@@ -1,18 +1,32 @@
 /*
  * Auto Retry (Lumiverse Spindle frontend extension)
  * Re-fires failed, empty, stalled, or cut-off generations.
+ *
  * Lumiverse runs the LLM call server-side, so there is no browser fetch to
- * patch. This listens to generation lifecycle events and re-triggers the
- * chat's regenerate control when a generation fails, stalls, or returns empty.
+ * patch and no API to stop or regenerate a chat reply. This listens to the
+ * generation lifecycle events and re-triggers the chat's own regenerate control
+ * in the DOM when a generation fails, stalls, or returns empty.
  *
  * Settings can be edited live from the UI: open the chat input "Extras" popover
  * and pick "Auto Retry settings". Changes are saved to localStorage and applied
  * to the next generation, so you never have to touch the GitHub files.
+ *
+ * The user is always in charge: pressing Stop, or tapping Cancel on the retry
+ * pop-up, stands the extension down immediately and briefly suppresses any
+ * further automatic retries, so it can never fight you or pile up under lag.
  */
 
 type Ctx = any;
 
 const STORE_KEY = 'lv-auto-retry:settings:v1';
+
+// How long (ms) to suppress automatic retries after the user stops or cancels.
+// Long enough to swallow the stopped generation's own trailing events.
+const STAND_DOWN_MS = 2500;
+
+// Bumped on each release. Shown in the startup log and in the Copy debug info
+// report, so a bug report always says which version it came from.
+const VERSION = '1.1.0';
 
 // ---- defaults (the UI overrides these; editing here changes the fallback) ----
 const CONFIG = {
@@ -28,9 +42,10 @@ const CONFIG = {
   // rate limiting (HTTP 429 / overloaded)
   rateLimitDelayMs: 8000,
 
-  // watchdogs
-  stuckTimeoutMs: 60000,   // started but never produced a token or an end. 0 disables.
-  idleTimeoutMs: 20000,    // tokens were flowing then stopped this long (mid-stream cutoff). 0 disables.
+  // watchdogs. Tuned to tolerate lag and slow local models so a slow-but-fine
+  // generation is not mistaken for a stall and retried into a pile-up.
+  stuckTimeoutMs: 90000,   // started but never produced a token or an end. 0 disables.
+  idleTimeoutMs: 45000,    // tokens were flowing then stopped this long (mid-stream cutoff). 0 disables.
 
   // what counts as needing a retry
   retryOnError: true,
@@ -41,54 +56,72 @@ const CONFIG = {
   minChars: 24,
 
   // host controls (the only DOM-dependent part). Use the Test buttons in settings.
+  // Multiple patterns are listed so a Lumiverse build that renames one attribute
+  // is still likely covered; if a build changes them all, fix it via the Test UI.
   regenerateSelector:
     '[data-action="regenerate"], [data-testid="regenerate"], ' +
     'button[aria-label*="regenerate" i], button[title*="regenerate" i]',
   swipeNextSelector:
     '[data-action="swipe-right"], button[aria-label*="next swipe" i], button[aria-label*="next" i]',
-  stopSelector: '[class*="_sendBtnStop_"]',
+  stopSelector:
+    '[data-action="stop"], [data-testid="stop"], ' +
+    'button[aria-label*="stop" i], button[title*="stop" i], [class*="_sendBtnStop_"]',
 
   toast: true,
-  log: true,
+  log: false,
 };
 
 // Fields the settings UI can edit, in display order. Single source of truth for
-// both the form and what gets persisted.
+// both the form and what gets persisted. Every option above (except the two
+// internal timing constants) is listed here, so everything is user-editable.
 type FieldType = 'bool' | 'num' | 'text';
 interface Field { key: keyof typeof CONFIG; label: string; type: FieldType; hint?: string; selector?: boolean; }
-interface Group { title: string; fields: Field[]; }
+interface Group { title: string; desc?: string; fields: Field[]; }
 const SCHEMA: Group[] = [
-  { title: 'General', fields: [
-    { key: 'enabled', label: 'Enable auto-retry', type: 'bool' },
-  ]},
-  { title: 'Retry budget', fields: [
-    { key: 'maxRetries', label: 'Max retries per message', type: 'num', hint: 'Hard cap. Every retry path shares it.' },
-    { key: 'retryDelayMs', label: 'Base delay (ms)', type: 'num' },
-    { key: 'backoffFactor', label: 'Backoff factor', type: 'num', hint: 'Delay multiplies by this each attempt.' },
-    { key: 'maxDelayMs', label: 'Max delay (ms)', type: 'num' },
-    { key: 'rateLimitDelayMs', label: 'Rate-limit floor (ms)', type: 'num', hint: 'Minimum wait when the error looks like a 429.' },
-  ]},
-  { title: 'Watchdogs', fields: [
-    { key: 'stuckTimeoutMs', label: 'No-start timeout (ms)', type: 'num', hint: 'Started but no token and no end. 0 disables.' },
-    { key: 'idleTimeoutMs', label: 'Mid-stream idle timeout (ms)', type: 'num', hint: 'Tokens stopped flowing. 0 disables.' },
-  ]},
-  { title: 'What to retry', fields: [
-    { key: 'retryOnError', label: 'Provider errors', type: 'bool' },
-    { key: 'retryOnEmpty', label: 'Empty / cut off mid-reasoning', type: 'bool' },
-    { key: 'retryOnTruncated', label: 'Cut-off final response', type: 'bool', hint: 'Detects a reply that ends mid-sentence (open quote, action, code fence, trailing comma).' },
-    { key: 'retryOnNoPunct', label: 'Also: ends with no punctuation', type: 'bool', hint: 'Stricter. Can re-roll good replies that just end on a word.' },
-    { key: 'retryOnShort', label: 'Short responses', type: 'bool' },
-    { key: 'minChars', label: 'Short threshold (chars)', type: 'num' },
-  ]},
-  { title: 'Host controls', fields: [
-    { key: 'regenerateSelector', label: 'Regenerate selector', type: 'text', selector: true },
-    { key: 'swipeNextSelector', label: 'Swipe-next selector', type: 'text', selector: true },
-    { key: 'stopSelector', label: 'Stop button selector', type: 'text', selector: true },
-  ]},
-  { title: 'Feedback', fields: [
-    { key: 'toast', label: 'Show toasts', type: 'bool' },
-    { key: 'log', label: 'Console logging', type: 'bool' },
-  ]},
+  { title: 'On / off',
+    desc: 'The main switch for the whole extension.',
+    fields: [
+      { key: 'enabled', label: 'Turn auto-retry on', type: 'bool', hint: "When on, it quietly tries again whenever a reply fails or gets cut off. Turn it off and it does nothing." },
+    ]},
+  { title: 'How hard it tries',
+    desc: 'How persistent it is, and how long it waits between tries.',
+    fields: [
+      { key: 'maxRetries', label: 'Most tries per message', type: 'num', hint: 'How many times it retries one message before giving up. 3 to 5 suits most people.' },
+      { key: 'retryDelayMs', label: 'Wait before the first retry', type: 'num', hint: 'How long it pauses before trying again the first time. In milliseconds: 1000 = 1 second.' },
+      { key: 'backoffFactor', label: 'How much longer each wait gets', type: 'num', hint: "Each retry waits this many times longer than the last, so it doesn't hammer the server. 2 means the wait doubles each time." },
+      { key: 'maxDelayMs', label: 'Longest it will ever wait', type: 'num', hint: "A ceiling so it never pauses forever. 30000 = 30 seconds." },
+      { key: 'rateLimitDelayMs', label: 'Wait when the server is busy', type: 'num', hint: 'If the server says "too many requests," it waits at least this long. 8000 = 8 seconds.' },
+      { key: 'jitter', label: 'Add a little randomness to waits', type: 'bool', hint: "Nudges each wait by a random amount so retries don't all hit the server at the same instant. Best left on." },
+    ]},
+  { title: 'Watch for frozen replies',
+    desc: "These notice when a reply freezes or never shows up, and step in. On a slow connection or a slow local model, make these numbers bigger.",
+    fields: [
+      { key: 'stuckTimeoutMs', label: 'Give up waiting for it to start', type: 'num', hint: "If a reply begins but no words appear in this long, treat it as stuck and retry. 90000 = 90 seconds. Set to 0 to switch off." },
+      { key: 'idleTimeoutMs', label: 'Give up on a reply that froze', type: 'num', hint: "If words were appearing and then stop for this long, treat it as frozen and retry. 45000 = 45 seconds. Set to 0 to switch off. Raise it if your model takes long natural pauses." },
+    ]},
+  { title: 'When to count a reply as bad',
+    desc: 'Pick which kinds of bad reply should trigger a retry.',
+    fields: [
+      { key: 'retryOnError', label: 'It came back as an error', type: 'bool', hint: 'Retry when the reply fails outright with an error.' },
+      { key: 'retryOnEmpty', label: 'It came back blank', type: 'bool', hint: 'Retry when nothing comes back, including a reply that thinks but never writes anything.' },
+      { key: 'retryOnTruncated', label: 'It cut off mid-sentence', type: 'bool', hint: "Retry when a reply clearly stops partway, like an open quote, an unfinished *action*, or a trailing comma. It's intentionally careful so it doesn't throw away good writing." },
+      { key: 'retryOnNoPunct', label: "Also: it ends with no punctuation", type: 'bool', hint: "A stricter version of the line above. It can wrongly redo a reply that simply ends on a word, so most people leave this off." },
+      { key: 'retryOnShort', label: 'It was very short', type: 'bool', hint: 'Retry replies shorter than the length below. Off by default, since short replies are often fine.' },
+      { key: 'minChars', label: 'What counts as "very short"', type: 'num', hint: 'Replies with fewer characters than this count as too short. Only used when the option above is on.' },
+    ]},
+  { title: 'Advanced: buttons it clicks',
+    desc: "It works by clicking your own on-screen buttons. You only need this if retries aren't happening. Paste a button's selector and press Test until it says match found.",
+    fields: [
+      { key: 'regenerateSelector', label: 'Your regenerate button', type: 'text', selector: true, hint: 'The retry button it clicks to redo a reply.' },
+      { key: 'swipeNextSelector', label: 'Your next / swipe button', type: 'text', selector: true, hint: 'A backup it clicks if your setup retries by swiping to a new reply instead.' },
+      { key: 'stopSelector', label: 'Your stop button', type: 'text', selector: true, hint: 'The stop button, so it can halt a frozen reply before retrying.' },
+    ]},
+  { title: 'Advanced: feedback',
+    desc: 'Small extras for how it talks to you.',
+    fields: [
+      { key: 'toast', label: 'Show a pop-up on each retry', type: 'bool', hint: 'A small message telling you it is retrying, with a Cancel button to stop it.' },
+      { key: 'log', label: 'Write technical details to the console', type: 'bool', hint: "For bug reports. Turn it on, make the problem happen again, then copy whatever shows up in the browser console (press F12). Leave it off the rest of the time." },
+    ]},
 ];
 
 // Final content present but cut off mid-sentence. Lumiverse does not expose
@@ -101,7 +134,13 @@ function looksTruncated(text: string, retryOnNoPunct: boolean): boolean {
 
   if ((t.match(/```/g) || []).length % 2 === 1) return true;                  // open code fence
   if ((t.replace(/```/g, '').match(/`/g) || []).length % 2 === 1) return true; // open inline code
-  if ((t.match(/\*/g) || []).length % 2 === 1) return true;                   // open emphasis / RP action
+
+  // Emphasis asterisks only. Strip markdown bullet markers ("* " at line start)
+  // first, or a reply with an odd number of list bullets would read as an open
+  // emphasis run and get re-rolled. Emphasis pairs (*x*, **x**) are unaffected.
+  const emphasis = t.replace(/^[ \t]*\*[ \t]+/gm, '');
+  if ((emphasis.match(/\*/g) || []).length % 2 === 1) return true;            // open emphasis / RP action
+
   if ((t.match(/"/g) || []).length % 2 === 1) return true;                    // open straight-quote dialogue
   if ((t.match(/\u201C/g) || []).length !== (t.match(/\u201D/g) || []).length) return true; // mismatched smart quotes
   if (/[,;]$/.test(t)) return true;                                           // cut mid-clause
@@ -156,6 +195,7 @@ export function setup(ctx: Ctx, opts?: any) {
         attempts: 0, pending: false, selfTriggered: false,
         genId: null, startTimer: null, idleTimer: null, timer: null,
         sawReasoning: false, sawContent: false, ignoreEndFor: null,
+        suppressUntil: 0,
       };
       chats.set(chatId, s);
     }
@@ -187,24 +227,48 @@ export function setup(ctx: Ctx, opts?: any) {
   };
 
   const fireRetry = () => {
-    const btn = find(cfg.regenerateSelector) || find(cfg.swipeNextSelector);
-    if (btn) { btn.click(); return true; }
+    let btn: any = null;
+    try { btn = find(cfg.regenerateSelector) || find(cfg.swipeNextSelector); } catch (_) {}
+    if (btn) {
+      try { hideToast(); btn.click(); return true; }
+      catch (e) { log('regenerate click failed', e); return false; }
+    }
     log('no regenerate control found, set the regenerate selector in settings');
-    toast('Auto-retry: regenerate button not found. Set the selector.');
+    showToast("Auto-retry: couldn't find your regenerate button. Set it in Auto Retry settings.");
     return false;
   };
 
   const stopGenerating = () => {
-    const stop = find(cfg.stopSelector);
-    if (stop) { stop.click(); return true; }
+    try {
+      const stop = find(cfg.stopSelector);
+      if (stop) { stop.click(); return true; }
+    } catch (e) { log('stop click failed', e); }
     return false;
   };
+
+  // The user wins, always. Cancel any pending retry for this chat, reset its
+  // budget, and briefly suppress new automatic retries so a stopped
+  // generation's trailing events can't immediately restart the loop. This is
+  // what makes Stop and Cancel actually stop things, even under lag.
+  function standDown(chatId: string, announce?: boolean) {
+    const s = st(chatId);
+    const hadPending = s.pending || !!s.timer || s.attempts > 0;
+    clearTimers(s);
+    s.attempts = 0;
+    s.suppressUntil = Date.now() + STAND_DOWN_MS;
+    if (hadPending) {
+      hideToast();
+      if (announce) showToast('Auto-retry stopped.');
+      log('stood down', chatId);
+    }
+  }
 
   function scheduleRetry(chatId: string, reason: string, err?: any) {
     const s = st(chatId);
     if (!cfg.enabled || s.pending) return;
+    if (Date.now() < s.suppressUntil) { log('suppressed (just stopped/cancelled)', chatId); return; }
     if (s.attempts >= cfg.maxRetries) {
-      toast('Auto-retry: gave up after ' + cfg.maxRetries + ' attempts.');
+      showToast('Auto-retry: gave up after ' + cfg.maxRetries + ' tries.');
       log('gave up', chatId, reason);
       s.attempts = 0;
       return;
@@ -215,7 +279,10 @@ export function setup(ctx: Ctx, opts?: any) {
     clearTimers(s);
     s.pending = true;
     log('retry ' + s.attempts + '/' + cfg.maxRetries + ' in ' + delay + 'ms (' + reason + (rl ? ', rate-limited' : '') + ')');
-    toast('Auto-retry ' + s.attempts + '/' + cfg.maxRetries + ' (' + reason + ') in ' + (delay / 1000).toFixed(1) + 's');
+    showToast(
+      'Retrying ' + s.attempts + '/' + cfg.maxRetries + ' (' + reason + ') in ' + (delay / 1000).toFixed(1) + 's',
+      { cancel: () => standDown(chatId, true), sticky: true }
+    );
     s.timer = setTimeout(() => {
       s.timer = null;
       s.pending = false;
@@ -238,12 +305,13 @@ export function setup(ctx: Ctx, opts?: any) {
   function onStart(p: any) {
     if (!p || !p.chatId) return;
     const s = st(p.chatId);
-    if (!s.selfTriggered) s.attempts = 0;   // fresh, user-initiated generation
+    if (!s.selfTriggered) { s.attempts = 0; s.suppressUntil = 0; }   // fresh, user-initiated generation
     s.selfTriggered = false;
     s.genId = p.generationId;
     s.sawReasoning = false;
     s.sawContent = false;
     clearTimers(s);
+    s.ignoreEndFor = null;   // a fresh generation supersedes any pending swallow guard
     if (cfg.enabled && cfg.stuckTimeoutMs > 0) {
       s.startTimer = setTimeout(() => abortAndRetry(p.chatId, 'stuck'), cfg.stuckTimeoutMs);
     }
@@ -267,6 +335,7 @@ export function setup(ctx: Ctx, opts?: any) {
     const s = st(p.chatId);
     if (s.ignoreEndFor && p.generationId === s.ignoreEndFor) return;   // dead gen, retry already scheduled
     clearTimers(s);
+    if (Date.now() < s.suppressUntil) { s.attempts = 0; return; }      // user just stopped; do not retry
     if (p.error) {
       if (cfg.retryOnError) scheduleRetry(p.chatId, 'error', p.error);
       return;
@@ -287,32 +356,126 @@ export function setup(ctx: Ctx, opts?: any) {
   function onStop(p: any) {
     if (!p || !p.chatId) return;
     const s = st(p.chatId);
-    if (s.ignoreEndFor && p.generationId === s.ignoreEndFor) return;   // our abort, retry already scheduled
-    clearTimers(s);
-    s.attempts = 0;                                                    // genuine user stop, do not fight them
+    if (s.ignoreEndFor && p.generationId === s.ignoreEndFor) return;   // our own abort, retry already scheduled
+    standDown(p.chatId, true);                                         // genuine user stop: stand down, don't fight them
   }
 
-  function toast(msg: string) {
-    if (!cfg.toast || typeof document === 'undefined') return;
+  // Backup for the user's Stop press: if the host's GENERATION_STOPPED event is
+  // late or missing (lag, or a customized stop button), catch the click itself
+  // and stand every pending retry down. Delegated + capture so it survives the
+  // host re-rendering its buttons.
+  function onDocClick(e: any) {
     try {
-      let t: any = document.getElementById('__lvRetryToast');
-      if (!t) {
-        t = document.createElement('div');
-        t.id = '__lvRetryToast';
-        t.style.cssText =
-          'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:2147483647;' +
-          'font:13px/1.4 var(--lumiverse-font-family,system-ui);padding:9px 14px;border-radius:10px;' +
-          'color:var(--lumiverse-text,#fff);background:var(--lumiverse-fill-strong,rgba(20,16,30,.96));' +
-          'border:1px solid var(--lumiverse-border,rgba(255,255,255,.18));' +
-          'box-shadow:0 8px 24px rgba(0,0,0,.45);pointer-events:none;transition:opacity .25s ease;' +
-          'opacity:0;max-width:80vw;text-align:center';
-        (document.body || document.documentElement).appendChild(t);
+      const tgt = e && e.target && e.target.closest ? e.target.closest(cfg.stopSelector) : null;
+      if (!tgt) return;
+      chats.forEach((s: any, id: string) => { if (s.pending || s.timer || s.attempts > 0) standDown(id, true); });
+    } catch (_) {}
+  }
+
+  // ---- toast with an optional Cancel button ----
+  function ensureToast(): any {
+    if (typeof document === 'undefined') return null;
+    let t: any = document.getElementById('__lvRetryToast');
+    if (!t) {
+      t = document.createElement('div');
+      t.id = '__lvRetryToast';
+      t.style.cssText =
+        'position:fixed;bottom:max(20px,env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);' +
+        'z-index:2147483647;display:flex;align-items:center;gap:10px;' +
+        'font:13px/1.4 var(--lumiverse-font-family,system-ui);padding:9px 12px;border-radius:12px;' +
+        'color:var(--lumiverse-text,#fff);background:var(--lumiverse-fill,rgba(20,16,30,.96));' +
+        'border:1px solid var(--lumiverse-border,rgba(255,255,255,.18));' +
+        'box-shadow:0 8px 24px rgba(0,0,0,.45);transition:opacity .2s ease;' +
+        'opacity:0;max-width:min(92vw,460px);text-align:left';
+      (document.body || document.documentElement).appendChild(t);
+    }
+    return t;
+  }
+  function hideToast() {
+    const t: any = (typeof document !== 'undefined') && document.getElementById('__lvRetryToast');
+    if (t) { clearTimeout(t.__h); t.style.opacity = '0'; t.style.pointerEvents = 'none'; }
+  }
+  function showToast(msg: string, opts?: { cancel?: () => void; sticky?: boolean }) {
+    if (!cfg.toast) return;
+    const t = ensureToast();
+    if (!t) return;
+    try {
+      t.innerHTML = '';
+      const span = document.createElement('span');
+      span.textContent = msg;
+      span.style.cssText = 'flex:1';
+      t.appendChild(span);
+      if (opts && opts.cancel) {
+        const c = document.createElement('button');
+        c.textContent = 'Cancel';
+        c.style.cssText =
+          'flex:none;min-height:32px;padding:6px 14px;border-radius:8px;cursor:pointer;' +
+          'font:13px var(--lumiverse-font-family,system-ui);' +
+          'border:1px solid var(--lumiverse-border,rgba(255,255,255,.28));' +
+          'background:var(--lumiverse-fill-subtle,rgba(255,255,255,.08));color:var(--lumiverse-text,#fff)';
+        c.addEventListener('click', () => { try { opts.cancel && opts.cancel(); } catch (_) {} });
+        t.appendChild(c);
+        t.style.pointerEvents = 'auto';
+      } else {
+        t.style.pointerEvents = 'none';
       }
-      t.textContent = msg;
       t.style.opacity = '1';
       clearTimeout(t.__h);
-      t.__h = setTimeout(() => { t.style.opacity = '0'; }, 3200);
+      if (!(opts && opts.sticky)) {
+        t.__h = setTimeout(() => { t.style.opacity = '0'; t.style.pointerEvents = 'none'; }, 3200);
+      }
     } catch (_) {}
+  }
+
+  // ---- debug info for bug reports ----
+  // A one-tap snapshot anyone can paste into a report without opening dev tools:
+  // version, current settings, whether each button selector matches right now,
+  // and the browser string. The console log (above) is the live timeline; this
+  // is the still photo.
+  function selectorState(sel: string): string {
+    try { return document.querySelector(sel) ? 'match' : 'no match'; }
+    catch (_) { return 'invalid selector'; }
+  }
+  function buildDebugInfo(): string {
+    const keys = ['enabled', 'maxRetries', 'retryDelayMs', 'backoffFactor', 'maxDelayMs',
+      'jitter', 'rateLimitDelayMs', 'stuckTimeoutMs', 'idleTimeoutMs', 'retryOnError',
+      'retryOnEmpty', 'retryOnTruncated', 'retryOnNoPunct', 'retryOnShort', 'minChars', 'toast', 'log'];
+    const lines: string[] = [];
+    lines.push('Auto Retry v' + VERSION + ' debug info');
+    lines.push('time: ' + new Date().toISOString());
+    lines.push('');
+    lines.push('settings:');
+    for (const k of keys) lines.push('  ' + k + ': ' + JSON.stringify(cfg[k]));
+    lines.push('');
+    lines.push('buttons (checked right now):');
+    lines.push('  regenerate: ' + selectorState(cfg.regenerateSelector));
+    lines.push('  swipeNext:  ' + selectorState(cfg.swipeNextSelector));
+    lines.push('  stop:       ' + selectorState(cfg.stopSelector));
+    lines.push('  regenerateSelector = ' + cfg.regenerateSelector);
+    lines.push('  swipeNextSelector  = ' + cfg.swipeNextSelector);
+    lines.push('  stopSelector       = ' + cfg.stopSelector);
+    try { lines.push(''); lines.push('browser: ' + ((navigator && navigator.userAgent) || 'unknown')); } catch (_) {}
+    return lines.join('\n');
+  }
+  function fallbackCopy(text: string): boolean {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.cssText = 'position:fixed;top:-1000px;left:-1000px;opacity:0';
+      (document.body || document.documentElement).appendChild(ta);
+      ta.focus(); ta.select();
+      const ok = !!(document.execCommand && document.execCommand('copy'));
+      ta.remove();
+      return ok;
+    } catch (_) { return false; }
+  }
+  function copyText(text: string): Promise<boolean> {
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
+        return navigator.clipboard.writeText(text).then(() => true, () => fallbackCopy(text));
+      }
+    } catch (_) {}
+    return Promise.resolve(fallbackCopy(text));
   }
 
   // ---- settings UI ----
@@ -320,34 +483,46 @@ export function setup(ctx: Ctx, opts?: any) {
 
   function buildSettingsBody(root: HTMLElement) {
     root.innerHTML = '';
+    // Cap the whole panel to a real viewport value that sits safely under the
+    // modal's max-height once its title bar and padding are counted. With the
+    // panel bounded and overflow hidden, the host modal has nothing left to
+    // over-scroll, so its own full-height scrollbar never appears; only the
+    // options list below scrolls. vh units keep it sane on phones too.
     const panel = document.createElement('div');
-    panel.style.cssText = 'display:flex;flex-direction:column;font:13px/1.45 var(--lumiverse-font-family,system-ui);color:var(--lumiverse-text,#eee)';
+    panel.style.cssText = 'display:flex;flex-direction:column;max-height:min(72vh,460px);overflow:hidden;box-sizing:border-box;font:13px/1.45 var(--lumiverse-font-family,system-ui);color:var(--lumiverse-text,#eee)';
 
-    // options live in their own scroll area so the footer never overlaps them
+    // the one scroll area: flexes to fill whatever height is left after the
+    // footer. min-height:0 lets it actually shrink and scroll inside the flex.
     const scroller = document.createElement('div');
-    scroller.style.cssText = 'display:flex;flex-direction:column;gap:16px;overflow-y:auto;max-height:min(56vh,420px);padding-right:4px';
+    scroller.style.cssText = 'display:flex;flex-direction:column;gap:18px;flex:1 1 auto;min-height:0;overflow-y:auto;padding-right:4px';
 
     for (const group of SCHEMA) {
       const sec = document.createElement('div');
-      sec.style.cssText = 'display:flex;flex-direction:column;gap:8px';
+      sec.style.cssText = 'display:flex;flex-direction:column;gap:10px';
 
       const h = document.createElement('div');
       h.textContent = group.title;
-      h.style.cssText = 'font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--lumiverse-text-dim,#9a93a8)';
+      h.style.cssText = 'font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--lumiverse-text-muted,#9a93a8)';
       sec.appendChild(h);
 
-      for (const f of group.fields) {
-        sec.appendChild(buildRow(f));
+      if (group.desc) {
+        const d = document.createElement('div');
+        d.textContent = group.desc;
+        d.style.cssText = 'font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,#9a93a8);margin-top:-4px';
+        sec.appendChild(d);
       }
+
+      for (const f of group.fields) sec.appendChild(buildRow(f));
       scroller.appendChild(sec);
     }
     panel.appendChild(scroller);
 
-    // footer: a plain bar below the scroll area, set off by a single hairline rule
+    // footer: a plain bar below the scroll area, set off by a single hairline
+    // rule. flex-wrap lets the buttons stack on a narrow phone screen.
     const actions = document.createElement('div');
-    actions.style.cssText = 'display:flex;align-items:center;gap:8px;flex:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--lumiverse-border,rgba(255,255,255,.08))';
+    actions.style.cssText = 'display:flex;align-items:center;flex-wrap:wrap;gap:8px;flex:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--lumiverse-border,rgba(255,255,255,.08))';
     const status = document.createElement('span');
-    status.style.cssText = 'flex:1;font-size:12px;color:var(--lumiverse-text-dim,#9a93a8)';
+    status.style.cssText = 'flex:1;min-width:120px;font-size:12px;color:var(--lumiverse-text-muted,#9a93a8)';
 
     const reset = btn('Reset to defaults', false);
     reset.addEventListener('click', async () => {
@@ -355,7 +530,7 @@ export function setup(ctx: Ctx, opts?: any) {
       try {
         if (ctx?.ui?.showConfirm) {
           const r = await ctx.ui.showConfirm({
-            title: 'Reset settings', message: 'Restore every Auto Retry setting to its default?',
+            title: 'Reset settings', message: 'Put every Auto Retry setting back to its default?',
             variant: 'warning', confirmLabel: 'Reset',
           });
           ok = !!r?.confirmed;
@@ -368,15 +543,25 @@ export function setup(ctx: Ctx, opts?: any) {
       log('settings reset to defaults');
     });
 
+    const dbg = btn('Copy debug info', false);
+    dbg.addEventListener('click', async () => {
+      const ok = await copyText(buildDebugInfo());
+      status.textContent = ok
+        ? 'Copied. Paste it into your bug report.'
+        : "Couldn't copy here. Turn on console logging instead.";
+      setTimeout(() => { status.textContent = ''; }, 4000);
+    });
+
     const save = btn('Save', true);
     save.addEventListener('click', () => {
       saveSaved();
-      status.textContent = 'Saved. Applies on the next generation.';
+      status.textContent = 'Saved. Takes effect on the next reply.';
       log('settings saved', cfg);
       setTimeout(() => { status.textContent = ''; }, 2600);
     });
 
     actions.appendChild(status);
+    actions.appendChild(dbg);
     actions.appendChild(reset);
     actions.appendChild(save);
     panel.appendChild(actions);
@@ -387,28 +572,31 @@ export function setup(ctx: Ctx, opts?: any) {
     // bool/num wrap in <label> so the whole row toggles or focuses its control.
     // text rows use <div> because they contain a Test button, which shouldn't sit inside a label.
     const row = document.createElement(f.type === 'text' ? 'div' : 'label');
-    row.style.cssText = 'display:flex;flex-direction:column;gap:4px';
+    row.style.cssText = 'display:flex;flex-direction:column;gap:5px;cursor:' + (f.type === 'text' ? 'default' : 'pointer');
 
     const top = document.createElement('div');
     top.style.cssText = 'display:flex;align-items:center;gap:10px;justify-content:space-between';
     const name = document.createElement('span');
     name.textContent = f.label;
+    name.style.cssText = 'font-size:13.5px';
     top.appendChild(name);
 
     if (f.type === 'bool') {
       const input = document.createElement('input');
       input.type = 'checkbox';
       input.checked = !!cfg[f.key];
-      input.style.cssText = 'width:16px;height:16px;accent-color:var(--lumiverse-primary,#7c5cff);cursor:pointer';
+      input.style.cssText = 'flex:none;width:20px;height:20px;accent-color:var(--lumiverse-primary,#7c5cff);cursor:pointer';
       input.addEventListener('change', () => { cfg[f.key] = input.checked; });
       top.appendChild(input);
       row.appendChild(top);
     } else if (f.type === 'num') {
       const input = document.createElement('input');
       input.type = 'number';
+      input.inputMode = 'numeric';
       input.value = String(cfg[f.key]);
       styleField(input);
       input.style.width = '120px';
+      input.style.flex = 'none';
       input.addEventListener('change', () => {
         const n = Number(input.value);
         cfg[f.key] = Number.isFinite(n) ? n : (CONFIG as any)[f.key];
@@ -430,14 +618,15 @@ export function setup(ctx: Ctx, opts?: any) {
         const testRow = document.createElement('div');
         testRow.style.cssText = 'display:flex;align-items:center;gap:8px';
         const test = btn('Test', false);
-        test.style.padding = '4px 10px';
+        test.style.padding = '5px 12px';
         const res = document.createElement('span');
-        res.style.cssText = 'font-size:12px;color:var(--lumiverse-text-dim,#9a93a8)';
+        res.style.cssText = 'font-size:12px;color:var(--lumiverse-text-muted,#9a93a8)';
         test.addEventListener('click', () => {
           let match = false;
-          try { match = !!document.querySelector(input.value); } catch (_) { res.textContent = 'invalid selector'; res.style.color = 'var(--lumiverse-danger,#ff6b6b)'; return; }
-          res.textContent = match ? 'match found' : 'no match on screen';
-          res.style.color = match ? 'var(--lumiverse-success,#46d39a)' : 'var(--lumiverse-text-dim,#9a93a8)';
+          try { match = !!document.querySelector(input.value); }
+          catch (_) { res.textContent = "that selector isn't valid"; res.style.color = 'var(--lumiverse-danger,#ff6b6b)'; return; }
+          res.textContent = match ? 'match found' : 'no match on screen right now';
+          res.style.color = match ? 'var(--lumiverse-success,#46d39a)' : 'var(--lumiverse-text-muted,#9a93a8)';
         });
         testRow.appendChild(test);
         testRow.appendChild(res);
@@ -448,15 +637,15 @@ export function setup(ctx: Ctx, opts?: any) {
     if (f.hint) {
       const hint = document.createElement('span');
       hint.textContent = f.hint;
-      hint.style.cssText = 'font-size:11.5px;color:var(--lumiverse-text-dim,#9a93a8)';
+      hint.style.cssText = 'font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,#9a93a8)';
       row.appendChild(hint);
     }
     return row;
   }
 
-  function styleField(input: HTMLElement) {
+  function styleField(input: HTMLInputElement) {
     input.style.cssText +=
-      'padding:7px 9px;border-radius:var(--lumiverse-radius,8px);' +
+      'padding:9px 10px;border-radius:var(--lumiverse-radius,8px);' +
       'border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));' +
       'background:var(--lumiverse-fill-subtle,rgba(255,255,255,.05));' +
       'color:var(--lumiverse-text,#eee);font:13px var(--lumiverse-font-family,system-ui);outline:none;' +
@@ -469,7 +658,7 @@ export function setup(ctx: Ctx, opts?: any) {
     const b = document.createElement('button');
     b.textContent = label;
     b.style.cssText =
-      'padding:7px 14px;border-radius:var(--lumiverse-radius,8px);cursor:pointer;' +
+      'min-height:36px;padding:8px 14px;border-radius:var(--lumiverse-radius,8px);cursor:pointer;' +
       'font:13px var(--lumiverse-font-family,system-ui);transition:filter .12s ease;' +
       (primary
         ? 'border:1px solid transparent;background:var(--lumiverse-primary,#7c5cff);color:var(--lumiverse-primary-contrast,#fff)'
@@ -481,11 +670,20 @@ export function setup(ctx: Ctx, opts?: any) {
 
   function openSettings() {
     if (!ctx?.ui?.showModal) { log('host has no modal API; cannot open settings'); return; }
-    if (modalHandle) { try { modalHandle.dismiss(); } catch (_) {} modalHandle = null; }
-    const modal = ctx.ui.showModal({ title: 'Auto Retry settings', width: 460, maxHeight: 560 });
-    modalHandle = modal;
-    buildSettingsBody(modal.root);
-    modal.onDismiss(() => { modalHandle = null; });
+    try {
+      if (modalHandle) { try { modalHandle.dismiss(); } catch (_) {} modalHandle = null; }
+      // Size to the screen so it fits on a phone as well as a desktop.
+      const vw = (typeof window !== 'undefined' && window.innerWidth) ? window.innerWidth : 480;
+      const vh = (typeof window !== 'undefined' && window.innerHeight) ? window.innerHeight : 720;
+      const modal = ctx.ui.showModal({
+        title: 'Auto Retry settings',
+        width: Math.min(460, vw - 24),
+        maxHeight: Math.min(560, vh - 24),
+      });
+      modalHandle = modal;
+      buildSettingsBody(modal.root);
+      modal.onDismiss(() => { modalHandle = null; });
+    } catch (e) { log('failed to open settings', e); }
   }
 
   // entry point: a button in the chat input "Extras" popover
@@ -503,13 +701,30 @@ export function setup(ctx: Ctx, opts?: any) {
     }
   } catch (e) { log('failed to register settings action', e); }
 
-  const offs = [
-    ctx.events.on('GENERATION_STARTED', onStart),
-    ctx.events.on('STREAM_TOKEN_RECEIVED', onToken),
-    ctx.events.on('GENERATION_ENDED', onEnd),
-    ctx.events.on('GENERATION_STOPPED', onStop),
-  ];
-  log('ready', cfg);
+  // backup stop-press catcher (see onDocClick)
+  if (typeof document !== 'undefined') {
+    document.addEventListener('click', onDocClick, true);
+    disposers.push(() => { try { document.removeEventListener('click', onDocClick, true); } catch (_) {} });
+  }
+
+  // Wrap each listener so a throw inside a handler is logged, never escapes into
+  // the host's event dispatcher, and never stops later events from arriving.
+  const safe = (label: string, fn: (p: any) => void) => (p: any) => {
+    try { fn(p); } catch (e) { log('handler error in ' + label, e); }
+  };
+
+  let offs: Array<() => void> = [];
+  try {
+    offs = [
+      ctx.events.on('GENERATION_STARTED', safe('GENERATION_STARTED', onStart)),
+      ctx.events.on('STREAM_TOKEN_RECEIVED', safe('STREAM_TOKEN_RECEIVED', onToken)),
+      ctx.events.on('GENERATION_ENDED', safe('GENERATION_ENDED', onEnd)),
+      ctx.events.on('GENERATION_STOPPED', safe('GENERATION_STOPPED', onStop)),
+    ];
+  } catch (e) {
+    log('failed to subscribe to generation events', e);
+  }
+  log('ready v' + VERSION, cfg);
 
   return () => {
     offs.forEach((o: any) => { try { o && o(); } catch (_) {} });
