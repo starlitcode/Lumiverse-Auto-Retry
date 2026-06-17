@@ -26,7 +26,7 @@ const STAND_DOWN_MS = 2500;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = '1.1.0';
+const VERSION = '1.1.1';
 
 // ---- defaults (the UI overrides these; editing here changes the fallback) ----
 const CONFIG = {
@@ -155,7 +155,24 @@ export function setup(ctx: Ctx, opts?: any) {
   // defaults, then GitHub opts, then whatever the user saved in the UI.
   const cfg: any = Object.assign({}, CONFIG, opts || {}, loadSaved());
 
-  const log = (...a: any[]) => { if (cfg.log) console.log('[auto-retry]', ...a); };
+  // A short in-memory ring buffer of what the extension did, captured whether or
+  // not console logging is on, so the Copy debug info report carries a timeline
+  // and the user never has to open dev tools to report a behavioural bug.
+  const EVENTLOG_MAX = 20;
+  const eventLog: string[] = [];
+  function recordEvent(args: any[]) {
+    try {
+      const parts = args.map((a) => {
+        if (typeof a === 'string') return a;
+        try { return JSON.stringify(a); } catch (_) { return String(a); }
+      });
+      let line = new Date().toISOString().slice(11, 23) + ' ' + parts.join(' ');
+      if (line.length > 220) line = line.slice(0, 217) + '...';
+      eventLog.push(line);
+      if (eventLog.length > EVENTLOG_MAX) eventLog.shift();
+    } catch (_) {}
+  }
+  const log = (...a: any[]) => { recordEvent(a); if (cfg.log) console.log('[auto-retry]', ...a); };
   const disposers: Array<() => void> = [];
 
   function loadSaved(): any {
@@ -305,6 +322,7 @@ export function setup(ctx: Ctx, opts?: any) {
   function onStart(p: any) {
     if (!p || !p.chatId) return;
     const s = st(p.chatId);
+    log('gen start', p.generationId, s.selfTriggered ? '(auto-retry)' : '(user)');
     if (!s.selfTriggered) { s.attempts = 0; s.suppressUntil = 0; }   // fresh, user-initiated generation
     s.selfTriggered = false;
     s.genId = p.generationId;
@@ -335,7 +353,7 @@ export function setup(ctx: Ctx, opts?: any) {
     const s = st(p.chatId);
     if (s.ignoreEndFor && p.generationId === s.ignoreEndFor) return;   // dead gen, retry already scheduled
     clearTimers(s);
-    if (Date.now() < s.suppressUntil) { s.attempts = 0; return; }      // user just stopped; do not retry
+    if (Date.now() < s.suppressUntil) { log('gen end ignored (just stopped)'); s.attempts = 0; return; }  // user just stopped; do not retry
     if (p.error) {
       if (cfg.retryOnError) scheduleRetry(p.chatId, 'error', p.error);
       return;
@@ -350,6 +368,7 @@ export function setup(ctx: Ctx, opts?: any) {
       return;
     }
     if (cfg.retryOnShort && content.length < cfg.minChars) { scheduleRetry(p.chatId, 'short'); return; }
+    log('gen ok', content.length + ' chars');
     s.attempts = 0;   // clean success
   }
 
@@ -357,6 +376,7 @@ export function setup(ctx: Ctx, opts?: any) {
     if (!p || !p.chatId) return;
     const s = st(p.chatId);
     if (s.ignoreEndFor && p.generationId === s.ignoreEndFor) return;   // our own abort, retry already scheduled
+    log('user stop', p.generationId);
     standDown(p.chatId, true);                                         // genuine user stop: stand down, don't fight them
   }
 
@@ -455,6 +475,11 @@ export function setup(ctx: Ctx, opts?: any) {
     lines.push('  swipeNextSelector  = ' + cfg.swipeNextSelector);
     lines.push('  stopSelector       = ' + cfg.stopSelector);
     try { lines.push(''); lines.push('browser: ' + ((navigator && navigator.userAgent) || 'unknown')); } catch (_) {}
+    try { lines.push('screen: ' + ((window && window.innerWidth) || '?') + ' x ' + ((window && window.innerHeight) || '?')); } catch (_) {}
+    lines.push('');
+    lines.push('recent activity (oldest first):');
+    if (eventLog.length === 0) lines.push('  (nothing recorded yet)');
+    else for (const e of eventLog) lines.push('  ' + e);
     return lines.join('\n');
   }
   function fallbackCopy(text: string): boolean {
@@ -732,6 +757,7 @@ export function setup(ctx: Ctx, opts?: any) {
     if (modalHandle) { try { modalHandle.dismiss(); } catch (_) {} modalHandle = null; }
     chats.forEach(clearTimers);
     chats.clear();
+    eventLog.length = 0;
     try {
       if (typeof document !== 'undefined' && document.getElementById) {
         const t: any = document.getElementById('__lvRetryToast');
