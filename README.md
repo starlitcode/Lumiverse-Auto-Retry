@@ -31,9 +31,9 @@ Settings are saved to the browser's `localStorage` and apply to the next generat
 
 ## Reporting a bug
 
-The settings modal has a **Copy debug info** button. It copies a short plain-text snapshot (the version, your current settings, whether each button selector matches on screen right now, and your browser) that you can paste straight into a bug report, no developer tools needed.
+The settings modal has a **Copy debug info** button. It copies a short plain-text snapshot you can paste straight into a bug report, no developer tools needed: the version, your current settings, whether each button selector matches on screen right now, your screen size and browser, and a timeline of the last things the extension did (when generations started, when retries fired and why, when one came back clean). That timeline is recorded whether or not console logging is on, so for most bugs this one button is all anyone needs.
 
-For a step-by-step trace of what the extension did, turn on **Write technical details to the console** in the Advanced section, make the problem happen again, then copy what appears in the browser console (press F12). The Copy debug info button is the snapshot; the console log is the timeline.
+For an even longer, every-step trace for a deep dive, turn on **Write technical details to the console** in the Advanced section, make the problem happen again, then copy what appears in the browser console (press F12).
 
 ## Cut-off detection (final response)
 
