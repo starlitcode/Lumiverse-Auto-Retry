@@ -25,7 +25,7 @@ Pressing your **Stop** button, or tapping **Cancel** on the retry pop-up, stops 
 
 ## Settings UI
 
-Open the chat input bar, click the **Extras** popover, and choose **Auto Retry settings**. Every option is editable there, in plain language, grouped by what it does. You can test your button selectors against the current screen and reset everything to defaults. The modal is sized to fit phones as well as desktop.
+Open the chat input bar, click the **Extras** popover, and choose **Auto Retry settings**. Every option is editable there, grouped by what it does. You can test your button selectors against the current screen and reset everything to defaults. The modal is sized to fit phones as well as desktop.
 
 Settings are saved to the browser's `localStorage` and apply to the next generation. They override both the code defaults and any `opts` passed at setup. Editing the CONFIG block in the source still works as the fallback, but the UI is the easy path.
 
