@@ -58,7 +58,7 @@ All cut-off retries share the same `maxRetries` budget, so this cannot loop.
 - Catches mid-stream, mid-reasoning, and cut-off final responses the original could not see.
 - Aborts a stalled run before retrying, and ignores the dead generation's late events so it never double-fires.
 - Respects manual stops, and gives you a Cancel button so you can pull the plug even while it is waiting to retry.
-- Settings live in one place, in plain language, editable from the UI, and the panel fits on mobile.
+- Settings live in one place, editable from the UI, and the panel fits on mobile.
 
 ## Install
 
