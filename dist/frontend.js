@@ -21,7 +21,7 @@ const STORE_KEY = 'lv-auto-retry:settings:v1';
 const STAND_DOWN_MS = 2500;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = '1.1.1';
+const VERSION = '1.1.2';
 // ---- defaults (the UI overrides these; editing here changes the fallback) ----
 const CONFIG = {
     enabled: true,
@@ -65,7 +65,7 @@ const SCHEMA = [
         desc: 'How persistent it is, and how long it waits between tries.',
         fields: [
             { key: 'maxRetries', label: 'Most tries per message', type: 'num', hint: 'How many times it retries one message before giving up. 3 to 5 suits most people.' },
-            { key: 'retryDelayMs', label: 'Wait before the first retry', type: 'num', hint: 'How long it pauses before trying again the first time. In milliseconds: 1000 = 1 second.' },
+            { key: 'retryDelayMs', label: 'Wait before the first retry', type: 'num', hint: 'How long it pauses before trying again the first time. In milliseconds, so the 1200 default is 1.2 seconds.' },
             { key: 'backoffFactor', label: 'How much longer each wait gets', type: 'num', hint: "Each retry waits this many times longer than the last, so it doesn't hammer the server. 2 means the wait doubles each time." },
             { key: 'maxDelayMs', label: 'Longest it will ever wait', type: 'num', hint: "A ceiling so it never pauses forever. 30000 = 30 seconds." },
             { key: 'rateLimitDelayMs', label: 'Wait when the server is busy', type: 'num', hint: 'If the server says "too many requests," it waits at least this long. 8000 = 8 seconds.' },
@@ -488,7 +488,7 @@ export function setup(ctx, opts) {
                 const c = document.createElement('button');
                 c.textContent = 'Cancel';
                 c.style.cssText =
-                    'flex:none;min-height:32px;padding:6px 14px;border-radius:8px;cursor:pointer;' +
+                    'flex:none;min-height:36px;padding:6px 14px;border-radius:8px;cursor:pointer;' +
                         'font:13px var(--lumiverse-font-family,system-ui);' +
                         'border:1px solid var(--lumiverse-border,rgba(255,255,255,.28));' +
                         'background:var(--lumiverse-fill-subtle,rgba(255,255,255,.08));color:var(--lumiverse-text,#fff)';
@@ -496,6 +496,11 @@ export function setup(ctx, opts) {
                     opts.cancel && opts.cancel();
                 }
                 catch (_) { } });
+                const cClear = () => { c.style.filter = 'none'; };
+                c.addEventListener('pointerdown', () => { c.style.filter = 'brightness(1.2)'; });
+                c.addEventListener('pointerup', cClear);
+                c.addEventListener('pointercancel', cClear);
+                c.addEventListener('pointerleave', cClear);
                 t.appendChild(c);
                 t.style.pointerEvents = 'auto';
             }
@@ -767,6 +772,12 @@ export function setup(ctx, opts) {
                     : 'border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));background:transparent;color:var(--lumiverse-text,#eee)');
         b.addEventListener('mouseenter', () => { b.style.filter = 'brightness(1.12)'; });
         b.addEventListener('mouseleave', () => { b.style.filter = 'none'; });
+        // Press feedback that also works on touch, where hover never fires.
+        const pressClear = () => { b.style.filter = 'none'; };
+        b.addEventListener('pointerdown', () => { b.style.filter = 'brightness(.9)'; });
+        b.addEventListener('pointerup', pressClear);
+        b.addEventListener('pointercancel', pressClear);
+        b.addEventListener('pointerleave', pressClear);
         return b;
     }
     function openSettings() {
