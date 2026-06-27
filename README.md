@@ -21,7 +21,7 @@ There is also no Spindle API to stop or regenerate a chat reply (checked against
 
 ## You are always in charge
 
-Pressing your **Stop** button, or tapping **Cancel** on the retry pop-up, stops the extension immediately. It cancels any pending retry, resets the retry count, and briefly ignores new automatic retries so a stopped reply's own trailing events can't quietly restart the loop. This holds even under lag or with a customized stop button, because the Cancel button on the pop-up doesn't depend on any selector. The watchdog timeouts also default high enough that a slow-but-fine reply isn't mistaken for a stall and retried into a pile-up.
+Pressing your **Stop** button, or tapping **Cancel** on the retry pop-up, stops the extension immediately. It cancels any pending retry, resets the retry count, and briefly ignores new automatic retries so a stopped reply's own trailing events can't quietly restart the loop. This works no matter what, because the Cancel button on the pop-up is the extension's own and doesn't depend on a button selector.
 
 ## Settings UI
 
@@ -107,6 +107,8 @@ If retries fire (the pop-up appears) but nothing regenerates, the selector needs
 2. Right-click the regenerate button and choose Inspect.
 3. Find a stable attribute on it (a data attribute, an aria-label, a title, or a class) and write a CSS selector that matches it.
 4. Put that selector in the settings modal's Regenerate selector field and hit **Test** with an AI message on screen. It will tell you whether it matches. Save when it does.
+
+A "not on screen" result doesn't always mean the selector is wrong. A button only exists in the page while it is actually showing, so a correct selector still won't match if that button isn't on screen at the moment you test. The **Stop** button is the clearest case: it only appears after you send a reply and it starts generating, so test the stop selector mid-generation, not from an idle screen.
 
 You can still confirm a selector from the console if you prefer:
 
