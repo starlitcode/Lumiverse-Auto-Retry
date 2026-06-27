@@ -22,7 +22,7 @@ const STAND_DOWN_MS = 2500;
 const IGNORE_MAX = 16; // most aborted-generation ids kept around to swallow their late events
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = '1.1.4';
+const VERSION = '1.1.5';
 // ---- defaults (the UI overrides these; editing here changes the fallback) ----
 const CONFIG = {
     enabled: true,
@@ -89,7 +89,7 @@ const SCHEMA = [
             { key: 'minChars', label: 'What counts as "very short"', type: 'num', int: true, min: 0, max: 100000, hint: 'Replies with fewer characters than this count as too short. Only used when the option above is on.' },
         ] },
     { title: 'Advanced: buttons it clicks',
-        desc: "It works by clicking your own on-screen buttons. The three boxes below are three different buttons it needs for three different jobs: redoing a reply, swiping to a fresh one as a backup, and stopping a frozen reply. Each box takes one CSS selector, the kind you'd use in your browser's inspector, and you can list a few separated by commas as fallbacks since it uses the first that matches. You only need this if retries aren't happening. Paste a selector and press Test until it says match found. A \"not on screen\" result doesn't mean the selector is wrong, only that the button isn't showing yet. The Stop button, for one, only appears while a reply is generating, so test each one while its button is actually visible.",
+        desc: "It works by clicking your own on-screen buttons. The three boxes below are three different buttons it needs for three different jobs: redoing a reply, swiping to a fresh one as a backup, and stopping a frozen reply. Each box takes one CSS selector, the kind you'd use in your browser's inspector, and you can list a few separated by commas as fallbacks since it uses the first that matches. You only need this if retries aren't happening. Paste a selector and press Test until it says match found. A no match doesn't always mean the selector is wrong; the button may just not be on screen yet, so test each one while its button is actually visible. The Stop button, for one, only appears while a reply is generating.",
         fields: [
             { key: 'regenerateSelector', label: 'Your regenerate button', type: 'text', selector: true, hint: 'The retry button it clicks to redo a reply.' },
             { key: 'swipeNextSelector', label: 'Your next / swipe button', type: 'text', selector: true, hint: 'A backup it clicks if your setup retries by swiping to a new reply instead.' },
@@ -773,7 +773,7 @@ export function setup(ctx, opts) {
                         res.style.color = 'var(--lumiverse-danger,#ff6b6b)';
                         return;
                     }
-                    res.textContent = match ? 'match found' : 'not on screen right now';
+                    res.textContent = match ? 'match found' : 'no match right now';
                     res.style.color = match ? 'var(--lumiverse-success,#46d39a)' : 'var(--lumiverse-text-muted,#9a93a8)';
                 });
                 testRow.appendChild(test);
