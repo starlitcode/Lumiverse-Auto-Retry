@@ -27,7 +27,7 @@ const IGNORE_MAX = 16;   // most aborted-generation ids kept around to swallow t
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = '1.1.5';
+const VERSION = '1.1.6';
 
 // ---- defaults (the UI overrides these; editing here changes the fallback) ----
 const CONFIG = {
@@ -95,7 +95,7 @@ const SCHEMA: Group[] = [
       { key: 'jitter', label: 'Add a little randomness to waits', type: 'bool', hint: "Nudges each wait by a random amount so retries don't all hit the server at the same instant. Best left on." },
     ]},
   { title: 'Watch for frozen replies',
-    desc: "These notice when a reply freezes or never shows up, and step in. On a slow connection or a slow local model, make these numbers bigger.",
+    desc: "These notice when a reply freezes or never shows up, and step in. The defaults lean long so a slow connection or a slow local model isn't mistaken for a freeze; lower them if your provider is fast and you want quicker retries.",
     fields: [
       { key: 'stuckTimeoutMs', label: 'Give up waiting for it to start', type: 'num', int: true, min: 0, max: 600000, hint: "If a reply begins but no words appear in this long, treat it as stuck and retry. 90000 = 90 seconds. Set to 0 to switch off." },
       { key: 'idleTimeoutMs', label: 'Give up on a reply that froze', type: 'num', int: true, min: 0, max: 600000, hint: "If words were appearing and then stop for this long, treat it as frozen and retry. 45000 = 45 seconds. Set to 0 to switch off." },
