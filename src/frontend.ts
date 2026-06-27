@@ -76,7 +76,7 @@ const CONFIG = {
 // both the form and what gets persisted. Every option above (except the two
 // internal timing constants) is listed here, so everything is user-editable.
 type FieldType = 'bool' | 'num' | 'text';
-interface Field { key: keyof typeof CONFIG; label: string; type: FieldType; hint?: string; selector?: boolean; }
+interface Field { key: keyof typeof CONFIG; label: string; type: FieldType; hint?: string; selector?: boolean; min?: number; max?: number; int?: boolean; }
 interface Group { title: string; desc?: string; fields: Field[]; }
 const SCHEMA: Group[] = [
   { title: 'On / off',
@@ -87,18 +87,18 @@ const SCHEMA: Group[] = [
   { title: 'How hard it tries',
     desc: 'How persistent it is, and how long it waits between tries.',
     fields: [
-      { key: 'maxRetries', label: 'Most tries per message', type: 'num', hint: 'How many times it retries one message before giving up. 3 to 5 suits most people.' },
-      { key: 'retryDelayMs', label: 'Wait before the first retry', type: 'num', hint: 'How long it pauses before trying again the first time. In milliseconds, so the 1200 default is 1.2 seconds.' },
-      { key: 'backoffFactor', label: 'How much longer each wait gets', type: 'num', hint: "Each retry waits this many times longer than the last, so it doesn't hammer the server. 2 means the wait doubles each time." },
-      { key: 'maxDelayMs', label: 'Longest it will ever wait', type: 'num', hint: "A ceiling so it never pauses forever. 30000 = 30 seconds." },
-      { key: 'rateLimitDelayMs', label: 'Wait when the server is busy', type: 'num', hint: 'If the server says "too many requests," it waits at least this long. 8000 = 8 seconds.' },
+      { key: 'maxRetries', label: 'Most tries per message', type: 'num', int: true, min: 0, max: 50, hint: 'How many times it retries one message before giving up. 3 to 5 suits most people.' },
+      { key: 'retryDelayMs', label: 'Wait before the first retry', type: 'num', int: true, min: 0, max: 600000, hint: 'How long it pauses before trying again the first time. In milliseconds, so the 1200 default is 1.2 seconds.' },
+      { key: 'backoffFactor', label: 'How much longer each wait gets', type: 'num', min: 1, max: 10, hint: "Each retry waits this many times longer than the last, so it doesn't hammer the server. 2 means the wait doubles each time." },
+      { key: 'maxDelayMs', label: 'Longest it will ever wait', type: 'num', int: true, min: 0, max: 600000, hint: "A ceiling so it never pauses forever. 30000 = 30 seconds." },
+      { key: 'rateLimitDelayMs', label: 'Wait when the server is busy', type: 'num', int: true, min: 0, max: 600000, hint: 'If the server says "too many requests," it waits at least this long. 8000 = 8 seconds.' },
       { key: 'jitter', label: 'Add a little randomness to waits', type: 'bool', hint: "Nudges each wait by a random amount so retries don't all hit the server at the same instant. Best left on." },
     ]},
   { title: 'Watch for frozen replies',
     desc: "These notice when a reply freezes or never shows up, and step in. On a slow connection or a slow local model, make these numbers bigger.",
     fields: [
-      { key: 'stuckTimeoutMs', label: 'Give up waiting for it to start', type: 'num', hint: "If a reply begins but no words appear in this long, treat it as stuck and retry. 90000 = 90 seconds. Set to 0 to switch off." },
-      { key: 'idleTimeoutMs', label: 'Give up on a reply that froze', type: 'num', hint: "If words were appearing and then stop for this long, treat it as frozen and retry. 45000 = 45 seconds. Set to 0 to switch off. Raise it if your model takes long natural pauses." },
+      { key: 'stuckTimeoutMs', label: 'Give up waiting for it to start', type: 'num', int: true, min: 0, max: 600000, hint: "If a reply begins but no words appear in this long, treat it as stuck and retry. 90000 = 90 seconds. Set to 0 to switch off." },
+      { key: 'idleTimeoutMs', label: 'Give up on a reply that froze', type: 'num', int: true, min: 0, max: 600000, hint: "If words were appearing and then stop for this long, treat it as frozen and retry. 45000 = 45 seconds. Set to 0 to switch off. Raise it if your model takes long natural pauses." },
     ]},
   { title: 'When to count a reply as bad',
     desc: 'Pick which kinds of bad reply should trigger a retry.',
@@ -108,7 +108,7 @@ const SCHEMA: Group[] = [
       { key: 'retryOnTruncated', label: 'It cut off mid-sentence', type: 'bool', hint: "Retry when a reply clearly stops partway, like an open quote, an unfinished *action*, or a trailing comma. It's intentionally careful so it doesn't throw away good writing." },
       { key: 'retryOnNoPunct', label: "Also: it ends with no punctuation", type: 'bool', hint: "A stricter version of the line above. It can wrongly redo a reply that simply ends on a word, so most people leave this off." },
       { key: 'retryOnShort', label: 'It was very short', type: 'bool', hint: 'Retry replies shorter than the length below. Off by default, since short replies are often fine.' },
-      { key: 'minChars', label: 'What counts as "very short"', type: 'num', hint: 'Replies with fewer characters than this count as too short. Only used when the option above is on.' },
+      { key: 'minChars', label: 'What counts as "very short"', type: 'num', int: true, min: 0, max: 100000, hint: 'Replies with fewer characters than this count as too short. Only used when the option above is on.' },
     ]},
   { title: 'Advanced: buttons it clicks',
     desc: "It works by clicking your own on-screen buttons. The three boxes below are three different buttons it needs for three different jobs: redoing a reply, swiping to a fresh one as a backup, and stopping a frozen reply. Each box takes one CSS selector, the kind you'd use in your browser's inspector, and you can list a few separated by commas as fallbacks since it uses the first that matches. You only need this if retries aren't happening. Paste a selector and press Test until it says match found. A \"not on screen\" result doesn't mean the selector is wrong, only that the button isn't showing yet. The Stop button, for one, only appears while a reply is generating, so test each one while its button is actually visible.",
@@ -185,7 +185,7 @@ export function setup(ctx: Ctx, opts?: any) {
       const out: any = {};
       for (const g of SCHEMA) for (const f of g.fields) {
         if (!(f.key in parsed)) continue;
-        out[f.key] = coerce(f.type, parsed[f.key], (CONFIG as any)[f.key]);
+        out[f.key] = f.type === 'num' ? clampField(f, parsed[f.key]) : coerce(f.type, parsed[f.key], (CONFIG as any)[f.key]);
       }
       return out;
     } catch (_) { return {}; }
@@ -202,6 +202,19 @@ export function setup(ctx: Ctx, opts?: any) {
     if (type === 'bool') return !!val;
     if (type === 'num') { const n = Number(val); return Number.isFinite(n) ? n : fallback; }
     return val == null ? fallback : String(val);
+  }
+  // Turn whatever is in a number box into a safe value: a blank or non-numeric
+  // box falls back to that field's default, then the result is clamped to the
+  // field's range and rounded if it's a whole-number field. Stops an empty or
+  // silly box from poisoning the retry maths.
+  function clampField(f: Field, raw: any): number {
+    const s = (raw == null ? '' : String(raw)).trim();
+    let n = s === '' ? (CONFIG as any)[f.key] : Number(s);
+    if (!Number.isFinite(n)) n = (CONFIG as any)[f.key];
+    if (typeof f.min === 'number') n = Math.max(f.min, n);
+    if (typeof f.max === 'number') n = Math.min(f.max, n);
+    if (f.int) n = Math.round(n);
+    return n;
   }
 
   // ---- per-chat state ----
@@ -589,6 +602,11 @@ export function setup(ctx: Ctx, opts?: any) {
 
     const save = btn('Save', true);
     save.addEventListener('click', () => {
+      // Commit a field the user is still editing, then normalise every number
+      // so a blank or out-of-range box can't be saved.
+      const active: any = (typeof document !== 'undefined') ? document.activeElement : null;
+      if (active && typeof active.blur === 'function') active.blur();
+      for (const g of SCHEMA) for (const fl of g.fields) if (fl.type === 'num') cfg[fl.key] = clampField(fl, cfg[fl.key]);
       saveSaved();
       if (onSaved) onSaved();
       status.textContent = 'Saved. Takes effect on the next reply.';
@@ -634,8 +652,7 @@ export function setup(ctx: Ctx, opts?: any) {
       input.style.width = '120px';
       input.style.flex = 'none';
       input.addEventListener('change', () => {
-        const n = Number(input.value);
-        cfg[f.key] = Number.isFinite(n) ? n : (CONFIG as any)[f.key];
+        cfg[f.key] = clampField(f, input.value);
         input.value = String(cfg[f.key]);
       });
       top.appendChild(input);
