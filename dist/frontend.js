@@ -19,9 +19,10 @@ const STORE_KEY = 'lv-auto-retry:settings:v1';
 // How long (ms) to suppress automatic retries after the user stops or cancels.
 // Long enough to swallow the stopped generation's own trailing events.
 const STAND_DOWN_MS = 2500;
+const IGNORE_MAX = 16; // most aborted-generation ids kept around to swallow their late events
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = '1.1.3';
+const VERSION = '1.1.4';
 // ---- defaults (the UI overrides these; editing here changes the fallback) ----
 const CONFIG = {
     enabled: true,
@@ -88,7 +89,7 @@ const SCHEMA = [
             { key: 'minChars', label: 'What counts as "very short"', type: 'num', hint: 'Replies with fewer characters than this count as too short. Only used when the option above is on.' },
         ] },
     { title: 'Advanced: buttons it clicks',
-        desc: "It works by clicking your own on-screen buttons. You only need this if retries aren't happening. Paste a button's selector and press Test until it says match found. A \"not on screen\" result doesn't mean the selector is wrong, only that the button isn't showing yet. The Stop button, for one, only appears while a reply is generating, so test each one while its button is actually visible.",
+        desc: "It works by clicking your own on-screen buttons. The three boxes below are three different buttons it needs for three different jobs: redoing a reply, swiping to a fresh one as a backup, and stopping a frozen reply. Each box takes one CSS selector, the kind you'd use in your browser's inspector, and you can list a few separated by commas as fallbacks since it uses the first that matches. You only need this if retries aren't happening. Paste a selector and press Test until it says match found. A \"not on screen\" result doesn't mean the selector is wrong, only that the button isn't showing yet. The Stop button, for one, only appears while a reply is generating, so test each one while its button is actually visible.",
         fields: [
             { key: 'regenerateSelector', label: 'Your regenerate button', type: 'text', selector: true, hint: 'The retry button it clicks to redo a reply.' },
             { key: 'swipeNextSelector', label: 'Your next / swipe button', type: 'text', selector: true, hint: 'A backup it clicks if your setup retries by swiping to a new reply instead.' },
@@ -212,7 +213,7 @@ export function setup(ctx, opts) {
             s = {
                 attempts: 0, pending: false, selfTriggered: false,
                 genId: null, startTimer: null, idleTimer: null, timer: null,
-                sawReasoning: false, sawContent: false, ignoreEndFor: null,
+                sawReasoning: false, sawContent: false, ignored: new Set(),
                 suppressUntil: 0,
             };
             chats.set(chatId, s);
@@ -341,12 +342,17 @@ export function setup(ctx, opts) {
         }, delay);
     }
     // Stalled or stuck. Halt the dead generation (best effort) and retry.
-    // Whatever terminal event the dead generation fires next is swallowed via
-    // ignoreEndFor, and the retry is scheduled directly so it cannot be lost.
+    // Any terminal events the dead generation fires next (a stop, then maybe an
+    // end) are swallowed by remembering its id, so a late one can't be mistaken
+    // for a user stop or a fresh result even after the next generation begins.
     function abortAndRetry(chatId, reason) {
         const s = st(chatId);
         clearTimers(s);
-        s.ignoreEndFor = s.genId;
+        if (s.genId != null) {
+            s.ignored.add(s.genId);
+            while (s.ignored.size > IGNORE_MAX)
+                s.ignored.delete(s.ignored.values().next().value);
+        }
         stopGenerating();
         scheduleRetry(chatId, reason);
     }
@@ -364,7 +370,6 @@ export function setup(ctx, opts) {
         s.sawReasoning = false;
         s.sawContent = false;
         clearTimers(s);
-        s.ignoreEndFor = null; // a fresh generation supersedes any pending swallow guard
         if (cfg.enabled && cfg.stuckTimeoutMs > 0) {
             s.startTimer = setTimeout(() => abortAndRetry(p.chatId, 'stuck'), cfg.stuckTimeoutMs);
         }
@@ -392,8 +397,8 @@ export function setup(ctx, opts) {
         if (!p || !p.chatId)
             return;
         const s = st(p.chatId);
-        if (s.ignoreEndFor && p.generationId === s.ignoreEndFor)
-            return; // dead gen, retry already scheduled
+        if (s.ignored.has(p.generationId))
+            return; // aborted gen's trailing event, retry already scheduled
         clearTimers(s);
         if (Date.now() < s.suppressUntil) {
             log('gen end ignored (just stopped)');
@@ -425,8 +430,8 @@ export function setup(ctx, opts) {
         if (!p || !p.chatId)
             return;
         const s = st(p.chatId);
-        if (s.ignoreEndFor && p.generationId === s.ignoreEndFor)
-            return; // our own abort, retry already scheduled
+        if (s.ignored.has(p.generationId))
+            return; // our own abort, not a user stop
         log('user stop', p.generationId);
         standDown(p.chatId, true); // genuine user stop: stand down, don't fight them
     }
@@ -592,7 +597,7 @@ export function setup(ctx, opts) {
     }
     // ---- settings UI ----
     let modalHandle = null;
-    function buildSettingsBody(root) {
+    function buildSettingsBody(root, onSaved) {
         root.innerHTML = '';
         // Cap the whole panel to a real viewport value that sits safely under the
         // modal's max-height once its title bar and padding are counted. With the
@@ -648,7 +653,8 @@ export function setup(ctx, opts) {
                 for (const fl of g.fields)
                     cfg[fl.key] = CONFIG[fl.key];
             saveSaved();
-            buildSettingsBody(root);
+            if (onSaved) onSaved();
+            buildSettingsBody(root, onSaved);
             log('settings reset to defaults');
         });
         const dbg = btn('Copy debug info', false);
@@ -662,6 +668,7 @@ export function setup(ctx, opts) {
         const save = btn('Save', true);
         save.addEventListener('click', () => {
             saveSaved();
+            if (onSaved) onSaved();
             status.textContent = 'Saved. Takes effect on the next reply.';
             log('settings saved', cfg);
             setTimeout(() => { status.textContent = ''; }, 2600);
@@ -802,8 +809,21 @@ export function setup(ctx, opts) {
                 maxHeight: Math.min(560, vh - 24),
             });
             modalHandle = modal;
-            buildSettingsBody(modal.root);
-            modal.onDismiss(() => { modalHandle = null; });
+            let baseline = {};
+            const snapshot = () => {
+                baseline = {};
+                for (const g of SCHEMA)
+                    for (const fl of g.fields)
+                        baseline[fl.key] = cfg[fl.key];
+            };
+            snapshot();
+            buildSettingsBody(modal.root, snapshot);
+            modal.onDismiss(() => {
+                for (const g of SCHEMA)
+                    for (const fl of g.fields)
+                        cfg[fl.key] = baseline[fl.key];
+                modalHandle = null;
+            });
         }
         catch (e) {
             log('failed to open settings', e);
