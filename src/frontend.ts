@@ -675,8 +675,10 @@ export function setup(ctx: Ctx, opts?: any) {
         const res = document.createElement('span');
         res.style.cssText = 'font-size:12px;color:var(--lumiverse-text-muted,#9a93a8)';
         test.addEventListener('click', () => {
+          const sel = input.value.trim();
+          if (!sel) { res.textContent = 'type a selector first'; res.style.color = 'var(--lumiverse-text-muted,#9a93a8)'; return; }
           let match = false;
-          try { match = !!document.querySelector(input.value); }
+          try { match = !!document.querySelector(sel); }
           catch (_) { res.textContent = "that selector isn't valid"; res.style.color = 'var(--lumiverse-danger,#ff6b6b)'; return; }
           res.textContent = match ? 'match found' : 'not on screen right now';
           res.style.color = match ? 'var(--lumiverse-success,#46d39a)' : 'var(--lumiverse-text-muted,#9a93a8)';
