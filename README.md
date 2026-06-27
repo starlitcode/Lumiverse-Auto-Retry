@@ -110,7 +110,7 @@ If retries fire (the pop-up appears) but nothing regenerates, the selector needs
 3. Find a stable attribute on it (a data attribute, an aria-label, a title, or a class) and write a CSS selector that matches it.
 4. Put that selector in the settings modal's Regenerate selector field and hit **Test** with an AI message on screen. It will tell you whether it matches. Save when it does.
 
-A "not on screen" result doesn't always mean the selector is wrong. A button only exists in the page while it is actually showing, so a correct selector still won't match if that button isn't on screen at the moment you test. The **Stop** button is the clearest case: it only appears after you send a reply and it starts generating, so test the stop selector mid-generation, not from an idle screen.
+A "no match" result doesn't always mean the selector is wrong. A button only exists in the page while it is actually showing, so a correct selector still won't match if that button isn't on screen at the moment you test. The **Stop** button is the clearest case: it only appears after you send a reply and it starts generating, so test the stop selector mid-generation, not from an idle screen.
 
 You can still confirm a selector from the console if you prefer:
 
