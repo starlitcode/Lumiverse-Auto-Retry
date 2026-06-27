@@ -27,7 +27,7 @@ Pressing your **Stop** button, or tapping **Cancel** on the retry pop-up, stops 
 
 Open the chat input bar, click the **Extras** popover, and choose **Auto Retry settings**. Every option is editable there, grouped by what it does. You can test your button selectors against the current screen and reset everything to defaults. The modal is sized to fit phones as well as desktop.
 
-Settings are saved to the browser's `localStorage` and apply to the next generation. They override both the code defaults and any `opts` passed at setup. Editing the CONFIG block in the source still works as the fallback, but the UI is the easy path.
+Only **Save** keeps your changes. Closing the modal with the X, or tapping outside it, discards anything you didn't save, so you can experiment freely. Saved settings live in the browser's `localStorage` and apply to the next generation. They override both the code defaults and any `opts` passed at setup. Editing the CONFIG block in the source still works as the fallback, but the UI is the easy path.
 
 ## Reporting a bug
 
@@ -56,7 +56,7 @@ All cut-off retries share the same `maxRetries` budget, so this cannot loop.
 
 - Cannot loop forever. Every retry path shares one hard maxRetries cap per message, and the noisy retry paths are off by default.
 - Catches mid-stream, mid-reasoning, and cut-off final responses the original could not see.
-- Aborts a stalled run before retrying, and ignores the dead generation's late events so it never double-fires.
+- Aborts a stalled run before retrying, and keeps ignoring that dead generation's late events even after the next one starts, so it never double-fires or cancels its own retry.
 - Respects manual stops, and gives you a Cancel button so you can pull the plug even while it is waiting to retry.
 - Settings live in one place, editable from the UI, and the panel fits on mobile.
 
@@ -100,6 +100,8 @@ The watchdog defaults (`stuckTimeoutMs`, `idleTimeoutMs`) lean long on purpose s
 ## Setting regenerateSelector
 
 Spindle has no public API to regenerate a message, so the re-fire clicks the host's existing regenerate or swipe control in the DOM. The default selectors cover common attribute and label patterns but may not match every Lumiverse build, and a future Lumiverse update could rename them.
+
+There are three selector fields, one per button the extension needs: **regenerate** (redo a reply), **next / swipe** (a backup if your build retries by swiping to a fresh reply), and **stop** (to halt a frozen reply before retrying). Each field takes one CSS selector, the same kind you'd pass to `document.querySelector`. You can list several separated by commas as fallbacks, and it uses the first that matches. That is what the defaults do, so a single host rename won't break them.
 
 If retries fire (the pop-up appears) but nothing regenerates, the selector needs adjusting:
 
