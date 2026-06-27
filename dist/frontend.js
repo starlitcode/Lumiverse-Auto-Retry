@@ -67,7 +67,7 @@ const SCHEMA = [
         fields: [
             { key: 'maxRetries', label: 'Most tries per message', type: 'num', int: true, min: 0, max: 50, hint: 'How many times it retries one message before giving up. 3 to 5 suits most people.' },
             { key: 'retryDelayMs', label: 'Wait before the first retry', type: 'num', int: true, min: 0, max: 600000, hint: 'How long it pauses before trying again the first time. In milliseconds, so the 1200 default is 1.2 seconds.' },
-            { key: 'backoffFactor', label: 'How much longer each wait gets', type: 'num', min: 1, max: 10, hint: "Each retry waits this many times longer than the last, so it doesn't hammer the server. 2 means the wait doubles each time." },
+            { key: 'backoffFactor', label: 'How much longer each wait gets', type: 'num', min: 1, max: 10, hint: "Each retry waits this many times longer than the last, so it doesn't hammer the server. 2 means the wait doubles each time. Stays at 1 or above." },
             { key: 'maxDelayMs', label: 'Longest it will ever wait', type: 'num', int: true, min: 0, max: 600000, hint: "A ceiling so it never pauses forever. 30000 = 30 seconds." },
             { key: 'rateLimitDelayMs', label: 'Wait when the server is busy', type: 'num', int: true, min: 0, max: 600000, hint: 'If the server says "too many requests," it waits at least this long. 8000 = 8 seconds.' },
             { key: 'jitter', label: 'Add a little randomness to waits', type: 'bool', hint: "Nudges each wait by a random amount so retries don't all hit the server at the same instant. Best left on." },
