@@ -98,7 +98,7 @@ const SCHEMA: Group[] = [
     desc: "These notice when a reply freezes or never shows up, and step in. On a slow connection or a slow local model, make these numbers bigger.",
     fields: [
       { key: 'stuckTimeoutMs', label: 'Give up waiting for it to start', type: 'num', int: true, min: 0, max: 600000, hint: "If a reply begins but no words appear in this long, treat it as stuck and retry. 90000 = 90 seconds. Set to 0 to switch off." },
-      { key: 'idleTimeoutMs', label: 'Give up on a reply that froze', type: 'num', int: true, min: 0, max: 600000, hint: "If words were appearing and then stop for this long, treat it as frozen and retry. 45000 = 45 seconds. Set to 0 to switch off. Raise it if your model takes long natural pauses." },
+      { key: 'idleTimeoutMs', label: 'Give up on a reply that froze', type: 'num', int: true, min: 0, max: 600000, hint: "If words were appearing and then stop for this long, treat it as frozen and retry. 45000 = 45 seconds. Set to 0 to switch off." },
     ]},
   { title: 'When to count a reply as bad',
     desc: 'Pick which kinds of bad reply should trigger a retry.',
