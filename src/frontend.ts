@@ -13,7 +13,7 @@
  *
  * The user is always in charge: pressing Stop, or tapping Cancel on the retry
  * pop-up, stands the extension down immediately and briefly suppresses any
- * further automatic retries, so it can never fight you or pile up under lag.
+ * further automatic retries, so it can never fight you or pile up.
  */
 
 type Ctx = any;
@@ -42,8 +42,8 @@ const CONFIG = {
   // rate limiting (HTTP 429 / overloaded)
   rateLimitDelayMs: 8000,
 
-  // watchdogs. Tuned to tolerate lag and slow local models so a slow-but-fine
-  // generation is not mistaken for a stall and retried into a pile-up.
+  // watchdogs. Tuned to tolerate a slow connection and slow local models so a
+  // slow-but-fine generation is not mistaken for a stall and retried into a pile-up.
   stuckTimeoutMs: 90000,   // started but never produced a token or an end. 0 disables.
   idleTimeoutMs: 45000,    // tokens were flowing then stopped this long (mid-stream cutoff). 0 disables.
 
@@ -110,7 +110,7 @@ const SCHEMA: Group[] = [
       { key: 'minChars', label: 'What counts as "very short"', type: 'num', hint: 'Replies with fewer characters than this count as too short. Only used when the option above is on.' },
     ]},
   { title: 'Advanced: buttons it clicks',
-    desc: "It works by clicking your own on-screen buttons. You only need this if retries aren't happening. Paste a button's selector and press Test until it says match found.",
+    desc: "It works by clicking your own on-screen buttons. You only need this if retries aren't happening. Paste a button's selector and press Test until it says match found. A 'not on screen' result doesn't mean the selector is wrong — only that the button isn't showing yet. The Stop button, for one, only appears while a reply is generating, so test each one while its button is actually visible.",
     fields: [
       { key: 'regenerateSelector', label: 'Your regenerate button', type: 'text', selector: true, hint: 'The retry button it clicks to redo a reply.' },
       { key: 'swipeNextSelector', label: 'Your next / swipe button', type: 'text', selector: true, hint: 'A backup it clicks if your setup retries by swiping to a new reply instead.' },
@@ -266,7 +266,7 @@ export function setup(ctx: Ctx, opts?: any) {
   // The user wins, always. Cancel any pending retry for this chat, reset its
   // budget, and briefly suppress new automatic retries so a stopped
   // generation's trailing events can't immediately restart the loop. This is
-  // what makes Stop and Cancel actually stop things, even under lag.
+  // what makes Stop and Cancel actually stop things.
   function standDown(chatId: string, announce?: boolean) {
     const s = st(chatId);
     const hadPending = s.pending || !!s.timer || s.attempts > 0;
@@ -381,9 +381,9 @@ export function setup(ctx: Ctx, opts?: any) {
   }
 
   // Backup for the user's Stop press: if the host's GENERATION_STOPPED event is
-  // late or missing (lag, or a customized stop button), catch the click itself
-  // and stand every pending retry down. Delegated + capture so it survives the
-  // host re-rendering its buttons.
+  // late or never fires, catch the click on the stop button itself and stand
+  // every pending retry down. Delegated + capture so it survives the host
+  // re-rendering its buttons.
   function onDocClick(e: any) {
     try {
       const tgt = e && e.target && e.target.closest ? e.target.closest(cfg.stopSelector) : null;
@@ -655,7 +655,7 @@ export function setup(ctx: Ctx, opts?: any) {
           let match = false;
           try { match = !!document.querySelector(input.value); }
           catch (_) { res.textContent = "that selector isn't valid"; res.style.color = 'var(--lumiverse-danger,#ff6b6b)'; return; }
-          res.textContent = match ? 'match found' : 'no match on screen right now';
+          res.textContent = match ? 'match found' : 'not on screen right now';
           res.style.color = match ? 'var(--lumiverse-success,#46d39a)' : 'var(--lumiverse-text-muted,#9a93a8)';
         });
         testRow.appendChild(test);
