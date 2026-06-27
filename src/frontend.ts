@@ -110,7 +110,7 @@ const SCHEMA: Group[] = [
       { key: 'minChars', label: 'What counts as "very short"', type: 'num', hint: 'Replies with fewer characters than this count as too short. Only used when the option above is on.' },
     ]},
   { title: 'Advanced: buttons it clicks',
-    desc: "It works by clicking your own on-screen buttons. You only need this if retries aren't happening. Paste a button's selector and press Test until it says match found. A 'not on screen' result doesn't mean the selector is wrong — only that the button isn't showing yet. The Stop button, for one, only appears while a reply is generating, so test each one while its button is actually visible.",
+    desc: "It works by clicking your own on-screen buttons. You only need this if retries aren't happening. Paste a button's selector and press Test until it says match found. A \"not on screen\" result doesn't mean the selector is wrong, only that the button isn't showing yet. The Stop button, for one, only appears while a reply is generating, so test each one while its button is actually visible.",
     fields: [
       { key: 'regenerateSelector', label: 'Your regenerate button', type: 'text', selector: true, hint: 'The retry button it clicks to redo a reply.' },
       { key: 'swipeNextSelector', label: 'Your next / swipe button', type: 'text', selector: true, hint: 'A backup it clicks if your setup retries by swiping to a new reply instead.' },
