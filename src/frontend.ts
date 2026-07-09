@@ -10,10 +10,6 @@
  * Settings can be edited live from the UI: open the chat input "Extras" popover
  * and pick "Auto Retry settings". Changes are saved to localStorage and applied
  * to the next generation, so you never have to touch the GitHub files.
- *
- * The user is always in charge: pressing Stop, or tapping Cancel on the retry
- * pop-up, stands the extension down immediately and briefly suppresses any
- * further automatic retries, so it can never fight you or pile up.
  */
 
 type Ctx = any;
