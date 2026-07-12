@@ -18,7 +18,7 @@ const STAND_DOWN_MS = 2500;
 const IGNORE_MAX = 16; // most aborted-generation ids kept around to swallow their late events
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = '1.2.0';
+const VERSION = '1.3.0';
 // ---- defaults (the UI overrides these; editing here changes the fallback) ----
 const CONFIG = {
     enabled: true,
@@ -49,7 +49,9 @@ const CONFIG = {
     refusalMaxChars: 1200, // only replies up to this length are considered refusals. Longer = treated as real content.
     // Find and replace in replies (handled by the backend via the Chat Mutation API).
     replaceEnabled: false, // off by default. When on, applies replaceRules to each finished reply and edits the saved message.
-    replaceRules: '', // "old => new" rules, comma-separated. A single word matches whole words; empty right side deletes it.
+    replaceRules: '', // "old => new" rules, comma-separated. A single word matches whole words; empty right side deletes it. Same word can appear more than once.
+    replaceCaseSensitive: false, // match letter case exactly. Off = case-insensitive with capitalization kept.
+    replaceRandom: false, // when a word has more than one replacement, pick one at random per occurrence. Off = always the first listed.
     // host controls (the only DOM-dependent part). Use the Test buttons in settings.
     // Multiple patterns are listed so a Lumiverse build that renames one attribute
     // is still likely covered; if a build changes them all, fix it via the Test UI.
@@ -98,7 +100,9 @@ const SCHEMA = [
         desc: "Swaps words in a reply after it arrives and saves the change, so the swap sticks and the model reads it on later turns. It never changes what the model generated, only the text afterward. Needs the chat editing permission. Off by default.",
         fields: [
             { key: 'replaceEnabled', label: 'Swap words in replies', type: 'bool', hint: "When on, applies your swaps below to each new reply and edits the saved message. If nothing here matches, the reply is left untouched." },
-            { key: 'replaceRules', label: 'Word swaps (old => new)', type: 'text', hint: "One or more \"old => new\" rules, separated by commas. Example: suddenly => abruptly, sort of => kind of. A single word matches whole words only, so cat won't touch category. Leave the right side empty to delete the word. Capitalization is matched to the text it replaced." },
+            { key: 'replaceRules', label: 'Word swaps (old => new)', type: 'text', hint: "One or more \"old => new\" rules, separated by commas. Example: suddenly => abruptly, sort of => kind of. A single word matches whole words only, so cat won't touch category. Leave the right side empty to delete the word. List the same word more than once (like sky => blue, sky => aqua) to give it several options for the random toggle below." },
+            { key: 'replaceRandom', label: 'Pick randomly when a word has more than one swap', type: 'bool', hint: "Off by default. When a word is listed more than once (like sky => blue, sky => aqua), each time it appears one of its options is picked at random. Off, it always uses the first one you listed." },
+            { key: 'replaceCaseSensitive', label: 'Match case exactly', type: 'bool', hint: "Off by default. When off, a swap matches any case and keeps the original capitalization. Turn on to swap only when the case matches your rule exactly, so sky and Sky can have different swaps." },
         ] },
     { title: 'Advanced: refusal tuning (beta)',
         desc: "Only matters if the refusal option above is on. Most people can leave all of this alone. It's here for fine-tuning what counts as a refusal.",
@@ -324,7 +328,7 @@ export function setup(ctx, opts) {
     function pushReplaceRules() {
         try {
             if (ctx && typeof ctx.sendToBackend === 'function') {
-                ctx.sendToBackend({ type: 'set_replace_rules', enabled: !!cfg.replaceEnabled, rulesText: String(cfg.replaceRules || '') });
+                ctx.sendToBackend({ type: 'set_replace_rules', enabled: !!cfg.replaceEnabled, rulesText: String(cfg.replaceRules || ''), random: !!cfg.replaceRandom, caseSensitive: !!cfg.replaceCaseSensitive });
             }
         } catch (_) {}
     }
@@ -762,7 +766,7 @@ export function setup(ctx, opts) {
     function buildDebugInfo() {
         const keys = ['enabled', 'maxRetries', 'retryDelayMs', 'backoffFactor', 'maxDelayMs',
             'jitter', 'rateLimitDelayMs', 'stuckTimeoutMs', 'idleTimeoutMs', 'retryOnError',
-            'retryOnEmpty', 'retryOnTruncated', 'retryOnNoPunct', 'retryOnShort', 'minChars', 'retryOnRefusal', 'refusalUseBuiltins', 'refusalMaxChars', 'refusalExtraPhrases', 'refusalPhraseSubs', 'refusalIgnorePhrases', 'replaceEnabled', 'replaceRules', 'toast', 'log'];
+            'retryOnEmpty', 'retryOnTruncated', 'retryOnNoPunct', 'retryOnShort', 'minChars', 'retryOnRefusal', 'refusalUseBuiltins', 'refusalMaxChars', 'refusalExtraPhrases', 'refusalPhraseSubs', 'refusalIgnorePhrases', 'replaceEnabled', 'replaceRules', 'replaceRandom', 'replaceCaseSensitive', 'toast', 'log'];
         const lines = [];
         lines.push('Auto Retry v' + VERSION + ' debug info');
         lines.push('time: ' + new Date().toISOString());
