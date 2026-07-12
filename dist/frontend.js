@@ -100,7 +100,7 @@ const SCHEMA = [
             { key: 'replaceEnabled', label: 'Swap words in replies', type: 'bool', hint: "When on, applies your swaps below to each new reply and edits the saved message. If nothing here matches, the reply is left untouched." },
             { key: 'replaceRules', label: 'Word swaps (old => new)', type: 'text', hint: "One or more \"old => new\" rules, separated by commas. Example: suddenly => abruptly, sort of => kind of. A single word matches whole words only, so cat won't touch category. Leave the right side empty to delete the word. Capitalization is matched to the text it replaced." },
         ] },
-    { title: 'Advanced: refusal tuning',
+    { title: 'Advanced: refusal tuning (beta)',
         desc: "Only matters if the refusal option above is on. Most people can leave all of this alone. It's here for fine-tuning what counts as a refusal.",
         fields: [
             { key: 'refusalUseBuiltins', label: 'Use the built-in phrase list', type: 'bool', hint: "On by default. Turn it off to ignore the built-in list completely and match only your own phrases below." },
