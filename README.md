@@ -97,7 +97,16 @@ violates the content polic        for safety reasons
 due to safety concerns            i have to prioritize safety
 ```
 
-Alongside that list it also matches a few patterns that are not fixed phrases, so the reword field does not change these: the model calling itself an AI or language model; policy or guideline wording ("against my guidelines"); a refusal joined to a task word like request, prompt, content, scenario, or roleplay; the assistant-only verbs assist, comply, or fulfill; and "I don't feel comfortable" followed by an action like continuing or writing. On the error side it matches content-block wording such as prohibited content, content policy, safety filter, and blocked for content.
+Alongside that list it also matches a few patterns that are not fixed phrases. Because they match by shape rather than exact text, the reword field does not change them, and the examples below are just that, examples, not the full set of wordings each one catches:
+
+- **The model calling itself an AI.** "As an AI, I can't do that." / "I'm just an AI assistant."
+- **Policy or guideline wording.** "This goes against my guidelines." / "That violates our content policy."
+- **A refusal joined to a task word** (request, prompt, content, scenario, roleplay). "I can't continue this roleplay." / "I won't write that content." / "I'm unable to complete this request."
+- **Assistant-only verbs** (assist, comply, fulfill). "I can't assist with that." / "I'm unable to comply." / "I cannot fulfill this."
+- **An out-of-character comfort hedge.** "I don't feel comfortable continuing this." / "I don't feel comfortable writing that."
+- **A soft redirect that pivots away** (needs the pivot, so a normal offer to help does not trip it). "I'd be happy to help with something else instead." / "Instead, I can help you with a lighter scene." / "Please try asking something else."
+
+On the error side, when a reply comes back as an error rather than text, it matches content-block wording. Examples: "PROHIBITED_CONTENT", "Blocked by safety settings.", "finish_reason: safety". It deliberately ignores ordinary network errors like "connection refused".
 
 ## Find and replace in replies (beta)
 
