@@ -43,6 +43,7 @@ const CONFIG = {
     minChars: 24,
     retryOnRefusal: true, // final content is an out-of-character refusal (see looksLikeRefusal). Re-fires the SAME request, capped by maxRetries. Does not alter the request.
     refusalExtraPhrases: '', // your own extra refusal phrases, comma-separated. Any reply containing one counts as a refusal.
+    refusalPhraseSubs: '', // reword the built-in phrases: "old => new" rules, comma- or newline-separated, applied to the built-in list before matching.
     refusalIgnorePhrases: '', // your escape hatch: a reply containing any of these (comma-separated) is never counted as a refusal.
     refusalUseBuiltins: true, // use the built-in English refusal lists. Turn off to run purely on your own phrases (e.g. a non-English model).
     refusalMaxChars: 1200, // only replies up to this length are considered refusals. Longer = treated as real content.
@@ -95,6 +96,7 @@ const SCHEMA = [
         fields: [
             { key: 'refusalUseBuiltins', label: 'Use the built-in phrase list', type: 'bool', hint: "On by default. The built-in list is tuned for English replies. Turn it off to ignore it completely and match only your own phrases below, which is what you'd do for a model that refuses in another language." },
             { key: 'refusalExtraPhrases', label: 'Your own refusal phrases', type: 'text', hint: "Optional. Extra phrases that should also count as a refusal, separated by commas. Upper or lower case doesn't matter. Paste the exact wording your model refuses with, in any language." },
+            { key: 'refusalPhraseSubs', label: 'Reword the built-in phrases', type: 'text', hint: "Optional. Swap wording inside the built-in list using \"old => new\" rules, separated by commas. Example: assist => help. It changes what the built-in list matches, so only swap for wording your model actually uses." },
             { key: 'refusalIgnorePhrases', label: 'Never treat these as a refusal', type: 'text', hint: "Optional. If a reply contains any of these phrases (comma-separated), it's never counted as a refusal. Your escape hatch when a line in your roleplay keeps getting redone by mistake. This wins over everything else." },
             { key: 'refusalMaxChars', label: 'Longest reply to treat as a refusal', type: 'num', int: true, min: 100, max: 100000, hint: 'Replies longer than this are assumed to be real writing, not a refusal, and are left alone. 1200 characters suits most cases. Raise it if your model writes long refusals; lower it to be safer with long scenes.' },
         ] },
@@ -141,13 +143,13 @@ function looksTruncated(text, retryOnNoPunct) {
     return false;
 }
 // An out-of-character refusal: the model dropping the scene to say it's an AI,
-// or that it can't help / continue. Targets accidental refusals on benign SFW
-// content, where re-running the same request usually just works because these
-// models are stochastic. Deliberately narrow so it never re-rolls an in-character
-// line like "I can't do that," said the guard. On a match the caller just
-// re-fires the SAME request, capped by maxRetries; a refusal the model actually
-// means repeats across the tries and stops at the cap. Nothing is rewritten, no
-// words are swapped, no message roles are changed.
+// or that it can't help / continue. Targets accidental refusals, where re-running
+// the same request often produces a normal reply because these models are
+// stochastic. Narrow so it doesn't re-roll an in-character line like "I can't do
+// that," said the guard. On a match the caller re-fires the same request, capped
+// by maxRetries; a refusal that repeats keeps coming back across the tries and
+// stops at the cap. The request is sent unchanged: no prompt edits, no word
+// swaps, no message-role changes.
 //
 // It's layered on purpose, since refusal wording drifts between models and over
 // time: tight regexes for the shapes that need context, a flat phrase list for
@@ -172,6 +174,35 @@ function splitPhrases(raw) {
         .split(/[,\n]/)
         .map((p) => normalizeForMatch(p).toLowerCase())
         .filter((p) => p.length > 0);
+}
+// Reword rules: "old => new" pairs, comma- or newline-separated. Lets a user
+// swap a word or bit of phrasing in the built-in list for wording they prefer.
+// Empty "new" is allowed (deletes the old text).
+function parseSubs(raw) {
+    const out = [];
+    for (const rule of String(raw == null ? '' : raw).split(/[,\n]/)) {
+        const i = rule.indexOf('=>');
+        if (i < 0)
+            continue;
+        const from = normalizeForMatch(rule.slice(0, i)).toLowerCase();
+        const to = normalizeForMatch(rule.slice(i + 2)).toLowerCase();
+        if (from)
+            out.push({ from, to });
+    }
+    return out;
+}
+// Apply the reword rules to the built-in phrase list. Each phrase is already
+// lowercase/normalized, matching how rules are parsed.
+function applySubs(phrases, subs) {
+    if (!subs.length)
+        return phrases;
+    return phrases.map((p) => {
+        let out = p;
+        for (const s of subs)
+            if (s.from)
+                out = out.split(s.from).join(s.to);
+        return out;
+    }).filter((p) => p.length > 0);
 }
 // Tier 1: strong regexes. Anchored so an in-character "I can't help you carry
 // that" doesn't trip them. These carry the precision.
@@ -241,7 +272,8 @@ function looksLikeRefusal(text, cfg) {
         for (const re of REFUSAL_STRONG)
             if (re.test(norm))
                 return true;
-        for (const p of REFUSAL_PHRASES)
+        const phrases = applySubs(REFUSAL_PHRASES, parseSubs(cfg && cfg.refusalPhraseSubs));
+        for (const p of phrases)
             if (lower.includes(p))
                 return true;
         for (const re of REFUSAL_SOFT)
@@ -708,7 +740,7 @@ export function setup(ctx, opts) {
     function buildDebugInfo() {
         const keys = ['enabled', 'maxRetries', 'retryDelayMs', 'backoffFactor', 'maxDelayMs',
             'jitter', 'rateLimitDelayMs', 'stuckTimeoutMs', 'idleTimeoutMs', 'retryOnError',
-            'retryOnEmpty', 'retryOnTruncated', 'retryOnNoPunct', 'retryOnShort', 'minChars', 'retryOnRefusal', 'refusalUseBuiltins', 'refusalMaxChars', 'refusalExtraPhrases', 'refusalIgnorePhrases', 'toast', 'log'];
+            'retryOnEmpty', 'retryOnTruncated', 'retryOnNoPunct', 'retryOnShort', 'minChars', 'retryOnRefusal', 'refusalUseBuiltins', 'refusalMaxChars', 'refusalExtraPhrases', 'refusalPhraseSubs', 'refusalIgnorePhrases', 'toast', 'log'];
         const lines = [];
         lines.push('Auto Retry v' + VERSION + ' debug info');
         lines.push('time: ' + new Date().toISOString());
