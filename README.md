@@ -16,6 +16,8 @@ It watches each reply and re-fires when:
 
 Every retry waits a little longer than the last so it never hammers the server, and waits extra when the server says it is busy. All of the triggers share one retry limit, so no reply is ever retried more than you allow, and nothing can loop forever.
 
+It can also, optionally, run a find-and-replace on replies: swap words you don't like for ones you prefer, saved into the reply. See [Find and replace in replies](#find-and-replace-in-replies) below. This is off by default and is the only feature that edits a reply.
+
 ## Install
 
 In Lumiverse, open Extensions and install from the repository URL:
@@ -26,7 +28,7 @@ https://github.com/starlitcode/Lumiverse-Auto-Retry
 
 ## Settings
 
-Open the chat input bar, tap the **Extras** popover, and choose **Auto Retry settings**. Everything is editable there, grouped by what it does, and the panel fits a phone as well as a desktop. Simple on/off switches are up top; the fiddly stuff is tucked under groups marked **Advanced** so you can ignore it if you just want it to work.
+Open the chat input bar, tap the **Extras** popover, and choose **Auto Retry settings**. Everything is editable there, grouped by what it does, and the panel fits a phone as well as a desktop. Simple on/off switches are up top; the groups marked **Advanced** are collapsed by default, so tap one of those headers to reveal its options when you want them.
 
 Only **Save** keeps your changes. Closing with the X or tapping outside discards anything you did not save, so you can experiment freely. Saved settings live in your browser and apply to the next reply.
 
@@ -65,13 +67,56 @@ Some providers deliver a refusal as an *error* instead of as reply text (Gemini'
 
 Everything sits under **Advanced: refusal tuning** in the settings, so the basic on/off toggle stays clean for people who just want it on:
 
-- **Use the built-in phrase list** (on by default). The built-in patterns are tuned for English. Turn this off to ignore them and match only your own phrases below, which is how you'd run it against a model that refuses in another language.
-- **Your own refusal phrases**: comma-separated extras that should also count. Paste the exact wording your model refuses with, in any language.
+- **Use the built-in phrase list** (on by default). Turn this off to ignore the built-in patterns and match only your own phrases below.
+- **Your own refusal phrases**: comma-separated extras that should also count. Paste the exact wording your model refuses with.
 - **Reword the built-in phrases**: change wording inside the built-in list with `old => new` rules, separated by commas. For example `assist => help` rewrites every built-in phrase that uses "assist" to use "help" instead. Handy if a built-in phrase uses a word you'd rather see worded differently, or if your model phrases the same refusal a little differently. It changes what the built-in list matches, so only swap for wording your model actually uses.
 - **Never treat these as a refusal**: a whitelist. If a reply contains any of these it is never re-rolled. Your escape hatch if a line in your roleplay keeps getting redone by mistake. This wins over everything else.
 - **Longest reply to treat as a refusal** (1200 by default). Longer replies are assumed to be real writing and left alone. Raise it if your model writes long refusals, lower it to be safer with long scenes.
 
-For a non-English model: turn off the built-in list, then paste your model's actual refusal wording into "Your own refusal phrases." It is marked beta because the built-in wordlists are still being tuned, so turn the whole thing off with the "It looks like an accidental refusal" toggle if you would rather it never touch a refusal-shaped reply.
+To run entirely on your own phrases, turn off the built-in list and put your wording into "Your own refusal phrases." It is marked beta because the built-in wordlists are still being tuned, so turn the whole thing off with the "It looks like an accidental refusal" toggle if you would rather it never touch a refusal-shaped reply.
+
+### What the built-in list looks for
+
+So you know what "Reword the built-in phrases" acts on, here is the exact phrase list. A reply is treated as a refusal if it contains any of these (case and curly apostrophes don't matter):
+
+```
+i can't help with that            i cannot help with that
+i can't assist with that          i cannot assist with that
+i'm unable to help with that      i'm unable to assist with that
+i am unable to assist with that   i'm not able to help with that
+i can't comply with that          i cannot comply with that
+i can't provide that information  i cannot provide that information
+i can't provide instructions      i can't provide guidance on that
+i can't fulfill that request      i can't fulfil that request
+i can't support that request      i won't be able to help with that
+i can't generate a response to that   i can't provide a response to that
+i can't generate that content     i can't engage with that request
+can't help with requests like this    can't assist with requests like this
+violates our polic                violates the safety polic
+violates the content polic        for safety reasons
+due to safety concerns            i have to prioritize safety
+```
+
+Alongside that list it also matches a few patterns that are not fixed phrases, so the reword field does not change these: the model calling itself an AI or language model; policy or guideline wording ("against my guidelines"); a refusal joined to a task word like request, prompt, content, scenario, or roleplay; the assistant-only verbs assist, comply, or fulfill; and "I don't feel comfortable" followed by an action like continuing or writing. On the error side it matches content-block wording such as prohibited content, content policy, safety filter, and blocked for content.
+
+## Find and replace in replies
+
+This swaps words in a reply after it arrives and saves the change into the stored message. It is separate from everything above: it has nothing to do with retrying or with refusal detection, and it is off by default. Turn on "Swap words in replies" and add rules to use it.
+
+It never changes what the model generated. A find-and-replace always runs after the reply already exists, so it only edits the text afterward. Because it edits the stored reply rather than just the display, the swap sticks, shows everywhere, and the model reads the swapped wording as context on later turns.
+
+Rules go in the "Word swaps" box as `old => new`, separated by commas:
+
+```
+suddenly => abruptly, sort of => kind of, very => 
+```
+
+- A single word matches whole words only, so `cat => dog` changes "cat" but leaves "category" alone.
+- Anything with a space or punctuation is matched literally, so `sort of => kind of` works as a phrase.
+- Leave the right side empty to delete a word, like `very => ` above.
+- Capitalization is matched to the text it replaced, so a swap at the start of a sentence stays capitalized.
+
+Editing a saved reply needs the `chat_mutation` permission (see Permissions below). If nothing in your rules matches a reply, that reply is left untouched.
 
 ## All settings
 
@@ -100,6 +145,8 @@ The settings modal is the easy path. The same options live in the CONFIG block a
 | refusalPhraseSubs | (empty) | Reword the built-in phrases with "old => new" rules, comma-separated. |
 | refusalIgnorePhrases | (empty) | Comma-separated whitelist; a reply containing any is never a refusal. |
 | refusalMaxChars | 1200 | Longest reply still treated as a possible refusal. |
+| replaceEnabled | false | Turn on find-and-replace on replies. Edits the saved message. |
+| replaceRules | (empty) | "old => new" word swaps, comma-separated. |
 | regenerateSelector | (see file) | Host button. See below. |
 | swipeNextSelector | (see file) | Backup button if your build retries by swiping. |
 | stopSelector | (see file) | Host stop button, used to abort a stalled reply. |
@@ -131,8 +178,17 @@ For a deeper trace, turn on **Write technical details to the console** in the Ad
 
 ## Permissions
 
-Declares `generation` so it can hear when replies start, stream, and end. The settings UI needs no extra permission. There is no backend and no network access; settings are stored in your browser.
+Declares two permissions:
+
+- `generation`: to hear when replies start, stream, and end. This drives all the retry logic.
+- `chat_mutation`: to edit a saved reply. This is used only by the "Find and replace in replies" feature, and only when you turn it on and enter swaps. If you never use that feature, nothing is edited.
+
+`chat_mutation` is a privileged permission, so depending on your Lumiverse setup it may need admin approval before it takes effect. The retry side works without it; only find-and-replace needs it.
+
+The find-and-replace feature runs in a small backend module. The rest of the extension is frontend-only. There is no network access, and your settings are stored in your browser.
 
 ## How it works under the hood
 
-SillyTavern's version patches the browser's fetch. That cannot work in Lumiverse, because the AI call runs on the server and streams back over a WebSocket, so there is no fetch to intercept. This extension is event-driven instead: it listens to Lumiverse's own generation events and, when something goes wrong, clicks your regenerate button. That button click is the only part that depends on the page layout, and it is the part you can fix yourself from the settings if a Lumiverse update ever moves those buttons.
+SillyTavern's version patches the browser's fetch. That cannot work in Lumiverse, because the AI call runs on the server and streams back over a WebSocket, so there is no fetch to intercept. The retry side is event-driven instead: it listens to Lumiverse's own generation events and, when something goes wrong, clicks your regenerate button. That button click is the only part that depends on the page layout, and it is the part you can fix yourself from the settings if a Lumiverse update ever moves those buttons.
+
+Find-and-replace works differently, because editing a saved reply is a backend job. A small backend module listens for finished replies and, when you have swaps enabled, edits the stored message through Lumiverse's Chat Mutation API. Your swap rules travel from the settings UI to that backend and are saved so they persist. Editing a reply this way emits an edit event, not a generation event, so it cannot loop back into itself.
