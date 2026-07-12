@@ -6,6 +6,11 @@
  * what the model reads on later turns. It never changes what the model
  * generated; it edits the stored text afterward.
  *
+ * A source word may have several replacements (e.g. "sky => blue, sky => aqua").
+ * With the random option on, each occurrence picks one of them at random; off,
+ * it always uses the first one listed. A case-sensitive option controls whether
+ * matching respects letter case.
+ *
  * Rules arrive from the settings UI over the frontend message bridge and are
  * persisted so they survive a backend restart. Editing a message emits
  * MESSAGE_EDITED (not GENERATION_ENDED), so this cannot re-trigger itself.
@@ -15,34 +20,45 @@
  */
 const RULES_FILE = 'replace-rules.json';
 let enabled = false;
-let rules = [];
+let random = false;
+let caseSensitive = false;
+let rulesText = '';
+let groups = [];
 let warnedEditError = false;
 function escapeRe(s) {
     return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
-// A single-token "old" (letters/numbers only) matches whole words, so
-// "cat => dog" doesn't turn "category" into "dogegory". Anything with a space
-// or punctuation is matched literally.
-function buildRule(from, to) {
-    const f = String(from == null ? '' : from);
-    if (!f) return null;
-    const isWord = /^[\p{L}\p{N}]+$/u.test(f);
-    const body = escapeRe(f);
-    const re = new RegExp(isWord ? '\\b' + body + '\\b' : body, 'giu');
-    return { re: re, to: String(to == null ? '' : to) };
-}
-function parseRules(raw) {
-    const out = [];
+// Parse "old => new" rules into groups keyed by the source word, so the same
+// word listed more than once collects all its replacements. A single-token
+// source (letters/numbers only) matches whole words, so "cat => dog" doesn't
+// turn "category" into "dogegory"; anything with a space or punctuation is
+// matched literally.
+function buildGroups(raw, cs) {
+    const map = new Map();
+    const order = [];
     for (const line of String(raw == null ? '' : raw).split(/[,\n]/)) {
         const i = line.indexOf('=>');
         if (i < 0) continue;
-        const r = buildRule(line.slice(0, i).trim(), line.slice(i + 2).trim());
-        if (r) out.push(r);
+        const from = line.slice(0, i).trim();
+        const to = line.slice(i + 2).trim();
+        if (!from) continue;
+        const key = cs ? from : from.toLowerCase();
+        if (!map.has(key)) { map.set(key, { from: from, tos: [] }); order.push(key); }
+        map.get(key).tos.push(to);
+    }
+    const out = [];
+    for (const key of order) {
+        const g = map.get(key);
+        const isWord = /^[\p{L}\p{N}]+$/u.test(g.from);
+        const body = escapeRe(g.from);
+        const re = new RegExp(isWord ? '\\b' + body + '\\b' : body, cs ? 'gu' : 'giu');
+        out.push({ re: re, tos: g.tos, from: g.from });
     }
     return out;
 }
 // Keep the replacement's capitalization roughly in line with the text it
-// replaced, so a swap at the start of a sentence still reads right.
+// replaced, so a swap at the start of a sentence still reads right. Only used
+// when matching is case-insensitive.
 function matchCase(sample, repl) {
     if (!repl) return repl;
     if (sample.length > 1 && sample === sample.toUpperCase() && sample !== sample.toLowerCase()) return repl.toUpperCase();
@@ -51,8 +67,17 @@ function matchCase(sample, repl) {
 }
 function applyRules(text) {
     let out = String(text == null ? '' : text);
-    for (const r of rules) out = out.replace(r.re, (m) => matchCase(m, r.to));
+    for (const g of groups) {
+        out = out.replace(g.re, (m) => {
+            let repl = (random && g.tos.length > 1) ? g.tos[Math.floor(Math.random() * g.tos.length)] : g.tos[0];
+            if (!caseSensitive) repl = matchCase(m, repl);
+            return repl;
+        });
+    }
     return out;
+}
+function rebuild() {
+    groups = buildGroups(rulesText, caseSensitive);
 }
 // Load persisted rules on startup.
 (async () => {
@@ -60,7 +85,10 @@ function applyRules(text) {
         const saved = await spindle.storage.read(RULES_FILE);
         const parsed = JSON.parse(saved);
         enabled = !!parsed.enabled;
-        rules = parseRules(parsed.rulesText || '');
+        random = !!parsed.random;
+        caseSensitive = !!parsed.caseSensitive;
+        rulesText = String(parsed.rulesText == null ? '' : parsed.rulesText);
+        rebuild();
     } catch (_) { /* no saved rules yet */ }
 })();
 // Receive rule changes from the settings UI and persist them.
@@ -68,9 +96,11 @@ spindle.onFrontendMessage(async (payload) => {
     try {
         if (!payload || payload.type !== 'set_replace_rules') return;
         enabled = !!payload.enabled;
-        const rulesText = String(payload.rulesText == null ? '' : payload.rulesText);
-        rules = parseRules(rulesText);
-        await spindle.storage.write(RULES_FILE, JSON.stringify({ enabled: enabled, rulesText: rulesText }));
+        random = !!payload.random;
+        caseSensitive = !!payload.caseSensitive;
+        rulesText = String(payload.rulesText == null ? '' : payload.rulesText);
+        rebuild();
+        await spindle.storage.write(RULES_FILE, JSON.stringify({ enabled: enabled, random: random, caseSensitive: caseSensitive, rulesText: rulesText }));
     } catch (_) {
         try { spindle.log.warn('auto-retry replace: could not save rules'); } catch (__) {}
     }
@@ -78,7 +108,7 @@ spindle.onFrontendMessage(async (payload) => {
 // After each finished reply, apply the rules to the saved message.
 spindle.on('GENERATION_ENDED', async (p) => {
     try {
-        if (!enabled || !rules.length) return;
+        if (!enabled || !groups.length) return;
         if (!p || p.error || !p.chatId) return;
         const chatId = p.chatId;
         let messageId = p.messageId;
