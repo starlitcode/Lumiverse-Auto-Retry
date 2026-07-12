@@ -18,7 +18,7 @@ const STAND_DOWN_MS = 2500;
 const IGNORE_MAX = 16; // most aborted-generation ids kept around to swallow their late events
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = '1.1.6';
+const VERSION = '1.2.0';
 // ---- defaults (the UI overrides these; editing here changes the fallback) ----
 const CONFIG = {
     enabled: true,
@@ -41,6 +41,11 @@ const CONFIG = {
     retryOnNoPunct: false, // extra: also treat "ends with no punctuation" as truncated. Noisy in RP, off by default.
     retryOnShort: false, // off by default. Caused endless regen in the original.
     minChars: 24,
+    retryOnRefusal: true, // final content is an out-of-character refusal (see looksLikeRefusal). Re-fires the SAME request, capped by maxRetries. Does not alter the request.
+    refusalExtraPhrases: '', // your own extra refusal phrases, comma-separated. Any reply containing one counts as a refusal.
+    refusalIgnorePhrases: '', // your escape hatch: a reply containing any of these (comma-separated) is never counted as a refusal.
+    refusalUseBuiltins: true, // use the built-in English refusal lists. Turn off to run purely on your own phrases (e.g. a non-English model).
+    refusalMaxChars: 1200, // only replies up to this length are considered refusals. Longer = treated as real content.
     // host controls (the only DOM-dependent part). Use the Test buttons in settings.
     // Multiple patterns are listed so a Lumiverse build that renames one attribute
     // is still likely covered; if a build changes them all, fix it via the Test UI.
@@ -83,6 +88,15 @@ const SCHEMA = [
             { key: 'retryOnNoPunct', label: "Also: it ends with no punctuation", type: 'bool', hint: "A stricter version of the line above. It can wrongly redo a reply that simply ends on a word, so most people leave this off." },
             { key: 'retryOnShort', label: 'It was very short', type: 'bool', hint: 'Retry replies shorter than the length below. Off by default, since short replies are often fine.' },
             { key: 'minChars', label: 'What counts as "very short"', type: 'num', int: true, min: 0, max: 100000, hint: 'Replies with fewer characters than this count as too short. Only used when the option above is on.' },
+            { key: 'retryOnRefusal', label: 'It looks like an accidental refusal (beta)', type: 'bool', hint: "Retry when the model breaks character to decline (says it's an AI, or that it can't help or continue). It just tries the same request again, capped by your Most tries setting, so a refusal the model really means will survive the tries and stop. Nothing in your request is changed. Kept narrow so it won't touch an in-character 'I can't do that' line. New and still being tuned, so leave it off if you'd rather not risk a re-roll." },
+        ] },
+    { title: 'Advanced: refusal tuning',
+        desc: "Only matters if the refusal option above is on. Most people can leave all of this alone. It's here for fine-tuning what counts as a refusal, or setting the feature up for a model that refuses in another language.",
+        fields: [
+            { key: 'refusalUseBuiltins', label: 'Use the built-in phrase list', type: 'bool', hint: "On by default. The built-in list is tuned for English replies. Turn it off to ignore it completely and match only your own phrases below, which is what you'd do for a model that refuses in another language." },
+            { key: 'refusalExtraPhrases', label: 'Your own refusal phrases', type: 'text', hint: "Optional. Extra phrases that should also count as a refusal, separated by commas. Upper or lower case doesn't matter. Paste the exact wording your model refuses with, in any language." },
+            { key: 'refusalIgnorePhrases', label: 'Never treat these as a refusal', type: 'text', hint: "Optional. If a reply contains any of these phrases (comma-separated), it's never counted as a refusal. Your escape hatch when a line in your roleplay keeps getting redone by mistake. This wins over everything else." },
+            { key: 'refusalMaxChars', label: 'Longest reply to treat as a refusal', type: 'num', int: true, min: 100, max: 100000, hint: 'Replies longer than this are assumed to be real writing, not a refusal, and are left alone. 1200 characters suits most cases. Raise it if your model writes long refusals; lower it to be safer with long scenes.' },
         ] },
     { title: 'Advanced: buttons it clicks',
         desc: "It works by clicking your own on-screen buttons. The three boxes below are three different buttons it needs for three different jobs: redoing a reply, swiping to a fresh one as a backup, and stopping a frozen reply. Each box takes one CSS selector, the kind you'd use in your browser's inspector, and you can list a few separated by commas as fallbacks since it uses the first that matches. You only need this if retries aren't happening. Paste a selector and press Test until it says match found. A no match doesn't always mean the selector is wrong; the button may just not be on screen yet, so test each one while its button is actually visible. The Stop button, for one, only appears while a reply is generating.",
@@ -124,6 +138,140 @@ function looksTruncated(text, retryOnNoPunct) {
         return true; // cut mid-clause
     if (retryOnNoPunct && !/[.!?\u2026"'*)\]}\u201D~>\-\u2014:]$/.test(t))
         return true;
+    return false;
+}
+// An out-of-character refusal: the model dropping the scene to say it's an AI,
+// or that it can't help / continue. Targets accidental refusals on benign SFW
+// content, where re-running the same request usually just works because these
+// models are stochastic. Deliberately narrow so it never re-rolls an in-character
+// line like "I can't do that," said the guard. On a match the caller just
+// re-fires the SAME request, capped by maxRetries; a refusal the model actually
+// means repeats across the tries and stops at the cap. Nothing is rewritten, no
+// words are swapped, no message roles are changed.
+//
+// It's layered on purpose, since refusal wording drifts between models and over
+// time: tight regexes for the shapes that need context, a flat phrase list for
+// the many near-identical templates seen across ChatGPT / Claude / Gemini, and
+// two user-editable lists (add your own, or whitelist a line that keeps getting
+// redone). The length gate keeps a long immersive scene that happens to contain
+// one of these phrases from tripping it.
+const REFUSAL_MAX_CHARS = 1200;
+// Fold curly quotes/apostrophes to straight and squeeze whitespace, so a reply
+// with a smart apostrophe ("I can’t") matches the same as a straight one.
+function normalizeForMatch(text) {
+    return String(text == null ? '' : text)
+        .replace(/[\u2018\u2019\u02BC\u2032]/g, "'")
+        .replace(/[\u201C\u201D\u2033]/g, '"')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+// A user list is comma- or newline-separated. Lowercased + normalized for a
+// case-insensitive substring test.
+function splitPhrases(raw) {
+    return String(raw == null ? '' : raw)
+        .split(/[,\n]/)
+        .map((p) => normalizeForMatch(p).toLowerCase())
+        .filter((p) => p.length > 0);
+}
+// Tier 1: strong regexes. Anchored so an in-character "I can't help you carry
+// that" doesn't trip them. These carry the precision.
+const REFUSAL_STRONG = [
+    // Model naming itself as an AI.
+    /\bas an? (?:ai|a\.i\.|language model|large language model|ai (?:model|assistant))\b/i,
+    /\bI(?:'m| am)(?: just| only)? an? (?:ai|a\.i\.|language model|large language model|ai assistant)\b/i,
+    // Policy / guideline framing.
+    /\b(?:against|violates?|violating|goes? against|contrary to) (?:my|our|the|its) (?:guidelines|programming|policy|policies|content polic(?:y|ies)|principles)\b/i,
+    // Refusal opener + a task-word a character never says (request, prompt,
+    // content, message, scenario, roleplay). This meta object separates "the model
+    // refusing a task" from "a character refusing a person," so declining an
+    // invitation, a duel, or a marriage proposal in-scene will NOT match.
+    /\bI(?: (?:can(?:no|')?t|cannot|will not|won'?t|must not|must|have to|need to|refuse to|decline to|am (?:not able|unable) to|am going to have to)|'m (?:not able|unable) to|'m going to have to)\b[^.?!\n]{0,30}?\b(?:this|that|your|the) (?:request|prompt|content|message|scenario|roleplay)\b/i,
+    // Assistant-only verbs (assist / comply / fulfill) that essentially never
+    // appear in first-person roleplay dialogue.
+    /\bI(?: (?:can(?:no|')?t|cannot|will not|won'?t|am (?:not able|unable) to)|'m (?:not able|unable) to) (?:be able to )?(?:assist|comply|fulfil|fulfill)\b/i,
+    // Out-of-character comfort hedge, only in the assistant-action sense.
+    /\bI don'?t feel comfortable (?:continuing|writing|creating|generating|producing|proceeding|providing|helping|assisting)\b/i,
+];
+// Tier 2: flat phrase list, matched as normalized lowercase substrings. Covers
+// the many near-identical refusal templates across providers without a regex
+// each. All things a character in a scene basically never says.
+const REFUSAL_PHRASES = [
+    "i can't help with that", "i cannot help with that",
+    "i can't assist with that", "i cannot assist with that",
+    "i'm unable to help with that", "i'm unable to assist with that",
+    "i am unable to assist with that", "i'm not able to help with that",
+    "i can't comply with that", "i cannot comply with that",
+    "i can't provide that information", "i cannot provide that information",
+    "i can't provide instructions", "i can't provide guidance on that",
+    "i can't fulfill that request", "i can't fulfil that request",
+    "i can't support that request", "i won't be able to help with that",
+    "i can't generate a response to that", "i can't provide a response to that",
+    "i can't generate that content", "i can't engage with that request",
+    "can't help with requests like this", "can't assist with requests like this",
+    "violates our polic", "violates the safety polic", "violates the content polic",
+    "for safety reasons", "due to safety concerns", "i have to prioritize safety",
+];
+// Tier 3: soft redirect tells. These lean on a pivot ("...instead", "instead, I
+// can...") so an ordinary helpful reply that just offers to help doesn't match.
+const REFUSAL_SOFT = [
+    /\bi'?d be happy to help (?:you )?(?:with [^.?!\n]{0,40}? )?instead\b/i,
+    /\binstead,? i (?:can|could|would be happy to) (?:help|offer|suggest|provide)\b/i,
+    /\bi can (?:provide|offer|give you) general information instead\b/i,
+    /\bplease (?:try asking something else|change the topic|rephrase your request)\b/i,
+];
+function looksLikeRefusal(text, cfg) {
+    const raw = String(text == null ? '' : text).trim();
+    if (!raw)
+        return false; // empty is handled by the empty branch
+    const maxChars = (cfg && Number.isFinite(cfg.refusalMaxChars)) ? cfg.refusalMaxChars : REFUSAL_MAX_CHARS;
+    if (raw.length > maxChars)
+        return false; // long immersive reply, not a refusal
+    const norm = normalizeForMatch(raw);
+    const lower = norm.toLowerCase();
+    // Whitelist wins: anything the user parked here is never a refusal.
+    for (const p of splitPhrases(cfg && cfg.refusalIgnorePhrases))
+        if (lower.includes(p))
+            return false;
+    // The user's own additions count as refusals.
+    for (const p of splitPhrases(cfg && cfg.refusalExtraPhrases))
+        if (lower.includes(p))
+            return true;
+    // Built-in English lists, unless the user has switched them off to run pure-custom.
+    if (!cfg || cfg.refusalUseBuiltins !== false) {
+        for (const re of REFUSAL_STRONG)
+            if (re.test(norm))
+                return true;
+        for (const p of REFUSAL_PHRASES)
+            if (lower.includes(p))
+                return true;
+        for (const re of REFUSAL_SOFT)
+            if (re.test(norm))
+                return true;
+    }
+    return false;
+}
+// Some providers deliver a refusal as an error string (e.g. a prohibited-content
+// result) rather than as reply text. This matches that, tuned for short error
+// messages, and deliberately narrow to content-moderation wording so it never
+// fires on a network error like "connection refused" or a timeout. Only used as
+// a fallback when the user has turned normal error-retries off but still wants
+// refusals caught. Respects the user's phrase lists and the built-ins toggle.
+const REFUSAL_ERROR = /\b(?:prohibited[_ ]?content|content[_ ]?polic(?:y|ies)|safety[_ ]?(?:polic(?:y|ies)|filter|settings?)|response was blocked|blocked (?:by|for) (?:safety|content|moderation)|content[_ ]?filter|moderation|flagged as|violat\w* (?:content|safety|polic)|finish[_ ]?reason["'\s:=]*(?:safety|prohibited|blocklist|recitation)|blocklist)\b/i;
+function looksLikeRefusalError(errText, cfg) {
+    const norm = normalizeForMatch(errText);
+    if (!norm)
+        return false;
+    const lower = norm.toLowerCase();
+    for (const p of splitPhrases(cfg && cfg.refusalIgnorePhrases))
+        if (lower.includes(p))
+            return false;
+    for (const p of splitPhrases(cfg && cfg.refusalExtraPhrases))
+        if (lower.includes(p))
+            return true;
+    if (!cfg || cfg.refusalUseBuiltins !== false) {
+        if (REFUSAL_ERROR.test(norm))
+            return true;
+    }
     return false;
 }
 export function setup(ctx, opts) {
@@ -419,8 +567,15 @@ export function setup(ctx, opts) {
             return;
         } // user just stopped; do not retry
         if (p.error) {
-            if (cfg.retryOnError)
+            if (cfg.retryOnError) {
                 scheduleRetry(p.chatId, 'error', p.error);
+                return;
+            }
+            // error-retry is off, but a refusal delivered as an error should still count if the user wants refusals caught
+            if (cfg.retryOnRefusal && looksLikeRefusalError(String(p.error), cfg)) {
+                scheduleRetry(p.chatId, 'looks like an accidental refusal');
+                return;
+            }
             return;
         }
         const content = String(p.content || '').trim();
@@ -430,6 +585,10 @@ export function setup(ctx, opts) {
         }
         if (cfg.retryOnTruncated && looksTruncated(content, cfg.retryOnNoPunct)) {
             scheduleRetry(p.chatId, 'cut off');
+            return;
+        }
+        if (cfg.retryOnRefusal && looksLikeRefusal(content, cfg)) {
+            scheduleRetry(p.chatId, 'looks like an accidental refusal');
             return;
         }
         if (cfg.retryOnShort && content.length < cfg.minChars) {
@@ -549,7 +708,7 @@ export function setup(ctx, opts) {
     function buildDebugInfo() {
         const keys = ['enabled', 'maxRetries', 'retryDelayMs', 'backoffFactor', 'maxDelayMs',
             'jitter', 'rateLimitDelayMs', 'stuckTimeoutMs', 'idleTimeoutMs', 'retryOnError',
-            'retryOnEmpty', 'retryOnTruncated', 'retryOnNoPunct', 'retryOnShort', 'minChars', 'toast', 'log'];
+            'retryOnEmpty', 'retryOnTruncated', 'retryOnNoPunct', 'retryOnShort', 'minChars', 'retryOnRefusal', 'refusalUseBuiltins', 'refusalMaxChars', 'refusalExtraPhrases', 'refusalIgnorePhrases', 'toast', 'log'];
         const lines = [];
         lines.push('Auto Retry v' + VERSION + ' debug info');
         lines.push('time: ' + new Date().toISOString());
