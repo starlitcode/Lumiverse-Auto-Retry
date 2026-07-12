@@ -55,8 +55,12 @@ const CONFIG = {
   refusalExtraPhrases: '', // your own extra refusal phrases, comma-separated. Any reply containing one counts as a refusal.
   refusalPhraseSubs: '',   // reword the built-in phrases: "old => new" rules, comma- or newline-separated, applied to the built-in list before matching.
   refusalIgnorePhrases: '',// your escape hatch: a reply containing any of these (comma-separated) is never counted as a refusal.
-  refusalUseBuiltins: true,// use the built-in English refusal lists. Turn off to run purely on your own phrases (e.g. a non-English model).
+  refusalUseBuiltins: true,// use the built-in refusal lists. Turn off to run purely on your own phrases below.
   refusalMaxChars: 1200,   // only replies up to this length are considered refusals. Longer = treated as real content.
+
+  // Find and replace in replies (handled by the backend via the Chat Mutation API).
+  replaceEnabled: false,   // off by default. When on, applies replaceRules to each finished reply and edits the saved message.
+  replaceRules: '',        // "old => new" rules, comma-separated. A single word matches whole words; empty right side deletes it.
 
   // host controls (the only DOM-dependent part). Use the Test buttons in settings.
   // Multiple patterns are listed so a Lumiverse build that renames one attribute
@@ -113,11 +117,17 @@ const SCHEMA: Group[] = [
       { key: 'minChars', label: 'What counts as "very short"', type: 'num', int: true, min: 0, max: 100000, hint: 'Replies with fewer characters than this count as too short. Only used when the option above is on.' },
       { key: 'retryOnRefusal', label: 'It looks like an accidental refusal (beta)', type: 'bool', hint: "Retry when the model breaks character to decline (says it's an AI, or that it can't help or continue). It just tries the same request again, capped by your Most tries setting, so a refusal the model really means will survive the tries and stop. Nothing in your request is changed. Kept narrow so it won't touch an in-character 'I can't do that' line. New and still being tuned, so leave it off if you'd rather not risk a re-roll." },
     ]},
-  { title: 'Advanced: refusal tuning',
-    desc: "Only matters if the refusal option above is on. Most people can leave all of this alone. It's here for fine-tuning what counts as a refusal, or setting the feature up for a model that refuses in another language.",
+  { title: 'Find and replace in replies',
+    desc: "Swaps words in a reply after it arrives and saves the change, so the swap sticks and the model reads it on later turns. It never changes what the model generated, only the text afterward. Needs the chat editing permission. Off by default.",
     fields: [
-      { key: 'refusalUseBuiltins', label: 'Use the built-in phrase list', type: 'bool', hint: "On by default. The built-in list is tuned for English replies. Turn it off to ignore it completely and match only your own phrases below, which is what you'd do for a model that refuses in another language." },
-      { key: 'refusalExtraPhrases', label: 'Your own refusal phrases', type: 'text', hint: "Optional. Extra phrases that should also count as a refusal, separated by commas. Upper or lower case doesn't matter. Paste the exact wording your model refuses with, in any language." },
+      { key: 'replaceEnabled', label: 'Swap words in replies', type: 'bool', hint: "When on, applies your swaps below to each new reply and edits the saved message. If nothing here matches, the reply is left untouched." },
+      { key: 'replaceRules', label: 'Word swaps (old => new)', type: 'text', hint: "One or more \"old => new\" rules, separated by commas. Example: suddenly => abruptly, sort of => kind of. A single word matches whole words only, so cat won't touch category. Leave the right side empty to delete the word. Capitalization is matched to the text it replaced." },
+    ]},
+  { title: 'Advanced: refusal tuning',
+    desc: "Only matters if the refusal option above is on. Most people can leave all of this alone. It's here for fine-tuning what counts as a refusal.",
+    fields: [
+      { key: 'refusalUseBuiltins', label: 'Use the built-in phrase list', type: 'bool', hint: "On by default. Turn it off to ignore the built-in list completely and match only your own phrases below." },
+      { key: 'refusalExtraPhrases', label: 'Your own refusal phrases', type: 'text', hint: "Optional. Extra phrases that should also count as a refusal, separated by commas. Upper or lower case doesn't matter. Paste the exact wording your model refuses with." },
       { key: 'refusalPhraseSubs', label: 'Reword the built-in phrases', type: 'text', hint: "Optional. Swap wording inside the built-in list using \"old => new\" rules, separated by commas. Example: assist => help. It changes what the built-in list matches, so only swap for wording your model actually uses." },
       { key: 'refusalIgnorePhrases', label: 'Never treat these as a refusal', type: 'text', hint: "Optional. If a reply contains any of these phrases (comma-separated), it's never counted as a refusal. Your escape hatch when a line in your roleplay keeps getting redone by mistake. This wins over everything else." },
       { key: 'refusalMaxChars', label: 'Longest reply to treat as a refusal', type: 'num', int: true, min: 100, max: 100000, hint: 'Replies longer than this are assumed to be real writing, not a refusal, and are left alone. 1200 characters suits most cases. Raise it if your model writes long refusals; lower it to be safer with long scenes.' },
@@ -319,6 +329,19 @@ export function setup(ctx: Ctx, opts?: any) {
   // cfg is mutable so the settings modal can change it live. Order: code
   // defaults, then GitHub opts, then whatever the user saved in the UI.
   const cfg: any = Object.assign({}, CONFIG, opts || {}, loadSaved());
+
+  // Hand the find-and-replace rules to the backend (the only part that can edit a
+  // saved message). Safe to call even if the host has no backend bridge.
+  function pushReplaceRules() {
+    try {
+      if (ctx && typeof (ctx as any).sendToBackend === 'function') {
+        (ctx as any).sendToBackend({ type: 'set_replace_rules', enabled: !!cfg.replaceEnabled, rulesText: String(cfg.replaceRules || '') });
+      }
+    } catch (_) {}
+  }
+  // Sync on load only when there's something to sync, so a fresh/default load
+  // can't clobber rules the backend already persisted. Save and reset always push.
+  if (cfg.replaceEnabled || (cfg.replaceRules && String(cfg.replaceRules).trim())) pushReplaceRules();
 
   // A short in-memory ring buffer of what the extension did, captured whether or
   // not console logging is on, so the Copy debug info report carries a timeline
@@ -651,7 +674,7 @@ export function setup(ctx: Ctx, opts?: any) {
   function buildDebugInfo(): string {
     const keys = ['enabled', 'maxRetries', 'retryDelayMs', 'backoffFactor', 'maxDelayMs',
       'jitter', 'rateLimitDelayMs', 'stuckTimeoutMs', 'idleTimeoutMs', 'retryOnError',
-      'retryOnEmpty', 'retryOnTruncated', 'retryOnNoPunct', 'retryOnShort', 'minChars', 'retryOnRefusal', 'refusalUseBuiltins', 'refusalMaxChars', 'refusalExtraPhrases', 'refusalPhraseSubs', 'refusalIgnorePhrases', 'toast', 'log'];
+      'retryOnEmpty', 'retryOnTruncated', 'retryOnNoPunct', 'retryOnShort', 'minChars', 'retryOnRefusal', 'refusalUseBuiltins', 'refusalMaxChars', 'refusalExtraPhrases', 'refusalPhraseSubs', 'refusalIgnorePhrases', 'replaceEnabled', 'replaceRules', 'toast', 'log'];
     const lines: string[] = [];
     lines.push('Auto Retry v' + VERSION + ' debug info');
     lines.push('time: ' + new Date().toISOString());
@@ -717,19 +740,56 @@ export function setup(ctx: Ctx, opts?: any) {
       const sec = document.createElement('div');
       sec.style.cssText = 'display:flex;flex-direction:column;gap:10px';
 
+      // Groups titled "Advanced..." collapse by default so the basic options
+      // aren't buried under them. Tap the header to reveal.
+      const advanced = /^advanced\b/i.test(group.title);
+
       const h = document.createElement('div');
-      h.textContent = group.title;
       h.style.cssText = 'font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--lumiverse-text-muted,#9a93a8)';
-      sec.appendChild(h);
 
-      if (group.desc) {
-        const d = document.createElement('div');
-        d.textContent = group.desc;
-        d.style.cssText = 'font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,#9a93a8);margin-top:-4px';
-        sec.appendChild(d);
+      if (advanced) {
+        h.style.cursor = 'pointer';
+        h.style.userSelect = 'none';
+        h.style.display = 'flex';
+        h.style.alignItems = 'center';
+        h.style.gap = '6px';
+        const caret = document.createElement('span');
+        caret.textContent = '\u25B8';   // right triangle when collapsed
+        caret.style.cssText = 'font-size:9px';
+        const label = document.createElement('span');
+        label.textContent = group.title;
+        h.appendChild(caret);
+        h.appendChild(label);
+        sec.appendChild(h);
+
+        const body = document.createElement('div');
+        body.style.cssText = 'display:none;flex-direction:column;gap:10px';
+        if (group.desc) {
+          const d = document.createElement('div');
+          d.textContent = group.desc;
+          d.style.cssText = 'font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,#9a93a8)';
+          body.appendChild(d);
+        }
+        for (const f of group.fields) body.appendChild(buildRow(f));
+        sec.appendChild(body);
+
+        let open = false;
+        h.addEventListener('click', () => {
+          open = !open;
+          body.style.display = open ? 'flex' : 'none';
+          caret.textContent = open ? '\u25BE' : '\u25B8';   // down triangle when open
+        });
+      } else {
+        h.textContent = group.title;
+        sec.appendChild(h);
+        if (group.desc) {
+          const d = document.createElement('div');
+          d.textContent = group.desc;
+          d.style.cssText = 'font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,#9a93a8);margin-top:-4px';
+          sec.appendChild(d);
+        }
+        for (const f of group.fields) sec.appendChild(buildRow(f));
       }
-
-      for (const f of group.fields) sec.appendChild(buildRow(f));
       scroller.appendChild(sec);
     }
     panel.appendChild(scroller);
@@ -756,6 +816,7 @@ export function setup(ctx: Ctx, opts?: any) {
       if (!ok) return;
       for (const g of SCHEMA) for (const fl of g.fields) cfg[fl.key] = (CONFIG as any)[fl.key];
       saveSaved();
+      pushReplaceRules();
       if (onSaved) onSaved();
       buildSettingsBody(root, onSaved);
       log('settings reset to defaults');
@@ -778,6 +839,7 @@ export function setup(ctx: Ctx, opts?: any) {
       if (active && typeof active.blur === 'function') active.blur();
       for (const g of SCHEMA) for (const fl of g.fields) if (fl.type === 'num') cfg[fl.key] = clampField(fl, cfg[fl.key]);
       saveSaved();
+      pushReplaceRules();
       if (onSaved) onSaved();
       status.textContent = 'Saved. Takes effect on the next reply.';
       log('settings saved', cfg);
