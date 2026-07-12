@@ -125,7 +125,8 @@ suddenly => abruptly, sort of => kind of, very =>
 - A single word matches whole words only, so `cat => dog` changes "cat" but leaves "category" alone.
 - Anything with a space or punctuation is matched literally, so `sort of => kind of` works as a phrase.
 - Leave the right side empty to delete a word, like `very => ` above.
-- Capitalization is matched to the text it replaced, so a swap at the start of a sentence stays capitalized.
+- List the same word more than once to give it options, like `sky => blue, sky => aqua`. By default it uses the first one. Turn on **Pick randomly when a word has more than one swap** and each time that word appears it picks one of its options at random, which is handy for variety.
+- By default matching ignores letter case and keeps the original capitalization, so a swap at the start of a sentence stays capitalized. Turn on **Match case exactly** to swap only when the case matches your rule, which also lets `sky` and `Sky` have different swaps.
 
 Editing a saved reply needs the `chat_mutation` permission (see Permissions below). If nothing in your rules matches a reply, that reply is left untouched.
 
@@ -158,6 +159,8 @@ The settings modal is the easy path. The same options live in the CONFIG block a
 | refusalMaxChars | 1200 | Longest reply still treated as a possible refusal. |
 | replaceEnabled | false | (beta) Turn on find-and-replace on replies. Edits the saved message. |
 | replaceRules | (empty) | "old => new" word swaps, comma-separated. |
+| replaceRandom | false | When a word has more than one swap, pick one at random each time. |
+| replaceCaseSensitive | false | Match letter case exactly. Off = case-insensitive, capitalization kept. |
 | regenerateSelector | (see file) | Host button. See below. |
 | swipeNextSelector | (see file) | Backup button if your build retries by swiping. |
 | stopSelector | (see file) | Host stop button, used to abort a stalled reply. |
