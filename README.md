@@ -16,7 +16,7 @@ It watches each reply and re-fires when:
 
 Every retry waits a little longer than the last so it never hammers the server, and waits extra when the server says it is busy. All of the triggers share one retry limit, so no reply is ever retried more than you allow, and nothing can loop forever.
 
-It can also, optionally, run a find-and-replace on replies: swap words you don't like for ones you prefer, saved into the reply. See [Find and replace in replies](#find-and-replace-in-replies) below. This is off by default and is the only feature that edits a reply.
+It can also, optionally, run a find-and-replace on replies: swap words you don't like for ones you prefer, saved into the reply. See [Find and replace in replies](#find-and-replace-in-replies-beta) below. This is off by default and is the only feature that edits a reply.
 
 ## Install
 
@@ -99,9 +99,11 @@ due to safety concerns            i have to prioritize safety
 
 Alongside that list it also matches a few patterns that are not fixed phrases, so the reword field does not change these: the model calling itself an AI or language model; policy or guideline wording ("against my guidelines"); a refusal joined to a task word like request, prompt, content, scenario, or roleplay; the assistant-only verbs assist, comply, or fulfill; and "I don't feel comfortable" followed by an action like continuing or writing. On the error side it matches content-block wording such as prohibited content, content policy, safety filter, and blocked for content.
 
-## Find and replace in replies
+## Find and replace in replies (beta)
 
 This swaps words in a reply after it arrives and saves the change into the stored message. It is separate from everything above: it has nothing to do with retrying or with refusal detection, and it is off by default. Turn on "Swap words in replies" and add rules to use it.
+
+It is marked beta: it is new, it runs a backend that edits your saved messages, and it needs a privileged permission, so it is worth trying with a little caution before you rely on it.
 
 It never changes what the model generated. A find-and-replace always runs after the reply already exists, so it only edits the text afterward. Because it edits the stored reply rather than just the display, the swap sticks, shows everywhere, and the model reads the swapped wording as context on later turns.
 
@@ -145,7 +147,7 @@ The settings modal is the easy path. The same options live in the CONFIG block a
 | refusalPhraseSubs | (empty) | Reword the built-in phrases with "old => new" rules, comma-separated. |
 | refusalIgnorePhrases | (empty) | Comma-separated whitelist; a reply containing any is never a refusal. |
 | refusalMaxChars | 1200 | Longest reply still treated as a possible refusal. |
-| replaceEnabled | false | Turn on find-and-replace on replies. Edits the saved message. |
+| replaceEnabled | false | (beta) Turn on find-and-replace on replies. Edits the saved message. |
 | replaceRules | (empty) | "old => new" word swaps, comma-separated. |
 | regenerateSelector | (see file) | Host button. See below. |
 | swipeNextSelector | (see file) | Backup button if your build retries by swiping. |
