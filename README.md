@@ -47,9 +47,9 @@ These are deliberately careful so a reply that legitimately ends on `...`, an ac
 
 ## Accidental-refusal detection (beta)
 
-Models sometimes break character and refuse a benign, SFW request by mistake: a false positive in a safety filter, or an inconsistent moderation call on ordinary creative writing. Because these models are a little random, running the *same* request again usually just produces a normal reply. `retryOnRefusal` (on by default) treats that like any other recoverable failure and re-fires.
+Models sometimes break character and refuse a request that a re-run would answer normally: a false positive in a safety filter, or an inconsistent moderation call. Because these models are stochastic, sending the same request again often produces a normal reply. `retryOnRefusal` (on by default) treats that like any other recoverable failure and re-fires.
 
-What it does **not** do matters as much as what it does. It does not rewrite your prompt, swap words, or change any message's role. It re-sends the identical request, capped by your retry limit. So a refusal the model actually means will simply repeat across the tries and then stop, showing you the refusal, exactly as if you had re-rolled by hand a few times. It is a reliability feature for accidental refusals, not a way around a model's real safety behavior.
+It re-sends the identical request, unchanged, capped by your retry limit. Nothing about the prompt, the wording, or the message roles is altered. A refusal the model repeats keeps coming back across the tries and then stops at the limit, leaving the refusal in place.
 
 Detection is layered, because refusal wording differs between models and drifts over time, and because in-character dialogue shares vocabulary with real refusals ("I can't do that," "I refuse," "I must decline"):
 
@@ -67,6 +67,7 @@ Everything sits under **Advanced: refusal tuning** in the settings, so the basic
 
 - **Use the built-in phrase list** (on by default). The built-in patterns are tuned for English. Turn this off to ignore them and match only your own phrases below, which is how you'd run it against a model that refuses in another language.
 - **Your own refusal phrases**: comma-separated extras that should also count. Paste the exact wording your model refuses with, in any language.
+- **Reword the built-in phrases**: change wording inside the built-in list with `old => new` rules, separated by commas. For example `assist => help` rewrites every built-in phrase that uses "assist" to use "help" instead. Handy if a built-in phrase uses a word you'd rather see worded differently, or if your model phrases the same refusal a little differently. It changes what the built-in list matches, so only swap for wording your model actually uses.
 - **Never treat these as a refusal**: a whitelist. If a reply contains any of these it is never re-rolled. Your escape hatch if a line in your roleplay keeps getting redone by mistake. This wins over everything else.
 - **Longest reply to treat as a refusal** (1200 by default). Longer replies are assumed to be real writing and left alone. Raise it if your model writes long refusals, lower it to be safer with long scenes.
 
@@ -96,6 +97,7 @@ The settings modal is the easy path. The same options live in the CONFIG block a
 | retryOnRefusal | true | (beta) Retry an accidental out-of-character refusal. |
 | refusalUseBuiltins | true | Use the built-in English refusal lists. Off = only your own phrases. |
 | refusalExtraPhrases | (empty) | Comma-separated phrases that also count as a refusal. |
+| refusalPhraseSubs | (empty) | Reword the built-in phrases with "old => new" rules, comma-separated. |
 | refusalIgnorePhrases | (empty) | Comma-separated whitelist; a reply containing any is never a refusal. |
 | refusalMaxChars | 1200 | Longest reply still treated as a possible refusal. |
 | regenerateSelector | (see file) | Host button. See below. |
