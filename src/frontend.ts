@@ -470,7 +470,7 @@ export function setup(ctx: Ctx, opts?: any) {
   // ---- import / export ----
   // Settings are just values. These group them so a user can share or back up
   // only the parts they want. Import runs every value back through the same
-  // coerce/clamp as saved settings, so a pasted block can only set known keys to
+  // coerce/clamp as saved settings, so an imported file can only set known keys to
   // safe values; anything unrecognised is ignored.
   const EXPORT_CATEGORIES: Array<{ id: string; label: string; keys: string[] }> = [
     { id: 'retry', label: 'Retry behavior', keys: ['enabled', 'maxRetries', 'retryDelayMs', 'backoffFactor', 'maxDelayMs', 'jitter', 'rateLimitDelayMs', 'stuckTimeoutMs', 'idleTimeoutMs', 'retryOnError', 'retryOnEmpty', 'retryOnTruncated', 'retryOnNoPunct', 'retryOnShort', 'minChars'] },
@@ -956,7 +956,7 @@ export function setup(ctx: Ctx, opts?: any) {
       body.style.cssText = 'display:none;flex-direction:column;gap:10px';
 
       const desc = document.createElement('div');
-      desc.textContent = 'Back up or share your settings as a file. Tick which parts to include (retry behavior, refusal detection, word swaps, button selectors, notifications), then Export to file to download them, or Import from file to load one. An import only fills the form so you can check it: press Save to keep it, or close the settings to discard it.';
+      desc.textContent = 'Save your settings to a file, or load them from one. Tick which parts to include (retry behavior, refusal detection, word swaps, button selectors, notifications), then Export to file to save the ticked parts, or Import from file to load a file. An import puts the values from the file into the settings above without saving them, so you can review them first: press Save to keep them, or close the settings to discard them.';
       desc.style.cssText = 'font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,#9a93a8)';
       body.appendChild(desc);
 
