@@ -382,14 +382,39 @@ export function setup(ctx: Ctx, opts?: any) {
   function showLiveLog() {
     if (liveLogEl || typeof document === 'undefined') return;
     const el = document.createElement('div');
-    el.style.cssText = 'position:fixed;right:8px;bottom:8px;z-index:2147483000;width:min(300px,90vw);max-height:40vh;display:flex;flex-direction:column;background:var(--lumiverse-surface,rgba(20,18,26,.96));border:1px solid var(--lumiverse-border,rgba(255,255,255,.14));border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.4);font-size:11px;color:var(--lumiverse-text,#e9e4f0);overflow:hidden';
+    el.style.cssText = 'position:fixed;right:8px;bottom:8px;z-index:2147483000;width:min(340px,92vw);height:min(300px,50vh);min-width:200px;min-height:120px;max-width:96vw;max-height:85vh;display:flex;flex-direction:column;background:var(--lumiverse-surface,rgba(20,18,26,.96));border:1px solid var(--lumiverse-border,rgba(255,255,255,.14));border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.4);font-family:var(--lumiverse-font-family,system-ui);font-size:13px;color:var(--lumiverse-text,#e9e4f0);overflow:hidden;resize:both';
     const head = document.createElement('div');
-    head.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 8px;border-bottom:1px solid var(--lumiverse-border,rgba(255,255,255,.12));font-weight:600';
+    head.style.cssText = 'display:flex;align-items:center;gap:8px;padding:7px 9px;border-bottom:1px solid var(--lumiverse-border,rgba(255,255,255,.12));font-weight:600;cursor:move;user-select:none;touch-action:none';
     const title = document.createElement('span'); title.textContent = 'Auto Retry log';
     head.appendChild(title);
     const bodyEl = document.createElement('div');
-    bodyEl.style.cssText = 'padding:6px 8px;overflow:auto;font-family:monospace;white-space:pre-wrap;line-height:1.35';
+    bodyEl.style.cssText = 'flex:1;padding:7px 9px;overflow:auto;white-space:pre-wrap;line-height:1.4;font-family:monospace';
     el.appendChild(head); el.appendChild(bodyEl);
+    // Drag by the header. Pointer events cover mouse and touch; the header
+    // captures the pointer so a fast drag outside it still tracks, and the panel
+    // is kept inside the viewport.
+    let dragging = false, sx = 0, sy = 0, ox = 0, oy = 0;
+    const onDown = (e: any) => {
+      dragging = true;
+      const r = el.getBoundingClientRect();
+      el.style.left = r.left + 'px'; el.style.top = r.top + 'px';
+      el.style.right = 'auto'; el.style.bottom = 'auto';
+      sx = e.clientX; sy = e.clientY; ox = r.left; oy = r.top;
+      try { head.setPointerCapture(e.pointerId); } catch (_) {}
+      e.preventDefault();
+    };
+    const onMove = (e: any) => {
+      if (!dragging) return;
+      let nx = ox + (e.clientX - sx), ny = oy + (e.clientY - sy);
+      nx = Math.max(0, Math.min(nx, window.innerWidth - el.offsetWidth));
+      ny = Math.max(0, Math.min(ny, window.innerHeight - el.offsetHeight));
+      el.style.left = nx + 'px'; el.style.top = ny + 'px';
+    };
+    const onUp = (e: any) => { if (dragging) { dragging = false; try { head.releasePointerCapture(e.pointerId); } catch (_) {} } };
+    head.addEventListener('pointerdown', onDown);
+    head.addEventListener('pointermove', onMove);
+    head.addEventListener('pointerup', onUp);
+    head.addEventListener('pointercancel', onUp);
     try { document.body.appendChild(el); } catch (_) { return; }
     liveLogEl = el; liveLogBody = bodyEl;
     renderLiveLog();
@@ -931,7 +956,7 @@ export function setup(ctx: Ctx, opts?: any) {
       body.style.cssText = 'display:none;flex-direction:column;gap:10px';
 
       const desc = document.createElement('div');
-      desc.textContent = 'Tick the parts to include, then export them to a file to back up or share, or import a file someone gave you. Import fills the form; press Save to keep it.';
+      desc.textContent = 'Back up or share your settings as a file. Tick which parts to include (retry behavior, refusal detection, word swaps, button selectors, notifications), then Export to file to download them, or Import from file to load one. An import only fills the form so you can check it: press Save to keep it, or close the settings to discard it.';
       desc.style.cssText = 'font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,#9a93a8)';
       body.appendChild(desc);
 
