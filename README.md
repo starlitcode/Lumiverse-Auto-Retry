@@ -132,7 +132,7 @@ Editing a saved reply needs the `chat_mutation` permission (see Permissions belo
 
 ## Import and export
 
-You can save your settings or share them with someone else. In the settings modal, open **Advanced: import / export**. Tick the parts you want, then either **Export** to copy a shareable block to your clipboard, or paste a block someone gave you and press **Import**.
+You can save your settings to a file or share them with someone else. In the settings modal, open **Advanced: import / export**. Tick the parts you want, then either **Export to file** to save them as a small `.json` file, or **Import from file** to load one someone gave you.
 
 The parts are grouped so you only move what you mean to: retry behavior, refusal detection, word swaps, button selectors, and notifications. For sharing phrase and swap setups, tick just refusal detection and word swaps and leave the rest, since button selectors in particular are tied to one person's Lumiverse build.
 
@@ -195,11 +195,9 @@ A "no match" doesn't always mean the selector is wrong. A button only exists whi
 
 ## Reporting a bug
 
-The quickest path is the **Copy debug info** button in the settings footer. It copies a short plain-text snapshot you can paste straight into a bug report, no developer tools needed: the version, your current settings, whether each button matches on screen right now, your screen and browser, and a timeline of the last things the extension did. That timeline is kept whether or not console logging is on, so for most bugs this one button is all anyone needs.
+The main tool is **Advanced: debug info** in the settings modal. Tick the parts you want (your settings, button match status, browser and screen, recent activity), press **Build preview**, then edit the text to remove anything private before you copy. It copies a short plain-text snapshot you can paste into a bug report, no developer tools needed. The activity timeline is kept whether or not console logging is on, so for most bugs this is all anyone needs. Nothing leaves your device until you paste it somewhere.
 
-If you would rather choose what to include, open **Advanced: debug info**. Tick the parts you want (your settings, button match status, browser and screen, recent activity), press **Build preview**, then edit the text to remove anything private before you copy. Nothing leaves your device until you paste it somewhere.
-
-For watching what the extension does live, turn on **Show a live log on screen** under Advanced: feedback. A small panel appears in the corner and updates in real time as generations run and retries fire, which is useful on mobile where the browser console is out of reach. Tap the x on the panel to hide it.
+For watching what the extension does live, turn on **Show a live log on screen** under Advanced: feedback. A small panel appears in the corner and updates in real time as generations run and retries fire, which is useful on mobile where the browser console is out of reach. It is controlled entirely by that toggle, so turn the toggle off to make it disappear.
 
 For a deeper trace, turn on **Write technical details to the console** in Advanced: feedback, reproduce the problem, then copy what appears in the browser console (F12).
 
