@@ -149,7 +149,7 @@ const SCHEMA: Group[] = [
     fields: [
       { key: 'toast', label: 'Show a pop-up on each retry', type: 'bool', hint: 'A small message telling you it is retrying, with a Cancel button to stop it.' },
       { key: 'log', label: 'Write technical details to the console', type: 'bool', hint: "For bug reports. Turn it on, make the problem happen again, then copy whatever shows up in the browser console (press F12). Leave it off the rest of the time." },
-      { key: 'liveLog', label: 'Show a live log on screen', type: 'bool', hint: "Puts a small panel in the corner that shows recent activity as it happens (generations, retries and why, finishes). Useful for watching what it does without opening the console, especially on mobile. Tap the x on the panel to hide it." },
+      { key: 'liveLog', label: 'Show a live log on screen', type: 'bool', hint: "Puts a small panel in the corner that shows recent activity as it happens (generations, retries and why, finishes). Useful for watching what it does without opening the console, especially on mobile. Turn this off to hide it." },
     ]},
 ];
 
@@ -384,12 +384,9 @@ export function setup(ctx: Ctx, opts?: any) {
     const el = document.createElement('div');
     el.style.cssText = 'position:fixed;right:8px;bottom:8px;z-index:2147483000;width:min(300px,90vw);max-height:40vh;display:flex;flex-direction:column;background:var(--lumiverse-surface,rgba(20,18,26,.96));border:1px solid var(--lumiverse-border,rgba(255,255,255,.14));border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.4);font-size:11px;color:var(--lumiverse-text,#e9e4f0);overflow:hidden';
     const head = document.createElement('div');
-    head.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 8px;border-bottom:1px solid var(--lumiverse-border,rgba(255,255,255,.12));font-weight:600';
+    head.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 8px;border-bottom:1px solid var(--lumiverse-border,rgba(255,255,255,.12));font-weight:600';
     const title = document.createElement('span'); title.textContent = 'Auto Retry log';
-    const x = document.createElement('button'); x.textContent = 'x'; x.setAttribute('aria-label', 'Hide log');
-    x.style.cssText = 'background:none;border:none;color:inherit;cursor:pointer;font-size:14px;line-height:1;padding:0 4px';
-    x.addEventListener('click', () => { cfg.liveLog = false; try { saveSaved(); } catch (_) {} hideLiveLog(); });
-    head.appendChild(title); head.appendChild(x);
+    head.appendChild(title);
     const bodyEl = document.createElement('div');
     bodyEl.style.cssText = 'padding:6px 8px;overflow:auto;font-family:monospace;white-space:pre-wrap;line-height:1.35';
     el.appendChild(head); el.appendChild(bodyEl);
@@ -822,6 +819,29 @@ export function setup(ctx: Ctx, opts?: any) {
     return Promise.resolve(fallbackCopy(text));
   }
 
+  // Save text as a file download. Returns false if the browser blocks it.
+  function downloadText(filename: string, text: string): boolean {
+    try {
+      const blob = new Blob([text], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = filename;
+      document.body.appendChild(a); a.click();
+      document.body.removeChild(a);
+      setTimeout(() => { try { URL.revokeObjectURL(url); } catch (_) {} }, 1000);
+      return true;
+    } catch (_) { return false; }
+  }
+  // Read a chosen file as text and hand it to cb.
+  function readFileAsText(file: File, cb: (text: string | null) => void): void {
+    try {
+      const reader = new FileReader();
+      reader.onload = () => cb(typeof reader.result === 'string' ? reader.result : null);
+      reader.onerror = () => cb(null);
+      reader.readAsText(file);
+    } catch (_) { cb(null); }
+  }
+
   // ---- settings UI ----
   let modalHandle: any = null;
 
@@ -911,7 +931,7 @@ export function setup(ctx: Ctx, opts?: any) {
       body.style.cssText = 'display:none;flex-direction:column;gap:10px';
 
       const desc = document.createElement('div');
-      desc.textContent = 'Tick the parts to include, then Export to copy a shareable block, or paste one below and Import. Import fills the form; press Save to keep it.';
+      desc.textContent = 'Tick the parts to include, then export them to a file to back up or share, or import a file someone gave you. Import fills the form; press Save to keep it.';
       desc.style.cssText = 'font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,#9a93a8)';
       body.appendChild(desc);
 
@@ -921,7 +941,8 @@ export function setup(ctx: Ctx, opts?: any) {
       for (const c of EXPORT_CATEGORIES) {
         const row = document.createElement('label');
         row.style.cssText = 'display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer';
-        const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = true;
+        const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = true; cb.style.cssText = 'accent-color:var(--lumiverse-primary,#7c5cff);cursor:pointer';
+        cb.style.cssText = 'accent-color:var(--lumiverse-primary,#7c5cff);cursor:pointer';
         const txt = document.createElement('span'); txt.textContent = c.label;
         row.appendChild(cb); row.appendChild(txt);
         checkWrap.appendChild(row);
@@ -934,44 +955,42 @@ export function setup(ctx: Ctx, opts?: any) {
       status.style.cssText = 'font-size:12px;line-height:1.4;color:var(--lumiverse-text-muted,#9a93a8);min-height:1em';
       status.textContent = ioStatus; ioStatus = '';
 
-      const areaCss = 'width:100%;box-sizing:border-box;font-family:monospace;font-size:12px;padding:8px;border-radius:8px;border:1px solid var(--lumiverse-border,#3a3543);background:var(--lumiverse-bg,#1a1720);color:var(--lumiverse-text,#e9e4f0);resize:vertical';
-      const subLabel = (t: string) => { const d = document.createElement('div'); d.textContent = t; d.style.cssText = 'font-size:12px;font-weight:600;color:var(--lumiverse-text,#e9e4f0)'; return d; };
-
-      const exportArea = document.createElement('textarea');
-      exportArea.readOnly = true; exportArea.rows = 4; exportArea.placeholder = 'Your export appears here.';
-      exportArea.style.cssText = areaCss;
-      const exportBtn = btn('Export ticked', false);
-      exportBtn.addEventListener('click', async () => {
+      const exportBtn = btn('Export to file', false);
+      exportBtn.addEventListener('click', () => {
         const ids = chosen();
         if (!ids.length) { status.textContent = 'Tick at least one part to export.'; return; }
-        const text = buildExport(ids);
-        exportArea.value = text;
-        const ok = await copyText(text);
-        status.textContent = ok ? 'Copied to clipboard. Paste it anywhere to share or save.' : 'Copy failed, but the text is in the box to copy by hand.';
+        const ok = downloadText('auto-retry-settings.json', buildExport(ids));
+        status.textContent = ok ? 'Saved a file with the ticked parts.' : "Couldn't save a file here.";
       });
 
-      const importArea = document.createElement('textarea');
-      importArea.rows = 4; importArea.placeholder = 'Paste an exported block here, then press Import.';
-      importArea.style.cssText = areaCss;
-      const importBtn = btn('Import ticked', false);
-      importBtn.addEventListener('click', () => {
-        const text = importArea.value.trim();
-        if (!text) { status.textContent = 'Paste an exported block first.'; return; }
+      const fileInput = document.createElement('input');
+      fileInput.type = 'file'; fileInput.accept = 'application/json,.json'; fileInput.style.display = 'none';
+      fileInput.addEventListener('change', () => {
+        const f = fileInput.files && fileInput.files[0];
+        fileInput.value = '';
+        if (!f) return;
         const ids = chosen();
         if (!ids.length) { status.textContent = 'Tick at least one part to import.'; return; }
-        const applied = applyImport(text, ids);
-        if (applied === null) { status.textContent = "That doesn't look like an Auto Retry export."; return; }
-        if (!applied.length) { status.textContent = 'Nothing matched the ticked parts in that block.'; return; }
-        ioStatus = 'Imported: ' + applied.join(', ') + '. Press Save to keep it.';
-        buildSettingsBody(root, onSaved);
+        readFileAsText(f, (text) => {
+          if (text == null) { status.textContent = "Couldn't read that file."; return; }
+          const applied = applyImport(text, ids);
+          if (applied === null) { status.textContent = "That file isn't a valid Auto Retry export."; return; }
+          if (!applied.length) { status.textContent = 'Nothing matched the ticked parts in that file.'; return; }
+          ioStatus = 'Imported: ' + applied.join(', ') + '. Press Save to keep it.';
+          buildSettingsBody(root, onSaved);
+        });
+      });
+      const importBtn = btn('Import from file', false);
+      importBtn.addEventListener('click', () => {
+        if (!chosen().length) { status.textContent = 'Tick at least one part to import first.'; return; }
+        fileInput.click();
       });
 
-      body.appendChild(subLabel('Export'));
-      body.appendChild(exportBtn);
-      body.appendChild(exportArea);
-      body.appendChild(subLabel('Import'));
-      body.appendChild(importArea);
-      body.appendChild(importBtn);
+      const btnRow = document.createElement('div');
+      btnRow.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px';
+      btnRow.appendChild(exportBtn); btnRow.appendChild(importBtn);
+      body.appendChild(btnRow);
+      body.appendChild(fileInput);
       body.appendChild(status);
 
       sec.appendChild(body);
@@ -1009,7 +1028,8 @@ export function setup(ctx: Ctx, opts?: any) {
       for (const s of sections) {
         const row = document.createElement('label');
         row.style.cssText = 'display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer';
-        const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = true;
+        const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = true; cb.style.cssText = 'accent-color:var(--lumiverse-primary,#7c5cff);cursor:pointer';
+        cb.style.cssText = 'accent-color:var(--lumiverse-primary,#7c5cff);cursor:pointer';
         const txt = document.createElement('span'); txt.textContent = s.label;
         row.appendChild(cb); row.appendChild(txt);
         dWrap.appendChild(row);
@@ -1078,15 +1098,6 @@ export function setup(ctx: Ctx, opts?: any) {
       log('settings reset to defaults');
     });
 
-    const dbg = btn('Copy debug info', false);
-    dbg.addEventListener('click', async () => {
-      const ok = await copyText(buildDebugInfo());
-      status.textContent = ok
-        ? 'Copied. Paste it into your bug report.'
-        : "Couldn't copy here. Turn on console logging instead.";
-      setTimeout(() => { status.textContent = ''; }, 4000);
-    });
-
     const save = btn('Save', true);
     save.addEventListener('click', () => {
       // Commit a field the user is still editing, then normalise every number
@@ -1104,7 +1115,6 @@ export function setup(ctx: Ctx, opts?: any) {
     });
 
     actions.appendChild(status);
-    actions.appendChild(dbg);
     actions.appendChild(reset);
     actions.appendChild(save);
     panel.appendChild(actions);
