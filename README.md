@@ -112,7 +112,7 @@ On the error side, when a reply comes back as an error rather than text, it matc
 
 This swaps words in a reply after it arrives and saves the change into the stored message. It is separate from everything above: it has nothing to do with retrying or with refusal detection, and it is off by default. Turn on "Swap words in replies" and add rules to use it.
 
-It is marked beta: it is new, it runs a backend that edits your saved messages, and it needs a privileged permission, so it is worth trying with a little caution before you rely on it.
+It is marked beta: it is new, it runs a backend that edits your saved messages, and it needs a privileged permission.
 
 It never changes what the model generated. A find-and-replace always runs after the reply already exists, so it only edits the text afterward. Because it edits the stored reply rather than just the display, the swap sticks, shows everywhere, and the model reads the swapped wording as context on later turns.
 
