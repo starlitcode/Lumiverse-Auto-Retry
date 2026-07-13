@@ -23,7 +23,7 @@ const IGNORE_MAX = 16;   // most aborted-generation ids kept around to swallow t
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = '1.4.0';
+const VERSION = '1.4.1';
 
 // ---- defaults (the UI overrides these; editing here changes the fallback) ----
 const CONFIG = {
@@ -382,7 +382,7 @@ export function setup(ctx: Ctx, opts?: any) {
   function showLiveLog() {
     if (liveLogEl || typeof document === 'undefined') return;
     const el = document.createElement('div');
-    el.style.cssText = 'position:fixed;right:8px;bottom:8px;z-index:2147483000;width:min(340px,92vw);height:min(300px,50vh);min-width:200px;min-height:120px;max-width:96vw;max-height:85vh;display:flex;flex-direction:column;background:var(--lumiverse-surface,rgba(20,18,26,.96));border:1px solid var(--lumiverse-border,rgba(255,255,255,.14));border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.4);font-family:var(--lumiverse-font-family,system-ui);font-size:13px;color:var(--lumiverse-text,#e9e4f0);overflow:hidden;resize:both';
+    el.style.cssText = 'position:fixed;right:8px;bottom:8px;z-index:2147483000;width:min(340px,92vw);height:min(300px,50vh);min-width:200px;min-height:120px;max-width:96vw;max-height:85vh;display:flex;flex-direction:column;background:var(--lumiverse-surface,rgba(20,18,26,.96));border:1px solid var(--lumiverse-border,rgba(255,255,255,.14));border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.4);font-family:var(--lumiverse-font-family,system-ui);font-size:13px;color:var(--lumiverse-text,#e9e4f0);overflow:hidden';
     const head = document.createElement('div');
     head.style.cssText = 'display:flex;align-items:center;gap:8px;padding:7px 9px;border-bottom:1px solid var(--lumiverse-border,rgba(255,255,255,.12));font-weight:600;cursor:move;user-select:none;touch-action:none';
     const title = document.createElement('span'); title.textContent = 'Auto Retry log';
@@ -415,6 +415,33 @@ export function setup(ctx: Ctx, opts?: any) {
     head.addEventListener('pointermove', onMove);
     head.addEventListener('pointerup', onUp);
     head.addEventListener('pointercancel', onUp);
+    // Resize by a corner grip. CSS resize only works with a mouse, so this uses
+    // the same pointer events as the drag so it also works with touch on mobile.
+    const grip = document.createElement('div');
+    grip.style.cssText = 'position:absolute;right:0;bottom:0;width:20px;height:20px;cursor:nwse-resize;touch-action:none;background:linear-gradient(135deg,transparent 45%,var(--lumiverse-border,rgba(255,255,255,.5)) 45%,var(--lumiverse-border,rgba(255,255,255,.5)) 55%,transparent 55%,transparent 70%,var(--lumiverse-border,rgba(255,255,255,.5)) 70%,var(--lumiverse-border,rgba(255,255,255,.5)) 80%,transparent 80%);border-bottom-right-radius:10px';
+    el.appendChild(grip);
+    let rz = false, rsx = 0, rsy = 0, rw = 0, rh = 0;
+    const rzDown = (e: any) => {
+      rz = true;
+      const r = el.getBoundingClientRect();
+      el.style.left = r.left + 'px'; el.style.top = r.top + 'px';
+      el.style.right = 'auto'; el.style.bottom = 'auto';
+      rsx = e.clientX; rsy = e.clientY; rw = el.offsetWidth; rh = el.offsetHeight;
+      try { grip.setPointerCapture(e.pointerId); } catch (_) {}
+      e.preventDefault();
+    };
+    const rzMove = (e: any) => {
+      if (!rz) return;
+      let nw = rw + (e.clientX - rsx), nh = rh + (e.clientY - rsy);
+      nw = Math.max(200, Math.min(nw, window.innerWidth - 16));
+      nh = Math.max(120, Math.min(nh, window.innerHeight - 16));
+      el.style.width = nw + 'px'; el.style.height = nh + 'px';
+    };
+    const rzUp = (e: any) => { if (rz) { rz = false; try { grip.releasePointerCapture(e.pointerId); } catch (_) {} } };
+    grip.addEventListener('pointerdown', rzDown);
+    grip.addEventListener('pointermove', rzMove);
+    grip.addEventListener('pointerup', rzUp);
+    grip.addEventListener('pointercancel', rzUp);
     try { document.body.appendChild(el); } catch (_) { return; }
     liveLogEl = el; liveLogBody = bodyEl;
     renderLiveLog();
