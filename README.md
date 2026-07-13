@@ -71,7 +71,7 @@ Everything sits under **Advanced: refusal tuning** in the settings, so the basic
 - **Your own refusal phrases**: comma-separated extras that should also count, always used whether or not the built-in list is on. Paste the exact wording your model refuses with.
 - **Reword the built-in phrases**: change wording inside the built-in list with `old => new` rules, separated by commas. For example `assist => help` rewrites every built-in phrase that uses "assist" to use "help" instead. Handy if a built-in phrase uses a word you'd rather see worded differently, or if your model phrases the same refusal a little differently. It changes what the built-in list matches, so only swap for wording your model actually uses.
 - **Never treat these as a refusal**: a whitelist. If a reply contains any of these it is never re-rolled. Your escape hatch if a line in your roleplay keeps getting redone by mistake. This wins over everything else.
-- **Longest reply to treat as a refusal** (1200 by default). Longer replies are assumed to be real writing and left alone. Raise it if your model writes long refusals, lower it to be safer with long scenes.
+- **Longest reply to treat as a refusal** (2000 by default). Longer replies are assumed to be real writing and left alone. Raise it if your model writes long, padded refusals, lower it to be safer with long scenes, or set it to 0 to scan replies of any length.
 
 To run entirely on your own phrases, turn off the built-in list and put your wording into "Your own refusal phrases." It is marked beta because the built-in wordlists are still being tuned, so turn the whole thing off with the "It looks like an accidental refusal" toggle if you would rather it never touch a refusal-shaped reply.
 
@@ -164,7 +164,7 @@ The settings modal is the easy path. The same options live in the CONFIG block a
 | refusalExtraPhrases | (empty) | Comma-separated phrases that also count as a refusal. |
 | refusalPhraseSubs | (empty) | Reword the built-in phrases with "old => new" rules, comma-separated. |
 | refusalIgnorePhrases | (empty) | Comma-separated whitelist; a reply containing any is never a refusal. |
-| refusalMaxChars | 1200 | Longest reply still treated as a possible refusal. |
+| refusalMaxChars | 2000 | Longest reply still treated as a possible refusal. 0 = no limit. |
 | replaceEnabled | false | (beta) Turn on find-and-replace on replies. Edits the saved message. |
 | replaceRules | (empty) | "old => new" word swaps, comma-separated. |
 | replaceRandom | false | When a word has more than one swap, pick one at random each time. |
