@@ -18,7 +18,7 @@ const STAND_DOWN_MS = 2500;
 const IGNORE_MAX = 16; // most aborted-generation ids kept around to swallow their late events
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = '1.4.1';
+const VERSION = '1.5.0';
 // ---- defaults (the UI overrides these; editing here changes the fallback) ----
 const CONFIG = {
     enabled: true,
@@ -46,7 +46,7 @@ const CONFIG = {
     refusalPhraseSubs: '', // reword the built-in phrases: "old => new" rules, comma- or newline-separated, applied to the built-in list before matching.
     refusalIgnorePhrases: '', // your escape hatch: a reply containing any of these (comma-separated) is never counted as a refusal.
     refusalUseBuiltins: true, // use the built-in refusal lists. Turn off to run purely on your own phrases below.
-    refusalMaxChars: 1200, // only replies up to this length are considered refusals. Longer = treated as real content.
+    refusalMaxChars: 2000, // only replies up to this length are considered refusals. Longer = treated as real content. 0 = no limit (scan any length).
     // Find and replace in replies (handled by the backend via the Chat Mutation API).
     replaceEnabled: false, // off by default. When on, applies replaceRules to each finished reply and edits the saved message.
     replaceRules: '', // "old => new" rules, comma-separated. A single word matches whole words; empty right side deletes it. Same word can appear more than once.
@@ -112,7 +112,7 @@ const SCHEMA = [
             { key: 'refusalExtraPhrases', label: 'Your own refusal phrases', type: 'text', hint: "Optional. Extra phrases that should also count as a refusal, separated by commas. These are always used, whether or not the built-in list above is on. Upper or lower case doesn't matter. Paste the exact wording your model refuses with." },
             { key: 'refusalPhraseSubs', label: 'Reword the built-in phrases', type: 'text', hint: "Optional. Swap wording inside the built-in list using \"old => new\" rules, separated by commas. Example: assist => help. It changes what the built-in list matches, so only swap for wording your model actually uses." },
             { key: 'refusalIgnorePhrases', label: 'Never treat these as a refusal', type: 'text', hint: "Optional. If a reply contains any of these phrases (comma-separated), it's never counted as a refusal. Your escape hatch when a line in your roleplay keeps getting redone by mistake. This wins over everything else." },
-            { key: 'refusalMaxChars', label: 'Longest reply to treat as a refusal', type: 'num', int: true, min: 100, max: 100000, hint: 'Replies longer than this are assumed to be real writing, not a refusal, and are left alone. 1200 characters suits most cases. Raise it if your model writes long refusals; lower it to be safer with long scenes.' },
+            { key: 'refusalMaxChars', label: 'Longest reply to treat as a refusal', type: 'num', int: true, min: 0, max: 100000, hint: 'Replies longer than this are assumed to be real writing, not a refusal, and are left alone. 2000 suits most cases. Raise it if your model writes long, padded refusals; lower it to protect long scenes. Set it to 0 to check replies of any length, which catches every refusal but is more likely to re-roll a long reply that happens to look refusal-shaped.' },
         ] },
     { title: 'Advanced: buttons it clicks',
         desc: "It works by clicking your own on-screen buttons. The three boxes below are three different buttons it needs for three different jobs: redoing a reply, swiping to a fresh one as a backup, and stopping a frozen reply. Each box takes one CSS selector, the kind you'd use in your browser's inspector, and you can list a few separated by commas as fallbacks since it uses the first that matches. You only need this if retries aren't happening. Paste a selector and press Test until it says match found. A no match doesn't always mean the selector is wrong; the button may just not be on screen yet, so test each one while its button is actually visible. The Stop button, for one, only appears while a reply is generating.",
@@ -170,7 +170,7 @@ function looksTruncated(text, retryOnNoPunct) {
 // two user-editable lists (add your own, or whitelist a line that keeps getting
 // redone). The length gate keeps a long immersive scene that happens to contain
 // one of these phrases from tripping it.
-const REFUSAL_MAX_CHARS = 1200;
+const REFUSAL_MAX_CHARS = 2000;
 // Fold curly quotes/apostrophes to straight and squeeze whitespace, so a reply
 // with a smart apostrophe ("I can’t") matches the same as a straight one.
 function normalizeForMatch(text) {
@@ -268,7 +268,7 @@ function looksLikeRefusal(text, cfg) {
     if (!raw)
         return false; // empty is handled by the empty branch
     const maxChars = (cfg && Number.isFinite(cfg.refusalMaxChars)) ? cfg.refusalMaxChars : REFUSAL_MAX_CHARS;
-    if (raw.length > maxChars)
+    if (maxChars > 0 && raw.length > maxChars)
         return false; // long immersive reply, not a refusal
     const norm = normalizeForMatch(raw);
     const lower = norm.toLowerCase();
