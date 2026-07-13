@@ -536,7 +536,7 @@ export function setup(ctx, opts) {
         { id: 'refusal', label: 'Refusal detection', keys: ['retryOnRefusal', 'refusalUseBuiltins', 'refusalMaxChars', 'refusalExtraPhrases', 'refusalPhraseSubs', 'refusalIgnorePhrases'] },
         { id: 'replace', label: 'Word swaps', keys: ['replaceEnabled', 'replaceRules', 'replaceRandom', 'replaceCaseSensitive'] },
         { id: 'buttons', label: 'Button selectors', keys: ['regenerateSelector', 'swipeNextSelector', 'stopSelector'] },
-        { id: 'notifications', label: 'Notifications', keys: ['toast', 'liveLog'] },
+        { id: 'notifications', label: 'On-screen', keys: ['toast', 'liveLog'] },
     ];
     const fieldByKey = {};
     for (const g of SCHEMA) for (const f of g.fields) fieldByKey[f.key] = f;
@@ -1083,79 +1083,6 @@ export function setup(ctx, opts) {
             }
             scroller.appendChild(sec);
         }
-        // import / export section (collapsible, same look as the Advanced groups)
-        {
-            const sec = document.createElement('div');
-            sec.style.cssText = 'display:flex;flex-direction:column;gap:10px';
-            const h = document.createElement('div');
-            h.style.cssText = 'font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--lumiverse-text-muted,#9a93a8);cursor:pointer;user-select:none;display:flex;align-items:center;gap:6px';
-            const caret = document.createElement('span'); caret.textContent = '\u25B8'; caret.style.cssText = 'font-size:9px';
-            const label = document.createElement('span'); label.textContent = 'Advanced: import / export';
-            h.appendChild(caret); h.appendChild(label); sec.appendChild(h);
-            const body = document.createElement('div');
-            body.style.cssText = 'display:none;flex-direction:column;gap:10px';
-            const desc = document.createElement('div');
-            desc.textContent = 'Save your settings to a file, or load them from one. Tick which parts to include (retry behavior, refusal detection, word swaps, button selectors, notifications), then Export to file to save the ticked parts, or Import from file to load a file. An import puts the values from the file into the settings above without saving them, so you can review them first: press Save to keep them, or close the settings to discard them.';
-            desc.style.cssText = 'font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,#9a93a8)';
-            body.appendChild(desc);
-            const checks = [];
-            const checkWrap = document.createElement('div');
-            checkWrap.style.cssText = 'display:flex;flex-direction:column;gap:6px';
-            for (const c of EXPORT_CATEGORIES) {
-                const row = document.createElement('label');
-                row.style.cssText = 'display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer';
-                const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = true; cb.style.cssText = 'accent-color:var(--lumiverse-primary,#7c5cff);cursor:pointer';
-                cb.style.cssText = 'accent-color:var(--lumiverse-primary,#7c5cff);cursor:pointer';
-                const txt = document.createElement('span'); txt.textContent = c.label;
-                row.appendChild(cb); row.appendChild(txt);
-                checkWrap.appendChild(row);
-                checks.push({ id: c.id, input: cb });
-            }
-            body.appendChild(checkWrap);
-            const chosen = () => checks.filter((x) => x.input.checked).map((x) => x.id);
-            const status = document.createElement('div');
-            status.style.cssText = 'font-size:12px;line-height:1.4;color:var(--lumiverse-text-muted,#9a93a8);min-height:1em';
-            status.textContent = ioStatus; ioStatus = '';
-            const exportBtn = btn('Export to file', false);
-            exportBtn.addEventListener('click', () => {
-                const ids = chosen();
-                if (!ids.length) { status.textContent = 'Tick at least one part to export.'; return; }
-                const ok = downloadText('auto-retry-settings.json', buildExport(ids));
-                status.textContent = ok ? 'Saved a file with the ticked parts.' : "Couldn't save a file here.";
-            });
-            const fileInput = document.createElement('input');
-            fileInput.type = 'file'; fileInput.accept = 'application/json,.json'; fileInput.style.display = 'none';
-            fileInput.addEventListener('change', () => {
-                const f = fileInput.files && fileInput.files[0];
-                fileInput.value = '';
-                if (!f) return;
-                const ids = chosen();
-                if (!ids.length) { status.textContent = 'Tick at least one part to import.'; return; }
-                readFileAsText(f, (text) => {
-                    if (text == null) { status.textContent = "Couldn't read that file."; return; }
-                    const applied = applyImport(text, ids);
-                    if (applied === null) { status.textContent = "That file isn't a valid Auto Retry export."; return; }
-                    if (!applied.length) { status.textContent = 'Nothing matched the ticked parts in that file.'; return; }
-                    ioStatus = 'Imported: ' + applied.join(', ') + '. Press Save to keep it.';
-                    buildSettingsBody(root, onSaved);
-                });
-            });
-            const importBtn = btn('Import from file', false);
-            importBtn.addEventListener('click', () => {
-                if (!chosen().length) { status.textContent = 'Tick at least one part to import first.'; return; }
-                fileInput.click();
-            });
-            const btnRow = document.createElement('div');
-            btnRow.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px';
-            btnRow.appendChild(exportBtn); btnRow.appendChild(importBtn);
-            body.appendChild(btnRow);
-            body.appendChild(fileInput);
-            body.appendChild(status);
-            sec.appendChild(body);
-            let open = false;
-            h.addEventListener('click', () => { open = !open; body.style.display = open ? 'flex' : 'none'; caret.textContent = open ? '\u25BE' : '\u25B8'; });
-            scroller.appendChild(sec);
-        }
         // debug info section (collapsible): choose what to include, review, redact, copy
         {
             const sec = document.createElement('div');
@@ -1213,6 +1140,79 @@ export function setup(ctx, opts) {
             body.appendChild(dArea);
             body.appendChild(copyBtn);
             body.appendChild(dStatus);
+            sec.appendChild(body);
+            let open = false;
+            h.addEventListener('click', () => { open = !open; body.style.display = open ? 'flex' : 'none'; caret.textContent = open ? '\u25BE' : '\u25B8'; });
+            scroller.appendChild(sec);
+        }
+        // import / export section (collapsible, same look as the Advanced groups)
+        {
+            const sec = document.createElement('div');
+            sec.style.cssText = 'display:flex;flex-direction:column;gap:10px';
+            const h = document.createElement('div');
+            h.style.cssText = 'font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--lumiverse-text-muted,#9a93a8);cursor:pointer;user-select:none;display:flex;align-items:center;gap:6px';
+            const caret = document.createElement('span'); caret.textContent = '\u25B8'; caret.style.cssText = 'font-size:9px';
+            const label = document.createElement('span'); label.textContent = 'Advanced: import / export';
+            h.appendChild(caret); h.appendChild(label); sec.appendChild(h);
+            const body = document.createElement('div');
+            body.style.cssText = 'display:none;flex-direction:column;gap:10px';
+            const desc = document.createElement('div');
+            desc.textContent = 'Save your settings to a file, or load them from one. Tick which parts to include (retry behavior, refusal detection, word swaps, button selectors, on-screen), then Export to file to save the ticked parts, or Import from file to load a file. An import puts the values from the file into the settings above without saving them, so you can review them first: press Save to keep them, or close the settings to discard them.';
+            desc.style.cssText = 'font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,#9a93a8)';
+            body.appendChild(desc);
+            const checks = [];
+            const checkWrap = document.createElement('div');
+            checkWrap.style.cssText = 'display:flex;flex-direction:column;gap:6px';
+            for (const c of EXPORT_CATEGORIES) {
+                const row = document.createElement('label');
+                row.style.cssText = 'display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer';
+                const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = true; cb.style.cssText = 'accent-color:var(--lumiverse-primary,#7c5cff);cursor:pointer';
+                cb.style.cssText = 'accent-color:var(--lumiverse-primary,#7c5cff);cursor:pointer';
+                const txt = document.createElement('span'); txt.textContent = c.label;
+                row.appendChild(cb); row.appendChild(txt);
+                checkWrap.appendChild(row);
+                checks.push({ id: c.id, input: cb });
+            }
+            body.appendChild(checkWrap);
+            const chosen = () => checks.filter((x) => x.input.checked).map((x) => x.id);
+            const status = document.createElement('div');
+            status.style.cssText = 'font-size:12px;line-height:1.4;color:var(--lumiverse-text-muted,#9a93a8);min-height:1em';
+            status.textContent = ioStatus; ioStatus = '';
+            const exportBtn = btn('Export to file', false);
+            exportBtn.addEventListener('click', () => {
+                const ids = chosen();
+                if (!ids.length) { status.textContent = 'Tick at least one part to export.'; return; }
+                const ok = downloadText('auto-retry-settings.json', buildExport(ids));
+                status.textContent = ok ? 'Saved a file with the ticked parts.' : "Couldn't save a file here.";
+            });
+            const fileInput = document.createElement('input');
+            fileInput.type = 'file'; fileInput.accept = 'application/json,.json'; fileInput.style.display = 'none';
+            fileInput.addEventListener('change', () => {
+                const f = fileInput.files && fileInput.files[0];
+                fileInput.value = '';
+                if (!f) return;
+                const ids = chosen();
+                if (!ids.length) { status.textContent = 'Tick at least one part to import.'; return; }
+                readFileAsText(f, (text) => {
+                    if (text == null) { status.textContent = "Couldn't read that file."; return; }
+                    const applied = applyImport(text, ids);
+                    if (applied === null) { status.textContent = "That file isn't a valid Auto Retry export."; return; }
+                    if (!applied.length) { status.textContent = 'Nothing matched the ticked parts in that file.'; return; }
+                    ioStatus = 'Imported: ' + applied.join(', ') + '. Press Save to keep it.';
+                    buildSettingsBody(root, onSaved);
+                });
+            });
+            const importBtn = btn('Import from file', false);
+            importBtn.addEventListener('click', () => {
+                if (!chosen().length) { status.textContent = 'Tick at least one part to import first.'; return; }
+                fileInput.click();
+            });
+            const btnRow = document.createElement('div');
+            btnRow.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px';
+            btnRow.appendChild(exportBtn); btnRow.appendChild(importBtn);
+            body.appendChild(btnRow);
+            body.appendChild(fileInput);
+            body.appendChild(status);
             sec.appendChild(body);
             let open = false;
             h.addEventListener('click', () => { open = !open; body.style.display = open ? 'flex' : 'none'; caret.textContent = open ? '\u25BE' : '\u25B8'; });
