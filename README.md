@@ -173,7 +173,6 @@ The settings modal is the easy path. The same options live in the CONFIG block a
 | swipeNextSelector | (see file) | Backup button if your build retries by swiping. |
 | stopSelector | (see file) | Host stop button, used to abort a stalled reply. |
 | toast | true | Show the little retry pop-up with its Cancel button. |
-| log | false | Console logging, for troubleshooting only. |
 | liveLog | false | Show a small on-screen panel with recent activity, updating live. |
 
 The two watchdog waits (`stuckTimeoutMs`, `idleTimeoutMs`) lean long on purpose so a slow connection or a slow local model isn't mistaken for a freeze. If your provider is fast and you want quicker recovery, lower them.
@@ -197,9 +196,7 @@ A "no match" doesn't always mean the selector is wrong. A button only exists whi
 
 The main tool is **Advanced: debug info** in the settings modal. Tick the parts you want (your settings, button match status, browser and screen, recent activity), press **Build preview**, then edit the text to remove anything private before you copy. It copies a short plain-text snapshot you can paste into a bug report, no developer tools needed. The activity timeline is kept whether or not console logging is on, so for most bugs this is all anyone needs. Nothing leaves your device until you paste it somewhere.
 
-For watching what the extension does live, turn on **Show a live log on screen** under Advanced: feedback. A small panel appears in the corner and updates in real time as generations run and retries fire, which is useful on mobile where the browser console is out of reach. Drag it around by its title bar and resize it from the bottom corner. It is controlled entirely by that toggle, so turn the toggle off to make it disappear.
-
-For a deeper trace, turn on **Write technical details to the console** in Advanced: feedback, reproduce the problem, then copy what appears in the browser console (F12).
+For watching what the extension does live, turn on **Show a live log on screen** under Advanced: on-screen log. A small panel appears in the corner and updates in real time as generations run and retries fire, which is useful on mobile where the browser console is out of reach. Drag it around by its title bar and resize it from the bottom corner. It is controlled entirely by that toggle, so turn the toggle off to make it disappear.
 
 ## Permissions
 
