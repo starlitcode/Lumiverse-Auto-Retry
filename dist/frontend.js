@@ -18,7 +18,7 @@ const STAND_DOWN_MS = 2500;
 const IGNORE_MAX = 16; // most aborted-generation ids kept around to swallow their late events
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = '1.3.1';
+const VERSION = '1.4.0';
 // ---- defaults (the UI overrides these; editing here changes the fallback) ----
 const CONFIG = {
     enabled: true,
@@ -62,6 +62,7 @@ const CONFIG = {
         'button[aria-label*="stop" i], button[title*="stop" i], [class*="_sendBtnStop_"]',
     toast: true,
     log: false,
+    liveLog: false, // show a small on-screen panel with recent activity, updating live. Handy on mobile where dev tools aren't available.
 };
 const SCHEMA = [
     { title: 'On / off',
@@ -107,8 +108,8 @@ const SCHEMA = [
     { title: 'Advanced: refusal tuning (beta)',
         desc: "Only matters if the refusal option above is on. Most people can leave all of this alone. It's here for fine-tuning what counts as a refusal.",
         fields: [
-            { key: 'refusalUseBuiltins', label: 'Use the built-in phrase list', type: 'bool', hint: "On by default. Turn it off to ignore the built-in list completely and match only your own phrases below." },
-            { key: 'refusalExtraPhrases', label: 'Your own refusal phrases', type: 'text', hint: "Optional. Extra phrases that should also count as a refusal, separated by commas. Upper or lower case doesn't matter. Paste the exact wording your model refuses with." },
+            { key: 'refusalUseBuiltins', label: 'Use the built-in phrase list', type: 'bool', hint: "On by default. This only controls the built-in list. Your own phrases below are always used either way. On, the built-in list is used together with your own phrases. Off, only your own phrases are used." },
+            { key: 'refusalExtraPhrases', label: 'Your own refusal phrases', type: 'text', hint: "Optional. Extra phrases that should also count as a refusal, separated by commas. These are always used, whether or not the built-in list above is on. Upper or lower case doesn't matter. Paste the exact wording your model refuses with." },
             { key: 'refusalPhraseSubs', label: 'Reword the built-in phrases', type: 'text', hint: "Optional. Swap wording inside the built-in list using \"old => new\" rules, separated by commas. Example: assist => help. It changes what the built-in list matches, so only swap for wording your model actually uses." },
             { key: 'refusalIgnorePhrases', label: 'Never treat these as a refusal', type: 'text', hint: "Optional. If a reply contains any of these phrases (comma-separated), it's never counted as a refusal. Your escape hatch when a line in your roleplay keeps getting redone by mistake. This wins over everything else." },
             { key: 'refusalMaxChars', label: 'Longest reply to treat as a refusal', type: 'num', int: true, min: 100, max: 100000, hint: 'Replies longer than this are assumed to be real writing, not a refusal, and are left alone. 1200 characters suits most cases. Raise it if your model writes long refusals; lower it to be safer with long scenes.' },
@@ -125,6 +126,7 @@ const SCHEMA = [
         fields: [
             { key: 'toast', label: 'Show a pop-up on each retry', type: 'bool', hint: 'A small message telling you it is retrying, with a Cancel button to stop it.' },
             { key: 'log', label: 'Write technical details to the console', type: 'bool', hint: "For bug reports. Turn it on, make the problem happen again, then copy whatever shows up in the browser console (press F12). Leave it off the rest of the time." },
+            { key: 'liveLog', label: 'Show a live log on screen', type: 'bool', hint: "Puts a small panel in the corner that shows recent activity as it happens (generations, retries and why, finishes). Useful for watching what it does without opening the console, especially on mobile. Tap the x on the panel to hide it." },
         ] },
 ];
 // Final content present but cut off mid-sentence. Lumiverse does not expose
@@ -341,6 +343,8 @@ export function setup(ctx, opts) {
     // and the user never has to open dev tools to report a behavioural bug.
     const EVENTLOG_MAX = 20;
     const eventLog = [];
+    let liveLogEl = null;
+    let liveLogBody = null;
     function recordEvent(args) {
         try {
             const parts = args.map((a) => {
@@ -359,11 +363,66 @@ export function setup(ctx, opts) {
             eventLog.push(line);
             if (eventLog.length > EVENTLOG_MAX)
                 eventLog.shift();
+            if (liveLogBody)
+                renderLiveLog();
         }
         catch (_) { }
     }
     const log = (...a) => { recordEvent(a); if (cfg.log)
         console.log('[auto-retry]', ...a); };
+    // Optional on-screen log. A small fixed panel that shows recent activity live,
+    // so someone can watch what the extension is doing without opening dev tools,
+    // which matters most on mobile. Driven by the liveLog setting.
+    function renderLiveLog() {
+        if (!liveLogBody)
+            return;
+        liveLogBody.textContent = eventLog.length ? eventLog.join('\n') : '(nothing yet)';
+        liveLogBody.scrollTop = liveLogBody.scrollHeight;
+    }
+    function showLiveLog() {
+        if (liveLogEl || typeof document === 'undefined')
+            return;
+        const el = document.createElement('div');
+        el.style.cssText = 'position:fixed;right:8px;bottom:8px;z-index:2147483000;width:min(300px,90vw);max-height:40vh;display:flex;flex-direction:column;background:var(--lumiverse-surface,rgba(20,18,26,.96));border:1px solid var(--lumiverse-border,rgba(255,255,255,.14));border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.4);font-size:11px;color:var(--lumiverse-text,#e9e4f0);overflow:hidden';
+        const head = document.createElement('div');
+        head.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 8px;border-bottom:1px solid var(--lumiverse-border,rgba(255,255,255,.12));font-weight:600';
+        const title = document.createElement('span');
+        title.textContent = 'Auto Retry log';
+        const x = document.createElement('button');
+        x.textContent = 'x';
+        x.setAttribute('aria-label', 'Hide log');
+        x.style.cssText = 'background:none;border:none;color:inherit;cursor:pointer;font-size:14px;line-height:1;padding:0 4px';
+        x.addEventListener('click', () => { cfg.liveLog = false; try { saveSaved(); } catch (_) { } hideLiveLog(); });
+        head.appendChild(title);
+        head.appendChild(x);
+        const bodyEl = document.createElement('div');
+        bodyEl.style.cssText = 'padding:6px 8px;overflow:auto;font-family:monospace;white-space:pre-wrap;line-height:1.35';
+        el.appendChild(head);
+        el.appendChild(bodyEl);
+        try {
+            document.body.appendChild(el);
+        }
+        catch (_) {
+            return;
+        }
+        liveLogEl = el;
+        liveLogBody = bodyEl;
+        renderLiveLog();
+    }
+    function hideLiveLog() {
+        if (liveLogEl && liveLogEl.parentNode) {
+            try {
+                liveLogEl.parentNode.removeChild(liveLogEl);
+            }
+            catch (_) { }
+        }
+        liveLogEl = null;
+        liveLogBody = null;
+    }
+    function syncLiveLog() { if (cfg.liveLog)
+        showLiveLog();
+    else
+        hideLiveLog(); }
     const disposers = [];
     function loadSaved() {
         try {
@@ -423,6 +482,57 @@ export function setup(ctx, opts) {
         if (f.int)
             n = Math.round(n);
         return n;
+    }
+    // ---- import / export ----
+    // Settings are just values. These group them so a user can share or back up
+    // only the parts they want. Import runs every value back through the same
+    // coerce/clamp as saved settings, so a pasted block can only set known keys to
+    // safe values; anything unrecognised is ignored.
+    const EXPORT_CATEGORIES = [
+        { id: 'retry', label: 'Retry behavior', keys: ['enabled', 'maxRetries', 'retryDelayMs', 'backoffFactor', 'maxDelayMs', 'jitter', 'rateLimitDelayMs', 'stuckTimeoutMs', 'idleTimeoutMs', 'retryOnError', 'retryOnEmpty', 'retryOnTruncated', 'retryOnNoPunct', 'retryOnShort', 'minChars'] },
+        { id: 'refusal', label: 'Refusal detection', keys: ['retryOnRefusal', 'refusalUseBuiltins', 'refusalMaxChars', 'refusalExtraPhrases', 'refusalPhraseSubs', 'refusalIgnorePhrases'] },
+        { id: 'replace', label: 'Word swaps', keys: ['replaceEnabled', 'replaceRules', 'replaceRandom', 'replaceCaseSensitive'] },
+        { id: 'buttons', label: 'Button selectors', keys: ['regenerateSelector', 'swipeNextSelector', 'stopSelector'] },
+        { id: 'notifications', label: 'Notifications', keys: ['toast', 'log', 'liveLog'] },
+    ];
+    const fieldByKey = {};
+    for (const g of SCHEMA) for (const f of g.fields) fieldByKey[f.key] = f;
+    let ioStatus = '';
+    function coerceKey(key, val) {
+        const f = fieldByKey[key];
+        if (!f) return undefined;
+        return f.type === 'num' ? clampField(f, val) : coerce(f.type, val, CONFIG[key]);
+    }
+    function buildExport(catIds) {
+        const settings = {};
+        for (const c of EXPORT_CATEGORIES) {
+            if (catIds.indexOf(c.id) < 0) continue;
+            const bucket = {};
+            for (const k of c.keys) bucket[k] = cfg[k];
+            settings[c.id] = bucket;
+        }
+        return JSON.stringify({ autoRetry: VERSION, settings: settings }, null, 2);
+    }
+    // Apply an imported blob, only the chosen categories actually present. Returns
+    // the labels applied, or null if the text was not a valid export.
+    function applyImport(text, catIds) {
+        let data;
+        try { data = JSON.parse(text); } catch (_) { return null; }
+        if (!data || typeof data !== 'object' || !data.settings || typeof data.settings !== 'object') return null;
+        const applied = [];
+        for (const c of EXPORT_CATEGORIES) {
+            if (catIds.indexOf(c.id) < 0) continue;
+            const bucket = data.settings[c.id];
+            if (!bucket || typeof bucket !== 'object') continue;
+            let touched = false;
+            for (const k of c.keys) {
+                if (!(k in bucket)) continue;
+                const v = coerceKey(k, bucket[k]);
+                if (v !== undefined) { cfg[k] = v; touched = true; }
+            }
+            if (touched) applied.push(c.label);
+        }
+        return applied;
     }
     // ---- per-chat state ----
     const chats = new Map();
@@ -763,41 +873,51 @@ export function setup(ctx, opts) {
             return 'invalid selector';
         }
     }
-    function buildDebugInfo() {
+    function buildDebugInfo(opts) {
+        const o = opts || {};
+        const inc = (v) => v !== false; // sections default to on
         const keys = ['enabled', 'maxRetries', 'retryDelayMs', 'backoffFactor', 'maxDelayMs',
             'jitter', 'rateLimitDelayMs', 'stuckTimeoutMs', 'idleTimeoutMs', 'retryOnError',
-            'retryOnEmpty', 'retryOnTruncated', 'retryOnNoPunct', 'retryOnShort', 'minChars', 'retryOnRefusal', 'refusalUseBuiltins', 'refusalMaxChars', 'refusalExtraPhrases', 'refusalPhraseSubs', 'refusalIgnorePhrases', 'replaceEnabled', 'replaceRules', 'replaceRandom', 'replaceCaseSensitive', 'toast', 'log'];
+            'retryOnEmpty', 'retryOnTruncated', 'retryOnNoPunct', 'retryOnShort', 'minChars', 'retryOnRefusal', 'refusalUseBuiltins', 'refusalMaxChars', 'refusalExtraPhrases', 'refusalPhraseSubs', 'refusalIgnorePhrases', 'replaceEnabled', 'replaceRules', 'replaceRandom', 'replaceCaseSensitive', 'liveLog', 'toast', 'log'];
         const lines = [];
         lines.push('Auto Retry v' + VERSION + ' debug info');
         lines.push('time: ' + new Date().toISOString());
-        lines.push('');
-        lines.push('settings:');
-        for (const k of keys)
-            lines.push('  ' + k + ': ' + JSON.stringify(cfg[k]));
-        lines.push('');
-        lines.push('buttons (checked right now):');
-        lines.push('  regenerate: ' + selectorState(cfg.regenerateSelector));
-        lines.push('  swipeNext:  ' + selectorState(cfg.swipeNextSelector));
-        lines.push('  stop:       ' + selectorState(cfg.stopSelector));
-        lines.push('  regenerateSelector = ' + cfg.regenerateSelector);
-        lines.push('  swipeNextSelector  = ' + cfg.swipeNextSelector);
-        lines.push('  stopSelector       = ' + cfg.stopSelector);
-        try {
+        if (inc(o.settings)) {
             lines.push('');
-            lines.push('browser: ' + ((navigator && navigator.userAgent) || 'unknown'));
+            lines.push('settings:');
+            for (const k of keys)
+                lines.push('  ' + k + ': ' + JSON.stringify(cfg[k]));
         }
-        catch (_) { }
-        try {
-            lines.push('screen: ' + ((window && window.innerWidth) || '?') + ' x ' + ((window && window.innerHeight) || '?'));
+        if (inc(o.buttons)) {
+            lines.push('');
+            lines.push('buttons (checked right now):');
+            lines.push('  regenerate: ' + selectorState(cfg.regenerateSelector));
+            lines.push('  swipeNext:  ' + selectorState(cfg.swipeNextSelector));
+            lines.push('  stop:       ' + selectorState(cfg.stopSelector));
+            lines.push('  regenerateSelector = ' + cfg.regenerateSelector);
+            lines.push('  swipeNextSelector  = ' + cfg.swipeNextSelector);
+            lines.push('  stopSelector       = ' + cfg.stopSelector);
         }
-        catch (_) { }
-        lines.push('');
-        lines.push('recent activity (oldest first):');
-        if (eventLog.length === 0)
-            lines.push('  (nothing recorded yet)');
-        else
-            for (const e of eventLog)
-                lines.push('  ' + e);
+        if (inc(o.environment)) {
+            try {
+                lines.push('');
+                lines.push('browser: ' + ((navigator && navigator.userAgent) || 'unknown'));
+            }
+            catch (_) { }
+            try {
+                lines.push('screen: ' + ((window && window.innerWidth) || '?') + ' x ' + ((window && window.innerHeight) || '?'));
+            }
+            catch (_) { }
+        }
+        if (inc(o.activity)) {
+            lines.push('');
+            lines.push('recent activity (oldest first):');
+            if (eventLog.length === 0)
+                lines.push('  (nothing recorded yet)');
+            else
+                for (const e of eventLog)
+                    lines.push('  ' + e);
+        }
         return lines.join('\n');
     }
     function fallbackCopy(text) {
@@ -894,6 +1014,140 @@ export function setup(ctx, opts) {
             }
             scroller.appendChild(sec);
         }
+        // import / export section (collapsible, same look as the Advanced groups)
+        {
+            const sec = document.createElement('div');
+            sec.style.cssText = 'display:flex;flex-direction:column;gap:10px';
+            const h = document.createElement('div');
+            h.style.cssText = 'font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--lumiverse-text-muted,#9a93a8);cursor:pointer;user-select:none;display:flex;align-items:center;gap:6px';
+            const caret = document.createElement('span'); caret.textContent = '\u25B8'; caret.style.cssText = 'font-size:9px';
+            const label = document.createElement('span'); label.textContent = 'Advanced: import / export';
+            h.appendChild(caret); h.appendChild(label); sec.appendChild(h);
+            const body = document.createElement('div');
+            body.style.cssText = 'display:none;flex-direction:column;gap:10px';
+            const desc = document.createElement('div');
+            desc.textContent = 'Tick the parts to include, then Export to copy a shareable block, or paste one below and Import. Import fills the form; press Save to keep it.';
+            desc.style.cssText = 'font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,#9a93a8)';
+            body.appendChild(desc);
+            const checks = [];
+            const checkWrap = document.createElement('div');
+            checkWrap.style.cssText = 'display:flex;flex-direction:column;gap:6px';
+            for (const c of EXPORT_CATEGORIES) {
+                const row = document.createElement('label');
+                row.style.cssText = 'display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer';
+                const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = true;
+                const txt = document.createElement('span'); txt.textContent = c.label;
+                row.appendChild(cb); row.appendChild(txt);
+                checkWrap.appendChild(row);
+                checks.push({ id: c.id, input: cb });
+            }
+            body.appendChild(checkWrap);
+            const chosen = () => checks.filter((x) => x.input.checked).map((x) => x.id);
+            const status = document.createElement('div');
+            status.style.cssText = 'font-size:12px;line-height:1.4;color:var(--lumiverse-text-muted,#9a93a8);min-height:1em';
+            status.textContent = ioStatus; ioStatus = '';
+            const areaCss = 'width:100%;box-sizing:border-box;font-family:monospace;font-size:12px;padding:8px;border-radius:8px;border:1px solid var(--lumiverse-border,#3a3543);background:var(--lumiverse-bg,#1a1720);color:var(--lumiverse-text,#e9e4f0);resize:vertical';
+            const subLabel = (t) => { const d = document.createElement('div'); d.textContent = t; d.style.cssText = 'font-size:12px;font-weight:600;color:var(--lumiverse-text,#e9e4f0)'; return d; };
+            const exportArea = document.createElement('textarea');
+            exportArea.readOnly = true; exportArea.rows = 4; exportArea.placeholder = 'Your export appears here.';
+            exportArea.style.cssText = areaCss;
+            const exportBtn = btn('Export ticked', false);
+            exportBtn.addEventListener('click', async () => {
+                const ids = chosen();
+                if (!ids.length) { status.textContent = 'Tick at least one part to export.'; return; }
+                const text = buildExport(ids);
+                exportArea.value = text;
+                const ok = await copyText(text);
+                status.textContent = ok ? 'Copied to clipboard. Paste it anywhere to share or save.' : 'Copy failed, but the text is in the box to copy by hand.';
+            });
+            const importArea = document.createElement('textarea');
+            importArea.rows = 4; importArea.placeholder = 'Paste an exported block here, then press Import.';
+            importArea.style.cssText = areaCss;
+            const importBtn = btn('Import ticked', false);
+            importBtn.addEventListener('click', () => {
+                const text = importArea.value.trim();
+                if (!text) { status.textContent = 'Paste an exported block first.'; return; }
+                const ids = chosen();
+                if (!ids.length) { status.textContent = 'Tick at least one part to import.'; return; }
+                const applied = applyImport(text, ids);
+                if (applied === null) { status.textContent = "That doesn't look like an Auto Retry export."; return; }
+                if (!applied.length) { status.textContent = 'Nothing matched the ticked parts in that block.'; return; }
+                ioStatus = 'Imported: ' + applied.join(', ') + '. Press Save to keep it.';
+                buildSettingsBody(root, onSaved);
+            });
+            body.appendChild(subLabel('Export'));
+            body.appendChild(exportBtn);
+            body.appendChild(exportArea);
+            body.appendChild(subLabel('Import'));
+            body.appendChild(importArea);
+            body.appendChild(importBtn);
+            body.appendChild(status);
+            sec.appendChild(body);
+            let open = false;
+            h.addEventListener('click', () => { open = !open; body.style.display = open ? 'flex' : 'none'; caret.textContent = open ? '\u25BE' : '\u25B8'; });
+            scroller.appendChild(sec);
+        }
+        // debug info section (collapsible): choose what to include, review, redact, copy
+        {
+            const sec = document.createElement('div');
+            sec.style.cssText = 'display:flex;flex-direction:column;gap:10px';
+            const h = document.createElement('div');
+            h.style.cssText = 'font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--lumiverse-text-muted,#9a93a8);cursor:pointer;user-select:none;display:flex;align-items:center;gap:6px';
+            const caret = document.createElement('span'); caret.textContent = '\u25B8'; caret.style.cssText = 'font-size:9px';
+            const label = document.createElement('span'); label.textContent = 'Advanced: debug info';
+            h.appendChild(caret); h.appendChild(label); sec.appendChild(h);
+            const body = document.createElement('div');
+            body.style.cssText = 'display:none;flex-direction:column;gap:10px';
+            const desc = document.createElement('div');
+            desc.textContent = 'A snapshot for your own debugging or a bug report. Tick the parts to include, build a preview, edit out anything you would rather not share, then copy. Nothing leaves your device until you paste it somewhere.';
+            desc.style.cssText = 'font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,#9a93a8)';
+            body.appendChild(desc);
+            const sections = [
+                { id: 'settings', label: 'Your settings' },
+                { id: 'buttons', label: 'Button match status' },
+                { id: 'environment', label: 'Browser and screen' },
+                { id: 'activity', label: 'Recent activity log' },
+            ];
+            const dchecks = [];
+            const dWrap = document.createElement('div');
+            dWrap.style.cssText = 'display:flex;flex-direction:column;gap:6px';
+            for (const s of sections) {
+                const row = document.createElement('label');
+                row.style.cssText = 'display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer';
+                const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = true;
+                const txt = document.createElement('span'); txt.textContent = s.label;
+                row.appendChild(cb); row.appendChild(txt);
+                dWrap.appendChild(row);
+                dchecks.push({ id: s.id, input: cb });
+            }
+            body.appendChild(dWrap);
+            const opts = () => {
+                const o = {};
+                for (const c of dchecks) o[c.id] = c.input.checked;
+                return o;
+            };
+            const dStatus = document.createElement('div');
+            dStatus.style.cssText = 'font-size:12px;line-height:1.4;color:var(--lumiverse-text-muted,#9a93a8);min-height:1em';
+            const dArea = document.createElement('textarea');
+            dArea.rows = 6; dArea.placeholder = 'Press Build preview to fill this, then edit out anything private before copying.';
+            dArea.style.cssText = 'width:100%;box-sizing:border-box;font-family:monospace;font-size:12px;padding:8px;border-radius:8px;border:1px solid var(--lumiverse-border,#3a3543);background:var(--lumiverse-bg,#1a1720);color:var(--lumiverse-text,#e9e4f0);resize:vertical';
+            const buildBtn = btn('Build preview', false);
+            buildBtn.addEventListener('click', () => { dArea.value = buildDebugInfo(opts()); dStatus.textContent = 'Built. Edit anything you want to remove, then Copy.'; });
+            const copyBtn = btn('Copy', false);
+            copyBtn.addEventListener('click', async () => {
+                if (!dArea.value.trim()) dArea.value = buildDebugInfo(opts());
+                const ok = await copyText(dArea.value);
+                dStatus.textContent = ok ? 'Copied. Paste it into your bug report.' : "Couldn't copy here; select the text and copy by hand.";
+            });
+            body.appendChild(buildBtn);
+            body.appendChild(dArea);
+            body.appendChild(copyBtn);
+            body.appendChild(dStatus);
+            sec.appendChild(body);
+            let open = false;
+            h.addEventListener('click', () => { open = !open; body.style.display = open ? 'flex' : 'none'; caret.textContent = open ? '\u25BE' : '\u25B8'; });
+            scroller.appendChild(sec);
+        }
         panel.appendChild(scroller);
         // footer: a plain bar below the scroll area, set off by a single hairline
         // rule. flex-wrap lets the buttons stack on a narrow phone screen.
@@ -921,6 +1175,7 @@ export function setup(ctx, opts) {
                     cfg[fl.key] = CONFIG[fl.key];
             saveSaved();
             pushReplaceRules();
+            syncLiveLog();
             if (onSaved) onSaved();
             buildSettingsBody(root, onSaved);
             log('settings reset to defaults');
@@ -946,6 +1201,7 @@ export function setup(ctx, opts) {
                         cfg[fl.key] = clampField(fl, cfg[fl.key]);
             saveSaved();
             pushReplaceRules();
+            syncLiveLog();
             if (onSaved) onSaved();
             status.textContent = 'Saved. Takes effect on the next reply.';
             log('settings saved', cfg);
@@ -1163,6 +1419,7 @@ export function setup(ctx, opts) {
     catch (e) {
         log('failed to subscribe to generation events', e);
     }
+    syncLiveLog();
     log('ready v' + VERSION, cfg);
     return () => {
         offs.forEach((o) => { try {
@@ -1180,6 +1437,7 @@ export function setup(ctx, opts) {
             catch (_) { }
             modalHandle = null;
         }
+        hideLiveLog();
         chats.forEach(clearTimers);
         chats.clear();
         eventLog.length = 0;
