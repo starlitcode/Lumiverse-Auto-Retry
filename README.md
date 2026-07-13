@@ -67,8 +67,8 @@ Some providers deliver a refusal as an *error* instead of as reply text (Gemini'
 
 Everything sits under **Advanced: refusal tuning** in the settings, so the basic on/off toggle stays clean for people who just want it on:
 
-- **Use the built-in phrase list** (on by default). Turn this off to ignore the built-in patterns and match only your own phrases below.
-- **Your own refusal phrases**: comma-separated extras that should also count. Paste the exact wording your model refuses with.
+- **Use the built-in phrase list** (on by default). This only controls the built-in list. Your own phrases below are always used either way. On, the built-in list is used together with your own phrases. Off, only your own phrases are used.
+- **Your own refusal phrases**: comma-separated extras that should also count, always used whether or not the built-in list is on. Paste the exact wording your model refuses with.
 - **Reword the built-in phrases**: change wording inside the built-in list with `old => new` rules, separated by commas. For example `assist => help` rewrites every built-in phrase that uses "assist" to use "help" instead. Handy if a built-in phrase uses a word you'd rather see worded differently, or if your model phrases the same refusal a little differently. It changes what the built-in list matches, so only swap for wording your model actually uses.
 - **Never treat these as a refusal**: a whitelist. If a reply contains any of these it is never re-rolled. Your escape hatch if a line in your roleplay keeps getting redone by mistake. This wins over everything else.
 - **Longest reply to treat as a refusal** (1200 by default). Longer replies are assumed to be real writing and left alone. Raise it if your model writes long refusals, lower it to be safer with long scenes.
@@ -130,6 +130,14 @@ suddenly => abruptly, sort of => kind of, very =>
 
 Editing a saved reply needs the `chat_mutation` permission (see Permissions below). If nothing in your rules matches a reply, that reply is left untouched.
 
+## Import and export
+
+You can save your settings or share them with someone else. In the settings modal, open **Advanced: import / export**. Tick the parts you want, then either **Export** to copy a shareable block to your clipboard, or paste a block someone gave you and press **Import**.
+
+The parts are grouped so you only move what you mean to: retry behavior, refusal detection, word swaps, button selectors, and notifications. For sharing phrase and swap setups, tick just refusal detection and word swaps and leave the rest, since button selectors in particular are tied to one person's Lumiverse build.
+
+Import fills the form but does not save on its own, so you can look it over and press **Save** to keep it or close the modal to discard it. Every imported value runs through the same checks as your normal settings, so a pasted block can only set known options to safe values, and anything it does not recognise is ignored.
+
 ## All settings
 
 The settings modal is the easy path. The same options live in the CONFIG block at the top of `src/frontend.ts` and `dist/frontend.js`. `dist/frontend.js` is the file the host actually loads, so editing CONFIG there takes effect with no rebuild; editing `src/frontend.ts` needs a `bun build`.
@@ -166,6 +174,7 @@ The settings modal is the easy path. The same options live in the CONFIG block a
 | stopSelector | (see file) | Host stop button, used to abort a stalled reply. |
 | toast | true | Show the little retry pop-up with its Cancel button. |
 | log | false | Console logging, for troubleshooting only. |
+| liveLog | false | Show a small on-screen panel with recent activity, updating live. |
 
 The two watchdog waits (`stuckTimeoutMs`, `idleTimeoutMs`) lean long on purpose so a slow connection or a slow local model isn't mistaken for a freeze. If your provider is fast and you want quicker recovery, lower them.
 
@@ -186,9 +195,13 @@ A "no match" doesn't always mean the selector is wrong. A button only exists whi
 
 ## Reporting a bug
 
-The settings modal has a **Copy debug info** button. It copies a short plain-text snapshot you can paste straight into a bug report, no developer tools needed: the version, your current settings, whether each button matches on screen right now, your screen and browser, and a timeline of the last things the extension did. That timeline is kept whether or not console logging is on, so for most bugs this one button is all anyone needs.
+The quickest path is the **Copy debug info** button in the settings footer. It copies a short plain-text snapshot you can paste straight into a bug report, no developer tools needed: the version, your current settings, whether each button matches on screen right now, your screen and browser, and a timeline of the last things the extension did. That timeline is kept whether or not console logging is on, so for most bugs this one button is all anyone needs.
 
-For a deeper trace, turn on **Write technical details to the console** in the Advanced section, reproduce the problem, then copy what appears in the browser console (F12).
+If you would rather choose what to include, open **Advanced: debug info**. Tick the parts you want (your settings, button match status, browser and screen, recent activity), press **Build preview**, then edit the text to remove anything private before you copy. Nothing leaves your device until you paste it somewhere.
+
+For watching what the extension does live, turn on **Show a live log on screen** under Advanced: feedback. A small panel appears in the corner and updates in real time as generations run and retries fire, which is useful on mobile where the browser console is out of reach. Tap the x on the panel to hide it.
+
+For a deeper trace, turn on **Write technical details to the console** in Advanced: feedback, reproduce the problem, then copy what appears in the browser console (F12).
 
 ## Permissions
 
