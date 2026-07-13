@@ -77,7 +77,6 @@ const CONFIG = {
     'button[aria-label*="stop" i], button[title*="stop" i], [class*="_sendBtnStop_"]',
 
   toast: true,
-  log: false,
   liveLog: false,          // show a small on-screen panel with recent activity, updating live. Handy on mobile where dev tools aren't available.
 };
 
@@ -88,10 +87,11 @@ type FieldType = 'bool' | 'num' | 'text';
 interface Field { key: keyof typeof CONFIG; label: string; type: FieldType; hint?: string; selector?: boolean; min?: number; max?: number; int?: boolean; }
 interface Group { title: string; desc?: string; fields: Field[]; }
 const SCHEMA: Group[] = [
-  { title: 'On / off',
-    desc: 'The main switch for the whole extension.',
+  { title: 'Basics',
+    desc: 'The main switch, and whether it tells you when it retries.',
     fields: [
       { key: 'enabled', label: 'Turn auto-retry on', type: 'bool', hint: "When on, it quietly tries again whenever a reply fails or gets cut off. Turn it off and it does nothing." },
+      { key: 'toast', label: 'Show a pop-up on each retry', type: 'bool', hint: 'A small message telling you it is retrying, with a Cancel button to stop it.' },
     ]},
   { title: 'How hard it tries',
     desc: 'How persistent it is, and how long it waits between tries.',
@@ -144,12 +144,10 @@ const SCHEMA: Group[] = [
       { key: 'swipeNextSelector', label: 'Your next / swipe button', type: 'text', selector: true, hint: 'A backup it clicks if your setup retries by swiping to a new reply instead.' },
       { key: 'stopSelector', label: 'Your stop button', type: 'text', selector: true, hint: 'The stop button, so it can halt a frozen reply before retrying.' },
     ]},
-  { title: 'Advanced: feedback',
-    desc: 'Small extras for how it talks to you.',
+  { title: 'Advanced: on-screen log',
+    desc: 'A live panel that shows what the extension is doing, for debugging.',
     fields: [
-      { key: 'toast', label: 'Show a pop-up on each retry', type: 'bool', hint: 'A small message telling you it is retrying, with a Cancel button to stop it.' },
-      { key: 'log', label: 'Write technical details to the console', type: 'bool', hint: "For bug reports. Turn it on, make the problem happen again, then copy whatever shows up in the browser console (press F12). Leave it off the rest of the time." },
-      { key: 'liveLog', label: 'Show a live log on screen', type: 'bool', hint: "Puts a small panel in the corner that shows recent activity as it happens (generations, retries and why, finishes). Useful for watching what it does without opening the console, especially on mobile. Turn this off to hide it." },
+      { key: 'liveLog', label: 'Show a live log on screen', type: 'bool', hint: "Puts a small panel in the corner that shows recent activity as it happens (generations, retries and why, finishes). Useful for watching what it does without opening the console, especially on mobile. Drag it to move it, drag its corner to resize, and turn this off to hide it." },
     ]},
 ];
 
@@ -369,7 +367,7 @@ export function setup(ctx: Ctx, opts?: any) {
       if (liveLogBody) renderLiveLog();
     } catch (_) {}
   }
-  const log = (...a: any[]) => { recordEvent(a); if (cfg.log) console.log('[auto-retry]', ...a); };
+  const log = (...a: any[]) => { recordEvent(a); };
 
   // Optional on-screen log. A small fixed panel that shows recent activity live,
   // so someone can watch what the extension is doing without opening dev tools,
@@ -504,7 +502,7 @@ export function setup(ctx: Ctx, opts?: any) {
     { id: 'refusal', label: 'Refusal detection', keys: ['retryOnRefusal', 'refusalUseBuiltins', 'refusalMaxChars', 'refusalExtraPhrases', 'refusalPhraseSubs', 'refusalIgnorePhrases'] },
     { id: 'replace', label: 'Word swaps', keys: ['replaceEnabled', 'replaceRules', 'replaceRandom', 'replaceCaseSensitive'] },
     { id: 'buttons', label: 'Button selectors', keys: ['regenerateSelector', 'swipeNextSelector', 'stopSelector'] },
-    { id: 'notifications', label: 'Notifications', keys: ['toast', 'log', 'liveLog'] },
+    { id: 'notifications', label: 'Notifications', keys: ['toast', 'liveLog'] },
   ];
   const fieldByKey: Record<string, Field> = {};
   for (const g of SCHEMA) for (const f of g.fields) fieldByKey[f.key] = f;
@@ -819,7 +817,7 @@ export function setup(ctx: Ctx, opts?: any) {
     const inc = (v: any) => v !== false; // sections default to on
     const keys = ['enabled', 'maxRetries', 'retryDelayMs', 'backoffFactor', 'maxDelayMs',
       'jitter', 'rateLimitDelayMs', 'stuckTimeoutMs', 'idleTimeoutMs', 'retryOnError',
-      'retryOnEmpty', 'retryOnTruncated', 'retryOnNoPunct', 'retryOnShort', 'minChars', 'retryOnRefusal', 'refusalUseBuiltins', 'refusalMaxChars', 'refusalExtraPhrases', 'refusalPhraseSubs', 'refusalIgnorePhrases', 'replaceEnabled', 'replaceRules', 'replaceRandom', 'replaceCaseSensitive', 'liveLog', 'toast', 'log'];
+      'retryOnEmpty', 'retryOnTruncated', 'retryOnNoPunct', 'retryOnShort', 'minChars', 'retryOnRefusal', 'refusalUseBuiltins', 'refusalMaxChars', 'refusalExtraPhrases', 'refusalPhraseSubs', 'refusalIgnorePhrases', 'replaceEnabled', 'replaceRules', 'replaceRandom', 'replaceCaseSensitive', 'liveLog', 'toast'];
     const lines: string[] = [];
     lines.push('Auto Retry v' + VERSION + ' debug info');
     lines.push('time: ' + new Date().toISOString());
