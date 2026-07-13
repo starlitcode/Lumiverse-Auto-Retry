@@ -23,7 +23,7 @@ const IGNORE_MAX = 16;   // most aborted-generation ids kept around to swallow t
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = '1.3.0';
+const VERSION = '1.3.1';
 
 // ---- defaults (the UI overrides these; editing here changes the fallback) ----
 const CONFIG = {
