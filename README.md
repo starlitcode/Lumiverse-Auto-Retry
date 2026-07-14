@@ -68,9 +68,9 @@ Some providers deliver a refusal as an *error* instead of as reply text (Gemini'
 Everything sits under **Advanced: refusal tuning** in the settings, so the basic on/off toggle stays clean for people who just want it on:
 
 - **Use the built-in phrase list** (on by default). This only controls the built-in list. Your own phrases below are always used either way. On, the built-in list is used together with your own phrases. Off, only your own phrases are used.
-- **Your own refusal phrases**: comma-separated extras that should also count, always used whether or not the built-in list is on. Paste the exact wording your model refuses with.
-- **Reword the built-in phrases**: change wording inside the built-in list with `old => new` rules, separated by commas. For example `assist => help` rewrites every built-in phrase that uses "assist" to use "help" instead. Handy if a built-in phrase uses a word you'd rather see worded differently, or if your model phrases the same refusal a little differently. It changes what the built-in list matches, so only swap for wording your model actually uses.
-- **Never treat these as a refusal**: a whitelist. If a reply contains any of these it is never re-rolled. Your escape hatch if a line in your roleplay keeps getting redone by mistake. This wins over everything else.
+- **Your own refusal phrases**: extras that should also count, one per line, always used whether or not the built-in list is on. Paste the exact wording your model refuses with.
+- **Reword the built-in phrases**: change wording inside the built-in list with `old => new` rules, one per line. For example `assist => help` rewrites every built-in phrase that uses "assist" to use "help" instead. Handy if a built-in phrase uses a word you'd rather see worded differently, or if your model phrases the same refusal a little differently. It changes what the built-in list matches, so only swap for wording your model actually uses.
+- **Never treat these as a refusal**: a whitelist. If a reply contains any of these, one per line, it is never re-rolled. This wins over everything else.
 - **Longest reply to treat as a refusal** (2000 by default). Longer replies are assumed to be real writing and left alone. Raise it if your model writes long, padded refusals, lower it to be safer with long scenes, or set it to 0 to scan replies of any length.
 
 To run entirely on your own phrases, turn off the built-in list and put your wording into "Your own refusal phrases." It is marked beta because the built-in wordlists are still being tuned, so turn the whole thing off with the "It looks like an accidental refusal" toggle if you would rather it never touch a refusal-shaped reply.
@@ -116,16 +116,19 @@ It is marked beta: it is new, it runs a backend that edits your saved messages, 
 
 It never changes what the model generated. A find-and-replace always runs after the reply already exists, so it only edits the text afterward. Because it edits the stored reply rather than just the display, the swap sticks, shows everywhere, and the model reads the swapped wording as context on later turns.
 
-Rules go in the "Word swaps" box as `old => new`, separated by commas:
+Rules go in the "Word swaps" box as `old => new`, one rule per line:
 
 ```
-suddenly => abruptly, sort of => kind of, very => 
+suddenly => abruptly
+sort of => kind of
+very => 
 ```
 
+- The left side can be a single word, a phrase, or a whole sentence, and commas inside it are fine (each rule is a whole line, so a comma no longer splits it).
 - A single word matches whole words only, so `cat => dog` changes "cat" but leaves "category" alone.
-- Anything with a space or punctuation is matched literally, so `sort of => kind of` works as a phrase.
-- Leave the right side empty to delete a word, like `very => ` above.
-- List the same word more than once to give it options, like `sky => blue, sky => aqua`. By default it uses the first one. Turn on **Pick randomly when a word has more than one swap** and each time that word appears it picks one of its options at random, which is handy for variety.
+- A phrase or sentence matches exactly as you type it, so `sort of => kind of` swaps that phrase wherever it appears, and a full sentence swaps that whole sentence. It has to match your text exactly, including spacing and punctuation.
+- Leave the right side empty to delete a word, like `very => ` above. It also removes one trailing space, so a mid-sentence deletion doesn't leave a double space.
+- Put the same left side on more than one line to give it options (for example `sky => blue` on one line and `sky => aqua` on the next). By default it uses the first one. Turn on **Pick randomly when a word has more than one swap** and each time that word appears it picks one of its options at random, which is handy for variety.
 - By default matching ignores letter case and keeps the original capitalization, so a swap at the start of a sentence stays capitalized. Turn on **Match case exactly** to swap only when the case matches your rule, which also lets `sky` and `Sky` have different swaps.
 
 Editing a saved reply needs the `chat_mutation` permission (see Permissions below). If nothing in your rules matches a reply, that reply is left untouched.
@@ -161,12 +164,12 @@ The settings modal is the easy path. The same options live in the CONFIG block a
 | minChars | 24 | Short threshold, used when retryOnShort is on. |
 | retryOnRefusal | true | (beta) Retry an accidental out-of-character refusal. |
 | refusalUseBuiltins | true | Use the built-in English refusal lists. Off = only your own phrases. |
-| refusalExtraPhrases | (empty) | Comma-separated phrases that also count as a refusal. |
-| refusalPhraseSubs | (empty) | Reword the built-in phrases with "old => new" rules, comma-separated. |
-| refusalIgnorePhrases | (empty) | Comma-separated whitelist; a reply containing any is never a refusal. |
+| refusalExtraPhrases | (empty) | Phrases that also count as a refusal, one per line. |
+| refusalPhraseSubs | (empty) | Reword the built-in phrases with "old => new" rules, one per line. |
+| refusalIgnorePhrases | (empty) | Whitelist, one per line; a reply containing any is never a refusal. |
 | refusalMaxChars | 2000 | Longest reply still treated as a possible refusal. 0 = no limit. |
 | replaceEnabled | false | (beta) Turn on find-and-replace on replies. Edits the saved message. |
-| replaceRules | (empty) | "old => new" word swaps, comma-separated. |
+| replaceRules | (empty) | "old => new" word swaps, one per line. |
 | replaceRandom | false | When a word has more than one swap, pick one at random each time. |
 | replaceCaseSensitive | false | Match letter case exactly. Off = case-insensitive, capitalization kept. |
 | regenerateSelector | (see file) | Host button. See below. |
