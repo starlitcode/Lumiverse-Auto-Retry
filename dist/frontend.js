@@ -1312,8 +1312,14 @@ export function setup(ctx, opts) {
         }
         else {
             row.appendChild(top);
-            const input = document.createElement('input');
-            input.type = 'text';
+            const isMultiline = !f.selector;
+            const input = document.createElement(isMultiline ? 'textarea' : 'input');
+            if (isMultiline) {
+                input.rows = 4;
+                input.style.resize = 'vertical';
+            } else {
+                input.type = 'text';
+            }
             input.value = String(cfg[f.key]);
             input.setAttribute('aria-label', f.label);
             styleField(input);
