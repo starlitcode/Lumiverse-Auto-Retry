@@ -1208,10 +1208,16 @@ export function setup(ctx: Ctx, opts?: any) {
       row.appendChild(top);
     } else {
       row.appendChild(top);
-      const input = document.createElement('input');
-      input.type = 'text';
-      input.value = String(cfg[f.key]);
-      input.setAttribute('aria-label', f.label);
+const isMultiline = !f.selector;
+const input = document.createElement(isMultiline ? 'textarea' : 'input') as any;
+if (isMultiline) {
+    input.rows = 4;
+    input.style.resize = 'vertical';
+} else {
+    input.type = 'text';
+}
+input.value = String(cfg[f.key]);
+input.setAttribute('aria-label', f.label);
       styleField(input);
       input.addEventListener('change', () => { cfg[f.key] = input.value; });
       row.appendChild(input);
