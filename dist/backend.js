@@ -36,7 +36,7 @@ function escapeRe(s) {
 function buildGroups(raw, cs) {
     const map = new Map();
     const order = [];
-    for (const line of String(raw == null ? '' : raw).split(/[,\n]/)) {
+    for (const line of String(raw == null ? '' : raw).split(/\r?\n/)) {
         const i = line.indexOf('=>');
         if (i < 0) continue;
         const from = line.slice(0, i).trim();
@@ -51,7 +51,7 @@ function buildGroups(raw, cs) {
         const g = map.get(key);
         const isWord = /^[\p{L}\p{N}]+$/u.test(g.from);
         const body = escapeRe(g.from);
-        const re = new RegExp(isWord ? '\\b' + body + '\\b' : body, cs ? 'gu' : 'giu');
+        const re = new RegExp('(' + (isWord ? '\\b' + body + '\\b' : body) + ')( ?)', cs ? 'gu' : 'giu');
         out.push({ re: re, tos: g.tos, from: g.from });
     }
     return out;
@@ -68,10 +68,10 @@ function matchCase(sample, repl) {
 function applyRules(text) {
     let out = String(text == null ? '' : text);
     for (const g of groups) {
-        out = out.replace(g.re, (m) => {
+        out = out.replace(g.re, (m, matched, trail) => {
             let repl = (random && g.tos.length > 1) ? g.tos[Math.floor(Math.random() * g.tos.length)] : g.tos[0];
-            if (!caseSensitive) repl = matchCase(m, repl);
-            return repl;
+            if (!caseSensitive) repl = matchCase(matched, repl);
+            return repl === '' ? '' : repl + trail; // deletion also drops one trailing space
         });
     }
     return out;
