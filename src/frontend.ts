@@ -23,7 +23,7 @@ const IGNORE_MAX = 16;   // most aborted-generation ids kept around to swallow t
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = '1.5.0';
+const VERSION = '2.0.0';
 
 // ---- defaults (the UI overrides these; editing here changes the fallback) ----
 const CONFIG = {
@@ -53,8 +53,8 @@ const CONFIG = {
   minChars: 24,
   retryOnRefusal: true,    // final content is an out-of-character refusal (see looksLikeRefusal). Re-fires the SAME request, capped by maxRetries. Does not alter the request.
   refusalExtraPhrases: '', // your own extra refusal phrases, comma-separated. Any reply containing one counts as a refusal.
-  refusalPhraseSubs: '',   // reword the built-in phrases: "old => new" rules, comma- or newline-separated, applied to the built-in list before matching.
-  refusalIgnorePhrases: '',// your escape hatch: a reply containing any of these (comma-separated) is never counted as a refusal.
+  refusalPhraseSubs: '',   // reword the built-in phrases: "old => new" rules, one per line, applied to the built-in list before matching.
+  refusalIgnorePhrases: '',// a reply containing any of these (one per line) is never counted as a refusal.
   refusalUseBuiltins: true,// use the built-in refusal lists. Turn off to run purely on your own phrases below.
   refusalMaxChars: 2000,   // only replies up to this length are considered refusals. Longer = treated as real content. 0 = no limit (scan any length).
 
@@ -124,7 +124,7 @@ const SCHEMA: Group[] = [
     desc: "Swaps words in a reply after it arrives and saves the change, so the swap sticks and the model reads it on later turns. It never changes what the model generated, only the text afterward. Needs the chat editing permission. Off by default.",
     fields: [
       { key: 'replaceEnabled', label: 'Swap words in replies', type: 'bool', hint: "When on, applies your swaps below to each new reply and edits the saved message. If nothing here matches, the reply is left untouched." },
-      { key: 'replaceRules', label: 'Word swaps (old => new)', type: 'text', hint: "One or more \"old => new\" rules, separated by commas. Example: suddenly => abruptly, sort of => kind of. A single word matches whole words only, so cat won't touch category. Leave the right side empty to delete the word. List the same word more than once (like sky => blue, sky => aqua) to give it several options for the random toggle below." },
+      { key: 'replaceRules', label: 'Word swaps (old => new)', type: 'text', hint: "Rules are \"old => new\", one per line. The left side can be a single word, a phrase, or a whole sentence, and commas inside it are fine. A single word matches whole words only (so cat won't touch category), while a phrase or sentence matches exactly as you type it. Leave the right side empty to delete it. Put the same left side on more than one line (like sky => blue on one line and sky => aqua on another) to give it options for the random toggle below." },
       { key: 'replaceRandom', label: 'Pick randomly when a word has more than one swap', type: 'bool', hint: "Off by default. When a word is listed more than once (like sky => blue, sky => aqua), each time it appears one of its options is picked at random. Off, it always uses the first one you listed." },
       { key: 'replaceCaseSensitive', label: 'Match case exactly', type: 'bool', hint: "Off by default. When off, a swap matches any case and keeps the original capitalization. Turn on to swap only when the case matches your rule exactly, so sky and Sky can have different swaps." },
     ]},
@@ -132,9 +132,9 @@ const SCHEMA: Group[] = [
     desc: "Only matters if the refusal option above is on. Most people can leave all of this alone. It's here for fine-tuning what counts as a refusal.",
     fields: [
       { key: 'refusalUseBuiltins', label: 'Use the built-in phrase list', type: 'bool', hint: "On by default. This only controls the built-in list. Your own phrases below are always used either way. On, the built-in list is used together with your own phrases. Off, only your own phrases are used." },
-      { key: 'refusalExtraPhrases', label: 'Your own refusal phrases', type: 'text', hint: "Optional. Extra phrases that should also count as a refusal, separated by commas. These are always used, whether or not the built-in list above is on. Upper or lower case doesn't matter. Paste the exact wording your model refuses with." },
-      { key: 'refusalPhraseSubs', label: 'Reword the built-in phrases', type: 'text', hint: "Optional. Swap wording inside the built-in list using \"old => new\" rules, separated by commas. Example: assist => help. It changes what the built-in list matches, so only swap for wording your model actually uses." },
-      { key: 'refusalIgnorePhrases', label: 'Never treat these as a refusal', type: 'text', hint: "Optional. If a reply contains any of these phrases (comma-separated), it's never counted as a refusal. Your escape hatch when a line in your roleplay keeps getting redone by mistake. This wins over everything else." },
+      { key: 'refusalExtraPhrases', label: 'Your own refusal phrases', type: 'text', hint: "Optional. Extra phrases that should also count as a refusal, one per line. These are always used, whether or not the built-in list above is on. Upper or lower case doesn't matter. Paste the exact wording your model refuses with." },
+      { key: 'refusalPhraseSubs', label: 'Reword the built-in phrases', type: 'text', hint: "Optional. Swap wording inside the built-in list using \"old => new\" rules, one per line. Example: assist => help. It changes what the built-in list matches, so only swap for wording your model actually uses." },
+      { key: 'refusalIgnorePhrases', label: 'Never treat these as a refusal', type: 'text', hint: "Optional. If a reply contains any of these phrases, one per line, it's never counted as a refusal. This wins over everything else." },
       { key: 'refusalMaxChars', label: 'Longest reply to treat as a refusal', type: 'num', int: true, min: 0, max: 100000, hint: 'Replies longer than this are assumed to be real writing, not a refusal, and are left alone. 2000 suits most cases. Raise it if your model writes long, padded refusals; lower it to protect long scenes. Set it to 0 to check replies of any length, which catches every refusal but is more likely to re-roll a long reply that happens to look refusal-shaped.' },
     ]},
   { title: 'Advanced: buttons it clicks',
@@ -208,17 +208,17 @@ function normalizeForMatch(text: string): string {
 // case-insensitive substring test.
 function splitPhrases(raw: any): string[] {
   return String(raw == null ? '' : raw)
-    .split(/[,\n]/)
+    .split(/\r?\n/)
     .map((p) => normalizeForMatch(p).toLowerCase())
     .filter((p) => p.length > 0);
 }
 
-// Reword rules: "old => new" pairs, comma- or newline-separated. Lets a user
+// Reword rules: "old => new" pairs, one per line. Lets a user
 // swap a word or bit of phrasing in the built-in list for wording they prefer.
 // Empty "new" is allowed (deletes the old text).
 function parseSubs(raw: any): Array<{ from: string; to: string }> {
   const out: Array<{ from: string; to: string }> = [];
-  for (const rule of String(raw == null ? '' : raw).split(/[,\n]/)) {
+  for (const rule of String(raw == null ? '' : raw).split(/\r?\n/)) {
     const i = rule.indexOf('=>');
     if (i < 0) continue;
     const from = normalizeForMatch(rule.slice(0, i)).toLowerCase();
