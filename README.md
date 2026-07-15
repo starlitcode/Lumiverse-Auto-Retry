@@ -6,7 +6,7 @@ Auto Retry quietly re-runs an AI reply when it fails, comes back empty, stalls p
 
 It watches each reply and re-fires when:
 
-- the reply comes back as a provider error (but skips permanent hard failures like invalid API keys)
+- the reply comes back as a provider error (but skips permanent hard failures like invalid API keys by default)
 - the reply comes back empty, including one that "thinks" but never writes anything
 - the reply is cut off mid-sentence (see [Cut-off detection](#cut-off-detection) below)
 - the reply is an accidental out-of-character refusal (see [Accidental-refusal detection](#accidental-refusal-detection-beta) below)
