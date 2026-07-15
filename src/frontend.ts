@@ -412,7 +412,7 @@ function looksTruncated(text: string, retryOnNoPunct: boolean): boolean {
 const REFUSAL_MAX_CHARS = 2000;
 
 // Fold curly quotes/apostrophes to straight and squeeze whitespace, so a reply
-// with a smart apostrophe ("I can’t") matches the same as a straight one.
+// with a smart apostrophe ("I can't") matches the same as a straight one.
 function normalizeForMatch(text: string): string {
   return String(text == null ? "" : text)
     .replace(/[\u2018\u2019\u02BC\u2032]/g, "'")
@@ -991,7 +991,6 @@ export function setup(ctx: Ctx, opts?: any) {
   const isHardError = (err: any) =>
     !!err &&
     /\b(?:400|401|403|404|405|406|413|422|invalid api key|authentication|unauthorized|not found|does not exist|model missing)\b/i.test(
-    (
       String(err),
     );
 
@@ -1622,8 +1621,6 @@ export function setup(ctx: Ctx, opts?: any) {
         cb.checked = true;
         cb.style.cssText =
           "accent-color:var(--lumiverse-primary,#7c5cff);cursor:pointer";
-        cb.style.cssText =
-          "accent-color:var(--lumiverse-primary,#7c5cff);cursor:pointer";
         const txt = document.createElement("span");
         txt.textContent = s.label;
         row.appendChild(cb);
@@ -1651,8 +1648,7 @@ export function setup(ctx: Ctx, opts?: any) {
       const buildBtn = btn("Build preview", false);
       buildBtn.addEventListener("click", () => {
         dArea.value = buildDebugInfo(opts());
-        dStatus.textContent =
-          "Built. Edit anything you want to remove, then Copy.";
+        dStatus.textContent = "Built. Edit anything you want to remove, then Copy.";
       });
       const copyBtn = btn("Copy", false);
       copyBtn.addEventListener("click", async () => {
@@ -1715,8 +1711,6 @@ export function setup(ctx: Ctx, opts?: any) {
         cb.checked = true;
         cb.style.cssText =
           "accent-color:var(--lumiverse-primary,#7c5cff);cursor:pointer";
-        cb.style.cssText =
-          "accent-color:var(--lumiverse-primary,#7c5cff);cursor:pointer";
         const txt = document.createElement("span");
         txt.textContent = c.label;
         row.appendChild(cb);
@@ -1771,8 +1765,7 @@ export function setup(ctx: Ctx, opts?: any) {
             return;
           }
           if (!applied.length) {
-            status.textContent =
-              "Nothing matched the ticked parts in that file.";
+            status.textContent = "Nothing matched the ticked parts in that file.";
             return;
           }
           ioStatus =
