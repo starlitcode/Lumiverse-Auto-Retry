@@ -824,7 +824,7 @@ export function setup(ctx, opts) {
         s.pending = false;
     };
     const isRateLimit = (err) => !!err && /\b429\b|rate.?limit|too many requests|quota|overloaded/i.test(String(err));
-    const isHardError = (err) => !!err && /\b(?:400|401|403|404|405|406|413|422|invalid api key|authentication|unauthorized|not found|does not exist|model missing)\b/i.test(String(err));
+    const isHardError = (err) => !!err && /\b(?:400|401|402|403|404|405|406|413|422|invalid api key|authentication|unauthorized|not found|does not exist|model missing|insufficient balance)\b/i.test(String(err));
     const computeDelay = (attempt, rateLimited) => {
         let d = cfg.retryDelayMs * Math.pow(cfg.backoffFactor, Math.max(0, attempt - 1));
         d = Math.min(d, cfg.maxDelayMs);
