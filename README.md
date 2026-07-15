@@ -6,7 +6,7 @@ Auto Retry quietly re-runs an AI reply when it fails, comes back empty, stalls p
 
 It watches each reply and re-fires when:
 
-- the reply comes back as a provider error
+- the reply comes back as a provider error (but skips permanent hard failures like invalid API keys)
 - the reply comes back empty, including one that "thinks" but never writes anything
 - the reply is cut off mid-sentence (see [Cut-off detection](#cut-off-detection) below)
 - the reply is an accidental out-of-character refusal (see [Accidental-refusal detection](#accidental-refusal-detection-beta) below)
@@ -157,6 +157,7 @@ The settings modal is the easy path. The same options live in the CONFIG block a
 | stuckTimeoutMs | 90000 | Started but no token and no end within this. 0 disables. |
 | idleTimeoutMs | 45000 | Tokens flowed then stopped for this long. 0 disables. |
 | retryOnError | true | Retry provider errors. |
+| ignoreHardErrors | true | Skip permanent failures like missing models or invalid API keys. |
 | retryOnEmpty | true | Retry empty replies and mid-reasoning cutoffs. |
 | retryOnTruncated | true | Retry a reply that ends mid-sentence. |
 | retryOnNoPunct | false | Stricter: also retry a reply ending with no punctuation. Noisy in RP. |
