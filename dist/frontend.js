@@ -279,7 +279,7 @@ const SCHEMA = [{
         key: 'refusalPhraseSubs',
         label: 'Reword the built-in phrases',
         type: 'text',
-        hint: "Optional. Swap wording inside the built-in list using \"old => new\" rules, one per line. Example: assist => help. It changes what the built-in list matches, so only swap for wording your model actually uses."
+        hint: 'Optional. Swap wording inside the built-in list using "old => new" rules, one per line. Example: assist => help. It changes what the built-in list matches, so only swap for wording your model actually uses.'
     },
     {
         key: 'refusalIgnorePhrases',
@@ -373,14 +373,14 @@ function looksTruncated(text, retryOnNoPunct) {
 // one of these phrases from tripping it.
 const REFUSAL_MAX_CHARS = 2000;
 // Fold curly quotes/apostrophes to straight and squeeze whitespace, so a reply
-// with a smart apostrophe ("I can’t") matches the same as a straight one.
+// with a smart apostrophe ("I can't") matches the same as a straight one.
 function normalizeForMatch(text) {
     return String(text == null ? '': text).replace(/[\u2018\u2019\u02BC\u2032]/g, "'").replace(/[\u201C\u201D\u2033]/g, '"').replace(/\s+/g, ' ').trim();
 }
 // A user list is comma- or newline-separated. Lowercased + normalized for a
 // case-insensitive substring test.
 function splitPhrases(raw) {
-    return String(raw == null ? '': raw).split(/\r?\n/).map((p) =>normalizeForMatch(p).toLowerCase()).filter((p) =>p.length > 0);
+    return String(raw == null ? '': raw).split(/\r?\n/).map((p) => normalizeForMatch(p).toLowerCase()).filter((p) => p.length > 0);
 }
 // Reword rules: "old => new" pairs, one per line. Lets a user
 // swap a word or bit of phrasing in the built-in list for wording they prefer.
@@ -403,32 +403,31 @@ function parseSubs(raw) {
 // lowercase/normalized, matching how rules are parsed.
 function applySubs(phrases, subs) {
     if (!subs.length) return phrases;
-    return phrases.map((p) =>{
+    return phrases.map((p) => {
         let out = p;
         for (const s of subs) if (s.from) out = out.split(s.from).join(s.to);
         return out;
-    }).filter((p) =>p.length > 0);
+    }).filter((p) => p.length > 0);
 }
 // Tier 1: strong regexes. Anchored so an in-character "I can't help you carry
 // that" doesn't trip them. These carry the precision.
 const REFUSAL_STRONG = [
 // Model naming itself as an AI.
-/ \bas an ? ( ? :ai | a\.i\. | language model | large language model | ai( ? :model | assistant))\b / i, /\bI(?:'m| am)(?: just| only)? an? (?:ai|a\.i\.|language model|large language model|ai assistant)\b/i,
+/\bas an? (?:ai|a\.i\.|language model|large language model|ai (?:model|assistant))\b/i,
+/\bI(?:'m| am)(?: just| only)? an? (?:ai|a\.i\.|language model|large language model|ai assistant)\b/i,
 // Policy / guideline framing.
-/ \b( ? :against | violates ? |violating | goes ? against | contrary to)( ? :my | our | the | its)( ? :guidelines | programming | policy | policies | content polic( ? :y | ies) | principles)\b / i,
+/\b(?:against|violates?|violating|goes? against|contrary to) (?:my|our|the|its) (?:guidelines|programming|policy|policies|content polic(?:y|ies)|principles)\b/i,
 // Refusal opener + a task-word a character never says (request, prompt,
 // content, message, scenario, roleplay). This meta object separates "the model
 // refusing a task" from "a character refusing a person," so declining an
 // invitation, a duel, or a marriage proposal in-scene will NOT match.
-/ \bI( ? :( ? :can( ? :no | ')?t|cannot|will not|won' ? t | must not | must | have to | need to | refuse to | decline to | am( ? :not able | unable) to | am going to have to) | 'm (?:not able|unable) to|'m going to have to)\b[ ^ . ? !\n] {
-    0,
-    30
-} ? \b( ? :this | that | your | the)( ? :request | prompt | content | message | scenario | roleplay)\b / i,
+/\bI(?: (?:can(?:no|')?t|cannot|will not|won'?t|must not|must|have to|need to|refuse to|decline to|am (?:not able|unable) to|am going to have to)|'m (?:not able|unable) to|'m going to have to)\b[^.?!\n]{0,30}?\b(?:this|that|your|the) (?:request|prompt|content|message|scenario|roleplay)\b/i,
 // Assistant-only verbs (assist / comply / fulfill) that essentially never
 // appear in first-person roleplay dialogue.
-/ \bI( ? :( ? :can( ? :no | ')?t|cannot|will not|won' ? t | am( ? :not able | unable) to) | 'm (?:not able|unable) to) (?:be able to )?(?:assist|comply|fulfil|fulfill)\b/i,
-    // Out-of-character comfort hedge, only in the assistant-action sense.
-    /\bI don' ? t feel comfortable( ? :continuing | writing | creating | generating | producing | proceeding | providing | helping | assisting)\b / i, ];
+/\bI(?: (?:can(?:no|')?t|cannot|will not|won'?t|am (?:not able|unable) to)|'m (?:not able|unable) to) (?:be able to )?(?:assist|comply|fulfil|fulfill)\b/i,
+// Out-of-character comfort hedge, only in the assistant-action sense.
+/\bI don'?t feel comfortable (?:continuing|writing|creating|generating|producing|proceeding|providing|helping|assisting)\b/i,
+];
 // Tier 2: flat phrase list, matched as normalized lowercase substrings. Covers
 // the many near-identical refusal templates across providers without a regex
 // each. All things a character in a scene basically never says.
@@ -474,8 +473,7 @@ function looksLikeRefusalError(errText, cfg) {
     }
     return false;
 }
-export
-function setup(ctx, opts) {
+export function setup(ctx, opts) {
     // cfg is mutable so the settings modal can change it live. Order: code
     // defaults, then GitHub opts, then whatever the user saved in the UI.
     const cfg = Object.assign({},
@@ -508,7 +506,7 @@ function setup(ctx, opts) {
     let liveLogBody = null;
     function recordEvent(args) {
         try {
-            const parts = args.map((a) =>{
+            const parts = args.map((a) => {
                 if (typeof a === 'string') return a;
                 try {
                     return JSON.stringify(a);
@@ -523,7 +521,7 @@ function setup(ctx, opts) {
             if (liveLogBody) renderLiveLog();
         } catch(_) {}
     }
-    const log = (...a) =>{
+    const log = (...a) => {
         recordEvent(a);
     };
     // Optional on-screen log. A small fixed panel that shows recent activity live,
@@ -555,7 +553,7 @@ function setup(ctx, opts) {
         sy = 0,
         ox = 0,
         oy = 0;
-        const onDown = (e) =>{
+        const onDown = (e) => {
             dragging = true;
             const r = el.getBoundingClientRect();
             el.style.left = r.left + 'px';
@@ -571,7 +569,7 @@ function setup(ctx, opts) {
             } catch(_) {}
             e.preventDefault();
         };
-        const onMove = (e) =>{
+        const onMove = (e) => {
             if (!dragging) return;
             let nx = ox + (e.clientX - sx),
             ny = oy + (e.clientY - sy);
@@ -580,7 +578,7 @@ function setup(ctx, opts) {
             el.style.left = nx + 'px';
             el.style.top = ny + 'px';
         };
-        const onUp = (e) =>{
+        const onUp = (e) => {
             if (dragging) {
                 dragging = false;
                 try {
@@ -602,7 +600,7 @@ function setup(ctx, opts) {
         rsy = 0,
         rw = 0,
         rh = 0;
-        const rzDown = (e) =>{
+        const rzDown = (e) => {
             rz = true;
             const r = el.getBoundingClientRect();
             el.style.left = r.left + 'px';
@@ -618,7 +616,7 @@ function setup(ctx, opts) {
             } catch(_) {}
             e.preventDefault();
         };
-        const rzMove = (e) =>{
+        const rzMove = (e) => {
             if (!rz) return;
             let nw = rw + (e.clientX - rsx),
             nh = rh + (e.clientY - rsy);
@@ -627,7 +625,7 @@ function setup(ctx, opts) {
             el.style.width = nw + 'px';
             el.style.height = nh + 'px';
         };
-        const rzUp = (e) =>{
+        const rzUp = (e) => {
             if (rz) {
                 rz = false;
                 try {
@@ -790,7 +788,7 @@ function setup(ctx, opts) {
     }
     // ---- per-chat state ----
     const chats = new Map();
-    const st = (chatId) =>{
+    const st = (chatId) => {
         let s = chats.get(chatId);
         if (!s) {
             s = {
@@ -810,7 +808,7 @@ function setup(ctx, opts) {
         }
         return s;
     };
-    const clearTimers = (s) =>{
+    const clearTimers = (s) => {
         if (s.startTimer) {
             clearTimeout(s.startTimer);
             s.startTimer = null;
@@ -825,16 +823,16 @@ function setup(ctx, opts) {
         }
         s.pending = false;
     };
-    const isRateLimit = (err) =>!!err && /\b429\b|rate.?limit|too many requests|quota|overloaded/i.test(String(err));
-    const isHardError = (err) =>!!err && /\b(?:400|401|403|404|405|406|413|422|invalid api key|authentication|unauthorized|not found|does not exist|model missing)\b/i.test(String(err));
-    const computeDelay = (attempt, rateLimited) =>{
+    const isRateLimit = (err) => !!err && /\b429\b|rate.?limit|too many requests|quota|overloaded/i.test(String(err));
+    const isHardError = (err) => !!err && /\b(?:400|401|403|404|405|406|413|422|invalid api key|authentication|unauthorized|not found|does not exist|model missing)\b/i.test(String(err));
+    const computeDelay = (attempt, rateLimited) => {
         let d = cfg.retryDelayMs * Math.pow(cfg.backoffFactor, Math.max(0, attempt - 1));
         d = Math.min(d, cfg.maxDelayMs);
         if (rateLimited) d = Math.max(d, cfg.rateLimitDelayMs * attempt);
         if (cfg.jitter) d = Math.round(d * (0.85 + Math.random() * 0.3));
         return d;
     };
-    const find = (selector) =>{
+    const find = (selector) => {
         let el = null;
         try {
             el = ctx && ctx.dom && ctx.dom.query ? ctx.dom.query(selector) : null;
@@ -846,7 +844,7 @@ function setup(ctx, opts) {
         }
         return el;
     };
-    const fireRetry = () =>{
+    const fireRetry = () => {
         let btn = null;
         try {
             btn = find(cfg.regenerateSelector) || find(cfg.swipeNextSelector);
@@ -865,7 +863,7 @@ function setup(ctx, opts) {
         showToast("Auto-retry: couldn't find your regenerate button. Set it in Auto Retry settings.");
         return false;
     };
-    const stopGenerating = () =>{
+    const stopGenerating = () => {
         try {
             const stop = find(cfg.stopSelector);
             if (stop) {
@@ -913,10 +911,10 @@ function setup(ctx, opts) {
         s.pending = true;
         log('retry ' + s.attempts + '/' + cfg.maxRetries + ' in ' + delay + 'ms (' + reason + (rl ? ', rate-limited': '') + ')');
         showToast('Retrying ' + s.attempts + '/' + cfg.maxRetries + ' (' + reason + ') in ' + (delay / 1000).toFixed(1) + 's', {
-            cancel: () =>standDown(chatId, true),
+            cancel: () => standDown(chatId, true),
             sticky: true
         });
-        s.timer = setTimeout(() =>{
+        s.timer = setTimeout(() => {
             s.timer = null;
             s.pending = false;
             s.selfTriggered = true;
@@ -955,7 +953,7 @@ function setup(ctx, opts) {
         s.sawContent = false;
         clearTimers(s);
         if (cfg.enabled && cfg.stuckTimeoutMs > 0) {
-            s.startTimer = setTimeout(() =>abortAndRetry(p.chatId, 'stuck'), cfg.stuckTimeoutMs);
+            s.startTimer = setTimeout(() => abortAndRetry(p.chatId, 'stuck'), cfg.stuckTimeoutMs);
         }
     }
     function onToken(p) {
@@ -970,7 +968,7 @@ function setup(ctx, opts) {
         }
         if (cfg.enabled && cfg.idleTimeoutMs > 0) {
             if (s.idleTimer) clearTimeout(s.idleTimer);
-            s.idleTimer = setTimeout(() =>abortAndRetry(p.chatId, 'stalled'), cfg.idleTimeoutMs);
+            s.idleTimer = setTimeout(() => abortAndRetry(p.chatId, 'stalled'), cfg.idleTimeoutMs);
         }
     }
     function onEnd(p) {
@@ -1035,7 +1033,7 @@ function setup(ctx, opts) {
         try {
             const tgt = e && e.target && e.target.closest ? e.target.closest(cfg.stopSelector) : null;
             if (!tgt) return;
-            chats.forEach((s, id) =>{
+            chats.forEach((s, id) => {
                 if (s.pending || s.timer || s.attempts > 0) standDown(id, true);
             });
         } catch(_) {}
@@ -1047,7 +1045,8 @@ function setup(ctx, opts) {
         if (!t) {
             t = document.createElement('div');
             t.id = '__lvRetryToast';
-            t.style.cssText = 'position:fixed;bottom:max(20px,env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);' + 'z-index:2147483647;display:flex;align-items:center;gap:10px;' + 'font:13px/1.4 var(--lumiverse-font-family,system-ui);padding:9px 12px;border-radius:12px;' + 'color:var(--lumiverse-text,#fff);background:var(--lumiverse-fill,rgba(20,16,30,.96));' + 'border:1px solid var(--lumiverse-border,rgba(255,255,255,.18));' + 'box-shadow:0 8px 24px rgba(0,0,0,.45);transition:opacity .2s ease;' + 'opacity:0;max-width:min(92vw,460px);text-align:left'; (document.body || document.documentElement).appendChild(t);
+            t.style.cssText = 'position:fixed;bottom:max(20px,env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);' + 'z-index:2147483647;display:flex;align-items:center;gap:10px;' + 'font:13px/1.4 var(--lumiverse-font-family,system-ui);padding:9px 12px;border-radius:12px;' + 'color:var(--lumiverse-text,#fff);background:var(--lumiverse-fill,rgba(20,16,30,.96));' + 'border:1px solid var(--lumiverse-border,rgba(255,255,255,.18));' + 'box-shadow:0 8px 24px rgba(0,0,0,.45);transition:opacity .2s ease;' + 'opacity:0;max-width:min(92vw,460px);text-align:left';
+            (document.body || document.documentElement).appendChild(t);
         }
         return t;
     }
@@ -1073,15 +1072,15 @@ function setup(ctx, opts) {
                 const c = document.createElement('button');
                 c.textContent = 'Cancel';
                 c.style.cssText = 'flex:none;min-height:36px;padding:6px 14px;border-radius:8px;cursor:pointer;' + 'font:13px var(--lumiverse-font-family,system-ui);' + 'border:1px solid var(--lumiverse-border,rgba(255,255,255,.28));' + 'background:var(--lumiverse-fill-subtle,rgba(255,255,255,.08));color:var(--lumiverse-text,#fff)';
-                c.addEventListener('click', () =>{
+                c.addEventListener('click', () => {
                     try {
                         opts.cancel && opts.cancel();
                     } catch(_) {}
                 });
-                const cClear = () =>{
+                const cClear = () => {
                     c.style.filter = 'none';
                 };
-                c.addEventListener('pointerdown', () =>{
+                c.addEventListener('pointerdown', () => {
                     c.style.filter = 'brightness(1.2)';
                 });
                 c.addEventListener('pointerup', cClear);
@@ -1095,7 +1094,7 @@ function setup(ctx, opts) {
             t.style.opacity = '1';
             clearTimeout(t.__h);
             if (! (opts && opts.sticky)) {
-                t.__h = setTimeout(() =>{
+                t.__h = setTimeout(() => {
                     t.style.opacity = '0';
                     t.style.pointerEvents = 'none';
                 },
@@ -1117,7 +1116,7 @@ function setup(ctx, opts) {
     }
     function buildDebugInfo(opts) {
         const o = opts || {};
-        const inc = (v) =>v !== false; // sections default to on
+        const inc = (v) => v !== false; // sections default to on
         const keys = ['enabled', 'maxRetries', 'retryDelayMs', 'backoffFactor', 'maxDelayMs', 'jitter', 'rateLimitDelayMs', 'stuckTimeoutMs', 'idleTimeoutMs', 'retryOnError', 'ignoreHardErrors', 'retryOnEmpty', 'retryOnTruncated', 'retryOnNoPunct', 'retryOnShort', 'minChars', 'retryOnRefusal', 'refusalUseBuiltins', 'refusalMaxChars', 'refusalExtraPhrases', 'refusalPhraseSubs', 'refusalIgnorePhrases', 'replaceEnabled', 'replaceRules', 'replaceRandom', 'replaceCaseSensitive', 'liveLog', 'toast'];
         const lines = [];
         lines.push('Auto Retry v' + VERSION + ' debug info');
@@ -1158,7 +1157,8 @@ function setup(ctx, opts) {
         try {
             const ta = document.createElement('textarea');
             ta.value = text;
-            ta.style.cssText = 'position:fixed;top:-1000px;left:-1000px;opacity:0'; (document.body || document.documentElement).appendChild(ta);
+            ta.style.cssText = 'position:fixed;top:-1000px;left:-1000px;opacity:0';
+            (document.body || document.documentElement).appendChild(ta);
             ta.focus();
             ta.select();
             const ok = !!(document.execCommand && document.execCommand('copy'));
@@ -1171,7 +1171,7 @@ function setup(ctx, opts) {
     function copyText(text) {
         try {
             if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
-                return navigator.clipboard.writeText(text).then(() =>true, () =>fallbackCopy(text));
+                return navigator.clipboard.writeText(text).then(() => true, () => fallbackCopy(text));
             }
         } catch(_) {}
         return Promise.resolve(fallbackCopy(text));
@@ -1179,9 +1179,7 @@ function setup(ctx, opts) {
     // Save text as a file download. Returns false if the browser blocks it.
     function downloadText(filename, text) {
         try {
-            const blob = new Blob([text], {
-                type: 'application/json'
-            });
+            const blob = new Blob([text], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
@@ -1189,7 +1187,7 @@ function setup(ctx, opts) {
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
-            setTimeout(() =>{
+            setTimeout(() => {
                 try {
                     URL.revokeObjectURL(url);
                 } catch(_) {}
@@ -1204,8 +1202,8 @@ function setup(ctx, opts) {
     function readFileAsText(file, cb) {
         try {
             const reader = new FileReader();
-            reader.onload = () =>cb(typeof reader.result === 'string' ? reader.result: null);
-            reader.onerror = () =>cb(null);
+            reader.onload = () => cb(typeof reader.result === 'string' ? reader.result: null);
+            reader.onerror = () => cb(null);
             reader.readAsText(file);
         } catch(_) {
             cb(null);
@@ -1259,7 +1257,7 @@ function setup(ctx, opts) {
                 for (const f of group.fields) body.appendChild(buildRow(f));
                 sec.appendChild(body);
                 let open = false;
-                h.addEventListener('click', () =>{
+                h.addEventListener('click', () => {
                     open = !open;
                     body.style.display = open ? 'flex': 'none';
                     caret.textContent = open ? '\u25BE': '\u25B8'; // down triangle when open
@@ -1336,7 +1334,7 @@ function setup(ctx, opts) {
                 });
             }
             body.appendChild(dWrap);
-            const opts = () =>{
+            const opts = () => {
                 const o = {};
                 for (const c of dchecks) o[c.id] = c.input.checked;
                 return o;
@@ -1348,12 +1346,12 @@ function setup(ctx, opts) {
             dArea.placeholder = 'Press Build preview to fill this, then edit out anything private before copying.';
             dArea.style.cssText = 'width:100%;box-sizing:border-box;font-family:monospace;font-size:12px;padding:8px;border-radius:8px;border:1px solid var(--lumiverse-border,#3a3543);background:var(--lumiverse-bg,#1a1720);color:var(--lumiverse-text,#e9e4f0);resize:vertical';
             const buildBtn = btn('Build preview', false);
-            buildBtn.addEventListener('click', () =>{
+            buildBtn.addEventListener('click', () => {
                 dArea.value = buildDebugInfo(opts());
                 dStatus.textContent = 'Built. Edit anything you want to remove, then Copy.';
             });
             const copyBtn = btn('Copy', false);
-            copyBtn.addEventListener('click', async() =>{
+            copyBtn.addEventListener('click', async () => {
                 if (!dArea.value.trim()) dArea.value = buildDebugInfo(opts());
                 const ok = await copyText(dArea.value);
                 dStatus.textContent = ok ? 'Copied. Paste it into your bug report.': "Couldn't copy here; select the text and copy by hand.";
@@ -1364,7 +1362,7 @@ function setup(ctx, opts) {
             body.appendChild(dStatus);
             sec.appendChild(body);
             let open = false;
-            h.addEventListener('click', () =>{
+            h.addEventListener('click', () => {
                 open = !open;
                 body.style.display = open ? 'flex': 'none';
                 caret.textContent = open ? '\u25BE': '\u25B8';
@@ -1413,13 +1411,13 @@ function setup(ctx, opts) {
                 });
             }
             body.appendChild(checkWrap);
-            const chosen = () =>checks.filter((x) =>x.input.checked).map((x) =>x.id);
+            const chosen = () => checks.filter((x) => x.input.checked).map((x) => x.id);
             const status = document.createElement('div');
             status.style.cssText = 'font-size:12px;line-height:1.4;color:var(--lumiverse-text-muted,#9a93a8);min-height:1em';
             status.textContent = ioStatus;
             ioStatus = '';
             const exportBtn = btn('Export to file', false);
-            exportBtn.addEventListener('click', () =>{
+            exportBtn.addEventListener('click', () => {
                 const ids = chosen();
                 if (!ids.length) {
                     status.textContent = 'Tick at least one part to export.';
@@ -1432,7 +1430,7 @@ function setup(ctx, opts) {
             fileInput.type = 'file';
             fileInput.accept = 'application/json,.json';
             fileInput.style.display = 'none';
-            fileInput.addEventListener('change', () =>{
+            fileInput.addEventListener('change', () => {
                 const f = fileInput.files && fileInput.files[0];
                 fileInput.value = '';
                 if (!f) return;
@@ -1441,7 +1439,7 @@ function setup(ctx, opts) {
                     status.textContent = 'Tick at least one part to import.';
                     return;
                 }
-                readFileAsText(f, (text) =>{
+                readFileAsText(f, (text) => {
                     if (text == null) {
                         status.textContent = "Couldn't read that file.";
                         return;
@@ -1460,7 +1458,7 @@ function setup(ctx, opts) {
                 });
             });
             const importBtn = btn('Import from file', false);
-            importBtn.addEventListener('click', () =>{
+            importBtn.addEventListener('click', () => {
                 if (!chosen().length) {
                     status.textContent = 'Tick at least one part to import first.';
                     return;
@@ -1476,7 +1474,7 @@ function setup(ctx, opts) {
             body.appendChild(status);
             sec.appendChild(body);
             let open = false;
-            h.addEventListener('click', () =>{
+            h.addEventListener('click', () => {
                 open = !open;
                 body.style.display = open ? 'flex': 'none';
                 caret.textContent = open ? '\u25BE': '\u25B8';
@@ -1491,17 +1489,17 @@ function setup(ctx, opts) {
         const status = document.createElement('span');
         status.style.cssText = 'flex:1;min-width:120px;font-size:12px;color:var(--lumiverse-text-muted,#9a93a8)';
         const reset = btn('Reset to defaults', false);
-        reset.addEventListener('click', async() =>{
+        reset.addEventListener('click', async () => {
             let ok = true;
             try {
-                if (ctx ? .ui ? .showConfirm) {
+                if (ctx?.ui?.showConfirm) {
                     const r = await ctx.ui.showConfirm({
                         title: 'Reset settings',
                         message: 'Put every Auto Retry setting back to its default?',
                         variant: 'warning',
                         confirmLabel: 'Reset',
                     });
-                    ok = !!r ? .confirmed;
+                    ok = !!r?.confirmed;
                 }
             } catch(_) {}
             if (!ok) return;
@@ -1514,7 +1512,7 @@ function setup(ctx, opts) {
             log('settings reset to defaults');
         });
         const save = btn('Save', true);
-        save.addEventListener('click', () =>{
+        save.addEventListener('click', () => {
             // Commit a field the user is still editing, then normalise every number
             // so a blank or out-of-range box can't be saved.
             const active = (typeof document !== 'undefined') ? document.activeElement: null;
@@ -1526,7 +1524,7 @@ function setup(ctx, opts) {
             if (onSaved) onSaved();
             status.textContent = 'Saved. Takes effect on the next reply.';
             log('settings saved', cfg);
-            setTimeout(() =>{
+            setTimeout(() => {
                 status.textContent = '';
             },
             2600);
@@ -1553,7 +1551,7 @@ function setup(ctx, opts) {
             input.type = 'checkbox';
             input.checked = !!cfg[f.key];
             input.style.cssText = 'flex:none;width:20px;height:20px;accent-color:var(--lumiverse-primary,#7c5cff);cursor:pointer';
-            input.addEventListener('change', () =>{
+            input.addEventListener('change', () => {
                 cfg[f.key] = input.checked;
             });
             top.appendChild(input);
@@ -1566,7 +1564,7 @@ function setup(ctx, opts) {
             styleField(input);
             input.style.width = '120px';
             input.style.flex = 'none';
-            input.addEventListener('change', () =>{
+            input.addEventListener('change', () => {
                 cfg[f.key] = clampField(f, input.value);
                 input.value = String(cfg[f.key]);
             });
@@ -1585,7 +1583,7 @@ function setup(ctx, opts) {
             input.value = String(cfg[f.key]);
             input.setAttribute('aria-label', f.label);
             styleField(input);
-            input.addEventListener('change', () =>{
+            input.addEventListener('change', () => {
                 cfg[f.key] = input.value;
             });
             row.appendChild(input);
@@ -1596,7 +1594,7 @@ function setup(ctx, opts) {
                 test.style.padding = '5px 12px';
                 const res = document.createElement('span');
                 res.style.cssText = 'font-size:12px;color:var(--lumiverse-text-muted,#9a93a8)';
-                test.addEventListener('click', () =>{
+                test.addEventListener('click', () => {
                     const sel = input.value.trim();
                     if (!sel) {
                         res.textContent = 'type a selector first';
@@ -1629,10 +1627,10 @@ function setup(ctx, opts) {
     }
     function styleField(input) {
         input.style.cssText += 'padding:9px 10px;border-radius:var(--lumiverse-radius,8px);' + 'border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));' + 'background:var(--lumiverse-fill-subtle,rgba(255,255,255,.05));' + 'color:var(--lumiverse-text,#eee);font:13px var(--lumiverse-font-family,system-ui);outline:none;' + 'transition:border-color .12s ease';
-        input.addEventListener('focus', () =>{
+        input.addEventListener('focus', () => {
             input.style.borderColor = 'var(--lumiverse-primary,#7c5cff)';
         });
-        input.addEventListener('blur', () =>{
+        input.addEventListener('blur', () => {
             input.style.borderColor = 'var(--lumiverse-border,rgba(255,255,255,.16))';
         });
     }
@@ -1640,17 +1638,17 @@ function setup(ctx, opts) {
         const b = document.createElement('button');
         b.textContent = label;
         b.style.cssText = 'min-height:36px;padding:8px 14px;border-radius:var(--lumiverse-radius,8px);cursor:pointer;' + 'font:13px var(--lumiverse-font-family,system-ui);transition:filter .12s ease;' + (primary ? 'border:1px solid transparent;background:var(--lumiverse-primary,#7c5cff);color:var(--lumiverse-primary-contrast,#fff)': 'border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));background:transparent;color:var(--lumiverse-text,#eee)');
-        b.addEventListener('mouseenter', () =>{
+        b.addEventListener('mouseenter', () => {
             b.style.filter = 'brightness(1.12)';
         });
-        b.addEventListener('mouseleave', () =>{
+        b.addEventListener('mouseleave', () => {
             b.style.filter = 'none';
         });
         // Press feedback that also works on touch, where hover never fires.
-        const pressClear = () =>{
+        const pressClear = () => {
             b.style.filter = 'none';
         };
-        b.addEventListener('pointerdown', () =>{
+        b.addEventListener('pointerdown', () => {
             b.style.filter = 'brightness(.9)';
         });
         b.addEventListener('pointerup', pressClear);
@@ -1659,7 +1657,7 @@ function setup(ctx, opts) {
         return b;
     }
     function openSettings() {
-        if (!ctx ? .ui ? .showModal) {
+        if (!ctx?.ui?.showModal) {
             log('host has no modal API; cannot open settings');
             return;
         }
@@ -1680,13 +1678,13 @@ function setup(ctx, opts) {
             });
             modalHandle = modal;
             let baseline = {};
-            const snapshot = () =>{
+            const snapshot = () => {
                 baseline = {};
                 for (const g of SCHEMA) for (const fl of g.fields) baseline[fl.key] = cfg[fl.key];
             };
             snapshot();
             buildSettingsBody(modal.root, snapshot);
-            modal.onDismiss(() =>{
+            modal.onDismiss(() => {
                 for (const g of SCHEMA) for (const fl of g.fields) cfg[fl.key] = baseline[fl.key];
                 modalHandle = null;
             });
@@ -1696,14 +1694,14 @@ function setup(ctx, opts) {
     }
     // entry point: a button in the chat input "Extras" popover
     try {
-        if (ctx ? .ui ? .registerInputBarAction) {
+        if (ctx?.ui?.registerInputBarAction) {
             const action = ctx.ui.registerInputBarAction({
                 id: 'auto-retry-settings',
                 label: 'Auto Retry settings',
                 iconSvg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 4 21 9 16 9"/></svg>',
             });
-            disposers.push(action.onClick(() =>openSettings()));
-            disposers.push(() =>{
+            disposers.push(action.onClick(() => openSettings()));
+            disposers.push(() => {
                 try {
                     action.destroy();
                 } catch(_) {}
@@ -1717,7 +1715,7 @@ function setup(ctx, opts) {
     // backup stop-press catcher (see onDocClick)
     if (typeof document !== 'undefined') {
         document.addEventListener('click', onDocClick, true);
-        disposers.push(() =>{
+        disposers.push(() => {
             try {
                 document.removeEventListener('click', onDocClick, true);
             } catch(_) {}
@@ -1725,7 +1723,7 @@ function setup(ctx, opts) {
     }
     // Wrap each listener so a throw inside a handler is logged, never escapes into
     // the host's event dispatcher, and never stops later events from arriving.
-    const safe = (label, fn) =>(p) =>{
+    const safe = (label, fn) => (p) => {
         try {
             fn(p);
         } catch(e) {
@@ -1740,13 +1738,13 @@ function setup(ctx, opts) {
     }
     syncLiveLog();
     log('ready v' + VERSION, cfg);
-    return () =>{
-        offs.forEach((o) =>{
+    return () => {
+        offs.forEach((o) => {
             try {
                 o && o();
             } catch(_) {}
         });
-        disposers.forEach((d) =>{
+        disposers.forEach((d) => {
             try {
                 d && d();
             } catch(_) {}
