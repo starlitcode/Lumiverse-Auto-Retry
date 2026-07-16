@@ -6,7 +6,8 @@
  * what the model reads on later turns. It never changes what the model
  * generated; it edits the stored text afterward.
  *
- * A source word may have several replacements (e.g. "sky => blue, sky => aqua").
+ * A source word may have several replacements: list it on more than one line (e.g.
+ * "sky => blue" then "sky => aqua").
  * With the random option on, each occurrence picks one of them at random; off,
  * it always uses the first one listed. A case-sensitive option controls whether
  * matching respects letter case.
@@ -129,7 +130,7 @@ spindle.on('GENERATION_ENDED', async (p) => {
         if (!content) return;
         const next = applyRules(content);
         if (next !== content) {
-            await spindle.chat.updateMessage(chatId, messageId, { content: next, metadata: { source: 'auto_retry_replace' } });
+            await spindle.chat.updateMessage(chatId, messageId, { content: next });
         }
     } catch (e) {
         if (!warnedEditError) {
