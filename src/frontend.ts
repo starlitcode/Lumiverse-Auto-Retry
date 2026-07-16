@@ -23,7 +23,7 @@ const IGNORE_MAX = 16; // most aborted-generation ids kept around to swallow the
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "2.2.0";
+const VERSION = "2.3.0";
 
 // ---- defaults (the UI overrides these; editing here changes the fallback) ----
 const CONFIG = {
@@ -53,15 +53,17 @@ const CONFIG = {
   retryOnShort: false, // off by default. Caused endless regen in the original.
   minChars: 24,
   retryOnRefusal: true, // final content is an out-of-character refusal (see looksLikeRefusal). Re-fires the SAME request, capped by maxRetries. Does not alter the request.
-  refusalExtraPhrases: "", // your own extra refusal phrases, comma-separated. Any reply containing one counts as a refusal.
+  refusalExtraPhrases: "", // your own extra refusal phrases, one per line. Any reply containing one counts as a refusal.
   refusalPhraseSubs: "", // reword the built-in phrases: "old => new" rules, one per line, applied to the built-in list before matching.
   refusalIgnorePhrases: "", // a reply containing any of these (one per line) is never counted as a refusal.
   refusalUseBuiltins: true, // use the built-in refusal lists. Turn off to run purely on your own phrases below.
   refusalMaxChars: 2000, // only replies up to this length are considered refusals. Longer = treated as real content. 0 = no limit (scan any length).
 
+  refusalStripThinking: true, // ignore the model's thinking when checking for a refusal, so a refusal that lives only in a <think> block does not trigger a retry when the visible reply is fine.
+  refusalThinkTags: "", // extra reasoning tag names (one per line) the model wraps its thinking in, on top of the built-in set. Both <tag> and [tag] forms are handled.
   // Find and replace in replies (handled by the backend via the Chat Mutation API).
   replaceEnabled: false, // off by default. When on, applies replaceRules to each finished reply and edits the saved message.
-  replaceRules: "", // "old => new" rules, comma-separated. A single word matches whole words; empty right side deletes it. Same word can appear more than once.
+  replaceRules: "", // "old => new" rules, one per line. A single word matches whole words; empty right side deletes it. Same word can appear more than once.
   replaceCaseSensitive: false, // match letter case exactly. Off = case-insensitive with capitalization kept.
   replaceRandom: false, // when a word has more than one replacement, pick one at random per occurrence. Off = always the first listed.
 
@@ -252,7 +254,7 @@ const SCHEMA: Group[] = [
         key: "retryOnRefusal",
         label: "It looks like an accidental refusal (beta)",
         type: "bool",
-        hint: "Retry when the model breaks character to decline (says it's an AI, or that it can't help or continue). It just tries the same request again, capped by your Most tries setting, so a refusal the model really means will survive the tries and stop. Nothing in your request is changed. Kept narrow so it won't touch an in-character \"I can't do that\" line. New and still being tuned, so leave it off if you'd rather not risk a re-roll.",
+        hint: "Retry when the model breaks character to decline (says it's an AI, or that it can't help or continue). It just tries the same request again, capped by your Most tries setting, so a refusal the model really means will survive the tries and stop. Nothing in your request is changed. Kept narrow so it won't touch an in-character \"I can't do that\" line. New and still being tuned, so leave it off if you'd rather not risk a re-roll. It reads only the final reply, never the model's thinking.",
       },
     ],
   },
@@ -276,7 +278,7 @@ const SCHEMA: Group[] = [
         key: "replaceRandom",
         label: "Pick randomly when a word has more than one swap",
         type: "bool",
-        hint: "Off by default. When a word is listed more than once (like sky => blue, sky => aqua), each time it appears one of its options is picked at random. Off, it always uses the first one you listed.",
+        hint: "Off by default. When the same word is listed on more than one line (like sky => blue on one line and sky => aqua on another), each time it appears one of its options is picked at random. Off, it always uses the first one you listed.",
       },
       {
         key: "replaceCaseSensitive",
@@ -322,6 +324,18 @@ const SCHEMA: Group[] = [
         min: 0,
         max: 100000,
         hint: "Replies longer than this are assumed to be real writing, not a refusal, and are left alone. 2000 suits most cases. Raise it if your model writes long, padded refusals; lower it to protect long scenes. Set it to 0 to check replies of any length, which catches every refusal but is more likely to re-roll a long reply that happens to look refusal-shaped.",
+      },
+      {
+        key: "refusalStripThinking",
+        label: "Ignore the thinking / reasoning (beta)",
+        type: "bool",
+        hint: "On by default. Only the final reply is checked, never the model's thinking. Known reasoning blocks (like <think> or <thinking>) are stripped before checking, so a refusal the model weighs while reasoning but doesn't put in the reply won't cause a retry. Turn it off to check the whole raw output.",
+      },
+      {
+        key: "refusalThinkTags",
+        label: "Extra thinking tag names",
+        type: "text",
+        hint: "Optional, one per line. The common reasoning tags are already handled. Add a tag name only if your model wraps its thinking in an unusual one (for example: mythink). Just the name, no brackets. Both <name> and [name] forms are covered.",
       },
     ],
   },
@@ -421,7 +435,7 @@ function normalizeForMatch(text: string): string {
     .trim();
 }
 
-// A user list is comma- or newline-separated. Lowercased + normalized for a
+// A user list is newline-separated (one entry per line). Lowercased + normalized for a
 // case-insensitive substring test.
 function splitPhrases(raw: any): string[] {
   return String(raw == null ? "" : raw)
@@ -479,6 +493,12 @@ const REFUSAL_STRONG: RegExp[] = [
   /\bI(?: (?:can(?:no|')?t|cannot|will not|won'?t|am (?:not able|unable) to)|'m (?:not able|unable) to) (?:be able to )?(?:assist|comply|fulfil|fulfill)\b/i,
   // Out-of-character comfort hedge, only in the assistant-action sense.
   /\bI don'?t feel comfortable (?:continuing|writing|creating|generating|producing|proceeding|providing|helping|assisting)\b/i,
+  // Common modern refusal openers and bodies: "I'm sorry, but I can't create/generate...",
+  // "that's not something I can help with", "I'm not going to generate that". Anchored on
+  // assistant-action verbs so an in-character line like "I can't marry you" stays safe.
+  /\bI(?:'m| am) sorry,? but I(?: can'?t| cannot| won'?t|'m (?:not able|unable) to| am (?:not able|unable) to) (?:create|generate|write|produce|provide|assist|comply|fulfil|fulfill|help you with|engage with)\b/i,
+  /\b(?:that|this)(?:'s| is) not something I(?: can| am able to|'m able to) (?:help with|assist with|create|generate|provide|write)\b/i,
+  /\bI(?:'m| am) not going to (?:create|generate|produce|write) (?:that|this|such|content|explicit|sexual|those)\b/i,
 ];
 
 // Tier 2: flat phrase list, matched as normalized lowercase substrings. Covers
@@ -515,6 +535,9 @@ const REFUSAL_PHRASES = [
   "for safety reasons",
   "due to safety concerns",
   "i have to prioritize safety",
+  "i cannot create that content",
+  "i cannot generate that content",
+  "i can't create that content",
 ];
 
 // Tier 3: soft redirect tells. These lean on a pivot ("...instead", "instead, I
@@ -526,8 +549,30 @@ const REFUSAL_SOFT: RegExp[] = [
   /\bplease (?:try asking something else|change the topic|rephrase your request)\b/i,
 ];
 
+// Reasoning/thinking blocks are where a model weighs a refusal before deciding
+// to answer. Only the final reply should be judged, so these are stripped before
+// matching: a refusal that lives only in the thinking never triggers a retry when
+// the visible reply is fine. Built-in tags cover the common wrappers; the user can
+// add more with refusalThinkTags. Applied here only, so the empty/truncation
+// checks still see the raw output.
+const THINK_TAGS = ["think", "thinking", "thought", "thoughts", "reasoning", "reason", "reflection", "scratchpad", "scratch_pad", "analysis", "inner_monologue", "inner-monologue", "internal_monologue", "monologue", "rationale", "deliberation", "cot", "chain_of_thought", "chain-of-thought"];
+function stripThinking(text: string, cfg?: any): string {
+  let t = String(text == null ? "" : text);
+  if (cfg && cfg.refusalStripThinking === false) return t;
+  const extra = String((cfg && cfg.refusalThinkTags) || "").split(/\r?\n/).map((s) => s.replace(/[^\w-]/g, "").toLowerCase()).filter(Boolean);
+  const names = THINK_TAGS.concat(extra);
+  if (!names.length) return t;
+  const alt = names.join("|");
+  // <tag ...>...</tag> and [tag ...]...[/tag], same tag both ends, across newlines
+  t = t.replace(new RegExp("<(" + alt + ")(?:\\s[^>]*)?>[\\s\\S]*?<\\/\\1\\s*>", "gi"), " ");
+  t = t.replace(new RegExp("\\[(" + alt + ")(?:\\s[^\\]]*)?\\][\\s\\S]*?\\[\\/\\1\\s*\\]", "gi"), " ");
+  // an unclosed opener running to the end (thinking cut off before the reply)
+  t = t.replace(new RegExp("<(?:" + alt + ")(?:\\s[^>]*)?>[\\s\\S]*$", "i"), " ");
+  t = t.replace(new RegExp("\\[(?:" + alt + ")(?:\\s[^\\]]*)?\\][\\s\\S]*$", "i"), " ");
+  return t;
+}
 function looksLikeRefusal(text: string, cfg?: any): boolean {
-  const raw = String(text == null ? "" : text).trim();
+  const raw = stripThinking(String(text == null ? "" : text), cfg).trim();
   if (!raw) return false; // empty is handled by the empty branch
   const maxChars =
     cfg && Number.isFinite(cfg.refusalMaxChars)
@@ -871,6 +916,8 @@ export function setup(ctx: Ctx, opts?: any) {
         "refusalExtraPhrases",
         "refusalPhraseSubs",
         "refusalIgnorePhrases",
+        "refusalStripThinking",
+        "refusalThinkTags",
       ],
     },
     {
@@ -1192,7 +1239,9 @@ export function setup(ctx: Ctx, opts?: any) {
       return;
     } // user just stopped; do not retry
     if (p.error) {
-      if (cfg.ignoreHardErrors && isHardError(p.error)) {
+      // A content-moderation block we can retry as a refusal is not a permanent
+      // failure, so don't let the hard-error skip swallow it before the refusal check.
+      if (cfg.ignoreHardErrors && isHardError(p.error) && !(cfg.retryOnRefusal && looksLikeRefusalError(String(p.error), cfg))) {
         log("hard error ignored", p.error);
         showToast("Auto-retry skipped: hard failure (auth/model).");
         s.attempts = 0;
@@ -1380,6 +1429,8 @@ export function setup(ctx: Ctx, opts?: any) {
       "refusalExtraPhrases",
       "refusalPhraseSubs",
       "refusalIgnorePhrases",
+      "refusalStripThinking",
+      "refusalThinkTags",
       "replaceEnabled",
       "replaceRules",
       "replaceRandom",
