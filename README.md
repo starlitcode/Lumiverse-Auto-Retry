@@ -30,7 +30,7 @@ https://github.com/starlitcode/Lumiverse-Auto-Retry
 
 Open the chat input bar, tap the **Extras** popover, and choose **Auto Retry settings**. Everything is editable there, grouped by what it does, and the panel fits a phone as well as a desktop. Simple on/off switches are up top; the groups marked **Advanced** are collapsed by default, so tap one of those headers to reveal its options when you want them.
 
-Only **Save** keeps your changes. Closing with the X or tapping outside discards anything you did not save, so you can experiment freely. Saved settings live in your browser and apply to the next reply.
+Only **Save** keeps your changes. Closing with the X or tapping outside discards anything you did not save, so you can experiment freely. Saved settings sync to your Lumiverse account, so they follow you to other browsers and devices, and they apply to the next reply.
 
 ## You are always in charge
 
@@ -144,7 +144,7 @@ Editing a saved reply needs the `chat_mutation` permission (see Permissions belo
 
 ## Import and export
 
-You can save your settings to a file and load them back later. In the settings modal, open **Advanced: import / export**. Tick the parts you want, then either **Export to file** to save them as a small `.json` file, or **Import from file** to load one.
+You can save your settings to a file and load them back later. In the settings modal, open **Advanced: import / export**. Tick the parts you want, then either **Export to file** to save them as a small `.json` file, or **Import from file** to load one. Your settings already follow your Lumiverse account across browsers on their own, so this is mainly for keeping a backup, sharing a setup with someone else, or copying between accounts.
 
 The parts are grouped so you only move what you mean to: retry behavior, refusal detection, word swaps, button selectors, and on-screen (the pop-up and live log). For sharing phrase and swap setups, tick just refusal detection and word swaps and leave the rest, since button selectors in particular are tied to one person's Lumiverse build.
 
@@ -222,7 +222,7 @@ Declares two permissions:
 
 `chat_mutation` is a privileged permission, so depending on your Lumiverse setup it may need admin approval before it takes effect. The retry side works without it; only find-and-replace needs it.
 
-The find-and-replace feature runs in a small backend module. The rest of the extension is frontend-only. There is no network access, and your settings are stored in your browser.
+The find-and-replace feature runs in a small backend module. The rest of the extension is frontend-only. It makes no external network calls. Your settings are saved to your Lumiverse account through the extension's own scoped storage, so they follow you across browsers, with a copy kept in the browser as a fast local cache.
 
 ## How it works under the hood
 
