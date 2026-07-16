@@ -12,8 +12,10 @@
  * it always uses the first one listed. A case-sensitive option controls whether
  * matching respects letter case.
  *
- * Rules arrive from the settings UI over the frontend message bridge and are
- * persisted so they survive a backend restart. Editing a message emits
+ * This backend also keeps the whole settings object in account storage, so the
+ * user's settings follow them across browsers and devices. Rules and settings
+ * arrive from the UI over the frontend message bridge and are persisted so they
+ * survive a restart. Editing a message emits
  * MESSAGE_EDITED (not GENERATION_ENDED), so this cannot re-trigger itself.
  *
  * Needs the `generation` permission (to hear GENERATION_ENDED) and
@@ -23,6 +25,7 @@
 declare const spindle: any;
 
 const RULES_FILE = 'replace-rules.json';
+const SETTINGS_FILE = 'settings.json';
 
 interface Group { re: RegExp; tos: string[]; from: string; }
 
@@ -92,34 +95,61 @@ function rebuild(): void {
   groups = buildGroups(rulesText, caseSensitive);
 }
 
-// Load persisted rules on startup.
+// Pull the find-and-replace fields out of a full settings object.
+function applyReplaceFromSettings(s: any) {
+  enabled = !!s.replaceEnabled;
+  random = !!s.replaceRandom;
+  caseSensitive = !!s.replaceCaseSensitive;
+  rulesText = String(s.replaceRules == null ? '' : s.replaceRules);
+  rebuild();
+}
+// Load persisted settings on startup. The whole settings object now lives in
+// account storage (SETTINGS_FILE) so it follows the user across browsers; an
+// older install that only stored replace rules (RULES_FILE) is read as a fallback.
 (async () => {
   try {
-    const saved = await spindle.storage.read(RULES_FILE);
-    const parsed = JSON.parse(saved);
-    enabled = !!parsed.enabled;
-    random = !!parsed.random;
-    caseSensitive = !!parsed.caseSensitive;
-    rulesText = String(parsed.rulesText == null ? '' : parsed.rulesText);
-    rebuild();
+      applyReplaceFromSettings(JSON.parse(await spindle.storage.read(SETTINGS_FILE)));
+      return;
+  } catch (_) { /* no account settings yet */ }
+  try {
+      const parsed = JSON.parse(await spindle.storage.read(RULES_FILE));
+      enabled = !!parsed.enabled;
+      random = !!parsed.random;
+      caseSensitive = !!parsed.caseSensitive;
+      rulesText = String(parsed.rulesText == null ? '' : parsed.rulesText);
+      rebuild();
   } catch (_) { /* no saved rules yet */ }
 })();
-
-// Receive rule changes from the settings UI and persist them.
+// Settings bridge with the UI: save the whole settings object to account storage,
+// hand it back on request, and keep the find-and-replace state in sync with it.
 spindle.onFrontendMessage(async (payload: any) => {
   try {
-    if (!payload || payload.type !== 'set_replace_rules') return;
-    enabled = !!payload.enabled;
-    random = !!payload.random;
-    caseSensitive = !!payload.caseSensitive;
-    rulesText = String(payload.rulesText == null ? '' : payload.rulesText);
-    rebuild();
-    await spindle.storage.write(RULES_FILE, JSON.stringify({ enabled: enabled, random: random, caseSensitive: caseSensitive, rulesText: rulesText }));
+      if (!payload) return;
+      if (payload.type === 'save_settings' && payload.settings && typeof payload.settings === 'object') {
+      applyReplaceFromSettings(payload.settings);
+      await spindle.storage.write(SETTINGS_FILE, JSON.stringify(payload.settings));
+      return;
+      }
+      if (payload.type === 'load_settings') {
+      let settings = null;
+      try { settings = JSON.parse(await spindle.storage.read(SETTINGS_FILE)); } catch (__) { settings = null; }
+      try { spindle.sendToFrontend({ type: 'loaded_settings', requestId: payload.requestId, settings: settings }); } catch (__) {}
+      return;
+      }
+      if (payload.type === 'set_replace_rules') {
+      // Legacy path for an older cached frontend that still sends rules alone.
+      enabled = !!payload.enabled;
+      random = !!payload.random;
+      caseSensitive = !!payload.caseSensitive;
+      rulesText = String(payload.rulesText == null ? '' : payload.rulesText);
+      rebuild();
+      await spindle.storage.write(RULES_FILE, JSON.stringify({ enabled: enabled, random: random, caseSensitive: caseSensitive, rulesText: rulesText }));
+      return;
+      }
   } catch (_) {
-    try { spindle.log.warn('auto-retry replace: could not save rules'); } catch (__) {}
+      try { spindle.log.warn('auto-retry: could not handle a settings message'); } catch (__) {}
   }
 });
-
 // After each finished reply, apply the rules to the saved message.
 spindle.on('GENERATION_ENDED', async (p: any) => {
   try {
