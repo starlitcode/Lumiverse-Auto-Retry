@@ -555,7 +555,7 @@ const REFUSAL_SOFT: RegExp[] = [
 // the visible reply is fine. Built-in tags cover the common wrappers; the user can
 // add more with refusalThinkTags. Applied here only, so the empty/truncation
 // checks still see the raw output.
-const THINK_TAGS = ["think", "thinking", "thought", "thoughts", "reasoning", "reason", "reflection", "scratchpad", "scratch_pad", "analysis", "inner_monologue", "inner-monologue", "internal_monologue", "monologue", "rationale", "deliberation", "cot", "chain_of_thought", "chain-of-thought"];
+const THINK_TAGS = ["think", "thinking", "thought", "thoughts", "reasoning", "reflection", "scratchpad", "analysis"];
 function stripThinking(text: string, cfg?: any): string {
   let t = String(text == null ? "" : text);
   if (cfg && cfg.refusalStripThinking === false) return t;
