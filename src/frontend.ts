@@ -327,7 +327,7 @@ const SCHEMA: Group[] = [
       },
       {
         key: "refusalStripThinking",
-        label: "Ignore the thinking / reasoning (beta)",
+        label: "Ignore the thinking / reasoning",
         type: "bool",
         hint: "On by default. Only the final reply is checked, never the model's thinking. Known reasoning blocks (like <think> or <thinking>) are stripped before checking, so a refusal the model weighs while reasoning but doesn't put in the reply won't cause a retry. Turn it off to check the whole raw output.",
       },
@@ -630,28 +630,45 @@ export function setup(ctx: Ctx, opts?: any) {
   // defaults, then GitHub opts, then whatever the user saved in the UI.
   const cfg: any = Object.assign({}, CONFIG, opts || {}, loadSaved());
 
-  // Hand the find-and-replace rules to the backend (the only part that can edit a
-  // saved message). Safe to call even if the host has no backend bridge.
-  function pushReplaceRules() {
+  // Persist the whole settings object to account storage (through the backend) so
+  // settings follow the user across browsers. The backend also derives its
+  // find-and-replace state from this. Safe to call with no backend bridge.
+  function saveToAccount() {
     try {
       if (ctx && typeof (ctx as any).sendToBackend === "function") {
-        (ctx as any).sendToBackend({
-          type: "set_replace_rules",
-          enabled: !!cfg.replaceEnabled,
-          rulesText: String(cfg.replaceRules || ""),
-          random: !!cfg.replaceRandom,
-          caseSensitive: !!cfg.replaceCaseSensitive,
-        });
+        const out: any = {};
+        for (const g of SCHEMA) for (const f of g.fields) out[f.key] = cfg[f.key];
+        (ctx as any).sendToBackend({ type: "save_settings", settings: out });
       }
     } catch (_) {}
   }
-  // Sync on load only when there's something to sync, so a fresh/default load
-  // can't clobber rules the backend already persisted. Save and reset always push.
-  if (
-    cfg.replaceEnabled ||
-    (cfg.replaceRules && String(cfg.replaceRules).trim())
-  )
-    pushReplaceRules();
+  // Pull account-synced settings on load. localStorage is a fast local cache and
+  // offline fallback; the account copy wins when present. If the account has
+  // nothing yet but this browser does, migrate this browser's settings up.
+  function loadFromAccount() {
+    try {
+      if (!ctx || typeof (ctx as any).sendToBackend !== "function" || typeof (ctx as any).onBackendMessage !== "function") return;
+      const reqId = "ar-load-" + Date.now() + "-" + Math.random().toString(36).slice(2);
+      const off = (ctx as any).onBackendMessage((msg: any) => {
+        if (!msg || msg.type !== "loaded_settings" || msg.requestId !== reqId) return;
+        try { off && off(); } catch (_) {}
+        const s = msg.settings;
+        if (s && typeof s === "object" && Object.keys(s).length) {
+          Object.assign(cfg, coerceSaved(s));
+          saveSaved();
+          syncLiveLog();
+          if (modalHandle && modalRoot) { if (modalSnapshot) modalSnapshot(); buildSettingsBody(modalRoot, modalSnapshot); }
+          log("settings loaded from account");
+        } else {
+          try {
+            if (typeof localStorage !== "undefined" && localStorage.getItem(STORE_KEY)) { saveToAccount(); log("settings migrated to account"); }
+          } catch (_) {}
+        }
+      });
+      disposers.push(() => { try { off && off(); } catch (_) {} });
+      (ctx as any).sendToBackend({ type: "load_settings", requestId: reqId });
+    } catch (_) {}
+  }
 
   // A short in-memory ring buffer of what the extension did, captured whether or
   // not console logging is on, so the Copy debug info report carries a timeline
@@ -824,22 +841,27 @@ export function setup(ctx: Ctx, opts?: any) {
   }
   const disposers: Array<() => void> = [];
 
+  // Coerce a raw saved object (local cache or account storage) into a clean
+  // partial config: keep only known fields, run each through its type.
+  function coerceSaved(parsed: any): any {
+    const out: any = {};
+    if (!parsed || typeof parsed !== "object") return out;
+    for (const g of SCHEMA)
+      for (const f of g.fields) {
+        if (!(f.key in parsed)) continue;
+        out[f.key] =
+          f.type === "num"
+            ? clampField(f, parsed[f.key])
+            : coerce(f.type, parsed[f.key], (CONFIG as any)[f.key]);
+      }
+    return out;
+  }
   function loadSaved(): any {
     try {
       if (typeof localStorage === "undefined") return {};
       const raw = localStorage.getItem(STORE_KEY);
       if (!raw) return {};
-      const parsed = JSON.parse(raw);
-      const out: any = {};
-      for (const g of SCHEMA)
-        for (const f of g.fields) {
-          if (!(f.key in parsed)) continue;
-          out[f.key] =
-            f.type === "num"
-              ? clampField(f, parsed[f.key])
-              : coerce(f.type, parsed[f.key], (CONFIG as any)[f.key]);
-        }
-      return out;
+      return coerceSaved(JSON.parse(raw));
     } catch (_) {
       return {};
     }
@@ -1548,6 +1570,8 @@ export function setup(ctx: Ctx, opts?: any) {
 
   // ---- settings UI ----
   let modalHandle: any = null;
+  let modalRoot: any = null;
+  let modalSnapshot: any = null;
 
   function buildSettingsBody(root: HTMLElement, onSaved?: () => void) {
     root.innerHTML = "";
@@ -1880,7 +1904,7 @@ export function setup(ctx: Ctx, opts?: any) {
       for (const g of SCHEMA)
         for (const fl of g.fields) cfg[fl.key] = (CONFIG as any)[fl.key];
       saveSaved();
-      pushReplaceRules();
+      saveToAccount();
       syncLiveLog();
       if (onSaved) onSaved();
       buildSettingsBody(root, onSaved);
@@ -1898,7 +1922,7 @@ export function setup(ctx: Ctx, opts?: any) {
         for (const fl of g.fields)
           if (fl.type === "num") cfg[fl.key] = clampField(fl, cfg[fl.key]);
       saveSaved();
-      pushReplaceRules();
+      saveToAccount();
       syncLiveLog();
       if (onSaved) onSaved();
       status.textContent = "Saved. Takes effect on the next reply.";
@@ -2090,6 +2114,7 @@ export function setup(ctx: Ctx, opts?: any) {
         maxHeight: Math.min(560, vh - 24),
       });
       modalHandle = modal;
+      modalRoot = modal.root;
 
       // Baseline of every saved setting at open. Edits below change cfg live, but
       // closing the modal with X or tapping outside restores this baseline, so
@@ -2101,12 +2126,15 @@ export function setup(ctx: Ctx, opts?: any) {
           for (const fl of g.fields) baseline[fl.key] = cfg[fl.key];
       };
       snapshot();
+      modalSnapshot = snapshot;
 
       buildSettingsBody(modal.root, snapshot);
       modal.onDismiss(() => {
         for (const g of SCHEMA)
           for (const fl of g.fields) cfg[fl.key] = baseline[fl.key];
         modalHandle = null;
+        modalRoot = null;
+        modalSnapshot = null;
       });
     } catch (e) {
       log("failed to open settings", e);
@@ -2170,6 +2198,7 @@ export function setup(ctx: Ctx, opts?: any) {
     log("failed to subscribe to generation events", e);
   }
   syncLiveLog();
+  loadFromAccount();
   log("ready v" + VERSION, cfg);
 
   return () => {
