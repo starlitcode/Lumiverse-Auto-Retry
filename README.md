@@ -63,6 +63,12 @@ Curly and straight apostrophes are treated the same, and only replies short enou
 
 Some providers deliver a refusal as an *error* instead of as reply text (Gemini's prohibited-content result, for one). With error retries on (the default) those are already covered. If you turn error retries off but leave refusal retries on, it still catches an error whose text is clearly about content moderation, while leaving ordinary network errors like a dropped connection alone.
 
+### Thinking and reasoning
+
+Only the final reply is ever checked for a refusal, never the model's thinking. Before matching, known reasoning blocks are stripped out (tags like `<think>`, `<thinking>`, `<reasoning>`, `<thought>`, `<reflection>`, `<scratchpad>` and similar, in both `<tag>` and `[tag]` forms). So if a model weighs a refusal while reasoning but then writes a normal reply, nothing is re-rolled. If a refusal ends up in the actual reply, it is caught as usual, and if the model reasons and then produces nothing, that is handled by the empty-reply retry instead.
+
+If your model wraps its thinking in an unusual tag the built-in set misses, add its name under **Extra thinking tag names** in the refusal tuning section, one per line, just the name (no brackets). You can turn the whole thing off with **Ignore the thinking / reasoning**, though leaving it on is the safe default.
+
 ### Tuning it
 
 Everything sits under **Advanced: refusal tuning** in the settings, so the basic on/off toggle stays clean for people who just want it on:
@@ -95,6 +101,8 @@ can't help with requests like this    can't assist with requests like this
 violates our polic                violates the safety polic
 violates the content polic        for safety reasons
 due to safety concerns            i have to prioritize safety
+i cannot create that content      i cannot generate that content
+i can't create that content
 ```
 
 Alongside that list it also matches a few patterns that are not fixed phrases. Because they match by shape rather than exact text, the reword field does not change them, and the examples below are just that, examples, not the full set of wordings each one catches:
@@ -104,6 +112,7 @@ Alongside that list it also matches a few patterns that are not fixed phrases. B
 - **A refusal joined to a task word** (request, prompt, content, scenario, roleplay). "I can't continue this roleplay." / "I won't write that content." / "I'm unable to complete this request."
 - **Assistant-only verbs** (assist, comply, fulfill). "I can't assist with that." / "I'm unable to comply." / "I cannot fulfill this."
 - **An out-of-character comfort hedge.** "I don't feel comfortable continuing this." / "I don't feel comfortable writing that."
+- **A common apology-style refusal opener or body.** "I'm sorry, but I can't create that." / "That's not something I can help with." / "I'm not going to generate that content."
 - **A soft redirect that pivots away** (needs the pivot, so a normal offer to help does not trip it). "I'd be happy to help with something else instead." / "Instead, I can help you with a lighter scene." / "Please try asking something else."
 
 On the error side, when a reply comes back as an error rather than text, it matches content-block wording. Examples: "PROHIBITED_CONTENT", "Blocked by safety settings.", "finish_reason: safety". It deliberately ignores ordinary network errors like "connection refused".
@@ -169,6 +178,8 @@ The settings modal is the easy path. The same options live in the CONFIG block a
 | refusalPhraseSubs | (empty) | Reword the built-in phrases with "old => new" rules, one per line. |
 | refusalIgnorePhrases | (empty) | Whitelist, one per line; a reply containing any is never a refusal. |
 | refusalMaxChars | 2000 | Longest reply still treated as a possible refusal. 0 = no limit. |
+| refusalStripThinking | on | Only check the final reply, stripping known reasoning tags first. Off checks the whole raw output. |
+| refusalThinkTags | (empty) | Extra reasoning tag names, one per line, for unusual thinking wrappers. |
 | replaceEnabled | false | (beta) Turn on find-and-replace on replies. Edits the saved message. |
 | replaceRules | (empty) | "old => new" word swaps, one per line. |
 | replaceRandom | false | When a word has more than one swap, pick one at random each time. |
