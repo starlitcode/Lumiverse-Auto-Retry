@@ -2297,6 +2297,7 @@ export function setup(ctx: Ctx, opts?: any) {
   try {
     if (ctx && typeof (ctx as any).onBackendMessage === "function") {
       const offRep = (ctx as any).onBackendMessage(async (msg: any) => {
+        try {
         if (!msg) return;
         if (msg.type === "confirm_edit") {
           const yes = await confirmEdit("Apply your word swaps to this reply?");
@@ -2312,6 +2313,7 @@ export function setup(ctx: Ctx, opts?: any) {
         else if (msg.changed > 0) showToast("Swapped words in " + msg.changed + (msg.changed === 1 ? " reply." : " replies."));
         else if (msg.skipped > 0) showToast("Already swapped. Turn on re-swapping to redo it.");
         else showToast("No matching words to swap.");
+        } catch (_) {}
       });
       disposers.push(() => { try { offRep && offRep(); } catch (_) {} });
     }
