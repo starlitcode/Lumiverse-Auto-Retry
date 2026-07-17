@@ -33,6 +33,9 @@ let enabled = false;
 let random = false;
 let caseSensitive = false;
 let rulesText = '';
+let swapWholeChat = false;
+let allowReSwap = false;
+let confirmBeforeEdit = false;
 let groups: Group[] = [];
 let warnedEditError = false;
 // Messages a swap has already changed this session, so the manual button won't
@@ -123,6 +126,9 @@ function applyReplaceFromSettings(s: any) {
   random = !!s.replaceRandom;
   caseSensitive = !!s.replaceCaseSensitive;
   rulesText = String(s.replaceRules == null ? '' : s.replaceRules);
+  swapWholeChat = !!s.swapWholeChat;
+  allowReSwap = !!s.allowReSwap;
+  confirmBeforeEdit = !!s.confirmBeforeEdit;
   rebuild();
 }
 // Load persisted settings on startup. The whole settings object now lives in
@@ -159,34 +165,39 @@ spindle.onFrontendMessage(async (payload: any) => {
       return;
       }
       if (payload.type === 'apply_replace_now') {
-        let changed = false, ok = true, found = false, alreadyDone = false;
+        let ok = true, found = false, changed = 0, skipped = 0;
         try {
           // Prefer the chat that's active (on screen) over the one the last
-          // generation happened in, so switching chats targets the right reply.
+          // generation happened in, so switching or reopening a chat still works.
           const chatId = await getActiveChatId(payload.chatId);
           // Only trust the passed message id while still in the chat it came from.
           const wantId = (chatId != null && chatId === payload.chatId) ? payload.messageId : null;
           if (chatId && groups.length) {
             const msgs = await spindle.chat.getMessages(chatId);
-            let m: any = null;
+            const targets: any[] = [];
             if (Array.isArray(msgs)) {
-              // Prefer the exact message the reply came from; fall back to the latest assistant reply.
-              if (wantId != null) m = msgs.find((x: any) => x && x.id === wantId && x.role === 'assistant') || null;
-              if (!m) { for (let i = msgs.length - 1; i >= 0; i--) { if (msgs[i] && msgs[i].role === 'assistant') { m = msgs[i]; break; } } }
-            }
-            if (m) {
-              found = true;
-              if (swappedIds.has(m.id)) {
-                alreadyDone = true;
+              if (swapWholeChat && !payload.onlyMessage) {
+                // Every assistant reply in the chat (never user messages).
+                for (const x of msgs) { if (x && x.role === 'assistant') targets.push(x); }
               } else {
-                const content = String(m.content == null ? '' : m.content);
-                const next = applyRules(content);
-                if (next !== content) { await spindle.chat.updateMessage(chatId, m.id, { content: next }); changed = true; markSwapped(m.id); }
+                // The exact reply if we have it, else the latest assistant reply.
+                let m: any = null;
+                if (wantId != null) m = msgs.find((x: any) => x && x.id === wantId && x.role === 'assistant') || null;
+                if (!m) { for (let i = msgs.length - 1; i >= 0; i--) { if (msgs[i] && msgs[i].role === 'assistant') { m = msgs[i]; break; } } }
+                if (m) targets.push(m);
               }
+            }
+            found = targets.length > 0;
+            for (const m of targets) {
+              // Skip replies already swapped this session unless re-swapping is allowed.
+              if (!allowReSwap && swappedIds.has(m.id)) { skipped++; continue; }
+              const content = String(m.content == null ? '' : m.content);
+              const next = applyRules(content);
+              if (next !== content) { await spindle.chat.updateMessage(chatId, m.id, { content: next }); changed++; markSwapped(m.id); }
             }
           }
         } catch (_) { ok = false; }
-        try { spindle.sendToFrontend({ type: 'replace_now_result', requestId: payload.requestId, changed: changed, ok: ok, hasRules: groups.length > 0, found: found, alreadyDone: alreadyDone }); } catch (__) {}
+        try { spindle.sendToFrontend({ type: 'replace_now_result', requestId: payload.requestId, ok: ok, hasRules: groups.length > 0, found: found, changed: changed, skipped: skipped }); } catch (__) {}
         return;
       }
       if (payload.type === 'set_replace_rules') {
@@ -227,6 +238,11 @@ spindle.on('GENERATION_ENDED', async (p: any) => {
     if (!content) return;
     const next = applyRules(content);
     if (next !== content) {
+      if (confirmBeforeEdit) {
+        // Ask first; the frontend sends apply_replace_now for this reply if the user agrees.
+        try { spindle.sendToFrontend({ type: 'confirm_edit', chatId: chatId, messageId: messageId, requestId: 'ar-auto-' + Date.now() }); } catch (__) {}
+        return;
+      }
       await spindle.chat.updateMessage(chatId, messageId, { content: next });
       markSwapped(messageId);
     }
