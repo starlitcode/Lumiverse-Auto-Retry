@@ -125,7 +125,13 @@ It is marked beta: it is new, it runs a backend that edits your saved messages, 
 
 It never changes what the model generated. A find-and-replace always runs after the reply already exists, so it only edits the text afterward. Because it edits the stored reply rather than just the display, the swap sticks, shows everywhere, and the model reads the swapped wording as context on later turns.
 
-If you would rather apply swaps by hand than have them run on every reply, turn on **Show a 'swap words now' button** in the find-and-replace section. That adds a button to the chat input's Extras menu (next to the settings button) that applies your swaps on demand to the latest reply. It only ever edits assistant replies, never your own messages, and it won't swap the same reply twice, so it won't stack on top of an automatic swap or an earlier tap. When Lumiverse reports which chat is active it targets the reply in the chat you are viewing, otherwise it falls back to the reply you last generated. It works whether or not automatic swapping is on. It is off by default so it does not clutter the menu for people who do not want it, and it appears in the same Extras menu on both mobile and desktop since Lumiverse handles that layout.
+If you would rather apply swaps by hand than have them run on every reply, turn on **Show a 'swap words now' button** under Advanced: find and replace. That adds a button to the chat input's Extras menu (next to the settings button) that applies your swaps on demand. It only ever edits assistant replies, never your own messages.
+
+By default it swaps just the latest reply and won't swap the same reply twice, so it won't stack on top of an automatic swap or an earlier tap. Two options change that. **Button swaps the whole chat** makes it apply your rules to every assistant reply in the chat you are viewing, not just the latest. **Allow swapping a reply again** lets it swap a reply you already swapped, which is useful after you change your rules, though it can stack swaps. There is no way to pick individual arbitrary messages; the choice is the latest reply or the whole chat.
+
+When Lumiverse reports which chat is active it targets the chat you are viewing, so it works on past conversations too, and otherwise it falls back to the reply you last generated. It works whether or not automatic swapping is on. It is off by default so it does not clutter the menu, and it appears in the same Extras menu on both mobile and desktop since Lumiverse handles that layout.
+
+If you never want a swap to touch a reply without your say-so, turn on **Ask before editing a reply**. Every swap, automatic or from the button, then pops up a confirmation you can accept or cancel, so nothing is changed silently. With automatic swapping on this can prompt often, which is the point for people who do not want surprises. It needs your Lumiverse to support confirm dialogs; if it does not, swaps proceed as normal.
 
 Rules go in the "Word swaps" box as `old => new`, one rule per line:
 
@@ -187,6 +193,9 @@ The settings modal is the easy path. The same options live in the CONFIG block a
 | replaceRandom | false | When a word has more than one swap, pick one at random each time. |
 | replaceCaseSensitive | false | Match letter case exactly. Off = case-insensitive, capitalization kept. |
 | showReplaceButton | false | Add a button to the input Extras menu that applies your word swaps to the latest reply on demand. |
+| swapWholeChat | false | Make that button swap every assistant reply in the chat, not just the latest. |
+| allowReSwap | false | Let that button swap a reply again even if it was already swapped (can stack swaps). |
+| confirmBeforeEdit | false | Ask you to confirm before any word-swap edit (automatic or manual); you can cancel. |
 | regenerateSelector | (see file) | Host button. See below. |
 | swipeNextSelector | (see file) | Backup button if your build retries by swiping. |
 | stopSelector | (see file) | Host stop button, used to abort a stalled reply. |
