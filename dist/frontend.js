@@ -76,6 +76,12 @@ const CONFIG = {
     // when a word has more than one replacement, pick one at random per occurrence. Off = always the first listed.
     showReplaceButton: false,
     // optional button in the input's Extras menu that applies the word swaps to the latest reply on demand.
+    swapWholeChat: false,
+    // when using that button, swap every assistant reply in the chat instead of only the latest.
+    allowReSwap: false,
+    // let that button swap a reply again even if it was already swapped this session (can stack swaps).
+    confirmBeforeEdit: false,
+    // ask for confirmation before any word-swap edit (automatic or manual); the user can cancel.
     // host controls (the only DOM-dependent part). Use the Test buttons in settings.
     // Multiple patterns are listed so a Lumiverse build that renames one attribute
     // is still likely covered; if a build changes them all, fix it via the Test UI.
@@ -238,7 +244,7 @@ const SCHEMA = [{
     ]
 },
 {
-    title: 'Find and replace in replies (beta)',
+    title: 'Advanced: find and replace (beta)',
     desc: "Swaps words in a reply after it arrives and saves the change, so the swap sticks and the model reads it on later turns. It never changes what the model generated, only the text afterward. Needs the chat editing permission. Off by default.",
     fields: [{
         key: 'replaceEnabled',
@@ -269,6 +275,24 @@ const SCHEMA = [{
         label: "Show a 'swap words now' button",
         type: 'bool',
         hint: "Off by default. Adds a button to the chat input's Extras menu that applies your word swaps on demand to the latest reply, so you can swap without leaving the automatic swap on. Only assistant replies are swapped, never your own messages, and the same reply won't be swapped twice. Needs your swap rules set up."
+    },
+    {
+        key: 'swapWholeChat',
+        label: 'Button swaps the whole chat',
+        type: 'bool',
+        hint: "Off by default. With this on, the swap button applies your rules to every assistant reply in the chat you're viewing, not just the latest one. Off, it only does the latest reply."
+    },
+    {
+        key: 'allowReSwap',
+        label: 'Allow swapping a reply again',
+        type: 'bool',
+        hint: "Off by default. Normally a reply is swapped at most once per session, so swaps don't stack. Turn this on to let the button swap a reply again even if it was already swapped, for example after you change your rules. This can apply your rules on top of an earlier swap."
+    },
+    {
+        key: 'confirmBeforeEdit',
+        label: 'Ask before editing a reply',
+        type: 'bool',
+        hint: "Off by default. When on, every word swap (automatic or from the button) asks you to confirm before it changes a reply, and you can cancel. This can get frequent if you use automatic swapping, but nothing is edited without your OK. Needs your Lumiverse to support confirm dialogs."
     },
     ]
 },
@@ -576,10 +600,24 @@ export function setup(ctx, opts) {
     let replaceActionOff = null;
     // Manual "swap words now": an optional Extras-menu button that applies the word
     // swaps to the latest reply on demand, instead of only automatically on finish.
-    function applyReplaceNow() {
+    // Optional consent dialog before any edit, for people who don't want surprises.
+    // Returns true to proceed. If the host has no confirm dialog, proceeds.
+    async function confirmEdit(message) {
+        try {
+            if (ctx && ctx.ui && typeof ctx.ui.showConfirm === 'function') {
+                const r = await ctx.ui.showConfirm({ title: 'Apply word swaps?', message: message, confirmLabel: 'Swap', cancelLabel: 'Cancel' });
+                return !!(r && r.confirmed);
+            }
+        } catch(_) {}
+        return true;
+    }
+    async function applyReplaceNow() {
         try {
             if (!ctx || typeof ctx.sendToBackend !== 'function') { showToast('Find and replace needs the backend, which this host does not offer.'); return; }
-            if (!lastChatId) { showToast('Generate or open a reply in this chat first.'); return; }
+            if (cfg.confirmBeforeEdit) {
+                const q = cfg.swapWholeChat ? 'Apply your word swaps to every reply in this chat?' : 'Apply your word swaps to the latest reply?';
+                if (!(await confirmEdit(q))) return;
+            }
             ctx.sendToBackend({ type: 'apply_replace_now', chatId: lastChatId, messageId: lastMessageId, requestId: 'ar-rep-' + Date.now() });
         } catch(_) {}
     }
@@ -834,7 +872,7 @@ export function setup(ctx, opts) {
     {
         id: 'replace',
         label: 'Word swaps',
-        keys: ['replaceEnabled', 'replaceRules', 'replaceRandom', 'replaceCaseSensitive', 'showReplaceButton']
+        keys: ['replaceEnabled', 'replaceRules', 'replaceRandom', 'replaceCaseSensitive', 'showReplaceButton', 'swapWholeChat', 'allowReSwap', 'confirmBeforeEdit']
     },
     {
         id: 'buttons',
@@ -1234,7 +1272,7 @@ export function setup(ctx, opts) {
     function buildDebugInfo(opts) {
         const o = opts || {};
         const inc = (v) => v !== false; // sections default to on
-        const keys = ['enabled', 'maxRetries', 'retryDelayMs', 'backoffFactor', 'maxDelayMs', 'jitter', 'rateLimitDelayMs', 'stuckTimeoutMs', 'idleTimeoutMs', 'retryOnError', 'ignoreHardErrors', 'retryOnEmpty', 'retryOnTruncated', 'retryOnNoPunct', 'retryOnShort', 'minChars', 'retryOnRefusal', 'refusalUseBuiltins', 'refusalMaxChars', 'refusalExtraPhrases', 'refusalPhraseSubs', 'refusalIgnorePhrases', 'refusalStripThinking', 'refusalThinkTags', 'replaceEnabled', 'replaceRules', 'replaceRandom', 'replaceCaseSensitive', 'showReplaceButton', 'liveLog', 'toast'];
+        const keys = ['enabled', 'maxRetries', 'retryDelayMs', 'backoffFactor', 'maxDelayMs', 'jitter', 'rateLimitDelayMs', 'stuckTimeoutMs', 'idleTimeoutMs', 'retryOnError', 'ignoreHardErrors', 'retryOnEmpty', 'retryOnTruncated', 'retryOnNoPunct', 'retryOnShort', 'minChars', 'retryOnRefusal', 'refusalUseBuiltins', 'refusalMaxChars', 'refusalExtraPhrases', 'refusalPhraseSubs', 'refusalIgnorePhrases', 'refusalStripThinking', 'refusalThinkTags', 'replaceEnabled', 'replaceRules', 'replaceRandom', 'replaceCaseSensitive', 'showReplaceButton', 'swapWholeChat', 'allowReSwap', 'confirmBeforeEdit', 'liveLog', 'toast'];
         const lines = [];
         lines.push('Auto Retry v' + VERSION + ' debug info');
         lines.push('time: ' + new Date().toISOString());
@@ -1869,14 +1907,22 @@ export function setup(ctx, opts) {
     syncReplaceButton();
     try {
         if (ctx && typeof ctx.onBackendMessage === 'function') {
-            const offRep = ctx.onBackendMessage((msg) => {
-                if (!msg || msg.type !== 'replace_now_result') return;
-                if (!msg.ok) showToast('Could not swap words in that reply.');
+            const offRep = ctx.onBackendMessage(async (msg) => {
+                if (!msg) return;
+                if (msg.type === 'confirm_edit') {
+                    const yes = await confirmEdit('Apply your word swaps to this reply?');
+                    if (yes && ctx && typeof ctx.sendToBackend === 'function') {
+                        ctx.sendToBackend({ type: 'apply_replace_now', chatId: msg.chatId, messageId: msg.messageId, onlyMessage: true, requestId: 'ar-rep-' + Date.now() });
+                    }
+                    return;
+                }
+                if (msg.type !== 'replace_now_result') return;
+                if (!msg.ok) showToast('Could not swap words.');
                 else if (!msg.hasRules) showToast('No word swaps are set up yet.');
-                else if (msg.alreadyDone) showToast('That reply was already swapped.');
-                else if (msg.found === false) showToast('No reply to swap yet. Generate one first.');
-                else if (msg.changed) showToast('Swapped words in the last reply.');
-                else showToast('No matching words to swap in that reply.');
+                else if (!msg.found) showToast('No reply found to swap in this chat.');
+                else if (msg.changed > 0) showToast('Swapped words in ' + msg.changed + (msg.changed === 1 ? ' reply.' : ' replies.'));
+                else if (msg.skipped > 0) showToast('Already swapped. Turn on re-swapping to redo it.');
+                else showToast('No matching words to swap.');
             });
             disposers.push(() => { try { offRep && offRep(); } catch(_) {} });
         }
