@@ -292,7 +292,7 @@ const SCHEMA: Group[] = [
       },
       {
         key: "showReplaceButton",
-        label: "Show a 'swap words now' button",
+        label: "Show a \"swap words now\" button",
         type: "bool",
         hint: "Off by default. Adds a button to the chat input's Extras menu that applies your word swaps on demand to the latest reply, so you can swap without leaving the automatic swap on. Only assistant replies are swapped, never your own messages, and the same reply won't be swapped twice. Needs your swap rules set up.",
       },
