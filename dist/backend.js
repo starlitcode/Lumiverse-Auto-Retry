@@ -29,6 +29,28 @@ let caseSensitive = false;
 let rulesText = '';
 let groups = [];
 let warnedEditError = false;
+// Messages a swap has already changed this session, so the manual button won't
+// compound swaps on a reply that auto-swap or an earlier tap already changed.
+const swappedIds = new Set();
+const SWAPPED_CAP = 1000;
+function markSwapped(id) {
+    if (id == null) return;
+    swappedIds.add(id);
+    if (swappedIds.size > SWAPPED_CAP) swappedIds.delete(swappedIds.values().next().value);
+}
+// Best-effort: the chat currently active (on screen), which needs the "chats"
+// permission. Method name follows the API's get-naming convention; if it's absent
+// or errors, fall back to the chat the request came from so nothing breaks.
+async function getActiveChatId(fallback) {
+    try {
+        if (spindle.chat && typeof spindle.chat.getActiveChat === 'function') {
+            const c = await spindle.chat.getActiveChat();
+            const id = c && (typeof c === 'string' ? c : c.id);
+            if (id) return id;
+        }
+    } catch (_) {}
+    return fallback;
+}
 function escapeRe(s) {
     return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -125,23 +147,34 @@ spindle.onFrontendMessage(async (payload) => {
             return;
         }
         if (payload.type === 'apply_replace_now') {
-            let changed = false, ok = true;
+            let changed = false, ok = true, found = false, alreadyDone = false;
             try {
-                const chatId = payload.chatId;
+                // Prefer the chat that's active (on screen) over the one the last
+                // generation happened in, so switching chats targets the right reply.
+                const chatId = await getActiveChatId(payload.chatId);
+                // Only trust the passed message id while still in the chat it came from.
+                const wantId = (chatId != null && chatId === payload.chatId) ? payload.messageId : null;
                 if (chatId && groups.length) {
                     const msgs = await spindle.chat.getMessages(chatId);
                     let m = null;
                     if (Array.isArray(msgs)) {
-                        for (let i = msgs.length - 1; i >= 0; i--) { if (msgs[i] && msgs[i].role === 'assistant') { m = msgs[i]; break; } }
+                        // Prefer the exact message the reply came from; fall back to the latest assistant reply.
+                        if (wantId != null) m = msgs.find((x) => x && x.id === wantId && x.role === 'assistant') || null;
+                        if (!m) { for (let i = msgs.length - 1; i >= 0; i--) { if (msgs[i] && msgs[i].role === 'assistant') { m = msgs[i]; break; } } }
                     }
                     if (m) {
-                        const content = String(m.content == null ? '' : m.content);
-                        const next = applyRules(content);
-                        if (next !== content) { await spindle.chat.updateMessage(chatId, m.id, { content: next }); changed = true; }
+                        found = true;
+                        if (swappedIds.has(m.id)) {
+                            alreadyDone = true;
+                        } else {
+                            const content = String(m.content == null ? '' : m.content);
+                            const next = applyRules(content);
+                            if (next !== content) { await spindle.chat.updateMessage(chatId, m.id, { content: next }); changed = true; markSwapped(m.id); }
+                        }
                     }
                 }
             } catch (_) { ok = false; }
-            try { spindle.sendToFrontend({ type: 'replace_now_result', requestId: payload.requestId, changed: changed, ok: ok, hasRules: groups.length > 0 }); } catch (__) {}
+            try { spindle.sendToFrontend({ type: 'replace_now_result', requestId: payload.requestId, changed: changed, ok: ok, hasRules: groups.length > 0, found: found, alreadyDone: alreadyDone }); } catch (__) {}
             return;
         }
         if (payload.type === 'set_replace_rules') {
@@ -169,7 +202,7 @@ spindle.on('GENERATION_ENDED', async (p) => {
         if (!messageId || !content) {
             const msgs = await spindle.chat.getMessages(chatId);
             if (!Array.isArray(msgs) || !msgs.length) return;
-            let m = messageId ? msgs.find((x) => x && x.id === messageId) : null;
+            let m = messageId ? msgs.find((x) => x && x.id === messageId && x.role === 'assistant') : null;
             if (!m) {
                 for (let i = msgs.length - 1; i >= 0; i--) {
                     if (msgs[i] && msgs[i].role === 'assistant') { m = msgs[i]; break; }
@@ -183,6 +216,7 @@ spindle.on('GENERATION_ENDED', async (p) => {
         const next = applyRules(content);
         if (next !== content) {
             await spindle.chat.updateMessage(chatId, messageId, { content: next });
+            markSwapped(messageId);
         }
     } catch (e) {
         if (!warnedEditError) {
