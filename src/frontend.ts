@@ -291,7 +291,7 @@ const SCHEMA: Group[] = [
         key: "showReplaceButton",
         label: "Show a 'swap words now' button",
         type: "bool",
-        hint: "Off by default. Adds a button to the chat input's Extras menu that applies your word swaps to the latest reply on demand, so you can swap without leaving the automatic swap on. Needs your swap rules set up and a reply in the current chat to act on.",
+        hint: "Off by default. Adds a button to the chat input's Extras menu that applies your word swaps on demand to the latest reply, so you can swap without leaving the automatic swap on. Only assistant replies are swapped, never your own messages, and the same reply won't be swapped twice. Needs your swap rules set up.",
       },
     ],
   },
@@ -678,6 +678,7 @@ export function setup(ctx: Ctx, opts?: any) {
   }
 
   let lastChatId: any = null;
+  let lastMessageId: any = null;
   let replaceAction: any = null;
   let replaceActionOff: any = null;
   // Manual "swap words now": an optional Extras-menu button that applies the word
@@ -686,7 +687,7 @@ export function setup(ctx: Ctx, opts?: any) {
     try {
       if (!ctx || typeof (ctx as any).sendToBackend !== "function") { showToast("Find and replace needs the backend, which this host does not offer."); return; }
       if (!lastChatId) { showToast("Generate or open a reply in this chat first."); return; }
-      (ctx as any).sendToBackend({ type: "apply_replace_now", chatId: lastChatId, requestId: "ar-rep-" + Date.now() });
+      (ctx as any).sendToBackend({ type: "apply_replace_now", chatId: lastChatId, messageId: lastMessageId, requestId: "ar-rep-" + Date.now() });
     } catch (_) {}
   }
   // Add or remove the Extras-menu button to match the toggle. Called on load and
@@ -1250,6 +1251,7 @@ export function setup(ctx: Ctx, opts?: any) {
     if (!p || !p.chatId) return;
     const s = st(p.chatId);
     lastChatId = p.chatId;
+    lastMessageId = p.messageId;
     log(
       "gen start",
       p.generationId,
@@ -1295,6 +1297,7 @@ export function setup(ctx: Ctx, opts?: any) {
     if (!p || !p.chatId) return;
     const s = st(p.chatId);
     lastChatId = p.chatId;
+    lastMessageId = p.messageId;
     if (s.ignored.has(p.generationId)) return; // aborted gen's trailing event, retry already scheduled
     clearTimers(s);
     if (Date.now() < s.suppressUntil) {
@@ -2256,6 +2259,8 @@ export function setup(ctx: Ctx, opts?: any) {
         if (!msg || msg.type !== "replace_now_result") return;
         if (!msg.ok) showToast("Could not swap words in that reply.");
         else if (!msg.hasRules) showToast("No word swaps are set up yet.");
+        else if (msg.alreadyDone) showToast("That reply was already swapped.");
+        else if (msg.found === false) showToast("No reply to swap yet. Generate one first.");
         else if (msg.changed) showToast("Swapped words in the last reply.");
         else showToast("No matching words to swap in that reply.");
       });
