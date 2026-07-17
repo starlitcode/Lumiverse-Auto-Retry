@@ -125,7 +125,7 @@ It is marked beta: it is new, it runs a backend that edits your saved messages, 
 
 It never changes what the model generated. A find-and-replace always runs after the reply already exists, so it only edits the text afterward. Because it edits the stored reply rather than just the display, the swap sticks, shows everywhere, and the model reads the swapped wording as context on later turns.
 
-If you would rather apply swaps by hand than have them run on every reply, turn on **Show a 'swap words now' button** in the find-and-replace section. That adds a button to the chat input's Extras menu (next to the settings button) that applies your swaps to the latest reply on demand. It works whether or not automatic swapping is on, needs your swap rules set up, and acts on the current chat. It is off by default so it does not clutter the menu for people who do not want it. The button appears in the same Extras menu on both mobile and desktop, since Lumiverse handles that layout.
+If you would rather apply swaps by hand than have them run on every reply, turn on **Show a 'swap words now' button** in the find-and-replace section. That adds a button to the chat input's Extras menu (next to the settings button) that applies your swaps on demand to the latest reply. It only ever edits assistant replies, never your own messages, and it won't swap the same reply twice, so it won't stack on top of an automatic swap or an earlier tap. When Lumiverse reports which chat is active it targets the reply in the chat you are viewing, otherwise it falls back to the reply you last generated. It works whether or not automatic swapping is on. It is off by default so it does not clutter the menu for people who do not want it, and it appears in the same Extras menu on both mobile and desktop since Lumiverse handles that layout.
 
 Rules go in the "Word swaps" box as `old => new`, one rule per line:
 
@@ -218,12 +218,13 @@ For watching what the extension does live, turn on **Show a live log on screen**
 
 ## Permissions
 
-Declares two permissions:
+Declares three permissions:
 
 - `generation`: to hear when replies start, stream, and end. This drives all the retry logic.
 - `chat_mutation`: to edit a saved reply. This is used only by the "Find and replace in replies" feature, and only when you turn it on and enter swaps. If you never use that feature, nothing is edited.
+- `chats`: to find the reply in the chat you are currently viewing when you use the manual "swap words now" button. If it is unavailable, the button falls back to the reply you last generated. It never reads or changes anything on its own.
 
-`chat_mutation` is a privileged permission, so depending on your Lumiverse setup it may need admin approval before it takes effect. The retry side works without it; only find-and-replace needs it.
+`chat_mutation` and `chats` are privileged permissions, so depending on your Lumiverse setup they may need admin approval before they take effect. The retry side works without them; only find-and-replace needs them.
 
 The find-and-replace feature runs in a small backend module. The rest of the extension is frontend-only. It makes no external network calls. Your settings are saved to your Lumiverse account through the extension's own scoped storage, so they follow you across browsers, with a copy kept in the browser as a fast local cache.
 
