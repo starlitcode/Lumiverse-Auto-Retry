@@ -125,6 +125,8 @@ It is marked beta: it is new, it runs a backend that edits your saved messages, 
 
 It never changes what the model generated. A find-and-replace always runs after the reply already exists, so it only edits the text afterward. Because it edits the stored reply rather than just the display, the swap sticks, shows everywhere, and the model reads the swapped wording as context on later turns.
 
+If you would rather apply swaps by hand than have them run on every reply, turn on **Show a 'swap words now' button** in the find-and-replace section. That adds a button to the chat input's Extras menu (next to the settings button) that applies your swaps to the latest reply on demand. It works whether or not automatic swapping is on, needs your swap rules set up, and acts on the current chat. It is off by default so it does not clutter the menu for people who do not want it. The button appears in the same Extras menu on both mobile and desktop, since Lumiverse handles that layout.
+
 Rules go in the "Word swaps" box as `old => new`, one rule per line:
 
 ```
@@ -184,6 +186,7 @@ The settings modal is the easy path. The same options live in the CONFIG block a
 | replaceRules | (empty) | "old => new" word swaps, one per line. |
 | replaceRandom | false | When a word has more than one swap, pick one at random each time. |
 | replaceCaseSensitive | false | Match letter case exactly. Off = case-insensitive, capitalization kept. |
+| showReplaceButton | false | Add a button to the input Extras menu that applies your word swaps to the latest reply on demand. |
 | regenerateSelector | (see file) | Host button. See below. |
 | swipeNextSelector | (see file) | Backup button if your build retries by swiping. |
 | stopSelector | (see file) | Host stop button, used to abort a stalled reply. |
