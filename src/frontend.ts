@@ -8,7 +8,7 @@
  * in the DOM when a generation fails, stalls, or returns empty.
  *
  * Settings can be edited live from the UI: open the chat input "Extras" popover
- * and pick "Auto Retry settings". Changes are saved to localStorage and applied
+ * and pick "Auto Retry settings". Changes are synced to your Lumiverse account and applied
  * to the next generation, so you never have to touch the GitHub files.
  */
 
@@ -23,7 +23,7 @@ const IGNORE_MAX = 16; // most aborted-generation ids kept around to swallow the
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "2.3.0";
+const VERSION = "2.4.0";
 
 // ---- defaults (the UI overrides these; editing here changes the fallback) ----
 const CONFIG = {
@@ -66,6 +66,7 @@ const CONFIG = {
   replaceRules: "", // "old => new" rules, one per line. A single word matches whole words; empty right side deletes it. Same word can appear more than once.
   replaceCaseSensitive: false, // match letter case exactly. Off = case-insensitive with capitalization kept.
   replaceRandom: false, // when a word has more than one replacement, pick one at random per occurrence. Off = always the first listed.
+  showReplaceButton: false, // optional button in the input's Extras menu that applies the word swaps to the latest reply on demand.
 
   // host controls (the only DOM-dependent part). Use the Test buttons in settings.
   // Multiple patterns are listed so a Lumiverse build that renames one attribute
@@ -285,6 +286,12 @@ const SCHEMA: Group[] = [
         label: "Match case exactly",
         type: "bool",
         hint: "Off by default. When off, a swap matches any case and keeps the original capitalization. Turn on to swap only when the case matches your rule exactly, so sky and Sky can have different swaps.",
+      },
+      {
+        key: "showReplaceButton",
+        label: "Show a 'swap words now' button",
+        type: "bool",
+        hint: "Off by default. Adds a button to the chat input's Extras menu that applies your word swaps to the latest reply on demand, so you can swap without leaving the automatic swap on. Needs your swap rules set up and a reply in the current chat to act on.",
       },
     ],
   },
@@ -670,6 +677,38 @@ export function setup(ctx: Ctx, opts?: any) {
     } catch (_) {}
   }
 
+  let lastChatId: any = null;
+  let replaceAction: any = null;
+  let replaceActionOff: any = null;
+  // Manual "swap words now": an optional Extras-menu button that applies the word
+  // swaps to the latest reply on demand, instead of only automatically on finish.
+  function applyReplaceNow() {
+    try {
+      if (!ctx || typeof (ctx as any).sendToBackend !== "function") { showToast("Find and replace needs the backend, which this host does not offer."); return; }
+      if (!lastChatId) { showToast("Generate or open a reply in this chat first."); return; }
+      (ctx as any).sendToBackend({ type: "apply_replace_now", chatId: lastChatId, requestId: "ar-rep-" + Date.now() });
+    } catch (_) {}
+  }
+  // Add or remove the Extras-menu button to match the toggle. Called on load and
+  // whenever settings are saved, so flipping the toggle takes effect at once.
+  function syncReplaceButton() {
+    try {
+      const canReg = !!(ctx && (ctx as any).ui && typeof (ctx as any).ui.registerInputBarAction === "function");
+      if (cfg.showReplaceButton && canReg && !replaceAction) {
+        replaceAction = (ctx as any).ui.registerInputBarAction({
+          id: "auto-retry-replace-now",
+          label: "Swap words in the last reply",
+          iconSvg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>',
+        });
+        replaceActionOff = replaceAction.onClick(() => applyReplaceNow());
+      } else if ((!cfg.showReplaceButton || !canReg) && replaceAction) {
+        try { replaceActionOff && replaceActionOff(); } catch (_) {}
+        try { replaceAction.destroy(); } catch (_) {}
+        replaceAction = null;
+        replaceActionOff = null;
+      }
+    } catch (_) {}
+  }
   // A short in-memory ring buffer of what the extension did, captured whether or
   // not console logging is on, so the Copy debug info report carries a timeline
   // and the user never has to open dev tools to report a behavioural bug.
@@ -712,7 +751,7 @@ export function setup(ctx: Ctx, opts?: any) {
     if (liveLogEl || typeof document === "undefined") return;
     const el = document.createElement("div");
     el.style.cssText =
-      "position:fixed;right:8px;bottom:8px;z-index:2147483000;width:min(340px,92vw);height:min(300px,50vh);min-width:200px;min-height:120px;max-width:96vw;max-height:85vh;display:flex;flex-direction:column;background:var(--lumiverse-surface,rgba(20,18,26,.96));border:1px solid var(--lumiverse-border,rgba(255,255,255,.14));border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.4);font-family:var(--lumiverse-font-family,system-ui);font-size:13px;color:var(--lumiverse-text,#e9e4f0);overflow:hidden";
+      "position:fixed;right:8px;bottom:8px;z-index:2147483000;width:min(340px,92vw);height:min(300px,50vh);min-width:200px;min-height:120px;max-width:96vw;max-height:85vh;display:flex;flex-direction:column;background:var(--lumiverse-surface,rgba(20,18,26,.96));border:1px solid var(--lumiverse-border,rgba(255,255,255,.14));border-radius:var(--lumiverse-radius,10px);box-shadow:0 6px 24px rgba(0,0,0,.4);font-family:var(--lumiverse-font-family,system-ui);font-size:13px;color:var(--lumiverse-text,#e9e4f0);overflow:hidden";
     const head = document.createElement("div");
     head.style.cssText =
       "display:flex;align-items:center;gap:8px;padding:7px 9px;border-bottom:1px solid var(--lumiverse-border,rgba(255,255,255,.12));font-weight:600;cursor:move;user-select:none;touch-action:none";
@@ -773,7 +812,7 @@ export function setup(ctx: Ctx, opts?: any) {
     // the same pointer events as the drag so it also works with touch on mobile.
     const grip = document.createElement("div");
     grip.style.cssText =
-      "position:absolute;right:0;bottom:0;width:20px;height:20px;cursor:nwse-resize;touch-action:none;background:linear-gradient(135deg,transparent 45%,var(--lumiverse-border,rgba(255,255,255,.5)) 45%,var(--lumiverse-border,rgba(255,255,255,.5)) 55%,transparent 55%,transparent 70%,var(--lumiverse-border,rgba(255,255,255,.5)) 70%,var(--lumiverse-border,rgba(255,255,255,.5)) 80%,transparent 80%);border-bottom-right-radius:10px";
+      "position:absolute;right:0;bottom:0;width:20px;height:20px;cursor:nwse-resize;touch-action:none;background:linear-gradient(135deg,transparent 45%,var(--lumiverse-border,rgba(255,255,255,.5)) 45%,var(--lumiverse-border,rgba(255,255,255,.5)) 55%,transparent 55%,transparent 70%,var(--lumiverse-border,rgba(255,255,255,.5)) 70%,var(--lumiverse-border,rgba(255,255,255,.5)) 80%,transparent 80%);border-bottom-right-radius:var(--lumiverse-radius,10px)";
     el.appendChild(grip);
     let rz = false,
       rsx = 0,
@@ -950,6 +989,7 @@ export function setup(ctx: Ctx, opts?: any) {
         "replaceRules",
         "replaceRandom",
         "replaceCaseSensitive",
+        "showReplaceButton",
       ],
     },
     {
@@ -1209,6 +1249,7 @@ export function setup(ctx: Ctx, opts?: any) {
   function onStart(p: any) {
     if (!p || !p.chatId) return;
     const s = st(p.chatId);
+    lastChatId = p.chatId;
     log(
       "gen start",
       p.generationId,
@@ -1253,6 +1294,7 @@ export function setup(ctx: Ctx, opts?: any) {
   function onEnd(p: any) {
     if (!p || !p.chatId) return;
     const s = st(p.chatId);
+    lastChatId = p.chatId;
     if (s.ignored.has(p.generationId)) return; // aborted gen's trailing event, retry already scheduled
     clearTimers(s);
     if (Date.now() < s.suppressUntil) {
@@ -1338,7 +1380,7 @@ export function setup(ctx: Ctx, opts?: any) {
       t.style.cssText =
         "position:fixed;bottom:max(20px,env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);" +
         "z-index:2147483647;display:flex;align-items:center;gap:10px;" +
-        "font:13px/1.4 var(--lumiverse-font-family,system-ui);padding:9px 12px;border-radius:12px;" +
+        "font:13px/1.4 var(--lumiverse-font-family,system-ui);padding:9px 12px;border-radius:var(--lumiverse-radius,12px);" +
         "color:var(--lumiverse-text,#fff);background:var(--lumiverse-fill,rgba(20,16,30,.96));" +
         "border:1px solid var(--lumiverse-border,rgba(255,255,255,.18));" +
         "box-shadow:0 8px 24px rgba(0,0,0,.45);transition:opacity .2s ease;" +
@@ -1374,7 +1416,7 @@ export function setup(ctx: Ctx, opts?: any) {
         const c = document.createElement("button");
         c.textContent = "Cancel";
         c.style.cssText =
-          "flex:none;min-height:36px;padding:6px 14px;border-radius:8px;cursor:pointer;" +
+          "flex:none;min-height:36px;padding:6px 14px;border-radius:var(--lumiverse-radius,8px);cursor:pointer;" +
           "font:13px var(--lumiverse-font-family,system-ui);" +
           "border:1px solid var(--lumiverse-border,rgba(255,255,255,.28));" +
           "background:var(--lumiverse-fill-subtle,rgba(255,255,255,.08));color:var(--lumiverse-text,#fff)";
@@ -1457,6 +1499,7 @@ export function setup(ctx: Ctx, opts?: any) {
       "replaceRules",
       "replaceRandom",
       "replaceCaseSensitive",
+      "showReplaceButton",
       "liveLog",
       "toast",
     ];
@@ -1718,7 +1761,7 @@ export function setup(ctx: Ctx, opts?: any) {
       dArea.placeholder =
         "Press Build preview to fill this, then edit out anything private before copying.";
       dArea.style.cssText =
-        "width:100%;box-sizing:border-box;font-family:monospace;font-size:12px;padding:8px;border-radius:8px;border:1px solid var(--lumiverse-border,#3a3543);background:var(--lumiverse-bg,#1a1720);color:var(--lumiverse-text,#e9e4f0);resize:vertical";
+        "width:100%;box-sizing:border-box;font-family:monospace;font-size:12px;padding:8px;border-radius:var(--lumiverse-radius,8px);border:1px solid var(--lumiverse-border,#3a3543);background:var(--lumiverse-bg,#1a1720);color:var(--lumiverse-text,#e9e4f0);resize:vertical";
 
       const buildBtn = btn("Build preview", false);
       buildBtn.addEventListener("click", () => {
@@ -1906,6 +1949,7 @@ export function setup(ctx: Ctx, opts?: any) {
       saveSaved();
       saveToAccount();
       syncLiveLog();
+      syncReplaceButton();
       if (onSaved) onSaved();
       buildSettingsBody(root, onSaved);
       log("settings reset to defaults");
@@ -1924,6 +1968,7 @@ export function setup(ctx: Ctx, opts?: any) {
       saveSaved();
       saveToAccount();
       syncLiveLog();
+      syncReplaceButton();
       if (onSaved) onSaved();
       status.textContent = "Saved. Takes effect on the next reply.";
       log("settings saved", cfg);
@@ -2050,12 +2095,17 @@ export function setup(ctx: Ctx, opts?: any) {
       "border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));" +
       "background:var(--lumiverse-fill-subtle,rgba(255,255,255,.05));" +
       "color:var(--lumiverse-text,#eee);font:13px var(--lumiverse-font-family,system-ui);outline:none;" +
-      "transition:border-color .12s ease";
+      "transition:border-color .12s ease,box-shadow .12s ease";
+    // On focus, tint the border and add a soft accent glow ring so focus is clearly
+    // visible and matches the host inputs. Falls back to just the border tint on
+    // browsers without color-mix. Cleared on blur.
     input.addEventListener("focus", () => {
       input.style.borderColor = "var(--lumiverse-primary,#7c5cff)";
+      input.style.boxShadow = "0 0 0 3px color-mix(in srgb, var(--lumiverse-primary,#7c5cff) 32%, transparent)";
     });
     input.addEventListener("blur", () => {
       input.style.borderColor = "var(--lumiverse-border,rgba(255,255,255,.16))";
+      input.style.boxShadow = "none";
     });
   }
 
@@ -2199,6 +2249,20 @@ export function setup(ctx: Ctx, opts?: any) {
   }
   syncLiveLog();
   loadFromAccount();
+  syncReplaceButton();
+  try {
+    if (ctx && typeof (ctx as any).onBackendMessage === "function") {
+      const offRep = (ctx as any).onBackendMessage((msg: any) => {
+        if (!msg || msg.type !== "replace_now_result") return;
+        if (!msg.ok) showToast("Could not swap words in that reply.");
+        else if (!msg.hasRules) showToast("No word swaps are set up yet.");
+        else if (msg.changed) showToast("Swapped words in the last reply.");
+        else showToast("No matching words to swap in that reply.");
+      });
+      disposers.push(() => { try { offRep && offRep(); } catch (_) {} });
+    }
+  } catch (_) {}
+  disposers.push(() => { try { replaceActionOff && replaceActionOff(); } catch (_) {} try { replaceAction && replaceAction.destroy(); } catch (_) {} });
   log("ready v" + VERSION, cfg);
 
   return () => {
