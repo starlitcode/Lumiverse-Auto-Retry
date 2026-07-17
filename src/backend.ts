@@ -51,13 +51,22 @@ function markSwapped(id: any) {
 // permission. Method name follows the API's get-naming convention; if it's absent
 // or errors, fall back to the chat the request came from so nothing breaks.
 async function getActiveChatId(fallback: any): Promise<any> {
-  try {
-    if (spindle.chat && typeof spindle.chat.getActiveChat === "function") {
-      const c = await spindle.chat.getActiveChat();
-      const id = c && (typeof c === "string" ? c : c.id);
-      if (id) return id;
+  // The exact "get active chat" method isn't documented, so try the likely
+  // read-only names on both namespaces. Each is guarded; if none exist or work,
+  // fall back to the chat the request came from so nothing breaks.
+  const candidates = ["getActiveChat", "getCurrentChat", "getActiveConversation", "getCurrentConversation", "getSelectedChat"];
+  for (const ns of [spindle.chat, spindle.chats]) {
+    if (!ns) continue;
+    for (const name of candidates) {
+      try {
+        if (typeof ns[name] === "function") {
+          const c = await ns[name]();
+          const id = c && (typeof c === "string" ? c : (c.id || c.chatId));
+          if (id) return id;
+        }
+      } catch (_) {}
     }
-  } catch (_) {}
+  }
   return fallback;
 }
 
