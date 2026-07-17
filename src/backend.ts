@@ -50,25 +50,6 @@ function markSwapped(id: any) {
 // Best-effort: the chat currently active (on screen), which needs the "chats"
 // permission. Method name follows the API's get-naming convention; if it's absent
 // or errors, fall back to the chat the request came from so nothing breaks.
-async function getActiveChatId(fallback: any): Promise<any> {
-  // The exact "get active chat" method isn't documented, so try the likely
-  // read-only names on both namespaces. Each is guarded; if none exist or work,
-  // fall back to the chat the request came from so nothing breaks.
-  const candidates = ["getActiveChat", "getCurrentChat", "getActiveConversation", "getCurrentConversation", "getSelectedChat"];
-  for (const ns of [spindle.chat, spindle.chats]) {
-    if (!ns) continue;
-    for (const name of candidates) {
-      try {
-        if (typeof ns[name] === "function") {
-          const c = await ns[name]();
-          const id = c && (typeof c === "string" ? c : (c.id || c.chatId));
-          if (id) return id;
-        }
-      } catch (_) {}
-    }
-  }
-  return fallback;
-}
 
 function escapeRe(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -95,10 +76,12 @@ function buildGroups(raw: string, cs: boolean): Group[] {
   const out: Group[] = [];
   for (const key of order) {
     const g = map.get(key)!;
-    const isWord = /^[\p{L}\p{N}]+$/u.test(g.from);
-    const body = escapeRe(g.from);
-    const re = new RegExp('(' + (isWord ? '\\b' + body + '\\b' : body) + ')( ?)', cs ? 'gu' : 'giu');
-    out.push({ re: re, tos: g.tos, from: g.from });
+    try {
+      const isWord = /^[\p{L}\p{N}]+$/u.test(g.from);
+      const body = escapeRe(g.from);
+      const re = new RegExp('(' + (isWord ? '\\b' + body + '\\b' : body) + ')( ?)', cs ? 'gu' : 'giu');
+      out.push({ re: re, tos: g.tos, from: g.from });
+    } catch (_) { /* skip a rule that can't compile */ }
   }
   return out;
 }
@@ -176,24 +159,23 @@ spindle.onFrontendMessage(async (payload: any) => {
       if (payload.type === 'apply_replace_now') {
         let ok = true, found = false, changed = 0, skipped = 0;
         try {
-          // Prefer the chat that's active (on screen) over the one the last
-          // generation happened in, so switching or reopening a chat still works.
-          const chatId = await getActiveChatId(payload.chatId);
-          // Only trust the passed message id while still in the chat it came from.
-          const wantId = (chatId != null && chatId === payload.chatId) ? payload.messageId : null;
+          const chatId = payload.chatId;
+          const wantId = payload.messageId;
           if (chatId && groups.length) {
             const msgs = await spindle.chat.getMessages(chatId);
             const targets: any[] = [];
             if (Array.isArray(msgs)) {
+              // The opening/greeting message is authored, not generated, so never swap it.
+              const greetingId = (msgs.length && msgs[0] && msgs[0].role === 'assistant') ? msgs[0].id : null;
               if (swapWholeChat && !payload.onlyMessage) {
-                // Every assistant reply in the chat (never user messages).
-                for (const x of msgs) { if (x && x.role === 'assistant') targets.push(x); }
+                // Every generated assistant reply in the chat (never user messages or the greeting).
+                for (const x of msgs) { if (x && x.role === 'assistant' && x.id !== greetingId) targets.push(x); }
               } else {
-                // The exact reply if we have it, else the latest assistant reply.
+                // The exact reply if we have it, else the latest assistant reply, never the greeting.
                 let m: any = null;
                 if (wantId != null) m = msgs.find((x: any) => x && x.id === wantId && x.role === 'assistant') || null;
-                if (!m) { for (let i = msgs.length - 1; i >= 0; i--) { if (msgs[i] && msgs[i].role === 'assistant') { m = msgs[i]; break; } } }
-                if (m) targets.push(m);
+                if (!m) { for (let i = msgs.length - 1; i >= 0; i--) { if (msgs[i] && msgs[i].role === 'assistant' && msgs[i].id !== greetingId) { m = msgs[i]; break; } } }
+                if (m && m.id !== greetingId) targets.push(m);
               }
             }
             found = targets.length > 0;
@@ -231,19 +213,20 @@ spindle.on('GENERATION_ENDED', async (p: any) => {
     const chatId = p.chatId;
     let messageId = p.messageId;
     let content = typeof p.content === 'string' ? p.content : '';
-    if (!messageId || !content) {
+    // Fetch to fill any missing content and to spot the greeting: the opening
+    // message is authored, not generated, so it must never be swapped.
+    try {
       const msgs = await spindle.chat.getMessages(chatId);
-      if (!Array.isArray(msgs) || !msgs.length) return;
-      let m = messageId ? msgs.find((x: any) => x && x.id === messageId && x.role === 'assistant') : null;
-      if (!m) {
-        for (let i = msgs.length - 1; i >= 0; i--) {
-          if (msgs[i] && msgs[i].role === 'assistant') { m = msgs[i]; break; }
+      if (Array.isArray(msgs) && msgs.length) {
+        const greetingId = (msgs[0] && msgs[0].role === 'assistant') ? msgs[0].id : null;
+        if (!messageId || !content) {
+          let m: any = messageId ? msgs.find((x: any) => x && x.id === messageId && x.role === 'assistant') : null;
+          if (!m) { for (let i = msgs.length - 1; i >= 0; i--) { if (msgs[i] && msgs[i].role === 'assistant') { m = msgs[i]; break; } } }
+          if (m) { messageId = m.id; if (!content) content = String(m.content == null ? '' : m.content); }
         }
+        if (messageId != null && greetingId != null && messageId === greetingId) return; // never swap the greeting
       }
-      if (!m) return;
-      messageId = m.id;
-      if (!content) content = String(m.content == null ? '' : m.content);
-    }
+    } catch (_) {}
     if (!content) return;
     const next = applyRules(content);
     if (next !== content) {
