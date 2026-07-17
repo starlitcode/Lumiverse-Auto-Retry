@@ -136,6 +136,26 @@ spindle.onFrontendMessage(async (payload: any) => {
       try { spindle.sendToFrontend({ type: 'loaded_settings', requestId: payload.requestId, settings: settings }); } catch (__) {}
       return;
       }
+      if (payload.type === 'apply_replace_now') {
+        let changed = false, ok = true;
+        try {
+          const chatId = payload.chatId;
+          if (chatId && groups.length) {
+            const msgs = await spindle.chat.getMessages(chatId);
+            let m: any = null;
+            if (Array.isArray(msgs)) {
+              for (let i = msgs.length - 1; i >= 0; i--) { if (msgs[i] && msgs[i].role === 'assistant') { m = msgs[i]; break; } }
+            }
+            if (m) {
+              const content = String(m.content == null ? '' : m.content);
+              const next = applyRules(content);
+              if (next !== content) { await spindle.chat.updateMessage(chatId, m.id, { content: next }); changed = true; }
+            }
+          }
+        } catch (_) { ok = false; }
+        try { spindle.sendToFrontend({ type: 'replace_now_result', requestId: payload.requestId, changed: changed, ok: ok, hasRules: groups.length > 0 }); } catch (__) {}
+        return;
+      }
       if (payload.type === 'set_replace_rules') {
       // Legacy path for an older cached frontend that still sends rules alone.
       enabled = !!payload.enabled;
