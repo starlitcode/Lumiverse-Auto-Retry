@@ -18,7 +18,7 @@ const STAND_DOWN_MS = 2500;
 const IGNORE_MAX = 16; // most aborted-generation ids kept around to swallow their late events
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = '2.4.0';
+const VERSION = '2.5.0';
 // ---- defaults (the UI overrides these; editing here changes the fallback) ----
 const CONFIG = {
     enabled: true,
@@ -31,6 +31,11 @@ const CONFIG = {
     jitter: true,
     // rate limiting (HTTP 429 / overloaded)
     rateLimitDelayMs: 8000,
+    // how a retry redoes the reply. false = click the regenerate control (redoes
+    // the reply in place). true = click the next / swipe control first, which adds
+    // a new reroll and leaves the existing rerolls in place; falls back to
+    // regenerate if the swipe control isn't found.
+    retryByNewReroll: false,
     // watchdogs. Tuned to tolerate a slow connection and slow local models so a
     // slow-but-fine generation is not mistaken for a stall and retried into a pile-up.
     stuckTimeoutMs: 90000,
@@ -163,6 +168,16 @@ const SCHEMA = [{
         hint: "Nudges each wait by a random amount so retries don't all hit the server at the same instant. Best left on."
     },
     ]
+},
+{
+    title: 'How it redoes a reply',
+    desc: 'Choose whether a retry replaces the reply or adds a new reroll beside it.',
+    fields: [{
+        key: 'retryByNewReroll',
+        label: 'Retry by adding a new reroll',
+        type: 'bool',
+        hint: "Off: a retry redoes the reply in place, using your regenerate button. On some setups that clears the other rerolls on that message. On: a retry clicks your next / swipe button instead, which adds a new reroll and leaves the existing ones in place. It falls back to the regenerate button if the next / swipe button isn't found, so set that selector in the buttons section below if retries stop happening.",
+    }],
 },
 {
     title: 'Watch for frozen replies',
@@ -862,7 +877,7 @@ export function setup(ctx, opts) {
     const EXPORT_CATEGORIES = [{
         id: 'retry',
         label: 'Retry behavior',
-        keys: ['enabled', 'maxRetries', 'retryDelayMs', 'backoffFactor', 'maxDelayMs', 'jitter', 'rateLimitDelayMs', 'stuckTimeoutMs', 'idleTimeoutMs', 'retryOnError', 'ignoreHardErrors', 'retryOnEmpty', 'retryOnTruncated', 'retryOnNoPunct', 'retryOnShort', 'minChars']
+        keys: ['enabled', 'maxRetries', 'retryDelayMs', 'backoffFactor', 'maxDelayMs', 'jitter', 'rateLimitDelayMs', 'retryByNewReroll', 'stuckTimeoutMs', 'idleTimeoutMs', 'retryOnError', 'ignoreHardErrors', 'retryOnEmpty', 'retryOnTruncated', 'retryOnNoPunct', 'retryOnShort', 'minChars']
     },
     {
         id: 'refusal',
@@ -996,7 +1011,12 @@ export function setup(ctx, opts) {
     const fireRetry = () => {
         let btn = null;
         try {
-            btn = find(cfg.regenerateSelector) || find(cfg.swipeNextSelector);
+            // With retryByNewReroll on, prefer the next / swipe control so a retry adds
+            // a new reroll and keeps the existing ones; fall back to regenerate. Off,
+            // it's the reverse: regenerate first, swipe as the backup.
+            btn = cfg.retryByNewReroll
+                ? find(cfg.swipeNextSelector) || find(cfg.regenerateSelector)
+                : find(cfg.regenerateSelector) || find(cfg.swipeNextSelector);
         } catch(_) {}
         if (btn) {
             try {
@@ -1004,12 +1024,12 @@ export function setup(ctx, opts) {
                 btn.click();
                 return true;
             } catch(e) {
-                log('regenerate click failed', e);
+                log('retry click failed', e);
                 return false;
             }
         }
-        log('no regenerate control found, set the regenerate selector in settings');
-        showToast("Auto-retry: couldn't find your regenerate button. Set it in Auto Retry settings.");
+        log('no retry control found, set the button selectors in settings');
+        showToast("Auto-retry: couldn't find your retry button. Set it in Auto Retry settings.");
         return false;
     };
     const stopGenerating = () => {
@@ -1272,7 +1292,7 @@ export function setup(ctx, opts) {
     function buildDebugInfo(opts) {
         const o = opts || {};
         const inc = (v) => v !== false; // sections default to on
-        const keys = ['enabled', 'maxRetries', 'retryDelayMs', 'backoffFactor', 'maxDelayMs', 'jitter', 'rateLimitDelayMs', 'stuckTimeoutMs', 'idleTimeoutMs', 'retryOnError', 'ignoreHardErrors', 'retryOnEmpty', 'retryOnTruncated', 'retryOnNoPunct', 'retryOnShort', 'minChars', 'retryOnRefusal', 'refusalUseBuiltins', 'refusalMaxChars', 'refusalExtraPhrases', 'refusalPhraseSubs', 'refusalIgnorePhrases', 'refusalStripThinking', 'refusalThinkTags', 'replaceEnabled', 'replaceRules', 'replaceRandom', 'replaceCaseSensitive', 'showReplaceButton', 'swapWholeChat', 'allowReSwap', 'confirmBeforeEdit', 'liveLog', 'toast'];
+        const keys = ['enabled', 'maxRetries', 'retryDelayMs', 'backoffFactor', 'maxDelayMs', 'jitter', 'rateLimitDelayMs', 'retryByNewReroll', 'stuckTimeoutMs', 'idleTimeoutMs', 'retryOnError', 'ignoreHardErrors', 'retryOnEmpty', 'retryOnTruncated', 'retryOnNoPunct', 'retryOnShort', 'minChars', 'retryOnRefusal', 'refusalUseBuiltins', 'refusalMaxChars', 'refusalExtraPhrases', 'refusalPhraseSubs', 'refusalIgnorePhrases', 'refusalStripThinking', 'refusalThinkTags', 'replaceEnabled', 'replaceRules', 'replaceRandom', 'replaceCaseSensitive', 'showReplaceButton', 'swapWholeChat', 'allowReSwap', 'confirmBeforeEdit', 'liveLog', 'toast'];
         const lines = [];
         lines.push('Auto Retry v' + VERSION + ' debug info');
         lines.push('time: ' + new Date().toISOString());
@@ -1284,6 +1304,7 @@ export function setup(ctx, opts) {
         if (inc(o.buttons)) {
             lines.push('');
             lines.push('buttons (checked right now):');
+            lines.push('  retry mode: ' + (cfg.retryByNewReroll ? 'new reroll (swipe first)' : 'regenerate'));
             lines.push('  regenerate: ' + selectorState(cfg.regenerateSelector));
             lines.push('  swipeNext:  ' + selectorState(cfg.swipeNextSelector));
             lines.push('  stop:       ' + selectorState(cfg.stopSelector));
