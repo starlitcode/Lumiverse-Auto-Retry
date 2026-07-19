@@ -36,7 +36,7 @@ Only **Save** keeps your changes. Closing with the X or tapping outside discards
 
 You can save your word-swap setups as named presets and switch between them without copying rules by hand. They live at the bottom of **Advanced: find and replace**.
 
-Type a name and press **Save as new** to store your current swaps, **Update** to overwrite the one you have selected, **Delete** to remove it, and **Apply** to load one. Applying a preset takes effect right away and is saved, so there is no separate Save step for it. Presets are kept on this browser, so unlike your account settings they do not sync across devices.
+Pick a saved preset and press **Load** to switch your settings to it. To store the current setup, type a name and press **Save as new**. **Update selected** overwrites the chosen preset with your current settings, and **Delete** removes it. Loading a preset takes effect right away and is saved, so there is no separate Save step for it. Presets are kept on this browser, so unlike your account settings they do not sync across devices.
 
 ## You are always in charge
 
