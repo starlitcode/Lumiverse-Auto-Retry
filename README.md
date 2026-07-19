@@ -1,6 +1,6 @@
 # Auto Retry (Lumiverse Spindle extension)
 
-Auto Retry quietly re-runs an AI reply when it fails, comes back empty, stalls partway, gets cut off mid-sentence, or refuses by mistake. You send a message, something goes wrong with the reply, and instead of you noticing and hitting regenerate, the extension does it for you. It is a rebuild of the [SillyTavern fetch-retry](https://github.com/Hikarushmz/fetch-retry) idea for Lumiverse.
+Auto Retry quietly re-runs an AI reply when it fails, comes back empty, stalls partway, gets cut off mid-sentence, or refuses by mistake, so you don't have to catch it and hit regenerate yourself. It is a rebuild of the [SillyTavern fetch-retry](https://github.com/Hikarushmz/fetch-retry) idea for Lumiverse.
 
 ## What it does
 
@@ -28,9 +28,15 @@ https://github.com/starlitcode/Lumiverse-Auto-Retry
 
 ## Settings
 
-Open the chat input bar, tap the **Extras** popover, and choose **Auto Retry settings**. Everything is editable there, grouped by what it does, and the panel fits a phone as well as a desktop. Simple on/off switches are up top; the groups marked **Advanced** are collapsed by default, so tap one of those headers to reveal its options when you want them.
+Open the chat input bar, tap the **Extras** popover, and choose **Auto Retry settings**. Options are grouped by what they do. Simple on/off switches are up top; the groups marked **Advanced** are collapsed by default, so tap one of those headers to reveal its options. Each setting has a **?** next to its name that shows a short description when you tap it, so the list stays compact.
 
-Only **Save** keeps your changes. Closing with the X or tapping outside discards anything you did not save, so you can experiment freely. Saved settings sync to your Lumiverse account, so they follow you to other browsers and devices, and they apply to the next reply.
+Only **Save** keeps your changes. Closing with the X or tapping outside discards anything you did not save, so you can experiment freely. Saved settings sync to your Lumiverse account, so they follow you to other browsers and devices, and they apply to the next reply. Long text boxes, like your word-swap rules, have an **Expand** button that opens a full-size editor.
+
+## Word swap presets
+
+You can save your word-swap setups as named presets and switch between them without copying rules by hand. They live at the bottom of **Advanced: find and replace**.
+
+Type a name and press **Save as new** to store your current swaps, **Update** to overwrite the one you have selected, **Delete** to remove it, and **Apply** to load one. Applying a preset takes effect right away and is saved, so there is no separate Save step for it. Presets are kept on this browser, so unlike your account settings they do not sync across devices.
 
 ## You are always in charge
 
@@ -129,7 +135,7 @@ If you would rather apply swaps by hand than have them run on every reply, turn 
 
 By default it swaps just the latest reply and won't swap the same reply twice, so it won't stack on top of an automatic swap or an earlier tap. Two options change that. **Button swaps the whole chat** makes it apply your rules to every assistant reply in the chat you are viewing, not just the latest. **Allow swapping a reply again** lets it swap a reply you already swapped, which is useful after you change your rules, though it can stack swaps. There is no way to pick individual arbitrary messages; the choice is the latest reply or the whole chat.
 
-It acts on replies from the current session (the ones you have generated), so it is most reliable right after a reply; on a freshly opened old chat it will say there is no reply to swap until you generate one. Either way, it never touches the opening greeting, which is authored rather than generated. It works whether or not automatic swapping is on. It is off by default so it does not clutter the menu, and it appears in the same Extras menu on both mobile and desktop since Lumiverse handles that layout.
+It acts on replies from the current session (the ones you have generated), so it is most reliable right after a reply; on a freshly opened old chat it will say there is no reply to swap until you generate one. It works whether or not automatic swapping is on, and appears in the Extras menu on both mobile and desktop.
 
 If you never want a swap to touch a reply without your say-so, turn on **Ask before editing a reply**. Every swap, automatic or from the button, then pops up a confirmation you can accept or cancel, so nothing is changed silently. With automatic swapping on this can prompt often, which is the point for people who do not want surprises. It needs your Lumiverse to support confirm dialogs; if it does not, swaps proceed as normal.
 
@@ -239,8 +245,8 @@ Declares two permissions:
 
 The find-and-replace feature runs in a small backend module. The rest of the extension is frontend-only. It makes no external network calls. Your settings are saved to your Lumiverse account through the extension's own scoped storage, so they follow you across browsers, with a copy kept in the browser as a fast local cache.
 
-## How it works under the hood
+## How it works
 
-SillyTavern's version patches the browser's fetch. That cannot work in Lumiverse, because the AI call runs on the server and streams back over a WebSocket, so there is no fetch to intercept. The retry side is event-driven instead: it listens to Lumiverse's own generation events and, when something goes wrong, clicks your regenerate button. That button click is the only part that depends on the page layout, and it is the part you can fix yourself from the settings if a Lumiverse update ever moves those buttons.
+Auto Retry listens to Lumiverse's own generation events. When a reply fails, comes back empty, stalls, or looks cut off or refused, it clicks your regenerate button to try again. That button click is the only part that depends on the page layout, so it is the one thing you can fix yourself in the settings if a Lumiverse update ever moves those buttons.
 
-Find-and-replace works differently, because editing a saved reply is a backend job. A small backend module listens for finished replies and, when you have swaps enabled, edits the stored message through Lumiverse's Chat Mutation API. Your swap rules travel from the settings UI to that backend and are saved so they persist. Editing a reply this way emits an edit event, not a generation event, so it cannot loop back into itself.
+Find and replace works separately, since editing a saved reply is a backend job. A small backend module watches for finished replies and, when swaps are on, edits the saved message through Lumiverse's Chat Mutation API. That edit is treated as an edit, not a new reply, so it can't set itself off in a loop.
