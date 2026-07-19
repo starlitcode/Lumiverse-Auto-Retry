@@ -1810,16 +1810,18 @@ export function setup(ctx: Ctx, opts?: any) {
       manageRow.appendChild(update);
       manageRow.appendChild(del);
 
-      // Save direction: the current settings into a new preset.
+      // Save direction: the current settings into a new preset, or rename one.
       const nameInput = document.createElement("input");
       nameInput.type = "text";
-      nameInput.placeholder = "Name for a new preset";
+      nameInput.placeholder = "Preset name";
       nameInput.style.cssText = "flex:1;min-width:150px";
       styleField(nameInput);
       const saveNew = smallBtn(btn("Save as new", false));
+      const rename = smallBtn(btn("Rename selected", false));
       const saveRow = rowBox();
       saveRow.appendChild(nameInput);
       saveRow.appendChild(saveNew);
+      saveRow.appendChild(rename);
 
       const status = document.createElement("div");
       status.style.cssText =
@@ -1902,6 +1904,43 @@ export function setup(ctx: Ctx, opts?: any) {
         status.textContent = "Saved current settings as: " + name + ".";
       });
 
+      rename.addEventListener("click", () => {
+        const cur = select.value;
+        if (!cur) {
+          status.textContent = "Pick a preset to rename.";
+          return;
+        }
+        const newName = nameInput.value.trim();
+        if (!newName) {
+          status.textContent = "Type the new name in the box, then Rename.";
+          return;
+        }
+        if (newName === cur) {
+          status.textContent = "That's already its name.";
+          return;
+        }
+        if (list().some((x) => x.name === newName)) {
+          status.textContent = "That name is taken. Pick another.";
+          return;
+        }
+        const arr = list();
+        const i = arr.findIndex((x) => x.name === cur);
+        if (i < 0) {
+          status.textContent = "That preset is gone.";
+          return;
+        }
+        // Keep the saved values, change only the name.
+        arr[i] = { name: newName, values: arr[i].values };
+        presets[kind] = arr;
+        if (!savePresets(presets)) {
+          status.textContent = "Couldn't save on this browser.";
+          return;
+        }
+        nameInput.value = "";
+        refreshSelect(newName);
+        status.textContent = "Renamed " + cur + " to " + newName + ".";
+      });
+
       update.addEventListener("click", () => {
         const name = select.value;
         if (!name) {
@@ -1956,7 +1995,7 @@ export function setup(ctx: Ctx, opts?: any) {
       wrap.appendChild(miniLabel("Saved presets"));
       wrap.appendChild(pickRow);
       wrap.appendChild(manageRow);
-      wrap.appendChild(miniLabel("Save current settings"));
+      wrap.appendChild(miniLabel("Save or rename"));
       wrap.appendChild(saveRow);
       wrap.appendChild(status);
       return wrap;
