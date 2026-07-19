@@ -2407,8 +2407,8 @@ export function setup(ctx: Ctx, opts?: any) {
       "display:flex;flex-direction:column;gap:5px;cursor:" +
       (f.type === "text" ? "default" : "pointer");
 
-    // The hint is hidden by default and revealed by the "?" toggle next to the
-    // label, so rows stay compact. Kept in the DOM so it's still there to show.
+    // The hint is hidden by default and revealed by the "?" next to the label
+    // (hover on a mouse, tap on touch), so rows stay compact. Kept in the DOM.
     let hintEl: HTMLElement | null = null;
     if (f.hint) {
       hintEl = document.createElement("span");
@@ -2434,13 +2434,7 @@ export function setup(ctx: Ctx, opts?: any) {
       info.setAttribute("aria-label", "Show description for " + f.label);
       info.style.cssText =
         "flex:none;width:18px;height:18px;padding:0;line-height:1;border-radius:50%;border:1px solid var(--lumiverse-border,rgba(255,255,255,.3));background:transparent;color:var(--lumiverse-text-muted,#9a93a8);font-size:11px;cursor:pointer";
-      info.addEventListener("click", (e: any) => {
-        // Stop the row-label from toggling its control when the button is tapped.
-        if (e) {
-          e.preventDefault();
-          e.stopPropagation();
-        }
-        const show = hintEl!.style.display === "none";
+      const setHint = (show: boolean) => {
         hintEl!.style.display = show ? "block" : "none";
         info.style.borderColor = show
           ? "var(--lumiverse-primary,#7c5cff)"
@@ -2448,6 +2442,27 @@ export function setup(ctx: Ctx, opts?: any) {
         info.style.color = show
           ? "var(--lumiverse-primary,#7c5cff)"
           : "var(--lumiverse-text-muted,#9a93a8)";
+      };
+      // Mouse devices reveal on hover (and keyboard focus); touch devices, which
+      // can't hover, toggle on tap.
+      const canHover =
+        typeof window !== "undefined" &&
+        !!window.matchMedia &&
+        window.matchMedia("(hover: hover)").matches;
+      if (canHover) {
+        info.addEventListener("mouseenter", () => setHint(true));
+        info.addEventListener("mouseleave", () => setHint(false));
+        info.addEventListener("focus", () => setHint(true));
+        info.addEventListener("blur", () => setHint(false));
+      }
+      info.addEventListener("click", (e: any) => {
+        // Stop the row-label from toggling its control when the button is clicked.
+        if (e) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+        // On touch, click toggles. On a mouse, hover already handles it.
+        if (!canHover) setHint(hintEl!.style.display === "none");
       });
       labelWrap.appendChild(info);
     }
