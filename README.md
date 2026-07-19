@@ -28,15 +28,9 @@ https://github.com/starlitcode/Lumiverse-Auto-Retry
 
 ## Settings
 
-Open the chat input bar, tap the **Extras** popover, and choose **Auto Retry settings**. Options are grouped by what they do. Simple on/off switches are up top; the groups marked **Advanced** are collapsed by default, so tap one of those headers to reveal its options. Each setting has a **?** next to its name that shows a short description when you tap it, so the list stays compact.
+Open the chat input bar, tap the **Extras** popover, and choose **Auto Retry settings**. Options are grouped by what they do. Simple on/off switches are up top; the groups marked **Advanced** are collapsed by default, so tap one of those headers to reveal its options. Each setting has a **?** next to its name that shows a short description: hover it on a computer, tap it on a phone, so the list stays compact.
 
 Only **Save** keeps your changes. Closing with the X or tapping outside discards anything you did not save, so you can experiment freely. Saved settings sync to your Lumiverse account, so they follow you to other browsers and devices, and they apply to the next reply. Long text boxes, like your word-swap rules, have an **Expand** button that opens a full-size editor.
-
-## Word swap presets
-
-You can save your word-swap setups as named presets and switch between them without copying rules by hand. They live at the bottom of **Advanced: find and replace**.
-
-Pick a saved preset and press **Load** to switch your settings to it. To store the current setup, type a name and press **Save as new**. **Update selected** overwrites the chosen preset with your current settings, **Rename selected** renames it to the name in the box, and **Delete** removes it. Loading a preset takes effect right away and is saved, so there is no separate Save step for it. Presets are kept on this browser, so unlike your account settings they do not sync across devices.
 
 ## You are always in charge
 
@@ -155,6 +149,12 @@ very =>
 - By default matching ignores letter case and keeps the original capitalization, so a swap at the start of a sentence stays capitalized. Turn on **Match case exactly** to swap only when the case matches your rule, which also lets `sky` and `Sky` have different swaps.
 
 Editing a saved reply needs the `chat_mutation` permission (see Permissions below). If nothing in your rules matches a reply, that reply is left untouched.
+
+### Presets
+
+At the bottom of the find-and-replace settings you can save your word-swap setups as named presets and switch between them without copying rules by hand.
+
+Pick a saved preset and press **Load** to switch your settings to it. To store the current setup, type a name and press **Save as new**. **Update selected** overwrites the chosen preset with your current settings, **Rename selected** renames it to the name in the box, and **Delete** removes it. Loading a preset takes effect right away and is saved, so there is no separate Save step. Presets are kept on this browser, so unlike your account settings they do not sync across devices.
 
 ## Import and export
 
