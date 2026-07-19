@@ -814,7 +814,7 @@ export function setup(ctx: Ctx, opts?: any) {
     head.appendChild(title);
     const bodyEl = document.createElement("div");
     bodyEl.style.cssText =
-      "flex:1;padding:7px 9px;overflow:auto;white-space:pre-wrap;line-height:1.4;font-family:var(--lumiverse-font-mono,ui-monospace,monospace)";
+      "flex:1;padding:7px 9px;overflow:auto;white-space:pre-wrap;line-height:1.4;font-family:var(--lumiverse-font-mono,ui-monospace,monospace) !important";
     el.appendChild(head);
     el.appendChild(bodyEl);
     // Drag by the header. Pointer events cover mouse and touch; the header
@@ -1060,10 +1060,13 @@ export function setup(ctx: Ctx, opts?: any) {
   const fieldByKey: Record<string, Field> = {};
   for (const g of SCHEMA) for (const f of g.fields) fieldByKey[f.key] = f;
   let ioStatus = "";
-  // Set right before a preset-apply rebuild so the rebuilt bar can show a note.
-  let presetFlash: { kind: string; name: string } | null = null;
+  // Per-field functions that push a cfg value back into the on-screen control,
+  // so applying a preset can update the visible fields in place without a full
+  // rebuild (which would jump the scroll and close open sections). Repopulated
+  // each time the settings body is built.
+  let fieldSetters: Record<string, (v: any) => void> = {};
   // Titles of collapsible sections the user has opened, kept so a rebuild
-  // (import, preset apply) doesn't collapse everything back.
+  // (import) doesn't collapse everything back.
   const openGroups = new Set<string>();
 
   function coerceKey(key: string, val: any): any {
@@ -1760,13 +1763,17 @@ export function setup(ctx: Ctx, opts?: any) {
   let modalHandle: any = null;
   let modalRoot: any = null;
   let modalSnapshot: any = null;
+  // Close function for the open expand-editor overlay, if any, so it can be shut
+  // when the settings modal closes instead of being left floating.
+  let closeExpandEditor: (() => void) | null = null;
 
   function buildSettingsBody(root: HTMLElement, onSaved?: () => void) {
     root.innerHTML = "";
+    fieldSetters = {};
 
-    // A preset switcher for one kind ("retry" or "swap"): pick and apply a saved
-    // preset, or save the current settings as a new one, update, or delete.
-    // Apply persists and takes effect at once, then rebuilds the panel.
+    // A preset switcher: pick a saved preset and Load it into the settings, or
+    // save the current settings as a preset. Load updates the on-screen fields in
+    // place (no rebuild), so it never jumps the scroll or closes open sections.
     function buildPresetBar(kind: string): HTMLElement {
       const wrap = document.createElement("div");
       wrap.style.cssText = "display:flex;flex-direction:column;gap:8px";
@@ -1774,32 +1781,45 @@ export function setup(ctx: Ctx, opts?: any) {
         b.style.cssText += "min-height:0;padding:7px 12px";
         return b;
       };
+      const miniLabel = (text: string) => {
+        const l = document.createElement("div");
+        l.textContent = text;
+        l.style.cssText =
+          "font-size:11px;color:var(--lumiverse-text-muted,#9a93a8)";
+        return l;
+      };
+      const rowBox = () => {
+        const r = document.createElement("div");
+        r.style.cssText =
+          "display:flex;gap:8px;flex-wrap:wrap;align-items:center";
+        return r;
+      };
 
-      const pickRow = document.createElement("div");
-      pickRow.style.cssText =
-        "display:flex;gap:8px;flex-wrap:wrap;align-items:center";
+      // Load direction: a saved preset into the settings.
       const select = document.createElement("select");
       select.style.cssText =
         "flex:1;min-width:150px;padding:8px 10px;border-radius:var(--lumiverse-radius,8px);border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));background:var(--lumiverse-fill-subtle,rgba(255,255,255,.05));color:var(--lumiverse-text,#eee);font:13px var(--lumiverse-font-family,var(--font-global,system-ui))";
-      const applyBtn = smallBtn(btn("Apply", true));
+      const loadBtn = smallBtn(btn("Load", true));
+      const pickRow = rowBox();
       pickRow.appendChild(select);
-      pickRow.appendChild(applyBtn);
+      pickRow.appendChild(loadBtn);
 
-      const editRow = document.createElement("div");
-      editRow.style.cssText =
-        "display:flex;gap:8px;flex-wrap:wrap;align-items:center";
+      const update = smallBtn(btn("Update selected", false));
+      const del = smallBtn(btn("Delete", false));
+      const manageRow = rowBox();
+      manageRow.appendChild(update);
+      manageRow.appendChild(del);
+
+      // Save direction: the current settings into a new preset.
       const nameInput = document.createElement("input");
       nameInput.type = "text";
-      nameInput.placeholder = "Name a new preset";
+      nameInput.placeholder = "Name for a new preset";
       nameInput.style.cssText = "flex:1;min-width:150px";
       styleField(nameInput);
       const saveNew = smallBtn(btn("Save as new", false));
-      const update = smallBtn(btn("Update", false));
-      const del = smallBtn(btn("Delete", false));
-      editRow.appendChild(nameInput);
-      editRow.appendChild(saveNew);
-      editRow.appendChild(update);
-      editRow.appendChild(del);
+      const saveRow = rowBox();
+      saveRow.appendChild(nameInput);
+      saveRow.appendChild(saveNew);
 
       const status = document.createElement("div");
       status.style.cssText =
@@ -1834,10 +1854,10 @@ export function setup(ctx: Ctx, opts?: any) {
       };
       refreshSelect();
 
-      applyBtn.addEventListener("click", () => {
+      loadBtn.addEventListener("click", () => {
         const name = select.value;
         if (!name) {
-          status.textContent = "Pick a preset to apply.";
+          status.textContent = "Pick a preset to load.";
           return;
         }
         const p = list().find((x) => x.name === name);
@@ -1846,16 +1866,18 @@ export function setup(ctx: Ctx, opts?: any) {
           return;
         }
         applyPresetValues(kind, p.values);
-        for (const g of SCHEMA)
-          for (const fl of g.fields)
-            if (fl.type === "num") cfg[fl.key] = clampField(fl, cfg[fl.key]);
+        // Reflect the new values in the on-screen fields without a rebuild.
+        for (const k of keysForKind(kind)) {
+          const fld = fieldByKey[k];
+          if (fld && fld.type === "num") cfg[k] = clampField(fld, cfg[k]);
+          if (fieldSetters[k]) fieldSetters[k](cfg[k]);
+        }
         saveSaved();
         saveToAccount();
         syncLiveLog();
         syncReplaceButton();
         if (onSaved) onSaved();
-        presetFlash = { kind, name };
-        buildSettingsBody(root, onSaved);
+        status.textContent = "Loaded preset: " + name + ". It's in effect now.";
       });
 
       saveNew.addEventListener("click", () => {
@@ -1865,7 +1887,8 @@ export function setup(ctx: Ctx, opts?: any) {
           return;
         }
         if (list().some((x) => x.name === name)) {
-          status.textContent = "That name is taken. Use Update, or pick another.";
+          status.textContent =
+            "That name is taken. Use Update selected, or pick another.";
           return;
         }
         commit();
@@ -1876,7 +1899,7 @@ export function setup(ctx: Ctx, opts?: any) {
         }
         nameInput.value = "";
         refreshSelect(name);
-        status.textContent = "Saved preset: " + name + ".";
+        status.textContent = "Saved current settings as: " + name + ".";
       });
 
       update.addEventListener("click", () => {
@@ -1898,7 +1921,8 @@ export function setup(ctx: Ctx, opts?: any) {
           status.textContent = "Couldn't save on this browser.";
           return;
         }
-        status.textContent = "Updated preset: " + name + ".";
+        status.textContent =
+          "Updated " + name + " to your current settings.";
       });
 
       del.addEventListener("click", async () => {
@@ -1929,14 +1953,11 @@ export function setup(ctx: Ctx, opts?: any) {
         status.textContent = "Deleted preset: " + name + ".";
       });
 
-      if (presetFlash && presetFlash.kind === kind) {
-        status.textContent =
-          "Applied preset: " + presetFlash.name + ". It's in effect now.";
-        presetFlash = null;
-      }
-
+      wrap.appendChild(miniLabel("Saved presets"));
       wrap.appendChild(pickRow);
-      wrap.appendChild(editRow);
+      wrap.appendChild(manageRow);
+      wrap.appendChild(miniLabel("Save current settings"));
+      wrap.appendChild(saveRow);
       wrap.appendChild(status);
       return wrap;
     }
@@ -2108,7 +2129,7 @@ export function setup(ctx: Ctx, opts?: any) {
       dArea.placeholder =
         "Press Build preview to fill this, then edit out anything private before copying.";
       dArea.style.cssText =
-        "width:100%;box-sizing:border-box;font-family:var(--lumiverse-font-mono,ui-monospace,monospace);font-size:12px;padding:8px;border-radius:var(--lumiverse-radius,8px);border:1px solid var(--lumiverse-border,#3a3543);background:var(--lumiverse-bg,#1a1720);color:var(--lumiverse-text,#e9e4f0);resize:vertical";
+        "width:100%;box-sizing:border-box;font-family:var(--lumiverse-font-mono,ui-monospace,monospace) !important;font-size:12px;padding:8px;border-radius:var(--lumiverse-radius,8px);border:1px solid var(--lumiverse-border,#3a3543);background:var(--lumiverse-bg,#1a1720);color:var(--lumiverse-text,#e9e4f0);resize:vertical";
 
       const buildBtn = btn("Build preview", false);
       buildBtn.addEventListener("click", () => {
@@ -2402,6 +2423,9 @@ export function setup(ctx: Ctx, opts?: any) {
       input.addEventListener("change", () => {
         cfg[f.key] = input.checked;
       });
+      fieldSetters[f.key] = (v: any) => {
+        input.checked = !!v;
+      };
       top.appendChild(input);
       row.appendChild(top);
     } else if (f.type === "num") {
@@ -2416,6 +2440,9 @@ export function setup(ctx: Ctx, opts?: any) {
         cfg[f.key] = clampField(f, input.value);
         input.value = String(cfg[f.key]);
       });
+      fieldSetters[f.key] = (v: any) => {
+        input.value = String(v);
+      };
       top.appendChild(input);
       row.appendChild(top);
     } else {
@@ -2446,6 +2473,9 @@ export function setup(ctx: Ctx, opts?: any) {
       input.addEventListener("change", () => {
         cfg[f.key] = input.value;
       });
+      fieldSetters[f.key] = (v: any) => {
+        input.value = String(v);
+      };
       row.appendChild(input);
 
       if (f.selector) {
@@ -2539,6 +2569,12 @@ export function setup(ctx: Ctx, opts?: any) {
     onDone: (val: string) => void,
   ) {
     if (typeof document === "undefined") return;
+    // Only one open at a time; shut a stray previous one first.
+    if (closeExpandEditor) {
+      try {
+        closeExpandEditor();
+      } catch (_) {}
+    }
     const overlay = document.createElement("div");
     overlay.style.cssText =
       "position:fixed;inset:0;z-index:2147483600;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;background:rgba(0,0,0,.55);font-family:var(--lumiverse-font-family,var(--font-global,system-ui))";
@@ -2569,6 +2605,7 @@ export function setup(ctx: Ctx, opts?: any) {
       try {
         document.removeEventListener("keydown", onKey);
       } catch (_) {}
+      if (closeExpandEditor === close) closeExpandEditor = null;
     }
     cancel.addEventListener("click", close);
     done.addEventListener("click", () => {
@@ -2586,9 +2623,9 @@ export function setup(ctx: Ctx, opts?: any) {
     box.appendChild(row);
     overlay.appendChild(box);
     (document.body || document.documentElement).appendChild(overlay);
-    try {
-      ta.focus();
-    } catch (_) {}
+    closeExpandEditor = close;
+    // Deliberately not focusing the textarea, so opening it doesn't pop the
+    // on-screen keyboard on mobile. Tap the text when you want to edit.
   }
 
   function openSettings() {
@@ -2634,6 +2671,11 @@ export function setup(ctx: Ctx, opts?: any) {
 
       buildSettingsBody(modal.root, snapshot);
       modal.onDismiss(() => {
+        if (closeExpandEditor) {
+          try {
+            closeExpandEditor();
+          } catch (_) {}
+        }
         for (const g of SCHEMA)
           for (const fl of g.fields) cfg[fl.key] = baseline[fl.key];
         modalHandle = null;
