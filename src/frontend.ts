@@ -23,7 +23,7 @@ const IGNORE_MAX = 16; // most aborted-generation ids kept around to swallow the
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "2.5.0";
+const VERSION = "2.6.0";
 
 // ---- defaults (the UI overrides these; editing here changes the fallback) ----
 const CONFIG = {
@@ -201,7 +201,7 @@ const SCHEMA: Group[] = [
   },
   {
     title: "Watch for frozen replies",
-    desc: "These notice when a reply freezes or never shows up, and step in. The defaults lean long so a slow connection or a slow local model isn't mistaken for a freeze; lower them if your provider is fast and you want quicker retries.",
+    desc: "Notices when a reply freezes or never arrives, and retries. Defaults lean long so a slow connection isn't mistaken for a freeze; lower them for quicker retries on a fast provider.",
     fields: [
       {
         key: "stuckTimeoutMs",
@@ -276,7 +276,7 @@ const SCHEMA: Group[] = [
         key: "retryOnRefusal",
         label: "It looks like an accidental refusal (beta)",
         type: "bool",
-        hint: "Retry when the model breaks character to decline (says it's an AI, or that it can't help or continue). It just tries the same request again, capped by your Most tries setting, so a refusal the model really means will survive the tries and stop. Nothing in your request is changed. Kept narrow so it won't touch an in-character \"I can't do that\" line. New and still being tuned, so leave it off if you'd rather not risk a re-roll. It reads only the final reply, never the model's thinking.",
+        hint: "Retry when the model breaks character to decline (says it's an AI, or that it can't help or continue). It retries the same request unchanged, capped by your Most tries setting, so a refusal the model means will survive the tries and stop. Reads only the final reply, never the thinking, and stays narrow so an in-character \"I can't do that\" is left alone.",
       },
     ],
   },
@@ -336,7 +336,7 @@ const SCHEMA: Group[] = [
   },
   {
     title: "Advanced: refusal tuning (beta)",
-    desc: "Only matters if the refusal option above is on. Most people can leave all of this alone. It's here for fine-tuning what counts as a refusal.",
+    desc: "Only matters if the refusal option above is on. Fine-tunes what counts as a refusal.",
     fields: [
       {
         key: "refusalUseBuiltins",
@@ -369,7 +369,7 @@ const SCHEMA: Group[] = [
         int: true,
         min: 0,
         max: 100000,
-        hint: "Replies longer than this are assumed to be real writing, not a refusal, and are left alone. 2000 suits most cases. Raise it if your model writes long, padded refusals; lower it to protect long scenes. Set it to 0 to check replies of any length, which catches every refusal but is more likely to re-roll a long reply that happens to look refusal-shaped.",
+        hint: "Replies longer than this are treated as real writing, not a refusal, and left alone. 2000 suits most cases. Set to 0 to check replies of any length.",
       },
       {
         key: "refusalStripThinking",
@@ -387,7 +387,7 @@ const SCHEMA: Group[] = [
   },
   {
     title: "Advanced: buttons it clicks",
-    desc: "It works by clicking your own on-screen buttons. The three boxes below are three different buttons it needs for three different jobs: redoing a reply, swiping to a fresh one as a backup, and stopping a frozen reply. Each box takes one CSS selector, the kind you'd use in your browser's inspector, and you can list a few separated by commas as fallbacks since it uses the first that matches. You only need this if retries aren't happening. Paste a selector and press Test until it says match found. A no match doesn't always mean the selector is wrong; the button may just not be on screen yet, so test each one while its button is actually visible. The Stop button, for one, only appears while a reply is generating.",
+    desc: "It works by clicking your own on-screen buttons. The three boxes are the buttons it needs: redoing a reply, swiping to a fresh one as a backup, and stopping a frozen reply. Each takes one CSS selector (list a few comma-separated as fallbacks; it uses the first that matches). You only need this if retries aren't happening: paste a selector and press Test until it says match found. Test each while its button is on screen, since a hidden button won't match. The Stop button only appears while a reply is generating.",
     fields: [
       {
         key: "regenerateSelector",
@@ -805,7 +805,7 @@ export function setup(ctx: Ctx, opts?: any) {
     if (liveLogEl || typeof document === "undefined") return;
     const el = document.createElement("div");
     el.style.cssText =
-      "position:fixed;right:8px;bottom:8px;z-index:2147483000;width:min(340px,92vw);height:min(300px,50vh);min-width:200px;min-height:120px;max-width:96vw;max-height:85vh;display:flex;flex-direction:column;background:var(--lumiverse-surface,rgba(20,18,26,.96));border:1px solid var(--lumiverse-border,rgba(255,255,255,.14));border-radius:var(--lumiverse-radius,10px);box-shadow:0 6px 24px rgba(0,0,0,.4);font-family:var(--lumiverse-font-family,system-ui);font-size:13px;color:var(--lumiverse-text,#e9e4f0);overflow:hidden";
+      "position:fixed;right:8px;bottom:8px;z-index:2147483000;width:min(340px,92vw);height:min(300px,50vh);min-width:200px;min-height:120px;max-width:96vw;max-height:85vh;display:flex;flex-direction:column;background:var(--lumiverse-surface,rgba(20,18,26,.96));border:1px solid var(--lumiverse-border,rgba(255,255,255,.14));border-radius:var(--lumiverse-radius,10px);box-shadow:0 6px 24px rgba(0,0,0,.4);font-family:var(--lumiverse-font-family,var(--font-global,system-ui));font-size:13px;color:var(--lumiverse-text,#e9e4f0);overflow:hidden";
     const head = document.createElement("div");
     head.style.cssText =
       "display:flex;align-items:center;gap:8px;padding:7px 9px;border-bottom:1px solid var(--lumiverse-border,rgba(255,255,255,.12));font-weight:600;cursor:move;user-select:none;touch-action:none";
@@ -814,7 +814,7 @@ export function setup(ctx: Ctx, opts?: any) {
     head.appendChild(title);
     const bodyEl = document.createElement("div");
     bodyEl.style.cssText =
-      "flex:1;padding:7px 9px;overflow:auto;white-space:pre-wrap;line-height:1.4;font-family:monospace";
+      "flex:1;padding:7px 9px;overflow:auto;white-space:pre-wrap;line-height:1.4;font-family:var(--lumiverse-font-mono,ui-monospace,monospace)";
     el.appendChild(head);
     el.appendChild(bodyEl);
     // Drag by the header. Pointer events cover mouse and touch; the header
@@ -1060,6 +1060,11 @@ export function setup(ctx: Ctx, opts?: any) {
   const fieldByKey: Record<string, Field> = {};
   for (const g of SCHEMA) for (const f of g.fields) fieldByKey[f.key] = f;
   let ioStatus = "";
+  // Set right before a preset-apply rebuild so the rebuilt bar can show a note.
+  let presetFlash: { kind: string; name: string } | null = null;
+  // Titles of collapsible sections the user has opened, kept so a rebuild
+  // (import, preset apply) doesn't collapse everything back.
+  const openGroups = new Set<string>();
 
   function coerceKey(key: string, val: any): any {
     const f = fieldByKey[key];
@@ -1111,6 +1116,73 @@ export function setup(ctx: Ctx, opts?: any) {
       if (touched) applied.push(c.label);
     }
     return applied;
+  }
+
+  // ---- presets ----
+  // Named word-swap snapshots the user can switch between, stored per browser.
+  const PRESETS_KEY = "lv-auto-retry:presets:v1";
+  const PRESET_KINDS: Record<string, { catId: string; label: string }> = {
+    swap: { catId: "replace", label: "Word swap" },
+  };
+  function keysForKind(kind: string): string[] {
+    const catId = PRESET_KINDS[kind] ? PRESET_KINDS[kind].catId : "";
+    for (const c of EXPORT_CATEGORIES) if (c.id === catId) return c.keys;
+    return [];
+  }
+  type Preset = { name: string; values: Record<string, any> };
+  function loadPresets(): Record<string, Preset[]> {
+    const empty: Record<string, Preset[]> = { swap: [] };
+    try {
+      if (typeof localStorage === "undefined") return empty;
+      const raw = localStorage.getItem(PRESETS_KEY);
+      if (!raw) return empty;
+      const data = JSON.parse(raw);
+      if (!data || typeof data !== "object") return empty;
+      const out: Record<string, Preset[]> = { swap: [] };
+      for (const kind of Object.keys(out)) {
+        const arr = Array.isArray(data[kind]) ? data[kind] : [];
+        out[kind] = arr
+          .filter(
+            (p: any) =>
+              p &&
+              typeof p.name === "string" &&
+              p.values &&
+              typeof p.values === "object",
+          )
+          .map((p: any) => ({ name: p.name, values: p.values }));
+      }
+      return out;
+    } catch (_) {
+      return empty;
+    }
+  }
+  function savePresets(all: Record<string, Preset[]>): boolean {
+    try {
+      if (typeof localStorage === "undefined") return false;
+      localStorage.setItem(PRESETS_KEY, JSON.stringify(all));
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+  // Snapshot the current values of a kind's keys.
+  function snapshotKind(kind: string): Record<string, any> {
+    const values: Record<string, any> = {};
+    for (const k of keysForKind(kind)) values[k] = cfg[k];
+    return values;
+  }
+  // Copy a preset's stored values into the live config, coercing each key.
+  function applyPresetValues(kind: string, values: any): number {
+    let n = 0;
+    for (const k of keysForKind(kind)) {
+      if (!values || !(k in values)) continue;
+      const v = coerceKey(k, values[k]);
+      if (v !== undefined) {
+        cfg[k] = v;
+        n++;
+      }
+    }
+    return n;
   }
 
   // ---- per-chat state ----
@@ -1691,6 +1763,184 @@ export function setup(ctx: Ctx, opts?: any) {
 
   function buildSettingsBody(root: HTMLElement, onSaved?: () => void) {
     root.innerHTML = "";
+
+    // A preset switcher for one kind ("retry" or "swap"): pick and apply a saved
+    // preset, or save the current settings as a new one, update, or delete.
+    // Apply persists and takes effect at once, then rebuilds the panel.
+    function buildPresetBar(kind: string): HTMLElement {
+      const wrap = document.createElement("div");
+      wrap.style.cssText = "display:flex;flex-direction:column;gap:8px";
+      const smallBtn = (b: HTMLButtonElement) => {
+        b.style.cssText += "min-height:0;padding:7px 12px";
+        return b;
+      };
+
+      const pickRow = document.createElement("div");
+      pickRow.style.cssText =
+        "display:flex;gap:8px;flex-wrap:wrap;align-items:center";
+      const select = document.createElement("select");
+      select.style.cssText =
+        "flex:1;min-width:150px;padding:8px 10px;border-radius:var(--lumiverse-radius,8px);border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));background:var(--lumiverse-fill-subtle,rgba(255,255,255,.05));color:var(--lumiverse-text,#eee);font:13px var(--lumiverse-font-family,var(--font-global,system-ui))";
+      const applyBtn = smallBtn(btn("Apply", true));
+      pickRow.appendChild(select);
+      pickRow.appendChild(applyBtn);
+
+      const editRow = document.createElement("div");
+      editRow.style.cssText =
+        "display:flex;gap:8px;flex-wrap:wrap;align-items:center";
+      const nameInput = document.createElement("input");
+      nameInput.type = "text";
+      nameInput.placeholder = "Name a new preset";
+      nameInput.style.cssText = "flex:1;min-width:150px";
+      styleField(nameInput);
+      const saveNew = smallBtn(btn("Save as new", false));
+      const update = smallBtn(btn("Update", false));
+      const del = smallBtn(btn("Delete", false));
+      editRow.appendChild(nameInput);
+      editRow.appendChild(saveNew);
+      editRow.appendChild(update);
+      editRow.appendChild(del);
+
+      const status = document.createElement("div");
+      status.style.cssText =
+        "font-size:12px;line-height:1.4;color:var(--lumiverse-text-muted,#9a93a8);min-height:1em";
+
+      const presets = loadPresets();
+      const list = () => presets[kind] || [];
+      // Flush a field the user is still editing into cfg before we snapshot it.
+      const commit = () => {
+        const active: any =
+          typeof document !== "undefined" ? document.activeElement : null;
+        if (active && typeof active.blur === "function") active.blur();
+        for (const g of SCHEMA)
+          for (const fl of g.fields)
+            if (fl.type === "num") cfg[fl.key] = clampField(fl, cfg[fl.key]);
+      };
+      const refreshSelect = (selectName?: string) => {
+        select.innerHTML = "";
+        const ph = document.createElement("option");
+        ph.value = "";
+        ph.textContent = list().length
+          ? "Pick a preset"
+          : "No presets saved yet";
+        select.appendChild(ph);
+        for (const p of list()) {
+          const o = document.createElement("option");
+          o.value = p.name;
+          o.textContent = p.name;
+          select.appendChild(o);
+        }
+        if (selectName) select.value = selectName;
+      };
+      refreshSelect();
+
+      applyBtn.addEventListener("click", () => {
+        const name = select.value;
+        if (!name) {
+          status.textContent = "Pick a preset to apply.";
+          return;
+        }
+        const p = list().find((x) => x.name === name);
+        if (!p) {
+          status.textContent = "That preset is gone.";
+          return;
+        }
+        applyPresetValues(kind, p.values);
+        for (const g of SCHEMA)
+          for (const fl of g.fields)
+            if (fl.type === "num") cfg[fl.key] = clampField(fl, cfg[fl.key]);
+        saveSaved();
+        saveToAccount();
+        syncLiveLog();
+        syncReplaceButton();
+        if (onSaved) onSaved();
+        presetFlash = { kind, name };
+        buildSettingsBody(root, onSaved);
+      });
+
+      saveNew.addEventListener("click", () => {
+        const name = nameInput.value.trim();
+        if (!name) {
+          status.textContent = "Type a name first.";
+          return;
+        }
+        if (list().some((x) => x.name === name)) {
+          status.textContent = "That name is taken. Use Update, or pick another.";
+          return;
+        }
+        commit();
+        presets[kind] = list().concat([{ name, values: snapshotKind(kind) }]);
+        if (!savePresets(presets)) {
+          status.textContent = "Couldn't save the preset on this browser.";
+          return;
+        }
+        nameInput.value = "";
+        refreshSelect(name);
+        status.textContent = "Saved preset: " + name + ".";
+      });
+
+      update.addEventListener("click", () => {
+        const name = select.value;
+        if (!name) {
+          status.textContent = "Pick a preset to update.";
+          return;
+        }
+        const arr = list();
+        const i = arr.findIndex((x) => x.name === name);
+        if (i < 0) {
+          status.textContent = "That preset is gone.";
+          return;
+        }
+        commit();
+        arr[i] = { name, values: snapshotKind(kind) };
+        presets[kind] = arr;
+        if (!savePresets(presets)) {
+          status.textContent = "Couldn't save on this browser.";
+          return;
+        }
+        status.textContent = "Updated preset: " + name + ".";
+      });
+
+      del.addEventListener("click", async () => {
+        const name = select.value;
+        if (!name) {
+          status.textContent = "Pick a preset to delete.";
+          return;
+        }
+        let ok = true;
+        try {
+          if (ctx?.ui?.showConfirm) {
+            const r = await ctx.ui.showConfirm({
+              title: "Delete preset",
+              message: 'Delete the preset "' + name + '"?',
+              variant: "warning",
+              confirmLabel: "Delete",
+            });
+            ok = !!r?.confirmed;
+          }
+        } catch (_) {}
+        if (!ok) return;
+        presets[kind] = list().filter((x) => x.name !== name);
+        if (!savePresets(presets)) {
+          status.textContent = "Couldn't save on this browser.";
+          return;
+        }
+        refreshSelect();
+        status.textContent = "Deleted preset: " + name + ".";
+      });
+
+      if (presetFlash && presetFlash.kind === kind) {
+        status.textContent =
+          "Applied preset: " + presetFlash.name + ". It's in effect now.";
+        presetFlash = null;
+      }
+
+      wrap.appendChild(pickRow);
+      wrap.appendChild(editRow);
+      wrap.appendChild(status);
+      return wrap;
+    }
+
     // Cap the whole panel to a real viewport value that sits safely under the
     // modal's max-height once its title bar and padding are counted. With the
     // panel bounded and overflow hidden, the host modal has nothing left to
@@ -1698,7 +1948,7 @@ export function setup(ctx: Ctx, opts?: any) {
     // options list below scrolls. vh units keep it sane on phones too.
     const panel = document.createElement("div");
     panel.style.cssText =
-      "display:flex;flex-direction:column;max-height:min(72vh,460px);overflow:hidden;box-sizing:border-box;font:13px/1.45 var(--lumiverse-font-family,system-ui);color:var(--lumiverse-text,#eee)";
+      "display:flex;flex-direction:column;max-height:min(72vh,460px);overflow:hidden;box-sizing:border-box;font:13px/1.45 var(--lumiverse-font-family,var(--font-global,system-ui));color:var(--lumiverse-text,#eee)";
 
     // the one scroll area: flexes to fill whatever height is left after the
     // footer. min-height:0 lets it actually shrink and scroll inside the flex.
@@ -1716,7 +1966,7 @@ export function setup(ctx: Ctx, opts?: any) {
 
       const h = document.createElement("div");
       h.style.cssText =
-        "font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--lumiverse-text-muted,#9a93a8)";
+        "font-size:11px;letter-spacing:.07em;text-transform:uppercase;font-family:var(--font-global-bold,var(--lumiverse-font-family,system-ui));color:var(--lumiverse-text-muted,#9a93a8)";
 
       if (advanced) {
         h.style.cursor = "pointer";
@@ -1743,13 +1993,37 @@ export function setup(ctx: Ctx, opts?: any) {
           body.appendChild(d);
         }
         for (const f of group.fields) body.appendChild(buildRow(f));
+        // Word swap presets sit at the end of the group, since they save and
+        // switch the settings above.
+        if (/find and replace/i.test(group.title)) {
+          const rule = document.createElement("div");
+          rule.style.cssText =
+            "height:1px;background:var(--lumiverse-border,rgba(255,255,255,.08));margin:4px 0 2px";
+          body.appendChild(rule);
+          const pl = document.createElement("div");
+          pl.textContent = "Presets";
+          pl.style.cssText =
+            "font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--lumiverse-text-muted,#9a93a8)";
+          body.appendChild(pl);
+          const pd = document.createElement("div");
+          pd.textContent =
+            "Save your current word swaps as a named setup and switch between them. Applying takes effect right away. Kept on this browser.";
+          pd.style.cssText =
+            "font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,#9a93a8)";
+          body.appendChild(pd);
+          body.appendChild(buildPresetBar("swap"));
+        }
         sec.appendChild(body);
 
-        let open = false;
+        let open = openGroups.has(group.title);
+        body.style.display = open ? "flex" : "none";
+        caret.textContent = open ? "\u25BE" : "\u25B8";
         h.addEventListener("click", () => {
           open = !open;
           body.style.display = open ? "flex" : "none";
           caret.textContent = open ? "\u25BE" : "\u25B8"; // down triangle when open
+          if (open) openGroups.add(group.title);
+          else openGroups.delete(group.title);
         });
       } else {
         h.textContent = group.title;
@@ -1772,7 +2046,7 @@ export function setup(ctx: Ctx, opts?: any) {
       sec.style.cssText = "display:flex;flex-direction:column;gap:10px";
       const h = document.createElement("div");
       h.style.cssText =
-        "font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--lumiverse-text-muted,#9a93a8);cursor:pointer;user-select:none;display:flex;align-items:center;gap:6px";
+        "font-size:11px;letter-spacing:.07em;text-transform:uppercase;font-family:var(--font-global-bold,var(--lumiverse-font-family,system-ui));color:var(--lumiverse-text-muted,#9a93a8);cursor:pointer;user-select:none;display:flex;align-items:center;gap:6px";
       const caret = document.createElement("span");
       caret.textContent = "\u25B8";
       caret.style.cssText = "font-size:9px";
@@ -1834,7 +2108,7 @@ export function setup(ctx: Ctx, opts?: any) {
       dArea.placeholder =
         "Press Build preview to fill this, then edit out anything private before copying.";
       dArea.style.cssText =
-        "width:100%;box-sizing:border-box;font-family:monospace;font-size:12px;padding:8px;border-radius:var(--lumiverse-radius,8px);border:1px solid var(--lumiverse-border,#3a3543);background:var(--lumiverse-bg,#1a1720);color:var(--lumiverse-text,#e9e4f0);resize:vertical";
+        "width:100%;box-sizing:border-box;font-family:var(--lumiverse-font-mono,ui-monospace,monospace);font-size:12px;padding:8px;border-radius:var(--lumiverse-radius,8px);border:1px solid var(--lumiverse-border,#3a3543);background:var(--lumiverse-bg,#1a1720);color:var(--lumiverse-text,#e9e4f0);resize:vertical";
 
       const buildBtn = btn("Build preview", false);
       buildBtn.addEventListener("click", () => {
@@ -1855,11 +2129,15 @@ export function setup(ctx: Ctx, opts?: any) {
       body.appendChild(copyBtn);
       body.appendChild(dStatus);
       sec.appendChild(body);
-      let open = false;
+      let open = openGroups.has("Advanced: debug info");
+      body.style.display = open ? "flex" : "none";
+      caret.textContent = open ? "\u25BE" : "\u25B8";
       h.addEventListener("click", () => {
         open = !open;
         body.style.display = open ? "flex" : "none";
         caret.textContent = open ? "\u25BE" : "\u25B8";
+        if (open) openGroups.add("Advanced: debug info");
+        else openGroups.delete("Advanced: debug info");
       });
       scroller.appendChild(sec);
     }
@@ -1870,7 +2148,7 @@ export function setup(ctx: Ctx, opts?: any) {
       sec.style.cssText = "display:flex;flex-direction:column;gap:10px";
       const h = document.createElement("div");
       h.style.cssText =
-        "font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--lumiverse-text-muted,#9a93a8);cursor:pointer;user-select:none;display:flex;align-items:center;gap:6px";
+        "font-size:11px;letter-spacing:.07em;text-transform:uppercase;font-family:var(--font-global-bold,var(--lumiverse-font-family,system-ui));color:var(--lumiverse-text-muted,#9a93a8);cursor:pointer;user-select:none;display:flex;align-items:center;gap:6px";
       const caret = document.createElement("span");
       caret.textContent = "\u25B8";
       caret.style.cssText = "font-size:9px";
@@ -1885,7 +2163,7 @@ export function setup(ctx: Ctx, opts?: any) {
 
       const desc = document.createElement("div");
       desc.textContent =
-        "Save your settings to a file, or load them from one. Tick which parts to include (retry behavior, refusal detection, word swaps, button selectors, on-screen), then Export to file to save the ticked parts, or Import from file to load a file. An import puts the values from the file into the settings above without saving them, so you can review them first: press Save to keep them, or close the settings to discard them.";
+        "Save settings to a file or load them from one. Tick the parts to include, then Export or Import. An import fills in the settings above without saving, so you can review first: press Save to keep it, or close to discard.";
       desc.style.cssText =
         "font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,#9a93a8)";
       body.appendChild(desc);
@@ -1982,11 +2260,15 @@ export function setup(ctx: Ctx, opts?: any) {
       body.appendChild(status);
 
       sec.appendChild(body);
-      let open = false;
+      let open = openGroups.has("Advanced: import / export");
+      body.style.display = open ? "flex" : "none";
+      caret.textContent = open ? "\u25BE" : "\u25B8";
       h.addEventListener("click", () => {
         open = !open;
         body.style.display = open ? "flex" : "none";
         caret.textContent = open ? "\u25BE" : "\u25B8";
+        if (open) openGroups.add("Advanced: import / export");
+        else openGroups.delete("Advanced: import / export");
       });
       scroller.appendChild(sec);
     }
@@ -2065,13 +2347,51 @@ export function setup(ctx: Ctx, opts?: any) {
       "display:flex;flex-direction:column;gap:5px;cursor:" +
       (f.type === "text" ? "default" : "pointer");
 
+    // The hint is hidden by default and revealed by the "?" toggle next to the
+    // label, so rows stay compact. Kept in the DOM so it's still there to show.
+    let hintEl: HTMLElement | null = null;
+    if (f.hint) {
+      hintEl = document.createElement("span");
+      hintEl.textContent = f.hint;
+      hintEl.style.cssText =
+        "display:none;font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,#9a93a8)";
+    }
+
     const top = document.createElement("div");
     top.style.cssText =
       "display:flex;align-items:center;gap:10px;justify-content:space-between";
+    const labelWrap = document.createElement("div");
+    labelWrap.style.cssText =
+      "display:flex;align-items:center;gap:6px;min-width:0";
     const name = document.createElement("span");
     name.textContent = f.label;
     name.style.cssText = "font-size:13.5px";
-    top.appendChild(name);
+    labelWrap.appendChild(name);
+    if (hintEl) {
+      const info = document.createElement("button");
+      info.type = "button";
+      info.textContent = "?";
+      info.setAttribute("aria-label", "Show description for " + f.label);
+      info.style.cssText =
+        "flex:none;width:18px;height:18px;padding:0;line-height:1;border-radius:50%;border:1px solid var(--lumiverse-border,rgba(255,255,255,.3));background:transparent;color:var(--lumiverse-text-muted,#9a93a8);font-size:11px;cursor:pointer";
+      info.addEventListener("click", (e: any) => {
+        // Stop the row-label from toggling its control when the button is tapped.
+        if (e) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+        const show = hintEl!.style.display === "none";
+        hintEl!.style.display = show ? "block" : "none";
+        info.style.borderColor = show
+          ? "var(--lumiverse-primary,#7c5cff)"
+          : "var(--lumiverse-border,rgba(255,255,255,.3))";
+        info.style.color = show
+          ? "var(--lumiverse-primary,#7c5cff)"
+          : "var(--lumiverse-text-muted,#9a93a8)";
+      });
+      labelWrap.appendChild(info);
+    }
+    top.appendChild(labelWrap);
 
     if (f.type === "bool") {
       const input = document.createElement("input");
@@ -2107,6 +2427,16 @@ export function setup(ctx: Ctx, opts?: any) {
       if (isMultiline) {
         input.rows = 4;
         input.style.resize = "vertical";
+        const expand = btn("Expand", false);
+        expand.style.cssText +=
+          "min-height:0;padding:3px 10px;font-size:12px;flex:none";
+        expand.addEventListener("click", () => {
+          openExpandEditor(f.label, input.value, (val: string) => {
+            input.value = val;
+            cfg[f.key] = val;
+          });
+        });
+        top.appendChild(expand);
       } else {
         input.type = "text";
       }
@@ -2152,13 +2482,7 @@ export function setup(ctx: Ctx, opts?: any) {
       }
     }
 
-    if (f.hint) {
-      const hint = document.createElement("span");
-      hint.textContent = f.hint;
-      hint.style.cssText =
-        "font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,#9a93a8)";
-      row.appendChild(hint);
-    }
+    if (hintEl) row.appendChild(hintEl);
     return row;
   }
 
@@ -2167,18 +2491,14 @@ export function setup(ctx: Ctx, opts?: any) {
       "padding:9px 10px;border-radius:var(--lumiverse-radius,8px);" +
       "border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));" +
       "background:var(--lumiverse-fill-subtle,rgba(255,255,255,.05));" +
-      "color:var(--lumiverse-text,#eee);font:13px var(--lumiverse-font-family,system-ui);outline:none;" +
-      "transition:border-color .12s ease,box-shadow .12s ease";
-    // On focus, tint the border and add a soft accent glow ring so focus is clearly
-    // visible and matches the host inputs. Falls back to just the border tint on
-    // browsers without color-mix. Cleared on blur.
+      "color:var(--lumiverse-text,#eee);font:13px var(--lumiverse-font-family,var(--font-global,system-ui));outline:none;" +
+      "transition:border-color .12s ease";
+    // On focus, tint the border so the active field is clear. No glow ring.
     input.addEventListener("focus", () => {
       input.style.borderColor = "var(--lumiverse-primary,#7c5cff)";
-      input.style.boxShadow = "0 0 0 3px color-mix(in srgb, var(--lumiverse-primary,#7c5cff) 32%, transparent)";
     });
     input.addEventListener("blur", () => {
       input.style.borderColor = "var(--lumiverse-border,rgba(255,255,255,.16))";
-      input.style.boxShadow = "none";
     });
   }
 
@@ -2208,6 +2528,67 @@ export function setup(ctx: Ctx, opts?: any) {
     b.addEventListener("pointercancel", pressClear);
     b.addEventListener("pointerleave", pressClear);
     return b;
+  }
+
+  // Full-size editor for a multiline field. Opens a large textarea over the
+  // modal so long rule lists are easier to read and edit. Done writes the text
+  // back; Cancel, Escape, or a click outside discards.
+  function openExpandEditor(
+    label: string,
+    initial: string,
+    onDone: (val: string) => void,
+  ) {
+    if (typeof document === "undefined") return;
+    const overlay = document.createElement("div");
+    overlay.style.cssText =
+      "position:fixed;inset:0;z-index:2147483600;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;background:rgba(0,0,0,.55);font-family:var(--lumiverse-font-family,var(--font-global,system-ui))";
+    const box = document.createElement("div");
+    box.style.cssText =
+      "display:flex;flex-direction:column;gap:10px;width:min(720px,96vw);height:min(80vh,640px);box-sizing:border-box;padding:14px;background:var(--lumiverse-surface,#1a1720);border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));border-radius:var(--lumiverse-radius,12px);box-shadow:0 12px 40px rgba(0,0,0,.5);color:var(--lumiverse-text,#eee)";
+    const title = document.createElement("div");
+    title.textContent = label;
+    title.style.cssText =
+      "flex:none;font-size:14px;font-family:var(--font-global-bold,var(--lumiverse-font-family,system-ui))";
+    const ta = document.createElement("textarea");
+    ta.value = initial;
+    ta.setAttribute("aria-label", label);
+    ta.style.cssText =
+      "flex:1;width:100%;box-sizing:border-box;resize:none;padding:10px;border-radius:var(--lumiverse-radius,8px);border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));background:var(--lumiverse-fill-subtle,rgba(255,255,255,.05));color:var(--lumiverse-text,#eee);outline:none;font:13px/1.5 var(--lumiverse-font-family,var(--font-global,system-ui))";
+    const row = document.createElement("div");
+    row.style.cssText =
+      "display:flex;justify-content:flex-end;gap:8px;flex:none";
+    const cancel = btn("Cancel", false);
+    const done = btn("Done", true);
+    const onKey = (e: any) => {
+      if (e && e.key === "Escape") close();
+    };
+    function close() {
+      try {
+        overlay.remove();
+      } catch (_) {}
+      try {
+        document.removeEventListener("keydown", onKey);
+      } catch (_) {}
+    }
+    cancel.addEventListener("click", close);
+    done.addEventListener("click", () => {
+      onDone(ta.value);
+      close();
+    });
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) close();
+    });
+    document.addEventListener("keydown", onKey);
+    row.appendChild(cancel);
+    row.appendChild(done);
+    box.appendChild(title);
+    box.appendChild(ta);
+    box.appendChild(row);
+    overlay.appendChild(box);
+    (document.body || document.documentElement).appendChild(overlay);
+    try {
+      ta.focus();
+    } catch (_) {}
   }
 
   function openSettings() {
