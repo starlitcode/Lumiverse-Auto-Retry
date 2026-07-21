@@ -127,7 +127,7 @@ It never changes what the model generated. A find-and-replace always runs after 
 
 If you would rather apply swaps by hand than have them run on every reply, turn on **Show a 'swap words now' button** under Advanced: find and replace. That adds a button to the chat input's Extras menu (next to the settings button) that applies your swaps on demand. It only ever edits assistant replies, never your own messages.
 
-By default it swaps just the latest reply and won't swap the same reply twice, so it won't stack on top of an automatic swap or an earlier tap. Two options change that. **Button swaps the whole chat** makes it apply your rules to every assistant reply in the chat you are viewing, not just the latest. **Allow swapping a reply again** lets it swap a reply you already swapped, which is useful after you change your rules, though it can stack swaps. There is no way to pick individual arbitrary messages; the choice is the latest reply or the whole chat.
+By default it swaps just the latest reply and won't swap the same reply twice, so it won't stack on top of an automatic swap or an earlier tap. Two options change the picture. **Show a swap-whole-chat button** adds a second Extras button, **Swap words in every reply**, which applies your rules once to every generated reply in the chat you are viewing, which is handy after adding a rule mid-chat or loading a different preset. **Allow swapping a reply again** lets it swap a reply you already swapped, which is useful after you change your rules, though it can stack swaps. There is no way to pick individual arbitrary messages; the choice is the latest reply or the whole chat.
 
 It acts on replies from the current session (the ones you have generated), so it is most reliable right after a reply; on a freshly opened old chat it will say there is no reply to swap until you generate one. It works whether or not automatic swapping is on, and appears in the Extras menu on both mobile and desktop.
 
@@ -202,7 +202,7 @@ The settings modal is the easy path. The same options live in the CONFIG block a
 | replaceRandom | false | When a word has more than one swap, pick one at random each time. |
 | replaceCaseSensitive | false | Match letter case exactly. Off = case-insensitive, capitalization kept. |
 | showReplaceButton | false | Add a button to the input Extras menu that applies your word swaps to the latest reply on demand. |
-| swapWholeChat | false | Make that button swap every assistant reply in the chat, not just the latest. |
+| showSwapAllButton | false | Adds an Extras button that swaps every generated reply in the chat once. |
 | allowReSwap | false | Let that button swap a reply again even if it was already swapped (can stack swaps). |
 | confirmBeforeEdit | false | Ask you to confirm before any word-swap edit (automatic or manual); you can cancel. |
 | regenerateSelector | (see file) | Host button. See below. |
