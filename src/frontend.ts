@@ -23,7 +23,7 @@ const IGNORE_MAX = 16; // most aborted-generation ids kept around to swallow the
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "2.8.0";
+const VERSION = "2.8.1";
 
 // ---- defaults (the UI overrides these; editing here changes the fallback) ----
 const CONFIG = {
@@ -599,7 +599,8 @@ const REFUSAL_SOFT: RegExp[] = [
 // to answer. Only the final reply should be judged, so these are stripped before
 // matching: a refusal that lives only in the thinking never triggers a retry when
 // the visible reply is fine. Built-in tags cover the common wrappers; the user can
-// add more with refusalThinkTags. Applied here only, so the empty/truncation
+// add more with refusalThinkTags. Also used by the empty check to catch a
+// reply that is nothing but an inline think block; the truncation and length
 // checks still see the raw output.
 const THINK_TAGS = ["think", "thinking", "thought", "thoughts", "reasoning", "reflection", "scratchpad", "analysis"];
 function stripThinking(text: string, cfg?: any): string {
@@ -1526,6 +1527,17 @@ export function setup(ctx: Ctx, opts?: any) {
         p.chatId,
         s.sawReasoning && !s.sawContent ? "cut off mid-reasoning" : "empty",
       );
+      return;
+    }
+    // Inline-reasoning models can put everything, refusal included, inside a
+    // think block and never write a reply. The raw content isn't empty then,
+    // but nothing outside the thinking is, so treat it as empty and retry.
+    if (
+      cfg.retryOnEmpty &&
+      content.length > 0 &&
+      stripThinking(content, cfg).trim().length === 0
+    ) {
+      scheduleRetry(p.chatId, "thinking only, no reply");
       return;
     }
     if (cfg.retryOnTruncated && looksTruncated(content, cfg.retryOnNoPunct)) {
