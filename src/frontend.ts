@@ -23,7 +23,7 @@ const IGNORE_MAX = 16; // most aborted-generation ids kept around to swallow the
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "2.7.0";
+const VERSION = "2.8.0";
 
 // ---- defaults (the UI overrides these; editing here changes the fallback) ----
 const CONFIG = {
@@ -73,7 +73,7 @@ const CONFIG = {
   replaceCaseSensitive: false, // match letter case exactly. Off = case-insensitive with capitalization kept.
   replaceRandom: false, // when a word has more than one replacement, pick one at random per occurrence. Off = always the first listed.
   showReplaceButton: false, // optional button in the input's Extras menu that applies the word swaps to the latest reply on demand.
-  swapWholeChat: false, // when using that button, swap every assistant reply in the chat instead of only the latest.
+  showSwapAllButton: false, // adds an Extras button that swaps every generated reply in the chat once.
   allowReSwap: false, // let that button swap a reply again even if it was already swapped this session (can stack swaps).
   confirmBeforeEdit: false, // ask for confirmation before any word-swap edit (automatic or manual); the user can cancel.
 
@@ -315,10 +315,10 @@ const SCHEMA: Group[] = [
         hint: "Off by default. Adds a button to the chat input's Extras menu that applies your word swaps on demand to the latest reply, so you can swap without leaving the automatic swap on. Only assistant replies are swapped, never your own messages, and the same reply won't be swapped twice. Needs your swap rules set up.",
       },
       {
-        key: "swapWholeChat",
-        label: "Button swaps the whole chat",
+        key: "showSwapAllButton",
+        label: "Show a swap-whole-chat button",
         type: "bool",
-        hint: "Off by default. With this on, the swap button applies your rules to every assistant reply in the chat you're viewing, not just the latest one. Off, it only does the latest reply.",
+        hint: "Off by default. Adds a button to the input's Extras menu that applies your rules once to every generated reply in the chat you're viewing. The greeting is never touched.",
       },
       {
         key: "allowReSwap",
@@ -720,6 +720,8 @@ export function setup(ctx: Ctx, opts?: any) {
   let lastMessageId: any = null;
   let replaceAction: any = null;
   let replaceActionOff: any = null;
+  let replaceAllAction: any = null;
+  let replaceAllActionOff: any = null;
   // Manual "swap words now": an optional Extras-menu button that applies the word
   // swaps to the latest reply on demand, instead of only automatically on finish.
   // Optional consent dialog before any edit, for people who don't want surprises.
@@ -737,14 +739,23 @@ export function setup(ctx: Ctx, opts?: any) {
     try {
       if (!ctx || typeof (ctx as any).sendToBackend !== "function") { showToast("Find and replace needs the backend, which this host does not offer."); return; }
       if (cfg.confirmBeforeEdit) {
-        const q = cfg.swapWholeChat ? "Apply your word swaps to every reply in this chat?" : "Apply your word swaps to the latest reply?";
-        if (!(await confirmEdit(q))) return;
+        if (!(await confirmEdit("Apply your word swaps to the latest reply?"))) return;
       }
       (ctx as any).sendToBackend({ type: "apply_replace_now", chatId: lastChatId, messageId: lastMessageId, requestId: "ar-rep-" + Date.now() });
     } catch (_) {}
   }
-  // Add or remove the Extras-menu button to match the toggle. Called on load and
-  // whenever settings are saved, so flipping the toggle takes effect at once.
+  // Swap every generated reply in the current chat, once, on request.
+  async function applyReplaceAllNow() {
+    try {
+      if (!ctx || typeof (ctx as any).sendToBackend !== "function") { showToast("Find and replace needs the backend, which this host does not offer."); return; }
+      if (cfg.confirmBeforeEdit) {
+        if (!(await confirmEdit("Apply your word swaps to every reply in this chat?"))) return;
+      }
+      (ctx as any).sendToBackend({ type: "apply_replace_now", chatId: lastChatId, wholeChat: true, requestId: "ar-rep-all-" + Date.now() });
+    } catch (_) {}
+  }
+  // Add or remove the Extras-menu buttons to match their toggles. Called on load
+  // and whenever settings are saved, so flipping a toggle takes effect at once.
   function syncReplaceButton() {
     try {
       const canReg = !!(ctx && (ctx as any).ui && typeof (ctx as any).ui.registerInputBarAction === "function");
@@ -760,6 +771,19 @@ export function setup(ctx: Ctx, opts?: any) {
         try { replaceAction.destroy(); } catch (_) {}
         replaceAction = null;
         replaceActionOff = null;
+      }
+      if (cfg.showSwapAllButton && canReg && !replaceAllAction) {
+        replaceAllAction = (ctx as any).ui.registerInputBarAction({
+          id: "auto-retry-replace-all",
+          label: "Swap words in every reply",
+          iconSvg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/><line x1="12" y1="7" x2="12" y2="17"/></svg>',
+        });
+        replaceAllActionOff = replaceAllAction.onClick(() => applyReplaceAllNow());
+      } else if ((!cfg.showSwapAllButton || !canReg) && replaceAllAction) {
+        try { replaceAllActionOff && replaceAllActionOff(); } catch (_) {}
+        try { replaceAllAction.destroy(); } catch (_) {}
+        replaceAllAction = null;
+        replaceAllActionOff = null;
       }
     } catch (_) {}
   }
@@ -1045,7 +1069,7 @@ export function setup(ctx: Ctx, opts?: any) {
         "replaceRandom",
         "replaceCaseSensitive",
         "showReplaceButton",
-        "swapWholeChat",
+        "showSwapAllButton",
         "allowReSwap",
         "confirmBeforeEdit",
       ],
@@ -1676,7 +1700,7 @@ export function setup(ctx: Ctx, opts?: any) {
       "replaceRandom",
       "replaceCaseSensitive",
       "showReplaceButton",
-      "swapWholeChat",
+      "showSwapAllButton",
       "allowReSwap",
       "confirmBeforeEdit",
       "liveLog",
