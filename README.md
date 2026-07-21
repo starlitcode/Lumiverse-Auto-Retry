@@ -154,11 +154,13 @@ Editing a saved reply needs the `chat_mutation` permission (see Permissions belo
 
 At the bottom of the find-and-replace settings you can save your word-swap setups as named presets and switch between them without copying rules by hand.
 
-Pick a saved preset and press **Load** to switch your settings to it. To store the current setup, type a name and press **Save as new**. **Update selected** overwrites the chosen preset with your current settings, **Rename selected** renames it to the name in the box, and **Delete** removes it. Loading a preset takes effect right away and is saved, so there is no separate Save step. Presets are kept on this browser, so unlike your account settings they do not sync across devices.
+Pick a saved preset and press **Load** to switch your settings to it. To store the current setup, type a name and press **Save as new**. **Update selected** overwrites the chosen preset with your current settings, **Rename selected** renames it to the name in the box, and **Delete** removes it. Loading a preset takes effect right away and is saved, so there is no separate Save step. Presets are kept on this browser, so unlike your account settings they do not sync across devices. To move them to another device or share them, use **Advanced: import / export**, which can include your presets in the file.
 
 ## Import and export
 
-You can save your settings to a file and load them back later. In the settings modal, open **Advanced: import / export**. Tick the parts you want, then either **Export to file** to save them as a small `.json` file, or **Import from file** to load one. Your settings already follow your Lumiverse account across browsers on their own, so this is mainly for keeping a backup, sharing a setup with someone else, or copying between accounts.
+You can save your settings to a file and load them back later. In the settings modal, open **Advanced: import / export**. Tick the parts you want, then either **Export to file** to save them as a small `.json` file, or **Import from file** to load one. Your settings already follow your Lumiverse account across browsers on their own, so this is mainly for keeping a backup, sharing a setup with someone else, or copying between accounts. Since word swap presets only live on one browser, this is also how you move them: tick **Word swap presets** to include them.
+
+Imported settings fill in the fields for review and need a **Save** to stick. Imported presets are different: they are saved as soon as they come in, with same-named presets replaced and new ones added.
 
 The parts are grouped so you only move what you mean to: retry behavior, refusal detection, word swaps, button selectors, and on-screen (the pop-up and live log). For sharing phrase and swap setups, tick just refusal detection and word swaps and leave the rest, since button selectors in particular are tied to one person's Lumiverse build.
 
