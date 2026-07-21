@@ -1,11 +1,11 @@
 {
-  "version": "2.6.0",
+  "version": "2.7.0",
   "name": "Auto Retry",
   "identifier": "auto_retry",
   "author": "starlitcode",
   "github": "https://github.com/starlitcode/Lumiverse-Auto-Retry",
   "homepage": "https://github.com/starlitcode/Lumiverse-Auto-Retry",
-  "description": "Automatically re-fires failed, stalled, empty, or cut-off generations, with optional accidental-refusal retry and an optional find-and-replace on replies. Event-driven port of the SillyTavern fetch-retry idea, with an in-app settings modal.",
+  "description": "Automatically retry failed, empty, stalled, or cut-off replies, with optional refusal detection and find-and-replace word swaps.",
   "permissions": [
     "generation",
     "chat_mutation"
