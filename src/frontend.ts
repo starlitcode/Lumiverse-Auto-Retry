@@ -23,7 +23,7 @@ const IGNORE_MAX = 16; // most aborted-generation ids kept around to swallow the
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "2.6.0";
+const VERSION = "2.7.0";
 
 // ---- defaults (the UI overrides these; editing here changes the fallback) ----
 const CONFIG = {
@@ -1056,15 +1056,20 @@ export function setup(ctx: Ctx, opts?: any) {
       keys: ["regenerateSelector", "swipeNextSelector", "stopSelector"],
     },
     { id: "notifications", label: "On-screen", keys: ["toast", "liveLog"] },
+    // Special entry: carried outside cfg. buildExport and the import handler
+    // treat it as the saved word-swap presets, not settings keys.
+    { id: "presets", label: "Word swap presets", keys: [] },
   ];
   const fieldByKey: Record<string, Field> = {};
   for (const g of SCHEMA) for (const f of g.fields) fieldByKey[f.key] = f;
-  let ioStatus = "";
   // Per-field functions that push a cfg value back into the on-screen control,
   // so applying a preset can update the visible fields in place without a full
   // rebuild (which would jump the scroll and close open sections). Repopulated
   // each time the settings body is built.
   let fieldSetters: Record<string, (v: any) => void> = {};
+  // Rebuild-free refreshers for the preset dropdowns, so an import that adds
+  // presets can update them without rebuilding the panel.
+  let presetBarRefreshers: Array<() => void> = [];
   // Titles of collapsible sections the user has opened, kept so a rebuild
   // (import) doesn't collapse everything back.
   const openGroups = new Set<string>();
@@ -1078,13 +1083,20 @@ export function setup(ctx: Ctx, opts?: any) {
   }
   function buildExport(catIds: string[]): string {
     const settings: any = {};
+    let presetsOut: any = null;
     for (const c of EXPORT_CATEGORIES) {
       if (catIds.indexOf(c.id) < 0) continue;
+      if (c.id === "presets") {
+        presetsOut = loadPresets();
+        continue;
+      }
       const bucket: any = {};
       for (const k of c.keys) bucket[k] = cfg[k];
       settings[c.id] = bucket;
     }
-    return JSON.stringify({ autoRetry: VERSION, settings: settings }, null, 2);
+    const out: any = { autoRetry: VERSION, settings: settings };
+    if (presetsOut) out.presets = presetsOut;
+    return JSON.stringify(out, null, 2);
   }
   // Apply an imported blob, only the chosen categories actually present. Returns
   // the labels applied, or null if the text was not a valid export.
@@ -1168,6 +1180,29 @@ export function setup(ctx: Ctx, opts?: any) {
       return false;
     }
   }
+  // Merge presets from an imported blob into storage. Same-named presets are
+  // replaced by the imported one, new names are added. Returns how many came
+  // in, or -1 if saving failed. Zero (including a file with none) is harmless.
+  function importPresets(data: any): number {
+    const incoming = data && data.presets ? data.presets : null;
+    if (!incoming || typeof incoming !== "object") return 0;
+    const stored = loadPresets();
+    let n = 0;
+    for (const kind of Object.keys(stored)) {
+      const arr = Array.isArray(incoming[kind]) ? incoming[kind] : [];
+      for (const p of arr) {
+        if (!p || typeof p.name !== "string" || !p.values || typeof p.values !== "object")
+          continue;
+        const i = stored[kind].findIndex((x) => x.name === p.name);
+        if (i >= 0) stored[kind][i] = { name: p.name, values: p.values };
+        else stored[kind].push({ name: p.name, values: p.values });
+        n++;
+      }
+    }
+    if (n && !savePresets(stored)) return -1;
+    return n;
+  }
+
   // Snapshot the current values of a kind's keys.
   function snapshotKind(kind: string): Record<string, any> {
     const values: Record<string, any> = {};
@@ -1770,6 +1805,7 @@ export function setup(ctx: Ctx, opts?: any) {
   function buildSettingsBody(root: HTMLElement, onSaved?: () => void) {
     root.innerHTML = "";
     fieldSetters = {};
+    presetBarRefreshers = [];
 
     // A preset switcher: pick a saved preset and Load it into the settings, or
     // save the current settings as a preset. Load updates the on-screen fields in
@@ -1855,6 +1891,13 @@ export function setup(ctx: Ctx, opts?: any) {
         if (selectName) select.value = selectName;
       };
       refreshSelect();
+      // Re-read storage and rebuild the dropdown, for when an import adds
+      // presets while this bar is on screen.
+      presetBarRefreshers.push(() => {
+        const fresh = loadPresets();
+        presets[kind] = fresh[kind] || [];
+        refreshSelect();
+      });
 
       loadBtn.addEventListener("click", () => {
         const name = select.value;
@@ -2254,8 +2297,6 @@ export function setup(ctx: Ctx, opts?: any) {
       const status = document.createElement("div");
       status.style.cssText =
         "font-size:12px;line-height:1.4;color:var(--lumiverse-text-muted,#9a93a8);min-height:1em";
-      status.textContent = ioStatus;
-      ioStatus = "";
 
       const exportBtn = btn("Export to file", false);
       exportBtn.addEventListener("click", () => {
@@ -2293,13 +2334,40 @@ export function setup(ctx: Ctx, opts?: any) {
             status.textContent = "That file isn't a valid Auto Retry export.";
             return;
           }
-          if (!applied.length) {
+          // Presets ride outside the settings model: they save right away.
+          let presetCount = 0;
+          if (ids.indexOf("presets") >= 0) {
+            let data: any = null;
+            try {
+              data = JSON.parse(text);
+            } catch (_) {}
+            presetCount = importPresets(data);
+            if (presetCount === -1) {
+              status.textContent =
+                "Couldn't save the imported presets on this browser.";
+              return;
+            }
+            if (presetCount > 0) for (const r of presetBarRefreshers) r();
+          }
+          if (!applied.length && !presetCount) {
             status.textContent = "Nothing matched the ticked parts in that file.";
             return;
           }
-          ioStatus =
-            "Imported: " + applied.join(", ") + ". Press Save to keep it.";
-          buildSettingsBody(root, onSaved);
+          // Reflect imported settings in the visible fields without a rebuild,
+          // so the panel doesn't jump back to the top.
+          for (const k of Object.keys(fieldSetters)) fieldSetters[k](cfg[k]);
+          let msg = "";
+          if (applied.length)
+            msg = "Imported: " + applied.join(", ") + ". Press Save to keep it.";
+          if (presetCount > 0)
+            msg +=
+              (msg ? " " : "") +
+              "Also brought in " +
+              presetCount +
+              " word swap preset" +
+              (presetCount === 1 ? "" : "s") +
+              ", saved already.";
+          status.textContent = msg;
         });
       });
       const importBtn = btn("Import from file", false);
