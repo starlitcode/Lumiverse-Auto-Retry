@@ -179,7 +179,7 @@ The settings modal is the easy path. The same options live in the CONFIG block a
 | maxDelayMs | 30000 | Longest it will ever wait. |
 | jitter | true | Nudges each wait randomly so retries don't all land at once. |
 | rateLimitDelayMs | 8000 | Floor wait when the server says it's busy. |
-| retryByNewReroll | false | Off: a retry redoes the reply in place via the regenerate button. On: a retry clicks the next / swipe button, adding a new reroll and keeping the existing ones. |
+| retryByNewReroll | false | Off: a retry redoes the reply in place via the regenerate button. On: a retry clicks the next / swipe button, adding a new reroll and keeping the existing ones. Skips the swipe button on empty or error replies. |
 | stuckTimeoutMs | 90000 | Started but no token and no end within this. 0 disables. |
 | idleTimeoutMs | 45000 | Tokens flowed then stopped for this long. 0 disables. |
 | retryOnError | true | Retry provider errors. |
@@ -217,9 +217,9 @@ The two watchdog waits (`stuckTimeoutMs`, `idleTimeoutMs`) lean long on purpose 
 
 Lumiverse has no built-in way for an extension to regenerate a reply, so the re-fire clicks your own on-screen regenerate or swipe button. The defaults match common Lumiverse builds, but a future update could rename those buttons.
 
-There are three button fields: **regenerate** (redo a reply), **next / swipe** (a backup if your build retries by swiping), and **stop** (to halt a frozen reply). Each takes one CSS selector, the kind you'd pass to `document.querySelector`, and you can list several separated by commas as fallbacks.
+There are three button fields: **regenerate** (redo a reply), **next / swipe** (a backup if your build retries by swiping), and **stop** (to halt a frozen reply). Each takes one CSS selector, the kind you'd pass to `document.querySelector`, and you can list several separated by commas as fallbacks. The extension checks these in the exact order you write them, so put your most specific selectors first (like data attributes) and broader ones last (like aria-label or title).
 
-By default a retry uses the regenerate button, which on some builds redoes the reply in place and clears the other rerolls on that message. If you'd rather keep those rerolls, turn on **Retry by adding a new reroll** (under "How it redoes a reply" in settings). A retry then clicks the next / swipe button first, which adds a new reroll and leaves the existing ones in place, and falls back to the regenerate button if the next / swipe button isn't found. Set the **next / swipe** selector below if retries stop happening after you turn it on.
+By default a retry uses the regenerate button, which on some builds redoes the reply in place and clears the other rerolls on that message. If you'd rather keep those rerolls, turn on **Retry by adding a new reroll** (under "How it redoes a reply" in settings). A retry then clicks the next / swipe button first, which adds a new reroll and leaves the existing ones in place, and falls back to the regenerate button if the next / swipe button isn't found. It also skips the swipe button entirely on empty replies or errors, since there is no message bubble to swipe away from, and goes straight to the regenerate button so it does not accidentally click something else. Set the **next / swipe** selector below if retries stop happening after you turn it on.
 
 If retries fire (the pop-up shows) but nothing regenerates, the selector needs adjusting:
 
