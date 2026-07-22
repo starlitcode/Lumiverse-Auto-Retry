@@ -547,6 +547,8 @@ const REFUSAL_STRONG: RegExp[] = [
   /\bI(?:'m| am) sorry,? but I(?: can'?t| cannot| won'?t|'m (?:not able|unable) to| am (?:not able|unable) to) (?:create|generate|write|produce|provide|assist|comply|fulfil|fulfill|help you with|engage with)\b/i,
   /\b(?:that|this)(?:'s| is) not something I(?: can| am able to|'m able to) (?:help with|assist with|create|generate|provide|write)\b/i,
   /\bI(?:'m| am) not going to (?:create|generate|produce|write) (?:that|this|such|content|explicit|sexual|those)\b/i,
+  // Refusal tied to specific prohibited content policies.
+  /\bI(?: (?:can(?:no|')?t|cannot|will not|won'?t|am (?:not able|unable) to)|'m (?:not able|unable) to) (?:participate|engage) in (?:this |the |any )?(?:roleplay|role-?playing) or (?:create|generate|produce|write) (?:content|stories|scenes|text) depicting (?:sexual violence|non-?consensual (?:sexual )?(?:acts|situations|scenarios|content))\b/i,
 ];
 
 // Tier 2: flat phrase list, matched as normalized lowercase substrings. Covers
