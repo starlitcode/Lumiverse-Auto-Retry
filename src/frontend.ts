@@ -23,7 +23,7 @@ const IGNORE_MAX = 16; // most aborted-generation ids kept around to swallow the
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "2.8.2";
+const VERSION = "2.8.3";
 
 // ---- defaults (the UI overrides these; editing here changes the fallback) ----
 const CONFIG = {
@@ -1328,7 +1328,13 @@ export function setup(ctx: Ctx, opts?: any) {
       } catch (_) {}
       if (!el && typeof document !== "undefined") {
         try {
-          el = document.querySelector(part);
+          // querySelector returns the first match in the DOM, which might be a
+          // hidden button on an old message. querySelectorAll lets us grab the
+          // last match, which is the button on the latest message.
+          const list = document.querySelectorAll(part);
+          if (list && list.length > 0) {
+            el = list[list.length - 1];
+          }
         } catch (_) {}
       }
       if (el) return el; // Found a match, stop looking.
