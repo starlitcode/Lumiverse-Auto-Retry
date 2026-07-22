@@ -18,7 +18,7 @@ const STAND_DOWN_MS = 2500;
 const IGNORE_MAX = 16; // most aborted-generation ids kept around to swallow their late events
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = '2.8.1';
+const VERSION = '2.8.2';
 // ---- defaults (the UI overrides these; editing here changes the fallback) ----
 const CONFIG = {
     enabled: true,
@@ -90,9 +90,9 @@ const CONFIG = {
     // host controls (the only DOM-dependent part). Use the Test buttons in settings.
     // Multiple patterns are listed so a Lumiverse build that renames one attribute
     // is still likely covered; if a build changes them all, fix it via the Test UI.
-    regenerateSelector: '[data-action="regenerate"], [data-testid="regenerate"], ' + 'button[aria-label*="regenerate" i], button[title*="regenerate" i]',
-    swipeNextSelector: '[data-action="swipe-right"], button[aria-label*="next swipe" i], button[aria-label*="next" i]',
-    stopSelector: '[data-action="stop"], [data-testid="stop"], ' + 'button[aria-label*="stop" i], button[title*="stop" i], [class*="_sendBtnStop_"]',
+    regenerateSelector: '[title="Regenerate"], [data-action="regenerate"], [data-testid="regenerate"], ' + 'button[aria-label*="regenerate" i], button[title*="regenerate" i]',
+    swipeNextSelector: '[aria-label="Next swipe"], [data-action="swipe-right"], [data-testid="swipe-right"], ' + 'button[aria-label*="next swipe" i], button[aria-label*="swipe right" i], ' + 'button[aria-label*="reroll" i], button[title*="swipe" i]',
+    stopSelector: '[aria-label="Stop generation"], [data-action="stop"], [data-testid="stop"], ' + 'button[aria-label*="stop" i], button[title*="stop" i], [class*="_sendBtnStop_"]',
     toast: true,
     liveLog: false,
     // show a small on-screen panel with recent activity, updating live. Handy on mobile where dev tools aren't available.
@@ -363,7 +363,7 @@ const SCHEMA = [{
 },
 {
     title: 'Advanced: buttons it clicks',
-    desc: "It works by clicking your own on-screen buttons. The three boxes are the buttons it needs: redoing a reply, swiping to a fresh one as a backup, and stopping a frozen reply. Each takes one CSS selector (list a few comma-separated as fallbacks; it uses the first that matches). You only need this if retries aren't happening: paste a selector and press Test until it says match found. Test each while its button is on screen, since a hidden button won't match. The Stop button only appears while a reply is generating.",
+    desc: "It works by clicking your own on-screen buttons. The three boxes are the buttons it needs: redoing a reply, swiping to a fresh one as a backup, and stopping a frozen reply. Each takes one CSS selector. List a few comma-separated as fallbacks. Put the most specific selectors first (like data-action or data-testid) and broader ones last (like aria-label or title), because it checks them in the exact order you list them. You only need this if retries aren't happening: paste a selector and press Test until it says match found. Test each while its button is on screen, since a hidden button won't match. The Stop button only appears while a reply is generating.",
     fields: [{
         key: 'regenerateSelector',
         label: 'Your regenerate button',
@@ -1088,6 +1088,8 @@ export function setup(ctx, opts) {
                 sawContent: false,
                 ignored: new Set(),
                 suppressUntil: 0,
+                startWatchdog: null,
+                expectingStart: 0,
             };
             chats.set(chatId, s);
         }
@@ -1106,6 +1108,10 @@ export function setup(ctx, opts) {
             clearTimeout(s.timer);
             s.timer = null;
         }
+        if (s.startWatchdog) {
+            clearTimeout(s.startWatchdog);
+            s.startWatchdog = null;
+        }
         s.pending = false;
     };
     const isRateLimit = (err) => !!err && /\b(?:408|429|500|502|503|504|520|521|522|523|524)\b|rate.?limit|too many requests|quota|overloaded|timeout|temporary|network/i.test(String(err));
@@ -1118,26 +1124,37 @@ export function setup(ctx, opts) {
         return d;
     };
     const find = (selector) => {
-        let el = null;
-        try {
-            el = ctx && ctx.dom && ctx.dom.query ? ctx.dom.query(selector) : null;
-        } catch(_) {}
-        if (!el && typeof document !== 'undefined') {
+        // Split by comma so we check them in list order, not DOM order.
+        const parts = String(selector || "").split(",").map((s) => s.trim());
+        for (const part of parts) {
+            if (!part) continue;
+            let el = null;
             try {
-                el = document.querySelector(selector);
+                if (ctx && ctx.dom && ctx.dom.query) {
+                    el = ctx.dom.query(part);
+                }
             } catch(_) {}
+            if (!el && typeof document !== 'undefined') {
+                try {
+                    el = document.querySelector(part);
+                } catch(_) {}
+            }
+            if (el) return el; // Found a match, stop looking.
         }
-        return el;
+        return null;
     };
-    const fireRetry = () => {
+    const fireRetry = (opts) => {
         let btn = null;
+        const hasContent = !!(opts && opts.hasContent);
         try {
-            // With retryByNewReroll on, prefer the next / swipe control so a retry adds
-            // a new reroll and keeps the existing ones; fall back to regenerate. Off,
-            // it's the reverse: regenerate first, swipe as the backup.
-            btn = cfg.retryByNewReroll
-                ? find(cfg.swipeNextSelector) || find(cfg.regenerateSelector)
-                : find(cfg.regenerateSelector) || find(cfg.swipeNextSelector);
+            // Only use swipe if there is a message bubble to swipe from. Empty or
+            // error replies have no bubble, so the swipe button is missing. Falling
+            // back to regenerate stops a bad selector from clicking the wrong button.
+            if (cfg.retryByNewReroll && hasContent) {
+                btn = find(cfg.swipeNextSelector) || find(cfg.regenerateSelector);
+            } else {
+                btn = find(cfg.regenerateSelector) || find(cfg.swipeNextSelector);
+            }
         } catch(_) {}
         if (btn) {
             try {
@@ -1181,7 +1198,7 @@ export function setup(ctx, opts) {
             log('stood down', chatId);
         }
     }
-    function scheduleRetry(chatId, reason, err) {
+    function scheduleRetry(chatId, reason, err, opts) {
         const s = st(chatId);
         if (!cfg.enabled || s.pending) return;
         if (Date.now() < s.suppressUntil) {
@@ -1208,10 +1225,24 @@ export function setup(ctx, opts) {
             s.timer = null;
             s.pending = false;
             s.selfTriggered = true;
-            if (!fireRetry()) {
+            if (!fireRetry(opts)) {
                 s.selfTriggered = false;
                 s.attempts = 0;
-            } // click failed, do not leave stale state
+            } else {
+                // If the click fails to start a generation in 6 seconds, assume it
+                // clicked the wrong button or a hidden one. Reset state so the next
+                // user message gets a clean retry budget.
+                s.expectingStart = Date.now();
+                s.startWatchdog = setTimeout(() => {
+                    if (s.expectingStart && Date.now() - s.expectingStart >= 6000) {
+                        log('retry click produced no generation; resetting stale state', chatId);
+                        s.selfTriggered = false;
+                        s.attempts = 0;
+                        s.expectingStart = 0;
+                        s.startWatchdog = null;
+                    }
+                }, 6000);
+            }
         },
         delay);
     }
@@ -1221,17 +1252,23 @@ export function setup(ctx, opts) {
     // for a user stop or a fresh result even after the next generation begins.
     function abortAndRetry(chatId, reason) {
         const s = st(chatId);
+        const hadContent = s.sawContent;
         clearTimers(s);
         if (s.genId != null) {
             s.ignored.add(s.genId);
             while (s.ignored.size > IGNORE_MAX) s.ignored.delete(s.ignored.values().next().value);
         }
         stopGenerating();
-        scheduleRetry(chatId, reason);
+        scheduleRetry(chatId, reason, undefined, { hasContent: hadContent });
     }
     function onStart(p) {
         if (!p || !p.chatId) return;
         const s = st(p.chatId);
+        if (s.startWatchdog) {
+            clearTimeout(s.startWatchdog);
+            s.startWatchdog = null;
+        }
+        s.expectingStart = 0;
         lastChatId = p.chatId;
         lastMessageId = p.messageId;
         log('gen start', p.generationId, s.selfTriggered ? '(auto-retry)': '(user)');
@@ -1284,6 +1321,43 @@ export function setup(ctx, opts) {
                 s.attempts = 0;
                 return;
             }
+            if (cfg.retryOnError) {
+                scheduleRetry(p.chatId, 'error', p.error, { hasContent: false });
+                return;
+            }
+            if (cfg.retryOnRefusal && looksLikeRefusalError(String(p.error), cfg)) {
+                scheduleRetry(p.chatId, 'looks like an accidental refusal', undefined, { hasContent: false });
+                return;
+            }
+            return;
+        }
+        const content = String(p.content || '').trim();
+        if (cfg.retryOnEmpty && content.length === 0) {
+            scheduleRetry(p.chatId, (s.sawReasoning && !s.sawContent) ? 'cut off mid-reasoning': 'empty', undefined, { hasContent: false });
+            return;
+        }
+        // Inline-reasoning models can put everything, refusal included, inside a
+        // think block and never write a reply. The raw content isn't empty then,
+        // but nothing outside the thinking is, so treat it as empty and retry.
+        if (cfg.retryOnEmpty && content.length > 0 && stripThinking(content, cfg).trim().length === 0) {
+            scheduleRetry(p.chatId, 'thinking only, no reply', undefined, { hasContent: false });
+            return;
+        }
+        if (cfg.retryOnTruncated && looksTruncated(content, cfg.retryOnNoPunct)) {
+            scheduleRetry(p.chatId, 'cut off', undefined, { hasContent: true });
+            return;
+        }
+        if (cfg.retryOnRefusal && looksLikeRefusal(content, cfg)) {
+            scheduleRetry(p.chatId, 'looks like an accidental refusal', undefined, { hasContent: true });
+            return;
+        }
+        if (cfg.retryOnShort && content.length < cfg.minChars) {
+            scheduleRetry(p.chatId, 'short', undefined, { hasContent: true });
+            return;
+        }
+        log('gen ok', content.length + ' chars');
+        s.attempts = 0; // clean success
+    }
             if (cfg.retryOnError) {
                 scheduleRetry(p.chatId, 'error', p.error);
                 return;
