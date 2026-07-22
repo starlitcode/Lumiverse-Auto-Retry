@@ -1358,43 +1358,6 @@ export function setup(ctx, opts) {
         log('gen ok', content.length + ' chars');
         s.attempts = 0; // clean success
     }
-            if (cfg.retryOnError) {
-                scheduleRetry(p.chatId, 'error', p.error);
-                return;
-            }
-            if (cfg.retryOnRefusal && looksLikeRefusalError(String(p.error), cfg)) {
-                scheduleRetry(p.chatId, 'looks like an accidental refusal');
-                return;
-            }
-            return;
-        }
-        const content = String(p.content || '').trim();
-        if (cfg.retryOnEmpty && content.length === 0) {
-            scheduleRetry(p.chatId, (s.sawReasoning && !s.sawContent) ? 'cut off mid-reasoning': 'empty');
-            return;
-        }
-        // Inline-reasoning models can put everything, refusal included, inside a
-        // think block and never write a reply. The raw content isn't empty then,
-        // but nothing outside the thinking is, so treat it as empty and retry.
-        if (cfg.retryOnEmpty && content.length > 0 && stripThinking(content, cfg).trim().length === 0) {
-            scheduleRetry(p.chatId, 'thinking only, no reply');
-            return;
-        }
-        if (cfg.retryOnTruncated && looksTruncated(content, cfg.retryOnNoPunct)) {
-            scheduleRetry(p.chatId, 'cut off');
-            return;
-        }
-        if (cfg.retryOnRefusal && looksLikeRefusal(content, cfg)) {
-            scheduleRetry(p.chatId, 'looks like an accidental refusal');
-            return;
-        }
-        if (cfg.retryOnShort && content.length < cfg.minChars) {
-            scheduleRetry(p.chatId, 'short');
-            return;
-        }
-        log('gen ok', content.length + ' chars');
-        s.attempts = 0; // clean success
-    }
     function onStop(p) {
         if (!p || !p.chatId) return;
         const s = st(p.chatId);
