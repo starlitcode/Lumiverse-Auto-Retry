@@ -38,7 +38,7 @@ Pressing your **Stop** button, or tapping **Cancel** on the retry pop-up, stops 
 
 ## Cut-off detection
 
-A reply that streams real text and then gets chopped off mid-sentence is easy to miss. Lumiverse does not tell an extension *why* a reply ended, so this works off the shape of the text instead. `retryOnTruncated` (on by default) treats a reply as cut off when it has a clearly open structure:
+A reply that streams real text and then gets chopped off mid-sentence is easy to miss. Lumiverse does not tell an extension *why* a reply ended, so this works off the shape of the text instead. `retryOnTruncated` (on by default) treats a reply as cut off when it has a clearly open structure. Reasoning blocks are removed before these are counted, so punctuation inside a model's thinking cannot unbalance them; a reasoning block left open with no close still counts as cut off. This does not depend on the **Ignore the thinking / reasoning** option, which applies to refusal matching only. The checks:
 
 - an unclosed code block or inline backtick
 - an odd number of emphasis `*`, an open action or emphasis (bullet lists are ignored so a list doesn't look half-open)
@@ -116,7 +116,7 @@ Alongside that list it also matches a few patterns that are not fixed phrases. B
 - **A soft redirect that pivots away** (needs the pivot, so a normal offer to help does not trip it). "I'd be happy to help with something else instead." / "Instead, I can help you with a lighter scene." / "Please try asking something else."
 - **A refusal tied to specific prohibited content.** "I cannot participate in roleplay or generate content depicting sexual violence" / "I'm unable to engage in roleplay depicting non-consensual acts."
 
-On the error side, when a reply ccomesback as an error rather than text, it matches content-block wording. Examples: "PROHIBITED_CONTENT", "Blocked by safety settings.", "finish_reason: safety". It deliberately ignores ordinary network errors like "connection refused".
+On the error side, when a reply comes back as an error rather than text, it matches content-block wording. Examples: "PROHIBITED_CONTENT", "Blocked by safety settings.", "finish_reason: safety". It deliberately ignores ordinary network errors like "connection refused".
 
 ## Find and replace in replies (beta)
 
@@ -148,6 +148,8 @@ very =>
 - Leave the right side empty to delete a word, like `very => ` above. It also removes one trailing space, so a mid-sentence deletion doesn't leave a double space.
 - Put the same left side on more than one line to give it options (for example `sky => blue` on one line and `sky => aqua` on the next). By default it uses the first one. Turn on **Pick randomly when a word has more than one swap** and each time that word appears it picks one of its options at random, which is handy for variety.
 - By default matching ignores letter case and keeps the original capitalization, so a swap at the start of a sentence stays capitalized. Turn on **Match case exactly** to swap only when the case matches your rule, which also lets `sky` and `Sky` have different swaps.
+- Rules are applied in a single pass, so no rule ever acts on what another rule just wrote. `cat => dog` alongside `dog => wolf` turns cats into dogs and dogs into wolves, and it never turns a cat into a wolf. This also means two rules can swap past each other: `hot => cold` with `cold => hot` exchanges the two words rather than making everything one of them.
+- Where two rules could match the same spot, the one with the longer left side wins. `cat nap => siesta` beats `cat => dog` on the words "cat nap", so the longer rule is never shadowed by a shorter one that starts the same way.
 
 Editing a saved reply needs the `chat_mutation` permission (see Permissions below). If nothing in your rules matches a reply, that reply is left untouched.
 
@@ -175,12 +177,13 @@ The settings modal is the easy path. The same options live in the CONFIG block a
 | --- | --- | --- |
 | enabled | true | Master switch. |
 | maxRetries | 4 | Hard cap per message. Nothing retries past this. |
+| pauseWhenFailing | true | Pause auto-retry for five minutes after three whole runs give up in a row. Cleared by the next reply that comes back fine. |
 | retryDelayMs | 1200 | Wait before the first retry, in milliseconds. |
 | backoffFactor | 2 | Each wait is this many times longer than the last. |
 | maxDelayMs | 30000 | Longest it will ever wait. |
 | jitter | true | Nudges each wait randomly so retries don't all land at once. |
 | rateLimitDelayMs | 8000 | Floor wait when the server says it's busy. |
-| retryByNewReroll | false | Off: a retry redoes the reply in place via the regenerate button. On: a retry clicks the next / swipe button, adding a new reroll and keeping the existing ones. Skips the swipe button on empty or error replies. |
+| retryByNewReroll | false | Off: a retry redoes the reply in place via the regenerate button. On: a retry clicks the next / swipe button, adding a new reroll and keeping the existing ones. Applies to every retry reason. The other button is the fallback. |
 | stuckTimeoutMs | 90000 | Started but no token and no end within this. 0 disables. |
 | idleTimeoutMs | 45000 | Tokens flowed then stopped for this long. 0 disables. |
 | retryOnError | true | Retry provider errors. |
@@ -220,7 +223,17 @@ Lumiverse has no built-in way for an extension to regenerate a reply, so the re-
 
 There are three button fields: **regenerate** (redo a reply), **next / swipe** (a backup if your build retries by swiping), and **stop** (to halt a frozen reply). Each takes one CSS selector, the kind you'd pass to `document.querySelector`, and you can list several separated by commas as fallbacks. The extension checks these in the exact order you write them, so put your most specific selectors first (like data attributes) and broader ones last (like aria-label or title).
 
-By default a retry uses the regenerate button, which on some builds redoes the reply in place and clears the other rerolls on that message. If you'd rather keep those rerolls, turn on **Retry by adding a new reroll** (under "How it redoes a reply" in settings). A retry then clicks the next / swipe button first, which adds a new reroll and leaves the existing ones in place, and falls back to the regenerate button if the next / swipe button isn't found. It also skips the swipe button entirely on empty replies or errors, since there is no message bubble to swipe away from, and goes straight to the regenerate button so it does not accidentally click something else. Set the **next / swipe** selector below if retries stop happening after you turn it on.
+By default a retry uses the regenerate button, which on some builds redoes the reply in place and clears the other rerolls on that message. If you'd rather keep those rerolls, turn on **Retry by adding a new reroll** (under "How it redoes a reply" in settings). A retry then clicks the next / swipe button, which adds a new reroll and leaves the existing ones in place.
+
+Whichever button the toggle prefers, the other one is the fallback, and the choice is made at the moment of the click from what is on screen and actually clickable. A button that is present but disabled or hidden is skipped rather than clicked, since clicking one of those does nothing and would burn a retry. This applies to every reason a retry fires, including empty replies and errors, so the toggle does what it says on all of them. Set the **next / swipe** selector below if retries stop happening after you turn it on.
+
+### Setting the buttons without writing a selector
+
+Each button setting has a **Pick it for me** button next to **Test**. Press it and the settings panel steps aside; click the real button in Lumiverse and the selector is filled in for you. The click is swallowed, so picking your stop or regenerate button doesn't also press it. Esc cancels.
+
+It builds the selector from whatever is most likely to survive an app update, preferring `aria-label`, `title` and `data-` attributes over class names. Lumiverse rebuilds its class names on every release, so a selector based on one stops matching the next time the app updates, and those are skipped on purpose. If the element it lands on has nothing dependable, it says so rather than saving something that will break; clicking the button itself rather than an icon inside it usually fixes that.
+
+If a click lands but no reply starts, which happens when a next / swipe button moves between rerolls that already exist rather than making a new one, it clicks the other button once before giving that attempt up.
 
 If retries fire (the pop-up shows) but nothing regenerates, the selector needs adjusting:
 
