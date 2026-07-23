@@ -16,14 +16,25 @@ const STORE_KEY = 'lv-auto-retry:settings:v1';
 // Long enough to swallow the stopped generation's own trailing events.
 const STAND_DOWN_MS = 2500;
 const IGNORE_MAX = 16; // most aborted-generation ids kept around to swallow their late events
+// How long (ms) to wait after clicking a retry control before deciding the
+// click started nothing. A swipe control can move between existing rerolls
+// instead of making a new one, and a stale control does nothing at all.
+const START_GRACE_MS = 6000;
+// Largest amount of streamed text kept per chat as a fallback when the end
+// event arrives without a content field. Trimmed from the front past this.
+const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = '2.8.3';
+const VERSION = '2.9.0';
 // ---- defaults (the UI overrides these; editing here changes the fallback) ----
 const CONFIG = {
     enabled: true,
     // retry budget
     maxRetries: 4,
+    // stop retrying for a while after several whole runs fail in a row: at that
+    // point the provider is down rather than the reply being unlucky, and more
+    // tries only burn tokens. Cleared by the next reply that comes back fine.
+    pauseWhenFailing: true,
     retryDelayMs: 1200,
     // first retry fires a touch sooner; backoff still climbs
     backoffFactor: 2,
@@ -32,9 +43,10 @@ const CONFIG = {
     // rate limiting (HTTP 429 / overloaded)
     rateLimitDelayMs: 8000,
     // how a retry redoes the reply. false = click the regenerate control (redoes
-    // the reply in place). true = click the next / swipe control first, which adds
-    // a new reroll and leaves the existing rerolls in place; falls back to
-    // regenerate if the swipe control isn't found.
+    // the reply in place). true = click the next / swipe control, which adds a new
+    // reroll and leaves the existing rerolls in place. Either way the other
+    // control is the fallback, picked at click time from what is actually on
+    // screen and clickable, and used again if the first click starts nothing.
     retryByNewReroll: false,
     // watchdogs. Tuned to tolerate a slow connection and slow local models so a
     // slow-but-fine generation is not mistaken for a stall and retried into a pile-up.
@@ -127,6 +139,12 @@ const SCHEMA = [{
         hint: 'How many times it retries one message before giving up. 3 to 5 suits most people.'
     },
     {
+        key: 'pauseWhenFailing',
+        label: 'Pause when everything is failing',
+        type: 'bool',
+        hint: "On by default. If three whole runs give up in a row, auto-retry stops for five minutes instead of trying again on every message. That usually means the provider is down rather than the reply being unlucky, and retrying through it only spends tokens. The next reply that comes back fine clears it, and you can still send and regenerate by hand while it's paused."
+    },
+    {
         key: 'retryDelayMs',
         label: 'Wait before the first retry',
         type: 'num',
@@ -176,7 +194,7 @@ const SCHEMA = [{
         key: 'retryByNewReroll',
         label: 'Retry by adding a new reroll',
         type: 'bool',
-        hint: "Off: a retry redoes the reply in place, using your regenerate button. On some setups that clears the other rerolls on that message. On: a retry clicks your next / swipe button instead, which adds a new reroll and leaves the existing ones in place. It falls back to the regenerate button if the next / swipe button isn't found, so set that selector in the buttons section below if retries stop happening.",
+        hint: "Off: a retry redoes the reply in place, using your regenerate button. On some setups that clears the other rerolls on that message. On: a retry clicks your next / swipe button instead, which adds a new reroll and leaves the existing ones in place. This applies to every retry, including empty replies and errors. If the preferred button isn't on screen, or the click starts nothing, it uses the other button instead, so set both selectors in the buttons section below.",
     }],
 },
 {
@@ -271,7 +289,7 @@ const SCHEMA = [{
         key: 'replaceRules',
         label: 'Word swaps (old => new)',
         type: 'text',
-        hint: "Rules are \"old => new\", one per line. The left side can be a single word, a phrase, or a whole sentence, and commas inside it are fine. A single word matches whole words only (so cat won't touch category), while a phrase or sentence matches exactly as you type it. Leave the right side empty to delete it. Put the same left side on more than one line (like sky => blue on one line and sky => aqua on another) to give it options for the random toggle below."
+        hint: "Rules are \"old => new\", one per line. The left side can be a single word, a phrase, or a whole sentence, and commas inside it are fine. A single word matches whole words only (so cat won't touch category), while a phrase or sentence matches exactly as you type it. Leave the right side empty to delete it. Put the same left side on more than one line (like sky => blue on one line and sky => aqua on another) to give it options for the random toggle below. All rules are applied in a single pass, so a rule never acts on what another rule just wrote: cat => dog and dog => wolf turns cats into dogs and dogs into wolves, and hot => cold with cold => hot swaps the two rather than making everything one of them. Where two rules could match the same spot, the longer left side wins."
     },
     {
         key: 'replaceRandom',
@@ -351,7 +369,7 @@ const SCHEMA = [{
         key: 'refusalStripThinking',
         label: 'Ignore the thinking / reasoning',
         type: 'bool',
-        hint: "On by default. Only the final reply is checked, never the model's thinking. Known reasoning blocks (like <think> or <thinking>) are stripped before checking, so a refusal the model weighs while reasoning but doesn't put in the reply won't cause a retry. Turn it off to check the whole raw output."
+        hint: "On by default. Only the final reply is checked for a refusal, never the model's thinking. Known reasoning blocks (like <think> or <thinking>) are stripped before checking, so a refusal the model weighs while reasoning but doesn't put in the reply won't cause a retry. Turn it off to check the whole raw output for a refusal. This affects refusal matching only. Empty and cut-off checks always look past the thinking, since a reply that is nothing but a think block is empty either way."
     },
     {
         key: 'refusalThinkTags',
@@ -403,9 +421,18 @@ const SCHEMA = [{
 // finish_reason on GENERATION_ENDED (confirmed against the Generation API), so
 // this works off the only signal a frontend extension has: the shape of the
 // text. Conservative on purpose to avoid re-rolling good roleplay replies.
-function looksTruncated(text, retryOnNoPunct) {
-    const t = String(text == null ? '': text).replace(/\s+$/, '');
-    if (!t) return false; // empty is handled by the empty branch
+function looksTruncated(text, retryOnNoPunct, cfg) {
+    const raw = String(text == null ? '': text).replace(/\s+$/, '');
+    if (!raw) return false; // empty is handled by the empty branch
+    // An opened reasoning block with no close means the reply was cut inside the
+    // model's thinking. Checked on the raw text, before anything is removed.
+    if (/<(?:think|thinking|reasoning|reflection|thought)\b[^>]*>/i.test(raw) && !/<\/(?:think|thinking|reasoning|reflection|thought)\s*>/i.test(raw)) return true;
+    // The checks below count fences, backticks, asterisks and quotes. A closed
+    // reasoning block sits outside the visible reply and its punctuation throws
+    // those counts off, so it is removed first regardless of the refusal-side
+    // thinking option, which governs refusal matching only.
+    const t = stripThinkingAlways(raw, cfg).replace(/\s+$/, '');
+    if (!t) return false;
     if ((t.match(/```/g) || []).length % 2 === 1) return true; // open code fence
     if ((t.replace(/```/g, '').match(/`/g) || []).length % 2 === 1) return true; // open inline code
     // Emphasis asterisks only. Strip markdown bullet markers ("* " at line start)
@@ -529,6 +556,15 @@ function stripThinking(text, cfg) {
     t = t.replace(new RegExp('\\[(?:' + alt + ')(?:\\s[^\\]]*)?\\][\\s\\S]*$', 'i'), ' ');
     return t;
 }
+
+// Removes reasoning blocks regardless of the refusal-side option. That option
+// governs refusal matching only: whether a refusal written inside thinking
+// counts. Asking whether a reply is empty, or whether it was cut off, is a
+// different question, and the answer is always no when the only thing there is
+// a think block.
+function stripThinkingAlways(text, cfg) {
+    return stripThinking(text, { refusalThinkTags: cfg && cfg.refusalThinkTags });
+}
 function looksLikeRefusal(text, cfg) {
     const raw = stripThinking(String(text == null ? '': text), cfg).trim();
     if (!raw) return false; // empty is handled by the empty branch
@@ -567,6 +603,46 @@ function looksLikeRefusalError(errText, cfg) {
     }
     return false;
 }
+
+// Class and id names Lumiverse generates per build (like _card_19912_336).
+// They change on every release, so a selector built on one quietly stops
+// matching after an app update. Skipped when building a selector from a click.
+const UNSTABLE_NAME = /(^_)|(_[a-z0-9]{4,}_\d+$)|(_[a-z0-9]{6,}$)|([-_][a-f0-9]{6,}$)/i;
+const SAFE_NAME = /^[A-Za-z_-][\w-]*$/;
+
+// Turns the element someone clicked into a selector for that control, choosing
+// attributes that survive an app update over class names that do not. Returns
+// null when nothing dependable is on the element.
+function deriveSelector(start) {
+  let el = start;
+  let hops = 0;
+  // Clicks usually land on an icon or a span inside the control, so walk up to
+  // the thing that actually behaves like a button.
+  while (el && hops < 6) {
+    const tag = String(el.tagName || "").toLowerCase();
+    const role = el.getAttribute ? el.getAttribute("role") : null;
+    if (tag === "button" || tag === "a" || role === "button") break;
+    el = el.parentElement;
+    hops++;
+  }
+  if (!el || !el.getAttribute) el = start;
+  if (!el || !el.getAttribute) return null;
+  const tag = String(el.tagName || "").toLowerCase() || "*";
+  const q = (v) =>
+    '"' + String(v).replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"';
+  for (const attr of ["data-testid", "data-test-id", "data-test", "data-action", "aria-label", "title", "name"]) {
+    const v = el.getAttribute(attr);
+    if (v && String(v).trim()) return tag + "[" + attr + "=" + q(String(v).trim()) + "]";
+  }
+  const id = el.getAttribute("id");
+  if (id && SAFE_NAME.test(id) && !UNSTABLE_NAME.test(id)) return "#" + id;
+  const cls = String(el.className || "")
+    .split(/\s+/)
+    .filter((c) => c && SAFE_NAME.test(c) && !UNSTABLE_NAME.test(c));
+  if (cls.length) return tag + "." + cls.slice(0, 2).join(".");
+  return null;
+}
+
 export function setup(ctx, opts) {
     // cfg is mutable so the settings modal can change it live. Order: code
     // defaults, then GitHub opts, then whatever the user saved in the UI.
@@ -1088,6 +1164,7 @@ export function setup(ctx, opts) {
                 timer: null,
                 sawReasoning: false,
                 sawContent: false,
+                buf: '', // streamed reply text, used when the end event carries no content
                 ignored: new Set(),
                 suppressUntil: 0,
                 startWatchdog: null,
@@ -1097,6 +1174,13 @@ export function setup(ctx, opts) {
         }
         return s;
     };
+    // Circuit breaker. Whole runs that gave up, back to back. Three in a row means
+    // the provider is down rather than one reply being unlucky, so retrying again
+    // on every message just spends tokens for nothing.
+    const BREAKER_RUNS = 3;
+    const BREAKER_PAUSE_MS = 300000;
+    let failedRuns = 0;
+    let pausedUntil = 0;
     const clearTimers = (s) => {
         if (s.startTimer) {
             clearTimeout(s.startTimer);
@@ -1114,6 +1198,9 @@ export function setup(ctx, opts) {
             clearTimeout(s.startWatchdog);
             s.startWatchdog = null;
         }
+        // Cleared with the watchdog it belongs to, so a stale marker can never
+        // make a later arming think a click is still outstanding.
+        s.expectingStart = 0;
         s.pending = false;
     };
     const isRateLimit = (err) => !!err && /\b(?:408|429|500|502|503|504|520|521|522|523|524)\b|rate.?limit|too many requests|quota|overloaded|timeout|temporary|network/i.test(String(err));
@@ -1125,70 +1212,88 @@ export function setup(ctx, opts) {
         if (cfg.jitter) d = Math.round(d * (0.85 + Math.random() * 0.3));
         return d;
     };
+    // A control only does something when it is enabled and actually laid out.
+    // A hidden or disabled button accepts .click() and silently does nothing,
+    // which would otherwise be counted as a retry that fired.
+    const clickable = (el) => {
+        if (!el) return false;
+        try {
+            if (el.disabled) return false;
+            if (el.getAttribute && el.getAttribute('aria-disabled') === 'true') return false;
+            if (el.hasAttribute && el.hasAttribute('hidden')) return false;
+            if (el.closest && el.closest('[inert]')) return false;
+            if (typeof el.getClientRects === 'function' && el.getClientRects().length === 0) return false;
+        } catch(_) {}
+        return true;
+    };
     const find = (selector) => {
         // Split by comma so we check them in list order, not DOM order.
         const parts = String(selector || "").split(",").map((s) => s.trim());
+        if (typeof document === 'undefined') return null;
         for (const part of parts) {
             if (!part) continue;
-            let el = null;
+            let list = null;
             try {
-                if (ctx && ctx.dom && ctx.dom.query) {
-                    el = ctx.dom.query(part);
-                }
-            } catch(_) {}
-            if (!el && typeof document !== 'undefined') {
-                try {
-                    // querySelector returns the first match in the DOM, which might be a
-                    // hidden button on an old message. querySelectorAll lets us grab the
-                    // last match, which is the button on the latest message.
-                    const list = document.querySelectorAll(part);
-                    if (list && list.length > 0) {
-                        el = list[list.length - 1];
-                    }
-                } catch(_) {}
+                list = document.querySelectorAll(part);
+            } catch(_) {
+                continue; // an invalid selector shouldn't stop the rest of the list
             }
-            if (el) return el; // Found a match, stop looking.
+            if (!list || !list.length) continue;
+            // Walk from the end: messages render in order, so the last match belongs
+            // to the newest message. Skip anything that isn't clickable, which is
+            // usually a hidden control left on an older message.
+            for (let i = list.length - 1; i >= 0; i--) {
+                if (clickable(list[i])) return list[i];
+            }
         }
         return null;
     };
-    const fireRetry = (opts) => {
-        let btn = null;
-        const hasContent = !!(opts && opts.hasContent);
+    // Set while the extension clicks a host control itself, so the document-level
+    // stop-press catcher can tell our synthetic click from the user's.
+    let selfClicking = 0;
+    const clickHostControl = (el) => {
+        if (!el) return false;
+        selfClicking += 1;
         try {
-            // Only use swipe if there is a message bubble to swipe from. Empty or
-            // error replies have no bubble, so the swipe button is missing. Falling
-            // back to regenerate stops a bad selector from clicking the wrong button.
-            if (cfg.retryByNewReroll && hasContent) {
-                btn = find(cfg.swipeNextSelector) || find(cfg.regenerateSelector);
-            } else {
-                btn = find(cfg.regenerateSelector) || find(cfg.swipeNextSelector);
-            }
-        } catch(_) {}
-        if (btn) {
-            try {
-                hideToast();
-                btn.click();
-                return true;
-            } catch(e) {
-                log('retry click failed', e);
-                return false;
-            }
+            el.click();
+            return true;
+        } catch(e) {
+            log('click failed', e);
+            return false;
+        } finally {
+            selfClicking -= 1;
         }
-        log('no retry control found, set the button selectors in settings');
-        showToast("Auto-retry: couldn't find your retry button. Set it in Auto Retry settings.");
-        return false;
+    };
+    // Which control a retry clicks. retryByNewReroll picks the preferred one; the
+    // other is the fallback. The choice is made at click time from what is on
+    // screen and clickable, so the reason for the retry (empty, error, cut off)
+    // no longer forces a particular control.
+    const pickRetryControl = () => {
+        const swipeFirst = !!cfg.retryByNewReroll;
+        const order = swipeFirst
+            ? [{ sel: cfg.swipeNextSelector, via: 'swipe' }, { sel: cfg.regenerateSelector, via: 'regenerate' }]
+            : [{ sel: cfg.regenerateSelector, via: 'regenerate' }, { sel: cfg.swipeNextSelector, via: 'swipe' }];
+        for (const step of order) {
+            const btn = find(step.sel);
+            if (btn) return { btn: btn, via: step.via };
+        }
+        return null;
+    };
+    // Returns which control it clicked, or null if nothing was clicked.
+    const fireRetry = () => {
+        const picked = pickRetryControl();
+        if (!picked) {
+            log('no retry control found, set the button selectors in settings');
+            showToast("Auto-retry: couldn't find your retry button. Set it in Auto Retry settings.");
+            return null;
+        }
+        hideToast();
+        return clickHostControl(picked.btn) ? picked.via : null;
     };
     const stopGenerating = () => {
-        try {
-            const stop = find(cfg.stopSelector);
-            if (stop) {
-                stop.click();
-                return true;
-            }
-        } catch(e) {
-            log('stop click failed', e);
-        }
-        return false;
+        const stop = find(cfg.stopSelector);
+        if (!stop) return false;
+        return clickHostControl(stop);
     };
     // The user wins, always. Cancel any pending retry for this chat, reset its
     // budget, and briefly suppress new automatic retries so a stopped
@@ -1206,17 +1311,77 @@ export function setup(ctx, opts) {
             log('stood down', chatId);
         }
     }
-    function scheduleRetry(chatId, reason, err, opts) {
+    // A click can land without starting anything: a swipe control may just move
+    // between rerolls that already exist, and a stale control does nothing at
+    // all. Wait for a generation to begin; if none does, click the other control
+    // once, then give the attempt up so the next user message starts clean.
+    const START_WAIT_ROUNDS = 3; // extra grace rounds while something is clearly generating
+    function armStartWatchdog(chatId, via, allowFallback, waits) {
+        const s = st(chatId);
+        // The caller marks the click before making it. If a start already arrived,
+        // which happens when the host dispatches its event straight off the click,
+        // there is nothing left to watch.
+        if (!s.expectingStart) return;
+        const left = typeof waits === 'number' ? waits : START_WAIT_ROUNDS;
+        if (s.startWatchdog) clearTimeout(s.startWatchdog);
+        s.startWatchdog = setTimeout(() => {
+            s.startWatchdog = null;
+            if (!s.expectingStart) return; // a generation started, nothing to do
+            // The stop control being on screen means something is generating and the
+            // start event is just slow. Clicking again here would stack a second
+            // generation, so this waits a few more rounds before deciding.
+            if (left > 0 && find(cfg.stopSelector)) {
+                log('retry click has not reported a start yet; waiting', chatId);
+                armStartWatchdog(chatId, via, allowFallback, left - 1);
+                return;
+            }
+            s.expectingStart = 0;
+            if (allowFallback) {
+                const otherSel = via === 'swipe' ? cfg.regenerateSelector : cfg.swipeNextSelector;
+                const otherVia = via === 'swipe' ? 'regenerate' : 'swipe';
+                const other = find(otherSel);
+                if (other) {
+                    s.expectingStart = Date.now();
+                    if (clickHostControl(other)) {
+                        log('no generation after the ' + via + ' click, trying ' + otherVia, chatId);
+                        armStartWatchdog(chatId, otherVia, false);
+                        return;
+                    }
+                    s.expectingStart = 0;
+                }
+            }
+            log('retry click produced no generation; resetting stale state', chatId);
+            s.selfTriggered = false;
+            s.attempts = 0;
+        },
+        START_GRACE_MS);
+    }
+    function scheduleRetry(chatId, reason, err) {
         const s = st(chatId);
         if (!cfg.enabled || s.pending) return;
+        if (cfg.pauseWhenFailing && Date.now() < pausedUntil) {
+            log('paused after repeated failures, not retrying', chatId);
+            return;
+        }
         if (Date.now() < s.suppressUntil) {
             log('suppressed (just stopped/cancelled)', chatId);
             return;
         }
         if (s.attempts >= cfg.maxRetries) {
-            showToast('Auto-retry: gave up after ' + cfg.maxRetries + ' tries.');
             log('gave up', chatId, reason);
             s.attempts = 0;
+            // A try limit of zero means no retry was ever made, so there is no failed
+            // run to count and nothing worth announcing.
+            if (cfg.maxRetries <= 0) return;
+            failedRuns += 1;
+            if (cfg.pauseWhenFailing && failedRuns >= BREAKER_RUNS) {
+                pausedUntil = Date.now() + BREAKER_PAUSE_MS;
+                failedRuns = 0;
+                log('paused for ' + Math.round(BREAKER_PAUSE_MS / 60000) + ' min after ' + BREAKER_RUNS + ' failed runs');
+                showToast('Auto-retry paused for ' + Math.round(BREAKER_PAUSE_MS / 60000) + ' minutes: the last ' + BREAKER_RUNS + ' runs all failed.');
+            } else {
+                showToast('Auto-retry: gave up after ' + cfg.maxRetries + ' tries.');
+            }
             return;
         }
         s.attempts += 1;
@@ -1233,24 +1398,18 @@ export function setup(ctx, opts) {
             s.timer = null;
             s.pending = false;
             s.selfTriggered = true;
-            if (!fireRetry(opts)) {
+            // Marked before the click, not after: some builds dispatch the start event
+            // straight off the click, and that start has to be able to cancel the
+            // watchdog rather than land before it exists.
+            s.expectingStart = Date.now();
+            const via = fireRetry();
+            if (!via) {
+                s.expectingStart = 0;
                 s.selfTriggered = false;
                 s.attempts = 0;
-            } else {
-                // If the click fails to start a generation in 6 seconds, assume it
-                // clicked the wrong button or a hidden one. Reset state so the next
-                // user message gets a clean retry budget.
-                s.expectingStart = Date.now();
-                s.startWatchdog = setTimeout(() => {
-                    if (s.expectingStart && Date.now() - s.expectingStart >= 6000) {
-                        log('retry click produced no generation; resetting stale state', chatId);
-                        s.selfTriggered = false;
-                        s.attempts = 0;
-                        s.expectingStart = 0;
-                        s.startWatchdog = null;
-                    }
-                }, 6000);
+                return;
             }
+            armStartWatchdog(chatId, via, true);
         },
         delay);
     }
@@ -1260,14 +1419,13 @@ export function setup(ctx, opts) {
     // for a user stop or a fresh result even after the next generation begins.
     function abortAndRetry(chatId, reason) {
         const s = st(chatId);
-        const hadContent = s.sawContent;
         clearTimers(s);
         if (s.genId != null) {
             s.ignored.add(s.genId);
             while (s.ignored.size > IGNORE_MAX) s.ignored.delete(s.ignored.values().next().value);
         }
         stopGenerating();
-        scheduleRetry(chatId, reason, undefined, { hasContent: hadContent });
+        scheduleRetry(chatId, reason);
     }
     function onStart(p) {
         if (!p || !p.chatId) return;
@@ -1288,16 +1446,34 @@ export function setup(ctx, opts) {
         s.genId = p.generationId;
         s.sawReasoning = false;
         s.sawContent = false;
+        s.buf = '';
         clearTimers(s);
         if (cfg.enabled && cfg.stuckTimeoutMs > 0) {
             s.startTimer = setTimeout(() => abortAndRetry(p.chatId, 'stuck'), cfg.stuckTimeoutMs);
         }
     }
+    // The text a token event carries. Builds name this field differently, so the
+    // first string among the known names is used and anything else is ignored.
+    function tokenText(p) {
+        for (const k of ['token', 'text', 'delta', 'content', 'chunk']) {
+            if (p && typeof p[k] === 'string') return p[k];
+        }
+        return '';
+    }
     function onToken(p) {
         if (!p || !p.chatId) return;
         const s = st(p.chatId);
-        if (p.type === 'reasoning') s.sawReasoning = true;
-        else s.sawContent = true;
+        // Matched by shape, not an exact string, so a build that labels these
+        // "reasoning_content" or "thinking" is not counted as visible reply text.
+        if (/reason|think/i.test(String((p && p.type) || ''))) s.sawReasoning = true;
+        else {
+            s.sawContent = true;
+            const piece = tokenText(p);
+            if (piece) {
+                s.buf += piece;
+                if (s.buf.length > STREAM_BUF_MAX) s.buf = s.buf.slice(-STREAM_BUF_MAX);
+            }
+        }
         // streaming is alive: drop the start watchdog, arm the idle watchdog
         if (s.startTimer) {
             clearTimeout(s.startTimer);
@@ -1330,39 +1506,55 @@ export function setup(ctx, opts) {
                 return;
             }
             if (cfg.retryOnError) {
-                scheduleRetry(p.chatId, 'error', p.error, { hasContent: false });
+                scheduleRetry(p.chatId, 'error', p.error);
                 return;
             }
             if (cfg.retryOnRefusal && looksLikeRefusalError(String(p.error), cfg)) {
-                scheduleRetry(p.chatId, 'looks like an accidental refusal', undefined, { hasContent: false });
+                scheduleRetry(p.chatId, 'looks like an accidental refusal');
                 return;
             }
             return;
         }
-        const content = String(p.content || '').trim();
-        if (cfg.retryOnEmpty && content.length === 0) {
-            scheduleRetry(p.chatId, (s.sawReasoning && !s.sawContent) ? 'cut off mid-reasoning': 'empty', undefined, { hasContent: false });
+        // Not every build puts the finished text on the end event. When it is
+        // missing, what actually streamed stands in for it, so a good reply is not
+        // read as empty and every check below still has real text to work with.
+        const hasContentField = typeof p.content === 'string';
+        const content = (hasContentField ? p.content : (s.buf || '')).trim();
+        // Empty only when the payload says so, or when nothing streamed either. A
+        // missing field plus tokens that carried no readable text is not a verdict,
+        // so it is left alone rather than re-rolled on a guess.
+        const isEmpty = content.length === 0 && (hasContentField || !s.sawContent);
+        if (cfg.retryOnEmpty && isEmpty) {
+            scheduleRetry(p.chatId, (s.sawReasoning && !s.sawContent) ? 'cut off mid-reasoning': 'empty');
+            return;
+        }
+        if (content.length === 0) {
+            log('gen end with no readable content; leaving it alone');
+            s.attempts = 0;
             return;
         }
         // Inline-reasoning models can put everything, refusal included, inside a
         // think block and never write a reply. The raw content isn't empty then,
         // but nothing outside the thinking is, so treat it as empty and retry.
-        if (cfg.retryOnEmpty && content.length > 0 && stripThinking(content, cfg).trim().length === 0) {
-            scheduleRetry(p.chatId, 'thinking only, no reply', undefined, { hasContent: false });
+        if (cfg.retryOnEmpty && content.length > 0 && stripThinkingAlways(content, cfg).trim().length === 0) {
+            scheduleRetry(p.chatId, 'thinking only, no reply');
             return;
         }
-        if (cfg.retryOnTruncated && looksTruncated(content, cfg.retryOnNoPunct)) {
-            scheduleRetry(p.chatId, 'cut off', undefined, { hasContent: true });
+        if (cfg.retryOnTruncated && looksTruncated(content, cfg.retryOnNoPunct, cfg)) {
+            scheduleRetry(p.chatId, 'cut off');
             return;
         }
         if (cfg.retryOnRefusal && looksLikeRefusal(content, cfg)) {
-            scheduleRetry(p.chatId, 'looks like an accidental refusal', undefined, { hasContent: true });
+            scheduleRetry(p.chatId, 'looks like an accidental refusal');
             return;
         }
         if (cfg.retryOnShort && content.length < cfg.minChars) {
-            scheduleRetry(p.chatId, 'short', undefined, { hasContent: true });
+            scheduleRetry(p.chatId, 'short');
             return;
         }
+        // A reply that came back fine means whatever was wrong has cleared.
+        failedRuns = 0;
+        pausedUntil = 0;
         log('gen ok', content.length + ' chars');
         s.attempts = 0; // clean success
     }
@@ -1379,6 +1571,10 @@ export function setup(ctx, opts) {
     // re-rendering its buttons.
     function onDocClick(e) {
         try {
+            // A stalled reply is halted by clicking that same stop button, and that
+            // click reaches here too. Standing down on it would suppress the retry
+            // being scheduled right behind it, so our own clicks are skipped.
+            if (selfClicking > 0) return;
             const tgt = e && e.target && e.target.closest ? e.target.closest(cfg.stopSelector) : null;
             if (!tgt) return;
             chats.forEach((s, id) => {
@@ -1407,7 +1603,10 @@ export function setup(ctx, opts) {
         }
     }
     function showToast(msg, opts) {
-        if (!cfg.toast) return;
+        // force is for messages the user has to see to understand what the app is
+        // doing right now, like the button picker waiting for a click. Everything
+        // else still respects the toast setting.
+        if (!cfg.toast && !(opts && opts.force)) return;
         const t = ensureToast();
         if (!t) return;
         try {
@@ -1455,12 +1654,22 @@ export function setup(ctx, opts) {
     // version, current settings, whether each button selector matches right now,
     // and the browser string. The console log (above) is the live timeline; this
     // is the still photo.
+    // Reports what the retry itself would find, not just whether the selector
+    // matches anything, so a match on a hidden or disabled control is not read as
+    // a working button.
     function selectorState(sel) {
-        try {
-            return document.querySelector(sel) ? 'match': 'no match';
-        } catch(_) {
-            return 'invalid selector';
+        const raw = String(sel || '').trim();
+        if (!raw) return 'not set';
+        if (find(raw)) return 'match';
+        const parts = raw.split(',').map((s) => s.trim()).filter(Boolean);
+        let anyValid = false;
+        for (const part of parts) {
+            try {
+                if (document.querySelector(part)) return 'match, not clickable right now';
+                anyValid = true;
+            } catch(_) {}
         }
+        return anyValid ? 'no match': 'invalid selector';
     }
     function buildDebugInfo(opts) {
         const o = opts || {};
@@ -1477,7 +1686,7 @@ export function setup(ctx, opts) {
         if (inc(o.buttons)) {
             lines.push('');
             lines.push('buttons (checked right now):');
-            lines.push('  retry mode: ' + (cfg.retryByNewReroll ? 'new reroll (swipe first)' : 'regenerate'));
+            lines.push('  retry mode: ' + (cfg.retryByNewReroll ? 'new reroll (swipe first, regenerate as fallback)' : 'regenerate (swipe as fallback)'));
             lines.push('  regenerate: ' + selectorState(cfg.regenerateSelector));
             lines.push('  swipeNext:  ' + selectorState(cfg.swipeNextSelector));
             lines.push('  stop:       ' + selectorState(cfg.stopSelector));
@@ -2278,18 +2487,28 @@ export function setup(ctx, opts) {
                         res.style.color = 'var(--lumiverse-text-muted,#9a93a8)';
                         return;
                     }
-                    let match = false;
-                    try {
-                        match = !!document.querySelector(sel);
-                    } catch(_) {
+                    const state = selectorState(sel);
+                    if (state === 'invalid selector') {
                         res.textContent = "that selector isn't valid";
                         res.style.color = 'var(--lumiverse-danger,#ff6b6b)';
                         return;
                     }
-                    res.textContent = match ? 'match found': 'no match right now';
-                    res.style.color = match ? 'var(--lumiverse-success,#46d39a)': 'var(--lumiverse-text-muted,#9a93a8)';
+                    if (state === 'match') {
+                        res.textContent = 'match found';
+                        res.style.color = 'var(--lumiverse-success,#46d39a)';
+                        return;
+                    }
+                    res.textContent = state === 'match, not clickable right now' ? 'found, but not clickable right now': 'no match right now';
+                    res.style.color = 'var(--lumiverse-text-muted,#9a93a8)';
+                });
+                const pick = btn('Pick it for me', false);
+                pick.style.padding = '5px 12px';
+                pick.addEventListener('click', () => {
+                    cfg[f.key] = input.value;
+                    startPicking(f.key, String(f.label || '').toLowerCase());
                 });
                 testRow.appendChild(test);
+                testRow.appendChild(pick);
                 testRow.appendChild(res);
                 row.appendChild(testRow);
             }
@@ -2386,6 +2605,57 @@ export function setup(ctx, opts) {
         closeExpandEditor = close;
         // Deliberately not focusing the textarea, so opening it doesn't pop the
         // on-screen keyboard on mobile. Tap the text when you want to edit.
+    }
+    // Lets someone point at the control instead of writing a selector for it. The
+    // settings modal steps out of the way, the next click on the page is caught
+    // before the app sees it, and the element under it becomes the selector.
+    function startPicking(key, label) {
+        if (typeof document === 'undefined') return;
+        // Refresh the baseline first: dismissing the modal rolls cfg back to it, so
+        // without this every unsaved edit would be lost by opening the picker.
+        if (modalSnapshot) {
+            try { modalSnapshot(); } catch (_) {}
+        }
+        if (modalHandle) {
+            try { modalHandle.dismiss(); } catch (_) {}
+            modalHandle = null;
+        }
+        let done = false;
+        const finish = (sel, message) => {
+            if (done) return;
+            done = true;
+            try { document.removeEventListener('click', onPick, true); } catch (_) {}
+            try { document.removeEventListener('keydown', onKey, true); } catch (_) {}
+            hideToast();
+            if (sel) cfg[key] = sel;
+            openSettings();
+            if (message) showToast(message, { force: true });
+        };
+        const onPick = (e) => {
+            const t = e && e.target;
+            // Our own toast is on screen during this, so let its buttons work.
+            try {
+                if (t && t.closest && t.closest('#__lvRetryToast')) return;
+            } catch (_) {}
+            // Swallowed so picking the stop or regenerate control doesn't also fire it.
+            try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
+            const sel = deriveSelector(t);
+            if (!sel) {
+                finish(null, "Couldn't identify that one. Try clicking the button itself rather than an icon inside it.");
+                return;
+            }
+            finish(sel, 'Set to ' + sel);
+        };
+        const onKey = (e) => {
+            if (e && e.key === 'Escape') finish(null, 'Picking cancelled.');
+        };
+        document.addEventListener('click', onPick, true);
+        document.addEventListener('keydown', onKey, true);
+        showToast('Click your ' + label + ' button. Esc to cancel.', {
+            sticky: true,
+            force: true,
+            cancel: () => finish(null, 'Picking cancelled.')
+        });
     }
     function openSettings() {
         if (!ctx?.ui?.showModal) {
