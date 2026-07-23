@@ -1893,7 +1893,7 @@ export function setup(ctx: Ctx, opts?: any) {
   }
   function showToast(
     msg: string,
-    opts?: { cancel?: () => void; sticky?: boolean; force?: boolean },
+    opts?: { cancel?: () => void; sticky?: boolean; force?: boolean; top?: boolean },
   ) {
     // force is for messages the user has to see to understand what the app is
     // doing right now, like the button picker waiting for a click. Everything
@@ -1933,6 +1933,16 @@ export function setup(ctx: Ctx, opts?: any) {
         t.style.pointerEvents = "auto";
       } else {
         t.style.pointerEvents = "none";
+      }
+      // Both edges are set every time, so a normal toast after a top-anchored one
+      // goes back to the bottom. The picker anchors to the top because the
+      // buttons it is asking you to click sit at the bottom, under this.
+      if (opts && opts.top) {
+        t.style.top = "max(20px,env(safe-area-inset-top,0px))";
+        t.style.bottom = "auto";
+      } else {
+        t.style.top = "auto";
+        t.style.bottom = "max(20px,env(safe-area-inset-bottom,0px))";
       }
       t.style.opacity = "1";
       clearTimeout(t.__h);
@@ -2968,7 +2978,7 @@ export function setup(ctx: Ctx, opts?: any) {
         pick.style.padding = "5px 12px";
         pick.addEventListener("click", () => {
           cfg[f.key] = input.value;
-          startPicking(f.key, String(f.label || "").toLowerCase());
+          startPicking(f.key, String(f.label || ""));
         });
         testRow.appendChild(test);
         testRow.appendChild(pick);
@@ -3096,6 +3106,7 @@ export function setup(ctx: Ctx, opts?: any) {
   // Lets someone point at the control instead of writing a selector for it. The
   // settings modal steps out of the way, the next click on the page is caught
   // before the app sees it, and the element under it becomes the selector.
+  const PRESS_EVENTS = ["pointerdown", "mousedown", "touchstart"];
   function startPicking(key: string, label: string) {
     if (typeof document === "undefined") return;
     // Refresh the baseline first: dismissing the modal rolls cfg back to it, so
@@ -3113,10 +3124,13 @@ export function setup(ctx: Ctx, opts?: any) {
       done = true;
       try { document.removeEventListener("click", onPick, true); } catch (_) {}
       try { document.removeEventListener("keydown", onKey, true); } catch (_) {}
+      for (const type of PRESS_EVENTS) {
+        try { document.removeEventListener(type, swallow, true); } catch (_) {}
+      }
       hideToast();
       if (sel) cfg[key] = sel;
       openSettings();
-      if (message) showToast(message, { force: true });
+      if (message) showToast(message, { force: true, top: true });
     };
     const onPick = (e: any) => {
       const t: any = e && e.target;
@@ -3136,13 +3150,37 @@ export function setup(ctx: Ctx, opts?: any) {
     const onKey = (e: any) => {
       if (e && e.key === "Escape") finish(null, "Picking cancelled.");
     };
+    // Some controls act on pointerdown rather than click. Their listeners are cut
+    // off here so nothing fires while picking. Only propagation is stopped: a
+    // preventDefault on touchstart would also stop the browser synthesising the
+    // click that the picker itself needs.
+    const swallow = (e: any) => {
+      const t: any = e && e.target;
+      try {
+        if (t && t.closest && t.closest("#__lvRetryToast")) return;
+      } catch (_) {}
+      try { e.stopPropagation(); } catch (_) {}
+    };
+    for (const type of PRESS_EVENTS) document.addEventListener(type, swallow, true);
     document.addEventListener("click", onPick, true);
     document.addEventListener("keydown", onKey, true);
-    showToast("Click your " + label + " button. Esc to cancel.", {
-      sticky: true,
-      force: true,
-      cancel: () => finish(null, "Picking cancelled."),
-    });
+    // The field labels already read "Your ... button", so the leading "your" is
+    // dropped rather than repeated back.
+    const what =
+      String(label || "").replace(/^your\s+/i, "").trim() || "retry button";
+    const hasKeyboard =
+      typeof window !== "undefined" &&
+      !!window.matchMedia &&
+      window.matchMedia("(hover: hover)").matches;
+    showToast(
+      "Click your " + what + ". " + (hasKeyboard ? "Esc or Cancel to stop." : "Or press Cancel."),
+      {
+        sticky: true,
+        force: true,
+        top: true,
+        cancel: () => finish(null, "Picking cancelled."),
+      },
+    );
   }
 
   function openSettings() {
