@@ -12,6 +12,10 @@
  * it always uses the first one listed. A case-sensitive option controls whether
  * matching respects letter case.
  *
+ * All rules run in a single pass over the text, so no rule ever acts on what
+ * another rule just wrote. Where two rules could match the same spot, the one
+ * with the longer left side wins.
+ *
  * This backend also keeps the whole settings object in account storage, so the
  * user's settings follow them across browsers and devices. Rules and settings
  * arrive from the UI over the frontend message bridge and are persisted so they
@@ -30,6 +34,10 @@ let rulesText = '';
 let allowReSwap = false;
 let confirmBeforeEdit = false;
 let groups = [];
+// All rules compiled into one pattern, plus the group index each capture slot
+// belongs to. Built once per settings change, used for the single pass.
+let combined = null;
+let combinedOrder = [];
 let warnedEditError = false;
 // Messages a swap has already changed this session, so the manual button won't
 // compound swaps on a reply that auto-swap or an earlier tap already changed.
@@ -67,14 +75,36 @@ function buildGroups(raw, cs) {
     const out = [];
     for (const key of order) {
         const g = map.get(key);
+        const isWord = /^[\p{L}\p{N}]+$/u.test(g.from);
         try {
-            const isWord = /^[\p{L}\p{N}]+$/u.test(g.from);
-            const body = escapeRe(g.from);
-            const re = new RegExp('(' + (isWord ? '\\b' + body + '\\b' : body) + ')( ?)', cs ? 'gu' : 'giu');
-            out.push({ re: re, tos: g.tos, from: g.from });
+            // Compiled here only to drop a source that can't form a valid pattern,
+            // so one bad rule can't take the combined pattern down with it.
+            new RegExp(escapeRe(g.from), cs ? 'gu' : 'giu');
+            out.push({ tos: g.tos, from: g.from, isWord: isWord });
         } catch (_) { /* skip a rule that can't compile */ }
     }
     return out;
+}
+// Every rule joined into one alternation so the text is walked once and each
+// stretch of it is replaced at most once. Running rules one after another would
+// let a later rule act on what an earlier one just wrote, so "cat => dog"
+// followed by "dog => wolf" would turn cat into wolf.
+function buildCombined(gs, cs) {
+    if (!gs.length) return null;
+    // Longest source first. A regex alternation takes the first branch that
+    // matches, so without this "cat" would win over "cat nap" and the longer
+    // rule would never fire. Equal lengths keep the order they were listed in.
+    combinedOrder = gs.map((_, i) => i).sort((a, b) => (gs[b].from.length - gs[a].from.length) || (a - b));
+    const parts = combinedOrder.map((i) => {
+        const body = escapeRe(gs[i].from);
+        return '(' + (gs[i].isWord ? '\\b' + body + '\\b' : body) + ')';
+    });
+    try {
+        return new RegExp('(?:' + parts.join('|') + ')( ?)', cs ? 'gu' : 'giu');
+    } catch (_) {
+        combinedOrder = [];
+        return null;
+    }
 }
 // Keep the replacement's capitalization roughly in line with the text it
 // replaced, so a swap at the start of a sentence still reads right. Only used
@@ -86,18 +116,30 @@ function matchCase(sample, repl) {
     return repl;
 }
 function applyRules(text) {
-    let out = String(text == null ? '' : text);
-    for (const g of groups) {
-        out = out.replace(g.re, (m, matched, trail) => {
-            let repl = (random && g.tos.length > 1) ? g.tos[Math.floor(Math.random() * g.tos.length)] : g.tos[0];
-            if (!caseSensitive) repl = matchCase(matched, repl);
-            return repl === '' ? '' : repl + trail; // deletion also drops one trailing space
-        });
-    }
-    return out;
+    const src = String(text == null ? '' : text);
+    if (!combined || !combinedOrder.length) return src;
+    combined.lastIndex = 0;
+    return src.replace(combined, (...args) => {
+        // args is: whole match, one slot per rule, the trailing space, offset, input.
+        const trail = String(args[combinedOrder.length + 1] || '');
+        let matched = null;
+        let g = null;
+        for (let k = 0; k < combinedOrder.length; k++) {
+            if (args[k + 1] !== undefined) {
+                matched = String(args[k + 1]);
+                g = groups[combinedOrder[k]];
+                break;
+            }
+        }
+        if (!g || matched == null) return String(args[0]);
+        let repl = (random && g.tos.length > 1) ? g.tos[Math.floor(Math.random() * g.tos.length)] : g.tos[0];
+        if (!caseSensitive) repl = matchCase(matched, repl);
+        return repl === '' ? '' : repl + trail; // deletion also drops one trailing space
+    });
 }
 function rebuild() {
     groups = buildGroups(rulesText, caseSensitive);
+    combined = buildCombined(groups, caseSensitive);
 }
 // Pull the find-and-replace fields out of a full settings object.
 function applyReplaceFromSettings(s) {
