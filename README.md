@@ -159,6 +159,10 @@ Editing a saved reply needs the `chat_mutation` permission (see Permissions belo
 
 At the bottom of the find-and-replace settings you can save your word-swap setups as named presets and switch between them without copying rules by hand.
 
+A preset holds your rules and the two options that decide how they match, **Pick a swap at random** and **Match case exactly**. Rules saved without those behave differently when loaded, which defeats the point of a preset.
+
+It deliberately leaves everything else alone. Whether swapping is switched on at all, which buttons appear in your Extras menu, whether a reply can be swapped twice, and whether it confirms before editing all stay as you have them. Those are yours rather than the preset author's, and a preset that could switch swapping on or drop the confirmation step would be changing things you never agreed to. Exporting still carries all of them, since an export is your own backup rather than something you load from someone else.
+
 Pick a saved preset and press **Load** to switch your settings to it. To store the current setup, type a name and press **Save as new**. **Update selected** overwrites the chosen preset with your current settings, **Rename selected** renames it to the name in the box, and **Delete** removes it. Loading a preset takes effect right away and is saved, so there is no separate Save step. Presets are kept on this browser, so unlike your account settings they do not sync across devices. To move them to another device or share them, use **Advanced: import / export**, which can include your presets in the file.
 
 ## Import and export
