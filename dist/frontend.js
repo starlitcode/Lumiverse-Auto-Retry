@@ -25,7 +25,7 @@ const START_GRACE_MS = 6000;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = '3.0.2';
+const VERSION = '3.1.0';
 // ---- defaults (the UI overrides these; editing here changes the fallback) ----
 const CONFIG = {
     enabled: true,
@@ -1123,11 +1123,28 @@ export function setup(ctx, opts) {
     // Named word-swap snapshots the user can switch between, stored per browser.
     const PRESETS_KEY = 'lv-auto-retry:presets:v1';
     const PRESET_KINDS = {
-        swap: { catId: 'replace', label: 'Word swap' },
+        swap: {
+            catId: 'replace',
+            label: 'Word swap',
+            // A preset is the rules plus what decides how they match, and nothing
+            // else. Everything omitted here is about whether the feature runs and how
+            // careful it is, which belongs to the person loading the preset rather
+            // than the person who saved it. replaceEnabled would let a preset start
+            // rewriting replies unasked, and confirmBeforeEdit would let one remove a
+            // confirmation someone deliberately turned on; those two matter most.
+            // Exporting still carries all of them.
+            omit: ['replaceEnabled', 'showReplaceButton', 'showSwapAllButton', 'allowReSwap', 'confirmBeforeEdit'],
+        },
     };
+    // Derived from the export category so the two stay in step, minus whatever
+    // that kind omits. Load walks this list rather than the stored values, so a
+    // preset saved before an omission simply ignores the extra keys.
     function keysForKind(kind) {
-        const catId = PRESET_KINDS[kind] ? PRESET_KINDS[kind].catId : '';
-        for (const c of EXPORT_CATEGORIES) if (c.id === catId) return c.keys;
+        const k = PRESET_KINDS[kind];
+        if (!k) return [];
+        const omit = k.omit || [];
+        for (const c of EXPORT_CATEGORIES)
+            if (c.id === k.catId) return c.keys.filter((key) => omit.indexOf(key) < 0);
         return [];
     }
     function loadPresets() {
