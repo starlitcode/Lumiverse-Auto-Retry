@@ -200,7 +200,7 @@ The settings modal is the easy path. The same options live in the CONFIG block a
 | retryOnTruncated | true | Retry a reply that ends mid-sentence. |
 | retryOnNoPunct | false | Stricter: also retry a reply ending with no punctuation. Noisy in RP. |
 | retryOnShort | false | Retry short replies. Off unless you mean it. |
-| minChars | 24 | Short threshold, used when retryOnShort is on. |
+| minChars | 24 | Short threshold, used when retryOnShort is on. Counts the visible reply only, not any reasoning block. |
 | retryOnRefusal | true | (beta) Retry an accidental out-of-character refusal. |
 | refusalUseBuiltins | true | Use the built-in English refusal lists. Off = only your own phrases. |
 | refusalExtraPhrases | (empty) | Phrases that also count as a refusal, one per line. |
