@@ -233,7 +233,7 @@ Whichever button the toggle prefers, the other one is the fallback, and the choi
 
 ### Setting the buttons without writing a selector
 
-Each button setting has a **Pick it for me** button next to **Test**. Press it and the settings panel steps aside; click the real button in Lumiverse and the selector is filled in for you. The click is swallowed, so picking your stop or regenerate button doesn't also press it. Esc cancels.
+Each button setting has a **Pick it for me** button next to **Test**. Press it and the settings panel steps aside; click the real button in Lumiverse and the selector is filled in for you. The click is swallowed, so picking your stop or regenerate button doesn't also press it. Press Cancel on the prompt to back out, or Esc if you're on a keyboard.
 
 It builds the selector from whatever is most likely to survive an app update, preferring `aria-label`, `title` and `data-` attributes over class names. Lumiverse rebuilds its class names on every release, so a selector based on one stops matching the next time the app updates, and those are skipped on purpose. If the element it lands on has nothing dependable, it says so rather than saving something that will break; clicking the button itself rather than an icon inside it usually fixes that.
 
@@ -241,7 +241,7 @@ If a click lands but no reply starts, which happens when a next / swipe button m
 
 ### Writing selectors by hand
 
-Each box takes one CSS selector, or several separated by commas as fallbacks. They're tried left to right, so put the most specific first (`data-action`, `data-testid`) and the broader ones last (`aria-label`, `title`). The first entry that finds a button you can actually click is the one used; an entry matching only a hidden or disabled button is passed over for the next, since clicking one of those does nothing and would waste a retry.
+Each box takes one CSS selector, or several separated by commas as fallbacks. They're tried left to right, so put the most specific first (`data-action`, `data-testid`) and the broader ones last (`aria-label`, `title`). The first entry that finds a button you can actually click is the one used, so an entry matching only a hidden or disabled button is passed over for the next.
 
 A comma inside brackets, parentheses or quotes stays part of the selector rather than splitting the list, so `:is(a, b)` and `[aria-label="Next, swipe"]` each count as one entry.
 
