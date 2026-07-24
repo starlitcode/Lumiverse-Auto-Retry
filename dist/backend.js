@@ -115,7 +115,7 @@ function matchCase(sample, repl) {
     if (/^[A-Z\u00C0-\u00DE]/.test(sample)) return repl.charAt(0).toUpperCase() + repl.slice(1);
     return repl;
 }
-function applyRules(text) {
+function applyRules(text, seen) {
     const src = String(text == null ? '' : text);
     if (!combined || !combinedOrder.length) return src;
     combined.lastIndex = 0;
@@ -134,7 +134,11 @@ function applyRules(text) {
         if (!g || matched == null) return String(args[0]);
         let repl = (random && g.tos.length > 1) ? g.tos[Math.floor(Math.random() * g.tos.length)] : g.tos[0];
         if (!caseSensitive) repl = matchCase(matched, repl);
-        return repl === '' ? '' : repl + trail; // deletion also drops one trailing space
+        const out = repl === '' ? '' : repl + trail; // deletion also drops one trailing space
+        // Recorded so the frontend can apply the same change to what is on screen.
+        // The host writes the message but does not redraw the chat view for it.
+        if (seen && matched + trail !== out) seen.push([matched + trail, out]);
+        return out;
     });
 }
 // Writes swapped text back. Content alone emits only MESSAGE_EDITED, which the
@@ -205,6 +209,9 @@ spindle.onFrontendMessage(async (payload) => {
         }
         if (payload.type === 'apply_replace_now') {
             let ok = true, found = false, changed = 0, skipped = 0;
+        // Literal substitutions made, passed back so the frontend can update the
+        // rendered text. The host saves the message without redrawing the chat.
+        const pairs = [];
             try {
                 const chatId = payload.chatId;
                 const wantId = payload.messageId;
@@ -230,12 +237,12 @@ spindle.onFrontendMessage(async (payload) => {
                         // Skip replies already swapped this session unless re-swapping is allowed.
                         if (!allowReSwap && swappedIds.has(m.id)) { skipped++; continue; }
                         const content = String(m.content == null ? '' : m.content);
-                        const next = applyRules(content);
+                        const next = applyRules(content, pairs);
                         if (next !== content) { await writeSwapped(chatId, m, next); changed++; markSwapped(m.id); }
                     }
                 }
             } catch (_) { ok = false; }
-            try { spindle.sendToFrontend({ type: 'replace_now_result', requestId: payload.requestId, ok: ok, hasRules: groups.length > 0, found: found, changed: changed, skipped: skipped }); } catch (__) {}
+            try { spindle.sendToFrontend({ type: 'replace_now_result', requestId: payload.requestId, ok: ok, hasRules: groups.length > 0, found: found, changed: changed, skipped: skipped, pairs: pairs, wholeChat: !!payload.wholeChat }); } catch (__) {}
             return;
         }
         if (payload.type === 'set_replace_rules') {
@@ -282,7 +289,8 @@ spindle.on('GENERATION_ENDED', async (p) => {
         // Both are needed: without an id there is nothing to write to, and the
         // lookup above leaves it unset when the reply cannot be found.
         if (!messageId || !content) return;
-        const next = applyRules(content);
+        const autoPairs = [];
+        const next = applyRules(content, autoPairs);
         if (next !== content) {
             if (confirmBeforeEdit) {
                 // Ask first; the frontend sends apply_replace_now for this reply if the user agrees.
@@ -291,6 +299,8 @@ spindle.on('GENERATION_ENDED', async (p) => {
             }
             await writeSwapped(chatId, target || { id: messageId }, next);
             markSwapped(messageId);
+            // Tell the frontend what changed so it can update the visible reply.
+            try { spindle.sendToFrontend({ type: 'swapped', chatId: chatId, pairs: autoPairs, wholeChat: false }); } catch (__) {}
         }
     } catch (e) {
         if (!warnedEditError) {
