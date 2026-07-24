@@ -25,7 +25,7 @@ const START_GRACE_MS = 6000;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = '3.0.0';
+const VERSION = '3.0.1';
 // ---- defaults (the UI overrides these; editing here changes the fallback) ----
 const CONFIG = {
     enabled: true,
@@ -2118,6 +2118,8 @@ export function setup(ctx, opts) {
                     body.appendChild(d);
                 }
                 for (const f of group.fields) body.appendChild(buildRow(f));
+                const resetSel = buildSelectorResetRow(group);
+                if (resetSel) body.appendChild(resetSel);
                 // Word swap presets sit at the end of the group, since they save and
                 // switch the settings above.
                 if (/find and replace/i.test(group.title)) {
@@ -2155,6 +2157,8 @@ export function setup(ctx, opts) {
                     sec.appendChild(d);
                 }
                 for (const f of group.fields) sec.appendChild(buildRow(f));
+                const resetSelOpen = buildSelectorResetRow(group);
+                if (resetSelOpen) sec.appendChild(resetSelOpen);
             }
             scroller.appendChild(sec);
         }
@@ -2442,6 +2446,36 @@ export function setup(ctx, opts) {
         actions.appendChild(save);
         panel.appendChild(actions);
         root.appendChild(panel);
+    }
+    // Puts the button selectors in a section back to what the extension shipped
+    // with. Pick it for me makes these easy to overwrite, including with the wrong
+    // element, and Reset all would take every other setting with it. This undoes
+    // only that mistake. It fills the boxes and leaves Save to the user, so a
+    // mistaken press is undone by closing the panel.
+    function buildSelectorResetRow(group) {
+        const keys = (group && group.fields ? group.fields : [])
+            .filter((f) => f && f.selector)
+            .map((f) => f.key);
+        if (!keys.length) return null;
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;align-items:center;gap:8px;flex-wrap:wrap';
+        const b = btn('Reset button selectors', false);
+        b.style.padding = '5px 12px';
+        const note = document.createElement('span');
+        note.style.cssText = 'font-size:12px;color:var(--lumiverse-text-muted,#9a93a8)';
+        b.addEventListener('click', () => {
+            let changed = 0;
+            for (const k of keys) {
+                if (cfg[k] !== CONFIG[k]) changed++;
+                cfg[k] = CONFIG[k];
+                const set = fieldSetters[k];
+                if (set) set(cfg[k]);
+            }
+            note.textContent = changed ? 'back to defaults, press Save to keep' : 'already at the defaults';
+        });
+        row.appendChild(b);
+        row.appendChild(note);
+        return row;
     }
     function buildRow(f) {
         // bool/num wrap in <label> so the whole row toggles or focuses its control.
