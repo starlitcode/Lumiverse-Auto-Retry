@@ -239,6 +239,14 @@ It builds the selector from whatever is most likely to survive an app update, pr
 
 If a click lands but no reply starts, which happens when a next / swipe button moves between rerolls that already exist rather than making a new one, it clicks the other button once before giving that attempt up.
 
+### Writing selectors by hand
+
+Each box takes one CSS selector, or several separated by commas as fallbacks. They're tried left to right, so put the most specific first (`data-action`, `data-testid`) and the broader ones last (`aria-label`, `title`). The first entry that finds a button you can actually click is the one used; an entry matching only a hidden or disabled button is passed over for the next, since clicking one of those does nothing and would waste a retry.
+
+A comma inside brackets, parentheses or quotes stays part of the selector rather than splitting the list, so `:is(a, b)` and `[aria-label="Next, swipe"]` each count as one entry.
+
+**Reset button selectors** at the bottom of that section puts all three back to the defaults without touching any other setting. It fills the boxes, so press Save to keep it.
+
 If retries fire (the pop-up shows) but nothing regenerates, the selector needs adjusting:
 
 1. Open developer tools (F12) with an AI message visible so its buttons are on screen.
