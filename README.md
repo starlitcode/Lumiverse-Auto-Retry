@@ -149,7 +149,9 @@ very =>
 - Put the same left side on more than one line to give it options (for example `sky => blue` on one line and `sky => aqua` on the next). By default it uses the first one. Turn on **Pick randomly when a word has more than one swap** and each time that word appears it picks one of its options at random, which is handy for variety.
 - By default matching ignores letter case and keeps the original capitalization, so a swap at the start of a sentence stays capitalized. Turn on **Match case exactly** to swap only when the case matches your rule, which also lets `sky` and `Sky` have different swaps.
 - Rules are applied in a single pass, so no rule ever acts on what another rule just wrote. `cat => dog` alongside `dog => wolf` turns cats into dogs and dogs into wolves, and it never turns a cat into a wolf. This also means two rules can swap past each other: `hot => cold` with `cold => hot` exchanges the two words rather than making everything one of them.
-- Where two rules could match the same spot, the one with the longer left side wins. `cat nap => siesta` beats `cat => dog` on the words "cat nap", so the longer rule is never shadowed by a shorter one that starts the same way.
+- Where two rules could match the same spot, the one with the longer left side wins. `cat nap => siesta` beats `cat => dog` on the words "cat nap", so the longer rule is never shadowed by a shorter one that starts the same way. If two left sides are the same length, the one you listed first wins.
+
+These last two settle different questions and don't overlap. The longest-left-side rule picks **which rule fires** when two different rules compete for the same spot. The random option picks **which replacement one rule uses** when you've given that same left side several right sides. Nothing competes in `sky => blue` and `sky => aqua`, since `sky` is the only rule matching "sky"; the only question is whether every "sky" becomes "blue" or each one rolls between the two. Left sides that are identical can't be told apart by length either, so list order decides, which is exactly what the random option is there to override. In short: longest match is about the left side of your rules, random is about the right side.
 
 Editing a saved reply needs the `chat_mutation` permission (see Permissions below). If nothing in your rules matches a reply, that reply is left untouched.
 
@@ -177,7 +179,9 @@ The settings modal is the easy path. The same options live in the CONFIG block a
 | --- | --- | --- |
 | enabled | true | Master switch. |
 | maxRetries | 4 | Hard cap per message. Nothing retries past this. |
-| pauseWhenFailing | true | Pause auto-retry for five minutes after three whole runs give up in a row. Cleared by the next reply that comes back fine. |
+| pauseWhenFailing | true | Pause auto-retry after several whole runs give up in a row. Cleared by the next reply that comes back fine. |
+| breakerRuns | 3 | How many failed runs in a row trigger the pause. A run is one message that used up all its tries. |
+| breakerPauseMins | 5 | How long the pause lasts, in minutes. A reply that comes back fine ends it early. |
 | retryDelayMs | 1200 | Wait before the first retry, in milliseconds. |
 | backoffFactor | 2 | Each wait is this many times longer than the last. |
 | maxDelayMs | 30000 | Longest it will ever wait. |
