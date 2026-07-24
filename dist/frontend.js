@@ -35,6 +35,10 @@ const CONFIG = {
     // point the provider is down rather than the reply being unlucky, and more
     // tries only burn tokens. Cleared by the next reply that comes back fine.
     pauseWhenFailing: true,
+    // how many whole runs must give up back to back before it pauses, and how
+    // long the pause lasts in minutes. Only used when pauseWhenFailing is on.
+    breakerRuns: 3,
+    breakerPauseMins: 5,
     retryDelayMs: 1200,
     // first retry fires a touch sooner; backoff still climbs
     backoffFactor: 2,
@@ -142,7 +146,25 @@ const SCHEMA = [{
         key: 'pauseWhenFailing',
         label: 'Pause when everything is failing',
         type: 'bool',
-        hint: "On by default. If three whole runs give up in a row, auto-retry stops for five minutes instead of trying again on every message. That usually means the provider is down rather than the reply being unlucky, and retrying through it only spends tokens. The next reply that comes back fine clears it, and you can still send and regenerate by hand while it's paused."
+        hint: "On by default. If several whole runs give up in a row, auto-retry stops for a while instead of trying again on every message. That usually means the provider is down rather than the reply being unlucky, and retrying through it only spends tokens. The next reply that comes back fine clears it, and you can still send and regenerate by hand while it's paused. The two boxes below set how many runs and how long."
+    },
+    {
+        key: 'breakerRuns',
+        label: 'Failed runs before pausing',
+        type: 'num',
+        int: true,
+        min: 1,
+        max: 20,
+        hint: 'How many whole runs have to give up back to back before it pauses. A run is one message that used up all its tries. At the default of 3, with the try limit at 4, that is 12 retries before it stops. Raise it if your setup is normally flaky, lower it to give up sooner.'
+    },
+    {
+        key: 'breakerPauseMins',
+        label: 'How long to pause (minutes)',
+        type: 'num',
+        int: true,
+        min: 1,
+        max: 180,
+        hint: 'How long auto-retry stays off once it pauses. Shorter suits a provider that hiccups and recovers; longer suits a real outage. Any reply that comes back fine ends the pause early, whatever this is set to.'
     },
     {
         key: 'retryDelayMs',
@@ -1205,10 +1227,21 @@ export function setup(ctx, opts) {
     // Circuit breaker. Whole runs that gave up, back to back. Three in a row means
     // the provider is down rather than one reply being unlucky, so retrying again
     // on every message just spends tokens for nothing.
-    const BREAKER_RUNS = 3;
-    const BREAKER_PAUSE_MS = 300000;
+    const BREAKER_RUNS_DEFAULT = 3;
+    const BREAKER_PAUSE_DEFAULT_MS = 300000;
     let failedRuns = 0;
     let pausedUntil = 0;
+    // Read at the moment they are needed so a settings change takes effect without
+    // a reload. Anything missing or nonsensical falls back to the default rather
+    // than switching the feature off by accident.
+    const breakerRuns = () => {
+        const v = Math.floor(Number(cfg.breakerRuns));
+        return Number.isFinite(v) && v >= 1 ? v : BREAKER_RUNS_DEFAULT;
+    };
+    const breakerPauseMs = () => {
+        const v = Math.floor(Number(cfg.breakerPauseMins));
+        return Number.isFinite(v) && v >= 1 ? v * 60000 : BREAKER_PAUSE_DEFAULT_MS;
+    };
     const clearTimers = (s) => {
         if (s.startTimer) {
             clearTimeout(s.startTimer);
@@ -1402,11 +1435,17 @@ export function setup(ctx, opts) {
             // run to count and nothing worth announcing.
             if (cfg.maxRetries <= 0) return;
             failedRuns += 1;
-            if (cfg.pauseWhenFailing && failedRuns >= BREAKER_RUNS) {
-                pausedUntil = Date.now() + BREAKER_PAUSE_MS;
+            const runsNeeded = breakerRuns();
+            if (cfg.pauseWhenFailing && failedRuns >= runsNeeded) {
+                const pauseMs = breakerPauseMs();
+                const mins = Math.round(pauseMs / 60000);
+                pausedUntil = Date.now() + pauseMs;
                 failedRuns = 0;
-                log('paused for ' + Math.round(BREAKER_PAUSE_MS / 60000) + ' min after ' + BREAKER_RUNS + ' failed runs');
-                showToast('Auto-retry paused for ' + Math.round(BREAKER_PAUSE_MS / 60000) + ' minutes: the last ' + BREAKER_RUNS + ' runs all failed.');
+                log('paused for ' + mins + ' min after ' + runsNeeded + ' failed runs');
+                // Forced: the toast setting covers the pop-up on each retry, and going
+                // quiet for minutes at a time is a state change rather than a retry. A
+                // user who sees nothing has no way to tell this from the thing breaking.
+                showToast('Auto-retry paused for ' + mins + (mins === 1 ? ' minute' : ' minutes') + ': the last ' + runsNeeded + (runsNeeded === 1 ? ' run' : ' runs') + ' failed.', { force: true });
             } else {
                 showToast('Auto-retry: gave up after ' + cfg.maxRetries + ' tries.');
             }
@@ -1716,6 +1755,11 @@ export function setup(ctx, opts) {
         const lines = [];
         lines.push('Auto Retry v' + VERSION + ' debug info');
         lines.push('time: ' + new Date().toISOString());
+        // Always included, whatever categories are ticked. This is the first thing
+        // to check when retries have stopped happening, so it must never be the
+        // part someone left out of the report.
+        const pauseLeftMs = pausedUntil - Date.now();
+        lines.push('auto-retry: ' + (cfg.enabled === false ? 'off in settings' : (cfg.pauseWhenFailing && pauseLeftMs > 0 ? 'PAUSED by the failure breaker, ' + Math.ceil(pauseLeftMs / 1000) + 's left' : 'active')) + ' (failed runs in a row: ' + failedRuns + ' of ' + breakerRuns() + ')');
         if (inc(o.settings)) {
             lines.push('');
             lines.push('settings:');
