@@ -1690,6 +1690,66 @@ export function setup(ctx, opts) {
     // late or never fires, catch the click on the stop button itself and stand
     // every pending retry down. Delegated + capture so it survives the host
     // re-rendering its buttons.
+    // The host saves a swapped reply without redrawing the chat, so the old words
+    // stay on screen until the view is rebuilt. This applies the same swaps to the
+    // rendered text. Only text nodes are touched, so markdown, formatting and any
+    // element structure are left exactly as they were.
+    //
+    // last: replace only the final occurrence in the page, which is the newest
+    // reply. Whole-chat swaps pass false and replace every occurrence, since every
+    // message really was changed.
+    function applySwapsToView(pairs, last) {
+        if (typeof document === 'undefined' || !pairs || !pairs.length) return 0;
+        const SKIP = /^(SCRIPT|STYLE|TEXTAREA|INPUT|SELECT|OPTION)$/;
+        let done = 0;
+        for (const pair of pairs) {
+            const from = String(pair && pair[0] != null ? pair[0] : '');
+            const to = String(pair && pair[1] != null ? pair[1] : '');
+            if (!from || from === to) continue;
+            // The backend matches whole words for single-word rules, so a literal
+            // replace here would also hit "dogged" when the rule was "dog". This
+            // rebuilds the same boundary the backend used.
+            let re = null;
+            try {
+                const esc = from.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const lead = /^[\p{L}\p{N}]/u.test(from) ? '\\b' : '';
+                const tail = /[\p{L}\p{N}]$/u.test(from) ? '\\b' : '';
+                re = new RegExp(lead + esc + tail, 'gu');
+            } catch (__) {
+                re = null;
+            }
+            const hits = [];
+            let walker = null;
+            try {
+                walker = document.createTreeWalker(document.body, 4 /* SHOW_TEXT */);
+            } catch (_) {
+                return done;
+            }
+            let node = walker.nextNode ? walker.nextNode() : null;
+            while (node) {
+                const parent = node.parentElement;
+                let skip = !parent || SKIP.test(String(parent.tagName || ''));
+                // Our own panels and anything the user is typing into are off limits.
+                if (!skip && parent.closest) {
+                    try {
+                        skip = !!parent.closest("#__lvRetryToast,#__lvRetrySettings,[contenteditable='true']");
+                    } catch (__) {}
+                }
+                if (!skip && re && re.test(String(node.nodeValue || ''))) hits.push(node);
+                if (re) re.lastIndex = 0;
+                node = walker.nextNode();
+            }
+            const targets = last ? hits.slice(-1) : hits;
+            for (const t of targets) {
+                try {
+                    re.lastIndex = 0;
+                    t.nodeValue = String(t.nodeValue).replace(re, to);
+                    done++;
+                } catch (__) {}
+            }
+        }
+        return done;
+    }
     function onDocClick(e) {
         try {
             // A stalled reply is halted by clicking that same stop button, and that
@@ -2962,7 +3022,14 @@ export function setup(ctx, opts) {
                     }
                     return;
                 }
+                // Sent after an automatic swap. The message is already saved; this only
+                // brings what is on screen into line with it.
+                if (msg.type === 'swapped') {
+                    applySwapsToView(msg.pairs || [], !msg.wholeChat);
+                    return;
+                }
                 if (msg.type !== 'replace_now_result') return;
+                if (msg.ok) applySwapsToView(msg.pairs || [], !msg.wholeChat);
                 if (!msg.ok) showToast('Could not swap words.');
                 else if (!msg.hasRules) showToast('No word swaps are set up yet.');
                 else if (!msg.found) showToast('No reply found to swap in this chat.');
