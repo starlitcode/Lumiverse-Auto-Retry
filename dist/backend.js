@@ -279,7 +279,9 @@ spindle.on('GENERATION_ENDED', async (p) => {
                 target = msgs.find((x) => x && x.id === messageId) || null;
             }
         } catch (_) {}
-        if (!content) return;
+        // Both are needed: without an id there is nothing to write to, and the
+        // lookup above leaves it unset when the reply cannot be found.
+        if (!messageId || !content) return;
         const next = applyRules(content);
         if (next !== content) {
             if (confirmBeforeEdit) {
