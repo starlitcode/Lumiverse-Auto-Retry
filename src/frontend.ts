@@ -32,7 +32,7 @@ const STREAM_BUF_MAX = 200000;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "3.1.1";
+const VERSION = "3.1.2";
 
 // ---- defaults (the UI overrides these; editing here changes the fallback) ----
 const CONFIG = {
@@ -613,6 +613,19 @@ const REFUSAL_STRONG: RegExp[] = [
   /\bI(?:'m| am) not going to (?:create|generate|produce|write) (?:that|this|such|content|explicit|sexual|those)\b/i,
   // Refusal tied to specific prohibited content policies.
   /\bI(?: (?:can(?:no|')?t|cannot|will not|won'?t|am (?:not able|unable) to)|'m (?:not able|unable) to) (?:participate|engage) in (?:this |the |any )?(?:roleplay|role-?playing) or (?:create|generate|produce|write) (?:content|stories|scenes|text) depicting (?:sexual violence|non-?consensual (?:sexual )?(?:acts|situations|scenarios|content))\b/i,
+  // Refusal aimed at roleplay itself. The verb list above is assistant-only
+  // (assist / comply / fulfill); this covers "participate" and "engage", which a
+  // character could say, so a meta object is required: roleplay, a scenario, or
+  // qualified content. "I cannot participate in this duel" has none of those and
+  // stays safe. Bare "content" is deliberately excluded, since "he said, content
+  // to wait" would otherwise match.
+  /\bI(?: (?:can(?:no|')?t|cannot|will not|won'?t|do not|don'?t|am (?:not able|unable) to)|'m (?:not able|unable) to) (?:participate|engage)\b[^.?!\n]{0,40}?\b(?:role-?play(?:ing|s)?|scenarios?|(?:sexual|explicit|adult|nsfw|romantic|such|this|that) content)\b/i,
+  // Fiction disclaimer. Nobody writes this inside a scene; it only appears when
+  // the model is explaining that being fictional does not change its answer.
+  /\beven (?:in|within) (?:a |an |the )?(?:fictional|fiction|hypothetical|imaginary|make-?believe|creative|roleplay) (?:context|setting|scenario|framing|situation)\b/i,
+  // The redirect offer that closes most refusals. Help-desk register plus a task
+  // noun, so an in-scene offer of help does not reach it.
+  /\bI(?:'m| am) (?:available|happy|glad) to (?:assist|help)\b[^.?!\n]{0,60}?\b(?:writing tasks?|creative writing|analysis|queries|other requests?|other topics?)\b/i,
 ];
 
 // Tier 2: flat phrase list, matched as normalized lowercase substrings. Covers
