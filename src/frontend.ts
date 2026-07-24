@@ -409,7 +409,7 @@ const SCHEMA: Group[] = [
   },
   {
     title: "Advanced: buttons it clicks",
-    desc: "It works by clicking your own on-screen buttons. The three boxes are the buttons it needs: redoing a reply, swiping to a fresh one as a backup, and stopping a frozen reply. Each takes one CSS selector. List a few comma-separated as fallbacks. Put the most specific selectors first (like data-action or data-testid) and broader ones last (like aria-label or title), because it checks them in the exact order you list them. You only need this if retries aren't happening: paste a selector and press Test until it says match found. Test each while its button is on screen, since a hidden button won't match. The Stop button only appears while a reply is generating.",
+    desc: "It works by clicking your own on-screen buttons. The three boxes are the buttons it needs: redoing a reply, swiping to a fresh one as a backup, and stopping a frozen reply. Each takes one CSS selector. List a few comma-separated as fallbacks. Put the most specific selectors first (like data-action or data-testid) and broader ones last (like aria-label or title), because it checks them in the exact order you list them. A comma inside brackets, parentheses or quotes stays part of the selector rather than splitting the list, so :is(a, b) and [aria-label=\"Next, swipe\"] each count as one entry. An entry that matches only a hidden or disabled button is passed over for the next one in the list. You only need this if retries aren't happening. The quickest way is Pick it for me: press it, then click the real button on screen. Otherwise paste a selector and press Test until it says match found. Test each while its button is on screen, since a hidden button won't match. The Stop button only appears while a reply is generating.",
     fields: [
       {
         key: "regenerateSelector",
@@ -724,6 +724,35 @@ function looksLikeRefusalError(errText: string, cfg?: any): boolean {
   return false;
 }
 
+
+// Splits a selector list on its top-level commas only. A comma inside brackets,
+// parentheses or quotes belongs to the selector rather than separating the list,
+// so :is(a, b) and [aria-label="Next, swipe"] survive whole. Entries come back
+// trimmed, with blanks dropped.
+function splitSelectorList(raw: string): string[] {
+  const src = String(raw == null ? "" : raw);
+  const out: string[] = [];
+  let buf = "";
+  let depth = 0;
+  let quote = "";
+  for (let i = 0; i < src.length; i++) {
+    const c = src[i];
+    if (quote) {
+      buf += c;
+      if (c === "\\" && i + 1 < src.length) { buf += src[i + 1]; i++; continue; }
+      if (c === quote) quote = "";
+      continue;
+    }
+    if (c === "\\" && i + 1 < src.length) { buf += c + src[i + 1]; i++; continue; }
+    if (c === '"' || c === "'") { quote = c; buf += c; continue; }
+    if (c === "(" || c === "[" || c === "{") { depth++; buf += c; continue; }
+    if (c === ")" || c === "]" || c === "}") { if (depth > 0) depth--; buf += c; continue; }
+    if (c === "," && depth === 0) { out.push(buf.trim()); buf = ""; continue; }
+    buf += c;
+  }
+  out.push(buf.trim());
+  return out.filter((p) => p.length > 0);
+}
 
 // Class and id names Lumiverse generates per build (like _card_19912_336).
 // They change on every release, so a selector built on one quietly stops
@@ -1436,11 +1465,11 @@ export function setup(ctx: Ctx, opts?: any) {
   };
 
   const find = (selector: string): any => {
-    // Split by comma so we check them in list order, not DOM order.
-    const parts = String(selector || "").split(",").map((s) => s.trim());
+    // Checked in list order, not DOM order, so the first entry that yields a
+    // usable control wins wherever it sits on the page.
+    const parts = splitSelectorList(selector);
     if (typeof document === "undefined") return null;
     for (const part of parts) {
-      if (!part) continue;
       let list: any = null;
       try {
         list = document.querySelectorAll(part);
@@ -1967,7 +1996,7 @@ export function setup(ctx: Ctx, opts?: any) {
     const raw = String(sel || "").trim();
     if (!raw) return "not set";
     if (find(raw)) return "match";
-    const parts = raw.split(",").map((s) => s.trim()).filter(Boolean);
+    const parts = splitSelectorList(raw);
     let anyValid = false;
     for (const part of parts) {
       try {
