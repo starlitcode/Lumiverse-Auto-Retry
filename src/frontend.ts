@@ -314,7 +314,7 @@ const SCHEMA: Group[] = [
         int: true,
         min: 0,
         max: 100000,
-        hint: "Replies with fewer characters than this count as too short. Only used when the option above is on.",
+        hint: "Replies with fewer characters than this count as too short. Only the visible reply is counted, not any reasoning block. Only used when the option above is on.",
       },
       {
         key: "retryOnRefusal",
@@ -599,7 +599,10 @@ const REFUSAL_STRONG: RegExp[] = [
   /\bI(?: (?:can(?:no|')?t|cannot|will not|won'?t|must not|must|have to|need to|refuse to|decline to|am (?:not able|unable) to|am going to have to)|'m (?:not able|unable) to|'m going to have to)\b[^.?!\n]{0,30}?\b(?:this|that|your|the) (?:request|prompt|content|message|scenario|roleplay)\b/i,
   // Assistant-only verbs (assist / comply / fulfill) that essentially never
   // appear in first-person roleplay dialogue.
-  /\bI(?: (?:can(?:no|')?t|cannot|will not|won'?t|am (?:not able|unable) to)|'m (?:not able|unable) to) (?:be able to )?(?:assist|comply|fulfil|fulfill)\b/i,
+  // The object matters: a refusal is aimed at "that" or "this request", never at
+  // a concrete thing in the scene. Without this, a servant or aide saying "I
+  // can't assist you with the horses today" reads as the model refusing.
+  /\bI(?: (?:can(?:no|')?t|cannot|will not|won'?t|am (?:not able|unable) to)|'m (?:not able|unable) to) (?:be able to )?(?:assist|comply|fulfil|fulfill)\b(?:[^.?!\n]{0,30}?\b(?:that|this|it|your request|this request|the request|your prompt)\b|(?:\s+you)?\s*[.!?,"'\u201d\u2019]|(?:\s+you)?\s*$)/i,
   // Out-of-character comfort hedge, only in the assistant-action sense.
   /\bI don'?t feel comfortable (?:continuing|writing|creating|generating|producing|proceeding|providing|helping|assisting)\b/i,
   // Common modern refusal openers and bodies: "I'm sorry, but I can't create/generate...",
@@ -668,6 +671,13 @@ const REFUSAL_SOFT: RegExp[] = [
 // reply that is nothing but an inline think block; the truncation and length
 // checks still see the raw output.
 const THINK_TAGS = ["think", "thinking", "thought", "thoughts", "reasoning", "reflection", "scratchpad", "analysis"];
+// The entries that match a model naming itself as an AI, picked out by what
+// they match rather than by position, so reordering the list above cannot
+// silently point the quotation check at the wrong patterns.
+const SELF_ID_PATTERNS: RegExp[] = REFUSAL_STRONG.filter(
+  (re) => re.source.indexOf("language model") >= 0,
+);
+
 function stripThinking(text: string, cfg?: any): string {
   let t = String(text == null ? "" : text);
   if (cfg && cfg.refusalStripThinking === false) return t;
@@ -692,6 +702,27 @@ function stripThinking(text: string, cfg?: any): string {
 function stripThinkingAlways(text: string, cfg?: any): string {
   return stripThinking(text, { refusalThinkTags: cfg && cfg.refusalThinkTags });
 }
+// True when the span at [start,end) sits inside a pair of quotation marks.
+// Used only for the "I am an AI" patterns: a character in a story can say that
+// line, and when they do it is dialogue, not the model stepping out of the
+// scene. Straight and curly quotes both count.
+function spanIsQuoted(text: string, start: number, end: number): boolean {
+  const QUOTES = "\"\u201c\u201d\u00ab\u00bb";
+  let open = -1;
+  for (let i = start - 1; i >= 0; i--) {
+    const c = text[i];
+    if (c === "\n") break; // a line break ends any quotation for our purposes
+    if (QUOTES.indexOf(c) >= 0) { open = i; break; }
+  }
+  if (open < 0) return false;
+  for (let i = end; i < text.length; i++) {
+    const c = text[i];
+    if (c === "\n") return false;
+    if (QUOTES.indexOf(c) >= 0) return true;
+  }
+  return false;
+}
+
 function looksLikeRefusal(text: string, cfg?: any): boolean {
   const raw = stripThinking(String(text == null ? "" : text), cfg).trim();
   if (!raw) return false; // empty is handled by the empty branch
@@ -712,7 +743,19 @@ function looksLikeRefusal(text: string, cfg?: any): boolean {
 
   // Built-in English lists, unless the user has switched them off to run pure-custom.
   if (!cfg || cfg.refusalUseBuiltins !== false) {
-    for (const re of REFUSAL_STRONG) if (re.test(norm)) return true;
+    for (const re of REFUSAL_STRONG) {
+      const m = norm.match(re);
+      if (!m) continue;
+      // A self-identifying AI is a stock science-fiction character. Inside
+      // quotation marks it is that character talking, so it is left alone.
+      if (
+        SELF_ID_PATTERNS.indexOf(re) >= 0 &&
+        typeof m.index === "number" &&
+        spanIsQuoted(norm, m.index, m.index + m[0].length)
+      )
+        continue;
+      return true;
+    }
     const phrases = applySubs(
       REFUSAL_PHRASES,
       parseSubs(cfg && cfg.refusalPhraseSubs),
@@ -1917,7 +1960,13 @@ export function setup(ctx: Ctx, opts?: any) {
       scheduleRetry(p.chatId, "looks like an accidental refusal");
       return;
     }
-    if (cfg.retryOnShort && content.length < cfg.minChars) {
+    // Measured on the visible reply, not the raw output. A reasoning block can
+    // run to hundreds of characters, so counting it would let a two-word reply
+    // pass the length test on a thinking model.
+    if (
+      cfg.retryOnShort &&
+      stripThinkingAlways(content, cfg).trim().length < cfg.minChars
+    ) {
       scheduleRetry(p.chatId, "short");
       return;
     }
