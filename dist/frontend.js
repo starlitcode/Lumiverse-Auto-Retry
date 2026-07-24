@@ -2458,11 +2458,14 @@ export function setup(ctx, opts) {
             .map((f) => f.key);
         if (!keys.length) return null;
         const row = document.createElement('div');
-        row.style.cssText = 'display:flex;align-items:center;gap:8px;flex-wrap:wrap';
+        // Column, not a wrapping row: with a row the status sits beside the button
+        // when it is short and jumps below it when it is long, which reads as a bug.
+        row.style.cssText = 'display:flex;flex-direction:column;align-items:flex-start;gap:6px';
         const b = btn('Reset button selectors', false);
         b.style.padding = '5px 12px';
         const note = document.createElement('span');
-        note.style.cssText = 'font-size:12px;color:var(--lumiverse-text-muted,#9a93a8)';
+        // Height is held even while empty so the panel doesn't shift when it fills.
+        note.style.cssText = 'font-size:12px;min-height:16px;color:var(--lumiverse-text-muted,#9a93a8)';
         b.addEventListener('click', () => {
             let changed = 0;
             for (const k of keys) {
@@ -2591,11 +2594,15 @@ export function setup(ctx, opts) {
             row.appendChild(input);
             if (f.selector) {
                 const testRow = document.createElement('div');
-                testRow.style.cssText = 'display:flex;align-items:center;gap:8px';
+                testRow.style.cssText = 'display:flex;flex-direction:column;align-items:flex-start;gap:6px';
+                // The buttons share a line and wrap if the screen is narrow; the result
+                // sits under them either way, so it never gets squeezed or moved around.
+                const testBtns = document.createElement('div');
+                testBtns.style.cssText = 'display:flex;align-items:center;gap:8px;flex-wrap:wrap';
                 const test = btn('Test', false);
                 test.style.padding = '5px 12px';
                 const res = document.createElement('span');
-                res.style.cssText = 'font-size:12px;color:var(--lumiverse-text-muted,#9a93a8)';
+                res.style.cssText = 'font-size:12px;min-height:16px;color:var(--lumiverse-text-muted,#9a93a8)';
                 test.addEventListener('click', () => {
                     const sel = input.value.trim();
                     if (!sel) {
@@ -2623,8 +2630,9 @@ export function setup(ctx, opts) {
                     cfg[f.key] = input.value;
                     startPicking(f.key, String(f.label || ''));
                 });
-                testRow.appendChild(test);
-                testRow.appendChild(pick);
+                testBtns.appendChild(test);
+                testBtns.appendChild(pick);
+                testRow.appendChild(testBtns);
                 testRow.appendChild(res);
                 row.appendChild(testRow);
             }
