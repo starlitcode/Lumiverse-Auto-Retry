@@ -150,6 +150,25 @@ function applyRules(text: string): string {
   });
 }
 
+// Writes swapped text back. Content alone emits only MESSAGE_EDITED, which the
+// chat view does not redraw on, so the swap sat there unseen until the chat was
+// reopened. Supplying the swipe array as well makes the host emit SWIPE_EDITED
+// too, which the view does redraw on. The active slot is rewritten to the same
+// text the content patch sets, so the message is unchanged either way; only the
+// event that announces it differs. Falls back to a plain content patch when the
+// message carries no usable swipe array.
+async function writeSwapped(chatId: string, m: any, next: string): Promise<void> {
+  const patch: any = { content: next };
+  const swipes = m && Array.isArray(m.swipes) ? m.swipes.slice() : null;
+  const idx = m && typeof m.swipe_id === 'number' ? m.swipe_id : 0;
+  if (swipes && swipes.length > 0 && idx >= 0 && idx < swipes.length) {
+    swipes[idx] = next;
+    patch.swipes = swipes;
+    patch.swipe_id = idx;
+  }
+  await spindle.chat.updateMessage(chatId, m.id, patch);
+}
+
 function rebuild(): void {
   groups = buildGroups(rulesText, caseSensitive);
   combined = buildCombined(groups, caseSensitive);
@@ -226,7 +245,7 @@ spindle.onFrontendMessage(async (payload: any) => {
               if (!allowReSwap && swappedIds.has(m.id)) { skipped++; continue; }
               const content = String(m.content == null ? '' : m.content);
               const next = applyRules(content);
-              if (next !== content) { await spindle.chat.updateMessage(chatId, m.id, { content: next }); changed++; markSwapped(m.id); }
+              if (next !== content) { await writeSwapped(chatId, m, next); changed++; markSwapped(m.id); }
             }
           }
         } catch (_) { ok = false; }
@@ -257,6 +276,10 @@ spindle.on('GENERATION_ENDED', async (p: any) => {
     let content = typeof p.content === 'string' ? p.content : '';
     // Fetch to fill any missing content and to spot the greeting: the opening
     // message is authored, not generated, so it must never be swapped.
+    // Held so the write below can carry the swipe array, which is what makes the
+    // chat view redraw. Stays null if the message can't be read; the write then
+    // falls back to a plain content patch.
+    let target: any = null;
     try {
       const msgs = await spindle.chat.getMessages(chatId);
       if (Array.isArray(msgs) && msgs.length) {
@@ -267,6 +290,7 @@ spindle.on('GENERATION_ENDED', async (p: any) => {
           if (m) { messageId = m.id; if (!content) content = String(m.content == null ? '' : m.content); }
         }
         if (messageId != null && greetingId != null && messageId === greetingId) return; // never swap the greeting
+        target = msgs.find((x: any) => x && x.id === messageId) || null;
       }
     } catch (_) {}
     if (!content) return;
@@ -277,7 +301,7 @@ spindle.on('GENERATION_ENDED', async (p: any) => {
         try { spindle.sendToFrontend({ type: 'confirm_edit', chatId: chatId, messageId: messageId, requestId: 'ar-auto-' + Date.now() }); } catch (__) {}
         return;
       }
-      await spindle.chat.updateMessage(chatId, messageId, { content: next });
+      await writeSwapped(chatId, target || { id: messageId }, next);
       markSwapped(messageId);
     }
   } catch (e: any) {
