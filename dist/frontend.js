@@ -403,7 +403,7 @@ const SCHEMA = [{
 },
 {
     title: 'Advanced: buttons it clicks',
-    desc: "It works by clicking your own on-screen buttons. The three boxes are the buttons it needs: redoing a reply, swiping to a fresh one as a backup, and stopping a frozen reply. Each takes one CSS selector. List a few comma-separated as fallbacks. Put the most specific selectors first (like data-action or data-testid) and broader ones last (like aria-label or title), because it checks them in the exact order you list them. A comma inside brackets, parentheses or quotes stays part of the selector rather than splitting the list, so :is(a, b) and [aria-label=\"Next, swipe\"] each count as one entry. An entry that matches only a hidden or disabled button is passed over for the next one in the list. You only need this if retries aren't happening. The quickest way is Pick it for me: press it, then click the real button on screen. Otherwise paste a selector and press Test until it says match found. Test each while its button is on screen, since a hidden button won't match. The Stop button only appears while a reply is generating.",
+    desc: "It retries by clicking your own on-screen buttons, so you only need this if retries aren't happening. The quickest fix is Pick it for me: press it, then click the real button. Otherwise paste a CSS selector and press Test until it says match found, with that button on screen. The stop button only appears while a reply is generating. The README covers fallback lists and selector syntax.",
     fields: [{
         key: 'regenerateSelector',
         label: 'Your regenerate button',
