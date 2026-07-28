@@ -117,7 +117,7 @@ const CONFIG = {
   liveLog: false, // show a small on-screen panel with recent activity, updating live. Handy on mobile where dev tools aren't available.
 };
 
-// Fields the settings UI can edit, in display order. Single source of truth for
+// Fields the settings UI can edit, in display order. The one place that defines
 // both the form and what gets persisted. Every option above (except the two
 // internal timing constants) is listed here, so everything is user-editable.
 type FieldType = "bool" | "num" | "text";
@@ -172,7 +172,7 @@ const SCHEMA: Group[] = [
         key: "pauseWhenFailing",
         label: "Pause when everything is failing",
         type: "bool",
-        hint: "On by default. If several whole runs give up in a row, auto-retry stops for a while instead of trying again on every message. That usually means the provider is down rather than the reply being unlucky, and retrying through it only spends tokens. The next reply that comes back fine clears it, and you can still send and regenerate by hand while it's paused. The two boxes below set how many runs and how long.",
+        hint: "On by default. If several whole runs give up in a row, the provider is probably down, so auto-retry stops for a while instead of retrying on every message you send. The next reply that works clears it, and you can still send and regenerate by hand while it's paused. The two boxes below set how many runs and how long.",
       },
       {
         key: "breakerRuns",
@@ -243,7 +243,7 @@ const SCHEMA: Group[] = [
         key: "retryByNewReroll",
         label: "Retry by adding a new reroll",
         type: "bool",
-        hint: "Off: a retry redoes the reply in place, using your regenerate button. On some setups that clears the other rerolls on that message. On: a retry clicks your next / swipe button instead, which adds a new reroll and leaves the existing ones in place. This applies to every retry, including empty replies and errors. If the preferred button isn't on screen, or the click starts nothing, it uses the other button instead, so set both selectors in the buttons section below.",
+        hint: "Off: a retry redoes the reply in place with your regenerate button. On some setups that clears the other rerolls on that message. On: a retry clicks your next / swipe button, which adds a new reroll and keeps the existing ones. Either way, if that button isn't on screen or the click starts nothing, it uses the other one, so set both selectors in the buttons section below.",
       },
     ],
   },
@@ -297,13 +297,13 @@ const SCHEMA: Group[] = [
         key: "retryOnTruncated",
         label: "It cut off mid-sentence",
         type: "bool",
-        hint: "Retry when a reply clearly stops partway, like an open quote, an unfinished *action*, or a trailing comma. It's intentionally careful so it doesn't throw away good writing.",
+        hint: "Retry when a reply stops partway, like an open quote, an unfinished *action*, or a trailing comma. It's careful so it doesn't throw away good writing.",
       },
       {
         key: "retryOnNoPunct",
         label: "Also: it ends with no punctuation",
         type: "bool",
-        hint: "A stricter version of the line above. It can wrongly redo a reply that simply ends on a word, so most people leave this off.",
+        hint: "A stricter version of the line above. It can wrongly redo a reply that ends on a word, so most people leave this off.",
       },
       {
         key: "retryOnShort",
@@ -423,7 +423,7 @@ const SCHEMA: Group[] = [
         key: "refusalStripThinking",
         label: "Ignore the thinking / reasoning",
         type: "bool",
-        hint: "On by default. Only the final reply is checked for a refusal, never the model's thinking. Known reasoning blocks (like <think> or <thinking>) are stripped before checking, so a refusal the model weighs while reasoning but doesn't put in the reply won't cause a retry. Turn it off to check the whole raw output for a refusal. This affects refusal matching only. Empty and cut-off checks always look past the thinking, since a reply that is nothing but a think block is empty either way.",
+        hint: "On by default. Only the final reply is checked for a refusal, never the model's thinking, so a refusal it weighs up while reasoning but leaves out of the reply won't cause a retry. Turn it off to check the whole raw output. This affects refusal matching only: the empty and cut-off checks always look past the thinking.",
       },
       {
         key: "refusalThinkTags",
@@ -455,7 +455,7 @@ const SCHEMA: Group[] = [
         key: "confirmButtonLabels",
         label: "Extra dialog buttons it may press",
         type: "text",
-        hint: "Almost nobody needs this. If you use Lumiverse's Regeneration Feedback, a retry opens that box and Auto Retry presses Skip so the reply carries on. This is for the case where that box, or any other pop-up a retry opens, uses different wording, so nothing gets pressed and it sits there. Type the button's text exactly as it appears on screen, one per line, like Skip. Capitals don't matter, no commas or quotes. It already knows Skip, Regenerate, Confirm, Proceed, Submit and OK, and yours are tried first. It only ever presses a button inside a pop-up that opened right after a retry, so it can't click anything on your toolbar.",
+        hint: "Almost nobody needs this. If you use Lumiverse's Regeneration Feedback, a retry opens that box and Auto Retry presses Skip to carry on. Use this box if your button says something else, so it gets pressed too. Type the button's text exactly as it appears, one per line. Capitals are ignored. It already knows Skip, Regenerate, Confirm, Proceed, Submit and OK, and anything you add is tried first.",
       },
       {
         key: "stopSelector",
@@ -483,7 +483,7 @@ const SCHEMA: Group[] = [
 // Final content present but cut off mid-sentence. Lumiverse does not expose
 // finish_reason on GENERATION_ENDED (confirmed against the Generation API), so
 // this works off the only signal a frontend extension has: the shape of the
-// text. Conservative on purpose to avoid re-rolling good roleplay replies.
+// text. Kept conservative to avoid re-rolling good roleplay replies.
 function looksTruncated(
   text: string,
   retryOnNoPunct: boolean,
@@ -536,7 +536,7 @@ function looksTruncated(
 // stops at the cap. The request is sent unchanged: no prompt edits, no word
 // swaps, no message-role changes.
 //
-// It's layered on purpose, since refusal wording drifts between models and over
+// It's layered, since refusal wording drifts between models and over
 // time: tight regexes for the shapes that need context, a flat phrase list for
 // the many near-identical templates seen across ChatGPT / Claude / Gemini, and
 // two user-editable lists (add your own, or whitelist a line that keeps getting
@@ -607,7 +607,7 @@ const REFUSAL_STRONG: RegExp[] = [
   // refusing a task" from "a character refusing a person," so declining an
   // invitation, a duel, or a marriage proposal in-scene will NOT match.
   /\bI(?: (?:can(?:no|')?t|cannot|will not|won'?t|must not|must|have to|need to|refuse to|decline to|am (?:not able|unable) to|am going to have to)|'m (?:not able|unable) to|'m going to have to)\b[^.?!\n]{0,30}?\b(?:this|that|your|the) (?:request|prompt|content|message|scenario|roleplay)\b/i,
-  // Assistant-only verbs (assist / comply / fulfill) that essentially never
+  // Assistant-only verbs (assist / comply / fulfill) that almost never
   // appear in first-person roleplay dialogue.
   // The object matters: a refusal is aimed at "that" or "this request", never at
   // a concrete thing in the scene. Without this, a servant or aide saying "I
@@ -627,7 +627,7 @@ const REFUSAL_STRONG: RegExp[] = [
   // (assist / comply / fulfill); this covers "participate" and "engage", which a
   // character could say, so a meta object is required: roleplay, a scenario, or
   // qualified content. "I cannot participate in this duel" has none of those and
-  // stays safe. Bare "content" is deliberately excluded, since "he said, content
+  // stays safe. Bare "content" is left out, since "he said, content
   // to wait" would otherwise match.
   /\bI(?: (?:can(?:no|')?t|cannot|will not|won'?t|do not|don'?t|am (?:not able|unable) to)|'m (?:not able|unable) to) (?:participate|engage)\b[^.?!\n]{0,40}?\b(?:role-?play(?:ing|s)?|scenarios?|(?:sexual|explicit|adult|nsfw|romantic|such|this|that) content)\b/i,
   // Fiction disclaimer. Nobody writes this inside a scene; it only appears when
@@ -640,7 +640,7 @@ const REFUSAL_STRONG: RegExp[] = [
 
 // Tier 2: flat phrase list, matched as normalized lowercase substrings. Covers
 // the many near-identical refusal templates across providers without a regex
-// each. All things a character in a scene basically never says.
+// each. All things a character in a scene almost never says.
 const REFUSAL_PHRASES = [
   "i can't help with that",
   "i cannot help with that",
@@ -791,7 +791,7 @@ function looksLikeRefusal(text: string, cfg?: any): boolean {
 
 // Some providers deliver a refusal as an error string (e.g. a prohibited-content
 // result) rather than as reply text. This matches that, tuned for short error
-// messages, and deliberately narrow to content-moderation wording so it never
+// messages, and stay narrow to content-moderation wording so it never
 // fires on a network error like "connection refused" or a timeout. Only used as
 // a fallback when the user has turned normal error-retries off but still wants
 // refusals caught. Respects the user's phrase lists and the built-ins toggle.
@@ -1382,7 +1382,7 @@ export function setup(ctx: Ctx, opts?: any) {
       // careful it is, which belongs to the person loading the preset rather
       // than the person who saved it. replaceEnabled would let a preset start
       // rewriting replies unasked, and confirmBeforeEdit would let one remove a
-      // confirmation someone deliberately turned on; those two matter most.
+      // confirmation someone chose to turn on; those two matter most.
       // Exporting still carries all of them.
       omit: [
         "replaceEnabled",
@@ -1395,7 +1395,7 @@ export function setup(ctx: Ctx, opts?: any) {
   };
   // Derived from the export category so the two stay in step, minus whatever
   // that kind omits. Load walks this list rather than the stored values, so a
-  // preset saved before an omission simply ignores the extra keys.
+  // preset saved before an omission ignores the extra keys.
   function keysForKind(kind: string): string[] {
     const k = PRESET_KINDS[kind];
     if (!k) return [];
@@ -1704,13 +1704,13 @@ export function setup(ctx: Ctx, opts?: any) {
   // extension itself clicked something, it only accepts a button that was not
   // already on screen before that click, and it only accepts a short list of
   // affirmative labels. A Cancel or Delete is never a candidate.
-  // Order is preference. Skip comes first on purpose: it means "carry on without
+  // Order is preference. Skip comes first: it means "carry on without
   // the optional step", which is exactly what an unattended retry wants, and it
   // avoids submitting guidance the user saved for a retry they meant to steer
   // themselves. Anything that would abandon the action lives in the deny list
   // below, so Skip can never stand in for Cancel.
   //
-  // No "continue" here on purpose either: that is a toolbar action of its own,
+  // "continue" is left out too: that is a toolbar action of its own,
   // and it extends the reply rather than re-rolling it.
   const CONFIRM_LABELS = [
     /^skip$/i,
@@ -1827,7 +1827,7 @@ export function setup(ctx: Ctx, opts?: any) {
       const label = buttonLabel(el);
       if (!label) continue;
       // The deny list guards the built-in guesses. A label typed by hand is a
-      // deliberate choice, so it is allowed through.
+      // choice they made, so it is allowed through.
       const chosen = userConfirmLabels().indexOf(label.toLowerCase()) >= 0;
       if (!chosen && CONFIRM_DENY.test(label)) continue;
       if (!inDialog(el)) continue; // a bare toolbar button is not a confirmation
@@ -2006,7 +2006,7 @@ export function setup(ctx: Ctx, opts?: any) {
     }, first ? CONFIRM_FIRST_MS : CONFIRM_POLL_MS);
   }
 
-  const START_WAIT_ROUNDS = 3; // extra grace rounds while something is clearly generating
+  const START_WAIT_ROUNDS = 3; // extra grace rounds while something is generating
   function armStartWatchdog(
     chatId: string,
     via: string,
@@ -2081,7 +2081,7 @@ export function setup(ctx: Ctx, opts?: any) {
         failedRuns = 0;
         log("paused for " + mins + " min after " + runsNeeded + " failed runs");
         // Forced: the toast setting covers the pop-up on each retry, and going
-        // quiet for minutes at a time is a state change rather than a retry. A
+        // quiet for minutes at a time is a state change, not a retry. A
         // user who sees nothing has no way to tell this from the thing breaking.
         showToast(
           "Auto-retry paused for " + mins + (mins === 1 ? " minute" : " minutes") +
@@ -2407,9 +2407,9 @@ export function setup(ctx: Ctx, opts?: any) {
       // click reaches here too. Standing down on it would suppress the retry
       // being scheduled right behind it, so our own clicks are skipped.
       if (selfClicking > 0) return;
-      // Any deliberate click during the short window after a retry means the
+      // Any click by the user during the short window after a retry means the
       // user is driving. Back off rather than press a dialog button underneath
-      // them, which could take a feedback prompt they opened on purpose.
+      // them, which could take a feedback prompt they opened themselves.
       clearConfirmWatch();
       const tgt =
         e && e.target && e.target.closest
@@ -3723,7 +3723,7 @@ export function setup(ctx: Ctx, opts?: any) {
     overlay.appendChild(box);
     (document.body || document.documentElement).appendChild(overlay);
     closeExpandEditor = close;
-    // Deliberately not focusing the textarea, so opening it doesn't pop the
+    // The textarea is not focused, so opening it doesn't pop the
     // on-screen keyboard on mobile. Tap the text when you want to edit.
   }
 
