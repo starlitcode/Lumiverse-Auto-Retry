@@ -1668,6 +1668,9 @@ export function setup(ctx: Ctx, opts?: any) {
   function standDown(chatId: string, announce?: boolean) {
     const s = st(chatId);
     const hadPending = s.pending || !!s.timer || s.attempts > 0;
+    // Otherwise a dialog raised by the retry that was just called off could
+    // still be confirmed, starting a reply the user had stopped.
+    clearConfirmWatch();
     clearTimers(s);
     s.attempts = 0;
     s.suppressUntil = Date.now() + STAND_DOWN_MS;
@@ -1719,6 +1722,8 @@ export function setup(ctx: Ctx, opts?: any) {
       try {
         const role = p.getAttribute && p.getAttribute("role");
         if (role === "dialog" || role === "alertdialog") return true;
+        if (p.getAttribute && p.getAttribute("data-component") === "RegenFeedbackModal")
+          return true;
         if (p.getAttribute && p.getAttribute("aria-modal") === "true") return true;
         const cls = String((p && p.className) || "");
         if (/modal|dialog|popover|popup|overlay|sheet|drawer/i.test(cls)) return true;
@@ -1727,6 +1732,36 @@ export function setup(ctx: Ctx, opts?: any) {
       hops++;
     }
     return false;
+  }
+
+  // Lumiverse's own regeneration-feedback dialog, handled by name rather than
+  // guessed at. The button class names are hashed per build (_btnSkip_1a2b_3),
+  // but the readable part survives, so a substring match keeps working.
+  const REGEN_MODAL = '[data-component="RegenFeedbackModal"]';
+  const REGEN_BUTTONS = ['[class*="btnSkip"]', '[class*="btnSubmit"]'];
+
+  // Skip means "regenerate without feedback", which is what an automatic retry
+  // wants: the dialog exists so a person can steer a retry they asked for, and
+  // this one nobody asked for. Submit is the fallback, and it is tried second
+  // because it can be disabled while the guidance box is empty. Cancel is never
+  // touched, since that would abandon the retry entirely.
+  function findRegenModalButton(): any {
+    if (typeof document === "undefined") return null;
+    let root: any = null;
+    try {
+      root = document.querySelector(REGEN_MODAL);
+    } catch (_) {
+      return null;
+    }
+    if (!root || !root.querySelector) return null;
+    for (const sel of REGEN_BUTTONS) {
+      let b: any = null;
+      try {
+        b = root.querySelector(sel);
+      } catch (_) {}
+      if (b && clickable(b)) return b;
+    }
+    return null;
   }
 
   const buttonLabel = (el: any): string => {
@@ -1803,6 +1838,14 @@ export function setup(ctx: Ctx, opts?: any) {
       // A visible stop control means the reply is already running, so there is
       // no dialog in the way and nothing to press.
       if (find(cfg.stopSelector)) return;
+      // The known dialog first, by name. Anything else falls back to the
+      // label scan below.
+      const known = findRegenModalButton();
+      if (known) {
+        log("regeneration feedback dialog opened; skipping past it");
+        clickHostControl(known);
+        return;
+      }
       const btn = findNewConfirm(before);
       if (btn) {
         log("a dialog opened after the retry click; confirming it");
@@ -2210,6 +2253,10 @@ export function setup(ctx: Ctx, opts?: any) {
       // click reaches here too. Standing down on it would suppress the retry
       // being scheduled right behind it, so our own clicks are skipped.
       if (selfClicking > 0) return;
+      // Any deliberate click during the short window after a retry means the
+      // user is driving. Back off rather than press a dialog button underneath
+      // them, which could take a feedback prompt they opened on purpose.
+      clearConfirmWatch();
       const tgt =
         e && e.target && e.target.closest
           ? e.target.closest(cfg.stopSelector)
