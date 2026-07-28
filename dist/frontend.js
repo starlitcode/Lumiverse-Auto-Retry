@@ -25,7 +25,7 @@ const START_GRACE_MS = 6000;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = '3.2.0';
+const VERSION = '3.2.1';
 // ---- defaults (the UI overrides these; editing here changes the fallback) ----
 const CONFIG = {
     enabled: true,
@@ -425,7 +425,7 @@ const SCHEMA = [{
         key: 'confirmButtonLabels',
         label: 'Extra dialog buttons it may press',
         type: 'text',
-        hint: "Only needed if a dialog opens when it retries and then just sits there. Type the button's text exactly as it appears on screen, one per line, like Skip. Capitals don't matter, and no commas or quotes. It already knows Skip, Regenerate, Confirm, Proceed, Submit and OK, so add wording here only if yours differs, for example if Lumiverse is in another language. Yours are tried first, so you can also use this to change which button it prefers. It only ever presses a button inside a dialog that opened right after a retry, so adding a word here cannot make it click anything on your toolbar."
+        hint: "Almost nobody needs this. If you use Lumiverse's Regeneration Feedback, a retry opens that box and Auto Retry presses Skip so the reply carries on. This is for the case where that box, or any other pop-up a retry opens, uses different wording, so nothing gets pressed and it sits there. Type the button's text exactly as it appears on screen, one per line, like Skip. Capitals don't matter, no commas or quotes. It already knows Skip, Regenerate, Confirm, Proceed, Submit and OK, and yours are tried first. It only ever presses a button inside a pop-up that opened right after a retry, so it can't click anything on your toolbar."
     },
     {
         key: 'stopSelector',
@@ -1495,6 +1495,9 @@ export function setup(ctx, opts) {
     // standing down on the first try. Capped so it can never sit on a button.
     let confirmClicks = 0;
     const CONFIRM_MAX_CLICKS = 3;
+    // Longest a dialog may stay hidden under any circumstances.
+    const HIDE_FAILSAFE_MS = 4000;
+    const DIALOG_SELECTOR = '[role="dialog"],[role="alertdialog"],[aria-modal="true"],[class*="modal" i],[class*="dialog" i],[class*="overlay" i]';
     // A confirm button lives inside a dialog. The toolbar's own Regenerate button
     // carries the same label, so without this the scan could press that instead
     // and loop. Element identity alone is not enough to tell them apart, because
@@ -1538,6 +1541,12 @@ export function setup(ctx, opts) {
             const label = buttonLabel(el);
             if (label && CONFIRM_LABELS.some((re) => re.test(label))) out.add(el);
         }
+        // Dialogs already open go in the same set, so one the user opened before the
+        // retry is never mistaken for one the retry raised, and never hidden.
+        try {
+            const dialogs = document.querySelectorAll(DIALOG_SELECTOR);
+            for (const el of Array.prototype.slice.call(dialogs)) out.add(el);
+        } catch (_) {}
         return out;
     }
     // Labels the user added, lower-cased and trimmed. Read fresh each time so a
@@ -1584,6 +1593,55 @@ export function setup(ctx, opts) {
         }
         return null;
     }
+    // Dialogs currently hidden, with the inline styles they had before. Nothing
+    // is ever left hidden: every path that ends the watch restores these, and a
+    // separate failsafe restores them even if that somehow doesn't run.
+    let hidden = [];
+    let hideFailsafe = null;
+    function restoreHiddenDialogs() {
+        if (hideFailsafe) {
+            clearTimeout(hideFailsafe);
+            hideFailsafe = null;
+        }
+        for (const h of hidden) {
+            try {
+                h.el.style.opacity = h.o;
+                h.el.style.pointerEvents = h.p;
+                h.el.style.transition = h.t;
+            } catch (_) {}
+        }
+        hidden = [];
+    }
+    // Anything dialog-shaped that has turned up since the retry click. Hidden
+    // rather than removed, and with pointer events switched off so that even in
+    // the worst case an unseen dialog cannot swallow taps.
+    function hideNewDialogs(before) {
+        if (typeof document === 'undefined') return;
+        let list = [];
+        try {
+            list = document.querySelectorAll(DIALOG_SELECTOR);
+        } catch (_) {
+            return;
+        }
+        for (const el of Array.prototype.slice.call(list)) {
+            if (before.has(el)) continue; // was already on screen, not ours
+            if (hidden.some((h) => h.el === el)) continue;
+            try {
+                if (el.closest && el.closest('#__lvRetryToast,#__lvRetrySettings')) continue;
+            } catch (_) {}
+            try {
+                hidden.push({ el: el, o: el.style.opacity || '', p: el.style.pointerEvents || '', t: el.style.transition || '' });
+                el.style.transition = 'none';
+                el.style.opacity = '0';
+                el.style.pointerEvents = 'none';
+            } catch (_) {}
+        }
+        if (hidden.length && !hideFailsafe) {
+            // Independent of everything else. If the watch is somehow never wound up,
+            // this still puts the dialog back rather than leaving it invisible.
+            hideFailsafe = setTimeout(restoreHiddenDialogs, HIDE_FAILSAFE_MS);
+        }
+    }
     function clearConfirmWatch() {
         if (confirmTimer) {
             clearTimeout(confirmTimer);
@@ -1595,6 +1653,9 @@ export function setup(ctx, opts) {
             } catch (_) {}
             confirmObserver = null;
         }
+        // A dialog only stays hidden while it is actively being clicked through.
+        // The moment the watch ends, for any reason, it goes back on screen.
+        restoreHiddenDialogs();
     }
     // One look for a dialog to click through. Returns true when there is nothing
     // left to wait for, either because it pressed something or because the reply
@@ -1606,6 +1667,10 @@ export function setup(ctx, opts) {
             clearConfirmWatch();
             return true;
         }
+        // Out of sight before it is identified, so there is nothing to see even on a
+        // slow device. If it turns out not to be dismissable, the restore above puts
+        // it straight back.
+        hideNewDialogs(before);
         const btn = findNewConfirm(before);
         if (!btn) return false;
         if (confirmClicks >= CONFIRM_MAX_CLICKS) {
