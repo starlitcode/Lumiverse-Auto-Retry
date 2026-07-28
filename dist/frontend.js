@@ -25,7 +25,7 @@ const START_GRACE_MS = 6000;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = '3.1.2';
+const VERSION = '3.1.3';
 // ---- defaults (the UI overrides these; editing here changes the fallback) ----
 const CONFIG = {
     enabled: true,
@@ -1440,6 +1440,125 @@ export function setup(ctx, opts) {
     // between rerolls that already exist, and a stale control does nothing at
     // all. Wait for a generation to begin; if none does, click the other control
     // once, then give the attempt up so the next user message starts clean.
+    // Some setups put a dialog between the regenerate button and the generation,
+    // asking for guidance before it re-rolls. Clicking regenerate then opens that
+    // dialog and stops, because the reply only starts once its own button is
+    // pressed. This finds that button and presses it.
+    //
+    // Safety rests on three things: it only looks in the moment after the
+    // extension itself clicked something, it only accepts a button that was not
+    // already on screen before that click, and it only accepts a short list of
+    // affirmative labels. A Cancel or Delete is never a candidate.
+    // No "continue" here on purpose: that is a toolbar action of its own, and it
+    // extends the reply rather than re-rolling it.
+    const CONFIRM_LABELS = [
+        /^re-?generate$/i,
+        /^re-?generate now$/i,
+        /^confirm$/i,
+        /^proceed$/i,
+        /^submit$/i,
+        /^ok(ay)?$/i,
+        /^skip$/i,
+    ];
+    const CONFIRM_DENY = /cancel|close|dismiss|delete|discard|remove|revert|undo|back|no thanks|never ?mind/i;
+    const CONFIRM_POLL_MS = 200;
+    const CONFIRM_TRIES = 8; // about 1.6s, then it gives up and leaves things alone
+    let confirmTimer = null;
+    // A confirm button lives inside a dialog. The toolbar's own Regenerate button
+    // carries the same label, so without this the scan could press that instead
+    // and loop. Element identity alone is not enough to tell them apart, because
+    // the app rebuilds those nodes when it re-renders and they then look new.
+    function inDialog(el) {
+        let p = el;
+        let hops = 0;
+        while (p && hops < 12) {
+            try {
+                const role = p.getAttribute && p.getAttribute('role');
+                if (role === 'dialog' || role === 'alertdialog') return true;
+                if (p.getAttribute && p.getAttribute('aria-modal') === 'true') return true;
+                const cls = String((p && p.className) || '');
+                if (/modal|dialog|popover|popup|overlay|sheet|drawer/i.test(cls)) return true;
+            } catch (_) {}
+            p = p.parentElement;
+            hops++;
+        }
+        return false;
+    }
+    const buttonLabel = (el) => {
+        let v = '';
+        try {
+            v = (el.getAttribute && el.getAttribute('aria-label')) || (el.getAttribute && el.getAttribute('title')) || el.textContent || '';
+        } catch (_) {}
+        return String(v).replace(/\s+/g, ' ').trim();
+    };
+    // Everything currently on screen that could pass as a confirm button. Taken
+    // before our click so anything already there is ruled out afterwards.
+    function confirmSnapshot() {
+        const out = new Set();
+        if (typeof document === 'undefined') return out;
+        let list = [];
+        try {
+            list = document.querySelectorAll('button,[role="button"]');
+        } catch (_) {
+            return out;
+        }
+        for (const el of Array.prototype.slice.call(list)) {
+            const label = buttonLabel(el);
+            if (label && CONFIRM_LABELS.some((re) => re.test(label))) out.add(el);
+        }
+        return out;
+    }
+    function findNewConfirm(before) {
+        if (typeof document === 'undefined') return null;
+        let list = [];
+        try {
+            list = document.querySelectorAll('button,[role="button"]');
+        } catch (_) {
+            return null;
+        }
+        const fresh = [];
+        for (const el of Array.prototype.slice.call(list)) {
+            if (before.has(el)) continue; // was already there, so our click didn't raise it
+            const label = buttonLabel(el);
+            if (!label || CONFIRM_DENY.test(label)) continue;
+            if (!inDialog(el)) continue; // a bare toolbar button is not a confirmation
+            if (!clickable(el)) continue;
+            try {
+                // Never our own panels.
+                if (el.closest && el.closest('#__lvRetryToast,#__lvRetrySettings')) continue;
+            } catch (_) {}
+            fresh.push(el);
+        }
+        // Most affirmative label wins, so Regenerate is preferred over Skip.
+        for (const re of CONFIRM_LABELS) {
+            for (const el of fresh) if (re.test(buttonLabel(el))) return el;
+        }
+        return null;
+    }
+    function clearConfirmWatch() {
+        if (confirmTimer) {
+            clearTimeout(confirmTimer);
+            confirmTimer = null;
+        }
+    }
+    function watchForConfirm(before, tries) {
+        const left = typeof tries === 'number' ? tries : CONFIRM_TRIES;
+        clearConfirmWatch();
+        if (left <= 0) return;
+        confirmTimer = setTimeout(() => {
+            confirmTimer = null;
+            // A visible stop control means the reply is already running, so there is
+            // no dialog in the way and nothing to press.
+            if (find(cfg.stopSelector)) return;
+            const btn = findNewConfirm(before);
+            if (btn) {
+                log('a dialog opened after the retry click; confirming it');
+                clickHostControl(btn);
+                return;
+            }
+            watchForConfirm(before, left - 1);
+        }, CONFIRM_POLL_MS);
+    }
     const START_WAIT_ROUNDS = 3; // extra grace rounds while something is clearly generating
     function armStartWatchdog(chatId, via, allowFallback, waits) {
         const s = st(chatId);
@@ -1467,7 +1586,9 @@ export function setup(ctx, opts) {
                 const other = find(otherSel);
                 if (other) {
                     s.expectingStart = Date.now();
+                    const beforeOther = confirmSnapshot();
                     if (clickHostControl(other)) {
+                        watchForConfirm(beforeOther);
                         log('no generation after the ' + via + ' click, trying ' + otherVia, chatId);
                         armStartWatchdog(chatId, otherVia, false);
                         return;
@@ -1533,6 +1654,7 @@ export function setup(ctx, opts) {
             // straight off the click, and that start has to be able to cancel the
             // watchdog rather than land before it exists.
             s.expectingStart = Date.now();
+            const before = confirmSnapshot();
             const via = fireRetry();
             if (!via) {
                 s.expectingStart = 0;
@@ -1540,6 +1662,7 @@ export function setup(ctx, opts) {
                 s.attempts = 0;
                 return;
             }
+            watchForConfirm(before);
             armStartWatchdog(chatId, via, true);
         },
         delay);
@@ -1575,6 +1698,7 @@ export function setup(ctx, opts) {
         } // fresh, user-initiated generation
         s.selfTriggered = false;
         s.genId = p.generationId;
+        clearConfirmWatch(); // a reply is running, so no dialog is in the way
         s.sawReasoning = false;
         s.sawContent = false;
         s.buf = '';
@@ -2860,7 +2984,7 @@ export function setup(ctx, opts) {
     // Lets someone point at the control instead of writing a selector for it. The
     // settings modal steps out of the way, the next click on the page is caught
     // before the app sees it, and the element under it becomes the selector.
-    const PRESS_EVENTS = ['pointerdown', 'mousedown', 'touchstart'];
+    const PRESS_EVENTS = ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'touchstart', 'touchend'];
     function startPicking(key, label) {
         if (typeof document === 'undefined') return;
         // Refresh the baseline first: dismissing the modal rolls cfg back to it, so
@@ -3057,6 +3181,7 @@ export function setup(ctx, opts) {
     disposers.push(() => { try { replaceActionOff && replaceActionOff(); } catch(_) {} try { replaceAction && replaceAction.destroy(); } catch(_) {} });
     log('ready v' + VERSION, cfg);
     return () => {
+        clearConfirmWatch();
         offs.forEach((o) => {
             try {
                 o && o();
