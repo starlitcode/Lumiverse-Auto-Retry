@@ -1452,16 +1452,22 @@ export function setup(ctx, opts) {
     // extension itself clicked something, it only accepts a button that was not
     // already on screen before that click, and it only accepts a short list of
     // affirmative labels. A Cancel or Delete is never a candidate.
-    // No "continue" here on purpose: that is a toolbar action of its own, and it
-    // extends the reply rather than re-rolling it.
+    // Order is preference. Skip comes first on purpose: it means "carry on without
+    // the optional step", which is exactly what an unattended retry wants, and it
+    // avoids submitting guidance the user saved for a retry they meant to steer
+    // themselves. Anything that would abandon the action lives in the deny list
+    // below, so Skip can never stand in for Cancel.
+    //
+    // No "continue" here on purpose either: that is a toolbar action of its own,
+    // and it extends the reply rather than re-rolling it.
     const CONFIRM_LABELS = [
+        /^skip$/i,
         /^re-?generate$/i,
         /^re-?generate now$/i,
         /^confirm$/i,
         /^proceed$/i,
         /^submit$/i,
         /^ok(ay)?$/i,
-        /^skip$/i,
     ];
     const CONFIRM_DENY = /cancel|close|dismiss|delete|discard|remove|revert|undo|back|no thanks|never ?mind/i;
     const CONFIRM_POLL_MS = 200;
@@ -1487,34 +1493,6 @@ export function setup(ctx, opts) {
             hops++;
         }
         return false;
-    }
-    // Lumiverse's own regeneration-feedback dialog, handled by name rather than
-    // guessed at. The button class names are hashed per build (_btnSkip_1a2b_3),
-    // but the readable part survives, so a substring match keeps working.
-    const REGEN_MODAL = '[data-component="RegenFeedbackModal"]';
-    const REGEN_BUTTONS = ['[class*="btnSkip"]', '[class*="btnSubmit"]'];
-    // Skip means "regenerate without feedback", which is what an automatic retry
-    // wants: the dialog exists so a person can steer a retry they asked for, and
-    // this one nobody asked for. Submit is the fallback, and it is tried second
-    // because it can be disabled while the guidance box is empty. Cancel is never
-    // touched, since that would abandon the retry entirely.
-    function findRegenModalButton() {
-        if (typeof document === 'undefined') return null;
-        let root = null;
-        try {
-            root = document.querySelector(REGEN_MODAL);
-        } catch (_) {
-            return null;
-        }
-        if (!root || !root.querySelector) return null;
-        for (const sel of REGEN_BUTTONS) {
-            let b = null;
-            try {
-                b = root.querySelector(sel);
-            } catch (_) {}
-            if (b && clickable(b)) return b;
-        }
-        return null;
     }
     const buttonLabel = (el) => {
         let v = '';
@@ -1582,14 +1560,6 @@ export function setup(ctx, opts) {
             // A visible stop control means the reply is already running, so there is
             // no dialog in the way and nothing to press.
             if (find(cfg.stopSelector)) return;
-            // The known dialog first, by name. Anything else falls back to the
-            // label scan below.
-            const known = findRegenModalButton();
-            if (known) {
-                log('regeneration feedback dialog opened; skipping past it');
-                clickHostControl(known);
-                return;
-            }
             const btn = findNewConfirm(before);
             if (btn) {
                 log('a dialog opened after the retry click; confirming it');
