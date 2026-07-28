@@ -1734,6 +1734,11 @@ export function setup(ctx: Ctx, opts?: any) {
   // can be pressed in the same frame it appears and is usually gone again before
   // it has been drawn. The timer below stays as a backstop.
   let confirmObserver: any = null;
+  // Presses made in the current window. A press can land before the dialog is
+  // ready to act on it, so the watch keeps looking afterwards instead of
+  // standing down on the first try. Capped so it can never sit on a button.
+  let confirmClicks = 0;
+  const CONFIRM_MAX_CLICKS = 3;
 
   // A confirm button lives inside a dialog. The toolbar's own Regenerate button
   // carries the same label, so without this the scan could press that instead
@@ -1860,10 +1865,24 @@ export function setup(ctx: Ctx, opts?: any) {
     }
     const btn = findNewConfirm(before);
     if (!btn) return false;
+    if (confirmClicks >= CONFIRM_MAX_CLICKS) {
+      log("dialog did not respond to being confirmed; leaving it alone");
+      clearConfirmWatch();
+      return true;
+    }
+    confirmClicks += 1;
     log("a dialog opened after the retry click; confirming it");
-    clearConfirmWatch();
+    // The observer is dropped here but the timer keeps running: our own press
+    // churns the page, and reacting to that would spin. The timer looks again
+    // shortly, so a press that did not take is tried once more.
+    if (confirmObserver) {
+      try {
+        confirmObserver.disconnect();
+      } catch (_) {}
+      confirmObserver = null;
+    }
     clickHostControl(btn);
-    return true;
+    return false;
   }
 
   function watchForConfirm(before: Set<any>, tries?: number) {
@@ -1871,6 +1890,7 @@ export function setup(ctx: Ctx, opts?: any) {
     const left = first ? CONFIRM_TRIES : (tries as number);
     if (first) {
       clearConfirmWatch();
+      confirmClicks = 0;
       try {
         if (typeof MutationObserver !== "undefined" && document.body) {
           confirmObserver = new MutationObserver(() => {
