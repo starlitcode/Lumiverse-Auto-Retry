@@ -248,7 +248,7 @@ If a click lands but no reply starts, which happens when a next / swipe button m
 
 Lumiverse has a **Regeneration Feedback** option. With it on, pressing regenerate doesn't regenerate straight away: it opens a box asking for guidance to pass to the next attempt. That box is what actually starts the reply, so anything that presses regenerate for you has to deal with it.
 
-Auto Retry handles this. When it retries and that dialog appears, it presses **Skip**, which means "regenerate without guidance". You'll see the dialog flash on screen for a moment as it goes past. That's expected: it's pressing the real button, so the dialog has to exist for there to be a button to press.
+Auto Retry handles this. When it retries and that dialog appears, it presses **Skip**, which means "regenerate without guidance". It reacts the moment the dialog is inserted, so usually you won't see it at all, though on a slow device it may flicker. That's expected rather than a fault: it presses the real button, so the dialog has to exist for there to be a button to press.
 
 A few things it deliberately does not do:
 
@@ -256,7 +256,7 @@ A few things it deliberately does not do:
 - If you click anything, or press stop, while it's about to skip, it backs off and leaves the dialog alone.
 - It never presses **Cancel**, and it never submits guidance you'd saved as a draft.
 
-You don't have to turn Regeneration Feedback off for Auto Retry to work. If you don't use it, leaving it off just means one less thing flashing past.
+You don't need to change either setting. Keep Regeneration Feedback on if you use it, and it will still open normally every time you press regenerate yourself. There's no need to turn Auto Retry off to use it, or the other way round.
 
 ### Extra dialog buttons it may press
 
