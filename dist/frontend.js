@@ -425,7 +425,7 @@ const SCHEMA = [{
         key: 'confirmButtonLabels',
         label: 'Extra dialog buttons it may press',
         type: 'text',
-        hint: "Optional, one per line. If a dialog appears when Auto Retry retries, it presses that dialog's own button to carry on. It already knows Skip, Regenerate, Confirm, Proceed, Submit and OK. Add wording here if your language or setup uses something else. Anything you add is tried before the built-in list. It still only ever presses a button inside a dialog that appeared right after a retry, so this cannot make it click things elsewhere."
+        hint: "Only needed if a dialog opens when it retries and then just sits there. Type the button's text exactly as it appears on screen, one per line, like Skip. Capitals don't matter, and no commas or quotes. It already knows Skip, Regenerate, Confirm, Proceed, Submit and OK, so add wording here only if yours differs, for example if Lumiverse is in another language. Yours are tried first, so you can also use this to change which button it prefers. It only ever presses a button inside a dialog that opened right after a retry, so adding a word here cannot make it click anything on your toolbar."
     },
     {
         key: 'stopSelector',
@@ -1486,6 +1486,10 @@ export function setup(ctx, opts) {
     const CONFIRM_POLL_MS = 150;
     const CONFIRM_TRIES = 11; // about 1.5s in total, then it leaves things alone
     let confirmTimer = null;
+    // Watches for the dialog being inserted rather than checking on a timer, so it
+    // can be pressed in the same frame it appears and is usually gone again before
+    // it has been drawn. The timer below stays as a backstop.
+    let confirmObserver = null;
     // A confirm button lives inside a dialog. The toolbar's own Regenerate button
     // carries the same label, so without this the scan could press that instead
     // and loop. Element identity alone is not enough to tell them apart, because
@@ -1580,24 +1584,58 @@ export function setup(ctx, opts) {
             clearTimeout(confirmTimer);
             confirmTimer = null;
         }
+        if (confirmObserver) {
+            try {
+                confirmObserver.disconnect();
+            } catch (_) {}
+            confirmObserver = null;
+        }
+    }
+    // One look for a dialog to click through. Returns true when there is nothing
+    // left to wait for, either because it pressed something or because the reply
+    // is already running.
+    function tryConfirm(before) {
+        // A visible stop control means the reply is already running, so there is
+        // no dialog in the way and nothing to press.
+        if (find(cfg.stopSelector)) {
+            clearConfirmWatch();
+            return true;
+        }
+        const btn = findNewConfirm(before);
+        if (!btn) return false;
+        log('a dialog opened after the retry click; confirming it');
+        clearConfirmWatch();
+        clickHostControl(btn);
+        return true;
     }
     function watchForConfirm(before, tries) {
-        const left = typeof tries === 'number' ? tries : CONFIRM_TRIES;
-        clearConfirmWatch();
-        if (left <= 0) return;
+        const first = typeof tries !== 'number';
+        const left = first ? CONFIRM_TRIES : tries;
+        if (first) {
+            clearConfirmWatch();
+            try {
+                if (typeof MutationObserver !== 'undefined' && document.body) {
+                    confirmObserver = new MutationObserver(() => {
+                        tryConfirm(before);
+                    });
+                    confirmObserver.observe(document.body, { childList: true, subtree: true });
+                }
+            } catch (_) {
+                confirmObserver = null;
+            }
+        } else if (confirmTimer) {
+            clearTimeout(confirmTimer);
+            confirmTimer = null;
+        }
+        if (left <= 0) {
+            clearConfirmWatch();
+            return;
+        }
         confirmTimer = setTimeout(() => {
             confirmTimer = null;
-            // A visible stop control means the reply is already running, so there is
-            // no dialog in the way and nothing to press.
-            if (find(cfg.stopSelector)) return;
-            const btn = findNewConfirm(before);
-            if (btn) {
-                log('a dialog opened after the retry click; confirming it');
-                clickHostControl(btn);
-                return;
-            }
+            if (tryConfirm(before)) return;
             watchForConfirm(before, left - 1);
-        }, left === CONFIRM_TRIES ? CONFIRM_FIRST_MS : CONFIRM_POLL_MS);
+        }, first ? CONFIRM_FIRST_MS : CONFIRM_POLL_MS);
     }
     const START_WAIT_ROUNDS = 3; // extra grace rounds while something is clearly generating
     function armStartWatchdog(chatId, via, allowFallback, waits) {
@@ -1627,8 +1665,8 @@ export function setup(ctx, opts) {
                 if (other) {
                     s.expectingStart = Date.now();
                     const beforeOther = confirmSnapshot();
+                    watchForConfirm(beforeOther);
                     if (clickHostControl(other)) {
-                        watchForConfirm(beforeOther);
                         log('no generation after the ' + via + ' click, trying ' + otherVia, chatId);
                         armStartWatchdog(chatId, otherVia, false);
                         return;
@@ -1695,14 +1733,18 @@ export function setup(ctx, opts) {
             // watchdog rather than land before it exists.
             s.expectingStart = Date.now();
             const before = confirmSnapshot();
+            // Armed before the click, not after: a build that puts its dialog on
+            // screen during the click itself would otherwise not be seen until the
+            // backstop timer, and the dialog would visibly linger.
+            watchForConfirm(before);
             const via = fireRetry();
             if (!via) {
+                clearConfirmWatch();
                 s.expectingStart = 0;
                 s.selfTriggered = false;
                 s.attempts = 0;
                 return;
             }
-            watchForConfirm(before);
             armStartWatchdog(chatId, via, true);
         },
         delay);
