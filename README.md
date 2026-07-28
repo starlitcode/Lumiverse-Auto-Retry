@@ -219,6 +219,7 @@ The settings modal is the easy path. The same options live in the CONFIG block a
 | confirmBeforeEdit | false | Ask you to confirm before any word-swap edit (automatic or manual); you can cancel. |
 | regenerateSelector | (see file) | Host button. See below. |
 | swipeNextSelector | (see file) | Backup button if your build retries by swiping. |
+| confirmButtonLabels | (blank) | Extra dialog button labels it may press when a dialog appears after a retry, one per line. Blank uses the built-in list. |
 | stopSelector | (see file) | Host stop button, used to abort a stalled reply. |
 | toast | true | Show the little retry pop-up with its Cancel button. |
 | liveLog | false | Show a small on-screen panel with recent activity, updating live. |
@@ -242,6 +243,35 @@ Each button setting has a **Pick it for me** button next to **Test**. Press it a
 It builds the selector from whatever is most likely to survive an app update, preferring `aria-label`, `title` and `data-` attributes over class names. Lumiverse rebuilds its class names on every release, so a selector based on one stops matching the next time the app updates, and those are skipped on purpose. If the element it lands on has nothing dependable, it says so rather than saving something that will break; clicking the button itself rather than an icon inside it usually fixes that.
 
 If a click lands but no reply starts, which happens when a next / swipe button moves between rerolls that already exist rather than making a new one, it clicks the other button once before giving that attempt up.
+
+### If a dialog appears when it retries
+
+Lumiverse has a **Regeneration Feedback** option. With it on, pressing regenerate doesn't regenerate straight away: it opens a box asking for guidance to pass to the next attempt. That box is what actually starts the reply, so anything that presses regenerate for you has to deal with it.
+
+Auto Retry handles this. When it retries and that dialog appears, it presses **Skip**, which means "regenerate without guidance". You'll see the dialog flash on screen for a moment as it goes past. That's expected: it's pressing the real button, so the dialog has to exist for there to be a button to press.
+
+A few things it deliberately does not do:
+
+- It never touches a dialog **you** opened. The dialog is only pressed in the moment right after Auto Retry's own click, so a regenerate you asked for still waits for you to type.
+- If you click anything, or press stop, while it's about to skip, it backs off and leaves the dialog alone.
+- It never presses **Cancel**, and it never submits guidance you'd saved as a draft.
+
+You don't have to turn Regeneration Feedback off for Auto Retry to work. If you don't use it, leaving it off just means one less thing flashing past.
+
+### Extra dialog buttons it may press
+
+Only needed if the above doesn't work on your setup. Auto Retry already knows `Skip`, `Regenerate`, `Confirm`, `Proceed`, `Submit` and `OK`. If your dialog's button says something else, for instance because Lumiverse is showing another language, add the wording here.
+
+It's a normal text box, one label per line, and **Expand** opens a bigger editor if you need it. Type the button's text exactly as it appears on screen, nothing else:
+
+```
+Überspringen
+Doorgaan
+```
+
+No commas and no quotes. Capitalisation doesn't matter. Anything you add is tried before the built-in list, so you can also use this to change which button it prefers.
+
+Adding a label doesn't widen where it looks. It still only presses a button inside a dialog that appeared right after a retry, so putting `Continue` here will not make it press the Continue button on your toolbar.
 
 ### Writing selectors by hand
 
