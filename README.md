@@ -38,14 +38,14 @@ Pressing your **Stop** button, or tapping **Cancel** on the retry pop-up, stops 
 
 ## Cut-off detection
 
-A reply that streams real text and then gets chopped off mid-sentence is easy to miss. Lumiverse does not tell an extension *why* a reply ended, so this works off the shape of the text instead. `retryOnTruncated` (on by default) treats a reply as cut off when it has a clearly open structure. Reasoning blocks are removed before these are counted, so punctuation inside a model's thinking cannot unbalance them; a reasoning block left open with no close still counts as cut off. This does not depend on the **Ignore the thinking / reasoning** option, which applies to refusal matching only. The checks:
+A reply that streams real text and then gets chopped off mid-sentence is easy to miss. Lumiverse does not tell an extension *why* a reply ended, so this works off the shape of the text instead. `retryOnTruncated` (on by default) treats a reply as cut off when its structure is left open. Reasoning blocks are removed before these are counted, so punctuation inside a model's thinking cannot unbalance them; a reasoning block left open with no close still counts as cut off. This does not depend on the **Ignore the thinking / reasoning** option, which applies to refusal matching only. The checks:
 
 - an unclosed code block or inline backtick
 - an odd number of emphasis `*`, an open action or emphasis (bullet lists are ignored so a list doesn't look half-open)
 - an unbalanced quote, open dialogue
 - it ends on a comma or semicolon, cut mid-clause
 
-These are deliberately careful so a reply that legitimately ends on `...`, an action, or a closed quote is left alone. If you want it stricter, turn on `retryOnNoPunct`, which also retries a reply ending with no punctuation at all. That one is noisier in roleplay, so it is off by default.
+These are kept careful so a reply that legitimately ends on `...`, an action, or a closed quote is left alone. If you want it stricter, turn on `retryOnNoPunct`, which also retries a reply ending with no punctuation at all. That one is noisier in roleplay, so it is off by default.
 
 ## Accidental-refusal detection (beta)
 
@@ -61,7 +61,7 @@ Detection is layered, because refusal wording differs between models and drifts 
 
 Curly and straight apostrophes are treated the same, and only replies short enough to plausibly *be* a refusal are considered, so a long scene that happens to contain one of these phrases is left alone. It leans toward missing a refusal rather than re-rolling good writing; when it misses, you re-roll by hand as before.
 
-Some providers deliver a refusal as an *error* instead of as reply text (Gemini's prohibited-content result, for one). With error retries on (the default) those are already covered. If you turn error retries off but leave refusal retries on, it still catches an error whose text is clearly about content moderation, while leaving ordinary network errors like a dropped connection alone.
+Some providers deliver a refusal as an *error* instead of as reply text (Gemini's prohibited-content result, for one). With error retries on (the default) those are already covered. If you turn error retries off but leave refusal retries on, it still catches an error whose text is about content moderation, while leaving ordinary network errors like a dropped connection alone.
 
 ### Thinking and reasoning
 
@@ -116,7 +116,7 @@ Alongside that list it also matches a few patterns that are not fixed phrases. B
 - **A soft redirect that pivots away** (needs the pivot, so a normal offer to help does not trip it). "I'd be happy to help with something else instead." / "Instead, I can help you with a lighter scene." / "Please try asking something else."
 - **A refusal tied to specific prohibited content.** "I cannot participate in roleplay or generate content depicting sexual violence" / "I'm unable to engage in roleplay depicting non-consensual acts."
 
-On the error side, when a reply comes back as an error rather than text, it matches content-block wording. Examples: "PROHIBITED_CONTENT", "Blocked by safety settings.", "finish_reason: safety". It deliberately ignores ordinary network errors like "connection refused".
+On the error side, when a reply comes back as an error rather than text, it matches content-block wording. Examples: "PROHIBITED_CONTENT", "Blocked by safety settings.", "finish_reason: safety". Ordinary network errors like "connection refused" are ignored.
 
 ## Find and replace in replies (beta)
 
@@ -161,7 +161,7 @@ At the bottom of the find-and-replace settings you can save your word-swap setup
 
 A preset holds your rules and the two options that decide how they match, **Pick a swap at random** and **Match case exactly**. Rules saved without those behave differently when loaded, which defeats the point of a preset.
 
-It deliberately leaves everything else alone. Whether swapping is switched on at all, which buttons appear in your Extras menu, whether a reply can be swapped twice, and whether it confirms before editing all stay as you have them. Those are yours rather than the preset author's, and a preset that could switch swapping on or drop the confirmation step would be changing things you never agreed to. Exporting still carries all of them, since an export is your own backup rather than something you load from someone else.
+Everything else is left alone. Whether swapping is switched on at all, which buttons appear in your Extras menu, whether a reply can be swapped twice, and whether it confirms before editing all stay as you have them. Those are yours rather than the preset author's, and a preset that could switch swapping on or drop the confirmation step would be changing things you never agreed to. Exporting still carries all of them, since an export is your own backup rather than something you load from someone else.
 
 Pick a saved preset and press **Load** to switch your settings to it. To store the current setup, type a name and press **Save as new**. **Update selected** overwrites the chosen preset with your current settings, **Rename selected** renames it to the name in the box, and **Delete** removes it. Loading a preset takes effect right away and is saved, so there is no separate Save step. Presets are kept on this browser, so unlike your account settings they do not sync across devices. To move them to another device or share them, use **Advanced: import / export**, which can include your presets in the file.
 
@@ -192,7 +192,7 @@ The settings modal is the easy path. The same options live in the CONFIG block a
 | jitter | true | Nudges each wait randomly so retries don't all land at once. |
 | rateLimitDelayMs | 8000 | Floor wait when the server says it's busy. |
 | retryByNewReroll | false | Off: a retry redoes the reply in place via the regenerate button. On: a retry clicks the next / swipe button, adding a new reroll and keeping the existing ones. Applies to every retry reason. The other button is the fallback. |
-| stuckTimeoutMs | 90000 | Started but no token and no end within this. 0 disables. |
+| stuckTimeoutMs | 90000 | Started, then nothing arrived and it never finished, within this. 0 disables. |
 | idleTimeoutMs | 45000 | Tokens flowed then stopped for this long. 0 disables. |
 | retryOnError | true | Retry provider errors. |
 | ignoreHardErrors | true | Skip permanent failures like missing models or invalid API keys. |
@@ -207,7 +207,7 @@ The settings modal is the easy path. The same options live in the CONFIG block a
 | refusalPhraseSubs | (empty) | Reword the built-in phrases with "old => new" rules, one per line. |
 | refusalIgnorePhrases | (empty) | Whitelist, one per line; a reply containing any is never a refusal. |
 | refusalMaxChars | 2000 | Longest reply still treated as a possible refusal. 0 = no limit. |
-| refusalStripThinking | on | Only check the final reply, stripping known reasoning tags first. Off checks the whole raw output. |
+| refusalStripThinking | true | Only check the final reply, stripping known reasoning tags first. Off checks the whole raw output. |
 | refusalThinkTags | (empty) | Extra reasoning tag names, one per line, for unusual thinking wrappers. |
 | replaceEnabled | false | (beta) Turn on find-and-replace on replies. Edits the saved message. |
 | replaceRules | (empty) | "old => new" word swaps, one per line. |
@@ -224,7 +224,7 @@ The settings modal is the easy path. The same options live in the CONFIG block a
 | toast | true | Show the little retry pop-up with its Cancel button. |
 | liveLog | false | Show a small on-screen panel with recent activity, updating live. |
 
-The two watchdog waits (`stuckTimeoutMs`, `idleTimeoutMs`) lean long on purpose so a slow connection or a slow local model isn't mistaken for a freeze. If your provider is fast and you want quicker recovery, lower them.
+The two watchdog waits (`stuckTimeoutMs`, `idleTimeoutMs`) are long so a slow connection or a slow local model isn't mistaken for a freeze. If your provider is fast and you want quicker recovery, lower them.
 
 ## Fixing the regenerate button
 
@@ -240,39 +240,39 @@ Whichever button the toggle prefers, the other one is the fallback, and the choi
 
 Each button setting has a **Pick it for me** button next to **Test**. Press it and the settings panel steps aside; click the real button in Lumiverse and the selector is filled in for you. The click is swallowed, so picking your stop or regenerate button doesn't also press it. Press Cancel on the prompt to back out, or Esc if you're on a keyboard.
 
-It builds the selector from whatever is most likely to survive an app update, preferring `aria-label`, `title` and `data-` attributes over class names. Lumiverse rebuilds its class names on every release, so a selector based on one stops matching the next time the app updates, and those are skipped on purpose. If the element it lands on has nothing dependable, it says so rather than saving something that will break; clicking the button itself rather than an icon inside it usually fixes that.
+It builds the selector from what is most likely to survive an app update, preferring `aria-label`, `title` and `data-` attributes over class names. Lumiverse rebuilds its class names on every release, so a selector based on one stops matching the next time the app updates. Those are skipped. If the element it lands on has nothing dependable, it says so rather than saving something that will break; clicking the button itself rather than an icon inside it usually fixes that.
 
 If a click lands but no reply starts, which happens when a next / swipe button moves between rerolls that already exist rather than making a new one, it clicks the other button once before giving that attempt up.
 
 ### Regeneration Feedback
 
-Lumiverse has a **Regeneration Feedback** option. With it on, pressing regenerate doesn't regenerate straight away: it opens a box asking for guidance to pass to the next attempt. That box is what actually starts the reply, so anything that presses regenerate for you has to deal with it.
+Lumiverse has a **Regeneration Feedback** option. With it on, pressing regenerate opens a box asking for guidance to send with the next attempt. The reply only starts once you press a button in that box, so Auto Retry has to handle it.
 
-Auto Retry handles this. When it retries and the Regeneration Feedback box appears, it presses **Skip**, which means "regenerate without guidance". The box is kept out of sight for the moment that takes, so you shouldn't see it at all. It has to be opened, because Auto Retry presses the real button rather than working around it.
+When a retry opens the box, Auto Retry presses **Skip**, which regenerates without guidance. The box is hidden for the moment that takes, so you shouldn't see it. It still has to open, because Auto Retry presses the real button.
 
-A few things it deliberately does not do:
+Some limits worth knowing:
 
-- It never touches a Regeneration Feedback box **you** opened, and never hides one. It only acts in the moment right after its own click, so a regenerate you asked for still opens the box normally and waits for you to type.
-- If you click anything, or press stop, while it's about to skip, it backs off and leaves the dialog alone.
-- It never presses **Cancel**, and it never submits guidance you'd saved as a draft. Skip is chosen precisely because it regenerates without sending anything you wrote.
-- If it can't dismiss the box, it puts it back on screen straight away rather than leaving it hidden, and a hidden box can never swallow your taps.
+- A box **you** opened is left alone. Auto Retry only acts in the moment right after its own click, so a regenerate you pressed still opens the box and waits for you to type.
+- If you tap anything, or press stop, while it's about to skip, it stops and leaves the box alone.
+- It presses Skip, so a draft you saved in the box is never sent. It never presses **Cancel**.
+- If it can't close the box, it shows it again straight away. A hidden box can still be tapped through, so it can't lock up the app.
 
-You don't need to change either setting. Keep Regeneration Feedback on if you use it, and it will still open normally every time you press regenerate yourself. There's no need to turn Auto Retry off to use it, or the other way round.
+You don't need to change either setting. Keep Regeneration Feedback on if you use it; it still opens every time you press regenerate yourself.
 
 ### Extra dialog buttons it may press
 
-Only needed if the Regeneration Feedback box, or any other pop-up a retry opens, doesn't get skipped and just sits there. Auto Retry already knows `Skip`, `Regenerate`, `Confirm`, `Proceed`, `Submit` and `OK`. If your button says something else, for instance because Lumiverse is showing another language, add the wording here.
+Only needed if the Regeneration Feedback box stays on screen when a retry opens it, which means Auto Retry didn't recognise its button. It already knows `Skip`, `Regenerate`, `Confirm`, `Proceed`, `Submit` and `OK`. If yours says something else, for example in another language, add that wording here.
 
-It's a normal text box, one label per line, and **Expand** opens a bigger editor if you need it. Type the button's text exactly as it appears on screen, nothing else:
+Type the button's text exactly as it appears, one per line. **Expand** opens a bigger editor if the box is too small:
 
 ```
 Überspringen
 Doorgaan
 ```
 
-No commas and no quotes. Capitalisation doesn't matter. Anything you add is tried before the built-in list, so you can also use this to change which button it prefers.
+Capitals are ignored. Anything you add is tried before the built-in list, so you can also use it to change which button Auto Retry prefers.
 
-Adding a label doesn't widen where it looks. It still only presses a button inside a pop-up that appeared right after a retry, so putting `Continue` here will not make it press the Continue button on your toolbar.
+Auto Retry only presses buttons inside a box that opened right after a retry. Putting `Continue` here won't make it press the Continue button on your toolbar.
 
 ### Writing selectors by hand
 
