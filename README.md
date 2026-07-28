@@ -244,23 +244,24 @@ It builds the selector from whatever is most likely to survive an app update, pr
 
 If a click lands but no reply starts, which happens when a next / swipe button moves between rerolls that already exist rather than making a new one, it clicks the other button once before giving that attempt up.
 
-### If a dialog appears when it retries
+### Regeneration Feedback
 
 Lumiverse has a **Regeneration Feedback** option. With it on, pressing regenerate doesn't regenerate straight away: it opens a box asking for guidance to pass to the next attempt. That box is what actually starts the reply, so anything that presses regenerate for you has to deal with it.
 
-Auto Retry handles this. When it retries and that dialog appears, it presses **Skip**, which means "regenerate without guidance". It reacts the moment the dialog is inserted, so usually you won't see it at all, though on a slow device it may flicker. That's expected rather than a fault: it presses the real button, so the dialog has to exist for there to be a button to press.
+Auto Retry handles this. When it retries and the Regeneration Feedback box appears, it presses **Skip**, which means "regenerate without guidance". The box is kept out of sight for the moment that takes, so you shouldn't see it at all. It has to be opened, because Auto Retry presses the real button rather than working around it.
 
 A few things it deliberately does not do:
 
-- It never touches a dialog **you** opened. The dialog is only pressed in the moment right after Auto Retry's own click, so a regenerate you asked for still waits for you to type.
+- It never touches a Regeneration Feedback box **you** opened, and never hides one. It only acts in the moment right after its own click, so a regenerate you asked for still opens the box normally and waits for you to type.
 - If you click anything, or press stop, while it's about to skip, it backs off and leaves the dialog alone.
-- It never presses **Cancel**, and it never submits guidance you'd saved as a draft.
+- It never presses **Cancel**, and it never submits guidance you'd saved as a draft. Skip is chosen precisely because it regenerates without sending anything you wrote.
+- If it can't dismiss the box, it puts it back on screen straight away rather than leaving it hidden, and a hidden box can never swallow your taps.
 
 You don't need to change either setting. Keep Regeneration Feedback on if you use it, and it will still open normally every time you press regenerate yourself. There's no need to turn Auto Retry off to use it, or the other way round.
 
 ### Extra dialog buttons it may press
 
-Only needed if the above doesn't work on your setup. Auto Retry already knows `Skip`, `Regenerate`, `Confirm`, `Proceed`, `Submit` and `OK`. If your dialog's button says something else, for instance because Lumiverse is showing another language, add the wording here.
+Only needed if the Regeneration Feedback box, or any other pop-up a retry opens, doesn't get skipped and just sits there. Auto Retry already knows `Skip`, `Regenerate`, `Confirm`, `Proceed`, `Submit` and `OK`. If your button says something else, for instance because Lumiverse is showing another language, add the wording here.
 
 It's a normal text box, one label per line, and **Expand** opens a bigger editor if you need it. Type the button's text exactly as it appears on screen, nothing else:
 
@@ -271,7 +272,7 @@ Doorgaan
 
 No commas and no quotes. Capitalisation doesn't matter. Anything you add is tried before the built-in list, so you can also use this to change which button it prefers.
 
-Adding a label doesn't widen where it looks. It still only presses a button inside a dialog that appeared right after a retry, so putting `Continue` here will not make it press the Continue button on your toolbar.
+Adding a label doesn't widen where it looks. It still only presses a button inside a pop-up that appeared right after a retry, so putting `Continue` here will not make it press the Continue button on your toolbar.
 
 ### Writing selectors by hand
 
