@@ -25,7 +25,7 @@ const START_GRACE_MS = 6000;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = '3.1.3';
+const VERSION = '3.2.0';
 // ---- defaults (the UI overrides these; editing here changes the fallback) ----
 const CONFIG = {
     enabled: true,
@@ -108,6 +108,9 @@ const CONFIG = {
     // is still likely covered; if a build changes them all, fix it via the Test UI.
     regenerateSelector: '[title="Regenerate"], [data-action="regenerate"], [data-testid="regenerate"], ' + 'button[aria-label*="regenerate" i], button[title*="regenerate" i]',
     swipeNextSelector: '[aria-label="Next swipe"], [data-action="swipe-right"], [data-testid="swipe-right"], ' + 'button[aria-label*="next swipe" i], button[aria-label*="swipe right" i], ' + 'button[aria-label*="reroll" i], button[title*="swipe" i]',
+    // extra button labels Auto Retry may press on a dialog that appears after it
+    // clicks retry. One per line. Blank means the built-in list only.
+    confirmButtonLabels: '',
     stopSelector: '[aria-label="Stop generation"], [data-action="stop"], [data-testid="stop"], ' + 'button[aria-label*="stop" i], button[title*="stop" i], [class*="_sendBtnStop_"]',
     toast: true,
     liveLog: false,
@@ -417,6 +420,12 @@ const SCHEMA = [{
         type: 'text',
         selector: true,
         hint: 'A backup it clicks if your setup retries by swiping to a new reply instead.'
+    },
+    {
+        key: 'confirmButtonLabels',
+        label: 'Extra dialog buttons it may press',
+        type: 'text',
+        hint: "Optional, one per line. If a dialog appears when Auto Retry retries, it presses that dialog's own button to carry on. It already knows Skip, Regenerate, Confirm, Proceed, Submit and OK. Add wording here if your language or setup uses something else. Anything you add is tried before the built-in list. It still only ever presses a button inside a dialog that appeared right after a retry, so this cannot make it click things elsewhere."
     },
     {
         key: 'stopSelector',
@@ -1470,8 +1479,12 @@ export function setup(ctx, opts) {
         /^ok(ay)?$/i,
     ];
     const CONFIRM_DENY = /cancel|close|dismiss|delete|discard|remove|revert|undo|back|no thanks|never ?mind/i;
-    const CONFIRM_POLL_MS = 200;
-    const CONFIRM_TRIES = 8; // about 1.6s, then it gives up and leaves things alone
+    // The first look is almost immediate so a dialog that has to be clicked
+    // through is on screen for as little time as possible. Later looks are spaced
+    // out, for a build that animates the dialog in more slowly.
+    const CONFIRM_FIRST_MS = 40;
+    const CONFIRM_POLL_MS = 150;
+    const CONFIRM_TRIES = 11; // about 1.5s in total, then it leaves things alone
     let confirmTimer = null;
     // A confirm button lives inside a dialog. The toolbar's own Regenerate button
     // carries the same label, so without this the scan could press that instead
@@ -1518,6 +1531,14 @@ export function setup(ctx, opts) {
         }
         return out;
     }
+    // Labels the user added, lower-cased and trimmed. Read fresh each time so a
+    // settings change takes effect without a reload.
+    function userConfirmLabels() {
+        return String(cfg.confirmButtonLabels || '')
+            .split(/[\r\n]+/)
+            .map((x) => x.trim().toLowerCase())
+            .filter((x) => x.length > 0);
+    }
     function findNewConfirm(before) {
         if (typeof document === 'undefined') return null;
         let list = [];
@@ -1530,7 +1551,11 @@ export function setup(ctx, opts) {
         for (const el of Array.prototype.slice.call(list)) {
             if (before.has(el)) continue; // was already there, so our click didn't raise it
             const label = buttonLabel(el);
-            if (!label || CONFIRM_DENY.test(label)) continue;
+            if (!label) continue;
+            // The deny list guards the built-in guesses. A label typed by hand is a
+            // deliberate choice, so it is allowed through.
+            const chosen = userConfirmLabels().indexOf(label.toLowerCase()) >= 0;
+            if (!chosen && CONFIRM_DENY.test(label)) continue;
             if (!inDialog(el)) continue; // a bare toolbar button is not a confirmation
             if (!clickable(el)) continue;
             try {
@@ -1539,7 +1564,12 @@ export function setup(ctx, opts) {
             } catch (_) {}
             fresh.push(el);
         }
-        // Most affirmative label wins, so Regenerate is preferred over Skip.
+        // Anything the user listed comes first: they know their own setup, and a
+        // build in another language will not match the built-in wording.
+        for (const want of userConfirmLabels()) {
+            for (const el of fresh) if (buttonLabel(el).toLowerCase() === want) return el;
+        }
+        // Then the built-ins, in preference order.
         for (const re of CONFIRM_LABELS) {
             for (const el of fresh) if (re.test(buttonLabel(el))) return el;
         }
@@ -1567,7 +1597,7 @@ export function setup(ctx, opts) {
                 return;
             }
             watchForConfirm(before, left - 1);
-        }, CONFIRM_POLL_MS);
+        }, left === CONFIRM_TRIES ? CONFIRM_FIRST_MS : CONFIRM_POLL_MS);
     }
     const START_WAIT_ROUNDS = 3; // extra grace rounds while something is clearly generating
     function armStartWatchdog(chatId, via, allowFallback, waits) {
