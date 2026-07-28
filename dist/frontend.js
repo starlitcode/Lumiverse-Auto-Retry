@@ -1497,6 +1497,7 @@ export function setup(ctx, opts) {
     const CONFIRM_MAX_CLICKS = 3;
     // Longest a dialog may stay hidden under any circumstances.
     const HIDE_FAILSAFE_MS = 4000;
+    const HIDE_CLASS = '__lvRetryHidden';
     const DIALOG_SELECTOR = '[role="dialog"],[role="alertdialog"],[aria-modal="true"],[class*="modal" i],[class*="dialog" i],[class*="overlay" i]';
     // A confirm button lives inside a dialog. The toolbar's own Regenerate button
     // carries the same label, so without this the scan could press that instead
@@ -1593,21 +1594,32 @@ export function setup(ctx, opts) {
         }
         return null;
     }
-    // Dialogs currently hidden, with the inline styles they had before. Nothing
-    // is ever left hidden: every path that ends the watch restores these, and a
-    // separate failsafe restores them even if that somehow doesn't run.
+    // Dialogs currently hidden. Hiding is done with a class and a rule marked
+    // important, not by writing inline styles: the dialog fades itself in by
+    // setting inline opacity every frame, so an inline value of ours would just be
+    // overwritten and the dialog would appear anyway. A stylesheet rule marked
+    // important outranks an inline value that isn't.
     let hidden = [];
     let hideFailsafe = null;
+    let hideStyleEl = null;
+    function ensureHideStyle() {
+        if (hideStyleEl || typeof document === 'undefined') return;
+        try {
+            const el = document.createElement('style');
+            el.id = '__lvRetryHideStyle';
+            el.textContent = '.' + HIDE_CLASS + '{opacity:0!important;pointer-events:none!important;transition:none!important;animation:none!important}';
+            (document.head || document.documentElement).appendChild(el);
+            hideStyleEl = el;
+        } catch (_) {}
+    }
     function restoreHiddenDialogs() {
         if (hideFailsafe) {
             clearTimeout(hideFailsafe);
             hideFailsafe = null;
         }
-        for (const h of hidden) {
+        for (const el of hidden) {
             try {
-                h.el.style.opacity = h.o;
-                h.el.style.pointerEvents = h.p;
-                h.el.style.transition = h.t;
+                el.classList.remove(HIDE_CLASS);
             } catch (_) {}
         }
         hidden = [];
@@ -1625,15 +1637,14 @@ export function setup(ctx, opts) {
         }
         for (const el of Array.prototype.slice.call(list)) {
             if (before.has(el)) continue; // was already on screen, not ours
-            if (hidden.some((h) => h.el === el)) continue;
+            if (hidden.indexOf(el) >= 0) continue;
             try {
                 if (el.closest && el.closest('#__lvRetryToast,#__lvRetrySettings')) continue;
             } catch (_) {}
             try {
-                hidden.push({ el: el, o: el.style.opacity || '', p: el.style.pointerEvents || '', t: el.style.transition || '' });
-                el.style.transition = 'none';
-                el.style.opacity = '0';
-                el.style.pointerEvents = 'none';
+                ensureHideStyle();
+                el.classList.add(HIDE_CLASS);
+                hidden.push(el);
             } catch (_) {}
         }
         if (hidden.length && !hideFailsafe) {
@@ -3353,6 +3364,12 @@ export function setup(ctx, opts) {
     log('ready v' + VERSION, cfg);
     return () => {
         clearConfirmWatch();
+        if (hideStyleEl) {
+            try {
+                hideStyleEl.remove();
+            } catch (_) {}
+            hideStyleEl = null;
+        }
         offs.forEach((o) => {
             try {
                 o && o();
