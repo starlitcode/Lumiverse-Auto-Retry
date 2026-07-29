@@ -10,8 +10,12 @@ node_modules/
 .cache/
 .bun/
 
+# build info from incremental typechecks
+*.tsbuildinfo
+
 # editor and OS junk
 .DS_Store
+Thumbs.db
 .idea/
 .vscode/
 *.swp
