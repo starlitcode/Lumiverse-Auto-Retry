@@ -1,6 +1,6 @@
 # Auto Retry (Lumiverse Spindle extension)
 
-Auto Retry quietly re-runs an AI reply when it fails, comes back empty, stalls partway, gets cut off mid-sentence, or refuses by mistake, so you don't have to catch it and hit regenerate yourself. It is a rebuild of the [SillyTavern fetch-retry](https://github.com/Hikarushmz/fetch-retry) idea for Lumiverse.
+Auto Retry quietly re-runs an AI reply when it fails, comes back empty, stalls partway, gets cut off mid-sentence, or refuses by mistake, so you don't have to catch it and hit regenerate yourself. The idea came from [SillyTavern's fetch-retry](https://github.com/Hikarushmz/fetch-retry), but Auto Retry is written from scratch for Lumiverse and shares no code with it.
 
 ## What it does
 
@@ -8,15 +8,15 @@ It watches each reply and re-fires when:
 
 - the reply comes back as a provider error (but skips permanent hard failures like invalid API keys by default)
 - the reply comes back empty, including one that "thinks" but never writes anything
-- the reply is cut off mid-sentence (see [Cut-off detection](#cut-off-detection) below)
-- the reply is an accidental out-of-character refusal (see [Accidental-refusal detection](#accidental-refusal-detection-beta) below)
+- the reply is cut off mid-sentence (see [Cut-off detection](docs/detection.md#cut-off-detection))
+- the reply is an accidental out-of-character refusal (see [Accidental-refusal detection](docs/detection.md#accidental-refusal-detection-beta))
 - the stream stalls mid-reply, tokens stop arriving for a while
 - a reply never starts or never finishes
 - (optional, off by default) the reply is very short
 
 Every retry waits a little longer than the last so it never hammers the server, and waits extra when the server says it is busy. All of the triggers share one retry limit, so no reply is ever retried more than you allow, and nothing can loop forever.
 
-It can also, optionally, run a find-and-replace on replies: swap words you don't like for ones you prefer, saved into the reply. See [Find and replace in replies](#find-and-replace-in-replies-beta) below. This is off by default and is the only feature that edits a reply.
+It can also, optionally, run a find-and-replace on replies: swap words you don't like for ones you prefer, saved into the reply. See [Find and replace in replies](docs/word-swaps.md). This is off by default and is the only feature that edits a reply.
 
 ## Install
 
@@ -61,3 +61,12 @@ The find-and-replace feature runs in a small backend module. The rest of the ext
 Auto Retry listens to Lumiverse's own generation events. When a reply fails, comes back empty, stalls, or looks cut off or refused, it clicks your regenerate button to try again. That button click is the only part that depends on the page layout, so it is the one thing you can fix yourself in the settings if a Lumiverse update ever moves those buttons.
 
 Find and replace works separately, since editing a saved reply is a backend job. A small backend module watches for finished replies and, when swaps are on, edits the saved message through Lumiverse's Chat Mutation API. That edit is treated as an edit, not a new reply, so it can't set itself off in a loop.
+
+## Credits
+
+- **starlitcode** - built and maintains the extension
+- **[Claude](https://claude.ai)** (Anthropic) - wrote the code, directed and tested by starlitcode
+- **[Hikarushmz](https://github.com/Hikarushmz/fetch-retry)** - their SillyTavern fetch-retry gave me the idea. Auto Retry is written from scratch and shares no code with it
+- Everyone who has reported a bug or asked a question that turned into a fix
+
+Licensed under the MIT License. See [LICENSE](LICENSE).
