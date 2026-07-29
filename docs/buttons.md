@@ -27,7 +27,7 @@ Some limits worth knowing:
 - A box **you** opened is left alone. Auto Retry only acts in the moment right after its own click, so a regenerate you pressed still opens the box and waits for you to type.
 - If you tap anything, or press stop, while it's about to skip, it stops and leaves the box alone.
 - It presses Skip, so a draft you saved in the box is never sent. It never presses **Cancel**.
-- If it can't close the box, it shows it again straight away. A hidden box can still be tapped through, so it can't lock up the app.
+- If it can't close the box, it shows it again straight away. Even while hidden, the box doesn't block your taps, so the app can't lock up.
 
 You don't need to change either setting. Keep Regeneration Feedback on if you use it; it still opens every time you press regenerate yourself.
 
@@ -38,8 +38,8 @@ Only needed if the Regeneration Feedback box stays on screen when a retry opens 
 Type the button's text exactly as it appears, one per line. **Expand** opens a bigger editor if the box is too small:
 
 ```
-Überspringen
-Doorgaan
+Omitir
+Regenerar
 ```
 
 Capitals are ignored. Anything you add is tried before the built-in list, so you can also use it to change which button Auto Retry prefers.
