@@ -41,7 +41,6 @@ const CONFIG = {
   // draggable button over the chat, and/or an entry in the Extras menu.
   showFloatingToggle: false,
   floatingToggleSize: 44,
-  showToggleButton: false,
 
   // retry budget
   maxRetries: 4,
@@ -166,12 +165,6 @@ const SCHEMA: Group[] = [
         min: 28,
         max: 96,
         hint: "How wide the floating button is, in pixels. 44 is about a comfortable thumb. Larger is easier to hit on a phone, smaller keeps it out of the way.",
-      },
-      {
-        key: "showToggleButton",
-        label: "On/off button in the Extras menu",
-        type: "bool",
-        hint: "Off by default. Adds the same on/off switch to the input bar's Extras menu, next to the settings button. Use this instead of the floating button if you would rather not have anything on top of the chat.",
       },
       {
         key: "toast",
@@ -955,8 +948,6 @@ export function setup(ctx: Ctx, opts?: any) {
 
   let lastChatId: any = null;
   let lastMessageId: any = null;
-  let toggleAction: any = null;
-  let toggleActionOff: any = null;
   let replaceAction: any = null;
   let replaceActionOff: any = null;
   let replaceAllAction: any = null;
@@ -998,35 +989,6 @@ export function setup(ctx: Ctx, opts?: any) {
   function syncReplaceButton() {
     try {
       const canReg = !!(ctx && (ctx as any).ui && typeof (ctx as any).ui.registerInputBarAction === "function");
-      // The label and icon say which state you are in, and the host sets those
-      // when the button is registered. So flipping the switch tears the button
-      // down and puts a fresh one up rather than trying to edit it in place.
-      if (cfg.showToggleButton && canReg) {
-        const onNow = cfg.enabled !== false;
-        const wanted = onNow ? "on" : "off";
-        if (toggleAction && toggleAction.__state !== wanted) {
-          try { toggleActionOff && toggleActionOff(); } catch (_) {}
-          try { toggleAction.destroy(); } catch (_) {}
-          toggleAction = null;
-          toggleActionOff = null;
-        }
-        if (!toggleAction) {
-          toggleAction = (ctx as any).ui.registerInputBarAction({
-            id: "auto-retry-toggle",
-            label: onNow ? "Auto Retry is on, tap to turn off" : "Auto Retry is off, tap to turn on",
-            iconSvg: onNow
-              ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>'
-              : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.55"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><line x1="3" y1="21" x2="21" y2="3"/></svg>',
-          });
-          toggleAction.__state = wanted;
-          toggleActionOff = toggleAction.onClick(() => toggleEnabled());
-        }
-      } else if ((!cfg.showToggleButton || !canReg) && toggleAction) {
-        try { toggleActionOff && toggleActionOff(); } catch (_) {}
-        try { toggleAction.destroy(); } catch (_) {}
-        toggleAction = null;
-        toggleActionOff = null;
-      }
       if (cfg.showReplaceButton && canReg && !replaceAction) {
         replaceAction = (ctx as any).ui.registerInputBarAction({
           id: "auto-retry-replace-now",
@@ -1097,7 +1059,7 @@ export function setup(ctx: Ctx, opts?: any) {
     if (liveLogEl || typeof document === "undefined") return;
     const el = document.createElement("div");
     el.style.cssText =
-      "position:fixed;right:8px;bottom:8px;z-index:2147483000;width:min(340px,92vw);height:min(300px,50vh);min-width:200px;min-height:120px;max-width:96vw;max-height:85vh;display:flex;flex-direction:column;background:var(--lumiverse-surface,rgba(20,18,26,.96));border:1px solid var(--lumiverse-border,rgba(255,255,255,.14));border-radius:var(--lumiverse-radius,10px);box-shadow:0 6px 24px rgba(0,0,0,.4);font-family:var(--lumiverse-font-family,var(--font-global,system-ui));font-size:13px;color:var(--lumiverse-text,#e9e4f0);overflow:hidden";
+      "position:fixed;right:8px;bottom:8px;z-index:2147483000;width:min(340px,92vw);height:min(300px,50vh);min-width:200px;min-height:120px;max-width:96vw;max-height:85vh;display:flex;flex-direction:column;background:var(--lumiverse-bg-elevated,rgba(35,30,48,.9));border:1px solid var(--lumiverse-border,rgba(255,255,255,.14));border-radius:var(--lumiverse-radius,10px);box-shadow:var(--lumiverse-shadow-md,0 8px 24px rgba(0,0,0,.4));font-family:var(--lumiverse-font-family,system-ui);font-size:13px;color:var(--lumiverse-text,#e9e4f0);overflow:hidden";
     const head = document.createElement("div");
     head.style.cssText =
       "display:flex;align-items:center;gap:8px;padding:7px 9px;border-bottom:1px solid var(--lumiverse-border,rgba(255,255,255,.12));font-weight:600;cursor:move;user-select:none;touch-action:none";
@@ -1228,6 +1190,14 @@ export function setup(ctx: Ctx, opts?: any) {
   const FLOAT_KEY = "lv-auto-retry:float-pos:v1";
   let floatEl: any = null;
 
+  // Viewport size, guarded. Used by both the initial placement and the drag
+  // clamp, so an environment that doesn't report a size can't turn a position
+  // into NaN and leave the button unreachable.
+  const vpW = (): number =>
+    (typeof window !== "undefined" && window.innerWidth) || 360;
+  const vpH = (): number =>
+    (typeof window !== "undefined" && window.innerHeight) || 640;
+
   function floatSize(): number {
     const v = Math.floor(Number(cfg.floatingToggleSize));
     return Number.isFinite(v) && v >= 28 ? Math.min(v, 96) : 44;
@@ -1241,14 +1211,14 @@ export function setup(ctx: Ctx, opts?: any) {
     floatEl.style.height = d + "px";
     floatEl.style.fontSize = Math.max(11, Math.round(d * 0.42)) + "px";
     floatEl.style.background = on
-      ? "var(--lumiverse-primary-025,rgba(150,120,255,.25))"
+      ? "var(--lumiverse-primary-020,rgba(147,112,219,.2))"
       : "var(--lumiverse-fill-subtle,rgba(255,255,255,.06))";
     floatEl.style.borderColor = on
-      ? "var(--lumiverse-primary-050,rgba(150,120,255,.5))"
+      ? "var(--lumiverse-primary-050,rgba(147,112,219,.5))"
       : "var(--lumiverse-border,rgba(255,255,255,.15))";
     floatEl.style.color = on
-      ? "var(--lumiverse-primary-text,#cfc2ff)"
-      : "var(--lumiverse-text-muted,#9a93a8)";
+      ? "var(--lumiverse-primary-text,rgba(186,135,255,.95))"
+      : "var(--lumiverse-text-muted,rgba(255,255,255,.65))";
     floatEl.style.opacity = on ? "1" : "0.75";
     floatEl.textContent = on ? "\u21BB" : "\u2298"; // clockwise arrow / slashed circle
     floatEl.title = on
@@ -1271,8 +1241,8 @@ export function setup(ctx: Ctx, opts?: any) {
   function placeFloat() {
     if (!floatEl) return;
     const d = floatSize();
-    const vw = (typeof window !== "undefined" && window.innerWidth) || 360;
-    const vh = (typeof window !== "undefined" && window.innerHeight) || 640;
+    const vw = vpW();
+    const vh = vpH();
     const saved = loadFloatPos();
     // Clamped every time, so a button saved on a wide screen is still reachable
     // on a narrow one, and a size change can't push it off the edge.
@@ -1290,41 +1260,74 @@ export function setup(ctx: Ctx, opts?: any) {
     el.style.cssText =
       "position:fixed;z-index:2147483000;display:flex;align-items:center;justify-content:center;" +
       "border-radius:50%;border:1px solid;cursor:pointer;touch-action:none;padding:0;line-height:1;" +
-      "backdrop-filter:blur(6px);box-shadow:0 2px 10px rgba(0,0,0,.35);font-family:inherit";
+      "backdrop-filter:blur(6px);box-shadow:var(--lumiverse-shadow-sm,0 2px 8px rgba(0,0,0,.2));font-family:inherit";
     // A drag and a tap both start with a pointerdown, so the two are told apart
     // by distance: move more than a few pixels and it is a drag, which also
     // means the tap is swallowed so dragging never flips the switch by accident.
+    //
+    // While dragging, the button is moved with a transform rather than by
+    // rewriting left and top. Changing left/top makes the browser redo layout on
+    // every pointer event, which on a phone cannot keep up with a finger and
+    // looks like the button jumping between positions. A transform is handled by
+    // the compositor instead, so it tracks the finger. The offset is folded back
+    // into left/top once, on release.
     let down = false;
     let moved = false;
     let sx = 0, sy = 0, ox = 0, oy = 0;
+    let dx = 0, dy = 0;
+    let frame: any = null;
+
+    const paintDrag = () => {
+      frame = null;
+      el.style.transform = "translate3d(" + dx + "px," + dy + "px,0)";
+    };
+
     const onDown = (e: any) => {
       down = true;
       moved = false;
+      dx = 0;
+      dy = 0;
       const r = el.getBoundingClientRect();
       sx = e.clientX; sy = e.clientY; ox = r.left; oy = r.top;
       try { el.setPointerCapture(e.pointerId); } catch (_) {}
     };
+
     const onMove = (e: any) => {
       if (!down) return;
-      const dx = e.clientX - sx, dy = e.clientY - sy;
-      if (!moved && Math.abs(dx) + Math.abs(dy) < 6) return;
-      moved = true;
+      const mx = e.clientX - sx, my = e.clientY - sy;
+      if (!moved && Math.abs(mx) + Math.abs(my) < 6) return;
+      if (!moved) {
+        moved = true;
+        // Blur is expensive to recompute while something moves, so it is dropped
+        // for the duration of the drag and put back on release.
+        el.style.backdropFilter = "none";
+      }
       const d = floatSize();
-      const nx = Math.max(4, Math.min(ox + dx, window.innerWidth - d - 4));
-      const ny = Math.max(4, Math.min(oy + dy, window.innerHeight - d - 4));
-      el.style.left = nx + "px";
-      el.style.top = ny + "px";
+      // Clamped as an offset, so the button cannot be dragged off the screen.
+      dx = Math.max(4 - ox, Math.min(mx, vpW() - d - 4 - ox));
+      dy = Math.max(4 - oy, Math.min(my, vpH() - d - 4 - oy));
+      // One paint per frame at most, however fast the pointer events arrive.
+      if (!frame) frame = requestAnimationFrame(paintDrag);
     };
+
     const onUp = (e: any) => {
       if (!down) return;
       down = false;
       try { el.releasePointerCapture(e.pointerId); } catch (_) {}
+      if (frame) {
+        cancelAnimationFrame(frame);
+        frame = null;
+      }
       if (!moved) return;
+      // Fold the drag offset into the real position and clear the transform, so
+      // the next drag starts from zero again.
+      const nx = ox + dx, ny = oy + dy;
+      el.style.transform = "none";
+      el.style.backdropFilter = "blur(6px)";
+      el.style.left = nx + "px";
+      el.style.top = ny + "px";
       try {
-        localStorage.setItem(
-          FLOAT_KEY,
-          JSON.stringify({ x: parseInt(el.style.left, 10), y: parseInt(el.style.top, 10) }),
-        );
+        localStorage.setItem(FLOAT_KEY, JSON.stringify({ x: nx, y: ny }));
       } catch (_) {}
     };
     el.addEventListener("pointerdown", onDown);
@@ -1457,7 +1460,6 @@ export function setup(ctx: Ctx, opts?: any) {
         "enabled",
         "showFloatingToggle",
         "floatingToggleSize",
-        "showToggleButton",
         "maxRetries",
         "retryDelayMs",
         "backoffFactor",
@@ -2654,7 +2656,7 @@ export function setup(ctx: Ctx, opts?: any) {
         "font:13px/1.4 var(--lumiverse-font-family,system-ui);padding:9px 12px;border-radius:var(--lumiverse-radius,12px);" +
         "color:var(--lumiverse-text,#fff);background:var(--lumiverse-fill,rgba(20,16,30,.96));" +
         "border:1px solid var(--lumiverse-border,rgba(255,255,255,.18));" +
-        "box-shadow:0 8px 24px rgba(0,0,0,.45);transition:opacity .2s ease;" +
+        "box-shadow:var(--lumiverse-shadow-md,0 8px 24px rgba(0,0,0,.4));transition:opacity .2s ease;" +
         "opacity:0;max-width:min(92vw,460px);text-align:left";
       (document.body || document.documentElement).appendChild(t);
     }
@@ -2768,7 +2770,6 @@ export function setup(ctx: Ctx, opts?: any) {
       "enabled",
       "showFloatingToggle",
       "floatingToggleSize",
-      "showToggleButton",
       "maxRetries",
       "retryDelayMs",
       "backoffFactor",
@@ -2960,7 +2961,7 @@ export function setup(ctx: Ctx, opts?: any) {
         const l = document.createElement("div");
         l.textContent = text;
         l.style.cssText =
-          "font-size:11px;color:var(--lumiverse-text-muted,#9a93a8)";
+          "font-size:11px;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
         return l;
       };
       const rowBox = () => {
@@ -2973,7 +2974,7 @@ export function setup(ctx: Ctx, opts?: any) {
       // Load direction: a saved preset into the settings.
       const select = document.createElement("select");
       select.style.cssText =
-        "flex:1;min-width:150px;padding:8px 10px;border-radius:var(--lumiverse-radius,8px);border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));background:var(--lumiverse-fill-subtle,rgba(255,255,255,.05));color:var(--lumiverse-text,#eee);font:13px var(--lumiverse-font-family,var(--font-global,system-ui))";
+        "flex:1;min-width:150px;padding:8px 10px;border-radius:var(--lumiverse-radius,8px);border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));background:var(--lumiverse-fill-subtle,rgba(255,255,255,.05));color:var(--lumiverse-text,#eee);font:13px var(--lumiverse-font-family,system-ui)";
       const loadBtn = smallBtn(btn("Load", true));
       const pickRow = rowBox();
       pickRow.appendChild(select);
@@ -3000,7 +3001,7 @@ export function setup(ctx: Ctx, opts?: any) {
 
       const status = document.createElement("div");
       status.style.cssText =
-        "font-size:12px;line-height:1.4;color:var(--lumiverse-text-muted,#9a93a8);min-height:1em";
+        "font-size:12px;line-height:1.4;color:var(--lumiverse-text-muted,rgba(255,255,255,.65));min-height:1em";
 
       const presets = loadPresets();
       const list = () => presets[kind] || [];
@@ -3191,7 +3192,7 @@ export function setup(ctx: Ctx, opts?: any) {
     // options list below scrolls. vh units keep it sane on phones too.
     const panel = document.createElement("div");
     panel.style.cssText =
-      "display:flex;flex-direction:column;max-height:min(72vh,460px);overflow:hidden;box-sizing:border-box;font:13px/1.45 var(--lumiverse-font-family,var(--font-global,system-ui));color:var(--lumiverse-text,#eee)";
+      "display:flex;flex-direction:column;max-height:min(72vh,460px);overflow:hidden;box-sizing:border-box;font:13px/1.45 var(--lumiverse-font-family,system-ui);color:var(--lumiverse-text,#eee)";
 
     // the one scroll area: flexes to fill whatever height is left after the
     // footer. min-height:0 lets it actually shrink and scroll inside the flex.
@@ -3209,7 +3210,7 @@ export function setup(ctx: Ctx, opts?: any) {
 
       const h = document.createElement("div");
       h.style.cssText =
-        "font-size:11px;letter-spacing:.07em;text-transform:uppercase;font-family:var(--font-global-bold,var(--lumiverse-font-family,system-ui));color:var(--lumiverse-text-muted,#9a93a8)";
+        "font-size:11px;letter-spacing:.07em;text-transform:uppercase;font-family:var(--lumiverse-font-family,system-ui);color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
 
       if (advanced) {
         h.style.cursor = "pointer";
@@ -3232,7 +3233,7 @@ export function setup(ctx: Ctx, opts?: any) {
           const d = document.createElement("div");
           d.textContent = group.desc;
           d.style.cssText =
-            "font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,#9a93a8)";
+            "font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
           body.appendChild(d);
         }
         for (const f of group.fields) body.appendChild(buildRow(f));
@@ -3248,13 +3249,13 @@ export function setup(ctx: Ctx, opts?: any) {
           const pl = document.createElement("div");
           pl.textContent = "Presets";
           pl.style.cssText =
-            "font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--lumiverse-text-muted,#9a93a8)";
+            "font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
           body.appendChild(pl);
           const pd = document.createElement("div");
           pd.textContent =
             "Save your current word swaps as a named setup and switch between them. Applying takes effect right away. Kept on this browser.";
           pd.style.cssText =
-            "font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,#9a93a8)";
+            "font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
           body.appendChild(pd);
           body.appendChild(buildPresetBar("swap"));
         }
@@ -3277,7 +3278,7 @@ export function setup(ctx: Ctx, opts?: any) {
           const d = document.createElement("div");
           d.textContent = group.desc;
           d.style.cssText =
-            "font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,#9a93a8);margin-top:-4px";
+            "font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65));margin-top:-4px";
           sec.appendChild(d);
         }
         for (const f of group.fields) sec.appendChild(buildRow(f));
@@ -3293,7 +3294,7 @@ export function setup(ctx: Ctx, opts?: any) {
       sec.style.cssText = "display:flex;flex-direction:column;gap:10px";
       const h = document.createElement("div");
       h.style.cssText =
-        "font-size:11px;letter-spacing:.07em;text-transform:uppercase;font-family:var(--font-global-bold,var(--lumiverse-font-family,system-ui));color:var(--lumiverse-text-muted,#9a93a8);cursor:pointer;user-select:none;display:flex;align-items:center;gap:6px";
+        "font-size:11px;letter-spacing:.07em;text-transform:uppercase;font-family:var(--lumiverse-font-family,system-ui);color:var(--lumiverse-text-muted,rgba(255,255,255,.65));cursor:pointer;user-select:none;display:flex;align-items:center;gap:6px";
       const caret = document.createElement("span");
       caret.textContent = "\u25B8";
       caret.style.cssText = "font-size:9px";
@@ -3309,7 +3310,7 @@ export function setup(ctx: Ctx, opts?: any) {
       desc.textContent =
         "A snapshot for your own debugging or a bug report. Tick the parts to include, build a preview, edit out anything you would rather not share, then copy. Nothing leaves your device until you paste it somewhere.";
       desc.style.cssText =
-        "font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,#9a93a8)";
+        "font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
       body.appendChild(desc);
 
       const sections: Array<{
@@ -3332,7 +3333,7 @@ export function setup(ctx: Ctx, opts?: any) {
         cb.type = "checkbox";
         cb.checked = true;
         cb.style.cssText =
-          "accent-color:var(--lumiverse-primary,#7c5cff);cursor:pointer";
+          "accent-color:var(--lumiverse-primary,rgba(147,112,219,.9));cursor:pointer";
         const txt = document.createElement("span");
         txt.textContent = s.label;
         row.appendChild(cb);
@@ -3349,7 +3350,7 @@ export function setup(ctx: Ctx, opts?: any) {
       };
       const dStatus = document.createElement("div");
       dStatus.style.cssText =
-        "font-size:12px;line-height:1.4;color:var(--lumiverse-text-muted,#9a93a8);min-height:1em";
+        "font-size:12px;line-height:1.4;color:var(--lumiverse-text-muted,rgba(255,255,255,.65));min-height:1em";
       const dArea = document.createElement("textarea");
       dArea.rows = 6;
       dArea.placeholder =
@@ -3395,7 +3396,7 @@ export function setup(ctx: Ctx, opts?: any) {
       sec.style.cssText = "display:flex;flex-direction:column;gap:10px";
       const h = document.createElement("div");
       h.style.cssText =
-        "font-size:11px;letter-spacing:.07em;text-transform:uppercase;font-family:var(--font-global-bold,var(--lumiverse-font-family,system-ui));color:var(--lumiverse-text-muted,#9a93a8);cursor:pointer;user-select:none;display:flex;align-items:center;gap:6px";
+        "font-size:11px;letter-spacing:.07em;text-transform:uppercase;font-family:var(--lumiverse-font-family,system-ui);color:var(--lumiverse-text-muted,rgba(255,255,255,.65));cursor:pointer;user-select:none;display:flex;align-items:center;gap:6px";
       const caret = document.createElement("span");
       caret.textContent = "\u25B8";
       caret.style.cssText = "font-size:9px";
@@ -3412,7 +3413,7 @@ export function setup(ctx: Ctx, opts?: any) {
       desc.textContent =
         "Save settings to a file or load them from one. Tick the parts to include, then Export or Import. An import fills in the settings above without saving, so you can review first: press Save to keep it, or close to discard.";
       desc.style.cssText =
-        "font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,#9a93a8)";
+        "font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
       body.appendChild(desc);
 
       const checks: Array<{ id: string; input: HTMLInputElement }> = [];
@@ -3426,7 +3427,7 @@ export function setup(ctx: Ctx, opts?: any) {
         cb.type = "checkbox";
         cb.checked = true;
         cb.style.cssText =
-          "accent-color:var(--lumiverse-primary,#7c5cff);cursor:pointer";
+          "accent-color:var(--lumiverse-primary,rgba(147,112,219,.9));cursor:pointer";
         const txt = document.createElement("span");
         txt.textContent = c.label;
         row.appendChild(cb);
@@ -3440,7 +3441,7 @@ export function setup(ctx: Ctx, opts?: any) {
 
       const status = document.createElement("div");
       status.style.cssText =
-        "font-size:12px;line-height:1.4;color:var(--lumiverse-text-muted,#9a93a8);min-height:1em";
+        "font-size:12px;line-height:1.4;color:var(--lumiverse-text-muted,rgba(255,255,255,.65));min-height:1em";
 
       const exportBtn = btn("Export to file", false);
       exportBtn.addEventListener("click", () => {
@@ -3554,7 +3555,7 @@ export function setup(ctx: Ctx, opts?: any) {
       "display:flex;align-items:center;flex-wrap:wrap;gap:8px;flex:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--lumiverse-border,rgba(255,255,255,.08))";
     const status = document.createElement("span");
     status.style.cssText =
-      "flex:1;min-width:120px;font-size:12px;color:var(--lumiverse-text-muted,#9a93a8)";
+      "flex:1;min-width:120px;font-size:12px;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
 
     const reset = btn("Reset to defaults", false);
     reset.addEventListener("click", async () => {
@@ -3633,7 +3634,7 @@ export function setup(ctx: Ctx, opts?: any) {
     const note = document.createElement("span");
     // Height is held even while empty so the panel doesn't shift when it fills.
     note.style.cssText =
-      "font-size:12px;min-height:16px;color:var(--lumiverse-text-muted,#9a93a8)";
+      "font-size:12px;min-height:16px;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
     b.addEventListener("click", () => {
       let changed = 0;
       for (const k of keys) {
@@ -3666,7 +3667,7 @@ export function setup(ctx: Ctx, opts?: any) {
       hintEl = document.createElement("span");
       hintEl.textContent = f.hint;
       hintEl.style.cssText =
-        "display:none;font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,#9a93a8)";
+        "display:none;font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
     }
 
     const top = document.createElement("div");
@@ -3685,15 +3686,15 @@ export function setup(ctx: Ctx, opts?: any) {
       info.textContent = "?";
       info.setAttribute("aria-label", "Show description for " + f.label);
       info.style.cssText =
-        "flex:none;width:18px;height:18px;padding:0;line-height:1;border-radius:50%;border:1px solid var(--lumiverse-border,rgba(255,255,255,.3));background:transparent;color:var(--lumiverse-text-muted,#9a93a8);font-size:11px;cursor:pointer";
+        "flex:none;width:18px;height:18px;padding:0;line-height:1;border-radius:50%;border:1px solid var(--lumiverse-border,rgba(255,255,255,.3));background:transparent;color:var(--lumiverse-text-muted,rgba(255,255,255,.65));font-size:11px;cursor:pointer";
       const setHint = (show: boolean) => {
         hintEl!.style.display = show ? "block" : "none";
         info.style.borderColor = show
-          ? "var(--lumiverse-primary,#7c5cff)"
+          ? "var(--lumiverse-primary,rgba(147,112,219,.9))"
           : "var(--lumiverse-border,rgba(255,255,255,.3))";
         info.style.color = show
-          ? "var(--lumiverse-primary,#7c5cff)"
-          : "var(--lumiverse-text-muted,#9a93a8)";
+          ? "var(--lumiverse-primary,rgba(147,112,219,.9))"
+          : "var(--lumiverse-text-muted,rgba(255,255,255,.65))";
       };
       // Mouse devices reveal on hover (and keyboard focus); touch devices, which
       // can't hover, toggle on tap.
@@ -3725,7 +3726,7 @@ export function setup(ctx: Ctx, opts?: any) {
       input.type = "checkbox";
       input.checked = !!cfg[f.key];
       input.style.cssText =
-        "flex:none;width:20px;height:20px;accent-color:var(--lumiverse-primary,#7c5cff);cursor:pointer";
+        "flex:none;width:20px;height:20px;accent-color:var(--lumiverse-primary,rgba(147,112,219,.9));cursor:pointer";
       input.addEventListener("change", () => {
         cfg[f.key] = input.checked;
       });
@@ -3797,30 +3798,30 @@ export function setup(ctx: Ctx, opts?: any) {
         test.style.padding = "5px 12px";
         const res = document.createElement("span");
         res.style.cssText =
-          "font-size:12px;min-height:16px;color:var(--lumiverse-text-muted,#9a93a8)";
+          "font-size:12px;min-height:16px;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
         test.addEventListener("click", () => {
           const sel = input.value.trim();
           if (!sel) {
             res.textContent = "type a selector first";
-            res.style.color = "var(--lumiverse-text-muted,#9a93a8)";
+            res.style.color = "var(--lumiverse-text-muted,rgba(255,255,255,.65))";
             return;
           }
           const state = selectorState(sel);
           if (state === "invalid selector") {
             res.textContent = "that selector isn't valid";
-            res.style.color = "var(--lumiverse-danger,#ff6b6b)";
+            res.style.color = "var(--lumiverse-danger,#ef4444)";
             return;
           }
           if (state === "match") {
             res.textContent = "match found";
-            res.style.color = "var(--lumiverse-success,#46d39a)";
+            res.style.color = "var(--lumiverse-success,#22c55e)";
             return;
           }
           res.textContent =
             state === "match, not clickable right now"
               ? "found, but not clickable right now"
               : "no match right now";
-          res.style.color = "var(--lumiverse-text-muted,#9a93a8)";
+          res.style.color = "var(--lumiverse-text-muted,rgba(255,255,255,.65))";
         });
         const pick = btn("Pick it for me", false);
         pick.style.padding = "5px 12px";
@@ -3845,11 +3846,11 @@ export function setup(ctx: Ctx, opts?: any) {
       "padding:9px 10px;border-radius:var(--lumiverse-radius,8px);" +
       "border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));" +
       "background:var(--lumiverse-fill-subtle,rgba(255,255,255,.05));" +
-      "color:var(--lumiverse-text,#eee);font:13px var(--lumiverse-font-family,var(--font-global,system-ui));outline:none;" +
+      "color:var(--lumiverse-text,#eee);font:13px var(--lumiverse-font-family,system-ui);outline:none;" +
       "transition:border-color .12s ease";
     // On focus, tint the border so the active field is clear. No glow ring.
     input.addEventListener("focus", () => {
-      input.style.borderColor = "var(--lumiverse-primary,#7c5cff)";
+      input.style.borderColor = "var(--lumiverse-primary,rgba(147,112,219,.9))";
     });
     input.addEventListener("blur", () => {
       input.style.borderColor = "var(--lumiverse-border,rgba(255,255,255,.16))";
@@ -3863,7 +3864,7 @@ export function setup(ctx: Ctx, opts?: any) {
       "min-height:36px;padding:8px 14px;border-radius:var(--lumiverse-radius,8px);cursor:pointer;" +
       "font:13px var(--lumiverse-font-family,system-ui);transition:filter .12s ease;" +
       (primary
-        ? "border:1px solid transparent;background:var(--lumiverse-primary,#7c5cff);color:var(--lumiverse-primary-contrast,#fff)"
+        ? "border:1px solid transparent;background:var(--lumiverse-primary,rgba(147,112,219,.9));color:var(--lumiverse-text,rgba(255,255,255,.9))"
         : "border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));background:transparent;color:var(--lumiverse-text,#eee)");
     b.addEventListener("mouseenter", () => {
       b.style.filter = "brightness(1.12)";
@@ -3901,19 +3902,19 @@ export function setup(ctx: Ctx, opts?: any) {
     }
     const overlay = document.createElement("div");
     overlay.style.cssText =
-      "position:fixed;inset:0;z-index:2147483600;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;background:rgba(0,0,0,.55);font-family:var(--lumiverse-font-family,var(--font-global,system-ui))";
+      "position:fixed;inset:0;z-index:2147483600;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;background:var(--lumiverse-modal-backdrop,rgba(0,0,0,.6));font-family:var(--lumiverse-font-family,system-ui)";
     const box = document.createElement("div");
     box.style.cssText =
-      "display:flex;flex-direction:column;gap:10px;width:min(720px,96vw);height:min(80vh,640px);box-sizing:border-box;padding:14px;background:var(--lumiverse-surface,#1a1720);border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));border-radius:var(--lumiverse-radius,12px);box-shadow:0 12px 40px rgba(0,0,0,.5);color:var(--lumiverse-text,#eee)";
+      "display:flex;flex-direction:column;gap:10px;width:min(720px,96vw);height:min(80vh,640px);box-sizing:border-box;padding:14px;background:var(--lumiverse-bg-elevated,rgba(35,30,48,.9));border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));border-radius:var(--lumiverse-radius,12px);box-shadow:var(--lumiverse-shadow-xl,0 20px 60px rgba(0,0,0,.5));color:var(--lumiverse-text,#eee)";
     const title = document.createElement("div");
     title.textContent = label;
     title.style.cssText =
-      "flex:none;font-size:14px;font-family:var(--font-global-bold,var(--lumiverse-font-family,system-ui))";
+      "flex:none;font-size:14px;font-family:var(--lumiverse-font-family,system-ui)";
     const ta = document.createElement("textarea");
     ta.value = initial;
     ta.setAttribute("aria-label", label);
     ta.style.cssText =
-      "flex:1;width:100%;box-sizing:border-box;resize:none;padding:10px;border-radius:var(--lumiverse-radius,8px);border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));background:var(--lumiverse-fill-subtle,rgba(255,255,255,.05));color:var(--lumiverse-text,#eee);outline:none;font:13px/1.5 var(--lumiverse-font-family,var(--font-global,system-ui))";
+      "flex:1;width:100%;box-sizing:border-box;resize:none;padding:10px;border-radius:var(--lumiverse-radius,8px);border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));background:var(--lumiverse-fill-subtle,rgba(255,255,255,.05));color:var(--lumiverse-text,#eee);outline:none;font:13px/1.5 var(--lumiverse-font-family,system-ui)";
     const row = document.createElement("div");
     row.style.cssText =
       "display:flex;justify-content:flex-end;gap:8px;flex:none";
@@ -4189,7 +4190,6 @@ export function setup(ctx: Ctx, opts?: any) {
       disposers.push(() => { try { offRep && offRep(); } catch (_) {} });
     }
   } catch (_) {}
-  disposers.push(() => { try { toggleActionOff && toggleActionOff(); } catch (_) {} try { toggleAction && toggleAction.destroy(); } catch (_) {} });
   disposers.push(() => { try { replaceActionOff && replaceActionOff(); } catch (_) {} try { replaceAction && replaceAction.destroy(); } catch (_) {} });
   log("ready v" + VERSION, cfg);
 
