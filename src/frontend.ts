@@ -1315,7 +1315,7 @@ export function setup(ctx: Ctx, opts?: any) {
     if (liveLogEl || typeof document === "undefined") return;
     const el = document.createElement("div");
     el.style.cssText =
-      "position:fixed;right:8px;bottom:8px;z-index:2147483000;width:min(340px,92vw);height:min(300px,50vh);min-width:200px;min-height:120px;max-width:96vw;max-height:85vh;display:flex;flex-direction:column;background:var(--lumiverse-bg-elevated,rgba(35,30,48,.9));border:1px solid var(--lumiverse-border,rgba(255,255,255,.14));border-radius:var(--lumiverse-radius-md,10px);box-shadow:var(--lumiverse-shadow-md,0 8px 24px rgba(0,0,0,.4));font-family:var(--lumiverse-font-family,system-ui);font-size:calc(13px * var(--lumiverse-font-scale,1));color:var(--lumiverse-text,#e9e4f0);overflow:hidden";
+      "position:fixed;right:8px;bottom:8px;z-index:2147483000;width:min(340px,92vw);height:min(300px,50vh);min-width:200px;min-height:120px;max-width:96vw;max-height:85vh;display:flex;flex-direction:column;background:var(--lumiverse-bg-elevated,rgba(35,30,48,.9));border:1px solid var(--lumiverse-border,rgba(255,255,255,.14));border-radius:var(--lumiverse-radius-md,10px);box-shadow:var(--lumiverse-shadow-md,0 8px 24px rgba(0,0,0,.4));font-family:var(--lumiverse-font-family,system-ui);font-size:13px;color:var(--lumiverse-text,#e9e4f0);overflow:hidden";
     const head = document.createElement("div");
     head.style.cssText =
       "display:flex;align-items:center;gap:8px;padding:7px 9px;border-bottom:1px solid var(--lumiverse-border,rgba(255,255,255,.12));font-weight:600;cursor:move;user-select:none;touch-action:none";
@@ -1329,7 +1329,7 @@ export function setup(ctx: Ctx, opts?: any) {
     const tinyBtn = (label: string) => {
       const b = btn(label, false);
       b.style.cssText +=
-        "min-height:0;padding:3px 9px;font-size:calc(11px * var(--lumiverse-font-scale,1));flex:none;cursor:pointer";
+        "min-height:0;padding:3px 9px;font-size:11px;flex:none;cursor:pointer";
       return b;
     };
     const copyBtn = tinyBtn("Copy");
@@ -3048,7 +3048,7 @@ export function setup(ctx: Ctx, opts?: any) {
       t.style.cssText =
         "position:fixed;bottom:max(20px,env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);" +
         "z-index:2147483647;display:flex;align-items:center;gap:10px;" +
-        "font:calc(13px * var(--lumiverse-font-scale,1))/1.4 var(--lumiverse-font-family,system-ui);padding:9px 12px;border-radius:var(--lumiverse-radius-lg,12px);" +
+        "font:13px/1.4 var(--lumiverse-font-family,system-ui);padding:9px 12px;border-radius:var(--lumiverse-radius-lg,12px);" +
         "color:var(--lumiverse-text,#fff);background:var(--lumiverse-bg-elevated,rgba(35,30,48,.94));" +
         "border:1px solid var(--lumiverse-border,rgba(255,255,255,.18));" +
         "box-shadow:var(--lumiverse-shadow-md,0 8px 24px rgba(0,0,0,.4));transition:opacity var(--lumiverse-transition,200ms ease);" +
@@ -3088,7 +3088,7 @@ export function setup(ctx: Ctx, opts?: any) {
         c.textContent = "Cancel";
         c.style.cssText =
           "flex:none;min-height:36px;padding:6px 14px;border-radius:var(--lumiverse-radius,8px);cursor:pointer;" +
-          "font:calc(13px * var(--lumiverse-font-scale,1)) var(--lumiverse-font-family,system-ui);" +
+          "font:13px var(--lumiverse-font-family,system-ui);" +
           "border:1px solid var(--lumiverse-border,rgba(255,255,255,.28));" +
           "background:var(--lumiverse-fill-subtle,rgba(0,0,0,.1));color:var(--lumiverse-text,#fff)";
         c.addEventListener("click", () => {
@@ -3337,7 +3337,7 @@ export function setup(ctx: Ctx, opts?: any) {
         const l = document.createElement("div");
         l.textContent = text;
         l.style.cssText =
-          "font-size:calc(11px * var(--lumiverse-font-scale,1));color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+          "font-size:11px;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
         return l;
       };
       const rowBox = () => {
@@ -3350,7 +3350,7 @@ export function setup(ctx: Ctx, opts?: any) {
       // Load direction: a saved preset into the settings.
       const select = document.createElement("select");
       select.style.cssText =
-        "flex:1;min-width:150px;padding:8px 10px;border-radius:var(--lumiverse-radius,8px);border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));background:var(--lumiverse-fill-subtle,rgba(0,0,0,.1));color:var(--lumiverse-text,#eee);font:calc(13px * var(--lumiverse-font-scale,1)) var(--lumiverse-font-family,system-ui)";
+        "flex:1;min-width:150px;padding:8px 10px;border-radius:var(--lumiverse-radius,8px);border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));background:var(--lumiverse-fill-subtle,rgba(0,0,0,.1));color:var(--lumiverse-text,#eee);font:13px var(--lumiverse-font-family,system-ui)";
       const loadBtn = smallBtn(btn("Load", true));
       const pickRow = rowBox();
       pickRow.appendChild(select);
@@ -3377,7 +3377,7 @@ export function setup(ctx: Ctx, opts?: any) {
 
       const status = document.createElement("div");
       status.style.cssText =
-        "font-size:calc(12px * var(--lumiverse-font-scale,1));line-height:1.4;color:var(--lumiverse-text-muted,rgba(255,255,255,.65));min-height:1em";
+        "font-size:12px;line-height:1.4;color:var(--lumiverse-text-muted,rgba(255,255,255,.65));min-height:1em";
 
       const presets = loadPresets();
       const list = () => presets[kind] || [];
@@ -3579,14 +3579,14 @@ export function setup(ctx: Ctx, opts?: any) {
       const title = document.createElement("div");
       title.textContent = "Try it on a reply";
       title.style.cssText =
-        "font-size:calc(11px * var(--lumiverse-font-scale,1));letter-spacing:.05em;text-transform:uppercase;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+        "font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
       wrap.appendChild(title);
 
       const desc = document.createElement("div");
       desc.textContent =
         "Paste a reply and see whether it would count as a refusal, and what decided it. It uses the settings as they are in the boxes above, so you can test a change before saving it. Nothing is sent anywhere and no reply is altered.";
       desc.style.cssText =
-        "font-size:calc(12px * var(--lumiverse-font-scale,1));line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+        "font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
       wrap.appendChild(desc);
 
       const ta = document.createElement("textarea") as any;
@@ -3601,7 +3601,7 @@ export function setup(ctx: Ctx, opts?: any) {
 
       const out = document.createElement("div");
       out.style.cssText =
-        "font-size:calc(12px * var(--lumiverse-font-scale,1));line-height:1.45;min-height:1em;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+        "font-size:12px;line-height:1.45;min-height:1em;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
 
       const check = btn("Check this text", false);
       check.style.cssText += "min-height:0;padding:6px 12px;align-self:flex-start";
@@ -3647,9 +3647,12 @@ export function setup(ctx: Ctx, opts?: any) {
     // panel bounded and overflow hidden, the host modal has nothing left to
     // over-scroll, so its own full-height scrollbar never appears; only the
     // options list below scrolls. vh units keep it sane on phones too.
+    // The pixel cap tracks the modal's own 720: 720 less its title bar and
+    // padding leaves roughly 640, so the panel fills the modal without pushing
+    // past it. The vh term is what keeps a short screen from overflowing.
     const panel = document.createElement("div");
     panel.style.cssText =
-      "display:flex;flex-direction:column;max-height:min(72vh,460px);overflow:hidden;box-sizing:border-box;font:calc(13px * var(--lumiverse-font-scale,1))/1.45 var(--lumiverse-font-family,system-ui);color:var(--lumiverse-text,#eee)";
+      "display:flex;flex-direction:column;max-height:min(74vh,640px);overflow:hidden;box-sizing:border-box;font:13px/1.45 var(--lumiverse-font-family,system-ui);color:var(--lumiverse-text,#eee)";
 
     // the one scroll area: flexes to fill whatever height is left after the
     // footer. min-height:0 lets it actually shrink and scroll inside the flex.
@@ -3737,7 +3740,7 @@ export function setup(ctx: Ctx, opts?: any) {
 
       const h = document.createElement("div");
       h.style.cssText =
-        "font-size:calc(11px * var(--lumiverse-font-scale,1));letter-spacing:.07em;text-transform:uppercase;font-family:var(--lumiverse-font-family,system-ui);color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+        "font-size:11px;letter-spacing:.07em;text-transform:uppercase;font-family:var(--lumiverse-font-family,system-ui);color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
 
       if (advanced) {
         h.style.cursor = "pointer";
@@ -3747,7 +3750,7 @@ export function setup(ctx: Ctx, opts?: any) {
         h.style.gap = "6px";
         const caret = document.createElement("span");
         caret.textContent = "\u25B8"; // right triangle when collapsed
-        caret.style.cssText = "font-size:calc(9px * var(--lumiverse-font-scale,1))";
+        caret.style.cssText = "font-size:9px";
         const label = document.createElement("span");
         label.textContent = group.title;
         h.appendChild(caret);
@@ -3760,7 +3763,7 @@ export function setup(ctx: Ctx, opts?: any) {
           const d = document.createElement("div");
           d.textContent = group.desc;
           d.style.cssText =
-            "font-size:calc(12px * var(--lumiverse-font-scale,1));line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+            "font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
           body.appendChild(d);
         }
         for (const f of group.fields) body.appendChild(addRow(buildRow(f), f));
@@ -3781,13 +3784,13 @@ export function setup(ctx: Ctx, opts?: any) {
           const pl = document.createElement("div");
           pl.textContent = "Presets";
           pl.style.cssText =
-            "font-size:calc(11px * var(--lumiverse-font-scale,1));letter-spacing:.05em;text-transform:uppercase;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+            "font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
           body.appendChild(pl);
           const pd = document.createElement("div");
           pd.textContent =
             "Save your current word swaps as a named setup and switch between them. Applying takes effect right away. Saved to your account, so they follow you to other devices.";
           pd.style.cssText =
-            "font-size:calc(12px * var(--lumiverse-font-scale,1));line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+            "font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
           body.appendChild(pd);
           body.appendChild(buildPresetBar("swap"));
         }
@@ -3801,7 +3804,7 @@ export function setup(ctx: Ctx, opts?: any) {
           const d = document.createElement("div");
           d.textContent = group.desc;
           d.style.cssText =
-            "font-size:calc(12px * var(--lumiverse-font-scale,1));line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65));margin-top:-4px";
+            "font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65));margin-top:-4px";
           sec.appendChild(d);
         }
         for (const f of group.fields) sec.appendChild(addRow(buildRow(f), f));
@@ -3817,10 +3820,10 @@ export function setup(ctx: Ctx, opts?: any) {
       sec.style.cssText = "display:flex;flex-direction:column;gap:10px";
       const h = document.createElement("div");
       h.style.cssText =
-        "font-size:calc(11px * var(--lumiverse-font-scale,1));letter-spacing:.07em;text-transform:uppercase;font-family:var(--lumiverse-font-family,system-ui);color:var(--lumiverse-text-muted,rgba(255,255,255,.65));cursor:pointer;user-select:none;display:flex;align-items:center;gap:6px";
+        "font-size:11px;letter-spacing:.07em;text-transform:uppercase;font-family:var(--lumiverse-font-family,system-ui);color:var(--lumiverse-text-muted,rgba(255,255,255,.65));cursor:pointer;user-select:none;display:flex;align-items:center;gap:6px";
       const caret = document.createElement("span");
       caret.textContent = "\u25B8";
-      caret.style.cssText = "font-size:calc(9px * var(--lumiverse-font-scale,1))";
+      caret.style.cssText = "font-size:9px";
       const label = document.createElement("span");
       label.textContent = "Advanced: debug info";
       h.appendChild(caret);
@@ -3840,7 +3843,7 @@ export function setup(ctx: Ctx, opts?: any) {
       desc.textContent =
         "A snapshot for your own debugging or a bug report. Tick the parts to include, build a preview, edit out anything you would rather not share, then copy. Nothing leaves your device until you paste it somewhere.";
       desc.style.cssText =
-        "font-size:calc(12px * var(--lumiverse-font-scale,1));line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+        "font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
       body.appendChild(desc);
 
       const sections: Array<{
@@ -3858,7 +3861,7 @@ export function setup(ctx: Ctx, opts?: any) {
       for (const s of sections) {
         const row = document.createElement("label");
         row.style.cssText =
-          "display:flex;align-items:center;gap:8px;font-size:calc(13px * var(--lumiverse-font-scale,1));cursor:pointer";
+          "display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer";
         const cb = document.createElement("input");
         cb.type = "checkbox";
         cb.checked = true;
@@ -3880,13 +3883,13 @@ export function setup(ctx: Ctx, opts?: any) {
       };
       const dStatus = document.createElement("div");
       dStatus.style.cssText =
-        "font-size:calc(12px * var(--lumiverse-font-scale,1));line-height:1.4;color:var(--lumiverse-text-muted,rgba(255,255,255,.65));min-height:1em";
+        "font-size:12px;line-height:1.4;color:var(--lumiverse-text-muted,rgba(255,255,255,.65));min-height:1em";
       const dArea = document.createElement("textarea");
       dArea.rows = 6;
       dArea.placeholder =
         "Press Build preview to fill this, then edit out anything private before copying.";
       dArea.style.cssText =
-        "width:100%;box-sizing:border-box;font-family:var(--lumiverse-font-mono,ui-monospace,monospace) !important;font-size:calc(12px * var(--lumiverse-font-scale,1));padding:8px;border-radius:var(--lumiverse-radius,8px);border:1px solid var(--lumiverse-border,#3a3543);background:var(--lumiverse-bg,#1a1720);color:var(--lumiverse-text,#e9e4f0);resize:vertical";
+        "width:100%;box-sizing:border-box;font-family:var(--lumiverse-font-mono,ui-monospace,monospace) !important;font-size:12px;padding:8px;border-radius:var(--lumiverse-radius,8px);border:1px solid var(--lumiverse-border,#3a3543);background:var(--lumiverse-bg,#1a1720);color:var(--lumiverse-text,#e9e4f0);resize:vertical";
 
       const buildBtn = btn("Build preview", false);
       buildBtn.addEventListener("click", () => {
@@ -3917,10 +3920,10 @@ export function setup(ctx: Ctx, opts?: any) {
       sec.style.cssText = "display:flex;flex-direction:column;gap:10px";
       const h = document.createElement("div");
       h.style.cssText =
-        "font-size:calc(11px * var(--lumiverse-font-scale,1));letter-spacing:.07em;text-transform:uppercase;font-family:var(--lumiverse-font-family,system-ui);color:var(--lumiverse-text-muted,rgba(255,255,255,.65));cursor:pointer;user-select:none;display:flex;align-items:center;gap:6px";
+        "font-size:11px;letter-spacing:.07em;text-transform:uppercase;font-family:var(--lumiverse-font-family,system-ui);color:var(--lumiverse-text-muted,rgba(255,255,255,.65));cursor:pointer;user-select:none;display:flex;align-items:center;gap:6px";
       const caret = document.createElement("span");
       caret.textContent = "\u25B8";
-      caret.style.cssText = "font-size:calc(9px * var(--lumiverse-font-scale,1))";
+      caret.style.cssText = "font-size:9px";
       const label = document.createElement("span");
       label.textContent = "Advanced: import / export";
       h.appendChild(caret);
@@ -3941,7 +3944,7 @@ export function setup(ctx: Ctx, opts?: any) {
       desc.textContent =
         "Save settings to a file or load them from one. Tick the parts to include, then Export or Import. An import fills in the settings above without saving, so you can review first: press Save to keep it, or close to discard.";
       desc.style.cssText =
-        "font-size:calc(12px * var(--lumiverse-font-scale,1));line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+        "font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
       body.appendChild(desc);
 
       const checks: Array<{ id: string; input: HTMLInputElement }> = [];
@@ -3950,7 +3953,7 @@ export function setup(ctx: Ctx, opts?: any) {
       for (const c of EXPORT_CATEGORIES) {
         const row = document.createElement("label");
         row.style.cssText =
-          "display:flex;align-items:center;gap:8px;font-size:calc(13px * var(--lumiverse-font-scale,1));cursor:pointer";
+          "display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer";
         const cb = document.createElement("input");
         cb.type = "checkbox";
         cb.checked = true;
@@ -3969,7 +3972,7 @@ export function setup(ctx: Ctx, opts?: any) {
 
       const status = document.createElement("div");
       status.style.cssText =
-        "font-size:calc(12px * var(--lumiverse-font-scale,1));line-height:1.4;color:var(--lumiverse-text-muted,rgba(255,255,255,.65));min-height:1em";
+        "font-size:12px;line-height:1.4;color:var(--lumiverse-text-muted,rgba(255,255,255,.65));min-height:1em";
 
       const exportBtn = btn("Export to file", false);
       exportBtn.addEventListener("click", () => {
@@ -4069,36 +4072,9 @@ export function setup(ctx: Ctx, opts?: any) {
     // Sits above the scroll area so it stays put while the results move. An
     // empty box puts everything back exactly as it was, including which sections
     // the user had open, so searching never quietly rearranges the panel.
-    // It rests as a single magnifier so it costs almost no height on a phone,
-    // where the panel is tight enough already, and slides open on a tap, on
-    // hover, or on keyboard focus. It stays open for as long as it holds a
-    // query: collapsing with a search still running would leave the list
-    // filtered with nothing on screen to explain why, so closing always clears
-    // it and puts every row back.
     const searchWrap = document.createElement("div");
     searchWrap.style.cssText =
-      "display:flex;flex-direction:column;gap:6px;flex:none;margin-bottom:10px";
-    const searchRow = document.createElement("div");
-    searchRow.style.cssText = "display:flex;align-items:center;gap:6px";
-
-    const searchToggle = document.createElement("button");
-    searchToggle.type = "button";
-    searchToggle.innerHTML =
-      '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>';
-    searchToggle.style.cssText =
-      "flex:none;display:flex;align-items:center;justify-content:center;" +
-      "width:calc(30px * var(--lumiverse-ui-scale,1));height:calc(30px * var(--lumiverse-ui-scale,1));" +
-      "padding:0;cursor:pointer;border-radius:var(--lumiverse-radius,8px);" +
-      "border:1px solid var(--lumiverse-secondary-border,rgba(128,128,128,.25));" +
-      "background:var(--lumiverse-secondary,rgba(128,128,128,.15));" +
-      "color:var(--lumiverse-text,#eee);" +
-      "transition:background-color var(--lumiverse-transition-fast,150ms ease)";
-    ensureReadable(searchToggle);
-
-    // The field sits in a wrapper that clips it, so opening animates the
-    // wrapper rather than the input's own padding and border, which would
-    // visibly squash the text on the way out.
-    const searchFieldWrap = document.createElement("div");
+      "display:flex;flex-direction:column;gap:6px;flex:none;margin-bottom:12px";
     const search = document.createElement("input");
     search.type = "search";
     search.placeholder = "Search settings";
@@ -4106,25 +4082,9 @@ export function setup(ctx: Ctx, opts?: any) {
     styleField(search);
     search.style.width = "100%";
     search.style.boxSizing = "border-box";
-    searchFieldWrap.appendChild(search);
-
-    // Someone who has asked for less movement gets the same behaviour without
-    // the slide.
-    const reduceMotion =
-      typeof window !== "undefined" &&
-      !!window.matchMedia &&
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    searchFieldWrap.style.cssText =
-      "flex:1 1 auto;min-width:0;overflow:hidden;max-width:0%;opacity:0;transition:" +
-      (reduceMotion
-        ? "none"
-        : "max-width var(--lumiverse-transition,200ms ease),opacity var(--lumiverse-transition,200ms ease)");
-
     const searchNote = document.createElement("div");
-    // No reserved height: with the field shut there is nothing to say, and an
-    // always-present blank line is exactly the wasted space this is avoiding.
     searchNote.style.cssText =
-      "font-size:calc(12px * var(--lumiverse-font-scale,1));color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+      "font-size:12px;min-height:1em;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
 
     const runSearch = () => {
       const q = search.value.trim().toLowerCase();
@@ -4163,68 +4123,9 @@ export function setup(ctx: Ctx, opts?: any) {
         ? hits + (hits === 1 ? " setting matches" : " settings match")
         : "Nothing matches that. Clear the box to see everything again.";
     };
-    let searchOpen = false;
-    const setSearchOpen = (open: boolean, focus?: boolean) => {
-      searchOpen = open;
-      searchFieldWrap.style.maxWidth = open ? "100%" : "0%";
-      searchFieldWrap.style.opacity = open ? "1" : "0";
-      searchToggle.setAttribute("aria-expanded", open ? "true" : "false");
-      const label = open ? "Close the settings search" : "Search settings";
-      searchToggle.setAttribute("aria-label", label);
-      searchToggle.title = label;
-      if (open) {
-        if (focus) {
-          try { search.focus(); } catch (_) {}
-        }
-      } else if (search.value) {
-        // Never leave the list filtered by a box that is no longer on screen.
-        search.value = "";
-        runSearch();
-      }
-    };
-    // Closing is refused while there is a query, so a search in progress cannot
-    // be lost to a pointer drifting off the row.
-    const closeSearchIfIdle = () => {
-      if (search.value.trim()) return;
-      if (typeof document !== "undefined" && document.activeElement === search) return;
-      setSearchOpen(false);
-    };
-
     search.addEventListener("input", runSearch);
-    // Tapping the magnifier opens it with the cursor already in it. Tapping
-    // again shuts it and clears whatever was typed.
-    searchToggle.addEventListener("click", () => {
-      if (searchOpen) setSearchOpen(false);
-      else setSearchOpen(true, true);
-    });
-    // A mouse only has to pass over it. Touch devices never fire this, which is
-    // why the tap above exists and why hovering never takes focus: throwing up
-    // the on-screen keyboard because a finger brushed past would be worse than
-    // the space the box was taking up.
-    const canHoverSearch =
-      typeof window !== "undefined" &&
-      !!window.matchMedia &&
-      window.matchMedia("(hover: hover)").matches;
-    if (canHoverSearch) {
-      searchRow.addEventListener("mouseenter", () => setSearchOpen(true));
-      searchRow.addEventListener("mouseleave", closeSearchIfIdle);
-    }
-    // Keyboard users reach it by tabbing: focus opens it, and it stays open
-    // until it is both empty and unfocused.
-    search.addEventListener("focus", () => setSearchOpen(true));
-    searchToggle.addEventListener("focus", () => setSearchOpen(true));
-    search.addEventListener("blur", () => setTimeout(closeSearchIfIdle, 0));
-    search.addEventListener("keydown", (e: any) => {
-      if (e && e.key === "Escape") {
-        setSearchOpen(false);
-        try { searchToggle.focus(); } catch (_) {}
-      }
-    });
-    searchRow.appendChild(searchToggle);
-    searchRow.appendChild(searchFieldWrap);
-    searchWrap.appendChild(searchRow);
+    searchWrap.appendChild(search);
     searchWrap.appendChild(searchNote);
-    setSearchOpen(false);
     panel.appendChild(searchWrap);
 
     panel.appendChild(scroller);
@@ -4236,7 +4137,7 @@ export function setup(ctx: Ctx, opts?: any) {
       "display:flex;align-items:center;flex-wrap:wrap;gap:8px;flex:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--lumiverse-border,rgba(255,255,255,.08))";
     const status = document.createElement("span");
     status.style.cssText =
-      "flex:1;min-width:120px;font-size:calc(12px * var(--lumiverse-font-scale,1));color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+      "flex:1;min-width:120px;font-size:12px;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
 
     const reset = btn("Reset to defaults", false);
     reset.addEventListener("click", async () => {
@@ -4319,7 +4220,7 @@ export function setup(ctx: Ctx, opts?: any) {
     const note = document.createElement("span");
     // Height is held even while empty so the panel doesn't shift when it fills.
     note.style.cssText =
-      "font-size:calc(12px * var(--lumiverse-font-scale,1));min-height:16px;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+      "font-size:12px;min-height:16px;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
     b.addEventListener("click", () => {
       let changed = 0;
       for (const k of keys) {
@@ -4352,7 +4253,7 @@ export function setup(ctx: Ctx, opts?: any) {
       hintEl = document.createElement("span");
       hintEl.textContent = f.hint;
       hintEl.style.cssText =
-        "display:none;font-size:calc(12px * var(--lumiverse-font-scale,1));line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+        "display:none;font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
     }
 
     const top = document.createElement("div");
@@ -4363,7 +4264,7 @@ export function setup(ctx: Ctx, opts?: any) {
       "display:flex;align-items:center;gap:6px;min-width:0";
     const name = document.createElement("span");
     name.textContent = f.label;
-    name.style.cssText = "font-size:calc(13.5px * var(--lumiverse-font-scale,1))";
+    name.style.cssText = "font-size:13.5px";
     labelWrap.appendChild(name);
     if (hintEl) {
       const info = document.createElement("button");
@@ -4371,7 +4272,7 @@ export function setup(ctx: Ctx, opts?: any) {
       info.textContent = "?";
       info.setAttribute("aria-label", "Show description for " + f.label);
       info.style.cssText =
-        "flex:none;width:calc(18px * var(--lumiverse-font-scale,1));height:calc(18px * var(--lumiverse-font-scale,1));padding:0;line-height:1;border-radius:50%;border:1px solid var(--lumiverse-border,rgba(255,255,255,.3));background:transparent;color:var(--lumiverse-text-muted,rgba(255,255,255,.65));font-size:calc(11px * var(--lumiverse-font-scale,1));cursor:pointer";
+        "flex:none;width:18px;height:18px;padding:0;line-height:1;border-radius:50%;border:1px solid var(--lumiverse-border,rgba(255,255,255,.3));background:transparent;color:var(--lumiverse-text-muted,rgba(255,255,255,.65));font-size:11px;cursor:pointer";
       const setHint = (show: boolean) => {
         hintEl!.style.display = show ? "block" : "none";
         info.style.borderColor = show
@@ -4411,7 +4312,7 @@ export function setup(ctx: Ctx, opts?: any) {
       input.type = "checkbox";
       input.checked = !!cfg[f.key];
       input.style.cssText =
-        "flex:none;width:calc(20px * var(--lumiverse-ui-scale,1));height:calc(20px * var(--lumiverse-ui-scale,1));accent-color:var(--lumiverse-primary,rgba(147,112,219,.9));cursor:pointer";
+        "flex:none;width:20px;height:20px;accent-color:var(--lumiverse-primary,rgba(147,112,219,.9));cursor:pointer";
       input.addEventListener("change", () => {
         cfg[f.key] = input.checked;
       });
@@ -4448,7 +4349,7 @@ export function setup(ctx: Ctx, opts?: any) {
         input.style.resize = "vertical";
         const expand = btn("Expand", false);
         expand.style.cssText +=
-          "min-height:0;padding:3px 10px;font-size:calc(12px * var(--lumiverse-font-scale,1));flex:none";
+          "min-height:0;padding:3px 10px;font-size:12px;flex:none";
         expand.addEventListener("click", () => {
           openExpandEditor(f.label, input.value, (val: string) => {
             input.value = val;
@@ -4483,7 +4384,7 @@ export function setup(ctx: Ctx, opts?: any) {
         test.style.padding = "5px 12px";
         const res = document.createElement("span");
         res.style.cssText =
-          "font-size:calc(12px * var(--lumiverse-font-scale,1));min-height:16px;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+          "font-size:12px;min-height:16px;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
         test.addEventListener("click", () => {
           const sel = input.value.trim();
           if (!sel) {
@@ -4531,7 +4432,7 @@ export function setup(ctx: Ctx, opts?: any) {
       "padding:9px 10px;border-radius:var(--lumiverse-radius,8px);" +
       "border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));" +
       "background:var(--lumiverse-fill-subtle,rgba(0,0,0,.1));" +
-      "color:var(--lumiverse-text,#eee);font:calc(13px * var(--lumiverse-font-scale,1)) var(--lumiverse-font-family,system-ui);outline:none;" +
+      "color:var(--lumiverse-text,#eee);font:13px var(--lumiverse-font-family,system-ui);outline:none;" +
       "transition:border-color var(--lumiverse-transition-fast,150ms ease)";
     ensureReadable(input);
     // On focus, tint the border so the active field is clear. No glow ring.
@@ -4548,7 +4449,7 @@ export function setup(ctx: Ctx, opts?: any) {
     b.textContent = label;
     b.style.cssText =
       "min-height:36px;padding:8px 14px;border-radius:var(--lumiverse-radius,8px);cursor:pointer;" +
-      "font:calc(13px * var(--lumiverse-font-scale,1)) var(--lumiverse-font-family,system-ui);" +
+      "font:13px var(--lumiverse-font-family,system-ui);" +
       "transition:filter var(--lumiverse-transition-fast,150ms ease)," +
       "background-color var(--lumiverse-transition-fast,150ms ease);" +
       (primary
@@ -4623,12 +4524,12 @@ export function setup(ctx: Ctx, opts?: any) {
     const title = document.createElement("div");
     title.textContent = label;
     title.style.cssText =
-      "flex:none;font-size:calc(14px * var(--lumiverse-font-scale,1));font-family:var(--lumiverse-font-family,system-ui)";
+      "flex:none;font-size:14px;font-family:var(--lumiverse-font-family,system-ui)";
     const ta = document.createElement("textarea");
     ta.value = initial;
     ta.setAttribute("aria-label", label);
     ta.style.cssText =
-      "flex:1;width:100%;box-sizing:border-box;resize:none;padding:10px;border-radius:var(--lumiverse-radius,8px);border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));background:var(--lumiverse-fill-subtle,rgba(0,0,0,.1));color:var(--lumiverse-text,#eee);outline:none;font:calc(13px * var(--lumiverse-font-scale,1))/1.5 var(--lumiverse-font-family,system-ui)";
+      "flex:1;width:100%;box-sizing:border-box;resize:none;padding:10px;border-radius:var(--lumiverse-radius,8px);border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));background:var(--lumiverse-fill-subtle,rgba(0,0,0,.1));color:var(--lumiverse-text,#eee);outline:none;font:13px/1.5 var(--lumiverse-font-family,system-ui)";
     const row = document.createElement("div");
     row.style.cssText =
       "display:flex;justify-content:flex-end;gap:8px;flex:none";
@@ -4779,7 +4680,10 @@ export function setup(ctx: Ctx, opts?: any) {
       const modal = ctx.ui.showModal({
         title: "Auto Retry settings",
         width: Math.min(460, vw - 24),
-        maxHeight: Math.min(560, vh - 24),
+        // A tall phone had most of its screen sitting empty under a panel that
+        // stopped at 560, so barely one section fitted before scrolling. The
+        // viewport is still the real limit; this just stops leaving room unused.
+        maxHeight: Math.min(720, vh - 24),
       });
       modalHandle = modal;
       modalRoot = modal.root;

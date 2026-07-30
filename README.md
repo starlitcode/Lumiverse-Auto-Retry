@@ -34,11 +34,11 @@ Pressing your **Stop** button, or tapping **Cancel** on the retry pop-up, stops 
 
 Open the chat input bar, tap the **Extras** popover, and choose **Auto Retry settings**. Options are grouped by what they do. Simple on/off switches are up top; the groups marked **Advanced** are collapsed by default, so tap one of those headers to reveal its options. Each setting has a **?** next to its name that shows a short description: hover it on a computer, tap it on a phone, so the list stays compact.
 
-The **search** at the top finds any option by its name or its description, and opens whichever section it lives in, so you never have to remember which group something is under. It sits as a small magnifier so it takes up almost no room, and slides open when you tap it, hover it, or tab to it. Closing it clears the search and puts every row back, so the list is never left filtered by a box you can't see.
+The **Search settings** box at the top finds any option by its name or its description, and opens whichever section it lives in, so you never have to remember which group something is under. Clearing the box puts the panel back exactly as it was.
 
 Only **Save** keeps your changes. Closing with the X or tapping outside discards anything you did not save, so you can experiment freely. Saved settings sync to your Lumiverse account, so they follow you to other browsers and devices, and they apply to the next reply. Long text boxes, like your word-swap rules, have an **Expand** button that opens a full-size editor.
 
-The panel is built entirely from your Lumiverse theme's own colours, corners, shadows and fonts, so it follows whatever theme you run, including your text and UI size settings. As it draws, it also checks that every label still contrasts with what is behind it. On a theme whose accent sits close to its text colour, a filled button would otherwise come out as a blank rectangle with its label invisible inside it; where that would happen the label is repainted and everything else is left exactly as your theme set it.
+The panel is built entirely from your Lumiverse theme's own colours, corners, shadows and fonts, so it follows whatever theme you run. As it draws, it also checks that every label still contrasts with what is behind it. On a theme whose accent sits close to its text colour, a filled button would otherwise come out as a blank rectangle with its label invisible inside it; where that would happen the label is repainted and everything else is left exactly as your theme set it.
 
 ## Turning it off quickly
 
