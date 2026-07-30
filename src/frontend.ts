@@ -37,6 +37,11 @@ const VERSION = "3.3.0";
 // ---- defaults (the UI overrides these; editing here changes the fallback) ----
 const CONFIG = {
   enabled: true,
+  // quick ways to switch the extension off without opening settings: a small
+  // draggable button over the chat, and/or an entry in the Extras menu.
+  showFloatingToggle: false,
+  floatingToggleSize: 44,
+  showToggleButton: false,
 
   // retry budget
   maxRetries: 4,
@@ -90,10 +95,6 @@ const CONFIG = {
   replaceRules: "", // "old => new" rules, one per line. A single word matches whole words; empty right side deletes it. Same word can appear more than once.
   replaceCaseSensitive: false, // match letter case exactly. Off = case-insensitive with capitalization kept.
   replaceRandom: false, // when a word has more than one replacement, pick one at random per occurrence. Off = always the first listed.
-  // one-tap on/off button in the input's Extras menu, so the extension can be
-  // switched off without opening settings.
-  showToggleButton: false,
-
   showReplaceButton: false, // optional button in the input's Extras menu that applies the word swaps to the latest reply on demand.
   showSwapAllButton: false, // adds an Extras button that swaps every generated reply in the chat once.
   allowReSwap: false, // let that button swap a reply again even if it was already swapped this session (can stack swaps).
@@ -150,6 +151,27 @@ const SCHEMA: Group[] = [
         label: "Turn auto-retry on",
         type: "bool",
         hint: "When on, it quietly tries again whenever a reply fails or gets cut off. Turn it off and it does nothing.",
+      },
+      {
+        key: "showFloatingToggle",
+        label: "Floating on/off button",
+        type: "bool",
+        hint: "Off by default. Puts a small round button on top of the chat that turns Auto Retry on or off in one tap. It shows which state it is in, and you can drag it anywhere; where you leave it is remembered. Handy if you switch it on and off a lot.",
+      },
+      {
+        key: "floatingToggleSize",
+        label: "Size of the floating button",
+        type: "num",
+        int: true,
+        min: 28,
+        max: 96,
+        hint: "How wide the floating button is, in pixels. 44 is about a comfortable thumb. Larger is easier to hit on a phone, smaller keeps it out of the way.",
+      },
+      {
+        key: "showToggleButton",
+        label: "On/off button in the Extras menu",
+        type: "bool",
+        hint: "Off by default. Adds the same on/off switch to the input bar's Extras menu, next to the settings button. Use this instead of the floating button if you would rather not have anything on top of the chat.",
       },
       {
         key: "toast",
@@ -359,12 +381,6 @@ const SCHEMA: Group[] = [
         label: "Match case exactly",
         type: "bool",
         hint: "Off by default. When off, a swap matches any case and keeps the original capitalization. Turn on to swap only when the case matches your rule exactly, so sky and Sky can have different swaps.",
-      },
-      {
-        key: "showToggleButton",
-        label: "On/off button in the Extras menu",
-        type: "bool",
-        hint: "Off by default. Adds a button to the input bar's Extras menu that turns Auto Retry on or off in one tap, so you don't have to open settings. The button shows which state you're in, and the change is saved straight away.",
       },
       {
         key: "showReplaceButton",
@@ -923,6 +939,7 @@ export function setup(ctx: Ctx, opts?: any) {
           Object.assign(cfg, coerceSaved(s));
           saveSaved();
           syncLiveLog();
+          syncFloat();
           if (modalHandle && modalRoot) { if (modalSnapshot) modalSnapshot(); buildSettingsBody(modalRoot, modalSnapshot); }
           log("settings loaded from account");
         } else {
@@ -1002,20 +1019,7 @@ export function setup(ctx: Ctx, opts?: any) {
               : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.55"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><line x1="3" y1="21" x2="21" y2="3"/></svg>',
           });
           toggleAction.__state = wanted;
-          toggleActionOff = toggleAction.onClick(() => {
-            cfg.enabled = cfg.enabled === false;
-            saveSaved();
-            if (cfg.enabled === false) {
-              // Drop anything already queued, so turning it off stops a retry
-              // that was about to fire.
-              chats.forEach((_s: any, id: string) => standDown(id, false));
-            }
-            showToast(
-              cfg.enabled === false ? "Auto Retry is off." : "Auto Retry is on.",
-              { force: true },
-            );
-            syncReplaceButton();
-          });
+          toggleActionOff = toggleAction.onClick(() => toggleEnabled());
         }
       } else if ((!cfg.showToggleButton || !canReg) && toggleAction) {
         try { toggleActionOff && toggleActionOff(); } catch (_) {}
@@ -1216,6 +1220,165 @@ export function setup(ctx: Ctx, opts?: any) {
     liveLogEl = null;
     liveLogBody = null;
   }
+  // A small round button that floats over the chat and turns the extension on or
+  // off in one tap. Built the same way as the live log panel above: created by
+  // the extension, so unlike the Extras entry its size and position are ours to
+  // set. Dragged with a pointer so it works with a finger as well as a mouse,
+  // and where it is left is remembered between sessions.
+  const FLOAT_KEY = "lv-auto-retry:float-pos:v1";
+  let floatEl: any = null;
+
+  function floatSize(): number {
+    const v = Math.floor(Number(cfg.floatingToggleSize));
+    return Number.isFinite(v) && v >= 28 ? Math.min(v, 96) : 44;
+  }
+
+  function paintFloat() {
+    if (!floatEl) return;
+    const on = cfg.enabled !== false;
+    const d = floatSize();
+    floatEl.style.width = d + "px";
+    floatEl.style.height = d + "px";
+    floatEl.style.fontSize = Math.max(11, Math.round(d * 0.42)) + "px";
+    floatEl.style.background = on
+      ? "var(--lumiverse-primary-025,rgba(150,120,255,.25))"
+      : "var(--lumiverse-fill-subtle,rgba(255,255,255,.06))";
+    floatEl.style.borderColor = on
+      ? "var(--lumiverse-primary-050,rgba(150,120,255,.5))"
+      : "var(--lumiverse-border,rgba(255,255,255,.15))";
+    floatEl.style.color = on
+      ? "var(--lumiverse-primary-text,#cfc2ff)"
+      : "var(--lumiverse-text-muted,#9a93a8)";
+    floatEl.style.opacity = on ? "1" : "0.75";
+    floatEl.textContent = on ? "\u21BB" : "\u2298"; // clockwise arrow / slashed circle
+    floatEl.title = on
+      ? "Auto Retry is on, tap to turn off"
+      : "Auto Retry is off, tap to turn on";
+    floatEl.setAttribute("aria-label", floatEl.title);
+    floatEl.setAttribute("aria-pressed", on ? "true" : "false");
+  }
+
+  function loadFloatPos(): { x: number; y: number } | null {
+    try {
+      const raw = localStorage.getItem(FLOAT_KEY);
+      if (!raw) return null;
+      const p = JSON.parse(raw);
+      if (typeof p.x === "number" && typeof p.y === "number") return p;
+    } catch (_) {}
+    return null;
+  }
+
+  function placeFloat() {
+    if (!floatEl) return;
+    const d = floatSize();
+    const vw = (typeof window !== "undefined" && window.innerWidth) || 360;
+    const vh = (typeof window !== "undefined" && window.innerHeight) || 640;
+    const saved = loadFloatPos();
+    // Clamped every time, so a button saved on a wide screen is still reachable
+    // on a narrow one, and a size change can't push it off the edge.
+    const x = Math.max(4, Math.min(saved ? saved.x : vw - d - 12, vw - d - 4));
+    const y = Math.max(4, Math.min(saved ? saved.y : Math.round(vh * 0.62), vh - d - 4));
+    floatEl.style.left = x + "px";
+    floatEl.style.top = y + "px";
+  }
+
+  function showFloat() {
+    if (floatEl || typeof document === "undefined") return;
+    const el = document.createElement("button");
+    el.type = "button";
+    el.id = "__lvRetryFloat";
+    el.style.cssText =
+      "position:fixed;z-index:2147483000;display:flex;align-items:center;justify-content:center;" +
+      "border-radius:50%;border:1px solid;cursor:pointer;touch-action:none;padding:0;line-height:1;" +
+      "backdrop-filter:blur(6px);box-shadow:0 2px 10px rgba(0,0,0,.35);font-family:inherit";
+    // A drag and a tap both start with a pointerdown, so the two are told apart
+    // by distance: move more than a few pixels and it is a drag, which also
+    // means the tap is swallowed so dragging never flips the switch by accident.
+    let down = false;
+    let moved = false;
+    let sx = 0, sy = 0, ox = 0, oy = 0;
+    const onDown = (e: any) => {
+      down = true;
+      moved = false;
+      const r = el.getBoundingClientRect();
+      sx = e.clientX; sy = e.clientY; ox = r.left; oy = r.top;
+      try { el.setPointerCapture(e.pointerId); } catch (_) {}
+    };
+    const onMove = (e: any) => {
+      if (!down) return;
+      const dx = e.clientX - sx, dy = e.clientY - sy;
+      if (!moved && Math.abs(dx) + Math.abs(dy) < 6) return;
+      moved = true;
+      const d = floatSize();
+      const nx = Math.max(4, Math.min(ox + dx, window.innerWidth - d - 4));
+      const ny = Math.max(4, Math.min(oy + dy, window.innerHeight - d - 4));
+      el.style.left = nx + "px";
+      el.style.top = ny + "px";
+    };
+    const onUp = (e: any) => {
+      if (!down) return;
+      down = false;
+      try { el.releasePointerCapture(e.pointerId); } catch (_) {}
+      if (!moved) return;
+      try {
+        localStorage.setItem(
+          FLOAT_KEY,
+          JSON.stringify({ x: parseInt(el.style.left, 10), y: parseInt(el.style.top, 10) }),
+        );
+      } catch (_) {}
+    };
+    el.addEventListener("pointerdown", onDown);
+    el.addEventListener("pointermove", onMove);
+    el.addEventListener("pointerup", onUp);
+    el.addEventListener("pointercancel", onUp);
+    el.addEventListener("click", (e: any) => {
+      if (moved) { // that was a drag, not a tap
+        moved = false;
+        try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
+        return;
+      }
+      toggleEnabled();
+    });
+    try {
+      (document.body || document.documentElement).appendChild(el);
+    } catch (_) {
+      return;
+    }
+    floatEl = el;
+    paintFloat();
+    placeFloat();
+  }
+
+  function hideFloat() {
+    if (floatEl) {
+      try { floatEl.remove(); } catch (_) {}
+    }
+    floatEl = null;
+  }
+
+  function syncFloat() {
+    if (cfg.showFloatingToggle) {
+      showFloat();
+      paintFloat();
+      placeFloat();
+    } else hideFloat();
+  }
+
+  // The one place the switch is flipped, so the floating button, the Extras
+  // entry and the settings panel can never disagree about the state.
+  function toggleEnabled() {
+    cfg.enabled = cfg.enabled === false;
+    saveSaved();
+    if (cfg.enabled === false) {
+      chats.forEach((_s: any, id: string) => standDown(id, false));
+    }
+    showToast(cfg.enabled === false ? "Auto Retry is off." : "Auto Retry is on.", {
+      force: true,
+    });
+    paintFloat();
+    syncReplaceButton();
+  }
+
   function syncLiveLog() {
     if (cfg.liveLog) showLiveLog();
     else hideLiveLog();
@@ -1292,6 +1455,8 @@ export function setup(ctx: Ctx, opts?: any) {
       label: "Retry behavior",
       keys: [
         "enabled",
+        "showFloatingToggle",
+        "floatingToggleSize",
         "showToggleButton",
         "maxRetries",
         "retryDelayMs",
@@ -2601,6 +2766,8 @@ export function setup(ctx: Ctx, opts?: any) {
     const inc = (v: any) => v !== false; // sections default to on
     const keys = [
       "enabled",
+      "showFloatingToggle",
+      "floatingToggleSize",
       "showToggleButton",
       "maxRetries",
       "retryDelayMs",
@@ -2892,6 +3059,7 @@ export function setup(ctx: Ctx, opts?: any) {
         saveSaved();
         saveToAccount();
         syncLiveLog();
+        syncFloat();
         syncReplaceButton();
         if (onSaved) onSaved();
         status.textContent = "Loaded preset: " + name + ". It's in effect now.";
@@ -3408,6 +3576,7 @@ export function setup(ctx: Ctx, opts?: any) {
       saveSaved();
       saveToAccount();
       syncLiveLog();
+      syncFloat();
       syncReplaceButton();
       if (onSaved) onSaved();
       buildSettingsBody(root, onSaved);
@@ -3427,6 +3596,7 @@ export function setup(ctx: Ctx, opts?: any) {
       saveSaved();
       saveToAccount();
       syncLiveLog();
+      syncFloat();
       syncReplaceButton();
       if (onSaved) onSaved();
       status.textContent = "Saved. Takes effect on the next reply.";
@@ -3985,6 +4155,7 @@ export function setup(ctx: Ctx, opts?: any) {
     log("failed to subscribe to generation events", e);
   }
   syncLiveLog();
+  syncFloat();
   loadFromAccount();
   syncReplaceButton();
   try {
@@ -4047,6 +4218,7 @@ export function setup(ctx: Ctx, opts?: any) {
       modalHandle = null;
     }
     hideLiveLog();
+    hideFloat();
     chats.forEach(clearTimers);
     chats.clear();
     eventLog.length = 0;
