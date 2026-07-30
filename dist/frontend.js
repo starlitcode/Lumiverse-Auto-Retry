@@ -11,7 +11,7 @@
  * and pick "Auto Retry settings". Changes are synced to your Lumiverse account and applied
  * to the next generation, so you never have to touch the GitHub files.
  */
-const STORE_KEY = 'lv-auto-retry:settings:v1';
+const STORE_KEY = "lv-auto-retry:settings:v1";
 // How long (ms) to suppress automatic retries after the user stops or cancels.
 // Long enough to swallow the stopped generation's own trailing events.
 const STAND_DOWN_MS = 2500;
@@ -25,14 +25,15 @@ const START_GRACE_MS = 6000;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = '3.3.0';
+const VERSION = "3.3.0";
 // ---- defaults (the UI overrides these; editing here changes the fallback) ----
 const CONFIG = {
     enabled: true,
-    // quick ways to switch the extension off without opening settings: a small
-    // draggable button over the chat, and/or an entry in the Extras menu.
+    // Two quick ways to switch the extension off without opening settings: a small
+    // draggable button over the chat, and an entry in the chat input's Extras menu.
     showFloatingToggle: false,
     floatingToggleSize: 44,
+    showExtrasToggle: false,
     // retry budget
     maxRetries: 4,
     // stop retrying for a while after several whole runs fail in a row: at that
@@ -43,8 +44,7 @@ const CONFIG = {
     // long the pause lasts in minutes. Only used when pauseWhenFailing is on.
     breakerRuns: 3,
     breakerPauseMins: 5,
-    retryDelayMs: 1200,
-    // first retry fires a touch sooner; backoff still climbs
+    retryDelayMs: 1200, // first retry fires a touch sooner; backoff still climbs
     backoffFactor: 2,
     maxDelayMs: 30000,
     jitter: true,
@@ -58,451 +58,451 @@ const CONFIG = {
     retryByNewReroll: false,
     // watchdogs. Tuned to tolerate a slow connection and slow local models so a
     // slow-but-fine generation is not mistaken for a stall and retried into a pile-up.
-    stuckTimeoutMs: 90000,
-    // started but never produced a token or an end. 0 disables.
-    idleTimeoutMs: 45000,
-    // tokens were flowing then stopped this long (mid-stream cutoff). 0 disables.
+    stuckTimeoutMs: 90000, // started but never produced a token or an end. 0 disables.
+    idleTimeoutMs: 45000, // tokens were flowing then stopped this long (mid-stream cutoff). 0 disables.
     // what counts as needing a retry
     retryOnError: true,
     ignoreHardErrors: true,
-    retryOnEmpty: true,
-    // also catches a generation cut off mid-reasoning (reasoning seen, content empty)
-    retryOnTruncated: true,
-    // final content present but cut off mid-sentence (structural heuristic, see looksTruncated)
-    retryOnNoPunct: false,
-    // extra: also treat "ends with no punctuation" as truncated. Noisy in RP, off by default.
-    retryOnShort: false,
-    // off by default. Caused endless regen in the original.
+    retryOnEmpty: true, // also catches a generation cut off mid-reasoning (reasoning seen, content empty)
+    retryOnTruncated: true, // final content present but cut off mid-sentence (structural heuristic, see looksTruncated)
+    retryOnNoPunct: false, // extra: also treat "ends with no punctuation" as truncated. Noisy in RP, off by default.
+    retryOnShort: false, // off by default. Caused endless regen in the original.
     minChars: 24,
-    retryOnRefusal: true,
-    // final content is an out-of-character refusal (see looksLikeRefusal). Re-fires the SAME request, capped by maxRetries. Does not alter the request.
-    refusalExtraPhrases: '',
-    // your own extra refusal phrases, one per line. Any reply containing one counts as a refusal.
-    refusalPhraseSubs: '',
-    // reword the built-in phrases: "old => new" rules, one per line, applied to the built-in list before matching.
-    refusalIgnorePhrases: '',
-    // a reply containing any of these (one per line) is never counted as a refusal.
-    refusalUseBuiltins: true,
-    // use the built-in refusal lists. Turn off to run purely on your own phrases below.
-    refusalMaxChars: 2000,
-    // only replies up to this length are considered refusals. Longer = treated as real content. 0 = no limit (scan any length).
-    refusalStripThinking: true,
-    // ignore the model's thinking when checking for a refusal, so a refusal that lives only in a <think> block does not trigger a retry when the visible reply is fine.
-    refusalThinkTags: '',
-    // extra reasoning tag names (one per line) the model wraps its thinking in, on top of the built-in set. Both <tag> and [tag] forms are handled.
+    retryOnRefusal: true, // final content is an out-of-character refusal (see looksLikeRefusal). Re-fires the SAME request, capped by maxRetries. Does not alter the request.
+    refusalExtraPhrases: "", // your own extra refusal phrases, one per line. Any reply containing one counts as a refusal.
+    refusalPhraseSubs: "", // reword the built-in phrases: "old => new" rules, one per line, applied to the built-in list before matching.
+    refusalIgnorePhrases: "", // a reply containing any of these (one per line) is never counted as a refusal.
+    refusalUseBuiltins: true, // use the built-in refusal lists. Turn off to run purely on your own phrases below.
+    refusalMaxChars: 2000, // only replies up to this length are considered refusals. Longer = treated as real content. 0 = no limit (scan any length).
+    refusalStripThinking: true, // ignore the model's thinking when checking for a refusal, so a refusal that lives only in a <think> block does not trigger a retry when the visible reply is fine.
+    refusalThinkTags: "", // extra reasoning tag names (one per line) the model wraps its thinking in, on top of the built-in set. Both <tag> and [tag] forms are handled.
     // Find and replace in replies (handled by the backend via the Chat Mutation API).
-    replaceEnabled: false,
-    // off by default. When on, applies replaceRules to each finished reply and edits the saved message.
-    replaceRules: '',
-    // "old => new" rules, one per line. A single word matches whole words; empty right side deletes it. Same word can appear more than once.
-    replaceCaseSensitive: false,
-    // match letter case exactly. Off = case-insensitive with capitalization kept.
-    replaceRandom: false,
-    // when a word has more than one replacement, pick one at random per occurrence. Off = always the first listed.
-    showReplaceButton: false,
-    // optional button in the input's Extras menu that applies the word swaps to the latest reply on demand.
-    showSwapAllButton: false,
-    // Extras button that puts the last word swap back. One step deep: it restores
-    // the reply text as it was before the most recent swap.
-    showUndoSwapButton: false,
-    // when using that button, swap every assistant reply in the chat instead of only the latest.
-    allowReSwap: false,
-    // let that button swap a reply again even if it was already swapped this session (can stack swaps).
-    confirmBeforeEdit: false,
-    // ask for confirmation before any word-swap edit (automatic or manual); the user can cancel.
+    replaceEnabled: false, // off by default. When on, applies replaceRules to each finished reply and edits the saved message.
+    replaceRules: "", // "old => new" rules, one per line. A single word matches whole words; empty right side deletes it. Same word can appear more than once.
+    replaceCaseSensitive: false, // match letter case exactly. Off = case-insensitive with capitalization kept.
+    replaceRandom: false, // when a word has more than one replacement, pick one at random per occurrence. Off = always the first listed.
+    showReplaceButton: false, // optional button in the input's Extras menu that applies the word swaps to the latest reply on demand.
+    showSwapAllButton: false, // adds an Extras button that swaps every generated reply in the chat once.
+    allowReSwap: false, // let that button swap a reply again even if it was already swapped this session (can stack swaps).
+    confirmBeforeEdit: false, // ask for confirmation before any word-swap edit (automatic or manual); the user can cancel.
     // host controls (the only DOM-dependent part). Use the Test buttons in settings.
     // Multiple patterns are listed so a Lumiverse build that renames one attribute
     // is still likely covered; if a build changes them all, fix it via the Test UI.
-    regenerateSelector: '[title="Regenerate"], [data-action="regenerate"], [data-testid="regenerate"], ' + 'button[aria-label*="regenerate" i], button[title*="regenerate" i]',
-    swipeNextSelector: '[aria-label="Next swipe"], [data-action="swipe-right"], [data-testid="swipe-right"], ' + 'button[aria-label*="next swipe" i], button[aria-label*="swipe right" i], ' + 'button[aria-label*="reroll" i], button[title*="swipe" i]',
+    regenerateSelector: '[title="Regenerate"], [data-action="regenerate"], [data-testid="regenerate"], ' +
+        'button[aria-label*="regenerate" i], button[title*="regenerate" i]',
+    swipeNextSelector: '[aria-label="Next swipe"], [data-action="swipe-right"], [data-testid="swipe-right"], ' +
+        'button[aria-label*="next swipe" i], button[aria-label*="swipe right" i], ' +
+        'button[aria-label*="reroll" i], button[title*="swipe" i]',
     // extra button labels Auto Retry may press on a dialog that appears after it
     // clicks retry. One per line. Blank means the built-in list only.
-    confirmButtonLabels: '',
-    stopSelector: '[aria-label="Stop generation"], [data-action="stop"], [data-testid="stop"], ' + 'button[aria-label*="stop" i], button[title*="stop" i], [class*="_sendBtnStop_"]',
+    confirmButtonLabels: "",
+    stopSelector: '[aria-label="Stop generation"], [data-action="stop"], [data-testid="stop"], ' +
+        'button[aria-label*="stop" i], button[title*="stop" i], [class*="_sendBtnStop_"]',
     toast: true,
-    liveLog: false,
-    // show a small on-screen panel with recent activity, updating live. Handy on mobile where dev tools aren't available.
+    liveLog: false, // show a small on-screen panel with recent activity, updating live. Handy on mobile where dev tools aren't available.
 };
-const SCHEMA = [{
-    title: 'Basics',
-    desc: 'The main switch, and whether it tells you when it retries.',
-    fields: [{
-        key: 'enabled',
-        label: 'Turn auto-retry on',
-        type: 'bool',
-        hint: "When on, it quietly tries again whenever a reply fails or gets cut off. Turn it off and it does nothing."
+const SCHEMA = [
+    {
+        title: "Basics",
+        desc: "The main switch, and whether it tells you when it retries.",
+        fields: [
+            {
+                key: "enabled",
+                label: "Turn auto-retry on",
+                type: "bool",
+                hint: "When on, it quietly tries again whenever a reply fails or gets cut off. Turn it off and it does nothing.",
+            },
+            {
+                key: "showFloatingToggle",
+                label: "Floating on/off button",
+                type: "bool",
+                hint: "Off by default. Puts a small round button on top of the chat that turns Auto Retry on or off in one tap. It shows which state it is in, and you can drag it anywhere; where you leave it is remembered. Handy if you switch it on and off a lot.",
+            },
+            {
+                key: "floatingToggleSize",
+                label: "Size of the floating button",
+                type: "num",
+                int: true,
+                min: 28,
+                max: 96,
+                hint: "How wide the floating button is, in pixels. 44 is about a comfortable thumb. Larger is easier to hit on a phone, smaller keeps it out of the way.",
+            },
+            {
+                key: "showExtrasToggle",
+                label: "On/off button in the Extras menu",
+                type: "bool",
+                hint: "Off by default. Adds an Auto Retry on/off entry to the chat input's Extras menu, next to the settings button. It says which state it is in, so you can check and change it without opening settings. Unlike the floating button it takes up no room on screen.",
+            },
+            {
+                key: "toast",
+                label: "Show a pop-up on each retry",
+                type: "bool",
+                hint: "A small message telling you it is retrying, with a Cancel button to stop it.",
+            },
+        ],
     },
     {
-        key: 'showFloatingToggle',
-        label: 'Floating on/off button',
-        type: 'bool',
-        hint: 'Off by default. Puts a small round button on top of the chat that turns Auto Retry on or off in one tap. It shows which state it is in, and you can drag it anywhere; where you leave it is remembered. Handy if you switch it on and off a lot.'
+        title: "How hard it tries",
+        desc: "How persistent it is, and how long it waits between tries.",
+        fields: [
+            {
+                key: "maxRetries",
+                label: "Most tries per message",
+                type: "num",
+                int: true,
+                min: 0,
+                max: 50,
+                hint: "How many times it retries one message before giving up. 3 to 5 suits most people.",
+            },
+            {
+                key: "pauseWhenFailing",
+                label: "Pause when everything is failing",
+                type: "bool",
+                hint: "On by default. If several whole runs give up in a row, the provider is probably down, so auto-retry stops for a while instead of retrying on every message you send. The next reply that works clears it, and you can still send and regenerate by hand while it's paused. The two boxes below set how many runs and how long.",
+            },
+            {
+                key: "breakerRuns",
+                label: "Failed runs before pausing",
+                type: "num",
+                int: true,
+                min: 1,
+                max: 20,
+                hint: "How many whole runs have to give up back to back before it pauses. A run is one message that used up all its tries. At the default of 3, with the try limit at 4, that is 12 retries before it stops. Raise it if your setup is normally flaky, lower it to give up sooner.",
+            },
+            {
+                key: "breakerPauseMins",
+                label: "How long to pause (minutes)",
+                type: "num",
+                int: true,
+                min: 1,
+                max: 180,
+                hint: "How long auto-retry stays off once it pauses. Shorter suits a provider that hiccups and recovers; longer suits a real outage. Any reply that comes back fine ends the pause early, whatever this is set to.",
+            },
+            {
+                key: "retryDelayMs",
+                label: "Wait before the first retry",
+                type: "num",
+                int: true,
+                min: 0,
+                max: 600000,
+                hint: "How long it pauses before trying again the first time. In milliseconds, so the 1200 default is 1.2 seconds.",
+            },
+            {
+                key: "backoffFactor",
+                label: "How much longer each wait gets",
+                type: "num",
+                min: 1,
+                max: 10,
+                hint: "Each retry waits this many times longer than the last, so it doesn't hammer the server. 2 means the wait doubles each time. Stays at 1 or above.",
+            },
+            {
+                key: "maxDelayMs",
+                label: "Longest it will ever wait",
+                type: "num",
+                int: true,
+                min: 0,
+                max: 600000,
+                hint: "A ceiling so it never pauses forever. 30000 = 30 seconds.",
+            },
+            {
+                key: "rateLimitDelayMs",
+                label: "Wait when the server is busy",
+                type: "num",
+                int: true,
+                min: 0,
+                max: 600000,
+                hint: 'If the server says "too many requests," it waits at least this long. 8000 = 8 seconds.',
+            },
+            {
+                key: "jitter",
+                label: "Add a little randomness to waits",
+                type: "bool",
+                hint: "Nudges each wait by a random amount so retries don't all hit the server at the same instant. Best left on.",
+            },
+        ],
     },
     {
-        key: 'floatingToggleSize',
-        label: 'Size of the floating button',
-        type: 'num',
-        int: true,
-        min: 28,
-        max: 96,
-        hint: 'How wide the floating button is, in pixels. 44 is about a comfortable thumb. Larger is easier to hit on a phone, smaller keeps it out of the way.'
+        title: "How it redoes a reply",
+        desc: "Choose whether a retry replaces the reply or adds a new reroll beside it.",
+        fields: [
+            {
+                key: "retryByNewReroll",
+                label: "Retry by adding a new reroll",
+                type: "bool",
+                hint: "Off: a retry redoes the reply in place with your regenerate button. On some setups that clears the other rerolls on that message. On: a retry clicks your next / swipe button, which adds a new reroll and keeps the existing ones. Either way, if that button isn't on screen or the click starts nothing, it uses the other one, so set both selectors in the buttons section below.",
+            },
+        ],
     },
     {
-        key: 'toast',
-        label: 'Show a pop-up on each retry',
-        type: 'bool',
-        hint: 'A small message telling you it is retrying, with a Cancel button to stop it.'
-    },
-    ]
-},
-{
-    title: 'How hard it tries',
-    desc: 'How persistent it is, and how long it waits between tries.',
-    fields: [{
-        key: 'maxRetries',
-        label: 'Most tries per message',
-        type: 'num',
-        int: true,
-        min: 0,
-        max: 50,
-        hint: 'How many times it retries one message before giving up. 3 to 5 suits most people.'
-    },
-    {
-        key: 'pauseWhenFailing',
-        label: 'Pause when everything is failing',
-        type: 'bool',
-        hint: "On by default. If several whole runs give up in a row, the provider is probably down, so auto-retry stops for a while instead of retrying on every message you send. The next reply that works clears it, and you can still send and regenerate by hand while it's paused. The two boxes below set how many runs and how long."
+        title: "Watch for frozen replies",
+        desc: "Notices when a reply freezes or never arrives, and retries. Defaults lean long so a slow connection isn't mistaken for a freeze; lower them for quicker retries on a fast provider.",
+        fields: [
+            {
+                key: "stuckTimeoutMs",
+                label: "Give up waiting for it to start",
+                type: "num",
+                int: true,
+                min: 0,
+                max: 600000,
+                hint: "If a reply begins but no words appear in this long, treat it as stuck and retry. 90000 = 90 seconds. Set to 0 to switch off.",
+            },
+            {
+                key: "idleTimeoutMs",
+                label: "Give up on a reply that froze",
+                type: "num",
+                int: true,
+                min: 0,
+                max: 600000,
+                hint: "If words were appearing and then stop for this long, treat it as frozen and retry. 45000 = 45 seconds. Set to 0 to switch off.",
+            },
+        ],
     },
     {
-        key: 'breakerRuns',
-        label: 'Failed runs before pausing',
-        type: 'num',
-        int: true,
-        min: 1,
-        max: 20,
-        hint: 'How many whole runs have to give up back to back before it pauses. A run is one message that used up all its tries. At the default of 3, with the try limit at 4, that is 12 retries before it stops. Raise it if your setup is normally flaky, lower it to give up sooner.'
+        title: "When to count a reply as bad",
+        desc: "Pick which kinds of bad reply should trigger a retry.",
+        fields: [
+            {
+                key: "retryOnError",
+                label: "It came back as an error",
+                type: "bool",
+                hint: "Retry when the reply fails outright with an error.",
+            },
+            {
+                key: "ignoreHardErrors",
+                label: "Skip hard failures",
+                type: "bool",
+                hint: "Stops it from retrying when an error is permanent, like a missing model, an invalid API key, or an authentication failure.",
+            },
+            {
+                key: "retryOnEmpty",
+                label: "It came back blank",
+                type: "bool",
+                hint: "Retry when nothing comes back, including a reply that thinks but never writes anything.",
+            },
+            {
+                key: "retryOnTruncated",
+                label: "It cut off mid-sentence",
+                type: "bool",
+                hint: "Retry when a reply stops partway, like an open quote, an unfinished *action*, or a trailing comma. It's careful so it doesn't throw away good writing.",
+            },
+            {
+                key: "retryOnNoPunct",
+                label: "Also: it ends with no punctuation",
+                type: "bool",
+                hint: "A stricter version of the line above. It can wrongly redo a reply that ends on a word, so most people leave this off.",
+            },
+            {
+                key: "retryOnShort",
+                label: "It was very short",
+                type: "bool",
+                hint: "Retry replies shorter than the length below. Off by default, since short replies are often fine.",
+            },
+            {
+                key: "minChars",
+                label: 'What counts as "very short"',
+                type: "num",
+                int: true,
+                min: 0,
+                max: 100000,
+                hint: "Replies with fewer characters than this count as too short. Only the visible reply is counted, not any reasoning block. Only used when the option above is on.",
+            },
+            {
+                key: "retryOnRefusal",
+                label: "It looks like an accidental refusal (beta)",
+                type: "bool",
+                hint: "Retry when the model breaks character to decline (says it's an AI, or that it can't help or continue). It retries the same request unchanged, capped by your Most tries setting, so a refusal the model means will survive the tries and stop. Reads only the final reply, never the thinking, and stays narrow so an in-character \"I can't do that\" is left alone.",
+            },
+        ],
     },
     {
-        key: 'breakerPauseMins',
-        label: 'How long to pause (minutes)',
-        type: 'num',
-        int: true,
-        min: 1,
-        max: 180,
-        hint: 'How long auto-retry stays off once it pauses. Shorter suits a provider that hiccups and recovers; longer suits a real outage. Any reply that comes back fine ends the pause early, whatever this is set to.'
+        title: "Advanced: find and replace (beta)",
+        desc: "Swaps words in a reply after it arrives and saves the change, so the swap sticks and the model reads it on later turns. It never changes what the model generated, only the text afterward. Needs the chat editing permission. Off by default.",
+        fields: [
+            {
+                key: "replaceEnabled",
+                label: "Swap words in replies",
+                type: "bool",
+                hint: "When on, applies your swaps below to each new reply and edits the saved message. If nothing here matches, the reply is left untouched.",
+            },
+            {
+                key: "replaceRules",
+                label: "Word swaps (old => new)",
+                type: "text",
+                hint: 'Rules are "old => new", one per line. The left side can be a single word, a phrase, or a whole sentence, and commas inside it are fine. A single word matches whole words only (so cat won\'t touch category), while a phrase or sentence matches exactly as you type it. Leave the right side empty to delete it. Put the same left side on more than one line (like sky => blue on one line and sky => aqua on another) to give it options for the random toggle below. All rules are applied in a single pass, so a rule never acts on what another rule just wrote: cat => dog and dog => wolf turns cats into dogs and dogs into wolves, and hot => cold with cold => hot swaps the two rather than making everything one of them. Where two rules could match the same spot, the longer left side wins.',
+            },
+            {
+                key: "replaceRandom",
+                label: "Pick randomly when a word has more than one swap",
+                type: "bool",
+                hint: "Off by default. When the same word is listed on more than one line (like sky => blue on one line and sky => aqua on another), each time it appears one of its options is picked at random. Off, it always uses the first one you listed.",
+            },
+            {
+                key: "replaceCaseSensitive",
+                label: "Match case exactly",
+                type: "bool",
+                hint: "Off by default. When off, a swap matches any case and keeps the original capitalization. Turn on to swap only when the case matches your rule exactly, so sky and Sky can have different swaps.",
+            },
+            {
+                key: "showReplaceButton",
+                label: "Show a \"swap words now\" button",
+                type: "bool",
+                hint: "Off by default. Adds a button to the chat input's Extras menu that applies your word swaps on demand to the latest reply, so you can swap without leaving the automatic swap on. Only assistant replies are swapped, never your own messages, and the same reply won't be swapped twice. Needs your swap rules set up.",
+            },
+            {
+                key: "showSwapAllButton",
+                label: "Show a swap-whole-chat button",
+                type: "bool",
+                hint: "Off by default. Adds a button to the input's Extras menu that applies your rules once to every generated reply in the chat you're viewing. The greeting is never touched.",
+            },
+            {
+                key: "allowReSwap",
+                label: "Allow swapping a reply again",
+                type: "bool",
+                hint: "Off by default. Normally a reply is swapped at most once per session, so swaps don't stack. Turn this on to let the button swap a reply again even if it was already swapped, for example after you change your rules. This can apply your rules on top of an earlier swap.",
+            },
+            {
+                key: "confirmBeforeEdit",
+                label: "Ask before editing a reply",
+                type: "bool",
+                hint: "Off by default. When on, every word swap (automatic or from the button) asks you to confirm before it changes a reply, and you can cancel. This can get frequent if you use automatic swapping, but nothing is edited without your OK. Needs your Lumiverse to support confirm dialogs.",
+            },
+        ],
     },
     {
-        key: 'retryDelayMs',
-        label: 'Wait before the first retry',
-        type: 'num',
-        int: true,
-        min: 0,
-        max: 600000,
-        hint: 'How long it pauses before trying again the first time. In milliseconds, so the 1200 default is 1.2 seconds.'
+        title: "Advanced: refusal tuning (beta)",
+        desc: "Only matters if the refusal option above is on. Fine-tunes what counts as a refusal.",
+        fields: [
+            {
+                key: "refusalUseBuiltins",
+                label: "Use the built-in phrase list",
+                type: "bool",
+                hint: "On by default. This only controls the built-in list. Your own phrases below are always used either way. On, the built-in list is used together with your own phrases. Off, only your own phrases are used.",
+            },
+            {
+                key: "refusalExtraPhrases",
+                label: "Your own refusal phrases",
+                type: "text",
+                hint: "Optional. Extra phrases that should also count as a refusal, one per line. These are always used, whether or not the built-in list above is on. Upper or lower case doesn't matter. Paste the exact wording your model refuses with.",
+            },
+            {
+                key: "refusalPhraseSubs",
+                label: "Reword the built-in phrases",
+                type: "text",
+                hint: 'Optional. Swap wording inside the built-in list using "old => new" rules, one per line. Example: assist => help. It changes what the built-in list matches, so only swap for wording your model actually uses.',
+            },
+            {
+                key: "refusalIgnorePhrases",
+                label: "Never treat these as a refusal",
+                type: "text",
+                hint: "Optional. If a reply contains any of these phrases, one per line, it's never counted as a refusal. This wins over everything else.",
+            },
+            {
+                key: "refusalMaxChars",
+                label: "Longest reply to treat as a refusal",
+                type: "num",
+                int: true,
+                min: 0,
+                max: 100000,
+                hint: "Replies longer than this are treated as real writing, not a refusal, and left alone. 2000 suits most cases. Set to 0 to check replies of any length.",
+            },
+            {
+                key: "refusalStripThinking",
+                label: "Ignore the thinking / reasoning",
+                type: "bool",
+                hint: "On by default. Only the final reply is checked for a refusal, never the model's thinking, so a refusal it weighs up while reasoning but leaves out of the reply won't cause a retry. Turn it off to check the whole raw output. This affects refusal matching only: the empty and cut-off checks always look past the thinking.",
+            },
+            {
+                key: "refusalThinkTags",
+                label: "Extra thinking tag names",
+                type: "text",
+                hint: "Optional, one per line. The common reasoning tags are already handled. Add a tag name only if your model wraps its thinking in an unusual one (for example: mythink). Just the name, no brackets. Both <name> and [name] forms are covered.",
+            },
+        ],
     },
     {
-        key: 'backoffFactor',
-        label: 'How much longer each wait gets',
-        type: 'num',
-        min: 1,
-        max: 10,
-        hint: "Each retry waits this many times longer than the last, so it doesn't hammer the server. 2 means the wait doubles each time. Stays at 1 or above."
+        title: "Advanced: buttons it clicks",
+        desc: "It retries by clicking your own on-screen buttons, so you only need this if retries aren't happening. The quickest fix is Pick it for me: press it, then click the real button. Otherwise paste a CSS selector and press Test until it says match found, with that button on screen. The stop button only appears while a reply is generating. The README covers fallback lists and selector syntax.",
+        fields: [
+            {
+                key: "regenerateSelector",
+                label: "Your regenerate button",
+                type: "text",
+                selector: true,
+                hint: "The retry button it clicks to redo a reply.",
+            },
+            {
+                key: "swipeNextSelector",
+                label: "Your next / swipe button",
+                type: "text",
+                selector: true,
+                hint: "A backup it clicks if your setup retries by swiping to a new reply instead.",
+            },
+            {
+                key: "confirmButtonLabels",
+                label: "Extra dialog buttons it may press",
+                type: "text",
+                hint: "Almost nobody needs this. If you use Lumiverse's Regeneration Feedback, a retry opens that box and Auto Retry presses Skip to carry on. Use this box if your button says something else, so it gets pressed too. Type the button's text exactly as it appears, one per line. Capitals are ignored. It already knows Skip, Regenerate, Confirm, Proceed, Submit and OK, and anything you add is tried first.",
+            },
+            {
+                key: "stopSelector",
+                label: "Your stop button",
+                type: "text",
+                selector: true,
+                hint: "The stop button, so it can halt a frozen reply before retrying.",
+            },
+        ],
     },
     {
-        key: 'maxDelayMs',
-        label: 'Longest it will ever wait',
-        type: 'num',
-        int: true,
-        min: 0,
-        max: 600000,
-        hint: "A ceiling so it never pauses forever. 30000 = 30 seconds."
+        title: "Advanced: on-screen log",
+        desc: "A live panel that shows what the extension is doing, for debugging.",
+        fields: [
+            {
+                key: "liveLog",
+                label: "Show a live log on screen",
+                type: "bool",
+                hint: "Puts a small panel in the corner that shows recent activity as it happens (generations, retries and why, finishes). Useful for watching what it does without opening the console, especially on mobile. Drag it to move it, drag its corner to resize, and turn this off to hide it.",
+            },
+        ],
     },
-    {
-        key: 'rateLimitDelayMs',
-        label: 'Wait when the server is busy',
-        type: 'num',
-        int: true,
-        min: 0,
-        max: 600000,
-        hint: 'If the server says "too many requests," it waits at least this long. 8000 = 8 seconds.'
-    },
-    {
-        key: 'jitter',
-        label: 'Add a little randomness to waits',
-        type: 'bool',
-        hint: "Nudges each wait by a random amount so retries don't all hit the server at the same instant. Best left on."
-    },
-    ]
-},
-{
-    title: 'How it redoes a reply',
-    desc: 'Choose whether a retry replaces the reply or adds a new reroll beside it.',
-    fields: [{
-        key: 'retryByNewReroll',
-        label: 'Retry by adding a new reroll',
-        type: 'bool',
-        hint: "Off: a retry redoes the reply in place with your regenerate button. On some setups that clears the other rerolls on that message. On: a retry clicks your next / swipe button, which adds a new reroll and keeps the existing ones. Either way, if that button isn't on screen or the click starts nothing, it uses the other one, so set both selectors in the buttons section below.",
-    }],
-},
-{
-    title: 'Watch for frozen replies',
-    desc: "Notices when a reply freezes or never arrives, and retries. Defaults lean long so a slow connection isn't mistaken for a freeze; lower them for quicker retries on a fast provider.",
-    fields: [{
-        key: 'stuckTimeoutMs',
-        label: 'Give up waiting for it to start',
-        type: 'num',
-        int: true,
-        min: 0,
-        max: 600000,
-        hint: "If a reply begins but no words appear in this long, treat it as stuck and retry. 90000 = 90 seconds. Set to 0 to switch off."
-    },
-    {
-        key: 'idleTimeoutMs',
-        label: 'Give up on a reply that froze',
-        type: 'num',
-        int: true,
-        min: 0,
-        max: 600000,
-        hint: "If words were appearing and then stop for this long, treat it as frozen and retry. 45000 = 45 seconds. Set to 0 to switch off."
-    },
-    ]
-},
-{
-    title: 'When to count a reply as bad',
-    desc: 'Pick which kinds of bad reply should trigger a retry.',
-    fields: [{
-        key: 'retryOnError',
-        label: 'It came back as an error',
-        type: 'bool',
-        hint: 'Retry when the reply fails outright with an error.'
-    },
-    {
-        key: 'ignoreHardErrors',
-        label: 'Skip hard failures',
-        type: 'bool',
-        hint: 'Stops it from retrying when an error is permanent, like a missing model, an invalid API key, or an authentication failure.'
-    },
-    {
-        key: 'retryOnEmpty',
-        label: 'It came back blank',
-        type: 'bool',
-        hint: 'Retry when nothing comes back, including a reply that thinks but never writes anything.'
-    },
-    {
-        key: 'retryOnTruncated',
-        label: 'It cut off mid-sentence',
-        type: 'bool',
-        hint: "Retry when a reply stops partway, like an open quote, an unfinished *action*, or a trailing comma. It's careful so it doesn't throw away good writing."
-    },
-    {
-        key: 'retryOnNoPunct',
-        label: "Also: it ends with no punctuation",
-        type: 'bool',
-        hint: "A stricter version of the line above. It can wrongly redo a reply that ends on a word, so most people leave this off."
-    },
-    {
-        key: 'retryOnShort',
-        label: 'It was very short',
-        type: 'bool',
-        hint: 'Retry replies shorter than the length below. Off by default, since short replies are often fine.'
-    },
-    {
-        key: 'minChars',
-        label: 'What counts as "very short"',
-        type: 'num',
-        int: true,
-        min: 0,
-        max: 100000,
-        hint: 'Replies with fewer characters than this count as too short. Only the visible reply is counted, not any reasoning block. Only used when the option above is on.'
-    },
-    {
-        key: 'retryOnRefusal',
-        label: 'It looks like an accidental refusal (beta)',
-        type: 'bool',
-        hint: "Retry when the model breaks character to decline (says it's an AI, or that it can't help or continue). It retries the same request unchanged, capped by your Most tries setting, so a refusal the model means will survive the tries and stop. Reads only the final reply, never the thinking, and stays narrow so an in-character \"I can't do that\" is left alone."
-    },
-    ]
-},
-{
-    title: 'Advanced: find and replace (beta)',
-    desc: "Swaps words in a reply after it arrives and saves the change, so the swap sticks and the model reads it on later turns. It never changes what the model generated, only the text afterward. Needs the chat editing permission. Off by default.",
-    fields: [{
-        key: 'replaceEnabled',
-        label: 'Swap words in replies',
-        type: 'bool',
-        hint: "When on, applies your swaps below to each new reply and edits the saved message. If nothing here matches, the reply is left untouched."
-    },
-    {
-        key: 'replaceRules',
-        label: 'Word swaps (old => new)',
-        type: 'text',
-        hint: "Rules are \"old => new\", one per line. The left side can be a single word, a phrase, or a whole sentence, and commas inside it are fine. A single word matches whole words only (so cat won't touch category), while a phrase or sentence matches exactly as you type it. Leave the right side empty to delete it. Put the same left side on more than one line (like sky => blue on one line and sky => aqua on another) to give it options for the random toggle below. All rules are applied in a single pass, so a rule never acts on what another rule just wrote: cat => dog and dog => wolf turns cats into dogs and dogs into wolves, and hot => cold with cold => hot swaps the two rather than making everything one of them. Where two rules could match the same spot, the longer left side wins."
-    },
-    {
-        key: 'replaceRandom',
-        label: 'Pick randomly when a word has more than one swap',
-        type: 'bool',
-        hint: "Off by default. When the same word is listed on more than one line (like sky => blue on one line and sky => aqua on another), each time it appears one of its options is picked at random. Off, it always uses the first one you listed."
-    },
-    {
-        key: 'replaceCaseSensitive',
-        label: 'Match case exactly',
-        type: 'bool',
-        hint: "Off by default. When off, a swap matches any case and keeps the original capitalization. Turn on to swap only when the case matches your rule exactly, so sky and Sky can have different swaps."
-    },
-    {
-        key: 'showReplaceButton',
-        label: "Show a \"swap words now\" button",
-        type: 'bool',
-        hint: "Off by default. Adds a button to the chat input's Extras menu that applies your word swaps on demand to the latest reply, so you can swap without leaving the automatic swap on. Only assistant replies are swapped, never your own messages, and the same reply won't be swapped twice. Needs your swap rules set up."
-    },
-    {
-        key: 'showSwapAllButton',
-        label: 'Show a swap-whole-chat button',
-        type: 'bool',
-        hint: "Off by default. Adds a button to the input's Extras menu that applies your rules once to every generated reply in the chat you're viewing. The greeting is never touched.",
-    },
-    {
-        key: 'showUndoSwapButton',
-        label: 'Show an undo button',
-        type: 'bool',
-        hint: 'Off by default. Adds a button to the Extras menu that puts the last word swap back, restoring the reply exactly as it read before. It remembers one swap at a time, whether that was a single reply or a whole chat. A reply you have edited yourself since the swap is left alone rather than overwritten.'
-    },
-    {
-        key: 'allowReSwap',
-        label: 'Allow swapping a reply again',
-        type: 'bool',
-        hint: "Off by default. Normally a reply is swapped at most once per session, so swaps don't stack. Turn this on to let the button swap a reply again even if it was already swapped, for example after you change your rules. This can apply your rules on top of an earlier swap."
-    },
-    {
-        key: 'confirmBeforeEdit',
-        label: 'Ask before editing a reply',
-        type: 'bool',
-        hint: "Off by default. When on, every word swap (automatic or from the button) asks you to confirm before it changes a reply, and you can cancel. This can get frequent if you use automatic swapping, but nothing is edited without your OK. Needs your Lumiverse to support confirm dialogs."
-    },
-    ]
-},
-{
-    title: 'Advanced: refusal tuning (beta)',
-    desc: "Only matters if the refusal option above is on. Fine-tunes what counts as a refusal.",
-    fields: [{
-        key: 'refusalUseBuiltins',
-        label: 'Use the built-in phrase list',
-        type: 'bool',
-        hint: "On by default. This only controls the built-in list. Your own phrases below are always used either way. On, the built-in list is used together with your own phrases. Off, only your own phrases are used."
-    },
-    {
-        key: 'refusalExtraPhrases',
-        label: 'Your own refusal phrases',
-        type: 'text',
-        hint: "Optional. Extra phrases that should also count as a refusal, one per line. These are always used, whether or not the built-in list above is on. Upper or lower case doesn't matter. Paste the exact wording your model refuses with."
-    },
-    {
-        key: 'refusalPhraseSubs',
-        label: 'Reword the built-in phrases',
-        type: 'text',
-        hint: 'Optional. Swap wording inside the built-in list using "old => new" rules, one per line. Example: assist => help. It changes what the built-in list matches, so only swap for wording your model actually uses.'
-    },
-    {
-        key: 'refusalIgnorePhrases',
-        label: 'Never treat these as a refusal',
-        type: 'text',
-        hint: "Optional. If a reply contains any of these phrases, one per line, it's never counted as a refusal. This wins over everything else."
-    },
-    {
-        key: 'refusalMaxChars',
-        label: 'Longest reply to treat as a refusal',
-        type: 'num',
-        int: true,
-        min: 0,
-        max: 100000,
-        hint: 'Replies longer than this are treated as real writing, not a refusal, and left alone. 2000 suits most cases. Set to 0 to check replies of any length.'
-    },
-    {
-        key: 'refusalStripThinking',
-        label: 'Ignore the thinking / reasoning',
-        type: 'bool',
-        hint: "On by default. Only the final reply is checked for a refusal, never the model's thinking, so a refusal it weighs up while reasoning but leaves out of the reply won't cause a retry. Turn it off to check the whole raw output. This affects refusal matching only: the empty and cut-off checks always look past the thinking."
-    },
-    {
-        key: 'refusalThinkTags',
-        label: 'Extra thinking tag names',
-        type: 'text',
-        hint: "Optional, one per line. The common reasoning tags are already handled. Add a tag name only if your model wraps its thinking in an unusual one (for example: mythink). Just the name, no brackets. Both <name> and [name] forms are covered."
-    },
-    ]
-},
-{
-    title: 'Advanced: buttons it clicks',
-    desc: "It retries by clicking your own on-screen buttons, so you only need this if retries aren't happening. The quickest fix is Pick it for me: press it, then click the real button. Otherwise paste a CSS selector and press Test until it says match found, with that button on screen. The stop button only appears while a reply is generating. The README covers fallback lists and selector syntax.",
-    fields: [{
-        key: 'regenerateSelector',
-        label: 'Your regenerate button',
-        type: 'text',
-        selector: true,
-        hint: 'The retry button it clicks to redo a reply.'
-    },
-    {
-        key: 'swipeNextSelector',
-        label: 'Your next / swipe button',
-        type: 'text',
-        selector: true,
-        hint: 'A backup it clicks if your setup retries by swiping to a new reply instead.'
-    },
-    {
-        key: 'confirmButtonLabels',
-        label: 'Extra dialog buttons it may press',
-        type: 'text',
-        hint: "Almost nobody needs this. If you use Lumiverse's Regeneration Feedback, a retry opens that box and Auto Retry presses Skip to carry on. Use this box if your button says something else, so it gets pressed too. Type the button's text exactly as it appears, one per line. Capitals are ignored. It already knows Skip, Regenerate, Confirm, Proceed, Submit and OK, and anything you add is tried first."
-    },
-    {
-        key: 'stopSelector',
-        label: 'Your stop button',
-        type: 'text',
-        selector: true,
-        hint: 'The stop button, so it can halt a frozen reply before retrying.'
-    },
-    ]
-},
-{
-    title: 'Advanced: on-screen log',
-    desc: 'A live panel that shows what the extension is doing, for debugging.',
-    fields: [{
-        key: 'liveLog',
-        label: 'Show a live log on screen',
-        type: 'bool',
-        hint: "Puts a small panel in the corner that shows recent activity as it happens (generations, retries and why, finishes). Useful for watching what it does without opening the console, especially on mobile. Drag it to move it, drag its corner to resize, and turn this off to hide it."
-    },
-    ]
-},
 ];
 // Final content present but cut off mid-sentence. Lumiverse does not expose
 // finish_reason on GENERATION_ENDED (confirmed against the Generation API), so
 // this works off the only signal a frontend extension has: the shape of the
 // text. Kept conservative to avoid re-rolling good roleplay replies.
 function looksTruncated(text, retryOnNoPunct, cfg) {
-    const raw = String(text == null ? '': text).replace(/\s+$/, '');
-    if (!raw) return false; // empty is handled by the empty branch
+    const raw = String(text == null ? "" : text).replace(/\s+$/, "");
+    if (!raw)
+        return false; // empty is handled by the empty branch
     // An opened reasoning block with no close means the reply was cut inside the
     // model's thinking. Checked on the raw text, before anything is removed.
-    if (/<(?:think|thinking|reasoning|reflection|thought)\b[^>]*>/i.test(raw) && !/<\/(?:think|thinking|reasoning|reflection|thought)\s*>/i.test(raw)) return true;
+    if (/<(?:think|thinking|reasoning|reflection|thought)\b[^>]*>/i.test(raw) &&
+        !/<\/(?:think|thinking|reasoning|reflection|thought)\s*>/i.test(raw))
+        return true;
     // The checks below count fences, backticks, asterisks and quotes. A closed
     // reasoning block sits outside the visible reply and its punctuation throws
     // those counts off, so it is removed first regardless of the refusal-side
     // thinking option, which governs refusal matching only.
-    const t = stripThinkingAlways(raw, cfg).replace(/\s+$/, '');
-    if (!t) return false;
-    if ((t.match(/```/g) || []).length % 2 === 1) return true; // open code fence
-    if ((t.replace(/```/g, '').match(/`/g) || []).length % 2 === 1) return true; // open inline code
+    const t = stripThinkingAlways(raw, cfg).replace(/\s+$/, "");
+    if (!t)
+        return false;
+    if ((t.match(/```/g) || []).length % 2 === 1)
+        return true; // open code fence
+    if ((t.replace(/```/g, "").match(/`/g) || []).length % 2 === 1)
+        return true; // open inline code
     // Emphasis asterisks only. Strip markdown bullet markers ("* " at line start)
     // first, or a reply with an odd number of list bullets would read as an open
     // emphasis run and get re-rolled. Emphasis pairs (*x*, **x**) are unaffected.
-    const emphasis = t.replace(/^[ \t]*\*[ \t]+/gm, '');
-    if ((emphasis.match(/\*/g) || []).length % 2 === 1) return true; // open emphasis / RP action
-    if ((t.match(/"/g) || []).length % 2 === 1) return true; // open straight-quote dialogue
-    if ((t.match(/\u201C/g) || []).length !== (t.match(/\u201D/g) || []).length) return true; // mismatched smart quotes
-    if (/[,;]$/.test(t)) return true; // cut mid-clause
-    if (retryOnNoPunct && !/[.!?\u2026"'*)\]}\u201D~>\-\u2014:]$/.test(t)) return true;
+    const emphasis = t.replace(/^[ \t]*\*[ \t]+/gm, "");
+    if ((emphasis.match(/\*/g) || []).length % 2 === 1)
+        return true; // open emphasis / RP action
+    if ((t.match(/"/g) || []).length % 2 === 1)
+        return true; // open straight-quote dialogue
+    if ((t.match(/\u201C/g) || []).length !== (t.match(/\u201D/g) || []).length)
+        return true; // mismatched smart quotes
+    if (/[,;]$/.test(t))
+        return true; // cut mid-clause
+    if (retryOnNoPunct && !/[.!?\u2026"'*)\]}\u201D~>\-\u2014:]$/.test(t))
+        return true;
     return false;
 }
 // An out-of-character refusal: the model dropping the scene to say it's an AI,
@@ -524,90 +524,140 @@ const REFUSAL_MAX_CHARS = 2000;
 // Fold curly quotes/apostrophes to straight and squeeze whitespace, so a reply
 // with a smart apostrophe ("I can't") matches the same as a straight one.
 function normalizeForMatch(text) {
-    return String(text == null ? '': text).replace(/[\u2018\u2019\u02BC\u2032]/g, "'").replace(/[\u201C\u201D\u2033]/g, '"').replace(/\s+/g, ' ').trim();
+    return String(text == null ? "" : text)
+        .replace(/[\u2018\u2019\u02BC\u2032]/g, "'")
+        .replace(/[\u201C\u201D\u2033]/g, '"')
+        .replace(/\s+/g, " ")
+        .trim();
 }
 // A user list is newline-separated (one entry per line). Lowercased + normalized for a
 // case-insensitive substring test.
 function splitPhrases(raw) {
-    return String(raw == null ? '': raw).split(/\r?\n/).map((p) => normalizeForMatch(p).toLowerCase()).filter((p) => p.length > 0);
+    return String(raw == null ? "" : raw)
+        .split(/\r?\n/)
+        .map((p) => normalizeForMatch(p).toLowerCase())
+        .filter((p) => p.length > 0);
 }
 // Reword rules: "old => new" pairs, one per line. Lets a user
 // swap a word or bit of phrasing in the built-in list for wording they prefer.
 // Empty "new" is allowed (deletes the old text).
 function parseSubs(raw) {
     const out = [];
-    for (const rule of String(raw == null ? '': raw).split(/\r?\n/)) {
-        const i = rule.indexOf('=>');
-        if (i < 0) continue;
+    for (const rule of String(raw == null ? "" : raw).split(/\r?\n/)) {
+        const i = rule.indexOf("=>");
+        if (i < 0)
+            continue;
         const from = normalizeForMatch(rule.slice(0, i)).toLowerCase();
         const to = normalizeForMatch(rule.slice(i + 2)).toLowerCase();
-        if (from) out.push({
-            from,
-            to
-        });
+        if (from)
+            out.push({ from, to });
     }
     return out;
 }
 // Apply the reword rules to the built-in phrase list. Each phrase is already
 // lowercase/normalized, matching how rules are parsed.
 function applySubs(phrases, subs) {
-    if (!subs.length) return phrases;
-    return phrases.map((p) => {
+    if (!subs.length)
+        return phrases;
+    return phrases
+        .map((p) => {
         let out = p;
-        for (const s of subs) if (s.from) out = out.split(s.from).join(s.to);
+        for (const s of subs)
+            if (s.from)
+                out = out.split(s.from).join(s.to);
         return out;
-    }).filter((p) => p.length > 0);
+    })
+        .filter((p) => p.length > 0);
 }
 // Tier 1: strong regexes. Anchored so an in-character "I can't help you carry
 // that" doesn't trip them. These carry the precision.
 const REFUSAL_STRONG = [
-// Model naming itself as an AI.
-/\bas an? (?:ai|a\.i\.|language model|large language model|ai (?:model|assistant))\b/i,
-/\bI(?:'m| am)(?: just| only)? an? (?:ai|a\.i\.|language model|large language model|ai assistant)\b/i,
-// Policy / guideline framing.
-/\b(?:against|violates?|violating|goes? against|contrary to) (?:my|our|the|its) (?:guidelines|programming|policy|policies|content polic(?:y|ies)|principles)\b/i,
-// Refusal opener + a task-word a character never says (request, prompt,
-// content, message, scenario, roleplay). This meta object separates "the model
-// refusing a task" from "a character refusing a person," so declining an
-// invitation, a duel, or a marriage proposal in-scene will NOT match.
-/\bI(?: (?:can(?:no|')?t|cannot|will not|won'?t|must not|must|have to|need to|refuse to|decline to|am (?:not able|unable) to|am going to have to)|'m (?:not able|unable) to|'m going to have to)\b[^.?!\n]{0,30}?\b(?:this|that|your|the) (?:request|prompt|content|message|scenario|roleplay)\b/i,
-// Assistant-only verbs (assist / comply / fulfill) that almost never
-// appear in first-person roleplay dialogue.
-// The object matters: a refusal is aimed at "that" or "this request", never at
-// a concrete thing in the scene. Without this, a servant or aide saying "I
-// can't assist you with the horses today" reads as the model refusing.
-/\bI(?: (?:can(?:no|')?t|cannot|will not|won'?t|am (?:not able|unable) to)|'m (?:not able|unable) to) (?:be able to )?(?:assist|comply|fulfil|fulfill)\b(?:[^.?!\n]{0,30}?\b(?:that|this|it|your request|this request|the request|your prompt)\b|(?:\s+you)?\s*[.!?,"'\u201d\u2019]|(?:\s+you)?\s*$)/i,
-// Out-of-character comfort hedge, only in the assistant-action sense.
-/\bI don'?t feel comfortable (?:continuing|writing|creating|generating|producing|proceeding|providing|helping|assisting)\b/i,
-// Common modern refusal openers and bodies: "I'm sorry, but I can't create/generate...",
-// "that's not something I can help with", "I'm not going to generate that". Anchored on
-// assistant-action verbs so an in-character line like "I can't marry you" stays safe.
-/\bI(?:'m| am) sorry,? but I(?: can'?t| cannot| won'?t|'m (?:not able|unable) to| am (?:not able|unable) to) (?:create|generate|write|produce|provide|assist|comply|fulfil|fulfill|help you with|engage with)\b/i,
-/\b(?:that|this)(?:'s| is) not something I(?: can| am able to|'m able to) (?:help with|assist with|create|generate|provide|write)\b/i,
-/\bI(?:'m| am) not going to (?:create|generate|produce|write) (?:that|this|such|content|explicit|sexual|those)\b/i,
-// Refusal tied to specific prohibited content policies.
-/\bI(?: (?:can(?:no|')?t|cannot|will not|won'?t|am (?:not able|unable) to)|'m (?:not able|unable) to) (?:participate|engage) in (?:this |the |any )?(?:roleplay|role-?playing) or (?:create|generate|produce|write) (?:content|stories|scenes|text) depicting (?:sexual violence|non-?consensual (?:sexual )?(?:acts|situations|scenarios|content))\b/i,
-// Refusal aimed at roleplay itself. The verb list above is assistant-only
-// (assist / comply / fulfill); this covers "participate" and "engage", which a
-// character could say, so a meta object is required: roleplay, a scenario, or
-// qualified content. "I cannot participate in this duel" has none of those and
-// stays safe. Bare "content" is left out, since "he said, content
-// to wait" would otherwise match.
-/\bI(?: (?:can(?:no|')?t|cannot|will not|won'?t|do not|don'?t|am (?:not able|unable) to)|'m (?:not able|unable) to) (?:participate|engage)\b[^.?!\n]{0,40}?\b(?:role-?play(?:ing|s)?|scenarios?|(?:sexual|explicit|adult|nsfw|romantic|such|this|that) content)\b/i,
-// Fiction disclaimer. Nobody writes this inside a scene; it only appears when
-// the model is explaining that being fictional does not change its answer.
-/\beven (?:in|within) (?:a |an |the )?(?:fictional|fiction|hypothetical|imaginary|make-?believe|creative|roleplay) (?:context|setting|scenario|framing|situation)\b/i,
-// The redirect offer that closes most refusals. Help-desk register plus a task
-// noun, so an in-scene offer of help does not reach it.
-/\bI(?:'m| am) (?:available|happy|glad) to (?:assist|help)\b[^.?!\n]{0,60}?\b(?:writing tasks?|creative writing|analysis|queries|other requests?|other topics?)\b/i,
+    // Model naming itself as an AI.
+    /\bas an? (?:ai|a\.i\.|language model|large language model|ai (?:model|assistant))\b/i,
+    /\bI(?:'m| am)(?: just| only)? an? (?:ai|a\.i\.|language model|large language model|ai assistant)\b/i,
+    // Policy / guideline framing.
+    /\b(?:against|violates?|violating|goes? against|contrary to) (?:my|our|the|its) (?:guidelines|programming|policy|policies|content polic(?:y|ies)|principles)\b/i,
+    // Refusal opener + a task-word a character never says (request, prompt,
+    // content, message, scenario, roleplay). This meta object separates "the model
+    // refusing a task" from "a character refusing a person," so declining an
+    // invitation, a duel, or a marriage proposal in-scene will NOT match.
+    /\bI(?: (?:can(?:no|')?t|cannot|will not|won'?t|must not|must|have to|need to|refuse to|decline to|am (?:not able|unable) to|am going to have to)|'m (?:not able|unable) to|'m going to have to)\b[^.?!\n]{0,30}?\b(?:this|that|your|the) (?:request|prompt|content|message|scenario|roleplay)\b/i,
+    // Assistant-only verbs (assist / comply / fulfill) that almost never
+    // appear in first-person roleplay dialogue.
+    // The object matters: a refusal is aimed at "that" or "this request", never at
+    // a concrete thing in the scene. Without this, a servant or aide saying "I
+    // can't assist you with the horses today" reads as the model refusing.
+    /\bI(?: (?:can(?:no|')?t|cannot|will not|won'?t|am (?:not able|unable) to)|'m (?:not able|unable) to) (?:be able to )?(?:assist|comply|fulfil|fulfill)\b(?:[^.?!\n]{0,30}?\b(?:that|this|it|your request|this request|the request|your prompt)\b|(?:\s+you)?\s*[.!?,"'\u201d\u2019]|(?:\s+you)?\s*$)/i,
+    // Out-of-character comfort hedge, only in the assistant-action sense.
+    /\bI don'?t feel comfortable (?:continuing|writing|creating|generating|producing|proceeding|providing|helping|assisting)\b/i,
+    // Common modern refusal openers and bodies: "I'm sorry, but I can't create/generate...",
+    // "that's not something I can help with", "I'm not going to generate that". Anchored on
+    // assistant-action verbs so an in-character line like "I can't marry you" stays safe.
+    /\bI(?:'m| am) sorry,? but I(?: can'?t| cannot| won'?t|'m (?:not able|unable) to| am (?:not able|unable) to) (?:create|generate|write|produce|provide|assist|comply|fulfil|fulfill|help you with|engage with)\b/i,
+    /\b(?:that|this)(?:'s| is) not something I(?: can| am able to|'m able to) (?:help with|assist with|create|generate|provide|write)\b/i,
+    /\bI(?:'m| am) not going to (?:create|generate|produce|write) (?:that|this|such|content|explicit|sexual|those)\b/i,
+    // Refusal tied to specific prohibited content policies.
+    /\bI(?: (?:can(?:no|')?t|cannot|will not|won'?t|am (?:not able|unable) to)|'m (?:not able|unable) to) (?:participate|engage) in (?:this |the |any )?(?:roleplay|role-?playing) or (?:create|generate|produce|write) (?:content|stories|scenes|text) depicting (?:sexual violence|non-?consensual (?:sexual )?(?:acts|situations|scenarios|content))\b/i,
+    // Refusal aimed at roleplay itself. The verb list above is assistant-only
+    // (assist / comply / fulfill); this covers "participate" and "engage", which a
+    // character could say, so a meta object is required: roleplay, a scenario, or
+    // qualified content. "I cannot participate in this duel" has none of those and
+    // stays safe. Bare "content" is left out, since "he said, content
+    // to wait" would otherwise match.
+    /\bI(?: (?:can(?:no|')?t|cannot|will not|won'?t|do not|don'?t|am (?:not able|unable) to)|'m (?:not able|unable) to) (?:participate|engage)\b[^.?!\n]{0,40}?\b(?:role-?play(?:ing|s)?|scenarios?|(?:sexual|explicit|adult|nsfw|romantic|such|this|that) content)\b/i,
+    // Fiction disclaimer. Nobody writes this inside a scene; it only appears when
+    // the model is explaining that being fictional does not change its answer.
+    /\beven (?:in|within) (?:a |an |the )?(?:fictional|fiction|hypothetical|imaginary|make-?believe|creative|roleplay) (?:context|setting|scenario|framing|situation)\b/i,
+    // The redirect offer that closes most refusals. Help-desk register plus a task
+    // noun, so an in-scene offer of help does not reach it.
+    /\bI(?:'m| am) (?:available|happy|glad) to (?:assist|help)\b[^.?!\n]{0,60}?\b(?:writing tasks?|creative writing|analysis|queries|other requests?|other topics?)\b/i,
 ];
 // Tier 2: flat phrase list, matched as normalized lowercase substrings. Covers
 // the many near-identical refusal templates across providers without a regex
 // each. All things a character in a scene almost never says.
-const REFUSAL_PHRASES = ["i can't help with that", "i cannot help with that", "i can't assist with that", "i cannot assist with that", "i'm unable to help with that", "i'm unable to assist with that", "i am unable to assist with that", "i'm not able to help with that", "i can't comply with that", "i cannot comply with that", "i can't provide that information", "i cannot provide that information", "i can't provide instructions", "i can't provide guidance on that", "i can't fulfill that request", "i can't fulfil that request", "i can't support that request", "i won't be able to help with that", "i can't generate a response to that", "i can't provide a response to that", "i can't generate that content", "i can't engage with that request", "can't help with requests like this", "can't assist with requests like this", "violates our polic", "violates the safety polic", "violates the content polic", "for safety reasons", "due to safety concerns", "i have to prioritize safety", "i cannot create that content", "i cannot generate that content", "i can't create that content", ];
+const REFUSAL_PHRASES = [
+    "i can't help with that",
+    "i cannot help with that",
+    "i can't assist with that",
+    "i cannot assist with that",
+    "i'm unable to help with that",
+    "i'm unable to assist with that",
+    "i am unable to assist with that",
+    "i'm not able to help with that",
+    "i can't comply with that",
+    "i cannot comply with that",
+    "i can't provide that information",
+    "i cannot provide that information",
+    "i can't provide instructions",
+    "i can't provide guidance on that",
+    "i can't fulfill that request",
+    "i can't fulfil that request",
+    "i can't support that request",
+    "i won't be able to help with that",
+    "i can't generate a response to that",
+    "i can't provide a response to that",
+    "i can't generate that content",
+    "i can't engage with that request",
+    "can't help with requests like this",
+    "can't assist with requests like this",
+    "violates our polic",
+    "violates the safety polic",
+    "violates the content polic",
+    "for safety reasons",
+    "due to safety concerns",
+    "i have to prioritize safety",
+    "i cannot create that content",
+    "i cannot generate that content",
+    "i can't create that content",
+];
 // Tier 3: soft redirect tells. These lean on a pivot ("...instead", "instead, I
 // can...") so an ordinary helpful reply that just offers to help doesn't match.
-const REFUSAL_SOFT = [/\bi'?d be happy to help (?:you )?(?:with [^.?!\n]{0,40}? )?instead\b/i, /\binstead,? i (?:can|could|would be happy to) (?:help|offer|suggest|provide)\b/i, /\bi can (?:provide|offer|give you) general information instead\b/i, /\bplease (?:try asking something else|change the topic|rephrase your request)\b/i, ];
+const REFUSAL_SOFT = [
+    /\bi'?d be happy to help (?:you )?(?:with [^.?!\n]{0,40}? )?instead\b/i,
+    /\binstead,? i (?:can|could|would be happy to) (?:help|offer|suggest|provide)\b/i,
+    /\bi can (?:provide|offer|give you) general information instead\b/i,
+    /\bplease (?:try asking something else|change the topic|rephrase your request)\b/i,
+];
 // Reasoning/thinking blocks are where a model weighs a refusal before deciding
 // to answer. Only the final reply should be judged, so these are stripped before
 // matching: a refusal that lives only in the thinking never triggers a retry when
@@ -615,27 +665,28 @@ const REFUSAL_SOFT = [/\bi'?d be happy to help (?:you )?(?:with [^.?!\n]{0,40}? 
 // add more with refusalThinkTags. Also used by the empty check to catch a
 // reply that is nothing but an inline think block; the truncation and length
 // checks still see the raw output.
-const THINK_TAGS = ['think', 'thinking', 'thought', 'thoughts', 'reasoning', 'reflection', 'scratchpad', 'analysis'];
+const THINK_TAGS = ["think", "thinking", "thought", "thoughts", "reasoning", "reflection", "scratchpad", "analysis"];
 // The entries that match a model naming itself as an AI, picked out by what
 // they match rather than by position, so reordering the list above cannot
 // silently point the quotation check at the wrong patterns.
-const SELF_ID_PATTERNS = REFUSAL_STRONG.filter((re) => re.source.indexOf('language model') >= 0);
+const SELF_ID_PATTERNS = REFUSAL_STRONG.filter((re) => re.source.indexOf("language model") >= 0);
 function stripThinking(text, cfg) {
-    let t = String(text == null ? '' : text);
-    if (cfg && cfg.refusalStripThinking === false) return t;
-    const extra = String((cfg && cfg.refusalThinkTags) || '').split(/\r?\n/).map((s) => s.replace(/[^\w-]/g, '').toLowerCase()).filter(Boolean);
+    let t = String(text == null ? "" : text);
+    if (cfg && cfg.refusalStripThinking === false)
+        return t;
+    const extra = String((cfg && cfg.refusalThinkTags) || "").split(/\r?\n/).map((s) => s.replace(/[^\w-]/g, "").toLowerCase()).filter(Boolean);
     const names = THINK_TAGS.concat(extra);
-    if (!names.length) return t;
-    const alt = names.join('|');
+    if (!names.length)
+        return t;
+    const alt = names.join("|");
     // <tag ...>...</tag> and [tag ...]...[/tag], same tag both ends, across newlines
-    t = t.replace(new RegExp('<(' + alt + ')(?:\\s[^>]*)?>[\\s\\S]*?<\\/\\1\\s*>', 'gi'), ' ');
-    t = t.replace(new RegExp('\\[(' + alt + ')(?:\\s[^\\]]*)?\\][\\s\\S]*?\\[\\/\\1\\s*\\]', 'gi'), ' ');
+    t = t.replace(new RegExp("<(" + alt + ")(?:\\s[^>]*)?>[\\s\\S]*?<\\/\\1\\s*>", "gi"), " ");
+    t = t.replace(new RegExp("\\[(" + alt + ")(?:\\s[^\\]]*)?\\][\\s\\S]*?\\[\\/\\1\\s*\\]", "gi"), " ");
     // an unclosed opener running to the end (thinking cut off before the reply)
-    t = t.replace(new RegExp('<(?:' + alt + ')(?:\\s[^>]*)?>[\\s\\S]*$', 'i'), ' ');
-    t = t.replace(new RegExp('\\[(?:' + alt + ')(?:\\s[^\\]]*)?\\][\\s\\S]*$', 'i'), ' ');
+    t = t.replace(new RegExp("<(?:" + alt + ")(?:\\s[^>]*)?>[\\s\\S]*$", "i"), " ");
+    t = t.replace(new RegExp("\\[(?:" + alt + ")(?:\\s[^\\]]*)?\\][\\s\\S]*$", "i"), " ");
     return t;
 }
-
 // Removes reasoning blocks regardless of the refusal-side option. That option
 // governs refusal matching only: whether a refusal written inside thinking
 // counts. Asking whether a reply is empty, or whether it was cut off, is a
@@ -649,47 +700,100 @@ function stripThinkingAlways(text, cfg) {
 // line, and when they do it is dialogue, not the model stepping out of the
 // scene. Straight and curly quotes both count.
 function spanIsQuoted(text, start, end) {
-    const QUOTES = '"\u201c\u201d\u00ab\u00bb';
+    const QUOTES = "\"\u201c\u201d\u00ab\u00bb";
     let open = -1;
     for (let i = start - 1; i >= 0; i--) {
         const c = text[i];
-        if (c === '\n') break; // a line break ends any quotation for our purposes
-        if (QUOTES.indexOf(c) >= 0) { open = i; break; }
+        if (c === "\n")
+            break; // a line break ends any quotation for our purposes
+        if (QUOTES.indexOf(c) >= 0) {
+            open = i;
+            break;
+        }
     }
-    if (open < 0) return false;
+    if (open < 0)
+        return false;
     for (let i = end; i < text.length; i++) {
         const c = text[i];
-        if (c === '\n') return false;
-        if (QUOTES.indexOf(c) >= 0) return true;
+        if (c === "\n")
+            return false;
+        if (QUOTES.indexOf(c) >= 0)
+            return true;
     }
     return false;
 }
-function looksLikeRefusal(text, cfg) {
-    const raw = stripThinking(String(text == null ? '': text), cfg).trim();
-    if (!raw) return false; // empty is handled by the empty branch
-    const maxChars = (cfg && Number.isFinite(cfg.refusalMaxChars)) ? cfg.refusalMaxChars: REFUSAL_MAX_CHARS;
-    if (maxChars > 0 && raw.length > maxChars) return false; // long immersive reply, not a refusal
+function refusalVerdict(text, cfg) {
+    const raw = stripThinking(String(text == null ? "" : text), cfg).trim();
+    // empty is handled by the empty branch
+    if (!raw)
+        return {
+            refusal: false,
+            reason: "there is no reply text left once the thinking is removed",
+        };
+    const maxChars = cfg && Number.isFinite(cfg.refusalMaxChars)
+        ? cfg.refusalMaxChars
+        : REFUSAL_MAX_CHARS;
+    // long immersive reply, not a refusal
+    if (maxChars > 0 && raw.length > maxChars)
+        return {
+            refusal: false,
+            reason: "it is " +
+                raw.length +
+                " characters, past the " +
+                maxChars +
+                "-character limit, so it counts as real writing",
+        };
     const norm = normalizeForMatch(raw);
     const lower = norm.toLowerCase();
     // Whitelist wins: anything the user parked here is never a refusal.
-    for (const p of splitPhrases(cfg && cfg.refusalIgnorePhrases)) if (lower.includes(p)) return false;
+    for (const p of splitPhrases(cfg && cfg.refusalIgnorePhrases))
+        if (lower.includes(p))
+            return {
+                refusal: false,
+                reason: 'your "never treat these as a refusal" list matched: ' + p,
+            };
     // The user's own additions count as refusals.
-    for (const p of splitPhrases(cfg && cfg.refusalExtraPhrases)) if (lower.includes(p)) return true;
+    for (const p of splitPhrases(cfg && cfg.refusalExtraPhrases))
+        if (lower.includes(p))
+            return { refusal: true, reason: "one of your own phrases matched: " + p };
     // Built-in English lists, unless the user has switched them off to run pure-custom.
     if (!cfg || cfg.refusalUseBuiltins !== false) {
         for (const re of REFUSAL_STRONG) {
             const m = norm.match(re);
-            if (!m) continue;
+            if (!m)
+                continue;
             // A self-identifying AI is a stock science-fiction character. Inside
             // quotation marks it is that character talking, so it is left alone.
-            if (SELF_ID_PATTERNS.indexOf(re) >= 0 && typeof m.index === 'number' && spanIsQuoted(norm, m.index, m.index + m[0].length)) continue;
-            return true;
+            if (SELF_ID_PATTERNS.indexOf(re) >= 0 &&
+                typeof m.index === "number" &&
+                spanIsQuoted(norm, m.index, m.index + m[0].length))
+                continue;
+            return { refusal: true, reason: 'a built-in pattern matched: "' + m[0] + '"' };
         }
         const phrases = applySubs(REFUSAL_PHRASES, parseSubs(cfg && cfg.refusalPhraseSubs));
-        for (const p of phrases) if (lower.includes(p)) return true;
-        for (const re of REFUSAL_SOFT) if (re.test(norm)) return true;
+        for (const p of phrases)
+            if (lower.includes(p))
+                return { refusal: true, reason: 'a built-in phrase matched: "' + p + '"' };
+        for (const re of REFUSAL_SOFT) {
+            const m = norm.match(re);
+            if (m)
+                return {
+                    refusal: true,
+                    reason: 'a built-in redirect tell matched: "' + m[0] + '"',
+                };
+        }
+        return {
+            refusal: false,
+            reason: "nothing in the built-in lists or your own phrases matched",
+        };
     }
-    return false;
+    return {
+        refusal: false,
+        reason: "the built-in lists are off and none of your own phrases matched",
+    };
+}
+function looksLikeRefusal(text, cfg) {
+    return refusalVerdict(text, cfg).refusal;
 }
 // Some providers deliver a refusal as an error string (e.g. a prohibited-content
 // result) rather than as reply text. This matches that, tuned for short error
@@ -700,39 +804,70 @@ function looksLikeRefusal(text, cfg) {
 const REFUSAL_ERROR = /\b(?:prohibited[_ ]?content|content[_ ]?polic(?:y|ies)|safety[_ ]?(?:polic(?:y|ies)|filter|settings?)|response was blocked|blocked (?:by|for) (?:safety|content|moderation)|content[_ ]?filter|moderation|flagged as|violat\w* (?:content|safety|polic)|finish[_ ]?reason["'\s:=]*(?:safety|prohibited|blocklist|recitation)|blocklist)\b/i;
 function looksLikeRefusalError(errText, cfg) {
     const norm = normalizeForMatch(errText);
-    if (!norm) return false;
+    if (!norm)
+        return false;
     const lower = norm.toLowerCase();
-    for (const p of splitPhrases(cfg && cfg.refusalIgnorePhrases)) if (lower.includes(p)) return false;
-    for (const p of splitPhrases(cfg && cfg.refusalExtraPhrases)) if (lower.includes(p)) return true;
+    for (const p of splitPhrases(cfg && cfg.refusalIgnorePhrases))
+        if (lower.includes(p))
+            return false;
+    for (const p of splitPhrases(cfg && cfg.refusalExtraPhrases))
+        if (lower.includes(p))
+            return true;
     if (!cfg || cfg.refusalUseBuiltins !== false) {
-        if (REFUSAL_ERROR.test(norm)) return true;
+        if (REFUSAL_ERROR.test(norm))
+            return true;
     }
     return false;
 }
-
 // Splits a selector list on its top-level commas only. A comma inside brackets,
 // parentheses or quotes belongs to the selector rather than separating the list,
 // so :is(a, b) and [aria-label="Next, swipe"] survive whole. Entries come back
 // trimmed, with blanks dropped.
 function splitSelectorList(raw) {
-    const src = String(raw == null ? '' : raw);
+    const src = String(raw == null ? "" : raw);
     const out = [];
-    let buf = '';
+    let buf = "";
     let depth = 0;
-    let quote = '';
+    let quote = "";
     for (let i = 0; i < src.length; i++) {
         const c = src[i];
         if (quote) {
             buf += c;
-            if (c === '\\' && i + 1 < src.length) { buf += src[i + 1]; i++; continue; }
-            if (c === quote) quote = '';
+            if (c === "\\" && i + 1 < src.length) {
+                buf += src[i + 1];
+                i++;
+                continue;
+            }
+            if (c === quote)
+                quote = "";
             continue;
         }
-        if (c === '\\' && i + 1 < src.length) { buf += c + src[i + 1]; i++; continue; }
-        if (c === '"' || c === "'") { quote = c; buf += c; continue; }
-        if (c === '(' || c === '[' || c === '{') { depth++; buf += c; continue; }
-        if (c === ')' || c === ']' || c === '}') { if (depth > 0) depth--; buf += c; continue; }
-        if (c === ',' && depth === 0) { out.push(buf.trim()); buf = ''; continue; }
+        if (c === "\\" && i + 1 < src.length) {
+            buf += c + src[i + 1];
+            i++;
+            continue;
+        }
+        if (c === '"' || c === "'") {
+            quote = c;
+            buf += c;
+            continue;
+        }
+        if (c === "(" || c === "[" || c === "{") {
+            depth++;
+            buf += c;
+            continue;
+        }
+        if (c === ")" || c === "]" || c === "}") {
+            if (depth > 0)
+                depth--;
+            buf += c;
+            continue;
+        }
+        if (c === "," && depth === 0) {
+            out.push(buf.trim());
+            buf = "";
+            continue;
+        }
         buf += c;
     }
     out.push(buf.trim());
@@ -743,180 +878,391 @@ function splitSelectorList(raw) {
 // matching after an app update. Skipped when building a selector from a click.
 const UNSTABLE_NAME = /(^_)|(_[a-z0-9]{4,}_\d+$)|(_[a-z0-9]{6,}$)|([-_][a-f0-9]{6,}$)/i;
 const SAFE_NAME = /^[A-Za-z_-][\w-]*$/;
-
 // Turns the element someone clicked into a selector for that control, choosing
 // attributes that survive an app update over class names that do not. Returns
 // null when nothing dependable is on the element.
 function deriveSelector(start) {
-  let el = start;
-  let hops = 0;
-  // Clicks usually land on an icon or a span inside the control, so walk up to
-  // the thing that actually behaves like a button.
-  while (el && hops < 6) {
-    const tag = String(el.tagName || "").toLowerCase();
-    const role = el.getAttribute ? el.getAttribute("role") : null;
-    if (tag === "button" || tag === "a" || role === "button") break;
-    el = el.parentElement;
-    hops++;
-  }
-  if (!el || !el.getAttribute) el = start;
-  if (!el || !el.getAttribute) return null;
-  const tag = String(el.tagName || "").toLowerCase() || "*";
-  const q = (v) =>
-    '"' + String(v).replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"';
-  for (const attr of ["data-testid", "data-test-id", "data-test", "data-action", "aria-label", "title", "name"]) {
-    const v = el.getAttribute(attr);
-    if (v && String(v).trim()) return tag + "[" + attr + "=" + q(String(v).trim()) + "]";
-  }
-  const id = el.getAttribute("id");
-  if (id && SAFE_NAME.test(id) && !UNSTABLE_NAME.test(id)) return "#" + id;
-  const cls = String(el.className || "")
-    .split(/\s+/)
-    .filter((c) => c && SAFE_NAME.test(c) && !UNSTABLE_NAME.test(c));
-  if (cls.length) return tag + "." + cls.slice(0, 2).join(".");
-  return null;
+    let el = start;
+    let hops = 0;
+    // Clicks usually land on an icon or a span inside the control, so walk up to
+    // the thing that actually behaves like a button.
+    while (el && hops < 6) {
+        const tag = String(el.tagName || "").toLowerCase();
+        const role = el.getAttribute ? el.getAttribute("role") : null;
+        if (tag === "button" || tag === "a" || role === "button")
+            break;
+        el = el.parentElement;
+        hops++;
+    }
+    if (!el || !el.getAttribute)
+        el = start;
+    if (!el || !el.getAttribute)
+        return null;
+    const tag = String(el.tagName || "").toLowerCase() || "*";
+    const q = (v) => '"' + String(v).replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"';
+    for (const attr of ["data-testid", "data-test-id", "data-test", "data-action", "aria-label", "title", "name"]) {
+        const v = el.getAttribute(attr);
+        if (v && String(v).trim())
+            return tag + "[" + attr + "=" + q(String(v).trim()) + "]";
+    }
+    const id = el.getAttribute("id");
+    if (id && SAFE_NAME.test(id) && !UNSTABLE_NAME.test(id))
+        return "#" + id;
+    const cls = String(el.className || "")
+        .split(/\s+/)
+        .filter((c) => c && SAFE_NAME.test(c) && !UNSTABLE_NAME.test(c));
+    if (cls.length)
+        return tag + "." + cls.slice(0, 2).join(".");
+    return null;
 }
-
+// getComputedStyle hands colours back as rgb()/rgba(), so that is all this needs
+// to read. Anything else is reported as unknown and the caller leaves it alone.
+function parseColor(value) {
+    const m = String(value == null ? "" : value)
+        .trim()
+        .match(/^rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:[,/\s]+([\d.]+%?))?\s*\)$/i);
+    if (!m)
+        return null;
+    let a = 1;
+    if (m[4] != null) {
+        a =
+            m[4].indexOf("%") >= 0
+                ? parseFloat(m[4]) / 100
+                : parseFloat(m[4]);
+        if (!Number.isFinite(a))
+            a = 1;
+    }
+    const c = [Number(m[1]), Number(m[2]), Number(m[3]), Math.max(0, Math.min(1, a))];
+    return c.slice(0, 3).some((n) => !Number.isFinite(n)) ? null : c;
+}
+// Lay a partly transparent colour over an opaque one.
+function blendColor(top, under) {
+    const a = top[3];
+    return [
+        top[0] * a + under[0] * (1 - a),
+        top[1] * a + under[1] * (1 - a),
+        top[2] * a + under[2] * (1 - a),
+        1,
+    ];
+}
+function relLuminance(c) {
+    const chan = (v) => {
+        const x = Math.max(0, Math.min(1, v / 255));
+        return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4);
+    };
+    return 0.2126 * chan(c[0]) + 0.7152 * chan(c[1]) + 0.0722 * chan(c[2]);
+}
+// The WCAG contrast ratio, 1 (identical) to 21 (black on white).
+function contrastRatio(a, b) {
+    const la = relLuminance(a);
+    const lb = relLuminance(b);
+    return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+}
+// What is actually behind an element: its own background when that is opaque,
+// otherwise the ancestors' backgrounds composited underneath it.
+const PAGE_FALLBACK = [20, 16, 30, 1]; // Lumiverse ships dark; last resort only
+function backdropOf(el) {
+    const layers = [];
+    let p = el;
+    let hops = 0;
+    while (p && hops < 24) {
+        let c = null;
+        try {
+            c = parseColor(getComputedStyle(p).backgroundColor);
+        }
+        catch (_) { }
+        if (c && c[3] > 0) {
+            layers.push(c);
+            if (c[3] >= 0.999)
+                break; // nothing below this can show through
+        }
+        p = p.parentElement;
+        hops++;
+    }
+    let base = PAGE_FALLBACK;
+    for (let i = layers.length - 1; i >= 0; i--)
+        base = blendColor(layers[i], base);
+    return base;
+}
+// Below this ratio a label is hard to pick out; at 1 it is invisible.
+const MIN_CONTRAST = 3.2;
+const NEAR_WHITE = "#ffffff";
+const NEAR_BLACK = "#14121a";
+// Repaint an element's text only if it fails the contrast floor against what is
+// behind it, so a theme that already reads well keeps its own colours exactly.
+function fixContrast(el, min) {
+    try {
+        if (!el || typeof getComputedStyle !== "function")
+            return;
+        const want = typeof min === "number" ? min : MIN_CONTRAST;
+        const fg = parseColor(getComputedStyle(el).color);
+        if (!fg)
+            return;
+        const bg = backdropOf(el);
+        if (contrastRatio(blendColor(fg, bg), bg) >= want)
+            return;
+        const light = [255, 255, 255, 1];
+        const dark = [20, 18, 26, 1];
+        el.style.color =
+            contrastRatio(light, bg) >= contrastRatio(dark, bg) ? NEAR_WHITE : NEAR_BLACK;
+    }
+    catch (_) { }
+}
+// Colours only resolve once the element is in the page and laid out, so the
+// check waits a frame rather than running against a half-built tree.
+function afterPaint(fn) {
+    if (typeof requestAnimationFrame === "function")
+        requestAnimationFrame(fn);
+    else
+        fn();
+}
+function ensureReadable(el, min) {
+    afterPaint(() => fixContrast(el, min));
+}
+// True when the element paints text of its own, rather than only holding other
+// elements that do. Form controls carry their value instead of a text child.
+function paintsText(el) {
+    const tag = String((el && el.tagName) || "").toUpperCase();
+    if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA" || tag === "BUTTON")
+        return true;
+    const kids = (el && el.childNodes) || [];
+    for (let i = 0; i < kids.length; i++) {
+        const n = kids[i];
+        if (n && n.nodeType === 3 && String(n.nodeValue || "").trim())
+            return true;
+    }
+    return false;
+}
+// One sweep over everything a panel painted, once per build. Secondary text
+// (hints, section headers) is meant to sit quieter than the main text, so it is
+// held to a lower floor and only rescued when it has all but disappeared.
+function ensureReadableTree(root, min) {
+    afterPaint(() => {
+        try {
+            if (!root || !root.querySelectorAll)
+                return;
+            const all = [root].concat(Array.prototype.slice.call(root.querySelectorAll("*")));
+            for (const el of all)
+                if (paintsText(el))
+                    fixContrast(el, min);
+        }
+        catch (_) { }
+    });
+}
 export function setup(ctx, opts) {
     // cfg is mutable so the settings modal can change it live. Order: code
     // defaults, then GitHub opts, then whatever the user saved in the UI.
-    const cfg = Object.assign({},
-    CONFIG, opts || {},
-    loadSaved());
+    const cfg = Object.assign({}, CONFIG, opts || {}, loadSaved());
     // Persist the whole settings object to account storage (through the backend) so
     // settings follow the user across browsers. The backend also derives its
     // find-and-replace state from this. Safe to call with no backend bridge.
     function saveToAccount() {
         try {
-            if (ctx && typeof ctx.sendToBackend === 'function') {
+            if (ctx && typeof ctx.sendToBackend === "function") {
                 const out = {};
-                for (const g of SCHEMA) for (const f of g.fields) out[f.key] = cfg[f.key];
-                ctx.sendToBackend({ type: 'save_settings', settings: out });
+                for (const g of SCHEMA)
+                    for (const f of g.fields)
+                        out[f.key] = cfg[f.key];
+                ctx.sendToBackend({ type: "save_settings", settings: out });
             }
-        } catch(_) {}
+        }
+        catch (_) { }
     }
     // Pull account-synced settings on load. localStorage is a fast local cache and
     // offline fallback; the account copy wins when present. If the account has
     // nothing yet but this browser does, migrate this browser's settings up.
     function loadFromAccount() {
         try {
-            if (!ctx || typeof ctx.sendToBackend !== 'function' || typeof ctx.onBackendMessage !== 'function') return;
-            const reqId = 'ar-load-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+            if (!ctx || typeof ctx.sendToBackend !== "function" || typeof ctx.onBackendMessage !== "function")
+                return;
+            const reqId = "ar-load-" + Date.now() + "-" + Math.random().toString(36).slice(2);
             const off = ctx.onBackendMessage((msg) => {
-                if (!msg || msg.type !== 'loaded_settings' || msg.requestId !== reqId) return;
-                try { off && off(); } catch(_) {}
+                if (!msg || msg.type !== "loaded_settings" || msg.requestId !== reqId)
+                    return;
+                try {
+                    off && off();
+                }
+                catch (_) { }
                 const s = msg.settings;
-                if (s && typeof s === 'object' && Object.keys(s).length) {
+                if (s && typeof s === "object" && Object.keys(s).length) {
                     Object.assign(cfg, coerceSaved(s));
                     saveSaved();
                     syncLiveLog();
                     syncFloat();
-                    if (modalHandle && modalRoot) { if (modalSnapshot) modalSnapshot(); buildSettingsBody(modalRoot, modalSnapshot); }
-                    log('settings loaded from account');
-                } else {
+                    if (modalHandle && modalRoot) {
+                        if (modalSnapshot)
+                            modalSnapshot();
+                        buildSettingsBody(modalRoot, modalSnapshot);
+                    }
+                    log("settings loaded from account");
+                }
+                else {
                     try {
-                        if (typeof localStorage !== 'undefined' && localStorage.getItem(STORE_KEY)) { saveToAccount(); log('settings migrated to account'); }
-                    } catch(_) {}
+                        if (typeof localStorage !== "undefined" && localStorage.getItem(STORE_KEY)) {
+                            saveToAccount();
+                            log("settings migrated to account");
+                        }
+                    }
+                    catch (_) { }
                 }
             });
-            disposers.push(() => { try { off && off(); } catch(_) {} });
-            ctx.sendToBackend({ type: 'load_settings', requestId: reqId });
-        } catch(_) {}
+            disposers.push(() => { try {
+                off && off();
+            }
+            catch (_) { } });
+            ctx.sendToBackend({ type: "load_settings", requestId: reqId });
+        }
+        catch (_) { }
     }
     let lastChatId = null;
     let lastMessageId = null;
     let replaceAction = null;
     let replaceActionOff = null;
     let replaceAllAction = null;
-    let undoAction = null;
-    let undoActionOff = null;
     let replaceAllActionOff = null;
+    let toggleAction = null;
+    let toggleActionOff = null;
     // Manual "swap words now": an optional Extras-menu button that applies the word
     // swaps to the latest reply on demand, instead of only automatically on finish.
     // Optional consent dialog before any edit, for people who don't want surprises.
     // Returns true to proceed. If the host has no confirm dialog, proceeds.
     async function confirmEdit(message) {
         try {
-            if (ctx && ctx.ui && typeof ctx.ui.showConfirm === 'function') {
-                const r = await ctx.ui.showConfirm({ title: 'Apply word swaps?', message: message, confirmLabel: 'Swap', cancelLabel: 'Cancel' });
+            if (ctx && ctx.ui && typeof ctx.ui.showConfirm === "function") {
+                const r = await ctx.ui.showConfirm({ title: "Apply word swaps?", message: message, confirmLabel: "Swap", cancelLabel: "Cancel" });
                 return !!(r && r.confirmed);
             }
-        } catch(_) {}
+        }
+        catch (_) { }
         return true;
     }
     async function applyReplaceNow() {
         try {
-            if (!ctx || typeof ctx.sendToBackend !== 'function') { showToast('Find and replace needs the backend, which this host does not offer.'); return; }
-            if (cfg.confirmBeforeEdit) {
-                if (!(await confirmEdit('Apply your word swaps to the latest reply?'))) return;
-            }
-            ctx.sendToBackend({ type: 'apply_replace_now', chatId: lastChatId, messageId: lastMessageId, requestId: 'ar-rep-' + Date.now() });
-        } catch(_) {}
-    }
-    // Swap every generated reply in the current chat, once, on request.
-    function undoSwapNow() {
-        try {
-            if (!ctx || typeof ctx.sendToBackend !== 'function') {
-                showToast('Undo needs the backend, which this host does not offer.');
+            if (!ctx || typeof ctx.sendToBackend !== "function") {
+                showToast("Find and replace needs the backend, which this host does not offer.");
                 return;
             }
-            ctx.sendToBackend({ type: 'undo_swap', requestId: 'ar-undo-' + Date.now() });
-        } catch (_) {}
+            if (cfg.confirmBeforeEdit) {
+                if (!(await confirmEdit("Apply your word swaps to the latest reply?")))
+                    return;
+            }
+            ctx.sendToBackend({ type: "apply_replace_now", chatId: lastChatId, messageId: lastMessageId, requestId: "ar-rep-" + Date.now() });
+        }
+        catch (_) { }
     }
+    // Swap every generated reply in the current chat, once, on request.
     async function applyReplaceAllNow() {
         try {
-            if (!ctx || typeof ctx.sendToBackend !== 'function') { showToast('Find and replace needs the backend, which this host does not offer.'); return; }
-            if (cfg.confirmBeforeEdit) {
-                if (!(await confirmEdit('Apply your word swaps to every reply in this chat?'))) return;
+            if (!ctx || typeof ctx.sendToBackend !== "function") {
+                showToast("Find and replace needs the backend, which this host does not offer.");
+                return;
             }
-            ctx.sendToBackend({ type: 'apply_replace_now', chatId: lastChatId, wholeChat: true, requestId: 'ar-rep-all-' + Date.now() });
-        } catch (_) {}
+            if (cfg.confirmBeforeEdit) {
+                if (!(await confirmEdit("Apply your word swaps to every reply in this chat?")))
+                    return;
+            }
+            ctx.sendToBackend({ type: "apply_replace_now", chatId: lastChatId, wholeChat: true, requestId: "ar-rep-all-" + Date.now() });
+        }
+        catch (_) { }
+    }
+    // The Extras-menu on/off entry. Its label and icon carry the current state,
+    // and the host offers no way to relabel an action once it is registered, so a
+    // state change registers it again rather than editing it in place.
+    const TOGGLE_ICON_ON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>';
+    const TOGGLE_ICON_OFF = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/><line x1="4" y1="20" x2="20" y2="4"/></svg>';
+    // The state the registered entry was last labelled for, so it is only rebuilt
+    // when the label would actually change.
+    let toggleActionState = null;
+    function dropToggleAction() {
+        if (!toggleAction)
+            return;
+        try {
+            toggleActionOff && toggleActionOff();
+        }
+        catch (_) { }
+        try {
+            toggleAction.destroy();
+        }
+        catch (_) { }
+        toggleAction = null;
+        toggleActionOff = null;
+        toggleActionState = null;
+    }
+    function syncToggleAction() {
+        try {
+            const canReg = !!(ctx && ctx.ui && typeof ctx.ui.registerInputBarAction === "function");
+            const on = cfg.enabled !== false;
+            if (!cfg.showExtrasToggle || !canReg) {
+                dropToggleAction();
+                return;
+            }
+            if (toggleAction && toggleActionState === on)
+                return;
+            dropToggleAction();
+            toggleAction = ctx.ui.registerInputBarAction({
+                id: "auto-retry-toggle",
+                label: on ? "Auto Retry is on, turn it off" : "Auto Retry is off, turn it on",
+                iconSvg: on ? TOGGLE_ICON_ON : TOGGLE_ICON_OFF,
+            });
+            toggleActionState = on;
+            toggleActionOff = toggleAction.onClick(() => {
+                // Flipping the switch relabels this very entry, which means destroying
+                // it and registering it again. Doing that from inside its own click
+                // handler would pull the entry out from under the host mid-dispatch, so
+                // it waits for the handler to return first.
+                setTimeout(() => toggleEnabled(), 0);
+            });
+        }
+        catch (_) { }
     }
     // Add or remove the Extras-menu buttons to match their toggles. Called on load
     // and whenever settings are saved, so flipping a toggle takes effect at once.
-    function syncReplaceButton() {
+    function syncInputBarActions() {
+        syncToggleAction();
         try {
-            const canReg = !!(ctx && ctx.ui && typeof ctx.ui.registerInputBarAction === 'function');
+            const canReg = !!(ctx && ctx.ui && typeof ctx.ui.registerInputBarAction === "function");
             if (cfg.showReplaceButton && canReg && !replaceAction) {
                 replaceAction = ctx.ui.registerInputBarAction({
-                    id: 'auto-retry-replace-now',
-                    label: 'Swap words in the last reply',
+                    id: "auto-retry-replace-now",
+                    label: "Swap words in the last reply",
                     iconSvg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>',
                 });
                 replaceActionOff = replaceAction.onClick(() => applyReplaceNow());
-            } else if ((!cfg.showReplaceButton || !canReg) && replaceAction) {
-                try { replaceActionOff && replaceActionOff(); } catch (_) {}
-                try { replaceAction.destroy(); } catch (_) {}
+            }
+            else if ((!cfg.showReplaceButton || !canReg) && replaceAction) {
+                try {
+                    replaceActionOff && replaceActionOff();
+                }
+                catch (_) { }
+                try {
+                    replaceAction.destroy();
+                }
+                catch (_) { }
                 replaceAction = null;
                 replaceActionOff = null;
             }
-            if (cfg.showUndoSwapButton && canReg && !undoAction) {
-                undoAction = ctx.ui.registerInputBarAction({
-                    id: 'auto-retry-undo-swap',
-                    label: 'Undo the last word swap',
-                    iconSvg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>',
-                });
-                undoActionOff = undoAction.onClick(() => undoSwapNow());
-            } else if ((!cfg.showUndoSwapButton || !canReg) && undoAction) {
-                try { undoActionOff && undoActionOff(); } catch (_) {}
-                try { undoAction.destroy(); } catch (_) {}
-                undoAction = null;
-                undoActionOff = null;
-            }
             if (cfg.showSwapAllButton && canReg && !replaceAllAction) {
                 replaceAllAction = ctx.ui.registerInputBarAction({
-                    id: 'auto-retry-replace-all',
-                    label: 'Swap words in every reply',
+                    id: "auto-retry-replace-all",
+                    label: "Swap words in every reply",
                     iconSvg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/><line x1="12" y1="7" x2="12" y2="17"/></svg>',
                 });
                 replaceAllActionOff = replaceAllAction.onClick(() => applyReplaceAllNow());
-            } else if ((!cfg.showSwapAllButton || !canReg) && replaceAllAction) {
-                try { replaceAllActionOff && replaceAllActionOff(); } catch (_) {}
-                try { replaceAllAction.destroy(); } catch (_) {}
+            }
+            else if ((!cfg.showSwapAllButton || !canReg) && replaceAllAction) {
+                try {
+                    replaceAllActionOff && replaceAllActionOff();
+                }
+                catch (_) { }
+                try {
+                    replaceAllAction.destroy();
+                }
+                catch (_) { }
                 replaceAllAction = null;
                 replaceAllActionOff = null;
             }
-        } catch (_) {}
+        }
+        catch (_) { }
     }
     // A short in-memory ring buffer of what the extension did, captured whether or
     // not console logging is on, so the Copy debug info report carries a timeline
@@ -928,19 +1274,25 @@ export function setup(ctx, opts) {
     function recordEvent(args) {
         try {
             const parts = args.map((a) => {
-                if (typeof a === 'string') return a;
+                if (typeof a === "string")
+                    return a;
                 try {
                     return JSON.stringify(a);
-                } catch(_) {
+                }
+                catch (_) {
                     return String(a);
                 }
             });
-            let line = new Date().toISOString().slice(11, 23) + ' ' + parts.join(' ');
-            if (line.length > 220) line = line.slice(0, 217) + '...';
+            let line = new Date().toISOString().slice(11, 23) + " " + parts.join(" ");
+            if (line.length > 220)
+                line = line.slice(0, 217) + "...";
             eventLog.push(line);
-            if (eventLog.length > EVENTLOG_MAX) eventLog.shift();
-            if (liveLogBody) renderLiveLog();
-        } catch(_) {}
+            if (eventLog.length > EVENTLOG_MAX)
+                eventLog.shift();
+            if (liveLogBody)
+                renderLiveLog();
+        }
+        catch (_) { }
     }
     const log = (...a) => {
         recordEvent(a);
@@ -949,38 +1301,74 @@ export function setup(ctx, opts) {
     // so someone can watch what the extension is doing without opening dev tools,
     // which matters most on mobile. Driven by the liveLog setting.
     function renderLiveLog() {
-        if (!liveLogBody) return;
-        liveLogBody.textContent = eventLog.length ? eventLog.join('\n') : '(nothing yet)';
+        if (!liveLogBody)
+            return;
+        liveLogBody.textContent = eventLog.length
+            ? eventLog.join("\n")
+            : "(nothing yet)";
         liveLogBody.scrollTop = liveLogBody.scrollHeight;
     }
     function showLiveLog() {
-        if (liveLogEl || typeof document === 'undefined') return;
-        const el = document.createElement('div');
-        el.style.cssText = 'position:fixed;right:8px;bottom:8px;z-index:2147483000;width:min(340px,92vw);height:min(300px,50vh);min-width:200px;min-height:120px;max-width:96vw;max-height:85vh;display:flex;flex-direction:column;background:var(--lumiverse-bg-elevated,rgba(35,30,48,.9));border:1px solid var(--lumiverse-border,rgba(255,255,255,.14));border-radius:var(--lumiverse-radius,10px);box-shadow:var(--lumiverse-shadow-md,0 8px 24px rgba(0,0,0,.4));font-family:var(--lumiverse-font-family,system-ui);font-size:13px;color:var(--lumiverse-text,#e9e4f0);overflow:hidden';
-        const head = document.createElement('div');
-        head.style.cssText = 'display:flex;align-items:center;gap:8px;padding:7px 9px;border-bottom:1px solid var(--lumiverse-border,rgba(255,255,255,.12));font-weight:600;cursor:move;user-select:none;touch-action:none';
-        const title = document.createElement('span');
-        title.textContent = 'Auto Retry log';
+        if (liveLogEl || typeof document === "undefined")
+            return;
+        const el = document.createElement("div");
+        el.style.cssText =
+            "position:fixed;right:8px;bottom:8px;z-index:2147483000;width:min(340px,92vw);height:min(300px,50vh);min-width:200px;min-height:120px;max-width:96vw;max-height:85vh;display:flex;flex-direction:column;background:var(--lumiverse-bg-elevated,rgba(35,30,48,.9));border:1px solid var(--lumiverse-border,rgba(255,255,255,.14));border-radius:var(--lumiverse-radius,10px);box-shadow:var(--lumiverse-shadow-md,0 8px 24px rgba(0,0,0,.4));font-family:var(--lumiverse-font-family,system-ui);font-size:13px;color:var(--lumiverse-text,#e9e4f0);overflow:hidden";
+        const head = document.createElement("div");
+        head.style.cssText =
+            "display:flex;align-items:center;gap:8px;padding:7px 9px;border-bottom:1px solid var(--lumiverse-border,rgba(255,255,255,.12));font-weight:600;cursor:move;user-select:none;touch-action:none";
+        const title = document.createElement("span");
+        title.textContent = "Auto Retry log";
+        title.style.cssText = "flex:1;min-width:0";
         head.appendChild(title);
-        const bodyEl = document.createElement('div');
-        bodyEl.style.cssText = 'flex:1;padding:7px 9px;overflow:auto;white-space:pre-wrap;line-height:1.4;font-family:var(--lumiverse-font-mono,ui-monospace,monospace) !important';
+        // The panel exists because the console is out of reach on a phone, which is
+        // also where selecting text by hand is worst, so the log needs its own way
+        // out. Clear keeps a long session's timeline readable.
+        const tinyBtn = (label) => {
+            const b = btn(label, false);
+            b.style.cssText +=
+                "min-height:0;padding:3px 9px;font-size:11px;flex:none;cursor:pointer";
+            return b;
+        };
+        const copyBtn = tinyBtn("Copy");
+        copyBtn.addEventListener("click", async () => {
+            const before = copyBtn.textContent;
+            const ok = await copyText(eventLog.join("\n"));
+            copyBtn.textContent = ok ? "Copied" : "Can't";
+            setTimeout(() => {
+                copyBtn.textContent = before;
+            }, 1400);
+        });
+        const clearBtn = tinyBtn("Clear");
+        clearBtn.addEventListener("click", () => {
+            eventLog.length = 0;
+            renderLiveLog();
+        });
+        head.appendChild(copyBtn);
+        head.appendChild(clearBtn);
+        const bodyEl = document.createElement("div");
+        bodyEl.style.cssText =
+            "flex:1;padding:7px 9px;overflow:auto;white-space:pre-wrap;line-height:1.4;font-family:var(--lumiverse-font-mono,ui-monospace,monospace) !important";
         el.appendChild(head);
         el.appendChild(bodyEl);
         // Drag by the header. Pointer events cover mouse and touch; the header
         // captures the pointer so a fast drag outside it still tracks, and the panel
         // is kept inside the viewport.
-        let dragging = false,
-        sx = 0,
-        sy = 0,
-        ox = 0,
-        oy = 0;
+        let dragging = false, sx = 0, sy = 0, ox = 0, oy = 0;
         const onDown = (e) => {
+            // A press on one of the header's own buttons belongs to that button.
+            // Without this the drag captures the pointer out from under it.
+            try {
+                if (e && e.target && e.target.closest && e.target.closest("button"))
+                    return;
+            }
+            catch (_) { }
             dragging = true;
             const r = el.getBoundingClientRect();
-            el.style.left = r.left + 'px';
-            el.style.top = r.top + 'px';
-            el.style.right = 'auto';
-            el.style.bottom = 'auto';
+            el.style.left = r.left + "px";
+            el.style.top = r.top + "px";
+            el.style.right = "auto";
+            el.style.bottom = "auto";
             sx = e.clientX;
             sy = e.clientY;
             ox = r.left;
@@ -989,7 +1377,8 @@ export function setup(ctx, opts) {
             my = 0;
             try {
                 head.setPointerCapture(e.pointerId);
-            } catch(_) {}
+            }
+            catch (_) { }
             e.preventDefault();
         };
         // Moved with a transform while dragging rather than by rewriting left and
@@ -997,84 +1386,79 @@ export function setup(ctx, opts) {
         // event, which on a phone cannot keep up with a finger and looks like the
         // panel jumping. A transform is handled by the compositor, so it tracks the
         // finger, and the offset is folded back into left/top once on release.
-        let mx = 0,
-          my = 0,
-          frame = null;
+        let mx = 0, my = 0, frame = null;
         const paintDrag = () => {
-          frame = null;
-          el.style.transform = 'translate3d(' + mx + 'px,' + my + 'px,0)';
+            frame = null;
+            el.style.transform = "translate3d(" + mx + "px," + my + "px,0)";
         };
         const onMove = (e) => {
-          if (!dragging) return;
-          const w = el.offsetWidth || 0,
-            h = el.offsetHeight || 0;
-          const vw = (typeof window !== 'undefined' && window.innerWidth) || 360;
-          const vh = (typeof window !== 'undefined' && window.innerHeight) || 640;
-          // Clamped as an offset, so the panel cannot be dragged off the screen.
-          mx = Math.max(-ox, Math.min(e.clientX - sx, vw - w - ox));
-          my = Math.max(-oy, Math.min(e.clientY - sy, vh - h - oy));
-          // One paint per frame at most, however fast the pointer events arrive.
-          if (!frame) frame = requestAnimationFrame(paintDrag);
+            if (!dragging)
+                return;
+            const w = el.offsetWidth || 0, h = el.offsetHeight || 0;
+            const vw = (typeof window !== "undefined" && window.innerWidth) || 360;
+            const vh = (typeof window !== "undefined" && window.innerHeight) || 640;
+            // Clamped as an offset, so the panel cannot be dragged off the screen.
+            mx = Math.max(-ox, Math.min(e.clientX - sx, vw - w - ox));
+            my = Math.max(-oy, Math.min(e.clientY - sy, vh - h - oy));
+            // One paint per frame at most, however fast the pointer events arrive.
+            if (!frame)
+                frame = requestAnimationFrame(paintDrag);
         };
         const onUp = (e) => {
-          if (dragging) {
-            dragging = false;
-            try {
-              head.releasePointerCapture(e.pointerId);
-            } catch (_) {}
-            if (frame) {
-              cancelAnimationFrame(frame);
-              frame = null;
+            if (dragging) {
+                dragging = false;
+                try {
+                    head.releasePointerCapture(e.pointerId);
+                }
+                catch (_) { }
+                if (frame) {
+                    cancelAnimationFrame(frame);
+                    frame = null;
+                }
+                el.style.transform = "none";
+                el.style.left = ox + mx + "px";
+                el.style.top = oy + my + "px";
+                mx = 0;
+                my = 0;
             }
-            el.style.transform = 'none';
-            el.style.left = ox + mx + 'px';
-            el.style.top = oy + my + 'px';
-            mx = 0;
-            my = 0;
-          }
         };
-        head.addEventListener('pointerdown', onDown);
-        head.addEventListener('pointermove', onMove);
-        head.addEventListener('pointerup', onUp);
-        head.addEventListener('pointercancel', onUp);
+        head.addEventListener("pointerdown", onDown);
+        head.addEventListener("pointermove", onMove);
+        head.addEventListener("pointerup", onUp);
+        head.addEventListener("pointercancel", onUp);
         // Resize by a corner grip. CSS resize only works with a mouse, so this uses
         // the same pointer events as the drag so it also works with touch on mobile.
-        const grip = document.createElement('div');
-        grip.style.cssText = 'position:absolute;right:0;bottom:0;width:20px;height:20px;cursor:nwse-resize;touch-action:none;background:linear-gradient(135deg,transparent 45%,var(--lumiverse-border,rgba(255,255,255,.5)) 45%,var(--lumiverse-border,rgba(255,255,255,.5)) 55%,transparent 55%,transparent 70%,var(--lumiverse-border,rgba(255,255,255,.5)) 70%,var(--lumiverse-border,rgba(255,255,255,.5)) 80%,transparent 80%);border-bottom-right-radius:var(--lumiverse-radius,10px)';
+        const grip = document.createElement("div");
+        grip.style.cssText =
+            "position:absolute;right:0;bottom:0;width:20px;height:20px;cursor:nwse-resize;touch-action:none;background:linear-gradient(135deg,transparent 45%,var(--lumiverse-border,rgba(255,255,255,.5)) 45%,var(--lumiverse-border,rgba(255,255,255,.5)) 55%,transparent 55%,transparent 70%,var(--lumiverse-border,rgba(255,255,255,.5)) 70%,var(--lumiverse-border,rgba(255,255,255,.5)) 80%,transparent 80%);border-bottom-right-radius:var(--lumiverse-radius,10px)";
         el.appendChild(grip);
-        let rz = false,
-        rsx = 0,
-        rsy = 0,
-        rw = 0,
-        rh = 0,
-        pendW = 0,
-        pendH = 0,
-        rzFrame = null;
+        let rz = false, rsx = 0, rsy = 0, rw = 0, rh = 0, pendW = 0, pendH = 0, rzFrame = null;
         const paintResize = () => {
             rzFrame = null;
-            el.style.width = pendW + 'px';
-            el.style.height = pendH + 'px';
+            el.style.width = pendW + "px";
+            el.style.height = pendH + "px";
         };
         const rzDown = (e) => {
             rz = true;
             const r = el.getBoundingClientRect();
-            el.style.left = r.left + 'px';
-            el.style.top = r.top + 'px';
-            el.style.right = 'auto';
-            el.style.bottom = 'auto';
+            el.style.left = r.left + "px";
+            el.style.top = r.top + "px";
+            el.style.right = "auto";
+            el.style.bottom = "auto";
             rsx = e.clientX;
             rsy = e.clientY;
             rw = el.offsetWidth;
             rh = el.offsetHeight;
             try {
                 grip.setPointerCapture(e.pointerId);
-            } catch(_) {}
+            }
+            catch (_) { }
             e.preventDefault();
         };
         const rzMove = (e) => {
-            if (!rz) return;
-            let nw = rw + (e.clientX - rsx),
-            nh = rh + (e.clientY - rsy);
+            if (!rz)
+                return;
+            let nw = rw + (e.clientX - rsx), nh = rh + (e.clientY - rsy);
             nw = Math.max(200, Math.min(nw, window.innerWidth - 16));
             nh = Math.max(120, Math.min(nh, window.innerHeight - 16));
             // Resizing has to change layout, so a transform cannot help here the way
@@ -1082,7 +1466,8 @@ export function setup(ctx, opts) {
             // from thrashing when pointer events arrive faster than the screen redraws.
             pendW = nw;
             pendH = nh;
-            if (!rzFrame) rzFrame = requestAnimationFrame(paintResize);
+            if (!rzFrame)
+                rzFrame = requestAnimationFrame(paintResize);
         };
         const rzUp = (e) => {
             if (rz) {
@@ -1094,27 +1479,31 @@ export function setup(ctx, opts) {
                 }
                 try {
                     grip.releasePointerCapture(e.pointerId);
-                } catch(_) {}
+                }
+                catch (_) { }
             }
         };
-        grip.addEventListener('pointerdown', rzDown);
-        grip.addEventListener('pointermove', rzMove);
-        grip.addEventListener('pointerup', rzUp);
-        grip.addEventListener('pointercancel', rzUp);
+        grip.addEventListener("pointerdown", rzDown);
+        grip.addEventListener("pointermove", rzMove);
+        grip.addEventListener("pointerup", rzUp);
+        grip.addEventListener("pointercancel", rzUp);
         try {
             document.body.appendChild(el);
-        } catch(_) {
+        }
+        catch (_) {
             return;
         }
         liveLogEl = el;
         liveLogBody = bodyEl;
         renderLiveLog();
+        ensureReadableTree(el);
     }
     function hideLiveLog() {
         if (liveLogEl && liveLogEl.parentNode) {
             try {
                 liveLogEl.parentNode.removeChild(liveLogEl);
-            } catch(_) {}
+            }
+            catch (_) { }
         }
         liveLogEl = null;
         liveLogBody = null;
@@ -1127,190 +1516,215 @@ export function setup(ctx, opts) {
     let floatWidget = null;
     let floatEl = null;
     let floatWidgetSize = 0;
-
     function floatSize() {
-      const v = Math.floor(Number(cfg.floatingToggleSize));
-      return Number.isFinite(v) && v >= 28 ? Math.min(v, 96) : 44;
+        const v = Math.floor(Number(cfg.floatingToggleSize));
+        return Number.isFinite(v) && v >= 28 ? Math.min(v, 96) : 44;
     }
-
-    const vpW = () =>
-      (typeof window !== "undefined" && window.innerWidth) || 360;
-    const vpH = () =>
-      (typeof window !== "undefined" && window.innerHeight) || 640;
-
+    const vpW = () => (typeof window !== "undefined" && window.innerWidth) || 360;
+    const vpH = () => (typeof window !== "undefined" && window.innerHeight) || 640;
     function paintFloat() {
-      if (!floatEl) return;
-      const on = cfg.enabled !== false;
-      const d = floatSize();
-      floatEl.style.width = d + "px";
-      floatEl.style.height = d + "px";
-      floatEl.style.fontSize = Math.max(11, Math.round(d * 0.42)) + "px";
-      floatEl.style.background = on
-        ? "var(--lumiverse-primary-020,rgba(147,112,219,.2))"
-        : "var(--lumiverse-fill-subtle,rgba(0,0,0,.1))";
-      floatEl.style.borderColor = on
-        ? "var(--lumiverse-primary-050,rgba(147,112,219,.5))"
-        : "var(--lumiverse-border,rgba(147,112,219,.12))";
-      floatEl.style.color = on
-        ? "var(--lumiverse-primary-text,rgba(186,135,255,.95))"
-        : "var(--lumiverse-text-muted,rgba(255,255,255,.65))";
-      floatEl.style.opacity = on ? "1" : "0.75";
-      floatEl.textContent = on ? "\u21BB" : "\u2298"; // clockwise arrow / slashed circle
-      const label = on
-        ? "Auto Retry is on, tap to turn off"
-        : "Auto Retry is off, tap to turn on";
-      floatEl.title = label;
-      floatEl.setAttribute("aria-label", label);
-      floatEl.setAttribute("aria-pressed", on ? "true" : "false");
+        if (!floatEl)
+            return;
+        const on = cfg.enabled !== false;
+        const d = floatSize();
+        floatEl.style.width = d + "px";
+        floatEl.style.height = d + "px";
+        floatEl.style.fontSize = Math.max(11, Math.round(d * 0.42)) + "px";
+        floatEl.style.background = on
+            ? "var(--lumiverse-primary-020,rgba(147,112,219,.2))"
+            : "var(--lumiverse-fill-subtle,rgba(0,0,0,.1))";
+        floatEl.style.borderColor = on
+            ? "var(--lumiverse-primary-050,rgba(147,112,219,.5))"
+            : "var(--lumiverse-border,rgba(147,112,219,.12))";
+        floatEl.style.color = on
+            ? "var(--lumiverse-primary-text,rgba(186,135,255,.95))"
+            : "var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+        floatEl.style.opacity = on ? "1" : "0.75";
+        floatEl.textContent = on ? "\u21BB" : "\u2298"; // clockwise arrow / slashed circle
+        const label = on
+            ? "Auto Retry is on, tap to turn off"
+            : "Auto Retry is off, tap to turn on";
+        floatEl.title = label;
+        floatEl.setAttribute("aria-label", label);
+        floatEl.setAttribute("aria-pressed", on ? "true" : "false");
+        // The tinted fill and the symbol on it both come from the theme's accent, so
+        // on some themes they land close enough together to read as an empty circle.
+        ensureReadable(floatEl);
     }
-
     function showFloat() {
-      if (floatWidget || typeof document === "undefined") return;
-      const d = floatSize();
-      try {
-        floatWidget = ctx.ui.createFloatWidget({
-          width: d,
-          height: d,
-          // Bottom right, clear of the input bar, matching where other extensions
-          // put theirs. The host remembers wherever the user drags it after that.
-          initialPosition: { x: Math.max(16, vpW() - 72), y: Math.max(16, vpH() - 160) },
-          snapToEdge: true,
-          tooltip: "Toggle Auto Retry",
-          chromeless: true,
+        if (floatWidget || typeof document === "undefined")
+            return;
+        const d = floatSize();
+        try {
+            floatWidget = ctx.ui.createFloatWidget({
+                width: d,
+                height: d,
+                // Bottom right, clear of the input bar, matching where other extensions
+                // put theirs. The host remembers wherever the user drags it after that.
+                initialPosition: { x: Math.max(16, vpW() - 72), y: Math.max(16, vpH() - 160) },
+                snapToEdge: true,
+                tooltip: "Toggle Auto Retry",
+                chromeless: true,
+            });
+        }
+        catch (_) {
+            // Float widgets need the ui_panels permission. Without it the extension
+            // still works; there is just no floating button.
+            floatWidget = null;
+            log("host would not create a float widget; is ui_panels granted?");
+            return;
+        }
+        floatWidgetSize = d;
+        const el = document.createElement("button");
+        el.type = "button";
+        el.style.cssText =
+            "display:flex;align-items:center;justify-content:center;box-sizing:border-box;" +
+                "border-radius:50%;border:1px solid;cursor:pointer;padding:0;line-height:1;" +
+                "font-family:var(--lumiverse-font-family,system-ui);" +
+                "box-shadow:var(--lumiverse-shadow-sm,0 2px 8px rgba(0,0,0,.2));" +
+                // Only colour and scale are animated. Position is the host's business, and
+                // a transition on transform would fight its dragging.
+                "transition:background var(--lumiverse-transition-fast,150ms ease)," +
+                "border-color var(--lumiverse-transition-fast,150ms ease)," +
+                "color var(--lumiverse-transition-fast,150ms ease)," +
+                "opacity var(--lumiverse-transition-fast,150ms ease)," +
+                "transform 120ms ease";
+        el.addEventListener("pointerdown", () => {
+            el.style.transform = "scale(.94)";
         });
-      } catch (_) {
-        // Float widgets need the ui_panels permission. Without it the extension
-        // still works; there is just no floating button.
-        floatWidget = null;
-        log("host would not create a float widget; is ui_panels granted?");
-        return;
-      }
-      floatWidgetSize = d;
-      const el = document.createElement("button");
-      el.type = "button";
-      el.style.cssText =
-        "display:flex;align-items:center;justify-content:center;box-sizing:border-box;" +
-        "border-radius:50%;border:1px solid;cursor:pointer;padding:0;line-height:1;" +
-        "font-family:var(--lumiverse-font-family,system-ui);" +
-        "box-shadow:var(--lumiverse-shadow-sm,0 2px 8px rgba(0,0,0,.2));" +
-        // Only colour and scale are animated. Position is the host's business, and
-        // a transition on transform would fight its dragging.
-        "transition:background var(--lumiverse-transition-fast,150ms ease)," +
-        "border-color var(--lumiverse-transition-fast,150ms ease)," +
-        "color var(--lumiverse-transition-fast,150ms ease)," +
-        "opacity var(--lumiverse-transition-fast,150ms ease)," +
-        "transform 120ms ease";
-      el.addEventListener("pointerdown", () => {
-        el.style.transform = "scale(.94)";
-      });
-      const springBack = () => {
-        el.style.transform = "none";
-      };
-      el.addEventListener("pointerup", springBack);
-      el.addEventListener("pointercancel", springBack);
-      el.addEventListener("pointerleave", springBack);
-      el.addEventListener("click", () => {
-        springBack();
-        toggleEnabled();
-      });
-      try {
-        floatWidget.root.replaceChildren(el);
-      } catch (_) {
-        try { floatWidget.root.innerHTML = ""; floatWidget.root.appendChild(el); } catch (__) {}
-      }
-      floatEl = el;
-      paintFloat();
+        const springBack = () => {
+            el.style.transform = "none";
+        };
+        el.addEventListener("pointerup", springBack);
+        el.addEventListener("pointercancel", springBack);
+        el.addEventListener("pointerleave", springBack);
+        el.addEventListener("click", () => {
+            springBack();
+            toggleEnabled();
+        });
+        try {
+            floatWidget.root.replaceChildren(el);
+        }
+        catch (_) {
+            try {
+                floatWidget.root.innerHTML = "";
+                floatWidget.root.appendChild(el);
+            }
+            catch (__) { }
+        }
+        floatEl = el;
+        paintFloat();
     }
-
     function hideFloat() {
-      if (floatWidget) {
-        try { floatWidget.destroy(); } catch (_) {}
-      }
-      floatWidget = null;
-      floatEl = null;
-      floatWidgetSize = 0;
+        if (floatWidget) {
+            try {
+                floatWidget.destroy();
+            }
+            catch (_) { }
+        }
+        floatWidget = null;
+        floatEl = null;
+        floatWidgetSize = 0;
     }
-
     function syncFloat() {
-      if (!cfg.showFloatingToggle) {
-        hideFloat();
-        return;
-      }
-      // Width and height are set when the widget is created, so a size change
-      // means building it again rather than restyling it.
-      if (floatWidget && floatWidgetSize !== floatSize()) hideFloat();
-      showFloat();
-      paintFloat();
+        if (!cfg.showFloatingToggle) {
+            hideFloat();
+            return;
+        }
+        // Width and height are set when the widget is created, so a size change
+        // means building it again rather than restyling it.
+        if (floatWidget && floatWidgetSize !== floatSize())
+            hideFloat();
+        showFloat();
+        paintFloat();
     }
-
     // The one place the switch is flipped, so the floating button, the Extras
     // entry and the settings panel can never disagree about the state.
     function toggleEnabled() {
-      cfg.enabled = cfg.enabled === false;
-      saveSaved();
-      if (cfg.enabled === false) {
-        chats.forEach((_s, id) => standDown(id, false));
-      }
-      showToast(cfg.enabled === false ? "Auto Retry is off." : "Auto Retry is on.", {
-        force: true,
-      });
-      paintFloat();
-      syncReplaceButton();
+        cfg.enabled = cfg.enabled === false;
+        saveSaved();
+        if (cfg.enabled === false) {
+            chats.forEach((_s, id) => standDown(id, false));
+        }
+        showToast(cfg.enabled === false ? "Auto Retry is off." : "Auto Retry is on.", {
+            force: true,
+        });
+        paintFloat();
+        syncInputBarActions();
     }
-
     function syncLiveLog() {
-        if (cfg.liveLog) showLiveLog();
-        else hideLiveLog();
+        if (cfg.liveLog)
+            showLiveLog();
+        else
+            hideLiveLog();
     }
     const disposers = [];
     // Coerce a raw saved object (local cache or account storage) into a clean
     // partial config: keep only known fields, run each through its type.
     function coerceSaved(parsed) {
         const out = {};
-        if (!parsed || typeof parsed !== 'object') return out;
-        for (const g of SCHEMA) for (const f of g.fields) {
-            if (! (f.key in parsed)) continue;
-            out[f.key] = f.type === 'num' ? clampField(f, parsed[f.key]) : coerce(f.type, parsed[f.key], CONFIG[f.key]);
-        }
+        if (!parsed || typeof parsed !== "object")
+            return out;
+        for (const g of SCHEMA)
+            for (const f of g.fields) {
+                if (!(f.key in parsed))
+                    continue;
+                out[f.key] =
+                    f.type === "num"
+                        ? clampField(f, parsed[f.key])
+                        : coerce(f.type, parsed[f.key], CONFIG[f.key]);
+            }
         return out;
     }
     function loadSaved() {
         try {
-            if (typeof localStorage === 'undefined') return {};
+            if (typeof localStorage === "undefined")
+                return {};
             const raw = localStorage.getItem(STORE_KEY);
-            if (!raw) return {};
+            if (!raw)
+                return {};
             return coerceSaved(JSON.parse(raw));
-        } catch(_) {
+        }
+        catch (_) {
             return {};
         }
     }
     function saveSaved() {
         try {
-            if (typeof localStorage === 'undefined') return;
+            if (typeof localStorage === "undefined")
+                return;
             const out = {};
-            for (const g of SCHEMA) for (const f of g.fields) out[f.key] = cfg[f.key];
+            for (const g of SCHEMA)
+                for (const f of g.fields)
+                    out[f.key] = cfg[f.key];
             localStorage.setItem(STORE_KEY, JSON.stringify(out));
-        } catch(_) {}
+        }
+        catch (_) { }
     }
     function coerce(type, val, fallback) {
-        if (type === 'bool') return !! val;
-        if (type === 'num') {
+        if (type === "bool")
+            return !!val;
+        if (type === "num") {
             const n = Number(val);
-            return Number.isFinite(n) ? n: fallback;
+            return Number.isFinite(n) ? n : fallback;
         }
-        return val == null ? fallback: String(val);
+        return val == null ? fallback : String(val);
     }
     // Turn whatever is in a number box into a safe value: a blank or non-numeric
     // box falls back to that field's default, then the result is clamped to the
     // field's range and rounded if it's a whole-number field. Stops an empty or
     // silly box from poisoning the retry maths.
     function clampField(f, raw) {
-        const s = (raw == null ? '': String(raw)).trim();
-        let n = s === '' ? CONFIG[f.key] : Number(s);
-        if (!Number.isFinite(n)) n = CONFIG[f.key];
-        if (typeof f.min === 'number') n = Math.max(f.min, n);
-        if (typeof f.max === 'number') n = Math.min(f.max, n);
-        if (f.int) n = Math.round(n);
+        const s = (raw == null ? "" : String(raw)).trim();
+        let n = s === "" ? CONFIG[f.key] : Number(s);
+        if (!Number.isFinite(n))
+            n = CONFIG[f.key];
+        if (typeof f.min === "number")
+            n = Math.max(f.min, n);
+        if (typeof f.max === "number")
+            n = Math.min(f.max, n);
+        if (f.int)
+            n = Math.round(n);
         return n;
     }
     // ---- import / export ----
@@ -1318,37 +1732,99 @@ export function setup(ctx, opts) {
     // only the parts they want. Import runs every value back through the same
     // coerce/clamp as saved settings, so an imported file can only set known keys to
     // safe values; anything unrecognised is ignored.
-    const EXPORT_CATEGORIES = [{
-        id: 'retry',
-        label: 'Retry behavior',
-        keys: ['enabled', 'showFloatingToggle', 'floatingToggleSize', 'maxRetries', 'retryDelayMs', 'backoffFactor', 'maxDelayMs', 'jitter', 'rateLimitDelayMs', 'retryByNewReroll', 'stuckTimeoutMs', 'idleTimeoutMs', 'retryOnError', 'ignoreHardErrors', 'retryOnEmpty', 'retryOnTruncated', 'retryOnNoPunct', 'retryOnShort', 'minChars']
-    },
-    {
-        id: 'refusal',
-        label: 'Refusal detection',
-        keys: ['retryOnRefusal', 'refusalUseBuiltins', 'refusalMaxChars', 'refusalExtraPhrases', 'refusalPhraseSubs', 'refusalIgnorePhrases', 'refusalStripThinking', 'refusalThinkTags']
-    },
-    {
-        id: 'replace',
-        label: 'Word swaps',
-        keys: ['replaceEnabled', 'replaceRules', 'replaceRandom', 'replaceCaseSensitive', 'showReplaceButton', 'showSwapAllButton', 'showUndoSwapButton', 'allowReSwap', 'confirmBeforeEdit']
-    },
-    {
-        id: 'buttons',
-        label: 'Button selectors',
-        keys: ['regenerateSelector', 'swipeNextSelector', 'stopSelector']
-    },
-    {
-        id: 'notifications',
-        label: 'On-screen',
-        keys: ['toast', 'liveLog']
-    },
-    // Special entry: carried outside cfg. buildExport and the import handler
-    // treat it as the saved word-swap presets, not settings keys.
-    { id: 'presets', label: 'Word swap presets', keys: [] },
+    const EXPORT_CATEGORIES = [
+        {
+            id: "retry",
+            label: "Retry behavior",
+            keys: [
+                "enabled",
+                "showFloatingToggle",
+                "floatingToggleSize",
+                "showExtrasToggle",
+                "maxRetries",
+                "pauseWhenFailing",
+                "breakerRuns",
+                "breakerPauseMins",
+                "retryDelayMs",
+                "backoffFactor",
+                "maxDelayMs",
+                "jitter",
+                "rateLimitDelayMs",
+                "retryByNewReroll",
+                "stuckTimeoutMs",
+                "idleTimeoutMs",
+                "retryOnError",
+                "ignoreHardErrors",
+                "retryOnEmpty",
+                "retryOnTruncated",
+                "retryOnNoPunct",
+                "retryOnShort",
+                "minChars",
+            ],
+        },
+        {
+            id: "refusal",
+            label: "Refusal detection",
+            keys: [
+                "retryOnRefusal",
+                "refusalUseBuiltins",
+                "refusalMaxChars",
+                "refusalExtraPhrases",
+                "refusalPhraseSubs",
+                "refusalIgnorePhrases",
+                "refusalStripThinking",
+                "refusalThinkTags",
+            ],
+        },
+        {
+            id: "replace",
+            label: "Word swaps",
+            keys: [
+                "replaceEnabled",
+                "replaceRules",
+                "replaceRandom",
+                "replaceCaseSensitive",
+                "showReplaceButton",
+                "showSwapAllButton",
+                "allowReSwap",
+                "confirmBeforeEdit",
+            ],
+        },
+        {
+            id: "buttons",
+            label: "Button selectors",
+            keys: [
+                "regenerateSelector",
+                "swipeNextSelector",
+                "stopSelector",
+                "confirmButtonLabels",
+            ],
+        },
+        { id: "notifications", label: "On-screen", keys: ["toast", "liveLog"] },
+        // Special entry: carried outside cfg. buildExport and the import handler
+        // treat it as the saved word-swap presets, not settings keys.
+        { id: "presets", label: "Word swap presets", keys: [] },
     ];
     const fieldByKey = {};
-    for (const g of SCHEMA) for (const f of g.fields) fieldByKey[f.key] = f;
+    for (const g of SCHEMA)
+        for (const f of g.fields)
+            fieldByKey[f.key] = f;
+    // Safety net for the lists above. A setting added to SCHEMA but forgotten in
+    // EXPORT_CATEGORIES used to be silently dropped from every export and backup,
+    // which is invisible until someone restores a file and finds a setting missing.
+    // Anything unaccounted for is folded into the retry category rather than lost.
+    {
+        const covered = new Set();
+        for (const c of EXPORT_CATEGORIES)
+            for (const k of c.keys)
+                covered.add(k);
+        const orphans = Object.keys(fieldByKey).filter((k) => !covered.has(k));
+        if (orphans.length) {
+            for (const c of EXPORT_CATEGORIES)
+                if (c.id === "retry")
+                    c.keys = c.keys.concat(orphans);
+        }
+    }
     // Per-field functions that push a cfg value back into the on-screen control,
     // so applying a preset can update the visible fields in place without a full
     // rebuild (which would jump the scroll and close open sections). Repopulated
@@ -1362,24 +1838,30 @@ export function setup(ctx, opts) {
     const openGroups = new Set();
     function coerceKey(key, val) {
         const f = fieldByKey[key];
-        if (!f) return undefined;
-        return f.type === 'num' ? clampField(f, val) : coerce(f.type, val, CONFIG[key]);
+        if (!f)
+            return undefined;
+        return f.type === "num"
+            ? clampField(f, val)
+            : coerce(f.type, val, CONFIG[key]);
     }
     function buildExport(catIds) {
         const settings = {};
         let presetsOut = null;
         for (const c of EXPORT_CATEGORIES) {
-            if (catIds.indexOf(c.id) < 0) continue;
-            if (c.id === 'presets') {
+            if (catIds.indexOf(c.id) < 0)
+                continue;
+            if (c.id === "presets") {
                 presetsOut = loadPresets();
                 continue;
             }
             const bucket = {};
-            for (const k of c.keys) bucket[k] = cfg[k];
+            for (const k of c.keys)
+                bucket[k] = cfg[k];
             settings[c.id] = bucket;
         }
         const out = { autoRetry: VERSION, settings: settings };
-        if (presetsOut) out.presets = presetsOut;
+        if (presetsOut)
+            out.presets = presetsOut;
         return JSON.stringify(out, null, 2);
     }
     // Apply an imported blob, only the chosen categories actually present. Returns
@@ -1388,35 +1870,44 @@ export function setup(ctx, opts) {
         let data;
         try {
             data = JSON.parse(text);
-        } catch(_) {
+        }
+        catch (_) {
             return null;
         }
-        if (!data || typeof data !== 'object' || !data.settings || typeof data.settings !== 'object') return null;
+        if (!data ||
+            typeof data !== "object" ||
+            !data.settings ||
+            typeof data.settings !== "object")
+            return null;
         const applied = [];
         for (const c of EXPORT_CATEGORIES) {
-            if (catIds.indexOf(c.id) < 0) continue;
+            if (catIds.indexOf(c.id) < 0)
+                continue;
             const bucket = data.settings[c.id];
-            if (!bucket || typeof bucket !== 'object') continue;
+            if (!bucket || typeof bucket !== "object")
+                continue;
             let touched = false;
             for (const k of c.keys) {
-                if (! (k in bucket)) continue;
+                if (!(k in bucket))
+                    continue;
                 const v = coerceKey(k, bucket[k]);
                 if (v !== undefined) {
                     cfg[k] = v;
                     touched = true;
                 }
             }
-            if (touched) applied.push(c.label);
+            if (touched)
+                applied.push(c.label);
         }
         return applied;
     }
     // ---- presets ----
     // Named word-swap snapshots the user can switch between, stored per browser.
-    const PRESETS_KEY = 'lv-auto-retry:presets:v1';
+    const PRESETS_KEY = "lv-auto-retry:presets:v1";
     const PRESET_KINDS = {
         swap: {
-            catId: 'replace',
-            label: 'Word swap',
+            catId: "replace",
+            label: "Word swap",
             // A preset is the rules plus what decides how they match, and nothing
             // else. Everything omitted here is about whether the feature runs and how
             // careful it is, which belongs to the person loading the preset rather
@@ -1424,7 +1915,13 @@ export function setup(ctx, opts) {
             // rewriting replies unasked, and confirmBeforeEdit would let one remove a
             // confirmation someone chose to turn on; those two matter most.
             // Exporting still carries all of them.
-            omit: ['replaceEnabled', 'showReplaceButton', 'showSwapAllButton', 'showUndoSwapButton', 'allowReSwap', 'confirmBeforeEdit'],
+            omit: [
+                "replaceEnabled",
+                "showReplaceButton",
+                "showSwapAllButton",
+                "allowReSwap",
+                "confirmBeforeEdit",
+            ],
         },
     };
     // Derived from the export category so the two stay in step, minus whatever
@@ -1432,38 +1929,49 @@ export function setup(ctx, opts) {
     // preset saved before an omission ignores the extra keys.
     function keysForKind(kind) {
         const k = PRESET_KINDS[kind];
-        if (!k) return [];
+        if (!k)
+            return [];
         const omit = k.omit || [];
         for (const c of EXPORT_CATEGORIES)
-            if (c.id === k.catId) return c.keys.filter((key) => omit.indexOf(key) < 0);
+            if (c.id === k.catId)
+                return c.keys.filter((key) => omit.indexOf(key) < 0);
         return [];
     }
     function loadPresets() {
         const empty = { swap: [] };
         try {
-            if (typeof localStorage === 'undefined') return empty;
+            if (typeof localStorage === "undefined")
+                return empty;
             const raw = localStorage.getItem(PRESETS_KEY);
-            if (!raw) return empty;
+            if (!raw)
+                return empty;
             const data = JSON.parse(raw);
-            if (!data || typeof data !== 'object') return empty;
+            if (!data || typeof data !== "object")
+                return empty;
             const out = { swap: [] };
             for (const kind of Object.keys(out)) {
                 const arr = Array.isArray(data[kind]) ? data[kind] : [];
                 out[kind] = arr
-                    .filter((p) => p && typeof p.name === 'string' && p.values && typeof p.values === 'object')
+                    .filter((p) => p &&
+                    typeof p.name === "string" &&
+                    p.values &&
+                    typeof p.values === "object")
                     .map((p) => ({ name: p.name, values: p.values }));
             }
             return out;
-        } catch (_) {
+        }
+        catch (_) {
             return empty;
         }
     }
     function savePresets(all) {
         try {
-            if (typeof localStorage === 'undefined') return false;
+            if (typeof localStorage === "undefined")
+                return false;
             localStorage.setItem(PRESETS_KEY, JSON.stringify(all));
             return true;
-        } catch (_) {
+        }
+        catch (_) {
             return false;
         }
     }
@@ -1472,33 +1980,40 @@ export function setup(ctx, opts) {
     // in, or -1 if saving failed. Zero (including a file with none) is harmless.
     function importPresets(data) {
         const incoming = data && data.presets ? data.presets : null;
-        if (!incoming || typeof incoming !== 'object') return 0;
+        if (!incoming || typeof incoming !== "object")
+            return 0;
         const stored = loadPresets();
         let n = 0;
         for (const kind of Object.keys(stored)) {
             const arr = Array.isArray(incoming[kind]) ? incoming[kind] : [];
             for (const p of arr) {
-                if (!p || typeof p.name !== 'string' || !p.values || typeof p.values !== 'object') continue;
+                if (!p || typeof p.name !== "string" || !p.values || typeof p.values !== "object")
+                    continue;
                 const i = stored[kind].findIndex((x) => x.name === p.name);
-                if (i >= 0) stored[kind][i] = { name: p.name, values: p.values };
-                else stored[kind].push({ name: p.name, values: p.values });
+                if (i >= 0)
+                    stored[kind][i] = { name: p.name, values: p.values };
+                else
+                    stored[kind].push({ name: p.name, values: p.values });
                 n++;
             }
         }
-        if (n && !savePresets(stored)) return -1;
+        if (n && !savePresets(stored))
+            return -1;
         return n;
     }
     // Snapshot the current values of a kind's keys.
     function snapshotKind(kind) {
         const values = {};
-        for (const k of keysForKind(kind)) values[k] = cfg[k];
+        for (const k of keysForKind(kind))
+            values[k] = cfg[k];
         return values;
     }
     // Copy a preset's stored values into the live config, coercing each key.
     function applyPresetValues(kind, values) {
         let n = 0;
         for (const k of keysForKind(kind)) {
-            if (!values || !(k in values)) continue;
+            if (!values || !(k in values))
+                continue;
             const v = coerceKey(k, values[k]);
             if (v !== undefined) {
                 cfg[k] = v;
@@ -1522,7 +2037,7 @@ export function setup(ctx, opts) {
                 timer: null,
                 sawReasoning: false,
                 sawContent: false,
-                buf: '', // streamed reply text, used when the end event carries no content
+                buf: "", // streamed reply text, used when the end event carries no content
                 ignored: new Set(),
                 suppressUntil: 0,
                 startWatchdog: null,
@@ -1539,6 +2054,18 @@ export function setup(ctx, opts) {
     const BREAKER_PAUSE_DEFAULT_MS = 300000;
     let failedRuns = 0;
     let pausedUntil = 0;
+    // A running tally of what the extension has actually done since it loaded.
+    // The event log keeps only the last twenty lines, so on a long session the
+    // shape of a problem ("it retried ninety times, all of them for 'cut off'")
+    // has scrolled away by the time anyone thinks to look. This survives it, and
+    // is the difference between a bug report that can be acted on and one that
+    // says "it retries too much".
+    const stats = {
+        retries: 0,
+        gaveUp: 0,
+        good: 0,
+        reasons: {},
+    };
     // Read at the moment they are needed so a settings change takes effect without
     // a reload. Anything missing or nonsensical falls back to the default rather
     // than switching the feature off by accident.
@@ -1572,47 +2099,63 @@ export function setup(ctx, opts) {
         s.expectingStart = 0;
         s.pending = false;
     };
-    const isRateLimit = (err) => !!err && /\b(?:408|429|500|502|503|504|520|521|522|523|524)\b|rate.?limit|too many requests|quota|overloaded|timeout|temporary|network/i.test(String(err));
-    const isHardError = (err) => !!err && /\b(?:400|401|402|403|404|405|406|411|413|415|422|invalid api key|authentication|unauthorized|not found|does not exist|model missing|insufficient balance|permission|forbidden|not allowed)\b/i.test(String(err));
+    const isRateLimit = (err) => !!err &&
+        /\b(?:408|429|500|502|503|504|520|521|522|523|524)\b|rate.?limit|too many requests|quota|overloaded|timeout|temporary|network/i.test(String(err));
+    const isHardError = (err) => !!err &&
+        /\b(?:400|401|402|403|404|405|406|411|413|415|422|invalid api key|authentication|unauthorized|not found|does not exist|model missing|insufficient balance|permission|forbidden|not allowed)\b/i.test(String(err));
     const computeDelay = (attempt, rateLimited) => {
         let d = cfg.retryDelayMs * Math.pow(cfg.backoffFactor, Math.max(0, attempt - 1));
         d = Math.min(d, cfg.maxDelayMs);
-        if (rateLimited) d = Math.max(d, cfg.rateLimitDelayMs * attempt);
-        if (cfg.jitter) d = Math.round(d * (0.85 + Math.random() * 0.3));
+        if (rateLimited)
+            d = Math.max(d, cfg.rateLimitDelayMs * attempt);
+        if (cfg.jitter)
+            d = Math.round(d * (0.85 + Math.random() * 0.3));
         return d;
     };
     // A control only does something when it is enabled and actually laid out.
     // A hidden or disabled button accepts .click() and silently does nothing,
     // which would otherwise be counted as a retry that fired.
     const clickable = (el) => {
-        if (!el) return false;
+        if (!el)
+            return false;
         try {
-            if (el.disabled) return false;
-            if (el.getAttribute && el.getAttribute('aria-disabled') === 'true') return false;
-            if (el.hasAttribute && el.hasAttribute('hidden')) return false;
-            if (el.closest && el.closest('[inert]')) return false;
-            if (typeof el.getClientRects === 'function' && el.getClientRects().length === 0) return false;
-        } catch(_) {}
+            if (el.disabled)
+                return false;
+            if (el.getAttribute && el.getAttribute("aria-disabled") === "true")
+                return false;
+            if (el.hasAttribute && el.hasAttribute("hidden"))
+                return false;
+            if (el.closest && el.closest("[inert]"))
+                return false;
+            if (typeof el.getClientRects === "function" &&
+                el.getClientRects().length === 0)
+                return false;
+        }
+        catch (_) { }
         return true;
     };
     const find = (selector) => {
         // Checked in list order, not DOM order, so the first entry that yields a
         // usable control wins wherever it sits on the page.
         const parts = splitSelectorList(selector);
-        if (typeof document === 'undefined') return null;
+        if (typeof document === "undefined")
+            return null;
         for (const part of parts) {
             let list = null;
             try {
                 list = document.querySelectorAll(part);
-            } catch(_) {
+            }
+            catch (_) {
                 continue; // an invalid selector shouldn't stop the rest of the list
             }
-            if (!list || !list.length) continue;
+            if (!list || !list.length)
+                continue;
             // Walk from the end: messages render in order, so the last match belongs
             // to the newest message. Skip anything that isn't clickable, which is
             // usually a hidden control left on an older message.
             for (let i = list.length - 1; i >= 0; i--) {
-                if (clickable(list[i])) return list[i];
+                if (clickable(list[i]))
+                    return list[i];
             }
         }
         return null;
@@ -1621,15 +2164,18 @@ export function setup(ctx, opts) {
     // stop-press catcher can tell our synthetic click from the user's.
     let selfClicking = 0;
     const clickHostControl = (el) => {
-        if (!el) return false;
+        if (!el)
+            return false;
         selfClicking += 1;
         try {
             el.click();
             return true;
-        } catch(e) {
-            log('click failed', e);
+        }
+        catch (e) {
+            log("click failed", e);
             return false;
-        } finally {
+        }
+        finally {
             selfClicking -= 1;
         }
     };
@@ -1640,11 +2186,18 @@ export function setup(ctx, opts) {
     const pickRetryControl = () => {
         const swipeFirst = !!cfg.retryByNewReroll;
         const order = swipeFirst
-            ? [{ sel: cfg.swipeNextSelector, via: 'swipe' }, { sel: cfg.regenerateSelector, via: 'regenerate' }]
-            : [{ sel: cfg.regenerateSelector, via: 'regenerate' }, { sel: cfg.swipeNextSelector, via: 'swipe' }];
+            ? [
+                { sel: cfg.swipeNextSelector, via: "swipe" },
+                { sel: cfg.regenerateSelector, via: "regenerate" },
+            ]
+            : [
+                { sel: cfg.regenerateSelector, via: "regenerate" },
+                { sel: cfg.swipeNextSelector, via: "swipe" },
+            ];
         for (const step of order) {
             const btn = find(step.sel);
-            if (btn) return { btn: btn, via: step.via };
+            if (btn)
+                return { btn: btn, via: step.via };
         }
         return null;
     };
@@ -1652,7 +2205,7 @@ export function setup(ctx, opts) {
     const fireRetry = () => {
         const picked = pickRetryControl();
         if (!picked) {
-            log('no retry control found, set the button selectors in settings');
+            log("no retry control found, set the button selectors in settings");
             showToast("Auto-retry: couldn't find your retry button. Set it in Auto Retry settings.");
             return null;
         }
@@ -1661,7 +2214,8 @@ export function setup(ctx, opts) {
     };
     const stopGenerating = () => {
         const stop = find(cfg.stopSelector);
-        if (!stop) return false;
+        if (!stop)
+            return false;
         return clickHostControl(stop);
     };
     // The user wins, always. Cancel any pending retry for this chat, reset its
@@ -1679,8 +2233,9 @@ export function setup(ctx, opts) {
         s.suppressUntil = Date.now() + STAND_DOWN_MS;
         if (hadPending) {
             hideToast();
-            if (announce) showToast('Auto-retry stopped.');
-            log('stood down', chatId);
+            if (announce)
+                showToast("Auto-retry stopped.");
+            log("stood down", chatId);
         }
     }
     // A click can land without starting anything: a swipe control may just move
@@ -1732,7 +2287,7 @@ export function setup(ctx, opts) {
     const CONFIRM_MAX_CLICKS = 3;
     // Longest a dialog may stay hidden under any circumstances.
     const HIDE_FAILSAFE_MS = 4000;
-    const HIDE_CLASS = '__lvRetryHidden';
+    const HIDE_CLASS = "__lvRetryHidden";
     const DIALOG_SELECTOR = '[role="dialog"],[role="alertdialog"],[aria-modal="true"],[class*="modal" i],[class*="dialog" i],[class*="overlay" i]';
     // A confirm button lives inside a dialog. The toolbar's own Regenerate button
     // carries the same label, so without this the scan could press that instead
@@ -1743,89 +2298,117 @@ export function setup(ctx, opts) {
         let hops = 0;
         while (p && hops < 12) {
             try {
-                const role = p.getAttribute && p.getAttribute('role');
-                if (role === 'dialog' || role === 'alertdialog') return true;
-                if (p.getAttribute && p.getAttribute('data-component') === 'RegenFeedbackModal') return true;
-                if (p.getAttribute && p.getAttribute('aria-modal') === 'true') return true;
-                const cls = String((p && p.className) || '');
-                if (/modal|dialog|popover|popup|overlay|sheet|drawer/i.test(cls)) return true;
-            } catch (_) {}
+                const role = p.getAttribute && p.getAttribute("role");
+                if (role === "dialog" || role === "alertdialog")
+                    return true;
+                if (p.getAttribute && p.getAttribute("data-component") === "RegenFeedbackModal")
+                    return true;
+                if (p.getAttribute && p.getAttribute("aria-modal") === "true")
+                    return true;
+                const cls = String((p && p.className) || "");
+                if (/modal|dialog|popover|popup|overlay|sheet|drawer/i.test(cls))
+                    return true;
+            }
+            catch (_) { }
             p = p.parentElement;
             hops++;
         }
         return false;
     }
     const buttonLabel = (el) => {
-        let v = '';
+        let v = "";
         try {
-            v = (el.getAttribute && el.getAttribute('aria-label')) || (el.getAttribute && el.getAttribute('title')) || el.textContent || '';
-        } catch (_) {}
-        return String(v).replace(/\s+/g, ' ').trim();
+            v =
+                (el.getAttribute && el.getAttribute("aria-label")) ||
+                    (el.getAttribute && el.getAttribute("title")) ||
+                    el.textContent ||
+                    "";
+        }
+        catch (_) { }
+        return String(v).replace(/\s+/g, " ").trim();
     };
     // Everything currently on screen that could pass as a confirm button. Taken
     // before our click so anything already there is ruled out afterwards.
     function confirmSnapshot() {
         const out = new Set();
-        if (typeof document === 'undefined') return out;
+        if (typeof document === "undefined")
+            return out;
         let list = [];
         try {
             list = document.querySelectorAll('button,[role="button"]');
-        } catch (_) {
+        }
+        catch (_) {
             return out;
         }
         for (const el of Array.prototype.slice.call(list)) {
             const label = buttonLabel(el);
-            if (label && CONFIRM_LABELS.some((re) => re.test(label))) out.add(el);
+            if (label && CONFIRM_LABELS.some((re) => re.test(label)))
+                out.add(el);
         }
         // Dialogs already open go in the same set, so one the user opened before the
         // retry is never mistaken for one the retry raised, and never hidden.
         try {
             const dialogs = document.querySelectorAll(DIALOG_SELECTOR);
-            for (const el of Array.prototype.slice.call(dialogs)) out.add(el);
-        } catch (_) {}
+            for (const el of Array.prototype.slice.call(dialogs))
+                out.add(el);
+        }
+        catch (_) { }
         return out;
     }
     // Labels the user added, lower-cased and trimmed. Read fresh each time so a
     // settings change takes effect without a reload.
     function userConfirmLabels() {
-        return String(cfg.confirmButtonLabels || '')
+        return String(cfg.confirmButtonLabels || "")
             .split(/[\r\n]+/)
             .map((x) => x.trim().toLowerCase())
             .filter((x) => x.length > 0);
     }
     function findNewConfirm(before) {
-        if (typeof document === 'undefined') return null;
+        if (typeof document === "undefined")
+            return null;
         let list = [];
         try {
             list = document.querySelectorAll('button,[role="button"]');
-        } catch (_) {
+        }
+        catch (_) {
             return null;
         }
         const fresh = [];
         for (const el of Array.prototype.slice.call(list)) {
-            if (before.has(el)) continue; // was already there, so our click didn't raise it
+            if (before.has(el))
+                continue; // was already there, so our click didn't raise it
             const label = buttonLabel(el);
-            if (!label) continue;
+            if (!label)
+                continue;
             // The deny list guards the built-in guesses. A label typed by hand is a
             // choice they made, so it is allowed through.
             const chosen = userConfirmLabels().indexOf(label.toLowerCase()) >= 0;
-            if (!chosen && CONFIRM_DENY.test(label)) continue;
-            if (!inDialog(el)) continue; // a bare toolbar button is not a confirmation
-            if (!clickable(el)) continue;
+            if (!chosen && CONFIRM_DENY.test(label))
+                continue;
+            if (!inDialog(el))
+                continue; // a bare toolbar button is not a confirmation
+            if (!clickable(el))
+                continue;
             try {
                 // Never our own panels.
-                if (el.closest && el.closest('#__lvRetryToast,#__lvRetrySettings')) continue;
-            } catch (_) {}
+                if (el.closest && el.closest("#__lvRetryToast,#__lvRetrySettings"))
+                    continue;
+            }
+            catch (_) { }
             fresh.push(el);
         }
         // Anything the user listed comes first: they know their own setup, and a
         // build in another language will not match the built-in wording.
         for (const want of userConfirmLabels()) {
-            for (const el of fresh) if (buttonLabel(el).toLowerCase() === want) return el;
+            for (const el of fresh)
+                if (buttonLabel(el).toLowerCase() === want)
+                    return el;
         }
         // Then the built-ins, in preference order.
         for (const re of CONFIRM_LABELS) {
-            for (const el of fresh) if (re.test(buttonLabel(el))) return el;
+            for (const el of fresh)
+                if (re.test(buttonLabel(el)))
+                    return el;
         }
         return null;
     }
@@ -1838,14 +2421,17 @@ export function setup(ctx, opts) {
     let hideFailsafe = null;
     let hideStyleEl = null;
     function ensureHideStyle() {
-        if (hideStyleEl || typeof document === 'undefined') return;
+        if (hideStyleEl || typeof document === "undefined")
+            return;
         try {
-            const el = document.createElement('style');
-            el.id = '__lvRetryHideStyle';
-            el.textContent = '.' + HIDE_CLASS + '{opacity:0!important;pointer-events:none!important;transition:none!important;animation:none!important}';
+            const el = document.createElement("style");
+            el.id = "__lvRetryHideStyle";
+            el.textContent =
+                "." + HIDE_CLASS + "{opacity:0!important;pointer-events:none!important;transition:none!important;animation:none!important}";
             (document.head || document.documentElement).appendChild(el);
             hideStyleEl = el;
-        } catch (_) {}
+        }
+        catch (_) { }
     }
     function restoreHiddenDialogs() {
         if (hideFailsafe) {
@@ -1855,7 +2441,8 @@ export function setup(ctx, opts) {
         for (const el of hidden) {
             try {
                 el.classList.remove(HIDE_CLASS);
-            } catch (_) {}
+            }
+            catch (_) { }
         }
         hidden = [];
     }
@@ -1863,24 +2450,31 @@ export function setup(ctx, opts) {
     // rather than removed, and with pointer events switched off so that even in
     // the worst case an unseen dialog cannot swallow taps.
     function hideNewDialogs(before) {
-        if (typeof document === 'undefined') return;
+        if (typeof document === "undefined")
+            return;
         let list = [];
         try {
             list = document.querySelectorAll(DIALOG_SELECTOR);
-        } catch (_) {
+        }
+        catch (_) {
             return;
         }
         for (const el of Array.prototype.slice.call(list)) {
-            if (before.has(el)) continue; // was already on screen, not ours
-            if (hidden.indexOf(el) >= 0) continue;
+            if (before.has(el))
+                continue; // was already on screen, not ours
+            if (hidden.indexOf(el) >= 0)
+                continue;
             try {
-                if (el.closest && el.closest('#__lvRetryToast,#__lvRetrySettings')) continue;
-            } catch (_) {}
+                if (el.closest && el.closest("#__lvRetryToast,#__lvRetrySettings"))
+                    continue;
+            }
+            catch (_) { }
             try {
                 ensureHideStyle();
                 el.classList.add(HIDE_CLASS);
                 hidden.push(el);
-            } catch (_) {}
+            }
+            catch (_) { }
         }
         if (hidden.length && !hideFailsafe) {
             // Independent of everything else. If the watch is somehow never wound up,
@@ -1896,7 +2490,8 @@ export function setup(ctx, opts) {
         if (confirmObserver) {
             try {
                 confirmObserver.disconnect();
-            } catch (_) {}
+            }
+            catch (_) { }
             confirmObserver = null;
         }
         // A dialog only stays hidden while it is actively being clicked through.
@@ -1918,43 +2513,53 @@ export function setup(ctx, opts) {
         // it straight back.
         hideNewDialogs(before);
         const btn = findNewConfirm(before);
-        if (!btn) return false;
+        if (!btn)
+            return false;
         if (confirmClicks >= CONFIRM_MAX_CLICKS) {
-            log('dialog did not respond to being confirmed; leaving it alone');
+            log("dialog did not respond to being confirmed; leaving it alone");
             clearConfirmWatch();
             return true;
         }
         confirmClicks += 1;
-        log('a dialog opened after the retry click; confirming it');
+        log("a dialog opened after the retry click; confirming it");
+        // Kept in the hidden list until the watch ends: if this press dismisses it
+        // the element goes away and restoring it is a no-op, and if it does not the
+        // dialog reappears rather than being stranded.
         // The observer is dropped here but the timer keeps running: our own press
         // churns the page, and reacting to that would spin. The timer looks again
         // shortly, so a press that did not take is tried once more.
         if (confirmObserver) {
             try {
                 confirmObserver.disconnect();
-            } catch (_) {}
+            }
+            catch (_) { }
             confirmObserver = null;
         }
         clickHostControl(btn);
         return false;
     }
     function watchForConfirm(before, tries) {
-        const first = typeof tries !== 'number';
+        const first = typeof tries !== "number";
         const left = first ? CONFIRM_TRIES : tries;
         if (first) {
             clearConfirmWatch();
             confirmClicks = 0;
             try {
-                if (typeof MutationObserver !== 'undefined' && document.body) {
+                if (typeof MutationObserver !== "undefined" && document.body) {
                     confirmObserver = new MutationObserver(() => {
                         tryConfirm(before);
                     });
-                    confirmObserver.observe(document.body, { childList: true, subtree: true });
+                    confirmObserver.observe(document.body, {
+                        childList: true,
+                        subtree: true,
+                    });
                 }
-            } catch (_) {
+            }
+            catch (_) {
                 confirmObserver = null;
             }
-        } else if (confirmTimer) {
+        }
+        else if (confirmTimer) {
             clearTimeout(confirmTimer);
             confirmTimer = null;
         }
@@ -1964,7 +2569,8 @@ export function setup(ctx, opts) {
         }
         confirmTimer = setTimeout(() => {
             confirmTimer = null;
-            if (tryConfirm(before)) return;
+            if (tryConfirm(before))
+                return;
             watchForConfirm(before, left - 1);
         }, first ? CONFIRM_FIRST_MS : CONFIRM_POLL_MS);
     }
@@ -1974,60 +2580,65 @@ export function setup(ctx, opts) {
         // The caller marks the click before making it. If a start already arrived,
         // which happens when the host dispatches its event straight off the click,
         // there is nothing left to watch.
-        if (!s.expectingStart) return;
-        const left = typeof waits === 'number' ? waits : START_WAIT_ROUNDS;
-        if (s.startWatchdog) clearTimeout(s.startWatchdog);
+        if (!s.expectingStart)
+            return;
+        const left = typeof waits === "number" ? waits : START_WAIT_ROUNDS;
+        if (s.startWatchdog)
+            clearTimeout(s.startWatchdog);
         s.startWatchdog = setTimeout(() => {
             s.startWatchdog = null;
-            if (!s.expectingStart) return; // a generation started, nothing to do
+            if (!s.expectingStart)
+                return; // a generation started, nothing to do
             // The stop control being on screen means something is generating and the
             // start event is just slow. Clicking again here would stack a second
             // generation, so this waits a few more rounds before deciding.
             if (left > 0 && find(cfg.stopSelector)) {
-                log('retry click has not reported a start yet; waiting', chatId);
+                log("retry click has not reported a start yet; waiting", chatId);
                 armStartWatchdog(chatId, via, allowFallback, left - 1);
                 return;
             }
             s.expectingStart = 0;
             if (allowFallback) {
-                const otherSel = via === 'swipe' ? cfg.regenerateSelector : cfg.swipeNextSelector;
-                const otherVia = via === 'swipe' ? 'regenerate' : 'swipe';
+                const otherSel = via === "swipe" ? cfg.regenerateSelector : cfg.swipeNextSelector;
+                const otherVia = via === "swipe" ? "regenerate" : "swipe";
                 const other = find(otherSel);
                 if (other) {
                     s.expectingStart = Date.now();
                     const beforeOther = confirmSnapshot();
                     watchForConfirm(beforeOther);
                     if (clickHostControl(other)) {
-                        log('no generation after the ' + via + ' click, trying ' + otherVia, chatId);
+                        log("no generation after the " + via + " click, trying " + otherVia, chatId);
                         armStartWatchdog(chatId, otherVia, false);
                         return;
                     }
                     s.expectingStart = 0;
                 }
             }
-            log('retry click produced no generation; resetting stale state', chatId);
+            log("retry click produced no generation; resetting stale state", chatId);
             s.selfTriggered = false;
             s.attempts = 0;
-        },
-        START_GRACE_MS);
+        }, START_GRACE_MS);
     }
     function scheduleRetry(chatId, reason, err) {
         const s = st(chatId);
-        if (!cfg.enabled || s.pending) return;
+        if (!cfg.enabled || s.pending)
+            return;
         if (cfg.pauseWhenFailing && Date.now() < pausedUntil) {
-            log('paused after repeated failures, not retrying', chatId);
+            log("paused after repeated failures, not retrying", chatId);
             return;
         }
         if (Date.now() < s.suppressUntil) {
-            log('suppressed (just stopped/cancelled)', chatId);
+            log("suppressed (just stopped/cancelled)", chatId);
             return;
         }
         if (s.attempts >= cfg.maxRetries) {
-            log('gave up', chatId, reason);
+            log("gave up", chatId, reason);
             s.attempts = 0;
             // A try limit of zero means no retry was ever made, so there is no failed
             // run to count and nothing worth announcing.
-            if (cfg.maxRetries <= 0) return;
+            if (cfg.maxRetries <= 0)
+                return;
+            stats.gaveUp += 1;
             failedRuns += 1;
             const runsNeeded = breakerRuns();
             if (cfg.pauseWhenFailing && failedRuns >= runsNeeded) {
@@ -2035,26 +2646,44 @@ export function setup(ctx, opts) {
                 const mins = Math.round(pauseMs / 60000);
                 pausedUntil = Date.now() + pauseMs;
                 failedRuns = 0;
-                log('paused for ' + mins + ' min after ' + runsNeeded + ' failed runs');
+                log("paused for " + mins + " min after " + runsNeeded + " failed runs");
                 // Forced: the toast setting covers the pop-up on each retry, and going
                 // quiet for minutes at a time is a state change, not a retry. A
                 // user who sees nothing has no way to tell this from the thing breaking.
-                showToast('Auto-retry paused for ' + mins + (mins === 1 ? ' minute' : ' minutes') + ': the last ' + runsNeeded + (runsNeeded === 1 ? ' run' : ' runs') + ' failed.', { force: true });
-            } else {
-                showToast('Auto-retry: gave up after ' + cfg.maxRetries + ' tries.');
+                showToast("Auto-retry paused for " + mins + (mins === 1 ? " minute" : " minutes") +
+                    ": the last " + runsNeeded + (runsNeeded === 1 ? " run" : " runs") + " failed.", { force: true });
+            }
+            else {
+                showToast("Auto-retry: gave up after " + cfg.maxRetries + " tries.");
             }
             return;
         }
         s.attempts += 1;
+        stats.retries += 1;
+        stats.reasons[reason] = (stats.reasons[reason] || 0) + 1;
         const rl = isRateLimit(err);
         const delay = computeDelay(s.attempts, rl);
         clearTimers(s);
         s.pending = true;
-        log('retry ' + s.attempts + '/' + cfg.maxRetries + ' in ' + delay + 'ms (' + reason + (rl ? ', rate-limited': '') + ')');
-        showToast('Retrying ' + s.attempts + '/' + cfg.maxRetries + ' (' + reason + ') in ' + (delay / 1000).toFixed(1) + 's', {
-            cancel: () => standDown(chatId, true),
-            sticky: true
-        });
+        log("retry " +
+            s.attempts +
+            "/" +
+            cfg.maxRetries +
+            " in " +
+            delay +
+            "ms (" +
+            reason +
+            (rl ? ", rate-limited" : "") +
+            ")");
+        showToast("Retrying " +
+            s.attempts +
+            "/" +
+            cfg.maxRetries +
+            " (" +
+            reason +
+            ") in " +
+            (delay / 1000).toFixed(1) +
+            "s", { cancel: () => standDown(chatId, true), sticky: true });
         s.timer = setTimeout(() => {
             s.timer = null;
             s.pending = false;
@@ -2077,8 +2706,7 @@ export function setup(ctx, opts) {
                 return;
             }
             armStartWatchdog(chatId, via, true);
-        },
-        delay);
+        }, delay);
     }
     // Stalled or stuck. Halt the dead generation (best effort) and retry.
     // Any terminal events the dead generation fires next (a stop, then maybe an
@@ -2089,13 +2717,15 @@ export function setup(ctx, opts) {
         clearTimers(s);
         if (s.genId != null) {
             s.ignored.add(s.genId);
-            while (s.ignored.size > IGNORE_MAX) s.ignored.delete(s.ignored.values().next().value);
+            while (s.ignored.size > IGNORE_MAX)
+                s.ignored.delete(s.ignored.values().next().value);
         }
         stopGenerating();
         scheduleRetry(chatId, reason);
     }
     function onStart(p) {
-        if (!p || !p.chatId) return;
+        if (!p || !p.chatId)
+            return;
         const s = st(p.chatId);
         if (s.startWatchdog) {
             clearTimeout(s.startWatchdog);
@@ -2104,7 +2734,7 @@ export function setup(ctx, opts) {
         s.expectingStart = 0;
         lastChatId = p.chatId;
         lastMessageId = p.messageId;
-        log('gen start', p.generationId, s.selfTriggered ? '(auto-retry)': '(user)');
+        log("gen start", p.generationId, s.selfTriggered ? "(auto-retry)" : "(user)");
         if (!s.selfTriggered) {
             s.attempts = 0;
             s.suppressUntil = 0;
@@ -2114,32 +2744,36 @@ export function setup(ctx, opts) {
         clearConfirmWatch(); // a reply is running, so no dialog is in the way
         s.sawReasoning = false;
         s.sawContent = false;
-        s.buf = '';
+        s.buf = "";
         clearTimers(s);
         if (cfg.enabled && cfg.stuckTimeoutMs > 0) {
-            s.startTimer = setTimeout(() => abortAndRetry(p.chatId, 'stuck'), cfg.stuckTimeoutMs);
+            s.startTimer = setTimeout(() => abortAndRetry(p.chatId, "stuck"), cfg.stuckTimeoutMs);
         }
     }
     // The text a token event carries. Builds name this field differently, so the
     // first string among the known names is used and anything else is ignored.
     function tokenText(p) {
-        for (const k of ['token', 'text', 'delta', 'content', 'chunk']) {
-            if (p && typeof p[k] === 'string') return p[k];
+        for (const k of ["token", "text", "delta", "content", "chunk"]) {
+            if (p && typeof p[k] === "string")
+                return p[k];
         }
-        return '';
+        return "";
     }
     function onToken(p) {
-        if (!p || !p.chatId) return;
+        if (!p || !p.chatId)
+            return;
         const s = st(p.chatId);
         // Matched by shape, not an exact string, so a build that labels these
         // "reasoning_content" or "thinking" is not counted as visible reply text.
-        if (/reason|think/i.test(String((p && p.type) || ''))) s.sawReasoning = true;
+        if (/reason|think/i.test(String((p && p.type) || "")))
+            s.sawReasoning = true;
         else {
             s.sawContent = true;
             const piece = tokenText(p);
             if (piece) {
                 s.buf += piece;
-                if (s.buf.length > STREAM_BUF_MAX) s.buf = s.buf.slice(-STREAM_BUF_MAX);
+                if (s.buf.length > STREAM_BUF_MAX)
+                    s.buf = s.buf.slice(-STREAM_BUF_MAX);
             }
         }
         // streaming is alive: drop the start watchdog, arm the idle watchdog
@@ -2148,19 +2782,22 @@ export function setup(ctx, opts) {
             s.startTimer = null;
         }
         if (cfg.enabled && cfg.idleTimeoutMs > 0) {
-            if (s.idleTimer) clearTimeout(s.idleTimer);
-            s.idleTimer = setTimeout(() => abortAndRetry(p.chatId, 'stalled'), cfg.idleTimeoutMs);
+            if (s.idleTimer)
+                clearTimeout(s.idleTimer);
+            s.idleTimer = setTimeout(() => abortAndRetry(p.chatId, "stalled"), cfg.idleTimeoutMs);
         }
     }
     function onEnd(p) {
-        if (!p || !p.chatId) return;
+        if (!p || !p.chatId)
+            return;
         const s = st(p.chatId);
         lastChatId = p.chatId;
         lastMessageId = p.messageId;
-        if (s.ignored.has(p.generationId)) return; // aborted gen's trailing event, retry already scheduled
+        if (s.ignored.has(p.generationId))
+            return; // aborted gen's trailing event, retry already scheduled
         clearTimers(s);
         if (Date.now() < s.suppressUntil) {
-            log('gen end ignored (just stopped)');
+            log("gen end ignored (just stopped)");
             s.attempts = 0;
             return;
         } // user just stopped; do not retry
@@ -2168,17 +2805,17 @@ export function setup(ctx, opts) {
             // A content-moderation block we can retry as a refusal is not a permanent
             // failure, so don't let the hard-error skip swallow it before the refusal check.
             if (cfg.ignoreHardErrors && isHardError(p.error) && !(cfg.retryOnRefusal && looksLikeRefusalError(String(p.error), cfg))) {
-                log('hard error ignored', p.error);
-                showToast('Auto-retry skipped: hard failure (auth/model).');
+                log("hard error ignored", p.error);
+                showToast("Auto-retry skipped: hard failure (auth/model).");
                 s.attempts = 0;
                 return;
             }
             if (cfg.retryOnError) {
-                scheduleRetry(p.chatId, 'error', p.error);
+                scheduleRetry(p.chatId, "error", p.error);
                 return;
             }
             if (cfg.retryOnRefusal && looksLikeRefusalError(String(p.error), cfg)) {
-                scheduleRetry(p.chatId, 'looks like an accidental refusal');
+                scheduleRetry(p.chatId, "looks like an accidental refusal");
                 return;
             }
             return;
@@ -2186,60 +2823,62 @@ export function setup(ctx, opts) {
         // Not every build puts the finished text on the end event. When it is
         // missing, what actually streamed stands in for it, so a good reply is not
         // read as empty and every check below still has real text to work with.
-        const hasContentField = typeof p.content === 'string';
-        const content = (hasContentField ? p.content : (s.buf || '')).trim();
+        const hasContentField = typeof p.content === "string";
+        const content = (hasContentField ? p.content : s.buf || "").trim();
         // Empty only when the payload says so, or when nothing streamed either. A
         // missing field plus tokens that carried no readable text is not a verdict,
         // so it is left alone rather than re-rolled on a guess.
         const isEmpty = content.length === 0 && (hasContentField || !s.sawContent);
         if (cfg.retryOnEmpty && isEmpty) {
-            scheduleRetry(p.chatId, (s.sawReasoning && !s.sawContent) ? 'cut off mid-reasoning': 'empty');
+            scheduleRetry(p.chatId, s.sawReasoning && !s.sawContent ? "cut off mid-reasoning" : "empty");
             return;
         }
         if (content.length === 0) {
-            log('gen end with no readable content; leaving it alone');
+            log("gen end with no readable content; leaving it alone");
             s.attempts = 0;
             return;
         }
         // Inline-reasoning models can put everything, refusal included, inside a
         // think block and never write a reply. The raw content isn't empty then,
         // but nothing outside the thinking is, so treat it as empty and retry.
-        if (cfg.retryOnEmpty && content.length > 0 && stripThinkingAlways(content, cfg).trim().length === 0) {
-            scheduleRetry(p.chatId, 'thinking only, no reply');
+        if (cfg.retryOnEmpty &&
+            content.length > 0 &&
+            stripThinkingAlways(content, cfg).trim().length === 0) {
+            scheduleRetry(p.chatId, "thinking only, no reply");
             return;
         }
         if (cfg.retryOnTruncated && looksTruncated(content, cfg.retryOnNoPunct, cfg)) {
-            scheduleRetry(p.chatId, 'cut off');
+            scheduleRetry(p.chatId, "cut off");
             return;
         }
         if (cfg.retryOnRefusal && looksLikeRefusal(content, cfg)) {
-            scheduleRetry(p.chatId, 'looks like an accidental refusal');
+            scheduleRetry(p.chatId, "looks like an accidental refusal");
             return;
         }
         // Measured on the visible reply, not the raw output. A reasoning block can
         // run to hundreds of characters, so counting it would let a two-word reply
         // pass the length test on a thinking model.
-        if (cfg.retryOnShort && stripThinkingAlways(content, cfg).trim().length < cfg.minChars) {
-            scheduleRetry(p.chatId, 'short');
+        if (cfg.retryOnShort &&
+            stripThinkingAlways(content, cfg).trim().length < cfg.minChars) {
+            scheduleRetry(p.chatId, "short");
             return;
         }
         // A reply that came back fine means whatever was wrong has cleared.
         failedRuns = 0;
         pausedUntil = 0;
-        log('gen ok', content.length + ' chars');
+        stats.good += 1;
+        log("gen ok", content.length + " chars");
         s.attempts = 0; // clean success
     }
     function onStop(p) {
-        if (!p || !p.chatId) return;
+        if (!p || !p.chatId)
+            return;
         const s = st(p.chatId);
-        if (s.ignored.has(p.generationId)) return; // our own abort, not a user stop
-        log('user stop', p.generationId);
+        if (s.ignored.has(p.generationId))
+            return; // our own abort, not a user stop
+        log("user stop", p.generationId);
         standDown(p.chatId, true); // genuine user stop: stand down, don't fight them
     }
-    // Backup for the user's Stop press: if the host's GENERATION_STOPPED event is
-    // late or never fires, catch the click on the stop button itself and stand
-    // every pending retry down. Delegated + capture so it survives the host
-    // re-rendering its buttons.
     // The host saves a swapped reply without redrawing the chat, so the old words
     // stay on screen until the view is rebuilt. This applies the same swaps to the
     // rendered text. Only text nodes are touched, so markdown, formatting and any
@@ -2249,44 +2888,51 @@ export function setup(ctx, opts) {
     // reply. Whole-chat swaps pass false and replace every occurrence, since every
     // message really was changed.
     function applySwapsToView(pairs, last) {
-        if (typeof document === 'undefined' || !pairs || !pairs.length) return 0;
+        if (typeof document === "undefined" || !pairs || !pairs.length)
+            return 0;
         const SKIP = /^(SCRIPT|STYLE|TEXTAREA|INPUT|SELECT|OPTION)$/;
         let done = 0;
         for (const pair of pairs) {
-            const from = String(pair && pair[0] != null ? pair[0] : '');
-            const to = String(pair && pair[1] != null ? pair[1] : '');
-            if (!from || from === to) continue;
+            const from = String(pair && pair[0] != null ? pair[0] : "");
+            const to = String(pair && pair[1] != null ? pair[1] : "");
+            if (!from || from === to)
+                continue;
             // The backend matches whole words for single-word rules, so a literal
             // replace here would also hit "dogged" when the rule was "dog". This
             // rebuilds the same boundary the backend used.
             let re = null;
             try {
-                const esc = from.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                const lead = /^[\p{L}\p{N}]/u.test(from) ? '\\b' : '';
-                const tail = /[\p{L}\p{N}]$/u.test(from) ? '\\b' : '';
-                re = new RegExp(lead + esc + tail, 'gu');
-            } catch (__) {
+                const esc = from.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+                const lead = /^[\p{L}\p{N}]/u.test(from) ? "\\b" : "";
+                const tail = /[\p{L}\p{N}]$/u.test(from) ? "\\b" : "";
+                re = new RegExp(lead + esc + tail, "gu");
+            }
+            catch (__) {
                 re = null;
             }
             const hits = [];
             let walker = null;
             try {
                 walker = document.createTreeWalker(document.body, 4 /* SHOW_TEXT */);
-            } catch (_) {
+            }
+            catch (_) {
                 return done;
             }
             let node = walker.nextNode ? walker.nextNode() : null;
             while (node) {
                 const parent = node.parentElement;
-                let skip = !parent || SKIP.test(String(parent.tagName || ''));
+                let skip = !parent || SKIP.test(String(parent.tagName || ""));
                 // Our own panels and anything the user is typing into are off limits.
                 if (!skip && parent.closest) {
                     try {
                         skip = !!parent.closest("#__lvRetryToast,#__lvRetrySettings,[contenteditable='true']");
-                    } catch (__) {}
+                    }
+                    catch (__) { }
                 }
-                if (!skip && re && re.test(String(node.nodeValue || ''))) hits.push(node);
-                if (re) re.lastIndex = 0;
+                if (!skip && re && re.test(String(node.nodeValue || "")))
+                    hits.push(node);
+                if (re)
+                    re.lastIndex = 0;
                 node = walker.nextNode();
             }
             const targets = last ? hits.slice(-1) : hits;
@@ -2295,104 +2941,134 @@ export function setup(ctx, opts) {
                     re.lastIndex = 0;
                     t.nodeValue = String(t.nodeValue).replace(re, to);
                     done++;
-                } catch (__) {}
+                }
+                catch (__) { }
             }
         }
         return done;
     }
+    // Backup for the user's Stop press: if the host's GENERATION_STOPPED event is
+    // late or never fires, catch the click on the stop button itself and stand
+    // every pending retry down. Delegated + capture so it survives the host
+    // re-rendering its buttons.
     function onDocClick(e) {
         try {
             // A stalled reply is halted by clicking that same stop button, and that
             // click reaches here too. Standing down on it would suppress the retry
             // being scheduled right behind it, so our own clicks are skipped.
-            if (selfClicking > 0) return;
+            if (selfClicking > 0)
+                return;
             // Any click by the user during the short window after a retry means the
             // user is driving. Back off rather than press a dialog button underneath
             // them, which could take a feedback prompt they opened themselves.
             clearConfirmWatch();
-            const tgt = e && e.target && e.target.closest ? e.target.closest(cfg.stopSelector) : null;
-            if (!tgt) return;
+            const tgt = e && e.target && e.target.closest
+                ? e.target.closest(cfg.stopSelector)
+                : null;
+            if (!tgt)
+                return;
             chats.forEach((s, id) => {
-                if (s.pending || s.timer || s.attempts > 0) standDown(id, true);
+                if (s.pending || s.timer || s.attempts > 0)
+                    standDown(id, true);
             });
-        } catch(_) {}
+        }
+        catch (_) { }
     }
     // ---- toast with an optional Cancel button ----
     function ensureToast() {
-        if (typeof document === 'undefined') return null;
-        let t = document.getElementById('__lvRetryToast');
+        if (typeof document === "undefined")
+            return null;
+        let t = document.getElementById("__lvRetryToast");
         if (!t) {
-            t = document.createElement('div');
-            t.id = '__lvRetryToast';
-            t.style.cssText = 'position:fixed;bottom:max(20px,env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);' + 'z-index:2147483647;display:flex;align-items:center;gap:10px;' + 'font:13px/1.4 var(--lumiverse-font-family,system-ui);padding:9px 12px;border-radius:var(--lumiverse-radius,12px);' + 'color:var(--lumiverse-text,#fff);background:var(--lumiverse-fill,rgba(20,16,30,.96));' + 'border:1px solid var(--lumiverse-border,rgba(255,255,255,.18));' + 'box-shadow:var(--lumiverse-shadow-md,0 8px 24px rgba(0,0,0,.4));transition:opacity var(--lumiverse-transition,200ms ease);' + 'opacity:0;max-width:min(92vw,460px);text-align:left';
+            t = document.createElement("div");
+            t.id = "__lvRetryToast";
+            t.style.cssText =
+                "position:fixed;bottom:max(20px,env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);" +
+                    "z-index:2147483647;display:flex;align-items:center;gap:10px;" +
+                    "font:13px/1.4 var(--lumiverse-font-family,system-ui);padding:9px 12px;border-radius:var(--lumiverse-radius,12px);" +
+                    "color:var(--lumiverse-text,#fff);background:var(--lumiverse-fill,rgba(20,16,30,.96));" +
+                    "border:1px solid var(--lumiverse-border,rgba(255,255,255,.18));" +
+                    "box-shadow:var(--lumiverse-shadow-md,0 8px 24px rgba(0,0,0,.4));transition:opacity var(--lumiverse-transition,200ms ease);" +
+                    "opacity:0;max-width:min(92vw,460px);text-align:left";
             (document.body || document.documentElement).appendChild(t);
         }
         return t;
     }
     function hideToast() {
-        const t = (typeof document !== 'undefined') && document.getElementById('__lvRetryToast');
+        const t = typeof document !== "undefined" &&
+            document.getElementById("__lvRetryToast");
         if (t) {
             clearTimeout(t.__h);
-            t.style.opacity = '0';
-            t.style.pointerEvents = 'none';
+            t.style.opacity = "0";
+            t.style.pointerEvents = "none";
         }
     }
     function showToast(msg, opts) {
         // force is for messages the user has to see to understand what the app is
         // doing right now, like the button picker waiting for a click. Everything
         // else still respects the toast setting.
-        if (!cfg.toast && !(opts && opts.force)) return;
+        if (!cfg.toast && !(opts && opts.force))
+            return;
         const t = ensureToast();
-        if (!t) return;
+        if (!t)
+            return;
         try {
-            t.innerHTML = '';
-            const span = document.createElement('span');
+            t.innerHTML = "";
+            const span = document.createElement("span");
             span.textContent = msg;
-            span.style.cssText = 'flex:1';
+            span.style.cssText = "flex:1";
             t.appendChild(span);
             if (opts && opts.cancel) {
-                const c = document.createElement('button');
-                c.textContent = 'Cancel';
-                c.style.cssText = 'flex:none;min-height:36px;padding:6px 14px;border-radius:var(--lumiverse-radius,8px);cursor:pointer;' + 'font:13px var(--lumiverse-font-family,system-ui);' + 'border:1px solid var(--lumiverse-border,rgba(255,255,255,.28));' + 'background:var(--lumiverse-fill-subtle,rgba(255,255,255,.08));color:var(--lumiverse-text,#fff)';
-                c.addEventListener('click', () => {
+                const c = document.createElement("button");
+                c.textContent = "Cancel";
+                c.style.cssText =
+                    "flex:none;min-height:36px;padding:6px 14px;border-radius:var(--lumiverse-radius,8px);cursor:pointer;" +
+                        "font:13px var(--lumiverse-font-family,system-ui);" +
+                        "border:1px solid var(--lumiverse-border,rgba(255,255,255,.28));" +
+                        "background:var(--lumiverse-fill-subtle,rgba(255,255,255,.08));color:var(--lumiverse-text,#fff)";
+                c.addEventListener("click", () => {
                     try {
                         opts.cancel && opts.cancel();
-                    } catch(_) {}
+                    }
+                    catch (_) { }
                 });
                 const cClear = () => {
-                    c.style.filter = 'none';
+                    c.style.filter = "none";
                 };
-                c.addEventListener('pointerdown', () => {
-                    c.style.filter = 'brightness(1.2)';
+                c.addEventListener("pointerdown", () => {
+                    c.style.filter = "brightness(1.2)";
                 });
-                c.addEventListener('pointerup', cClear);
-                c.addEventListener('pointercancel', cClear);
-                c.addEventListener('pointerleave', cClear);
+                c.addEventListener("pointerup", cClear);
+                c.addEventListener("pointercancel", cClear);
+                c.addEventListener("pointerleave", cClear);
                 t.appendChild(c);
-                t.style.pointerEvents = 'auto';
-            } else {
-                t.style.pointerEvents = 'none';
+                t.style.pointerEvents = "auto";
+            }
+            else {
+                t.style.pointerEvents = "none";
             }
             // Both edges are set every time, so a normal toast after a top-anchored one
             // goes back to the bottom. The picker anchors to the top because the
             // buttons it is asking you to click sit at the bottom, under this.
             if (opts && opts.top) {
-                t.style.top = 'max(20px,env(safe-area-inset-top,0px))';
-                t.style.bottom = 'auto';
-            } else {
-                t.style.top = 'auto';
-                t.style.bottom = 'max(20px,env(safe-area-inset-bottom,0px))';
+                t.style.top = "max(20px,env(safe-area-inset-top,0px))";
+                t.style.bottom = "auto";
             }
-            t.style.opacity = '1';
+            else {
+                t.style.top = "auto";
+                t.style.bottom = "max(20px,env(safe-area-inset-bottom,0px))";
+            }
+            t.style.opacity = "1";
+            ensureReadableTree(t);
             clearTimeout(t.__h);
-            if (! (opts && opts.sticky)) {
+            if (!(opts && opts.sticky)) {
                 t.__h = setTimeout(() => {
-                    t.style.opacity = '0';
-                    t.style.pointerEvents = 'none';
-                },
-                3200);
+                    t.style.opacity = "0";
+                    t.style.pointerEvents = "none";
+                }, 3200);
             }
-        } catch(_) {}
+        }
+        catch (_) { }
     }
     // ---- debug info for bug reports ----
     // A one-tap snapshot anyone can paste into a report without opening dev tools:
@@ -2403,93 +3079,136 @@ export function setup(ctx, opts) {
     // matches anything, so a match on a hidden or disabled control is not read as
     // a working button.
     function selectorState(sel) {
-        const raw = String(sel || '').trim();
-        if (!raw) return 'not set';
-        if (find(raw)) return 'match';
+        const raw = String(sel || "").trim();
+        if (!raw)
+            return "not set";
+        if (find(raw))
+            return "match";
         const parts = splitSelectorList(raw);
         let anyValid = false;
         for (const part of parts) {
             try {
-                if (document.querySelector(part)) return 'match, not clickable right now';
+                if (document.querySelector(part))
+                    return "match, not clickable right now";
                 anyValid = true;
-            } catch(_) {}
+            }
+            catch (_) { }
         }
-        return anyValid ? 'no match': 'invalid selector';
+        return anyValid ? "no match" : "invalid selector";
     }
     function buildDebugInfo(opts) {
         const o = opts || {};
         const inc = (v) => v !== false; // sections default to on
-        const keys = ['enabled', 'showFloatingToggle', 'floatingToggleSize', 'maxRetries', 'retryDelayMs', 'backoffFactor', 'maxDelayMs', 'jitter', 'rateLimitDelayMs', 'retryByNewReroll', 'stuckTimeoutMs', 'idleTimeoutMs', 'retryOnError', 'ignoreHardErrors', 'retryOnEmpty', 'retryOnTruncated', 'retryOnNoPunct', 'retryOnShort', 'minChars', 'retryOnRefusal', 'refusalUseBuiltins', 'refusalMaxChars', 'refusalExtraPhrases', 'refusalPhraseSubs', 'refusalIgnorePhrases', 'refusalStripThinking', 'refusalThinkTags', 'replaceEnabled', 'replaceRules', 'replaceRandom', 'replaceCaseSensitive', 'showReplaceButton', 'showSwapAllButton', 'showUndoSwapButton', 'allowReSwap', 'confirmBeforeEdit', 'liveLog', 'toast'];
+        // Taken from the schema rather than listed again here. The old hand-kept
+        // list had drifted, so settings added later were missing from every report,
+        // which is exactly the information a bug report is supposed to carry. The
+        // selectors are printed in full by the buttons section below instead.
+        const keys = Object.keys(fieldByKey).filter((k) => !fieldByKey[k].selector);
         const lines = [];
-        lines.push('Auto Retry v' + VERSION + ' debug info');
-        lines.push('time: ' + new Date().toISOString());
+        lines.push("Auto Retry v" + VERSION + " debug info");
+        lines.push("time: " + new Date().toISOString());
         // Always included, whatever categories are ticked. This is the first thing
         // to check when retries have stopped happening, so it must never be the
         // part someone left out of the report.
         const pauseLeftMs = pausedUntil - Date.now();
-        lines.push('auto-retry: ' + (cfg.enabled === false ? 'off in settings' : (cfg.pauseWhenFailing && pauseLeftMs > 0 ? 'PAUSED by the failure breaker, ' + Math.ceil(pauseLeftMs / 1000) + 's left' : 'active')) + ' (failed runs in a row: ' + failedRuns + ' of ' + breakerRuns() + ')');
+        lines.push("auto-retry: " +
+            (cfg.enabled === false
+                ? "off in settings"
+                : cfg.pauseWhenFailing && pauseLeftMs > 0
+                    ? "PAUSED by the failure breaker, " +
+                        Math.ceil(pauseLeftMs / 1000) +
+                        "s left"
+                    : "active") +
+            " (failed runs in a row: " + failedRuns + " of " + breakerRuns() + ")");
         if (inc(o.settings)) {
-            lines.push('');
-            lines.push('settings:');
-            for (const k of keys) lines.push('  ' + k + ': ' + JSON.stringify(cfg[k]));
+            lines.push("");
+            lines.push("settings:");
+            for (const k of keys)
+                lines.push("  " + k + ": " + JSON.stringify(cfg[k]));
         }
         if (inc(o.buttons)) {
-            lines.push('');
-            lines.push('buttons (checked right now):');
-            lines.push('  retry mode: ' + (cfg.retryByNewReroll ? 'new reroll (swipe first, regenerate as fallback)' : 'regenerate (swipe as fallback)'));
-            lines.push('  regenerate: ' + selectorState(cfg.regenerateSelector));
-            lines.push('  swipeNext:  ' + selectorState(cfg.swipeNextSelector));
-            lines.push('  stop:       ' + selectorState(cfg.stopSelector));
-            lines.push('  regenerateSelector = ' + cfg.regenerateSelector);
-            lines.push('  swipeNextSelector  = ' + cfg.swipeNextSelector);
-            lines.push('  stopSelector       = ' + cfg.stopSelector);
+            lines.push("");
+            lines.push("buttons (checked right now):");
+            lines.push("  retry mode: " +
+                (cfg.retryByNewReroll
+                    ? "new reroll (swipe first, regenerate as fallback)"
+                    : "regenerate (swipe as fallback)"));
+            lines.push("  regenerate: " + selectorState(cfg.regenerateSelector));
+            lines.push("  swipeNext:  " + selectorState(cfg.swipeNextSelector));
+            lines.push("  stop:       " + selectorState(cfg.stopSelector));
+            lines.push("  regenerateSelector = " + cfg.regenerateSelector);
+            lines.push("  swipeNextSelector  = " + cfg.swipeNextSelector);
+            lines.push("  stopSelector       = " + cfg.stopSelector);
         }
         if (inc(o.environment)) {
             try {
-                lines.push('');
-                lines.push('browser: ' + ((navigator && navigator.userAgent) || 'unknown'));
-            } catch(_) {}
+                lines.push("");
+                lines.push("browser: " + ((navigator && navigator.userAgent) || "unknown"));
+            }
+            catch (_) { }
             try {
-                lines.push('screen: ' + ((window && window.innerWidth) || '?') + ' x ' + ((window && window.innerHeight) || '?'));
-            } catch(_) {}
+                lines.push("screen: " +
+                    ((window && window.innerWidth) || "?") +
+                    " x " +
+                    ((window && window.innerHeight) || "?"));
+            }
+            catch (_) { }
         }
         if (inc(o.activity)) {
-            lines.push('');
-            lines.push('recent activity (oldest first):');
-            if (eventLog.length === 0) lines.push('  (nothing recorded yet)');
-            else for (const e of eventLog) lines.push('  ' + e);
+            lines.push("");
+            lines.push("this session:");
+            lines.push("  replies that came back fine: " + stats.good);
+            lines.push("  retries fired: " + stats.retries);
+            lines.push("  messages it gave up on: " + stats.gaveUp);
+            const reasons = Object.keys(stats.reasons).sort((a, b) => stats.reasons[b] - stats.reasons[a]);
+            if (reasons.length) {
+                lines.push("  retries by reason:");
+                for (const r of reasons)
+                    lines.push("    " + r + ": " + stats.reasons[r]);
+            }
+            lines.push("");
+            lines.push("recent activity (oldest first):");
+            if (eventLog.length === 0)
+                lines.push("  (nothing recorded yet)");
+            else
+                for (const e of eventLog)
+                    lines.push("  " + e);
         }
-        return lines.join('\n');
+        return lines.join("\n");
     }
     function fallbackCopy(text) {
         try {
-            const ta = document.createElement('textarea');
+            const ta = document.createElement("textarea");
             ta.value = text;
-            ta.style.cssText = 'position:fixed;top:-1000px;left:-1000px;opacity:0';
+            ta.style.cssText = "position:fixed;top:-1000px;left:-1000px;opacity:0";
             (document.body || document.documentElement).appendChild(ta);
             ta.focus();
             ta.select();
-            const ok = !!(document.execCommand && document.execCommand('copy'));
+            const ok = !!(document.execCommand && document.execCommand("copy"));
             ta.remove();
             return ok;
-        } catch(_) {
+        }
+        catch (_) {
             return false;
         }
     }
     function copyText(text) {
         try {
-            if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
+            if (typeof navigator !== "undefined" &&
+                navigator.clipboard &&
+                navigator.clipboard.writeText) {
                 return navigator.clipboard.writeText(text).then(() => true, () => fallbackCopy(text));
             }
-        } catch(_) {}
+        }
+        catch (_) { }
         return Promise.resolve(fallbackCopy(text));
     }
     // Save text as a file download. Returns false if the browser blocks it.
     function downloadText(filename, text) {
         try {
-            const blob = new Blob([text], { type: 'application/json' });
+            const blob = new Blob([text], { type: "application/json" });
             const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
+            const a = document.createElement("a");
             a.href = url;
             a.download = filename;
             document.body.appendChild(a);
@@ -2498,11 +3217,12 @@ export function setup(ctx, opts) {
             setTimeout(() => {
                 try {
                     URL.revokeObjectURL(url);
-                } catch(_) {}
-            },
-            1000);
+                }
+                catch (_) { }
+            }, 1000);
             return true;
-        } catch(_) {
+        }
+        catch (_) {
             return false;
         }
     }
@@ -2510,10 +3230,11 @@ export function setup(ctx, opts) {
     function readFileAsText(file, cb) {
         try {
             const reader = new FileReader();
-            reader.onload = () => cb(typeof reader.result === 'string' ? reader.result: null);
+            reader.onload = () => cb(typeof reader.result === "string" ? reader.result : null);
             reader.onerror = () => cb(null);
             reader.readAsText(file);
-        } catch(_) {
+        }
+        catch (_) {
             cb(null);
         }
     }
@@ -2525,79 +3246,88 @@ export function setup(ctx, opts) {
     // when the settings modal closes instead of being left floating.
     let closeExpandEditor = null;
     function buildSettingsBody(root, onSaved) {
-        root.innerHTML = '';
+        root.innerHTML = "";
         fieldSetters = {};
         presetBarRefreshers = [];
         // A preset switcher: pick a saved preset and Load it into the settings, or
         // save the current settings as a preset. Load updates the on-screen fields in
         // place (no rebuild), so it never jumps the scroll or closes open sections.
         function buildPresetBar(kind) {
-            const wrap = document.createElement('div');
-            wrap.style.cssText = 'display:flex;flex-direction:column;gap:8px';
+            const wrap = document.createElement("div");
+            wrap.style.cssText = "display:flex;flex-direction:column;gap:8px";
             const smallBtn = (b) => {
-                b.style.cssText += 'min-height:0;padding:7px 12px';
+                b.style.cssText += "min-height:0;padding:7px 12px";
                 return b;
             };
             const miniLabel = (text) => {
-                const l = document.createElement('div');
+                const l = document.createElement("div");
                 l.textContent = text;
-                l.style.cssText = 'font-size:11px;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))';
+                l.style.cssText =
+                    "font-size:11px;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
                 return l;
             };
             const rowBox = () => {
-                const r = document.createElement('div');
-                r.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;align-items:center';
+                const r = document.createElement("div");
+                r.style.cssText =
+                    "display:flex;gap:8px;flex-wrap:wrap;align-items:center";
                 return r;
             };
             // Load direction: a saved preset into the settings.
-            const select = document.createElement('select');
-            select.style.cssText = 'flex:1;min-width:150px;padding:8px 10px;border-radius:var(--lumiverse-radius,8px);border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));background:var(--lumiverse-fill-subtle,rgba(255,255,255,.05));color:var(--lumiverse-text,#eee);font:13px var(--lumiverse-font-family,system-ui)';
-            const loadBtn = smallBtn(btn('Load', true));
+            const select = document.createElement("select");
+            select.style.cssText =
+                "flex:1;min-width:150px;padding:8px 10px;border-radius:var(--lumiverse-radius,8px);border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));background:var(--lumiverse-fill-subtle,rgba(255,255,255,.05));color:var(--lumiverse-text,#eee);font:13px var(--lumiverse-font-family,system-ui)";
+            const loadBtn = smallBtn(btn("Load", true));
             const pickRow = rowBox();
             pickRow.appendChild(select);
             pickRow.appendChild(loadBtn);
-            const update = smallBtn(btn('Update selected', false));
-            const del = smallBtn(btn('Delete', false));
+            const update = smallBtn(btn("Update selected", false));
+            const del = smallBtn(btn("Delete", false));
             const manageRow = rowBox();
             manageRow.appendChild(update);
             manageRow.appendChild(del);
             // Save direction: the current settings into a new preset, or rename one.
-            const nameInput = document.createElement('input');
-            nameInput.type = 'text';
-            nameInput.placeholder = 'Preset name';
-            nameInput.style.cssText = 'flex:1;min-width:150px';
+            const nameInput = document.createElement("input");
+            nameInput.type = "text";
+            nameInput.placeholder = "Preset name";
+            nameInput.style.cssText = "flex:1;min-width:150px";
             styleField(nameInput);
-            const saveNew = smallBtn(btn('Save as new', false));
-            const rename = smallBtn(btn('Rename selected', false));
+            const saveNew = smallBtn(btn("Save as new", false));
+            const rename = smallBtn(btn("Rename selected", false));
             const saveRow = rowBox();
             saveRow.appendChild(nameInput);
             saveRow.appendChild(saveNew);
             saveRow.appendChild(rename);
-            const status = document.createElement('div');
-            status.style.cssText = 'font-size:12px;line-height:1.4;color:var(--lumiverse-text-muted,rgba(255,255,255,.65));min-height:1em';
+            const status = document.createElement("div");
+            status.style.cssText =
+                "font-size:12px;line-height:1.4;color:var(--lumiverse-text-muted,rgba(255,255,255,.65));min-height:1em";
             const presets = loadPresets();
             const list = () => presets[kind] || [];
             // Flush a field the user is still editing into cfg before we snapshot it.
             const commit = () => {
-                const active = typeof document !== 'undefined' ? document.activeElement : null;
-                if (active && typeof active.blur === 'function') active.blur();
+                const active = typeof document !== "undefined" ? document.activeElement : null;
+                if (active && typeof active.blur === "function")
+                    active.blur();
                 for (const g of SCHEMA)
                     for (const fl of g.fields)
-                        if (fl.type === 'num') cfg[fl.key] = clampField(fl, cfg[fl.key]);
+                        if (fl.type === "num")
+                            cfg[fl.key] = clampField(fl, cfg[fl.key]);
             };
             const refreshSelect = (selectName) => {
-                select.innerHTML = '';
-                const ph = document.createElement('option');
-                ph.value = '';
-                ph.textContent = list().length ? 'Pick a preset' : 'No presets saved yet';
+                select.innerHTML = "";
+                const ph = document.createElement("option");
+                ph.value = "";
+                ph.textContent = list().length
+                    ? "Pick a preset"
+                    : "No presets saved yet";
                 select.appendChild(ph);
                 for (const p of list()) {
-                    const o = document.createElement('option');
+                    const o = document.createElement("option");
                     o.value = p.name;
                     o.textContent = p.name;
                     select.appendChild(o);
                 }
-                if (selectName) select.value = selectName;
+                if (selectName)
+                    select.value = selectName;
             };
             refreshSelect();
             // Re-read storage and rebuild the dropdown, for when an import adds
@@ -2607,40 +3337,44 @@ export function setup(ctx, opts) {
                 presets[kind] = fresh[kind] || [];
                 refreshSelect();
             });
-            loadBtn.addEventListener('click', () => {
+            loadBtn.addEventListener("click", () => {
                 const name = select.value;
                 if (!name) {
-                    status.textContent = 'Pick a preset to load.';
+                    status.textContent = "Pick a preset to load.";
                     return;
                 }
                 const p = list().find((x) => x.name === name);
                 if (!p) {
-                    status.textContent = 'That preset is gone.';
+                    status.textContent = "That preset is gone.";
                     return;
                 }
                 applyPresetValues(kind, p.values);
                 // Reflect the new values in the on-screen fields without a rebuild.
                 for (const k of keysForKind(kind)) {
                     const fld = fieldByKey[k];
-                    if (fld && fld.type === 'num') cfg[k] = clampField(fld, cfg[k]);
-                    if (fieldSetters[k]) fieldSetters[k](cfg[k]);
+                    if (fld && fld.type === "num")
+                        cfg[k] = clampField(fld, cfg[k]);
+                    if (fieldSetters[k])
+                        fieldSetters[k](cfg[k]);
                 }
                 saveSaved();
                 saveToAccount();
                 syncLiveLog();
                 syncFloat();
-                syncReplaceButton();
-                if (onSaved) onSaved();
-                status.textContent = 'Loaded preset: ' + name + ". It's in effect now.";
+                syncInputBarActions();
+                if (onSaved)
+                    onSaved();
+                status.textContent = "Loaded preset: " + name + ". It's in effect now.";
             });
-            saveNew.addEventListener('click', () => {
+            saveNew.addEventListener("click", () => {
                 const name = nameInput.value.trim();
                 if (!name) {
-                    status.textContent = 'Type a name first.';
+                    status.textContent = "Type a name first.";
                     return;
                 }
                 if (list().some((x) => x.name === name)) {
-                    status.textContent = 'That name is taken. Use Update selected, or pick another.';
+                    status.textContent =
+                        "That name is taken. Use Update selected, or pick another.";
                     return;
                 }
                 commit();
@@ -2649,19 +3383,19 @@ export function setup(ctx, opts) {
                     status.textContent = "Couldn't save the preset on this browser.";
                     return;
                 }
-                nameInput.value = '';
+                nameInput.value = "";
                 refreshSelect(name);
-                status.textContent = 'Saved current settings as: ' + name + '.';
+                status.textContent = "Saved current settings as: " + name + ".";
             });
-            rename.addEventListener('click', () => {
+            rename.addEventListener("click", () => {
                 const cur = select.value;
                 if (!cur) {
-                    status.textContent = 'Pick a preset to rename.';
+                    status.textContent = "Pick a preset to rename.";
                     return;
                 }
                 const newName = nameInput.value.trim();
                 if (!newName) {
-                    status.textContent = 'Type the new name in the box, then Rename.';
+                    status.textContent = "Type the new name in the box, then Rename.";
                     return;
                 }
                 if (newName === cur) {
@@ -2669,13 +3403,13 @@ export function setup(ctx, opts) {
                     return;
                 }
                 if (list().some((x) => x.name === newName)) {
-                    status.textContent = 'That name is taken. Pick another.';
+                    status.textContent = "That name is taken. Pick another.";
                     return;
                 }
                 const arr = list();
                 const i = arr.findIndex((x) => x.name === cur);
                 if (i < 0) {
-                    status.textContent = 'That preset is gone.';
+                    status.textContent = "That preset is gone.";
                     return;
                 }
                 // Keep the saved values, change only the name.
@@ -2685,20 +3419,20 @@ export function setup(ctx, opts) {
                     status.textContent = "Couldn't save on this browser.";
                     return;
                 }
-                nameInput.value = '';
+                nameInput.value = "";
                 refreshSelect(newName);
-                status.textContent = 'Renamed ' + cur + ' to ' + newName + '.';
+                status.textContent = "Renamed " + cur + " to " + newName + ".";
             });
-            update.addEventListener('click', () => {
+            update.addEventListener("click", () => {
                 const name = select.value;
                 if (!name) {
-                    status.textContent = 'Pick a preset to update.';
+                    status.textContent = "Pick a preset to update.";
                     return;
                 }
                 const arr = list();
                 const i = arr.findIndex((x) => x.name === name);
                 if (i < 0) {
-                    status.textContent = 'That preset is gone.';
+                    status.textContent = "That preset is gone.";
                     return;
                 }
                 commit();
@@ -2708,41 +3442,117 @@ export function setup(ctx, opts) {
                     status.textContent = "Couldn't save on this browser.";
                     return;
                 }
-                status.textContent = 'Updated ' + name + ' to your current settings.';
+                status.textContent =
+                    "Updated " + name + " to your current settings.";
             });
-            del.addEventListener('click', async () => {
+            del.addEventListener("click", async () => {
                 const name = select.value;
                 if (!name) {
-                    status.textContent = 'Pick a preset to delete.';
+                    status.textContent = "Pick a preset to delete.";
                     return;
                 }
                 let ok = true;
                 try {
                     if (ctx?.ui?.showConfirm) {
                         const r = await ctx.ui.showConfirm({
-                            title: 'Delete preset',
+                            title: "Delete preset",
                             message: 'Delete the preset "' + name + '"?',
-                            variant: 'warning',
-                            confirmLabel: 'Delete',
+                            variant: "warning",
+                            confirmLabel: "Delete",
                         });
                         ok = !!r?.confirmed;
                     }
-                } catch (_) {}
-                if (!ok) return;
+                }
+                catch (_) { }
+                if (!ok)
+                    return;
                 presets[kind] = list().filter((x) => x.name !== name);
                 if (!savePresets(presets)) {
                     status.textContent = "Couldn't save on this browser.";
                     return;
                 }
                 refreshSelect();
-                status.textContent = 'Deleted preset: ' + name + '.';
+                status.textContent = "Deleted preset: " + name + ".";
             });
-            wrap.appendChild(miniLabel('Saved presets'));
+            wrap.appendChild(miniLabel("Saved presets"));
             wrap.appendChild(pickRow);
             wrap.appendChild(manageRow);
-            wrap.appendChild(miniLabel('Save or rename'));
+            wrap.appendChild(miniLabel("Save or rename"));
             wrap.appendChild(saveRow);
             wrap.appendChild(status);
+            return wrap;
+        }
+        // Somewhere to try the refusal settings on real text. Without this the whole
+        // section is guesswork: you edit a phrase list, then have to wait for the
+        // model to refuse again to find out whether it worked, and a wrong guess
+        // costs a re-roll of good writing. This runs the same check a finished reply
+        // goes through, against the values in the boxes above rather than the saved
+        // ones, so it answers straight away and nothing is sent anywhere.
+        function buildRefusalTester() {
+            const wrap = document.createElement("div");
+            wrap.style.cssText = "display:flex;flex-direction:column;gap:8px";
+            const rule = document.createElement("div");
+            rule.style.cssText =
+                "height:1px;background:var(--lumiverse-border,rgba(255,255,255,.08));margin:4px 0 2px";
+            wrap.appendChild(rule);
+            const title = document.createElement("div");
+            title.textContent = "Try it on a reply";
+            title.style.cssText =
+                "font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+            wrap.appendChild(title);
+            const desc = document.createElement("div");
+            desc.textContent =
+                "Paste a reply and see whether it would count as a refusal, and what decided it. It uses the settings as they are in the boxes above, so you can test a change before saving it. Nothing is sent anywhere and no reply is altered.";
+            desc.style.cssText =
+                "font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+            wrap.appendChild(desc);
+            const ta = document.createElement("textarea");
+            ta.rows = 3;
+            ta.placeholder = "Paste a reply here";
+            ta.setAttribute("aria-label", "Reply text to test for a refusal");
+            styleField(ta);
+            ta.style.width = "100%";
+            ta.style.boxSizing = "border-box";
+            ta.style.resize = "vertical";
+            wrap.appendChild(ta);
+            const out = document.createElement("div");
+            out.style.cssText =
+                "font-size:12px;line-height:1.45;min-height:1em;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+            const check = btn("Check this text", false);
+            check.style.cssText += "min-height:0;padding:6px 12px;align-self:flex-start";
+            check.addEventListener("click", () => {
+                // A box the user is still typing in has not fired its change event yet,
+                // so its edit is not in cfg. Blurring first is what makes the test
+                // reflect what is actually on screen.
+                const active = typeof document !== "undefined" ? document.activeElement : null;
+                if (active && active !== ta && typeof active.blur === "function")
+                    active.blur();
+                const text = String(ta.value || "");
+                if (!text.trim()) {
+                    out.textContent = "Paste some reply text first.";
+                    out.style.color = "var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+                    ensureReadable(out, 2.6);
+                    return;
+                }
+                const v = refusalVerdict(text, cfg);
+                if (v.refusal) {
+                    out.textContent =
+                        "Counts as a refusal, so a retry would fire - " +
+                            v.reason +
+                            (cfg.retryOnRefusal
+                                ? "."
+                                : '. (But "It looks like an accidental refusal" is off, so nothing would actually be retried.)');
+                    out.style.color = "var(--lumiverse-success,#22c55e)";
+                }
+                else {
+                    out.textContent =
+                        "Reads as normal writing, so no retry - " + v.reason + ".";
+                    out.style.color = "var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+                }
+                ensureReadable(out, 2.6);
+            });
+            wrap.appendChild(check);
+            wrap.appendChild(out);
             return wrap;
         }
         // Cap the whole panel to a real viewport value that sits safely under the
@@ -2750,249 +3560,314 @@ export function setup(ctx, opts) {
         // panel bounded and overflow hidden, the host modal has nothing left to
         // over-scroll, so its own full-height scrollbar never appears; only the
         // options list below scrolls. vh units keep it sane on phones too.
-        const panel = document.createElement('div');
-        panel.style.cssText = 'display:flex;flex-direction:column;max-height:min(72vh,460px);overflow:hidden;box-sizing:border-box;font:13px/1.45 var(--lumiverse-font-family,system-ui);color:var(--lumiverse-text,#eee)';
+        const panel = document.createElement("div");
+        panel.style.cssText =
+            "display:flex;flex-direction:column;max-height:min(72vh,460px);overflow:hidden;box-sizing:border-box;font:13px/1.45 var(--lumiverse-font-family,system-ui);color:var(--lumiverse-text,#eee)";
         // the one scroll area: flexes to fill whatever height is left after the
         // footer. min-height:0 lets it actually shrink and scroll inside the flex.
-        const scroller = document.createElement('div');
-        scroller.style.cssText = 'display:flex;flex-direction:column;gap:18px;flex:1 1 auto;min-height:0;overflow-y:auto;padding-right:4px';
+        const scroller = document.createElement("div");
+        scroller.style.cssText =
+            "display:flex;flex-direction:column;gap:18px;flex:1 1 auto;min-height:0;overflow-y:auto;padding-right:4px";
+        const panelSections = [];
+        const searchRows = [];
+        const searchText = (...parts) => parts.map((p) => String(p == null ? "" : p)).join(" ").toLowerCase();
         for (const group of SCHEMA) {
-            const sec = document.createElement('div');
-            sec.style.cssText = 'display:flex;flex-direction:column;gap:10px';
+            const sec = document.createElement("div");
+            sec.style.cssText = "display:flex;flex-direction:column;gap:10px";
+            const handle = {
+                sec: sec,
+                title: group.title,
+                keywords: searchText(group.title, group.desc),
+                setOpen: null,
+            };
+            panelSections.push(handle);
+            const addRow = (row, f) => {
+                searchRows.push({
+                    row: row,
+                    text: searchText(f.label, f.hint, f.key, group.title),
+                    section: handle,
+                });
+                return row;
+            };
             // Groups titled "Advanced..." collapse by default so the basic options
             // aren't buried under them. Tap the header to reveal.
             const advanced = /^advanced\b/i.test(group.title);
-            const h = document.createElement('div');
-            h.style.cssText = 'font-size:11px;letter-spacing:.07em;text-transform:uppercase;font-family:var(--lumiverse-font-family,system-ui);color:var(--lumiverse-text-muted,rgba(255,255,255,.65))';
+            const h = document.createElement("div");
+            h.style.cssText =
+                "font-size:11px;letter-spacing:.07em;text-transform:uppercase;font-family:var(--lumiverse-font-family,system-ui);color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
             if (advanced) {
-                h.style.cursor = 'pointer';
-                h.style.userSelect = 'none';
-                h.style.display = 'flex';
-                h.style.alignItems = 'center';
-                h.style.gap = '6px';
-                const caret = document.createElement('span');
-                caret.textContent = '\u25B8'; // right triangle when collapsed
-                caret.style.cssText = 'font-size:9px';
-                const label = document.createElement('span');
+                h.style.cursor = "pointer";
+                h.style.userSelect = "none";
+                h.style.display = "flex";
+                h.style.alignItems = "center";
+                h.style.gap = "6px";
+                const caret = document.createElement("span");
+                caret.textContent = "\u25B8"; // right triangle when collapsed
+                caret.style.cssText = "font-size:9px";
+                const label = document.createElement("span");
                 label.textContent = group.title;
                 h.appendChild(caret);
                 h.appendChild(label);
                 sec.appendChild(h);
-                const body = document.createElement('div');
-                body.style.cssText = 'display:none;flex-direction:column;gap:10px';
+                const body = document.createElement("div");
+                body.style.cssText = "display:none;flex-direction:column;gap:10px";
                 if (group.desc) {
-                    const d = document.createElement('div');
+                    const d = document.createElement("div");
                     d.textContent = group.desc;
-                    d.style.cssText = 'font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))';
+                    d.style.cssText =
+                        "font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
                     body.appendChild(d);
                 }
-                for (const f of group.fields) body.appendChild(buildRow(f));
+                for (const f of group.fields)
+                    body.appendChild(addRow(buildRow(f), f));
                 const resetSel = buildSelectorResetRow(group);
-                if (resetSel) body.appendChild(resetSel);
+                if (resetSel)
+                    body.appendChild(resetSel);
+                // The refusal tuning options are all guesswork without a way to try
+                // them, so the section carries its own tester.
+                if (/refusal tuning/i.test(group.title)) {
+                    body.appendChild(buildRefusalTester());
+                }
                 // Word swap presets sit at the end of the group, since they save and
                 // switch the settings above.
                 if (/find and replace/i.test(group.title)) {
-                    const rule = document.createElement('div');
-                    rule.style.cssText = 'height:1px;background:var(--lumiverse-border,rgba(255,255,255,.08));margin:4px 0 2px';
+                    const rule = document.createElement("div");
+                    rule.style.cssText =
+                        "height:1px;background:var(--lumiverse-border,rgba(255,255,255,.08));margin:4px 0 2px";
                     body.appendChild(rule);
-                    const pl = document.createElement('div');
-                    pl.textContent = 'Presets';
-                    pl.style.cssText = 'font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))';
+                    const pl = document.createElement("div");
+                    pl.textContent = "Presets";
+                    pl.style.cssText =
+                        "font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
                     body.appendChild(pl);
-                    const pd = document.createElement('div');
-                    pd.textContent = 'Save your current word swaps as a named setup and switch between them. Applying takes effect right away. Kept on this browser.';
-                    pd.style.cssText = 'font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))';
+                    const pd = document.createElement("div");
+                    pd.textContent =
+                        "Save your current word swaps as a named setup and switch between them. Applying takes effect right away. Kept on this browser.";
+                    pd.style.cssText =
+                        "font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
                     body.appendChild(pd);
-                    body.appendChild(buildPresetBar('swap'));
+                    body.appendChild(buildPresetBar("swap"));
                 }
                 sec.appendChild(body);
-                let open = openGroups.has(group.title);
-                body.style.display = open ? 'flex': 'none';
-                caret.textContent = open ? '\u25BE': '\u25B8';
-                h.addEventListener('click', () => {
-                    open = !open;
-                    body.style.display = open ? 'flex': 'none';
-                    caret.textContent = open ? '\u25BE': '\u25B8'; // down triangle when open
-                    if (open) openGroups.add(group.title);
-                    else openGroups.delete(group.title);
+                // Opening and closing is done in one place so the search can reveal a
+                // section without the caret and the remembered state falling out of step.
+                const setOpen = (v) => {
+                    body.style.display = v ? "flex" : "none";
+                    caret.textContent = v ? "\u25BE" : "\u25B8"; // down triangle when open
+                };
+                handle.setOpen = setOpen;
+                setOpen(openGroups.has(group.title));
+                h.addEventListener("click", () => {
+                    const open = body.style.display !== "none";
+                    setOpen(!open);
+                    if (!open)
+                        openGroups.add(group.title);
+                    else
+                        openGroups.delete(group.title);
                 });
-            } else {
+            }
+            else {
                 h.textContent = group.title;
                 sec.appendChild(h);
                 if (group.desc) {
-                    const d = document.createElement('div');
+                    const d = document.createElement("div");
                     d.textContent = group.desc;
-                    d.style.cssText = 'font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65));margin-top:-4px';
+                    d.style.cssText =
+                        "font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65));margin-top:-4px";
                     sec.appendChild(d);
                 }
-                for (const f of group.fields) sec.appendChild(buildRow(f));
+                for (const f of group.fields)
+                    sec.appendChild(addRow(buildRow(f), f));
                 const resetSelOpen = buildSelectorResetRow(group);
-                if (resetSelOpen) sec.appendChild(resetSelOpen);
+                if (resetSelOpen)
+                    sec.appendChild(resetSelOpen);
             }
             scroller.appendChild(sec);
         }
         // debug info section (collapsible): choose what to include, review, redact, copy
         {
-            const sec = document.createElement('div');
-            sec.style.cssText = 'display:flex;flex-direction:column;gap:10px';
-            const h = document.createElement('div');
-            h.style.cssText = 'font-size:11px;letter-spacing:.07em;text-transform:uppercase;font-family:var(--lumiverse-font-family,system-ui);color:var(--lumiverse-text-muted,rgba(255,255,255,.65));cursor:pointer;user-select:none;display:flex;align-items:center;gap:6px';
-            const caret = document.createElement('span');
-            caret.textContent = '\u25B8';
-            caret.style.cssText = 'font-size:9px';
-            const label = document.createElement('span');
-            label.textContent = 'Advanced: debug info';
+            const sec = document.createElement("div");
+            sec.style.cssText = "display:flex;flex-direction:column;gap:10px";
+            const h = document.createElement("div");
+            h.style.cssText =
+                "font-size:11px;letter-spacing:.07em;text-transform:uppercase;font-family:var(--lumiverse-font-family,system-ui);color:var(--lumiverse-text-muted,rgba(255,255,255,.65));cursor:pointer;user-select:none;display:flex;align-items:center;gap:6px";
+            const caret = document.createElement("span");
+            caret.textContent = "\u25B8";
+            caret.style.cssText = "font-size:9px";
+            const label = document.createElement("span");
+            label.textContent = "Advanced: debug info";
             h.appendChild(caret);
             h.appendChild(label);
             sec.appendChild(h);
-            const body = document.createElement('div');
-            body.style.cssText = 'display:none;flex-direction:column;gap:10px';
-            const desc = document.createElement('div');
-            desc.textContent = 'A snapshot for your own debugging or a bug report. Tick the parts to include, build a preview, edit out anything you would rather not share, then copy. Nothing leaves your device until you paste it somewhere.';
-            desc.style.cssText = 'font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))';
+            const handle = {
+                sec: sec,
+                title: "Advanced: debug info",
+                keywords: "advanced debug info bug report copy diagnostics activity log version",
+                setOpen: null,
+            };
+            panelSections.push(handle);
+            const body = document.createElement("div");
+            body.style.cssText = "display:none;flex-direction:column;gap:10px";
+            const desc = document.createElement("div");
+            desc.textContent =
+                "A snapshot for your own debugging or a bug report. Tick the parts to include, build a preview, edit out anything you would rather not share, then copy. Nothing leaves your device until you paste it somewhere.";
+            desc.style.cssText =
+                "font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
             body.appendChild(desc);
-            const sections = [{
-                id: 'settings',
-                label: 'Your settings'
-            },
-            {
-                id: 'buttons',
-                label: 'Button match status'
-            },
-            {
-                id: 'environment',
-                label: 'Browser and screen'
-            },
-            {
-                id: 'activity',
-                label: 'Recent activity log'
-            },
+            const sections = [
+                { id: "settings", label: "Your settings" },
+                { id: "buttons", label: "Button match status" },
+                { id: "environment", label: "Browser and screen" },
+                { id: "activity", label: "Session totals and recent activity" },
             ];
             const dchecks = [];
-            const dWrap = document.createElement('div');
-            dWrap.style.cssText = 'display:flex;flex-direction:column;gap:6px';
+            const dWrap = document.createElement("div");
+            dWrap.style.cssText = "display:flex;flex-direction:column;gap:6px";
             for (const s of sections) {
-                const row = document.createElement('label');
-                row.style.cssText = 'display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer';
-                const cb = document.createElement('input');
-                cb.type = 'checkbox';
+                const row = document.createElement("label");
+                row.style.cssText =
+                    "display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer";
+                const cb = document.createElement("input");
+                cb.type = "checkbox";
                 cb.checked = true;
-                cb.style.cssText = 'accent-color:var(--lumiverse-primary,rgba(147,112,219,.9));cursor:pointer';
-                const txt = document.createElement('span');
+                cb.style.cssText =
+                    "accent-color:var(--lumiverse-primary,rgba(147,112,219,.9));cursor:pointer";
+                const txt = document.createElement("span");
                 txt.textContent = s.label;
                 row.appendChild(cb);
                 row.appendChild(txt);
                 dWrap.appendChild(row);
-                dchecks.push({
-                    id: s.id,
-                    input: cb
-                });
+                dchecks.push({ id: s.id, input: cb });
             }
             body.appendChild(dWrap);
             const opts = () => {
                 const o = {};
-                for (const c of dchecks) o[c.id] = c.input.checked;
+                for (const c of dchecks)
+                    o[c.id] = c.input.checked;
                 return o;
             };
-            const dStatus = document.createElement('div');
-            dStatus.style.cssText = 'font-size:12px;line-height:1.4;color:var(--lumiverse-text-muted,rgba(255,255,255,.65));min-height:1em';
-            const dArea = document.createElement('textarea');
+            const dStatus = document.createElement("div");
+            dStatus.style.cssText =
+                "font-size:12px;line-height:1.4;color:var(--lumiverse-text-muted,rgba(255,255,255,.65));min-height:1em";
+            const dArea = document.createElement("textarea");
             dArea.rows = 6;
-            dArea.placeholder = 'Press Build preview to fill this, then edit out anything private before copying.';
-            dArea.style.cssText = 'width:100%;box-sizing:border-box;font-family:var(--lumiverse-font-mono,ui-monospace,monospace) !important;font-size:12px;padding:8px;border-radius:var(--lumiverse-radius,8px);border:1px solid var(--lumiverse-border,#3a3543);background:var(--lumiverse-bg,#1a1720);color:var(--lumiverse-text,#e9e4f0);resize:vertical';
-            const buildBtn = btn('Build preview', false);
-            buildBtn.addEventListener('click', () => {
+            dArea.placeholder =
+                "Press Build preview to fill this, then edit out anything private before copying.";
+            dArea.style.cssText =
+                "width:100%;box-sizing:border-box;font-family:var(--lumiverse-font-mono,ui-monospace,monospace) !important;font-size:12px;padding:8px;border-radius:var(--lumiverse-radius,8px);border:1px solid var(--lumiverse-border,#3a3543);background:var(--lumiverse-bg,#1a1720);color:var(--lumiverse-text,#e9e4f0);resize:vertical";
+            const buildBtn = btn("Build preview", false);
+            buildBtn.addEventListener("click", () => {
                 dArea.value = buildDebugInfo(opts());
-                dStatus.textContent = 'Built. Edit anything you want to remove, then Copy.';
+                dStatus.textContent = "Built. Edit anything you want to remove, then Copy.";
             });
-            const copyBtn = btn('Copy', false);
-            copyBtn.addEventListener('click', async () => {
-                if (!dArea.value.trim()) dArea.value = buildDebugInfo(opts());
+            const copyBtn = btn("Copy", false);
+            copyBtn.addEventListener("click", async () => {
+                if (!dArea.value.trim())
+                    dArea.value = buildDebugInfo(opts());
                 const ok = await copyText(dArea.value);
-                dStatus.textContent = ok ? 'Copied. Paste it into your bug report.': "Couldn't copy here; select the text and copy by hand.";
+                dStatus.textContent = ok
+                    ? "Copied. Paste it into your bug report."
+                    : "Couldn't copy here; select the text and copy by hand.";
             });
             body.appendChild(buildBtn);
             body.appendChild(dArea);
             body.appendChild(copyBtn);
             body.appendChild(dStatus);
             sec.appendChild(body);
-            let open = openGroups.has('Advanced: debug info');
-            body.style.display = open ? 'flex': 'none';
-            caret.textContent = open ? '\u25BE': '\u25B8';
-            h.addEventListener('click', () => {
-                open = !open;
-                body.style.display = open ? 'flex': 'none';
-                caret.textContent = open ? '\u25BE': '\u25B8';
-                if (open) openGroups.add('Advanced: debug info');
-                else openGroups.delete('Advanced: debug info');
+            const setOpen = (v) => {
+                body.style.display = v ? "flex" : "none";
+                caret.textContent = v ? "\u25BE" : "\u25B8";
+            };
+            handle.setOpen = setOpen;
+            setOpen(openGroups.has("Advanced: debug info"));
+            h.addEventListener("click", () => {
+                const open = body.style.display !== "none";
+                setOpen(!open);
+                if (!open)
+                    openGroups.add("Advanced: debug info");
+                else
+                    openGroups.delete("Advanced: debug info");
             });
             scroller.appendChild(sec);
         }
         // import / export section (collapsible, same look as the Advanced groups)
         {
-            const sec = document.createElement('div');
-            sec.style.cssText = 'display:flex;flex-direction:column;gap:10px';
-            const h = document.createElement('div');
-            h.style.cssText = 'font-size:11px;letter-spacing:.07em;text-transform:uppercase;font-family:var(--lumiverse-font-family,system-ui);color:var(--lumiverse-text-muted,rgba(255,255,255,.65));cursor:pointer;user-select:none;display:flex;align-items:center;gap:6px';
-            const caret = document.createElement('span');
-            caret.textContent = '\u25B8';
-            caret.style.cssText = 'font-size:9px';
-            const label = document.createElement('span');
-            label.textContent = 'Advanced: import / export';
+            const sec = document.createElement("div");
+            sec.style.cssText = "display:flex;flex-direction:column;gap:10px";
+            const h = document.createElement("div");
+            h.style.cssText =
+                "font-size:11px;letter-spacing:.07em;text-transform:uppercase;font-family:var(--lumiverse-font-family,system-ui);color:var(--lumiverse-text-muted,rgba(255,255,255,.65));cursor:pointer;user-select:none;display:flex;align-items:center;gap:6px";
+            const caret = document.createElement("span");
+            caret.textContent = "\u25B8";
+            caret.style.cssText = "font-size:9px";
+            const label = document.createElement("span");
+            label.textContent = "Advanced: import / export";
             h.appendChild(caret);
             h.appendChild(label);
             sec.appendChild(h);
-            const body = document.createElement('div');
-            body.style.cssText = 'display:none;flex-direction:column;gap:10px';
-            const desc = document.createElement('div');
-            desc.textContent = 'Save settings to a file or load them from one. Tick the parts to include, then Export or Import. An import fills in the settings above without saving, so you can review first: press Save to keep it, or close to discard.';
-            desc.style.cssText = 'font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))';
+            const handle = {
+                sec: sec,
+                title: "Advanced: import / export",
+                keywords: "advanced import export backup file share transfer settings presets json",
+                setOpen: null,
+            };
+            panelSections.push(handle);
+            const body = document.createElement("div");
+            body.style.cssText = "display:none;flex-direction:column;gap:10px";
+            const desc = document.createElement("div");
+            desc.textContent =
+                "Save settings to a file or load them from one. Tick the parts to include, then Export or Import. An import fills in the settings above without saving, so you can review first: press Save to keep it, or close to discard.";
+            desc.style.cssText =
+                "font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
             body.appendChild(desc);
             const checks = [];
-            const checkWrap = document.createElement('div');
-            checkWrap.style.cssText = 'display:flex;flex-direction:column;gap:6px';
+            const checkWrap = document.createElement("div");
+            checkWrap.style.cssText = "display:flex;flex-direction:column;gap:6px";
             for (const c of EXPORT_CATEGORIES) {
-                const row = document.createElement('label');
-                row.style.cssText = 'display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer';
-                const cb = document.createElement('input');
-                cb.type = 'checkbox';
+                const row = document.createElement("label");
+                row.style.cssText =
+                    "display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer";
+                const cb = document.createElement("input");
+                cb.type = "checkbox";
                 cb.checked = true;
-                cb.style.cssText = 'accent-color:var(--lumiverse-primary,rgba(147,112,219,.9));cursor:pointer';
-                const txt = document.createElement('span');
+                cb.style.cssText =
+                    "accent-color:var(--lumiverse-primary,rgba(147,112,219,.9));cursor:pointer";
+                const txt = document.createElement("span");
                 txt.textContent = c.label;
                 row.appendChild(cb);
                 row.appendChild(txt);
                 checkWrap.appendChild(row);
-                checks.push({
-                    id: c.id,
-                    input: cb
-                });
+                checks.push({ id: c.id, input: cb });
             }
             body.appendChild(checkWrap);
             const chosen = () => checks.filter((x) => x.input.checked).map((x) => x.id);
-            const status = document.createElement('div');
-            status.style.cssText = 'font-size:12px;line-height:1.4;color:var(--lumiverse-text-muted,rgba(255,255,255,.65));min-height:1em';
-            const exportBtn = btn('Export to file', false);
-            exportBtn.addEventListener('click', () => {
+            const status = document.createElement("div");
+            status.style.cssText =
+                "font-size:12px;line-height:1.4;color:var(--lumiverse-text-muted,rgba(255,255,255,.65));min-height:1em";
+            const exportBtn = btn("Export to file", false);
+            exportBtn.addEventListener("click", () => {
                 const ids = chosen();
                 if (!ids.length) {
-                    status.textContent = 'Tick at least one part to export.';
+                    status.textContent = "Tick at least one part to export.";
                     return;
                 }
-                const ok = downloadText('auto-retry-settings.json', buildExport(ids));
-                status.textContent = ok ? 'Saved a file with the ticked parts.': "Couldn't save a file here.";
+                const ok = downloadText("auto-retry-settings.json", buildExport(ids));
+                status.textContent = ok
+                    ? "Saved a file with the ticked parts."
+                    : "Couldn't save a file here.";
             });
-            const fileInput = document.createElement('input');
-            fileInput.type = 'file';
-            fileInput.accept = 'application/json,.json';
-            fileInput.style.display = 'none';
-            fileInput.addEventListener('change', () => {
+            const fileInput = document.createElement("input");
+            fileInput.type = "file";
+            fileInput.accept = "application/json,.json";
+            fileInput.style.display = "none";
+            fileInput.addEventListener("change", () => {
                 const f = fileInput.files && fileInput.files[0];
-                fileInput.value = '';
-                if (!f) return;
+                fileInput.value = "";
+                if (!f)
+                    return;
                 const ids = chosen();
                 if (!ids.length) {
-                    status.textContent = 'Tick at least one part to import.';
+                    status.textContent = "Tick at least one part to import.";
                     return;
                 }
                 readFileAsText(f, (text) => {
@@ -3007,116 +3882,210 @@ export function setup(ctx, opts) {
                     }
                     // Presets ride outside the settings model: they save right away.
                     let presetCount = 0;
-                    if (ids.indexOf('presets') >= 0) {
+                    if (ids.indexOf("presets") >= 0) {
                         let data = null;
                         try {
                             data = JSON.parse(text);
-                        } catch (_) {}
+                        }
+                        catch (_) { }
                         presetCount = importPresets(data);
                         if (presetCount === -1) {
-                            status.textContent = "Couldn't save the imported presets on this browser.";
+                            status.textContent =
+                                "Couldn't save the imported presets on this browser.";
                             return;
                         }
-                        if (presetCount > 0) for (const r of presetBarRefreshers) r();
+                        if (presetCount > 0)
+                            for (const r of presetBarRefreshers)
+                                r();
                     }
                     if (!applied.length && !presetCount) {
-                        status.textContent = 'Nothing matched the ticked parts in that file.';
+                        status.textContent = "Nothing matched the ticked parts in that file.";
                         return;
                     }
                     // Reflect imported settings in the visible fields without a rebuild,
                     // so the panel doesn't jump back to the top.
-                    for (const k of Object.keys(fieldSetters)) fieldSetters[k](cfg[k]);
-                    let msg = '';
-                    if (applied.length) msg = 'Imported: ' + applied.join(', ') + '. Press Save to keep it.';
-                    if (presetCount > 0) msg += (msg ? ' ' : '') + 'Also brought in ' + presetCount + ' word swap preset' + (presetCount === 1 ? '' : 's') + ', saved already.';
+                    for (const k of Object.keys(fieldSetters))
+                        fieldSetters[k](cfg[k]);
+                    let msg = "";
+                    if (applied.length)
+                        msg = "Imported: " + applied.join(", ") + ". Press Save to keep it.";
+                    if (presetCount > 0)
+                        msg +=
+                            (msg ? " " : "") +
+                                "Also brought in " +
+                                presetCount +
+                                " word swap preset" +
+                                (presetCount === 1 ? "" : "s") +
+                                ", saved already.";
                     status.textContent = msg;
                 });
             });
-            const importBtn = btn('Import from file', false);
-            importBtn.addEventListener('click', () => {
+            const importBtn = btn("Import from file", false);
+            importBtn.addEventListener("click", () => {
                 if (!chosen().length) {
-                    status.textContent = 'Tick at least one part to import first.';
+                    status.textContent = "Tick at least one part to import first.";
                     return;
                 }
                 fileInput.click();
             });
-            const btnRow = document.createElement('div');
-            btnRow.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px';
+            const btnRow = document.createElement("div");
+            btnRow.style.cssText = "display:flex;flex-wrap:wrap;gap:8px";
             btnRow.appendChild(exportBtn);
             btnRow.appendChild(importBtn);
             body.appendChild(btnRow);
             body.appendChild(fileInput);
             body.appendChild(status);
             sec.appendChild(body);
-            let open = openGroups.has('Advanced: import / export');
-            body.style.display = open ? 'flex': 'none';
-            caret.textContent = open ? '\u25BE': '\u25B8';
-            h.addEventListener('click', () => {
-                open = !open;
-                body.style.display = open ? 'flex': 'none';
-                caret.textContent = open ? '\u25BE': '\u25B8';
-                if (open) openGroups.add('Advanced: import / export');
-                else openGroups.delete('Advanced: import / export');
+            const setOpen = (v) => {
+                body.style.display = v ? "flex" : "none";
+                caret.textContent = v ? "\u25BE" : "\u25B8";
+            };
+            handle.setOpen = setOpen;
+            setOpen(openGroups.has("Advanced: import / export"));
+            h.addEventListener("click", () => {
+                const open = body.style.display !== "none";
+                setOpen(!open);
+                if (!open)
+                    openGroups.add("Advanced: import / export");
+                else
+                    openGroups.delete("Advanced: import / export");
             });
             scroller.appendChild(sec);
         }
+        // ---- the search box ----
+        // Sits above the scroll area so it stays put while the results move. An
+        // empty box puts everything back exactly as it was, including which sections
+        // the user had open, so searching never quietly rearranges the panel.
+        const searchWrap = document.createElement("div");
+        searchWrap.style.cssText =
+            "display:flex;flex-direction:column;gap:6px;flex:none;margin-bottom:12px";
+        const search = document.createElement("input");
+        search.type = "search";
+        search.placeholder = "Search settings";
+        search.setAttribute("aria-label", "Search settings");
+        styleField(search);
+        search.style.width = "100%";
+        search.style.boxSizing = "border-box";
+        const searchNote = document.createElement("div");
+        searchNote.style.cssText =
+            "font-size:12px;min-height:1em;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+        const runSearch = () => {
+            const q = search.value.trim().toLowerCase();
+            // Every row buildRow makes is a flex column, so hidden rows are put back
+            // to "flex" rather than "". Clearing the property instead would drop the
+            // display that the row's own inline style set, and a <label> row would
+            // fall back to inline and lose its layout.
+            if (!q) {
+                for (const r of searchRows)
+                    r.row.style.display = "flex";
+                for (const s of panelSections) {
+                    s.sec.style.display = "flex";
+                    if (s.setOpen)
+                        s.setOpen(openGroups.has(s.title));
+                }
+                searchNote.textContent = "";
+                return;
+            }
+            let hits = 0;
+            for (const s of panelSections) {
+                // A section whose own title matches keeps all of its rows, so searching
+                // for a section name browses it rather than emptying it.
+                const titleHit = s.keywords.indexOf(q) >= 0;
+                let any = titleHit;
+                for (const r of searchRows) {
+                    if (r.section !== s)
+                        continue;
+                    const hit = titleHit || r.text.indexOf(q) >= 0;
+                    r.row.style.display = hit ? "flex" : "none";
+                    if (hit) {
+                        any = true;
+                        hits++;
+                    }
+                }
+                s.sec.style.display = any ? "flex" : "none";
+                if (any && s.setOpen)
+                    s.setOpen(true);
+            }
+            searchNote.textContent = hits
+                ? hits + (hits === 1 ? " setting matches" : " settings match")
+                : "Nothing matches that. Clear the box to see everything again.";
+        };
+        search.addEventListener("input", runSearch);
+        searchWrap.appendChild(search);
+        searchWrap.appendChild(searchNote);
+        panel.appendChild(searchWrap);
         panel.appendChild(scroller);
         // footer: a plain bar below the scroll area, set off by a single hairline
         // rule. flex-wrap lets the buttons stack on a narrow phone screen.
-        const actions = document.createElement('div');
-        actions.style.cssText = 'display:flex;align-items:center;flex-wrap:wrap;gap:8px;flex:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--lumiverse-border,rgba(255,255,255,.08))';
-        const status = document.createElement('span');
-        status.style.cssText = 'flex:1;min-width:120px;font-size:12px;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))';
-        const reset = btn('Reset to defaults', false);
-        reset.addEventListener('click', async () => {
+        const actions = document.createElement("div");
+        actions.style.cssText =
+            "display:flex;align-items:center;flex-wrap:wrap;gap:8px;flex:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--lumiverse-border,rgba(255,255,255,.08))";
+        const status = document.createElement("span");
+        status.style.cssText =
+            "flex:1;min-width:120px;font-size:12px;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+        const reset = btn("Reset to defaults", false);
+        reset.addEventListener("click", async () => {
             let ok = true;
             try {
                 if (ctx?.ui?.showConfirm) {
                     const r = await ctx.ui.showConfirm({
-                        title: 'Reset settings',
-                        message: 'Put every Auto Retry setting back to its default?',
-                        variant: 'warning',
-                        confirmLabel: 'Reset',
+                        title: "Reset settings",
+                        message: "Put every Auto Retry setting back to its default?",
+                        variant: "warning",
+                        confirmLabel: "Reset",
                     });
                     ok = !!r?.confirmed;
                 }
-            } catch(_) {}
-            if (!ok) return;
-            for (const g of SCHEMA) for (const fl of g.fields) cfg[fl.key] = CONFIG[fl.key];
+            }
+            catch (_) { }
+            if (!ok)
+                return;
+            for (const g of SCHEMA)
+                for (const fl of g.fields)
+                    cfg[fl.key] = CONFIG[fl.key];
             saveSaved();
             saveToAccount();
             syncLiveLog();
             syncFloat();
-            syncReplaceButton();
-            if (onSaved) onSaved();
+            syncInputBarActions();
+            if (onSaved)
+                onSaved();
             buildSettingsBody(root, onSaved);
-            log('settings reset to defaults');
+            log("settings reset to defaults");
         });
-        const save = btn('Save', true);
-        save.addEventListener('click', () => {
+        const save = btn("Save", true);
+        save.addEventListener("click", () => {
             // Commit a field the user is still editing, then normalise every number
             // so a blank or out-of-range box can't be saved.
-            const active = (typeof document !== 'undefined') ? document.activeElement: null;
-            if (active && typeof active.blur === 'function') active.blur();
-            for (const g of SCHEMA) for (const fl of g.fields) if (fl.type === 'num') cfg[fl.key] = clampField(fl, cfg[fl.key]);
+            const active = typeof document !== "undefined" ? document.activeElement : null;
+            if (active && typeof active.blur === "function")
+                active.blur();
+            for (const g of SCHEMA)
+                for (const fl of g.fields)
+                    if (fl.type === "num")
+                        cfg[fl.key] = clampField(fl, cfg[fl.key]);
             saveSaved();
             saveToAccount();
             syncLiveLog();
             syncFloat();
-            syncReplaceButton();
-            if (onSaved) onSaved();
-            status.textContent = 'Saved. Takes effect on the next reply.';
-            log('settings saved', cfg);
+            syncInputBarActions();
+            if (onSaved)
+                onSaved();
+            status.textContent = "Saved. Takes effect on the next reply.";
+            log("settings saved", cfg);
             setTimeout(() => {
-                status.textContent = '';
-            },
-            2600);
+                status.textContent = "";
+            }, 2600);
         });
         actions.appendChild(status);
         actions.appendChild(reset);
         actions.appendChild(save);
         panel.appendChild(actions);
         root.appendChild(panel);
+        // Secondary text (hints, section headers, status lines) is meant to read
+        // quieter than the rest, so it is held to a gentler floor than the controls
+        // and only repainted on a theme where it has all but vanished.
+        ensureReadableTree(panel, 2.6);
     }
     // Puts the button selectors in a section back to what the extension shipped
     // with. Pick it for me makes these easy to overwrite, including with the wrong
@@ -3127,25 +4096,32 @@ export function setup(ctx, opts) {
         const keys = (group && group.fields ? group.fields : [])
             .filter((f) => f && f.selector)
             .map((f) => f.key);
-        if (!keys.length) return null;
-        const row = document.createElement('div');
+        if (!keys.length)
+            return null;
+        const row = document.createElement("div");
         // Column, not a wrapping row: with a row the status sits beside the button
         // when it is short and jumps below it when it is long, which reads as a bug.
-        row.style.cssText = 'display:flex;flex-direction:column;align-items:flex-start;gap:6px';
-        const b = btn('Reset button selectors', false);
-        b.style.padding = '5px 12px';
-        const note = document.createElement('span');
+        row.style.cssText =
+            "display:flex;flex-direction:column;align-items:flex-start;gap:6px";
+        const b = btn("Reset button selectors", false);
+        b.style.padding = "5px 12px";
+        const note = document.createElement("span");
         // Height is held even while empty so the panel doesn't shift when it fills.
-        note.style.cssText = 'font-size:12px;min-height:16px;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))';
-        b.addEventListener('click', () => {
+        note.style.cssText =
+            "font-size:12px;min-height:16px;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+        b.addEventListener("click", () => {
             let changed = 0;
             for (const k of keys) {
-                if (cfg[k] !== CONFIG[k]) changed++;
+                if (cfg[k] !== CONFIG[k])
+                    changed++;
                 cfg[k] = CONFIG[k];
                 const set = fieldSetters[k];
-                if (set) set(cfg[k]);
+                if (set)
+                    set(cfg[k]);
             }
-            note.textContent = changed ? 'back to defaults, press Save to keep' : 'already at the defaults';
+            note.textContent = changed
+                ? "back to defaults, press Save to keep"
+                : "already at the defaults";
         });
         row.appendChild(b);
         row.appendChild(note);
@@ -3154,62 +4130,76 @@ export function setup(ctx, opts) {
     function buildRow(f) {
         // bool/num wrap in <label> so the whole row toggles or focuses its control.
         // text rows use <div> because they contain a Test button, which shouldn't sit inside a label.
-        const row = document.createElement(f.type === 'text' ? 'div': 'label');
-        row.style.cssText = 'display:flex;flex-direction:column;gap:5px;cursor:' + (f.type === 'text' ? 'default': 'pointer');
+        const row = document.createElement(f.type === "text" ? "div" : "label");
+        row.style.cssText =
+            "display:flex;flex-direction:column;gap:5px;cursor:" +
+                (f.type === "text" ? "default" : "pointer");
         // The hint is hidden by default and revealed by the "?" next to the label
         // (hover on a mouse, tap on touch), so rows stay compact. Kept in the DOM.
         let hintEl = null;
         if (f.hint) {
-            hintEl = document.createElement('span');
+            hintEl = document.createElement("span");
             hintEl.textContent = f.hint;
-            hintEl.style.cssText = 'display:none;font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))';
+            hintEl.style.cssText =
+                "display:none;font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
         }
-        const top = document.createElement('div');
-        top.style.cssText = 'display:flex;align-items:center;gap:10px;justify-content:space-between';
-        const labelWrap = document.createElement('div');
-        labelWrap.style.cssText = 'display:flex;align-items:center;gap:6px;min-width:0';
-        const name = document.createElement('span');
+        const top = document.createElement("div");
+        top.style.cssText =
+            "display:flex;align-items:center;gap:10px;justify-content:space-between";
+        const labelWrap = document.createElement("div");
+        labelWrap.style.cssText =
+            "display:flex;align-items:center;gap:6px;min-width:0";
+        const name = document.createElement("span");
         name.textContent = f.label;
-        name.style.cssText = 'font-size:13.5px';
+        name.style.cssText = "font-size:13.5px";
         labelWrap.appendChild(name);
         if (hintEl) {
-            const info = document.createElement('button');
-            info.type = 'button';
-            info.textContent = '?';
-            info.setAttribute('aria-label', 'Show description for ' + f.label);
-            info.style.cssText = 'flex:none;width:18px;height:18px;padding:0;line-height:1;border-radius:50%;border:1px solid var(--lumiverse-border,rgba(255,255,255,.3));background:transparent;color:var(--lumiverse-text-muted,rgba(255,255,255,.65));font-size:11px;cursor:pointer';
+            const info = document.createElement("button");
+            info.type = "button";
+            info.textContent = "?";
+            info.setAttribute("aria-label", "Show description for " + f.label);
+            info.style.cssText =
+                "flex:none;width:18px;height:18px;padding:0;line-height:1;border-radius:50%;border:1px solid var(--lumiverse-border,rgba(255,255,255,.3));background:transparent;color:var(--lumiverse-text-muted,rgba(255,255,255,.65));font-size:11px;cursor:pointer";
             const setHint = (show) => {
-                hintEl.style.display = show ? 'block': 'none';
-                info.style.borderColor = show ? 'var(--lumiverse-primary,rgba(147,112,219,.9))': 'var(--lumiverse-border,rgba(255,255,255,.3))';
-                info.style.color = show ? 'var(--lumiverse-primary,rgba(147,112,219,.9))': 'var(--lumiverse-text-muted,rgba(255,255,255,.65))';
+                hintEl.style.display = show ? "block" : "none";
+                info.style.borderColor = show
+                    ? "var(--lumiverse-primary,rgba(147,112,219,.9))"
+                    : "var(--lumiverse-border,rgba(255,255,255,.3))";
+                info.style.color = show
+                    ? "var(--lumiverse-primary,rgba(147,112,219,.9))"
+                    : "var(--lumiverse-text-muted,rgba(255,255,255,.65))";
             };
             // Mouse devices reveal on hover (and keyboard focus); touch devices, which
             // can't hover, toggle on tap.
-            const canHover = typeof window !== 'undefined' && !!window.matchMedia && window.matchMedia('(hover: hover)').matches;
+            const canHover = typeof window !== "undefined" &&
+                !!window.matchMedia &&
+                window.matchMedia("(hover: hover)").matches;
             if (canHover) {
-                info.addEventListener('mouseenter', () => setHint(true));
-                info.addEventListener('mouseleave', () => setHint(false));
-                info.addEventListener('focus', () => setHint(true));
-                info.addEventListener('blur', () => setHint(false));
+                info.addEventListener("mouseenter", () => setHint(true));
+                info.addEventListener("mouseleave", () => setHint(false));
+                info.addEventListener("focus", () => setHint(true));
+                info.addEventListener("blur", () => setHint(false));
             }
-            info.addEventListener('click', (e) => {
+            info.addEventListener("click", (e) => {
                 // Stop the row-label from toggling its control when the button is clicked.
                 if (e) {
                     e.preventDefault();
                     e.stopPropagation();
                 }
                 // On touch, click toggles. On a mouse, hover already handles it.
-                if (!canHover) setHint(hintEl.style.display === 'none');
+                if (!canHover)
+                    setHint(hintEl.style.display === "none");
             });
             labelWrap.appendChild(info);
         }
         top.appendChild(labelWrap);
-        if (f.type === 'bool') {
-            const input = document.createElement('input');
-            input.type = 'checkbox';
+        if (f.type === "bool") {
+            const input = document.createElement("input");
+            input.type = "checkbox";
             input.checked = !!cfg[f.key];
-            input.style.cssText = 'flex:none;width:20px;height:20px;accent-color:var(--lumiverse-primary,rgba(147,112,219,.9));cursor:pointer';
-            input.addEventListener('change', () => {
+            input.style.cssText =
+                "flex:none;width:20px;height:20px;accent-color:var(--lumiverse-primary,rgba(147,112,219,.9));cursor:pointer";
+            input.addEventListener("change", () => {
                 cfg[f.key] = input.checked;
             });
             fieldSetters[f.key] = (v) => {
@@ -3217,15 +4207,16 @@ export function setup(ctx, opts) {
             };
             top.appendChild(input);
             row.appendChild(top);
-        } else if (f.type === 'num') {
-            const input = document.createElement('input');
-            input.type = 'number';
-            input.inputMode = 'numeric';
+        }
+        else if (f.type === "num") {
+            const input = document.createElement("input");
+            input.type = "number";
+            input.inputMode = "numeric";
             input.value = String(cfg[f.key]);
             styleField(input);
-            input.style.width = '120px';
-            input.style.flex = 'none';
-            input.addEventListener('change', () => {
+            input.style.width = "120px";
+            input.style.flex = "none";
+            input.addEventListener("change", () => {
                 cfg[f.key] = clampField(f, input.value);
                 input.value = String(cfg[f.key]);
             });
@@ -3234,29 +4225,32 @@ export function setup(ctx, opts) {
             };
             top.appendChild(input);
             row.appendChild(top);
-        } else {
+        }
+        else {
             row.appendChild(top);
             const isMultiline = !f.selector;
-            const input = document.createElement(isMultiline ? 'textarea': 'input');
+            const input = document.createElement(isMultiline ? "textarea" : "input");
             if (isMultiline) {
                 input.rows = 4;
-                input.style.resize = 'vertical';
-                const expand = btn('Expand', false);
-                expand.style.cssText += 'min-height:0;padding:3px 10px;font-size:12px;flex:none';
-                expand.addEventListener('click', () => {
+                input.style.resize = "vertical";
+                const expand = btn("Expand", false);
+                expand.style.cssText +=
+                    "min-height:0;padding:3px 10px;font-size:12px;flex:none";
+                expand.addEventListener("click", () => {
                     openExpandEditor(f.label, input.value, (val) => {
                         input.value = val;
                         cfg[f.key] = val;
                     });
                 });
                 top.appendChild(expand);
-            } else {
-                input.type = 'text';
+            }
+            else {
+                input.type = "text";
             }
             input.value = String(cfg[f.key]);
-            input.setAttribute('aria-label', f.label);
+            input.setAttribute("aria-label", f.label);
             styleField(input);
-            input.addEventListener('change', () => {
+            input.addEventListener("change", () => {
                 cfg[f.key] = input.value;
             });
             fieldSetters[f.key] = (v) => {
@@ -3264,42 +4258,48 @@ export function setup(ctx, opts) {
             };
             row.appendChild(input);
             if (f.selector) {
-                const testRow = document.createElement('div');
-                testRow.style.cssText = 'display:flex;flex-direction:column;align-items:flex-start;gap:6px';
+                const testRow = document.createElement("div");
+                testRow.style.cssText =
+                    "display:flex;flex-direction:column;align-items:flex-start;gap:6px";
                 // The buttons share a line and wrap if the screen is narrow; the result
                 // sits under them either way, so it never gets squeezed or moved around.
-                const testBtns = document.createElement('div');
-                testBtns.style.cssText = 'display:flex;align-items:center;gap:8px;flex-wrap:wrap';
-                const test = btn('Test', false);
-                test.style.padding = '5px 12px';
-                const res = document.createElement('span');
-                res.style.cssText = 'font-size:12px;min-height:16px;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))';
-                test.addEventListener('click', () => {
+                const testBtns = document.createElement("div");
+                testBtns.style.cssText =
+                    "display:flex;align-items:center;gap:8px;flex-wrap:wrap";
+                const test = btn("Test", false);
+                test.style.padding = "5px 12px";
+                const res = document.createElement("span");
+                res.style.cssText =
+                    "font-size:12px;min-height:16px;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+                test.addEventListener("click", () => {
                     const sel = input.value.trim();
                     if (!sel) {
-                        res.textContent = 'type a selector first';
-                        res.style.color = 'var(--lumiverse-text-muted,rgba(255,255,255,.65))';
+                        res.textContent = "type a selector first";
+                        res.style.color = "var(--lumiverse-text-muted,rgba(255,255,255,.65))";
                         return;
                     }
                     const state = selectorState(sel);
-                    if (state === 'invalid selector') {
+                    if (state === "invalid selector") {
                         res.textContent = "that selector isn't valid";
-                        res.style.color = 'var(--lumiverse-danger,#ef4444)';
+                        res.style.color = "var(--lumiverse-danger,#ef4444)";
                         return;
                     }
-                    if (state === 'match') {
-                        res.textContent = 'match found';
-                        res.style.color = 'var(--lumiverse-success,#22c55e)';
+                    if (state === "match") {
+                        res.textContent = "match found";
+                        res.style.color = "var(--lumiverse-success,#22c55e)";
                         return;
                     }
-                    res.textContent = state === 'match, not clickable right now' ? 'found, but not clickable right now': 'no match right now';
-                    res.style.color = 'var(--lumiverse-text-muted,rgba(255,255,255,.65))';
+                    res.textContent =
+                        state === "match, not clickable right now"
+                            ? "found, but not clickable right now"
+                            : "no match right now";
+                    res.style.color = "var(--lumiverse-text-muted,rgba(255,255,255,.65))";
                 });
-                const pick = btn('Pick it for me', false);
-                pick.style.padding = '5px 12px';
-                pick.addEventListener('click', () => {
+                const pick = btn("Pick it for me", false);
+                pick.style.padding = "5px 12px";
+                pick.addEventListener("click", () => {
                     cfg[f.key] = input.value;
-                    startPicking(f.key, String(f.label || ''));
+                    startPicking(f.key, String(f.label || ""));
                 });
                 testBtns.appendChild(test);
                 testBtns.appendChild(pick);
@@ -3308,88 +4308,120 @@ export function setup(ctx, opts) {
                 row.appendChild(testRow);
             }
         }
-        if (hintEl) row.appendChild(hintEl);
+        if (hintEl)
+            row.appendChild(hintEl);
         return row;
     }
     function styleField(input) {
-        input.style.cssText += 'padding:9px 10px;border-radius:var(--lumiverse-radius,8px);' + 'border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));' + 'background:var(--lumiverse-fill-subtle,rgba(255,255,255,.05));' + 'color:var(--lumiverse-text,#eee);font:13px var(--lumiverse-font-family,system-ui);outline:none;' + 'transition:border-color var(--lumiverse-transition-fast,150ms ease)';
+        input.style.cssText +=
+            "padding:9px 10px;border-radius:var(--lumiverse-radius,8px);" +
+                "border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));" +
+                "background:var(--lumiverse-fill-subtle,rgba(255,255,255,.05));" +
+                "color:var(--lumiverse-text,#eee);font:13px var(--lumiverse-font-family,system-ui);outline:none;" +
+                "transition:border-color var(--lumiverse-transition-fast,150ms ease)";
+        ensureReadable(input);
         // On focus, tint the border so the active field is clear. No glow ring.
-        input.addEventListener('focus', () => {
-            input.style.borderColor = 'var(--lumiverse-primary,rgba(147,112,219,.9))';
+        input.addEventListener("focus", () => {
+            input.style.borderColor = "var(--lumiverse-primary,rgba(147,112,219,.9))";
         });
-        input.addEventListener('blur', () => {
-            input.style.borderColor = 'var(--lumiverse-border,rgba(255,255,255,.16))';
+        input.addEventListener("blur", () => {
+            input.style.borderColor = "var(--lumiverse-border,rgba(255,255,255,.16))";
         });
     }
     function btn(label, primary) {
-        const b = document.createElement('button');
+        const b = document.createElement("button");
         b.textContent = label;
-        b.style.cssText = 'min-height:36px;padding:8px 14px;border-radius:var(--lumiverse-radius,8px);cursor:pointer;' + 'font:13px var(--lumiverse-font-family,system-ui);transition:filter var(--lumiverse-transition-fast,150ms ease);' + (primary ? 'border:1px solid transparent;background:var(--lumiverse-primary,rgba(147,112,219,.9));color:var(--lumiverse-text,rgba(255,255,255,.9))': 'border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));background:transparent;color:var(--lumiverse-text,#eee)');
-        b.addEventListener('mouseenter', () => {
-            b.style.filter = 'brightness(1.12)';
+        b.style.cssText =
+            "min-height:36px;padding:8px 14px;border-radius:var(--lumiverse-radius,8px);cursor:pointer;" +
+                "font:13px var(--lumiverse-font-family,system-ui);transition:filter var(--lumiverse-transition-fast,150ms ease);" +
+                (primary
+                    ? // A filled button's label must contrast with the fill, not with the
+                        // panel, so this asks for the theme's on-accent colour and falls back
+                        // to white rather than reusing the body text colour, which on a light
+                        // accent is the same colour as the fill. ensureReadable then checks
+                        // what was actually painted and corrects it if the theme's own value
+                        // is no better.
+                        "border:1px solid transparent;background:var(--lumiverse-primary,rgba(147,112,219,.9));" +
+                            "color:var(--lumiverse-primary-contrast,var(--lumiverse-on-primary,#ffffff))"
+                    : "border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));background:transparent;color:var(--lumiverse-text,#eee)");
+        ensureReadable(b);
+        b.addEventListener("mouseenter", () => {
+            b.style.filter = "brightness(1.12)";
         });
-        b.addEventListener('mouseleave', () => {
-            b.style.filter = 'none';
+        b.addEventListener("mouseleave", () => {
+            b.style.filter = "none";
         });
         // Press feedback that also works on touch, where hover never fires.
         const pressClear = () => {
-            b.style.filter = 'none';
+            b.style.filter = "none";
         };
-        b.addEventListener('pointerdown', () => {
-            b.style.filter = 'brightness(.9)';
+        b.addEventListener("pointerdown", () => {
+            b.style.filter = "brightness(.9)";
         });
-        b.addEventListener('pointerup', pressClear);
-        b.addEventListener('pointercancel', pressClear);
-        b.addEventListener('pointerleave', pressClear);
+        b.addEventListener("pointerup", pressClear);
+        b.addEventListener("pointercancel", pressClear);
+        b.addEventListener("pointerleave", pressClear);
         return b;
     }
     // Full-size editor for a multiline field. Opens a large textarea over the
     // modal so long rule lists are easier to read and edit. Done writes the text
     // back; Cancel, Escape, or a click outside discards.
     function openExpandEditor(label, initial, onDone) {
-        if (typeof document === 'undefined') return;
+        if (typeof document === "undefined")
+            return;
         // Only one open at a time; shut a stray previous one first.
         if (closeExpandEditor) {
             try {
                 closeExpandEditor();
-            } catch (_) {}
+            }
+            catch (_) { }
         }
-        const overlay = document.createElement('div');
-        overlay.style.cssText = 'position:fixed;inset:0;z-index:2147483600;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;background:var(--lumiverse-modal-backdrop,rgba(0,0,0,.6));font-family:var(--lumiverse-font-family,system-ui)';
-        const box = document.createElement('div');
-        box.style.cssText = 'display:flex;flex-direction:column;gap:10px;width:min(720px,96vw);height:min(80vh,640px);box-sizing:border-box;padding:14px;background:var(--lumiverse-bg-elevated,rgba(35,30,48,.9));border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));border-radius:var(--lumiverse-radius,12px);box-shadow:var(--lumiverse-shadow-xl,0 20px 60px rgba(0,0,0,.5));color:var(--lumiverse-text,#eee)';
-        const title = document.createElement('div');
+        const overlay = document.createElement("div");
+        overlay.style.cssText =
+            "position:fixed;inset:0;z-index:2147483600;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;background:var(--lumiverse-modal-backdrop,rgba(0,0,0,.6));font-family:var(--lumiverse-font-family,system-ui)";
+        const box = document.createElement("div");
+        box.style.cssText =
+            "display:flex;flex-direction:column;gap:10px;width:min(720px,96vw);height:min(80vh,640px);box-sizing:border-box;padding:14px;background:var(--lumiverse-bg-elevated,rgba(35,30,48,.9));border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));border-radius:var(--lumiverse-radius,12px);box-shadow:var(--lumiverse-shadow-xl,0 20px 60px rgba(0,0,0,.5));color:var(--lumiverse-text,#eee)";
+        const title = document.createElement("div");
         title.textContent = label;
-        title.style.cssText = 'flex:none;font-size:14px;font-family:var(--lumiverse-font-family,system-ui)';
-        const ta = document.createElement('textarea');
+        title.style.cssText =
+            "flex:none;font-size:14px;font-family:var(--lumiverse-font-family,system-ui)";
+        const ta = document.createElement("textarea");
         ta.value = initial;
-        ta.setAttribute('aria-label', label);
-        ta.style.cssText = 'flex:1;width:100%;box-sizing:border-box;resize:none;padding:10px;border-radius:var(--lumiverse-radius,8px);border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));background:var(--lumiverse-fill-subtle,rgba(255,255,255,.05));color:var(--lumiverse-text,#eee);outline:none;font:13px/1.5 var(--lumiverse-font-family,system-ui)';
-        const row = document.createElement('div');
-        row.style.cssText = 'display:flex;justify-content:flex-end;gap:8px;flex:none';
-        const cancel = btn('Cancel', false);
-        const done = btn('Done', true);
+        ta.setAttribute("aria-label", label);
+        ta.style.cssText =
+            "flex:1;width:100%;box-sizing:border-box;resize:none;padding:10px;border-radius:var(--lumiverse-radius,8px);border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));background:var(--lumiverse-fill-subtle,rgba(255,255,255,.05));color:var(--lumiverse-text,#eee);outline:none;font:13px/1.5 var(--lumiverse-font-family,system-ui)";
+        const row = document.createElement("div");
+        row.style.cssText =
+            "display:flex;justify-content:flex-end;gap:8px;flex:none";
+        const cancel = btn("Cancel", false);
+        const done = btn("Done", true);
         const onKey = (e) => {
-            if (e && e.key === 'Escape') close();
+            if (e && e.key === "Escape")
+                close();
         };
         function close() {
             try {
                 overlay.remove();
-            } catch (_) {}
+            }
+            catch (_) { }
             try {
-                document.removeEventListener('keydown', onKey);
-            } catch (_) {}
-            if (closeExpandEditor === close) closeExpandEditor = null;
+                document.removeEventListener("keydown", onKey);
+            }
+            catch (_) { }
+            if (closeExpandEditor === close)
+                closeExpandEditor = null;
         }
-        cancel.addEventListener('click', close);
-        done.addEventListener('click', () => {
+        cancel.addEventListener("click", close);
+        done.addEventListener("click", () => {
             onDone(ta.value);
             close();
         });
-        overlay.addEventListener('click', (e) => {
-            if (e.target === overlay) close();
+        overlay.addEventListener("click", (e) => {
+            if (e.target === overlay)
+                close();
         });
-        document.addEventListener('keydown', onKey);
+        document.addEventListener("keydown", onKey);
         row.appendChild(cancel);
         row.appendChild(done);
         box.appendChild(title);
@@ -3397,6 +4429,7 @@ export function setup(ctx, opts) {
         box.appendChild(row);
         overlay.appendChild(box);
         (document.body || document.documentElement).appendChild(overlay);
+        ensureReadableTree(box);
         closeExpandEditor = close;
         // The textarea is not focused, so opening it doesn't pop the
         // on-screen keyboard on mobile. Tap the text when you want to edit.
@@ -3404,49 +4437,82 @@ export function setup(ctx, opts) {
     // Lets someone point at the control instead of writing a selector for it. The
     // settings modal steps out of the way, the next click on the page is caught
     // before the app sees it, and the element under it becomes the selector.
-    const PRESS_EVENTS = ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'touchstart', 'touchend'];
+    const PRESS_EVENTS = [
+        "pointerdown",
+        "pointerup",
+        "mousedown",
+        "mouseup",
+        "touchstart",
+        "touchend",
+    ];
     function startPicking(key, label) {
-        if (typeof document === 'undefined') return;
+        if (typeof document === "undefined")
+            return;
         // Refresh the baseline first: dismissing the modal rolls cfg back to it, so
         // without this every unsaved edit would be lost by opening the picker.
         if (modalSnapshot) {
-            try { modalSnapshot(); } catch (_) {}
+            try {
+                modalSnapshot();
+            }
+            catch (_) { }
         }
         if (modalHandle) {
-            try { modalHandle.dismiss(); } catch (_) {}
+            try {
+                modalHandle.dismiss();
+            }
+            catch (_) { }
             modalHandle = null;
         }
         let done = false;
         const finish = (sel, message) => {
-            if (done) return;
+            if (done)
+                return;
             done = true;
-            try { document.removeEventListener('click', onPick, true); } catch (_) {}
-            try { document.removeEventListener('keydown', onKey, true); } catch (_) {}
+            try {
+                document.removeEventListener("click", onPick, true);
+            }
+            catch (_) { }
+            try {
+                document.removeEventListener("keydown", onKey, true);
+            }
+            catch (_) { }
             for (const type of PRESS_EVENTS) {
-                try { document.removeEventListener(type, swallow, true); } catch (_) {}
+                try {
+                    document.removeEventListener(type, swallow, true);
+                }
+                catch (_) { }
             }
             hideToast();
-            if (sel) cfg[key] = sel;
+            if (sel)
+                cfg[key] = sel;
             openSettings();
-            if (message) showToast(message, { force: true, top: true });
+            if (message)
+                showToast(message, { force: true, top: true });
         };
         const onPick = (e) => {
             const t = e && e.target;
             // Our own toast is on screen during this, so let its buttons work.
             try {
-                if (t && t.closest && t.closest('#__lvRetryToast')) return;
-            } catch (_) {}
+                if (t && t.closest && t.closest("#__lvRetryToast"))
+                    return;
+            }
+            catch (_) { }
             // Swallowed so picking the stop or regenerate control doesn't also fire it.
-            try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
+            try {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            catch (_) { }
             const sel = deriveSelector(t);
             if (!sel) {
                 finish(null, "Couldn't identify that one. Try clicking the button itself rather than an icon inside it.");
                 return;
             }
-            finish(sel, 'Set to ' + sel);
+            finish(sel, "Set to " + sel);
         };
         const onKey = (e) => {
-            if (e && e.key === 'Escape') finish(null, 'Picking cancelled.');
+            if (e && e.key === "Escape")
+                finish(null, "Picking cancelled.");
         };
         // Some controls act on pointerdown rather than click. Their listeners are cut
         // off here so nothing fires while picking. Only propagation is stopped: a
@@ -3455,52 +4521,68 @@ export function setup(ctx, opts) {
         const swallow = (e) => {
             const t = e && e.target;
             try {
-                if (t && t.closest && t.closest('#__lvRetryToast')) return;
-            } catch (_) {}
-            try { e.stopPropagation(); } catch (_) {}
+                if (t && t.closest && t.closest("#__lvRetryToast"))
+                    return;
+            }
+            catch (_) { }
+            try {
+                e.stopPropagation();
+            }
+            catch (_) { }
         };
-        for (const type of PRESS_EVENTS) document.addEventListener(type, swallow, true);
-        document.addEventListener('click', onPick, true);
-        document.addEventListener('keydown', onKey, true);
+        for (const type of PRESS_EVENTS)
+            document.addEventListener(type, swallow, true);
+        document.addEventListener("click", onPick, true);
+        document.addEventListener("keydown", onKey, true);
         // The field labels already read "Your ... button", so the leading "your" is
         // dropped rather than repeated back.
-        const what = String(label || '').replace(/^your\s+/i, '').trim() || 'retry button';
-        // "Esc to cancel" means nothing on a touch device, where the Cancel button is
-        // the only way out.
-        const hasKeyboard = typeof window !== 'undefined' && !!window.matchMedia && window.matchMedia('(hover: hover)').matches;
-        showToast('Click your ' + what + '. ' + (hasKeyboard ? 'Esc or Cancel to stop.' : 'Or press Cancel.'), {
+        const what = String(label || "").replace(/^your\s+/i, "").trim() || "retry button";
+        const hasKeyboard = typeof window !== "undefined" &&
+            !!window.matchMedia &&
+            window.matchMedia("(hover: hover)").matches;
+        showToast("Click your " + what + ". " + (hasKeyboard ? "Esc or Cancel to stop." : "Or press Cancel."), {
             sticky: true,
             force: true,
             top: true,
-            cancel: () => finish(null, 'Picking cancelled.')
+            cancel: () => finish(null, "Picking cancelled."),
         });
     }
     function openSettings() {
         if (!ctx?.ui?.showModal) {
-            log('host has no modal API; cannot open settings');
+            log("host has no modal API; cannot open settings");
             return;
         }
         try {
             if (modalHandle) {
                 try {
                     modalHandle.dismiss();
-                } catch(_) {}
+                }
+                catch (_) { }
                 modalHandle = null;
             }
             // Size to the screen so it fits on a phone as well as a desktop.
-            const vw = (typeof window !== 'undefined' && window.innerWidth) ? window.innerWidth: 480;
-            const vh = (typeof window !== 'undefined' && window.innerHeight) ? window.innerHeight: 720;
+            const vw = typeof window !== "undefined" && window.innerWidth
+                ? window.innerWidth
+                : 480;
+            const vh = typeof window !== "undefined" && window.innerHeight
+                ? window.innerHeight
+                : 720;
             const modal = ctx.ui.showModal({
-                title: 'Auto Retry settings',
+                title: "Auto Retry settings",
                 width: Math.min(460, vw - 24),
                 maxHeight: Math.min(560, vh - 24),
             });
             modalHandle = modal;
             modalRoot = modal.root;
+            // Baseline of every saved setting at open. Edits below change cfg live, but
+            // closing the modal with X or tapping outside restores this baseline, so
+            // nothing sticks unless Save is pressed. Save and Reset refresh the baseline.
             let baseline = {};
             const snapshot = () => {
                 baseline = {};
-                for (const g of SCHEMA) for (const fl of g.fields) baseline[fl.key] = cfg[fl.key];
+                for (const g of SCHEMA)
+                    for (const fl of g.fields)
+                        baseline[fl.key] = cfg[fl.key];
             };
             snapshot();
             modalSnapshot = snapshot;
@@ -3509,44 +4591,52 @@ export function setup(ctx, opts) {
                 if (closeExpandEditor) {
                     try {
                         closeExpandEditor();
-                    } catch (_) {}
+                    }
+                    catch (_) { }
                 }
-                for (const g of SCHEMA) for (const fl of g.fields) cfg[fl.key] = baseline[fl.key];
+                for (const g of SCHEMA)
+                    for (const fl of g.fields)
+                        cfg[fl.key] = baseline[fl.key];
                 modalHandle = null;
                 modalRoot = null;
                 modalSnapshot = null;
             });
-        } catch(e) {
-            log('failed to open settings', e);
+        }
+        catch (e) {
+            log("failed to open settings", e);
         }
     }
     // entry point: a button in the chat input "Extras" popover
     try {
         if (ctx?.ui?.registerInputBarAction) {
             const action = ctx.ui.registerInputBarAction({
-                id: 'auto-retry-settings',
-                label: 'Auto Retry settings',
+                id: "auto-retry-settings",
+                label: "Auto Retry settings",
                 iconSvg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 4 21 9 16 9"/></svg>',
             });
             disposers.push(action.onClick(() => openSettings()));
             disposers.push(() => {
                 try {
                     action.destroy();
-                } catch(_) {}
+                }
+                catch (_) { }
             });
-        } else {
-            log('host has no input bar action API; open settings via ctx only');
         }
-    } catch(e) {
-        log('failed to register settings action', e);
+        else {
+            log("host has no input bar action API; open settings via ctx only");
+        }
+    }
+    catch (e) {
+        log("failed to register settings action", e);
     }
     // backup stop-press catcher (see onDocClick)
-    if (typeof document !== 'undefined') {
-        document.addEventListener('click', onDocClick, true);
+    if (typeof document !== "undefined") {
+        document.addEventListener("click", onDocClick, true);
         disposers.push(() => {
             try {
-                document.removeEventListener('click', onDocClick, true);
-            } catch(_) {}
+                document.removeEventListener("click", onDocClick, true);
+            }
+            catch (_) { }
         });
     }
     // Wrap each listener so a throw inside a handler is logged, never escapes into
@@ -3554,85 +4644,123 @@ export function setup(ctx, opts) {
     const safe = (label, fn) => (p) => {
         try {
             fn(p);
-        } catch(e) {
-            log('handler error in ' + label, e);
+        }
+        catch (e) {
+            log("handler error in " + label, e);
         }
     };
     let offs = [];
     try {
-        offs = [ctx.events.on('GENERATION_STARTED', safe('GENERATION_STARTED', onStart)), ctx.events.on('STREAM_TOKEN_RECEIVED', safe('STREAM_TOKEN_RECEIVED', onToken)), ctx.events.on('GENERATION_ENDED', safe('GENERATION_ENDED', onEnd)), ctx.events.on('GENERATION_STOPPED', safe('GENERATION_STOPPED', onStop)), ];
-    } catch(e) {
-        log('failed to subscribe to generation events', e);
+        offs = [
+            ctx.events.on("GENERATION_STARTED", safe("GENERATION_STARTED", onStart)),
+            ctx.events.on("STREAM_TOKEN_RECEIVED", safe("STREAM_TOKEN_RECEIVED", onToken)),
+            ctx.events.on("GENERATION_ENDED", safe("GENERATION_ENDED", onEnd)),
+            ctx.events.on("GENERATION_STOPPED", safe("GENERATION_STOPPED", onStop)),
+        ];
+    }
+    catch (e) {
+        log("failed to subscribe to generation events", e);
     }
     syncLiveLog();
     syncFloat();
     loadFromAccount();
-    syncReplaceButton();
+    syncInputBarActions();
     try {
-        if (ctx && typeof ctx.onBackendMessage === 'function') {
+        if (ctx && typeof ctx.onBackendMessage === "function") {
             const offRep = ctx.onBackendMessage(async (msg) => {
-              try {
-                if (!msg) return;
-                if (msg.type === 'confirm_edit') {
-                    const yes = await confirmEdit('Apply your word swaps to this reply?');
-                    if (yes && ctx && typeof ctx.sendToBackend === 'function') {
-                        ctx.sendToBackend({ type: 'apply_replace_now', chatId: msg.chatId, messageId: msg.messageId, onlyMessage: true, requestId: 'ar-rep-' + Date.now() });
+                try {
+                    if (!msg)
+                        return;
+                    if (msg.type === "confirm_edit") {
+                        const yes = await confirmEdit("Apply your word swaps to this reply?");
+                        if (yes && ctx && typeof ctx.sendToBackend === "function") {
+                            ctx.sendToBackend({ type: "apply_replace_now", chatId: msg.chatId, messageId: msg.messageId, onlyMessage: true, requestId: "ar-rep-" + Date.now() });
+                        }
+                        return;
                     }
-                    return;
-                }
-                // Sent after an automatic swap. The message is already saved; this only
-                // brings what is on screen into line with it.
-                if (msg.type === 'swapped') {
-                    applySwapsToView(msg.pairs || [], !msg.wholeChat);
-                    return;
-                }
-                if (msg.type === 'undo_result') {
-                    if (!msg.ok) showToast('Could not undo the swap.');
-                    else if (!msg.restored) showToast('Nothing to undo.');
-                    else {
+                    // Sent after an automatic swap. The message is already saved; this only
+                    // brings what is on screen into line with it.
+                    if (msg.type === "swapped") {
                         applySwapsToView(msg.pairs || [], !msg.wholeChat);
-                        showToast(msg.restored === 1 ? 'Put the last swap back.' : 'Put ' + msg.restored + ' replies back.');
+                        return;
                     }
-                    return;
+                    if (msg.type !== "replace_now_result")
+                        return;
+                    if (msg.ok)
+                        applySwapsToView(msg.pairs || [], !msg.wholeChat);
+                    if (!msg.ok)
+                        showToast("Could not swap words.");
+                    else if (!msg.hasRules)
+                        showToast("No word swaps are set up yet.");
+                    else if (!msg.found)
+                        showToast("No reply found to swap in this chat.");
+                    else if (msg.changed > 0)
+                        showToast("Swapped words in " + msg.changed + (msg.changed === 1 ? " reply." : " replies."));
+                    else if (msg.skipped > 0)
+                        showToast("Already swapped. Turn on re-swapping to redo it.");
+                    else
+                        showToast("No matching words to swap.");
                 }
-                if (msg.type !== 'replace_now_result') return;
-                if (msg.ok) applySwapsToView(msg.pairs || [], !msg.wholeChat);
-                if (!msg.ok) showToast('Could not swap words.');
-                else if (!msg.hasRules) showToast('No word swaps are set up yet.');
-                else if (!msg.found) showToast('No reply found to swap in this chat.');
-                else if (msg.changed > 0) showToast('Swapped words in ' + msg.changed + (msg.changed === 1 ? ' reply.' : ' replies.'));
-                else if (msg.skipped > 0) showToast('Already swapped. Turn on re-swapping to redo it.');
-                else showToast('No matching words to swap.');
-              } catch(_) {}
+                catch (_) { }
             });
-            disposers.push(() => { try { offRep && offRep(); } catch(_) {} });
+            disposers.push(() => { try {
+                offRep && offRep();
+            }
+            catch (_) { } });
         }
-    } catch(_) {}
-    disposers.push(() => { try { undoActionOff && undoActionOff(); } catch(_) {} try { undoAction && undoAction.destroy(); } catch(_) {} });
-    disposers.push(() => { try { replaceActionOff && replaceActionOff(); } catch(_) {} try { replaceAction && replaceAction.destroy(); } catch(_) {} });
-    log('ready v' + VERSION, cfg);
+    }
+    catch (_) { }
+    // Every Extras entry the extension can register is torn down here. The
+    // swap-whole-chat one used to be missed, so it survived a reload and stacked
+    // up a duplicate button each time.
+    disposers.push(() => { try {
+        replaceActionOff && replaceActionOff();
+    }
+    catch (_) { } try {
+        replaceAction && replaceAction.destroy();
+    }
+    catch (_) { } });
+    disposers.push(() => { try {
+        replaceAllActionOff && replaceAllActionOff();
+    }
+    catch (_) { } try {
+        replaceAllAction && replaceAllAction.destroy();
+    }
+    catch (_) { } });
+    disposers.push(() => { try {
+        toggleActionOff && toggleActionOff();
+    }
+    catch (_) { } try {
+        toggleAction && toggleAction.destroy();
+    }
+    catch (_) { } });
+    log("ready v" + VERSION, cfg);
     return () => {
         clearConfirmWatch();
         if (hideStyleEl) {
             try {
                 hideStyleEl.remove();
-            } catch (_) {}
+            }
+            catch (_) { }
             hideStyleEl = null;
         }
         offs.forEach((o) => {
             try {
                 o && o();
-            } catch(_) {}
+            }
+            catch (_) { }
         });
         disposers.forEach((d) => {
             try {
                 d && d();
-            } catch(_) {}
+            }
+            catch (_) { }
         });
         if (modalHandle) {
             try {
                 modalHandle.dismiss();
-            } catch(_) {}
+            }
+            catch (_) { }
             modalHandle = null;
         }
         hideLiveLog();
@@ -3641,13 +4769,15 @@ export function setup(ctx, opts) {
         chats.clear();
         eventLog.length = 0;
         try {
-            if (typeof document !== 'undefined' && document.getElementById) {
-                const t = document.getElementById('__lvRetryToast');
+            if (typeof document !== "undefined" && document.getElementById) {
+                const t = document.getElementById("__lvRetryToast");
                 if (t) {
                     clearTimeout(t.__h);
-                    if (t.remove) t.remove();
+                    if (t.remove)
+                        t.remove();
                 }
             }
-        } catch(_) {}
+        }
+        catch (_) { }
     };
 }

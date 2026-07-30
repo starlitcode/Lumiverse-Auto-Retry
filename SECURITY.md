@@ -24,11 +24,15 @@ It reads a reply only to run its checks on the one that just arrived, and it doe
 
 Your settings and your word-swap presets are saved twice over: once in your browser's local storage, and once in Lumiverse's own per-user storage so they follow your account between devices. That is the only thing written anywhere.
 
-Separately it keeps the last twenty lines of what it did, in memory only, so the Copy debug info button has something to report. That list dies with the tab. It is never written to disk and never leaves your device.
+Separately it keeps the last twenty lines of what it did, plus a few counters for the session (replies that came back fine, retries fired, and what they fired for), in memory only, so the Copy debug info button has something to report. Both die with the tab. Neither is written to disk and neither leaves your device.
 
 ## One thing to be careful with
 
-The Copy debug info button gathers your settings, your button selectors, your browser string, and that recent activity log. The activity log records what the extension saw, so it can contain short fragments of a reply. Read what you copied before pasting it somewhere public, and untick any section you would rather keep to yourself. The tick boxes are there for exactly that.
+The Copy debug info button gathers your settings, your button selectors, your browser string, the session counters, and that recent activity log. The activity log records what the extension saw, so it can contain short fragments of a reply. Read what you copied before pasting it somewhere public, and untick any section you would rather keep to yourself. The tick boxes are there for exactly that.
+
+The **Copy** button on the on-screen live log is the same thing in miniature: it puts that whole activity log on your clipboard in one tap, fragments included. It is there because selecting text by hand on a phone is awkward, and the same advice applies before you paste it anywhere.
+
+The refusal tester in the settings panel only reads the text you paste into it. It runs the check on your device and reports the verdict; it sends nothing and stores nothing.
 
 ## If you find a problem
 

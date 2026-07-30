@@ -1,10 +1,15 @@
 # All settings
 
-The settings modal is the easy path. The same options live in the CONFIG block at the top of `src/frontend.ts` and `dist/frontend.js`. `dist/frontend.js` is the file the host actually loads, so editing CONFIG there takes effect with no rebuild; editing `src/frontend.ts` needs a `bun build`.
+The settings modal is the easy path, and the **Search settings** box at the top of it is the quickest way to reach one option out of the forty-odd below: type part of a name or a description and it shows the matching rows, opening whichever Advanced section they live in. Clear the box to put the panel back as it was.
+
+The same options live in the CONFIG block at the top of `src/frontend.ts` and `dist/frontend.js`. `dist/frontend.js` is the file the host actually loads, so editing CONFIG there takes effect with no rebuild; editing `src/frontend.ts` needs a `bun run build`.
 
 | Option | Default | Meaning |
 | --- | --- | --- |
 | enabled | true | Master switch. |
+| showFloatingToggle | false | Put a small draggable on/off button over the chat. |
+| floatingToggleSize | 44 | How wide that floating button is, in pixels (28-96). |
+| showExtrasToggle | false | Add an on/off entry to the chat input's Extras menu. Its label says which state it is in. |
 | maxRetries | 4 | Hard cap per message. Nothing retries past this. |
 | pauseWhenFailing | true | Pause auto-retry after several whole runs give up in a row. Cleared by the next reply that comes back fine. |
 | breakerRuns | 3 | How many failed runs in a row trigger the pause. A run is one message that used up all its tries. |

@@ -16,7 +16,7 @@ It watches each reply and re-fires when:
 
 Every retry waits a little longer than the last so it never hammers the server, and waits extra when the server says it is busy. All of the triggers share one retry limit, so no reply is ever retried more than you allow, and nothing can loop forever.
 
-It can also, optionally, run a find-and-replace on replies: swap words you don't like for ones you prefer, saved into the reply. See [Find and replace in replies](docs/word-swaps.md). This is off by default and is the only feature that edits a reply.
+It can also, optionally, run a find-and-replace on replies: swap words you don't like for ones you prefer, saved into the reply. See [Find and replace in replies](docs/word-swaps.md). This is off by default and is the only feature that edits a reply. A swap cannot be undone, so it is worth reading that page before switching it on.
 
 ## Install
 
@@ -34,11 +34,18 @@ Pressing your **Stop** button, or tapping **Cancel** on the retry pop-up, stops 
 
 Open the chat input bar, tap the **Extras** popover, and choose **Auto Retry settings**. Options are grouped by what they do. Simple on/off switches are up top; the groups marked **Advanced** are collapsed by default, so tap one of those headers to reveal its options. Each setting has a **?** next to its name that shows a short description: hover it on a computer, tap it on a phone, so the list stays compact.
 
+The **Search settings** box at the top finds any option by its name or its description, and opens whichever section it lives in, so you never have to remember which group something is under. Clearing the box puts the panel back exactly as it was.
+
 Only **Save** keeps your changes. Closing with the X or tapping outside discards anything you did not save, so you can experiment freely. Saved settings sync to your Lumiverse account, so they follow you to other browsers and devices, and they apply to the next reply. Long text boxes, like your word-swap rules, have an **Expand** button that opens a full-size editor.
+
+The panel takes its colours from your Lumiverse theme, and checks as it draws that every label still contrasts with what is behind it. On a theme whose accent colour sits close to its text colour, a filled button would otherwise come out as a blank rectangle with its label invisible inside it; where that would happen the label is repainted and everything else is left alone.
 
 ## Turning it off quickly
 
-If you switch Auto Retry on and off a lot, turn on **Floating on/off button** in Basics. That puts a small button over the chat that toggles it in one tap. Drag it anywhere; it snaps to the nearest edge and stays where you leave it, and you can set its size or right-click it to hide it or reset its position.
+Two options in Basics, and you can use either or both:
+
+- **Floating on/off button** puts a small button over the chat that toggles it in one tap. Drag it anywhere; it snaps to the nearest edge and stays where you leave it, and you can set its size or right-click it to hide it or reset its position.
+- **On/off button in the Extras menu** adds an entry next to the settings button. Its label says which state it is currently in, so you can check and change it without opening settings, and it takes up no room on screen.
 
 ## Documentation
 

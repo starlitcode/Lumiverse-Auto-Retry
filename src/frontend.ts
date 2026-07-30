@@ -37,10 +37,11 @@ const VERSION = "3.3.0";
 // ---- defaults (the UI overrides these; editing here changes the fallback) ----
 const CONFIG = {
   enabled: true,
-  // quick ways to switch the extension off without opening settings: a small
-  // draggable button over the chat, and/or an entry in the Extras menu.
+  // Two quick ways to switch the extension off without opening settings: a small
+  // draggable button over the chat, and an entry in the chat input's Extras menu.
   showFloatingToggle: false,
   floatingToggleSize: 44,
+  showExtrasToggle: false,
 
   // retry budget
   maxRetries: 4,
@@ -96,9 +97,6 @@ const CONFIG = {
   replaceRandom: false, // when a word has more than one replacement, pick one at random per occurrence. Off = always the first listed.
   showReplaceButton: false, // optional button in the input's Extras menu that applies the word swaps to the latest reply on demand.
   showSwapAllButton: false, // adds an Extras button that swaps every generated reply in the chat once.
-  // Extras button that puts the last word swap back. One step deep: it restores
-  // the reply text as it was before the most recent swap.
-  showUndoSwapButton: false,
   allowReSwap: false, // let that button swap a reply again even if it was already swapped this session (can stack swaps).
   confirmBeforeEdit: false, // ask for confirmation before any word-swap edit (automatic or manual); the user can cancel.
 
@@ -168,6 +166,12 @@ const SCHEMA: Group[] = [
         min: 28,
         max: 96,
         hint: "How wide the floating button is, in pixels. 44 is about a comfortable thumb. Larger is easier to hit on a phone, smaller keeps it out of the way.",
+      },
+      {
+        key: "showExtrasToggle",
+        label: "On/off button in the Extras menu",
+        type: "bool",
+        hint: "Off by default. Adds an Auto Retry on/off entry to the chat input's Extras menu, next to the settings button. It says which state it is in, so you can check and change it without opening settings. Unlike the floating button it takes up no room on screen.",
       },
       {
         key: "toast",
@@ -389,12 +393,6 @@ const SCHEMA: Group[] = [
         label: "Show a swap-whole-chat button",
         type: "bool",
         hint: "Off by default. Adds a button to the input's Extras menu that applies your rules once to every generated reply in the chat you're viewing. The greeting is never touched.",
-      },
-      {
-        key: "showUndoSwapButton",
-        label: "Show an undo button",
-        type: "bool",
-        hint: "Off by default. Adds a button to the Extras menu that puts the last word swap back, restoring the reply exactly as it read before. It remembers one swap at a time, whether that was a single reply or a whole chat. A reply you have edited yourself since the swap is left alone rather than overwritten.",
       },
       {
         key: "allowReSwap",
@@ -774,23 +772,52 @@ function spanIsQuoted(text: string, start: number, end: number): boolean {
   return false;
 }
 
-function looksLikeRefusal(text: string, cfg?: any): boolean {
+// The verdict and the reason for it. The reason exists so the tester in the
+// settings panel can say *why* a reply was or wasn't counted, rather than
+// leaving someone to guess which of four phrase lists decided it. The retry path
+// itself only needs the boolean, and takes it through looksLikeRefusal below.
+interface RefusalVerdict {
+  refusal: boolean;
+  reason: string;
+}
+
+function refusalVerdict(text: string, cfg?: any): RefusalVerdict {
   const raw = stripThinking(String(text == null ? "" : text), cfg).trim();
-  if (!raw) return false; // empty is handled by the empty branch
+  // empty is handled by the empty branch
+  if (!raw)
+    return {
+      refusal: false,
+      reason: "there is no reply text left once the thinking is removed",
+    };
   const maxChars =
     cfg && Number.isFinite(cfg.refusalMaxChars)
       ? cfg.refusalMaxChars
       : REFUSAL_MAX_CHARS;
-  if (maxChars > 0 && raw.length > maxChars) return false; // long immersive reply, not a refusal
+  // long immersive reply, not a refusal
+  if (maxChars > 0 && raw.length > maxChars)
+    return {
+      refusal: false,
+      reason:
+        "it is " +
+        raw.length +
+        " characters, past the " +
+        maxChars +
+        "-character limit, so it counts as real writing",
+    };
   const norm = normalizeForMatch(raw);
   const lower = norm.toLowerCase();
 
   // Whitelist wins: anything the user parked here is never a refusal.
   for (const p of splitPhrases(cfg && cfg.refusalIgnorePhrases))
-    if (lower.includes(p)) return false;
+    if (lower.includes(p))
+      return {
+        refusal: false,
+        reason: 'your "never treat these as a refusal" list matched: ' + p,
+      };
   // The user's own additions count as refusals.
   for (const p of splitPhrases(cfg && cfg.refusalExtraPhrases))
-    if (lower.includes(p)) return true;
+    if (lower.includes(p))
+      return { refusal: true, reason: "one of your own phrases matched: " + p };
 
   // Built-in English lists, unless the user has switched them off to run pure-custom.
   if (!cfg || cfg.refusalUseBuiltins !== false) {
@@ -805,16 +832,37 @@ function looksLikeRefusal(text: string, cfg?: any): boolean {
         spanIsQuoted(norm, m.index, m.index + m[0].length)
       )
         continue;
-      return true;
+      return { refusal: true, reason: 'a built-in pattern matched: "' + m[0] + '"' };
     }
     const phrases = applySubs(
       REFUSAL_PHRASES,
       parseSubs(cfg && cfg.refusalPhraseSubs),
     );
-    for (const p of phrases) if (lower.includes(p)) return true;
-    for (const re of REFUSAL_SOFT) if (re.test(norm)) return true;
+    for (const p of phrases)
+      if (lower.includes(p))
+        return { refusal: true, reason: 'a built-in phrase matched: "' + p + '"' };
+    for (const re of REFUSAL_SOFT) {
+      const m = norm.match(re);
+      if (m)
+        return {
+          refusal: true,
+          reason: 'a built-in redirect tell matched: "' + m[0] + '"',
+        };
+    }
+    return {
+      refusal: false,
+      reason: "nothing in the built-in lists or your own phrases matched",
+    };
   }
-  return false;
+  return {
+    refusal: false,
+    reason:
+      "the built-in lists are off and none of your own phrases matched",
+  };
+}
+
+function looksLikeRefusal(text: string, cfg?: any): boolean {
+  return refusalVerdict(text, cfg).refusal;
 }
 
 // Some providers deliver a refusal as an error string (e.g. a prohibited-content
@@ -909,6 +957,151 @@ function deriveSelector(start: any): string | null {
   return null;
 }
 
+// ---- keeping text readable on a themed surface ----
+// Every colour in this UI comes from the user's Lumiverse theme, and a theme is
+// free to set its accent to whatever it likes. On a theme whose accent is close
+// to its text colour, a filled button painted accent-on-text came out as a blank
+// rectangle: the label was there, in the same colour as the button under it.
+// Guessing at extra theme variables would only move the problem, since a
+// variable a theme does not define falls back to a colour that may clash just as
+// badly. So this measures what the browser actually painted and steps in only
+// when the two colours are genuinely too close to read.
+
+type Rgba = [number, number, number, number];
+
+// getComputedStyle hands colours back as rgb()/rgba(), so that is all this needs
+// to read. Anything else is reported as unknown and the caller leaves it alone.
+function parseColor(value: any): Rgba | null {
+  const m = String(value == null ? "" : value)
+    .trim()
+    .match(
+      /^rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:[,/\s]+([\d.]+%?))?\s*\)$/i,
+    );
+  if (!m) return null;
+  let a = 1;
+  if (m[4] != null) {
+    a =
+      m[4].indexOf("%") >= 0
+        ? parseFloat(m[4]) / 100
+        : parseFloat(m[4]);
+    if (!Number.isFinite(a)) a = 1;
+  }
+  const c: Rgba = [Number(m[1]), Number(m[2]), Number(m[3]), Math.max(0, Math.min(1, a))];
+  return c.slice(0, 3).some((n) => !Number.isFinite(n)) ? null : c;
+}
+
+// Lay a partly transparent colour over an opaque one.
+function blendColor(top: Rgba, under: Rgba): Rgba {
+  const a = top[3];
+  return [
+    top[0] * a + under[0] * (1 - a),
+    top[1] * a + under[1] * (1 - a),
+    top[2] * a + under[2] * (1 - a),
+    1,
+  ];
+}
+
+function relLuminance(c: Rgba): number {
+  const chan = (v: number) => {
+    const x = Math.max(0, Math.min(1, v / 255));
+    return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4);
+  };
+  return 0.2126 * chan(c[0]) + 0.7152 * chan(c[1]) + 0.0722 * chan(c[2]);
+}
+
+// The WCAG contrast ratio, 1 (identical) to 21 (black on white).
+function contrastRatio(a: Rgba, b: Rgba): number {
+  const la = relLuminance(a);
+  const lb = relLuminance(b);
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+}
+
+// What is actually behind an element: its own background when that is opaque,
+// otherwise the ancestors' backgrounds composited underneath it.
+const PAGE_FALLBACK: Rgba = [20, 16, 30, 1]; // Lumiverse ships dark; last resort only
+function backdropOf(el: any): Rgba {
+  const layers: Rgba[] = [];
+  let p: any = el;
+  let hops = 0;
+  while (p && hops < 24) {
+    let c: Rgba | null = null;
+    try {
+      c = parseColor(getComputedStyle(p).backgroundColor);
+    } catch (_) {}
+    if (c && c[3] > 0) {
+      layers.push(c);
+      if (c[3] >= 0.999) break; // nothing below this can show through
+    }
+    p = p.parentElement;
+    hops++;
+  }
+  let base: Rgba = PAGE_FALLBACK;
+  for (let i = layers.length - 1; i >= 0; i--) base = blendColor(layers[i], base);
+  return base;
+}
+
+// Below this ratio a label is hard to pick out; at 1 it is invisible.
+const MIN_CONTRAST = 3.2;
+const NEAR_WHITE = "#ffffff";
+const NEAR_BLACK = "#14121a";
+
+// Repaint an element's text only if it fails the contrast floor against what is
+// behind it, so a theme that already reads well keeps its own colours exactly.
+function fixContrast(el: any, min?: number) {
+  try {
+    if (!el || typeof getComputedStyle !== "function") return;
+    const want = typeof min === "number" ? min : MIN_CONTRAST;
+    const fg = parseColor(getComputedStyle(el).color);
+    if (!fg) return;
+    const bg = backdropOf(el);
+    if (contrastRatio(blendColor(fg, bg), bg) >= want) return;
+    const light: Rgba = [255, 255, 255, 1];
+    const dark: Rgba = [20, 18, 26, 1];
+    el.style.color =
+      contrastRatio(light, bg) >= contrastRatio(dark, bg) ? NEAR_WHITE : NEAR_BLACK;
+  } catch (_) {}
+}
+
+// Colours only resolve once the element is in the page and laid out, so the
+// check waits a frame rather than running against a half-built tree.
+function afterPaint(fn: () => void) {
+  if (typeof requestAnimationFrame === "function") requestAnimationFrame(fn);
+  else fn();
+}
+
+function ensureReadable(el: any, min?: number) {
+  afterPaint(() => fixContrast(el, min));
+}
+
+// True when the element paints text of its own, rather than only holding other
+// elements that do. Form controls carry their value instead of a text child.
+function paintsText(el: any): boolean {
+  const tag = String((el && el.tagName) || "").toUpperCase();
+  if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA" || tag === "BUTTON")
+    return true;
+  const kids = (el && el.childNodes) || [];
+  for (let i = 0; i < kids.length; i++) {
+    const n: any = kids[i];
+    if (n && n.nodeType === 3 && String(n.nodeValue || "").trim()) return true;
+  }
+  return false;
+}
+
+// One sweep over everything a panel painted, once per build. Secondary text
+// (hints, section headers) is meant to sit quieter than the main text, so it is
+// held to a lower floor and only rescued when it has all but disappeared.
+function ensureReadableTree(root: any, min?: number) {
+  afterPaint(() => {
+    try {
+      if (!root || !root.querySelectorAll) return;
+      const all: any[] = [root].concat(
+        Array.prototype.slice.call(root.querySelectorAll("*")),
+      );
+      for (const el of all) if (paintsText(el)) fixContrast(el, min);
+    } catch (_) {}
+  });
+}
+
 export function setup(ctx: Ctx, opts?: any) {
   // cfg is mutable so the settings modal can change it live. Order: code
   // defaults, then GitHub opts, then whatever the user saved in the UI.
@@ -960,9 +1153,9 @@ export function setup(ctx: Ctx, opts?: any) {
   let replaceAction: any = null;
   let replaceActionOff: any = null;
   let replaceAllAction: any = null;
-  let undoAction: any = null;
-  let undoActionOff: any = null;
   let replaceAllActionOff: any = null;
+  let toggleAction: any = null;
+  let toggleActionOff: any = null;
   // Manual "swap words now": an optional Extras-menu button that applies the word
   // swaps to the latest reply on demand, instead of only automatically on finish.
   // Optional consent dialog before any edit, for people who don't want surprises.
@@ -986,16 +1179,6 @@ export function setup(ctx: Ctx, opts?: any) {
     } catch (_) {}
   }
   // Swap every generated reply in the current chat, once, on request.
-  function undoSwapNow() {
-    try {
-      if (!ctx || typeof (ctx as any).sendToBackend !== "function") {
-        showToast("Undo needs the backend, which this host does not offer.");
-        return;
-      }
-      (ctx as any).sendToBackend({ type: "undo_swap", requestId: "ar-undo-" + Date.now() });
-    } catch (_) {}
-  }
-
   async function applyReplaceAllNow() {
     try {
       if (!ctx || typeof (ctx as any).sendToBackend !== "function") { showToast("Find and replace needs the backend, which this host does not offer."); return; }
@@ -1005,9 +1188,56 @@ export function setup(ctx: Ctx, opts?: any) {
       (ctx as any).sendToBackend({ type: "apply_replace_now", chatId: lastChatId, wholeChat: true, requestId: "ar-rep-all-" + Date.now() });
     } catch (_) {}
   }
+  // The Extras-menu on/off entry. Its label and icon carry the current state,
+  // and the host offers no way to relabel an action once it is registered, so a
+  // state change registers it again rather than editing it in place.
+  const TOGGLE_ICON_ON =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>';
+  const TOGGLE_ICON_OFF =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/><line x1="4" y1="20" x2="20" y2="4"/></svg>';
+  // The state the registered entry was last labelled for, so it is only rebuilt
+  // when the label would actually change.
+  let toggleActionState: boolean | null = null;
+
+  function dropToggleAction() {
+    if (!toggleAction) return;
+    try { toggleActionOff && toggleActionOff(); } catch (_) {}
+    try { toggleAction.destroy(); } catch (_) {}
+    toggleAction = null;
+    toggleActionOff = null;
+    toggleActionState = null;
+  }
+
+  function syncToggleAction() {
+    try {
+      const canReg = !!(ctx && (ctx as any).ui && typeof (ctx as any).ui.registerInputBarAction === "function");
+      const on = cfg.enabled !== false;
+      if (!cfg.showExtrasToggle || !canReg) {
+        dropToggleAction();
+        return;
+      }
+      if (toggleAction && toggleActionState === on) return;
+      dropToggleAction();
+      toggleAction = (ctx as any).ui.registerInputBarAction({
+        id: "auto-retry-toggle",
+        label: on ? "Auto Retry is on, turn it off" : "Auto Retry is off, turn it on",
+        iconSvg: on ? TOGGLE_ICON_ON : TOGGLE_ICON_OFF,
+      });
+      toggleActionState = on;
+      toggleActionOff = toggleAction.onClick(() => {
+        // Flipping the switch relabels this very entry, which means destroying
+        // it and registering it again. Doing that from inside its own click
+        // handler would pull the entry out from under the host mid-dispatch, so
+        // it waits for the handler to return first.
+        setTimeout(() => toggleEnabled(), 0);
+      });
+    } catch (_) {}
+  }
+
   // Add or remove the Extras-menu buttons to match their toggles. Called on load
   // and whenever settings are saved, so flipping a toggle takes effect at once.
-  function syncReplaceButton() {
+  function syncInputBarActions() {
+    syncToggleAction();
     try {
       const canReg = !!(ctx && (ctx as any).ui && typeof (ctx as any).ui.registerInputBarAction === "function");
       if (cfg.showReplaceButton && canReg && !replaceAction) {
@@ -1022,19 +1252,6 @@ export function setup(ctx: Ctx, opts?: any) {
         try { replaceAction.destroy(); } catch (_) {}
         replaceAction = null;
         replaceActionOff = null;
-      }
-      if (cfg.showUndoSwapButton && canReg && !undoAction) {
-        undoAction = (ctx as any).ui.registerInputBarAction({
-          id: "auto-retry-undo-swap",
-          label: "Undo the last word swap",
-          iconSvg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>',
-        });
-        undoActionOff = undoAction.onClick(() => undoSwapNow());
-      } else if ((!cfg.showUndoSwapButton || !canReg) && undoAction) {
-        try { undoActionOff && undoActionOff(); } catch (_) {}
-        try { undoAction.destroy(); } catch (_) {}
-        undoAction = null;
-        undoActionOff = null;
       }
       if (cfg.showSwapAllButton && canReg && !replaceAllAction) {
         replaceAllAction = (ctx as any).ui.registerInputBarAction({
@@ -1099,7 +1316,33 @@ export function setup(ctx: Ctx, opts?: any) {
       "display:flex;align-items:center;gap:8px;padding:7px 9px;border-bottom:1px solid var(--lumiverse-border,rgba(255,255,255,.12));font-weight:600;cursor:move;user-select:none;touch-action:none";
     const title = document.createElement("span");
     title.textContent = "Auto Retry log";
+    title.style.cssText = "flex:1;min-width:0";
     head.appendChild(title);
+    // The panel exists because the console is out of reach on a phone, which is
+    // also where selecting text by hand is worst, so the log needs its own way
+    // out. Clear keeps a long session's timeline readable.
+    const tinyBtn = (label: string) => {
+      const b = btn(label, false);
+      b.style.cssText +=
+        "min-height:0;padding:3px 9px;font-size:11px;flex:none;cursor:pointer";
+      return b;
+    };
+    const copyBtn = tinyBtn("Copy");
+    copyBtn.addEventListener("click", async () => {
+      const before = copyBtn.textContent;
+      const ok = await copyText(eventLog.join("\n"));
+      copyBtn.textContent = ok ? "Copied" : "Can't";
+      setTimeout(() => {
+        copyBtn.textContent = before;
+      }, 1400);
+    });
+    const clearBtn = tinyBtn("Clear");
+    clearBtn.addEventListener("click", () => {
+      eventLog.length = 0;
+      renderLiveLog();
+    });
+    head.appendChild(copyBtn);
+    head.appendChild(clearBtn);
     const bodyEl = document.createElement("div");
     bodyEl.style.cssText =
       "flex:1;padding:7px 9px;overflow:auto;white-space:pre-wrap;line-height:1.4;font-family:var(--lumiverse-font-mono,ui-monospace,monospace) !important";
@@ -1114,6 +1357,11 @@ export function setup(ctx: Ctx, opts?: any) {
       ox = 0,
       oy = 0;
     const onDown = (e: any) => {
+      // A press on one of the header's own buttons belongs to that button.
+      // Without this the drag captures the pointer out from under it.
+      try {
+        if (e && e.target && e.target.closest && e.target.closest("button")) return;
+      } catch (_) {}
       dragging = true;
       const r = el.getBoundingClientRect();
       el.style.left = r.left + "px";
@@ -1249,6 +1497,7 @@ export function setup(ctx: Ctx, opts?: any) {
     liveLogEl = el;
     liveLogBody = bodyEl;
     renderLiveLog();
+    ensureReadableTree(el);
   }
   function hideLiveLog() {
     if (liveLogEl && liveLogEl.parentNode) {
@@ -1302,6 +1551,9 @@ export function setup(ctx: Ctx, opts?: any) {
     floatEl.title = label;
     floatEl.setAttribute("aria-label", label);
     floatEl.setAttribute("aria-pressed", on ? "true" : "false");
+    // The tinted fill and the symbol on it both come from the theme's accent, so
+    // on some themes they land close enough together to read as an empty circle.
+    ensureReadable(floatEl);
   }
 
   function showFloat() {
@@ -1395,7 +1647,7 @@ export function setup(ctx: Ctx, opts?: any) {
       force: true,
     });
     paintFloat();
-    syncReplaceButton();
+    syncInputBarActions();
   }
 
   function syncLiveLog() {
@@ -1476,7 +1728,11 @@ export function setup(ctx: Ctx, opts?: any) {
         "enabled",
         "showFloatingToggle",
         "floatingToggleSize",
+        "showExtrasToggle",
         "maxRetries",
+        "pauseWhenFailing",
+        "breakerRuns",
+        "breakerPauseMins",
         "retryDelayMs",
         "backoffFactor",
         "maxDelayMs",
@@ -1518,7 +1774,6 @@ export function setup(ctx: Ctx, opts?: any) {
         "replaceCaseSensitive",
         "showReplaceButton",
         "showSwapAllButton",
-        "showUndoSwapButton",
         "allowReSwap",
         "confirmBeforeEdit",
       ],
@@ -1526,7 +1781,12 @@ export function setup(ctx: Ctx, opts?: any) {
     {
       id: "buttons",
       label: "Button selectors",
-      keys: ["regenerateSelector", "swipeNextSelector", "stopSelector"],
+      keys: [
+        "regenerateSelector",
+        "swipeNextSelector",
+        "stopSelector",
+        "confirmButtonLabels",
+      ],
     },
     { id: "notifications", label: "On-screen", keys: ["toast", "liveLog"] },
     // Special entry: carried outside cfg. buildExport and the import handler
@@ -1535,6 +1795,19 @@ export function setup(ctx: Ctx, opts?: any) {
   ];
   const fieldByKey: Record<string, Field> = {};
   for (const g of SCHEMA) for (const f of g.fields) fieldByKey[f.key] = f;
+  // Safety net for the lists above. A setting added to SCHEMA but forgotten in
+  // EXPORT_CATEGORIES used to be silently dropped from every export and backup,
+  // which is invisible until someone restores a file and finds a setting missing.
+  // Anything unaccounted for is folded into the retry category rather than lost.
+  {
+    const covered = new Set<string>();
+    for (const c of EXPORT_CATEGORIES) for (const k of c.keys) covered.add(k);
+    const orphans = Object.keys(fieldByKey).filter((k) => !covered.has(k));
+    if (orphans.length) {
+      for (const c of EXPORT_CATEGORIES)
+        if (c.id === "retry") c.keys = c.keys.concat(orphans);
+    }
+  }
   // Per-field functions that push a cfg value back into the on-screen control,
   // so applying a preset can update the visible fields in place without a full
   // rebuild (which would jump the scroll and close open sections). Repopulated
@@ -1627,7 +1900,6 @@ export function setup(ctx: Ctx, opts?: any) {
         "replaceEnabled",
         "showReplaceButton",
         "showSwapAllButton",
-        "showUndoSwapButton",
         "allowReSwap",
         "confirmBeforeEdit",
       ],
@@ -1755,6 +2027,18 @@ export function setup(ctx: Ctx, opts?: any) {
   const BREAKER_PAUSE_DEFAULT_MS = 300000;
   let failedRuns = 0;
   let pausedUntil = 0;
+  // A running tally of what the extension has actually done since it loaded.
+  // The event log keeps only the last twenty lines, so on a long session the
+  // shape of a problem ("it retried ninety times, all of them for 'cut off'")
+  // has scrolled away by the time anyone thinks to look. This survives it, and
+  // is the difference between a bug report that can be acted on and one that
+  // says "it retries too much".
+  const stats = {
+    retries: 0,
+    gaveUp: 0,
+    good: 0,
+    reasons: {} as Record<string, number>,
+  };
   // Read at the moment they are needed so a settings change takes effect without
   // a reload. Anything missing or nonsensical falls back to the default rather
   // than switching the feature off by accident.
@@ -2311,6 +2595,7 @@ export function setup(ctx: Ctx, opts?: any) {
       // A try limit of zero means no retry was ever made, so there is no failed
       // run to count and nothing worth announcing.
       if (cfg.maxRetries <= 0) return;
+      stats.gaveUp += 1;
       failedRuns += 1;
       const runsNeeded = breakerRuns();
       if (cfg.pauseWhenFailing && failedRuns >= runsNeeded) {
@@ -2333,6 +2618,8 @@ export function setup(ctx: Ctx, opts?: any) {
       return;
     }
     s.attempts += 1;
+    stats.retries += 1;
+    stats.reasons[reason] = (stats.reasons[reason] || 0) + 1;
     const rl = isRateLimit(err);
     const delay = computeDelay(s.attempts, rl);
     clearTimers(s);
@@ -2558,6 +2845,7 @@ export function setup(ctx: Ctx, opts?: any) {
     // A reply that came back fine means whatever was wrong has cleared.
     failedRuns = 0;
     pausedUntil = 0;
+    stats.good += 1;
     log("gen ok", content.length + " chars");
     s.attempts = 0; // clean success
   }
@@ -2570,10 +2858,6 @@ export function setup(ctx: Ctx, opts?: any) {
     standDown(p.chatId, true); // genuine user stop: stand down, don't fight them
   }
 
-  // Backup for the user's Stop press: if the host's GENERATION_STOPPED event is
-  // late or never fires, catch the click on the stop button itself and stand
-  // every pending retry down. Delegated + capture so it survives the host
-  // re-rendering its buttons.
   // The host saves a swapped reply without redrawing the chat, so the old words
   // stay on screen until the view is rebuilt. This applies the same swaps to the
   // rendered text. Only text nodes are touched, so markdown, formatting and any
@@ -2640,6 +2924,10 @@ export function setup(ctx: Ctx, opts?: any) {
     return done;
   }
 
+  // Backup for the user's Stop press: if the host's GENERATION_STOPPED event is
+  // late or never fires, catch the click on the stop button itself and stand
+  // every pending retry down. Delegated + capture so it survives the host
+  // re-rendering its buttons.
   function onDocClick(e: any) {
     try {
       // A stalled reply is halted by clicking that same stop button, and that
@@ -2744,6 +3032,7 @@ export function setup(ctx: Ctx, opts?: any) {
         t.style.bottom = "max(20px,env(safe-area-inset-bottom,0px))";
       }
       t.style.opacity = "1";
+      ensureReadableTree(t);
       clearTimeout(t.__h);
       if (!(opts && opts.sticky)) {
         t.__h = setTimeout(() => {
@@ -2784,46 +3073,13 @@ export function setup(ctx: Ctx, opts?: any) {
   }): string {
     const o = opts || {};
     const inc = (v: any) => v !== false; // sections default to on
-    const keys = [
-      "enabled",
-      "showFloatingToggle",
-      "floatingToggleSize",
-      "maxRetries",
-      "retryDelayMs",
-      "backoffFactor",
-      "maxDelayMs",
-      "jitter",
-      "rateLimitDelayMs",
-      "retryByNewReroll",
-      "stuckTimeoutMs",
-      "idleTimeoutMs",
-      "retryOnError",
-      "ignoreHardErrors",
-      "retryOnEmpty",
-      "retryOnTruncated",
-      "retryOnNoPunct",
-      "retryOnShort",
-      "minChars",
-      "retryOnRefusal",
-      "refusalUseBuiltins",
-      "refusalMaxChars",
-      "refusalExtraPhrases",
-      "refusalPhraseSubs",
-      "refusalIgnorePhrases",
-      "refusalStripThinking",
-      "refusalThinkTags",
-      "replaceEnabled",
-      "replaceRules",
-      "replaceRandom",
-      "replaceCaseSensitive",
-      "showReplaceButton",
-      "showSwapAllButton",
-      "showUndoSwapButton",
-      "allowReSwap",
-      "confirmBeforeEdit",
-      "liveLog",
-      "toast",
-    ];
+    // Taken from the schema rather than listed again here. The old hand-kept
+    // list had drifted, so settings added later were missing from every report,
+    // which is exactly the information a bug report is supposed to carry. The
+    // selectors are printed in full by the buttons section below instead.
+    const keys = Object.keys(fieldByKey).filter(
+      (k) => !fieldByKey[k].selector,
+    );
     const lines: string[] = [];
     lines.push("Auto Retry v" + VERSION + " debug info");
     lines.push("time: " + new Date().toISOString());
@@ -2881,6 +3137,18 @@ export function setup(ctx: Ctx, opts?: any) {
       } catch (_) {}
     }
     if (inc(o.activity)) {
+      lines.push("");
+      lines.push("this session:");
+      lines.push("  replies that came back fine: " + stats.good);
+      lines.push("  retries fired: " + stats.retries);
+      lines.push("  messages it gave up on: " + stats.gaveUp);
+      const reasons = Object.keys(stats.reasons).sort(
+        (a, b) => stats.reasons[b] - stats.reasons[a],
+      );
+      if (reasons.length) {
+        lines.push("  retries by reason:");
+        for (const r of reasons) lines.push("    " + r + ": " + stats.reasons[r]);
+      }
       lines.push("");
       lines.push("recent activity (oldest first):");
       if (eventLog.length === 0) lines.push("  (nothing recorded yet)");
@@ -3080,7 +3348,7 @@ export function setup(ctx: Ctx, opts?: any) {
         saveToAccount();
         syncLiveLog();
         syncFloat();
-        syncReplaceButton();
+        syncInputBarActions();
         if (onSaved) onSaved();
         status.textContent = "Loaded preset: " + name + ". It's in effect now.";
       });
@@ -3204,6 +3472,87 @@ export function setup(ctx: Ctx, opts?: any) {
       return wrap;
     }
 
+    // Somewhere to try the refusal settings on real text. Without this the whole
+    // section is guesswork: you edit a phrase list, then have to wait for the
+    // model to refuse again to find out whether it worked, and a wrong guess
+    // costs a re-roll of good writing. This runs the same check a finished reply
+    // goes through, against the values in the boxes above rather than the saved
+    // ones, so it answers straight away and nothing is sent anywhere.
+    function buildRefusalTester(): HTMLElement {
+      const wrap = document.createElement("div");
+      wrap.style.cssText = "display:flex;flex-direction:column;gap:8px";
+
+      const rule = document.createElement("div");
+      rule.style.cssText =
+        "height:1px;background:var(--lumiverse-border,rgba(255,255,255,.08));margin:4px 0 2px";
+      wrap.appendChild(rule);
+
+      const title = document.createElement("div");
+      title.textContent = "Try it on a reply";
+      title.style.cssText =
+        "font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+      wrap.appendChild(title);
+
+      const desc = document.createElement("div");
+      desc.textContent =
+        "Paste a reply and see whether it would count as a refusal, and what decided it. It uses the settings as they are in the boxes above, so you can test a change before saving it. Nothing is sent anywhere and no reply is altered.";
+      desc.style.cssText =
+        "font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+      wrap.appendChild(desc);
+
+      const ta = document.createElement("textarea") as any;
+      ta.rows = 3;
+      ta.placeholder = "Paste a reply here";
+      ta.setAttribute("aria-label", "Reply text to test for a refusal");
+      styleField(ta);
+      ta.style.width = "100%";
+      ta.style.boxSizing = "border-box";
+      ta.style.resize = "vertical";
+      wrap.appendChild(ta);
+
+      const out = document.createElement("div");
+      out.style.cssText =
+        "font-size:12px;line-height:1.45;min-height:1em;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+
+      const check = btn("Check this text", false);
+      check.style.cssText += "min-height:0;padding:6px 12px;align-self:flex-start";
+      check.addEventListener("click", () => {
+        // A box the user is still typing in has not fired its change event yet,
+        // so its edit is not in cfg. Blurring first is what makes the test
+        // reflect what is actually on screen.
+        const active: any =
+          typeof document !== "undefined" ? document.activeElement : null;
+        if (active && active !== ta && typeof active.blur === "function")
+          active.blur();
+        const text = String(ta.value || "");
+        if (!text.trim()) {
+          out.textContent = "Paste some reply text first.";
+          out.style.color = "var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+          ensureReadable(out, 2.6);
+          return;
+        }
+        const v = refusalVerdict(text, cfg);
+        if (v.refusal) {
+          out.textContent =
+            "Counts as a refusal, so a retry would fire - " +
+            v.reason +
+            (cfg.retryOnRefusal
+              ? "."
+              : '. (But "It looks like an accidental refusal" is off, so nothing would actually be retried.)');
+          out.style.color = "var(--lumiverse-success,#22c55e)";
+        } else {
+          out.textContent =
+            "Reads as normal writing, so no retry - " + v.reason + ".";
+          out.style.color = "var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+        }
+        ensureReadable(out, 2.6);
+      });
+
+      wrap.appendChild(check);
+      wrap.appendChild(out);
+      return wrap;
+    }
+
     // Cap the whole panel to a real viewport value that sits safely under the
     // modal's max-height once its title bar and padding are counted. With the
     // panel bounded and overflow hidden, the host modal has nothing left to
@@ -3219,9 +3568,40 @@ export function setup(ctx: Ctx, opts?: any) {
     scroller.style.cssText =
       "display:flex;flex-direction:column;gap:18px;flex:1 1 auto;min-height:0;overflow-y:auto;padding-right:4px";
 
+    // ---- search index ----
+    // There are over forty settings across ten sections, half of them collapsed,
+    // so finding one meant remembering which section it lived under. Each row is
+    // registered here with its label, its description and its option name, and
+    // the section it sits in, so a search can show the row and open its section.
+    interface SectionHandle {
+      sec: HTMLElement;
+      title: string;
+      keywords: string;
+      setOpen: ((open: boolean) => void) | null;
+    }
+    const panelSections: SectionHandle[] = [];
+    const searchRows: Array<{ row: HTMLElement; text: string; section: SectionHandle }> = [];
+    const searchText = (...parts: any[]) =>
+      parts.map((p) => String(p == null ? "" : p)).join(" ").toLowerCase();
+
     for (const group of SCHEMA) {
       const sec = document.createElement("div");
       sec.style.cssText = "display:flex;flex-direction:column;gap:10px";
+      const handle: SectionHandle = {
+        sec: sec,
+        title: group.title,
+        keywords: searchText(group.title, group.desc),
+        setOpen: null,
+      };
+      panelSections.push(handle);
+      const addRow = (row: HTMLElement, f: Field) => {
+        searchRows.push({
+          row: row,
+          text: searchText(f.label, f.hint, f.key, group.title),
+          section: handle,
+        });
+        return row;
+      };
 
       // Groups titled "Advanced..." collapse by default so the basic options
       // aren't buried under them. Tap the header to reveal.
@@ -3255,9 +3635,14 @@ export function setup(ctx: Ctx, opts?: any) {
             "font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
           body.appendChild(d);
         }
-        for (const f of group.fields) body.appendChild(buildRow(f));
+        for (const f of group.fields) body.appendChild(addRow(buildRow(f), f));
         const resetSel = buildSelectorResetRow(group);
         if (resetSel) body.appendChild(resetSel);
+        // The refusal tuning options are all guesswork without a way to try
+        // them, so the section carries its own tester.
+        if (/refusal tuning/i.test(group.title)) {
+          body.appendChild(buildRefusalTester());
+        }
         // Word swap presets sit at the end of the group, since they save and
         // switch the settings above.
         if (/find and replace/i.test(group.title)) {
@@ -3280,14 +3665,18 @@ export function setup(ctx: Ctx, opts?: any) {
         }
         sec.appendChild(body);
 
-        let open = openGroups.has(group.title);
-        body.style.display = open ? "flex" : "none";
-        caret.textContent = open ? "\u25BE" : "\u25B8";
+        // Opening and closing is done in one place so the search can reveal a
+        // section without the caret and the remembered state falling out of step.
+        const setOpen = (v: boolean) => {
+          body.style.display = v ? "flex" : "none";
+          caret.textContent = v ? "\u25BE" : "\u25B8"; // down triangle when open
+        };
+        handle.setOpen = setOpen;
+        setOpen(openGroups.has(group.title));
         h.addEventListener("click", () => {
-          open = !open;
-          body.style.display = open ? "flex" : "none";
-          caret.textContent = open ? "\u25BE" : "\u25B8"; // down triangle when open
-          if (open) openGroups.add(group.title);
+          const open = body.style.display !== "none";
+          setOpen(!open);
+          if (!open) openGroups.add(group.title);
           else openGroups.delete(group.title);
         });
       } else {
@@ -3300,7 +3689,7 @@ export function setup(ctx: Ctx, opts?: any) {
             "font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65));margin-top:-4px";
           sec.appendChild(d);
         }
-        for (const f of group.fields) sec.appendChild(buildRow(f));
+        for (const f of group.fields) sec.appendChild(addRow(buildRow(f), f));
         const resetSelOpen = buildSelectorResetRow(group);
         if (resetSelOpen) sec.appendChild(resetSelOpen);
       }
@@ -3322,6 +3711,13 @@ export function setup(ctx: Ctx, opts?: any) {
       h.appendChild(caret);
       h.appendChild(label);
       sec.appendChild(h);
+      const handle: SectionHandle = {
+        sec: sec,
+        title: "Advanced: debug info",
+        keywords: "advanced debug info bug report copy diagnostics activity log version",
+        setOpen: null,
+      };
+      panelSections.push(handle);
 
       const body = document.createElement("div");
       body.style.cssText = "display:none;flex-direction:column;gap:10px";
@@ -3339,7 +3735,7 @@ export function setup(ctx: Ctx, opts?: any) {
         { id: "settings", label: "Your settings" },
         { id: "buttons", label: "Button match status" },
         { id: "environment", label: "Browser and screen" },
-        { id: "activity", label: "Recent activity log" },
+        { id: "activity", label: "Session totals and recent activity" },
       ];
       const dchecks: Array<{ id: string; input: HTMLInputElement }> = [];
       const dWrap = document.createElement("div");
@@ -3396,14 +3792,16 @@ export function setup(ctx: Ctx, opts?: any) {
       body.appendChild(copyBtn);
       body.appendChild(dStatus);
       sec.appendChild(body);
-      let open = openGroups.has("Advanced: debug info");
-      body.style.display = open ? "flex" : "none";
-      caret.textContent = open ? "\u25BE" : "\u25B8";
+      const setOpen = (v: boolean) => {
+        body.style.display = v ? "flex" : "none";
+        caret.textContent = v ? "\u25BE" : "\u25B8";
+      };
+      handle.setOpen = setOpen;
+      setOpen(openGroups.has("Advanced: debug info"));
       h.addEventListener("click", () => {
-        open = !open;
-        body.style.display = open ? "flex" : "none";
-        caret.textContent = open ? "\u25BE" : "\u25B8";
-        if (open) openGroups.add("Advanced: debug info");
+        const open = body.style.display !== "none";
+        setOpen(!open);
+        if (!open) openGroups.add("Advanced: debug info");
         else openGroups.delete("Advanced: debug info");
       });
       scroller.appendChild(sec);
@@ -3424,6 +3822,13 @@ export function setup(ctx: Ctx, opts?: any) {
       h.appendChild(caret);
       h.appendChild(label);
       sec.appendChild(h);
+      const handle: SectionHandle = {
+        sec: sec,
+        title: "Advanced: import / export",
+        keywords: "advanced import export backup file share transfer settings presets json",
+        setOpen: null,
+      };
+      panelSections.push(handle);
 
       const body = document.createElement("div");
       body.style.cssText = "display:none;flex-direction:column;gap:10px";
@@ -3552,18 +3957,80 @@ export function setup(ctx: Ctx, opts?: any) {
       body.appendChild(status);
 
       sec.appendChild(body);
-      let open = openGroups.has("Advanced: import / export");
-      body.style.display = open ? "flex" : "none";
-      caret.textContent = open ? "\u25BE" : "\u25B8";
+      const setOpen = (v: boolean) => {
+        body.style.display = v ? "flex" : "none";
+        caret.textContent = v ? "\u25BE" : "\u25B8";
+      };
+      handle.setOpen = setOpen;
+      setOpen(openGroups.has("Advanced: import / export"));
       h.addEventListener("click", () => {
-        open = !open;
-        body.style.display = open ? "flex" : "none";
-        caret.textContent = open ? "\u25BE" : "\u25B8";
-        if (open) openGroups.add("Advanced: import / export");
+        const open = body.style.display !== "none";
+        setOpen(!open);
+        if (!open) openGroups.add("Advanced: import / export");
         else openGroups.delete("Advanced: import / export");
       });
       scroller.appendChild(sec);
     }
+
+    // ---- the search box ----
+    // Sits above the scroll area so it stays put while the results move. An
+    // empty box puts everything back exactly as it was, including which sections
+    // the user had open, so searching never quietly rearranges the panel.
+    const searchWrap = document.createElement("div");
+    searchWrap.style.cssText =
+      "display:flex;flex-direction:column;gap:6px;flex:none;margin-bottom:12px";
+    const search = document.createElement("input");
+    search.type = "search";
+    search.placeholder = "Search settings";
+    search.setAttribute("aria-label", "Search settings");
+    styleField(search);
+    search.style.width = "100%";
+    search.style.boxSizing = "border-box";
+    const searchNote = document.createElement("div");
+    searchNote.style.cssText =
+      "font-size:12px;min-height:1em;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+
+    const runSearch = () => {
+      const q = search.value.trim().toLowerCase();
+      // Every row buildRow makes is a flex column, so hidden rows are put back
+      // to "flex" rather than "". Clearing the property instead would drop the
+      // display that the row's own inline style set, and a <label> row would
+      // fall back to inline and lose its layout.
+      if (!q) {
+        for (const r of searchRows) r.row.style.display = "flex";
+        for (const s of panelSections) {
+          s.sec.style.display = "flex";
+          if (s.setOpen) s.setOpen(openGroups.has(s.title));
+        }
+        searchNote.textContent = "";
+        return;
+      }
+      let hits = 0;
+      for (const s of panelSections) {
+        // A section whose own title matches keeps all of its rows, so searching
+        // for a section name browses it rather than emptying it.
+        const titleHit = s.keywords.indexOf(q) >= 0;
+        let any = titleHit;
+        for (const r of searchRows) {
+          if (r.section !== s) continue;
+          const hit = titleHit || r.text.indexOf(q) >= 0;
+          r.row.style.display = hit ? "flex" : "none";
+          if (hit) {
+            any = true;
+            hits++;
+          }
+        }
+        s.sec.style.display = any ? "flex" : "none";
+        if (any && s.setOpen) s.setOpen(true);
+      }
+      searchNote.textContent = hits
+        ? hits + (hits === 1 ? " setting matches" : " settings match")
+        : "Nothing matches that. Clear the box to see everything again.";
+    };
+    search.addEventListener("input", runSearch);
+    searchWrap.appendChild(search);
+    searchWrap.appendChild(searchNote);
+    panel.appendChild(searchWrap);
 
     panel.appendChild(scroller);
 
@@ -3597,7 +4064,7 @@ export function setup(ctx: Ctx, opts?: any) {
       saveToAccount();
       syncLiveLog();
       syncFloat();
-      syncReplaceButton();
+      syncInputBarActions();
       if (onSaved) onSaved();
       buildSettingsBody(root, onSaved);
       log("settings reset to defaults");
@@ -3617,7 +4084,7 @@ export function setup(ctx: Ctx, opts?: any) {
       saveToAccount();
       syncLiveLog();
       syncFloat();
-      syncReplaceButton();
+      syncInputBarActions();
       if (onSaved) onSaved();
       status.textContent = "Saved. Takes effect on the next reply.";
       log("settings saved", cfg);
@@ -3631,6 +4098,10 @@ export function setup(ctx: Ctx, opts?: any) {
     actions.appendChild(save);
     panel.appendChild(actions);
     root.appendChild(panel);
+    // Secondary text (hints, section headers, status lines) is meant to read
+    // quieter than the rest, so it is held to a gentler floor than the controls
+    // and only repainted on a theme where it has all but vanished.
+    ensureReadableTree(panel, 2.6);
   }
 
   // Puts the button selectors in a section back to what the extension shipped
@@ -3867,6 +4338,7 @@ export function setup(ctx: Ctx, opts?: any) {
       "background:var(--lumiverse-fill-subtle,rgba(255,255,255,.05));" +
       "color:var(--lumiverse-text,#eee);font:13px var(--lumiverse-font-family,system-ui);outline:none;" +
       "transition:border-color var(--lumiverse-transition-fast,150ms ease)";
+    ensureReadable(input);
     // On focus, tint the border so the active field is clear. No glow ring.
     input.addEventListener("focus", () => {
       input.style.borderColor = "var(--lumiverse-primary,rgba(147,112,219,.9))";
@@ -3883,8 +4355,16 @@ export function setup(ctx: Ctx, opts?: any) {
       "min-height:36px;padding:8px 14px;border-radius:var(--lumiverse-radius,8px);cursor:pointer;" +
       "font:13px var(--lumiverse-font-family,system-ui);transition:filter var(--lumiverse-transition-fast,150ms ease);" +
       (primary
-        ? "border:1px solid transparent;background:var(--lumiverse-primary,rgba(147,112,219,.9));color:var(--lumiverse-text,rgba(255,255,255,.9))"
+        ? // A filled button's label must contrast with the fill, not with the
+          // panel, so this asks for the theme's on-accent colour and falls back
+          // to white rather than reusing the body text colour, which on a light
+          // accent is the same colour as the fill. ensureReadable then checks
+          // what was actually painted and corrects it if the theme's own value
+          // is no better.
+          "border:1px solid transparent;background:var(--lumiverse-primary,rgba(147,112,219,.9));" +
+          "color:var(--lumiverse-primary-contrast,var(--lumiverse-on-primary,#ffffff))"
         : "border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));background:transparent;color:var(--lumiverse-text,#eee)");
+    ensureReadable(b);
     b.addEventListener("mouseenter", () => {
       b.style.filter = "brightness(1.12)";
     });
@@ -3967,6 +4447,7 @@ export function setup(ctx: Ctx, opts?: any) {
     box.appendChild(row);
     overlay.appendChild(box);
     (document.body || document.documentElement).appendChild(overlay);
+    ensureReadableTree(box);
     closeExpandEditor = close;
     // The textarea is not focused, so opening it doesn't pop the
     // on-screen keyboard on mobile. Tap the text when you want to edit.
@@ -4177,7 +4658,7 @@ export function setup(ctx: Ctx, opts?: any) {
   syncLiveLog();
   syncFloat();
   loadFromAccount();
-  syncReplaceButton();
+  syncInputBarActions();
   try {
     if (ctx && typeof (ctx as any).onBackendMessage === "function") {
       const offRep = (ctx as any).onBackendMessage(async (msg: any) => {
@@ -4196,19 +4677,6 @@ export function setup(ctx: Ctx, opts?: any) {
           applySwapsToView(msg.pairs || [], !msg.wholeChat);
           return;
         }
-        if (msg.type === "undo_result") {
-          if (!msg.ok) showToast("Could not undo the swap.");
-          else if (!msg.restored) showToast("Nothing to undo.");
-          else {
-            applySwapsToView(msg.pairs || [], !msg.wholeChat);
-            showToast(
-              msg.restored === 1
-                ? "Put the last swap back."
-                : "Put " + msg.restored + " replies back.",
-            );
-          }
-          return;
-        }
         if (msg.type !== "replace_now_result") return;
         if (msg.ok) applySwapsToView(msg.pairs || [], !msg.wholeChat);
         if (!msg.ok) showToast("Could not swap words.");
@@ -4222,8 +4690,12 @@ export function setup(ctx: Ctx, opts?: any) {
       disposers.push(() => { try { offRep && offRep(); } catch (_) {} });
     }
   } catch (_) {}
-  disposers.push(() => { try { undoActionOff && undoActionOff(); } catch (_) {} try { undoAction && undoAction.destroy(); } catch (_) {} });
+  // Every Extras entry the extension can register is torn down here. The
+  // swap-whole-chat one used to be missed, so it survived a reload and stacked
+  // up a duplicate button each time.
   disposers.push(() => { try { replaceActionOff && replaceActionOff(); } catch (_) {} try { replaceAction && replaceAction.destroy(); } catch (_) {} });
+  disposers.push(() => { try { replaceAllActionOff && replaceAllActionOff(); } catch (_) {} try { replaceAllAction && replaceAllAction.destroy(); } catch (_) {} });
+  disposers.push(() => { try { toggleActionOff && toggleActionOff(); } catch (_) {} try { toggleAction && toggleAction.destroy(); } catch (_) {} });
   log("ready v" + VERSION, cfg);
 
   return () => {
