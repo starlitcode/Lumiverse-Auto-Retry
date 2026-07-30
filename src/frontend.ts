@@ -32,7 +32,7 @@ const STREAM_BUF_MAX = 200000;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "3.2.1";
+const VERSION = "3.3.0";
 
 // ---- defaults (the UI overrides these; editing here changes the fallback) ----
 const CONFIG = {
@@ -90,6 +90,10 @@ const CONFIG = {
   replaceRules: "", // "old => new" rules, one per line. A single word matches whole words; empty right side deletes it. Same word can appear more than once.
   replaceCaseSensitive: false, // match letter case exactly. Off = case-insensitive with capitalization kept.
   replaceRandom: false, // when a word has more than one replacement, pick one at random per occurrence. Off = always the first listed.
+  // one-tap on/off button in the input's Extras menu, so the extension can be
+  // switched off without opening settings.
+  showToggleButton: false,
+
   showReplaceButton: false, // optional button in the input's Extras menu that applies the word swaps to the latest reply on demand.
   showSwapAllButton: false, // adds an Extras button that swaps every generated reply in the chat once.
   allowReSwap: false, // let that button swap a reply again even if it was already swapped this session (can stack swaps).
@@ -355,6 +359,12 @@ const SCHEMA: Group[] = [
         label: "Match case exactly",
         type: "bool",
         hint: "Off by default. When off, a swap matches any case and keeps the original capitalization. Turn on to swap only when the case matches your rule exactly, so sky and Sky can have different swaps.",
+      },
+      {
+        key: "showToggleButton",
+        label: "On/off button in the Extras menu",
+        type: "bool",
+        hint: "Off by default. Adds a button to the input bar's Extras menu that turns Auto Retry on or off in one tap, so you don't have to open settings. The button shows which state you're in, and the change is saved straight away.",
       },
       {
         key: "showReplaceButton",
@@ -928,6 +938,8 @@ export function setup(ctx: Ctx, opts?: any) {
 
   let lastChatId: any = null;
   let lastMessageId: any = null;
+  let toggleAction: any = null;
+  let toggleActionOff: any = null;
   let replaceAction: any = null;
   let replaceActionOff: any = null;
   let replaceAllAction: any = null;
@@ -969,6 +981,48 @@ export function setup(ctx: Ctx, opts?: any) {
   function syncReplaceButton() {
     try {
       const canReg = !!(ctx && (ctx as any).ui && typeof (ctx as any).ui.registerInputBarAction === "function");
+      // The label and icon say which state you are in, and the host sets those
+      // when the button is registered. So flipping the switch tears the button
+      // down and puts a fresh one up rather than trying to edit it in place.
+      if (cfg.showToggleButton && canReg) {
+        const onNow = cfg.enabled !== false;
+        const wanted = onNow ? "on" : "off";
+        if (toggleAction && toggleAction.__state !== wanted) {
+          try { toggleActionOff && toggleActionOff(); } catch (_) {}
+          try { toggleAction.destroy(); } catch (_) {}
+          toggleAction = null;
+          toggleActionOff = null;
+        }
+        if (!toggleAction) {
+          toggleAction = (ctx as any).ui.registerInputBarAction({
+            id: "auto-retry-toggle",
+            label: onNow ? "Auto Retry is on, tap to turn off" : "Auto Retry is off, tap to turn on",
+            iconSvg: onNow
+              ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>'
+              : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.55"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><line x1="3" y1="21" x2="21" y2="3"/></svg>',
+          });
+          toggleAction.__state = wanted;
+          toggleActionOff = toggleAction.onClick(() => {
+            cfg.enabled = cfg.enabled === false;
+            saveSaved();
+            if (cfg.enabled === false) {
+              // Drop anything already queued, so turning it off stops a retry
+              // that was about to fire.
+              chats.forEach((_s: any, id: string) => standDown(id, false));
+            }
+            showToast(
+              cfg.enabled === false ? "Auto Retry is off." : "Auto Retry is on.",
+              { force: true },
+            );
+            syncReplaceButton();
+          });
+        }
+      } else if ((!cfg.showToggleButton || !canReg) && toggleAction) {
+        try { toggleActionOff && toggleActionOff(); } catch (_) {}
+        try { toggleAction.destroy(); } catch (_) {}
+        toggleAction = null;
+        toggleActionOff = null;
+      }
       if (cfg.showReplaceButton && canReg && !replaceAction) {
         replaceAction = (ctx as any).ui.registerInputBarAction({
           id: "auto-retry-replace-now",
@@ -1238,6 +1292,7 @@ export function setup(ctx: Ctx, opts?: any) {
       label: "Retry behavior",
       keys: [
         "enabled",
+        "showToggleButton",
         "maxRetries",
         "retryDelayMs",
         "backoffFactor",
@@ -1866,8 +1921,7 @@ export function setup(ctx: Ctx, opts?: any) {
       const el = document.createElement("style");
       el.id = "__lvRetryHideStyle";
       el.textContent =
-        "." + HIDE_CLASS + "{opacity:0!important;pointer-events:none!important;" +
-        "transition:none!important;animation:none!important}";
+        "." + HIDE_CLASS + "{opacity:0!important;pointer-events:none!important;transition:none!important;animation:none!important}";
       (document.head || document.documentElement).appendChild(el);
       hideStyleEl = el;
     } catch (_) {}
@@ -2547,6 +2601,7 @@ export function setup(ctx: Ctx, opts?: any) {
     const inc = (v: any) => v !== false; // sections default to on
     const keys = [
       "enabled",
+      "showToggleButton",
       "maxRetries",
       "retryDelayMs",
       "backoffFactor",
@@ -3963,6 +4018,7 @@ export function setup(ctx: Ctx, opts?: any) {
       disposers.push(() => { try { offRep && offRep(); } catch (_) {} });
     }
   } catch (_) {}
+  disposers.push(() => { try { toggleActionOff && toggleActionOff(); } catch (_) {} try { toggleAction && toggleAction.destroy(); } catch (_) {} });
   disposers.push(() => { try { replaceActionOff && replaceActionOff(); } catch (_) {} try { replaceAction && replaceAction.destroy(); } catch (_) {} });
   log("ready v" + VERSION, cfg);
 
