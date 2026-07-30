@@ -32,7 +32,7 @@ Pressing your **Stop** button, or tapping **Cancel** on the retry pop-up, stops 
 
 ## Settings
 
-Open the chat input bar, tap the **Extras** popover, and choose **Auto Retry settings**. Options are grouped by what they do. Simple on/off switches are up top; the groups marked **Advanced** are collapsed by default, so tap one of those headers to reveal its options. Each setting has a **?** next to its name that shows a short description: hover it on a computer, tap it on a phone, so the list stays compact.
+Open the chat input bar, tap the **Extras** popover, and choose **Auto Retry settings**. Options are grouped by what they do. Simple on/off switches are up top; the groups marked **Advanced** are collapsed by default, so tap one of those headers to reveal its options. Each setting has a **?** next to its name that shows a short description: hover it on a computer, tap it on a phone. The description floats over the panel rather than opening inside the list, so reading one never pushes the options below it out of place, and only one is ever open at a time. Tap the **?** again, tap anywhere else, scroll, or press Esc to dismiss it.
 
 The **Search settings** box at the top finds any option by its name or its description, and opens whichever section it lives in, so you never have to remember which group something is under. Clearing the box puts the panel back exactly as it was.
 

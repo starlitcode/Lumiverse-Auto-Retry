@@ -3075,6 +3075,123 @@ export function setup(ctx, opts) {
         }
         catch (_) { }
     }
+    // ---- hint popover ----
+    // A setting's description used to expand inline, which pushed every option
+    // below it down the list. On a phone one tap could shove the next two options
+    // off the screen, and opening a second description moved everything again, so
+    // reading two descriptions meant losing your place twice. This floats the text
+    // over the panel instead, so the list never moves.
+    //
+    // Fixed position, parented to the page rather than the row: the options list
+    // is a scroll container, and anything inside it would be clipped at its edges.
+    // Only ever one open, since there is only ever one of these.
+    let hintPop = null;
+    let hintAnchor = null;
+    let hintReset = null;
+    function hideHint() {
+        if (hintPop) {
+            try {
+                hintPop.remove();
+            }
+            catch (_) { }
+        }
+        hintPop = null;
+        hintAnchor = null;
+        if (hintReset) {
+            try {
+                hintReset();
+            }
+            catch (_) { }
+        }
+        hintReset = null;
+    }
+    function showHint(anchor, text, onClose) {
+        hideHint();
+        if (typeof document === "undefined" || !anchor || !anchor.getBoundingClientRect)
+            return;
+        const el = document.createElement("div");
+        el.setAttribute("role", "tooltip");
+        el.textContent = text;
+        el.style.cssText =
+            "position:fixed;z-index:2147483646;box-sizing:border-box;padding:8px 10px;" +
+                "border-radius:var(--lumiverse-radius,8px);" +
+                "background:var(--lumiverse-bg-elevated,rgba(35,30,48,.98));" +
+                "border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));" +
+                "box-shadow:var(--lumiverse-shadow-md,0 8px 24px rgba(0,0,0,.4));" +
+                "color:var(--lumiverse-text,#eee);font:12px/1.45 var(--lumiverse-font-family,system-ui);" +
+                // Off screen until it has been measured, so it is never seen in the wrong
+                // place for a frame.
+                "left:0;top:-9999px";
+        (document.body || document.documentElement).appendChild(el);
+        const vw = vpW();
+        const vh = vpH();
+        const width = Math.min(300, vw - 24);
+        el.style.width = width + "px";
+        const r = anchor.getBoundingClientRect();
+        const h = el.offsetHeight || 0;
+        // Centred under the "?" where there is room, nudged back inside the screen
+        // where there is not, and flipped above it when it would run off the bottom.
+        let left = r.left + r.width / 2 - width / 2;
+        left = Math.max(12, Math.min(left, vw - width - 12));
+        let top = r.bottom + 8;
+        if (top + h > vh - 12)
+            top = Math.max(12, r.top - h - 8);
+        el.style.left = Math.round(left) + "px";
+        el.style.top = Math.round(top) + "px";
+        hintPop = el;
+        hintAnchor = anchor;
+        hintReset = onClose;
+        ensureReadableTree(el, 2.6);
+    }
+    // Anything that means the anchor has moved or attention has gone elsewhere
+    // closes it. Scroll is captured, since the options list scrolls, not the page.
+    if (typeof document !== "undefined") {
+        const onHintDismiss = (e) => {
+            if (!hintPop)
+                return;
+            const t = e && e.target;
+            try {
+                // The "?" itself is left alone so its own handler can close it, rather
+                // than this closing it and the click reopening it.
+                if (t && t.closest && (t === hintAnchor || t.closest("[data-ar-hint]")))
+                    return;
+                if (t && hintPop.contains && hintPop.contains(t))
+                    return;
+            }
+            catch (_) { }
+            hideHint();
+        };
+        const onHintScroll = () => hideHint();
+        const onHintKey = (e) => {
+            if (e && e.key === "Escape")
+                hideHint();
+        };
+        document.addEventListener("pointerdown", onHintDismiss, true);
+        document.addEventListener("scroll", onHintScroll, true);
+        document.addEventListener("keydown", onHintKey, true);
+        if (typeof window !== "undefined")
+            window.addEventListener("resize", onHintScroll);
+        disposers.push(() => {
+            try {
+                document.removeEventListener("pointerdown", onHintDismiss, true);
+            }
+            catch (_) { }
+            try {
+                document.removeEventListener("scroll", onHintScroll, true);
+            }
+            catch (_) { }
+            try {
+                document.removeEventListener("keydown", onHintKey, true);
+            }
+            catch (_) { }
+            try {
+                if (typeof window !== "undefined")
+                    window.removeEventListener("resize", onHintScroll);
+            }
+            catch (_) { }
+            hideHint();
+        });
+    }
     // ---- toast with an optional Cancel button ----
     function ensureToast() {
         if (typeof document === "undefined")
@@ -3347,6 +3464,8 @@ export function setup(ctx, opts) {
     // when the settings modal closes instead of being left floating.
     let closeExpandEditor = null;
     function buildSettingsBody(root, onSaved) {
+        // The buttons a popover can be anchored to are about to be thrown away.
+        hideHint();
         root.innerHTML = "";
         fieldSetters = {};
         presetBarRefreshers = [];
@@ -4069,6 +4188,7 @@ export function setup(ctx, opts) {
         searchNote.style.cssText =
             "font-size:12px;min-height:1em;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
         const runSearch = () => {
+            hideHint();
             const q = search.value.trim().toLowerCase();
             // Every row buildRow makes is a flex column, so hidden rows are put back
             // to "flex" rather than "". Clearing the property instead would drop the
@@ -4233,15 +4353,9 @@ export function setup(ctx, opts) {
         row.style.cssText =
             "display:flex;flex-direction:column;gap:5px;cursor:" +
                 (f.type === "text" ? "default" : "pointer");
-        // The hint is hidden by default and revealed by the "?" next to the label
-        // (hover on a mouse, tap on touch), so rows stay compact. Kept in the DOM.
-        let hintEl = null;
-        if (f.hint) {
-            hintEl = document.createElement("span");
-            hintEl.textContent = f.hint;
-            hintEl.style.cssText =
-                "display:none;font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
-        }
+        // The description belongs to the "?" next to the label (hover on a mouse,
+        // tap on touch) and is shown in a popover over the panel, so revealing one
+        // never moves the rows underneath it.
         const top = document.createElement("div");
         top.style.cssText =
             "display:flex;align-items:center;gap:10px;justify-content:space-between";
@@ -4252,21 +4366,28 @@ export function setup(ctx, opts) {
         name.textContent = f.label;
         name.style.cssText = "font-size:13.5px";
         labelWrap.appendChild(name);
-        if (hintEl) {
+        if (f.hint) {
             const info = document.createElement("button");
             info.type = "button";
             info.textContent = "?";
             info.setAttribute("aria-label", "Show description for " + f.label);
+            // Marks it for the dismiss handler, which leaves the "?" alone so its own
+            // click can close a popover rather than closing and reopening it.
+            info.setAttribute("data-ar-hint", "1");
             info.style.cssText =
                 "flex:none;width:18px;height:18px;padding:0;line-height:1;border-radius:50%;border:1px solid var(--lumiverse-border,rgba(255,255,255,.3));background:transparent;color:var(--lumiverse-text-muted,rgba(255,255,255,.65));font-size:11px;cursor:pointer";
-            const setHint = (show) => {
-                hintEl.style.display = show ? "block" : "none";
-                info.style.borderColor = show
+            const paint = (on) => {
+                info.style.borderColor = on
                     ? "var(--lumiverse-primary,rgba(147,112,219,.9))"
                     : "var(--lumiverse-border,rgba(255,255,255,.3))";
-                info.style.color = show
+                info.style.color = on
                     ? "var(--lumiverse-primary,rgba(147,112,219,.9))"
                     : "var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+            };
+            const mine = () => hintAnchor === info;
+            const open = () => {
+                showHint(info, String(f.hint), () => paint(false));
+                paint(true);
             };
             // Mouse devices reveal on hover (and keyboard focus); touch devices, which
             // can't hover, toggle on tap.
@@ -4274,10 +4395,16 @@ export function setup(ctx, opts) {
                 !!window.matchMedia &&
                 window.matchMedia("(hover: hover)").matches;
             if (canHover) {
-                info.addEventListener("mouseenter", () => setHint(true));
-                info.addEventListener("mouseleave", () => setHint(false));
-                info.addEventListener("focus", () => setHint(true));
-                info.addEventListener("blur", () => setHint(false));
+                info.addEventListener("mouseenter", open);
+                info.addEventListener("mouseleave", () => {
+                    if (mine())
+                        hideHint();
+                });
+                info.addEventListener("focus", open);
+                info.addEventListener("blur", () => {
+                    if (mine())
+                        hideHint();
+                });
             }
             info.addEventListener("click", (e) => {
                 // Stop the row-label from toggling its control when the button is clicked.
@@ -4286,8 +4413,12 @@ export function setup(ctx, opts) {
                     e.stopPropagation();
                 }
                 // On touch, click toggles. On a mouse, hover already handles it.
-                if (!canHover)
-                    setHint(hintEl.style.display === "none");
+                if (canHover)
+                    return;
+                if (mine())
+                    hideHint();
+                else
+                    open();
             });
             labelWrap.appendChild(info);
         }
@@ -4407,8 +4538,6 @@ export function setup(ctx, opts) {
                 row.appendChild(testRow);
             }
         }
-        if (hintEl)
-            row.appendChild(hintEl);
         return row;
     }
     function styleField(input) {
@@ -4710,6 +4839,7 @@ export function setup(ctx, opts) {
             modalSnapshot = snapshot;
             buildSettingsBody(modal.root, snapshot);
             modal.onDismiss(() => {
+                hideHint();
                 if (closeExpandEditor) {
                     try {
                         closeExpandEditor();

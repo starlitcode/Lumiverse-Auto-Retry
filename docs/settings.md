@@ -2,6 +2,8 @@
 
 The settings modal is the easy path, and the **Search settings** box at the top of it is the quickest way to reach one option out of the forty-odd below: type part of a name or a description and it shows the matching rows, opening whichever Advanced section they live in. Clear the box to put the panel back as it was.
 
+Each option's **?** shows its description in a small popover over the panel, so opening one never shifts the rows underneath it. Only one is open at a time; tap the **?** again, tap elsewhere, scroll, or press Esc to close it.
+
 Every section header is a proper button, so the Advanced groups open with Enter or Space if you are working from the keyboard rather than a pointer.
 
 The same options live in the CONFIG block at the top of `src/frontend.ts` and `dist/frontend.js`. `dist/frontend.js` is the file the host actually loads, so editing CONFIG there takes effect with no rebuild; editing `src/frontend.ts` needs a `bun run build`.
