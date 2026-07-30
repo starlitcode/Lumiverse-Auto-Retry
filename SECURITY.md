@@ -10,7 +10,7 @@ It also never treats text as code. There is no `eval` and no `new Function` anyw
 
 ## What it can reach, and why it needs to
 
-It asks Lumiverse for two permissions. `chat_mutation` is the one that matters: it lets the extension read the text of a reply, which is how it decides whether that reply failed, and rewrite a reply, which is how the word-swap feature saves a change. That is a privileged permission and worth thinking twice about, which is why word swaps are off by default and marked beta. `generation` is declared so the extension can follow the generation lifecycle, the events that tell it a reply started, streamed, or ended.
+It asks Lumiverse for three permissions. `chat_mutation` is the one that matters: it lets the extension read the text of a reply, which is how it decides whether that reply failed, and rewrite a reply, which is how the word-swap feature saves a change. That is a privileged permission and worth thinking twice about, which is why word swaps are off by default and marked beta. `generation` is declared so the extension can follow the generation lifecycle, the events that tell it a reply started, streamed, or ended. `ui_panels` is what Lumiverse requires before an extension may put a floating widget on screen, and it is used for the optional on/off button and nothing else. It grants screen space, not access to your data.
 
 Behind those it uses four Lumiverse APIs and nothing else: reading the messages in a chat, updating a message, and reading and writing its own settings. Everything the extension does is built out of those four.
 
