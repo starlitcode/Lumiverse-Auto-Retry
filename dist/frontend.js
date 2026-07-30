@@ -102,6 +102,9 @@ const CONFIG = {
     showReplaceButton: false,
     // optional button in the input's Extras menu that applies the word swaps to the latest reply on demand.
     showSwapAllButton: false,
+    // Extras button that puts the last word swap back. One step deep: it restores
+    // the reply text as it was before the most recent swap.
+    showUndoSwapButton: false,
     // when using that button, swap every assistant reply in the chat instead of only the latest.
     allowReSwap: false,
     // let that button swap a reply again even if it was already swapped this session (can stack swaps).
@@ -358,6 +361,12 @@ const SCHEMA = [{
         label: 'Show a swap-whole-chat button',
         type: 'bool',
         hint: "Off by default. Adds a button to the input's Extras menu that applies your rules once to every generated reply in the chat you're viewing. The greeting is never touched.",
+    },
+    {
+        key: 'showUndoSwapButton',
+        label: 'Show an undo button',
+        type: 'bool',
+        hint: 'Off by default. Adds a button to the Extras menu that puts the last word swap back, restoring the reply exactly as it read before. It remembers one swap at a time, whether that was a single reply or a whole chat. A reply you have edited yourself since the swap is left alone rather than overwritten.'
     },
     {
         key: 'allowReSwap',
@@ -819,6 +828,8 @@ export function setup(ctx, opts) {
     let replaceAction = null;
     let replaceActionOff = null;
     let replaceAllAction = null;
+    let undoAction = null;
+    let undoActionOff = null;
     let replaceAllActionOff = null;
     // Manual "swap words now": an optional Extras-menu button that applies the word
     // swaps to the latest reply on demand, instead of only automatically on finish.
@@ -843,6 +854,15 @@ export function setup(ctx, opts) {
         } catch(_) {}
     }
     // Swap every generated reply in the current chat, once, on request.
+    function undoSwapNow() {
+        try {
+            if (!ctx || typeof ctx.sendToBackend !== 'function') {
+                showToast('Undo needs the backend, which this host does not offer.');
+                return;
+            }
+            ctx.sendToBackend({ type: 'undo_swap', requestId: 'ar-undo-' + Date.now() });
+        } catch (_) {}
+    }
     async function applyReplaceAllNow() {
         try {
             if (!ctx || typeof ctx.sendToBackend !== 'function') { showToast('Find and replace needs the backend, which this host does not offer.'); return; }
@@ -869,6 +889,19 @@ export function setup(ctx, opts) {
                 try { replaceAction.destroy(); } catch (_) {}
                 replaceAction = null;
                 replaceActionOff = null;
+            }
+            if (cfg.showUndoSwapButton && canReg && !undoAction) {
+                undoAction = ctx.ui.registerInputBarAction({
+                    id: 'auto-retry-undo-swap',
+                    label: 'Undo the last word swap',
+                    iconSvg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>',
+                });
+                undoActionOff = undoAction.onClick(() => undoSwapNow());
+            } else if ((!cfg.showUndoSwapButton || !canReg) && undoAction) {
+                try { undoActionOff && undoActionOff(); } catch (_) {}
+                try { undoAction.destroy(); } catch (_) {}
+                undoAction = null;
+                undoActionOff = null;
             }
             if (cfg.showSwapAllButton && canReg && !replaceAllAction) {
                 replaceAllAction = ctx.ui.registerInputBarAction({
@@ -1013,7 +1046,15 @@ export function setup(ctx, opts) {
         rsx = 0,
         rsy = 0,
         rw = 0,
-        rh = 0;
+        rh = 0,
+        pendW = 0,
+        pendH = 0,
+        rzFrame = null;
+        const paintResize = () => {
+            rzFrame = null;
+            el.style.width = pendW + 'px';
+            el.style.height = pendH + 'px';
+        };
         const rzDown = (e) => {
             rz = true;
             const r = el.getBoundingClientRect();
@@ -1036,12 +1077,21 @@ export function setup(ctx, opts) {
             nh = rh + (e.clientY - rsy);
             nw = Math.max(200, Math.min(nw, window.innerWidth - 16));
             nh = Math.max(120, Math.min(nh, window.innerHeight - 16));
-            el.style.width = nw + 'px';
-            el.style.height = nh + 'px';
+            // Resizing has to change layout, so a transform cannot help here the way
+            // it does for dragging. Batching to one change per frame still keeps it
+            // from thrashing when pointer events arrive faster than the screen redraws.
+            pendW = nw;
+            pendH = nh;
+            if (!rzFrame) rzFrame = requestAnimationFrame(paintResize);
         };
         const rzUp = (e) => {
             if (rz) {
                 rz = false;
+                if (rzFrame) {
+                    cancelAnimationFrame(rzFrame);
+                    rzFrame = null;
+                    paintResize();
+                }
                 try {
                     grip.releasePointerCapture(e.pointerId);
                 } catch(_) {}
@@ -1281,7 +1331,7 @@ export function setup(ctx, opts) {
     {
         id: 'replace',
         label: 'Word swaps',
-        keys: ['replaceEnabled', 'replaceRules', 'replaceRandom', 'replaceCaseSensitive', 'showReplaceButton', 'showSwapAllButton', 'allowReSwap', 'confirmBeforeEdit']
+        keys: ['replaceEnabled', 'replaceRules', 'replaceRandom', 'replaceCaseSensitive', 'showReplaceButton', 'showSwapAllButton', 'showUndoSwapButton', 'allowReSwap', 'confirmBeforeEdit']
     },
     {
         id: 'buttons',
@@ -1374,7 +1424,7 @@ export function setup(ctx, opts) {
             // rewriting replies unasked, and confirmBeforeEdit would let one remove a
             // confirmation someone chose to turn on; those two matter most.
             // Exporting still carries all of them.
-            omit: ['replaceEnabled', 'showReplaceButton', 'showSwapAllButton', 'allowReSwap', 'confirmBeforeEdit'],
+            omit: ['replaceEnabled', 'showReplaceButton', 'showSwapAllButton', 'showUndoSwapButton', 'allowReSwap', 'confirmBeforeEdit'],
         },
     };
     // Derived from the export category so the two stay in step, minus whatever
@@ -2369,7 +2419,7 @@ export function setup(ctx, opts) {
     function buildDebugInfo(opts) {
         const o = opts || {};
         const inc = (v) => v !== false; // sections default to on
-        const keys = ['enabled', 'showFloatingToggle', 'floatingToggleSize', 'maxRetries', 'retryDelayMs', 'backoffFactor', 'maxDelayMs', 'jitter', 'rateLimitDelayMs', 'retryByNewReroll', 'stuckTimeoutMs', 'idleTimeoutMs', 'retryOnError', 'ignoreHardErrors', 'retryOnEmpty', 'retryOnTruncated', 'retryOnNoPunct', 'retryOnShort', 'minChars', 'retryOnRefusal', 'refusalUseBuiltins', 'refusalMaxChars', 'refusalExtraPhrases', 'refusalPhraseSubs', 'refusalIgnorePhrases', 'refusalStripThinking', 'refusalThinkTags', 'replaceEnabled', 'replaceRules', 'replaceRandom', 'replaceCaseSensitive', 'showReplaceButton', 'showSwapAllButton', 'allowReSwap', 'confirmBeforeEdit', 'liveLog', 'toast'];
+        const keys = ['enabled', 'showFloatingToggle', 'floatingToggleSize', 'maxRetries', 'retryDelayMs', 'backoffFactor', 'maxDelayMs', 'jitter', 'rateLimitDelayMs', 'retryByNewReroll', 'stuckTimeoutMs', 'idleTimeoutMs', 'retryOnError', 'ignoreHardErrors', 'retryOnEmpty', 'retryOnTruncated', 'retryOnNoPunct', 'retryOnShort', 'minChars', 'retryOnRefusal', 'refusalUseBuiltins', 'refusalMaxChars', 'refusalExtraPhrases', 'refusalPhraseSubs', 'refusalIgnorePhrases', 'refusalStripThinking', 'refusalThinkTags', 'replaceEnabled', 'replaceRules', 'replaceRandom', 'replaceCaseSensitive', 'showReplaceButton', 'showSwapAllButton', 'showUndoSwapButton', 'allowReSwap', 'confirmBeforeEdit', 'liveLog', 'toast'];
         const lines = [];
         lines.push('Auto Retry v' + VERSION + ' debug info');
         lines.push('time: ' + new Date().toISOString());
@@ -3536,6 +3586,15 @@ export function setup(ctx, opts) {
                     applySwapsToView(msg.pairs || [], !msg.wholeChat);
                     return;
                 }
+                if (msg.type === 'undo_result') {
+                    if (!msg.ok) showToast('Could not undo the swap.');
+                    else if (!msg.restored) showToast('Nothing to undo.');
+                    else {
+                        applySwapsToView(msg.pairs || [], !msg.wholeChat);
+                        showToast(msg.restored === 1 ? 'Put the last swap back.' : 'Put ' + msg.restored + ' replies back.');
+                    }
+                    return;
+                }
                 if (msg.type !== 'replace_now_result') return;
                 if (msg.ok) applySwapsToView(msg.pairs || [], !msg.wholeChat);
                 if (!msg.ok) showToast('Could not swap words.');
@@ -3549,6 +3608,7 @@ export function setup(ctx, opts) {
             disposers.push(() => { try { offRep && offRep(); } catch(_) {} });
         }
     } catch(_) {}
+    disposers.push(() => { try { undoActionOff && undoActionOff(); } catch(_) {} try { undoAction && undoAction.destroy(); } catch(_) {} });
     disposers.push(() => { try { replaceActionOff && replaceActionOff(); } catch(_) {} try { replaceAction && replaceAction.destroy(); } catch(_) {} });
     log('ready v' + VERSION, cfg);
     return () => {
