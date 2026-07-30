@@ -38,7 +38,7 @@ The **Search settings** box at the top finds any option by its name or its descr
 
 Only **Save** keeps your changes. Closing with the X or tapping outside discards anything you did not save, so you can experiment freely. Saved settings sync to your Lumiverse account, so they follow you to other browsers and devices, and they apply to the next reply. Long text boxes, like your word-swap rules, have an **Expand** button that opens a full-size editor.
 
-The panel takes its colours from your Lumiverse theme, and checks as it draws that every label still contrasts with what is behind it. On a theme whose accent colour sits close to its text colour, a filled button would otherwise come out as a blank rectangle with its label invisible inside it; where that would happen the label is repainted and everything else is left alone.
+The panel is built entirely from your Lumiverse theme's own colours, corners, shadows and fonts, so it follows whatever theme you run, including your text and UI size settings. As it draws, it also checks that every label still contrasts with what is behind it. On a theme whose accent sits close to its text colour, a filled button would otherwise come out as a blank rectangle with its label invisible inside it; where that would happen the label is repainted and everything else is left exactly as your theme set it.
 
 ## Turning it off quickly
 

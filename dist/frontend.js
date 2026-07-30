@@ -1313,7 +1313,7 @@ export function setup(ctx, opts) {
             return;
         const el = document.createElement("div");
         el.style.cssText =
-            "position:fixed;right:8px;bottom:8px;z-index:2147483000;width:min(340px,92vw);height:min(300px,50vh);min-width:200px;min-height:120px;max-width:96vw;max-height:85vh;display:flex;flex-direction:column;background:var(--lumiverse-bg-elevated,rgba(35,30,48,.9));border:1px solid var(--lumiverse-border,rgba(255,255,255,.14));border-radius:var(--lumiverse-radius,10px);box-shadow:var(--lumiverse-shadow-md,0 8px 24px rgba(0,0,0,.4));font-family:var(--lumiverse-font-family,system-ui);font-size:13px;color:var(--lumiverse-text,#e9e4f0);overflow:hidden";
+            "position:fixed;right:8px;bottom:8px;z-index:2147483000;width:min(340px,92vw);height:min(300px,50vh);min-width:200px;min-height:120px;max-width:96vw;max-height:85vh;display:flex;flex-direction:column;background:var(--lumiverse-bg-elevated,rgba(35,30,48,.9));border:1px solid var(--lumiverse-border,rgba(255,255,255,.14));border-radius:var(--lumiverse-radius-md,10px);box-shadow:var(--lumiverse-shadow-md,0 8px 24px rgba(0,0,0,.4));font-family:var(--lumiverse-font-family,system-ui);font-size:calc(13px * var(--lumiverse-font-scale,1));color:var(--lumiverse-text,#e9e4f0);overflow:hidden";
         const head = document.createElement("div");
         head.style.cssText =
             "display:flex;align-items:center;gap:8px;padding:7px 9px;border-bottom:1px solid var(--lumiverse-border,rgba(255,255,255,.12));font-weight:600;cursor:move;user-select:none;touch-action:none";
@@ -1327,7 +1327,7 @@ export function setup(ctx, opts) {
         const tinyBtn = (label) => {
             const b = btn(label, false);
             b.style.cssText +=
-                "min-height:0;padding:3px 9px;font-size:11px;flex:none;cursor:pointer";
+                "min-height:0;padding:3px 9px;font-size:calc(11px * var(--lumiverse-font-scale,1));flex:none;cursor:pointer";
             return b;
         };
         const copyBtn = tinyBtn("Copy");
@@ -1430,7 +1430,7 @@ export function setup(ctx, opts) {
         // the same pointer events as the drag so it also works with touch on mobile.
         const grip = document.createElement("div");
         grip.style.cssText =
-            "position:absolute;right:0;bottom:0;width:20px;height:20px;cursor:nwse-resize;touch-action:none;background:linear-gradient(135deg,transparent 45%,var(--lumiverse-border,rgba(255,255,255,.5)) 45%,var(--lumiverse-border,rgba(255,255,255,.5)) 55%,transparent 55%,transparent 70%,var(--lumiverse-border,rgba(255,255,255,.5)) 70%,var(--lumiverse-border,rgba(255,255,255,.5)) 80%,transparent 80%);border-bottom-right-radius:var(--lumiverse-radius,10px)";
+            "position:absolute;right:0;bottom:0;width:20px;height:20px;cursor:nwse-resize;touch-action:none;background:linear-gradient(135deg,transparent 45%,var(--lumiverse-border,rgba(255,255,255,.5)) 45%,var(--lumiverse-border,rgba(255,255,255,.5)) 55%,transparent 55%,transparent 70%,var(--lumiverse-border,rgba(255,255,255,.5)) 70%,var(--lumiverse-border,rgba(255,255,255,.5)) 80%,transparent 80%);border-bottom-right-radius:var(--lumiverse-radius-md,10px)";
         el.appendChild(grip);
         let rz = false, rsx = 0, rsy = 0, rw = 0, rh = 0, pendW = 0, pendH = 0, rzFrame = null;
         const paintResize = () => {
@@ -2985,8 +2985,8 @@ export function setup(ctx, opts) {
             t.style.cssText =
                 "position:fixed;bottom:max(20px,env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);" +
                     "z-index:2147483647;display:flex;align-items:center;gap:10px;" +
-                    "font:13px/1.4 var(--lumiverse-font-family,system-ui);padding:9px 12px;border-radius:var(--lumiverse-radius,12px);" +
-                    "color:var(--lumiverse-text,#fff);background:var(--lumiverse-fill,rgba(20,16,30,.96));" +
+                    "font:calc(13px * var(--lumiverse-font-scale,1))/1.4 var(--lumiverse-font-family,system-ui);padding:9px 12px;border-radius:var(--lumiverse-radius-lg,12px);" +
+                    "color:var(--lumiverse-text,#fff);background:var(--lumiverse-bg-elevated,rgba(35,30,48,.94));" +
                     "border:1px solid var(--lumiverse-border,rgba(255,255,255,.18));" +
                     "box-shadow:var(--lumiverse-shadow-md,0 8px 24px rgba(0,0,0,.4));transition:opacity var(--lumiverse-transition,200ms ease);" +
                     "opacity:0;max-width:min(92vw,460px);text-align:left";
@@ -3023,9 +3023,9 @@ export function setup(ctx, opts) {
                 c.textContent = "Cancel";
                 c.style.cssText =
                     "flex:none;min-height:36px;padding:6px 14px;border-radius:var(--lumiverse-radius,8px);cursor:pointer;" +
-                        "font:13px var(--lumiverse-font-family,system-ui);" +
+                        "font:calc(13px * var(--lumiverse-font-scale,1)) var(--lumiverse-font-family,system-ui);" +
                         "border:1px solid var(--lumiverse-border,rgba(255,255,255,.28));" +
-                        "background:var(--lumiverse-fill-subtle,rgba(255,255,255,.08));color:var(--lumiverse-text,#fff)";
+                        "background:var(--lumiverse-fill-subtle,rgba(0,0,0,.1));color:var(--lumiverse-text,#fff)";
                 c.addEventListener("click", () => {
                     try {
                         opts.cancel && opts.cancel();
@@ -3263,7 +3263,7 @@ export function setup(ctx, opts) {
                 const l = document.createElement("div");
                 l.textContent = text;
                 l.style.cssText =
-                    "font-size:11px;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+                    "font-size:calc(11px * var(--lumiverse-font-scale,1));color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
                 return l;
             };
             const rowBox = () => {
@@ -3275,7 +3275,7 @@ export function setup(ctx, opts) {
             // Load direction: a saved preset into the settings.
             const select = document.createElement("select");
             select.style.cssText =
-                "flex:1;min-width:150px;padding:8px 10px;border-radius:var(--lumiverse-radius,8px);border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));background:var(--lumiverse-fill-subtle,rgba(255,255,255,.05));color:var(--lumiverse-text,#eee);font:13px var(--lumiverse-font-family,system-ui)";
+                "flex:1;min-width:150px;padding:8px 10px;border-radius:var(--lumiverse-radius,8px);border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));background:var(--lumiverse-fill-subtle,rgba(0,0,0,.1));color:var(--lumiverse-text,#eee);font:calc(13px * var(--lumiverse-font-scale,1)) var(--lumiverse-font-family,system-ui)";
             const loadBtn = smallBtn(btn("Load", true));
             const pickRow = rowBox();
             pickRow.appendChild(select);
@@ -3299,7 +3299,7 @@ export function setup(ctx, opts) {
             saveRow.appendChild(rename);
             const status = document.createElement("div");
             status.style.cssText =
-                "font-size:12px;line-height:1.4;color:var(--lumiverse-text-muted,rgba(255,255,255,.65));min-height:1em";
+                "font-size:calc(12px * var(--lumiverse-font-scale,1));line-height:1.4;color:var(--lumiverse-text-muted,rgba(255,255,255,.65));min-height:1em";
             const presets = loadPresets();
             const list = () => presets[kind] || [];
             // Flush a field the user is still editing into cfg before we snapshot it.
@@ -3498,13 +3498,13 @@ export function setup(ctx, opts) {
             const title = document.createElement("div");
             title.textContent = "Try it on a reply";
             title.style.cssText =
-                "font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+                "font-size:calc(11px * var(--lumiverse-font-scale,1));letter-spacing:.05em;text-transform:uppercase;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
             wrap.appendChild(title);
             const desc = document.createElement("div");
             desc.textContent =
                 "Paste a reply and see whether it would count as a refusal, and what decided it. It uses the settings as they are in the boxes above, so you can test a change before saving it. Nothing is sent anywhere and no reply is altered.";
             desc.style.cssText =
-                "font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+                "font-size:calc(12px * var(--lumiverse-font-scale,1));line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
             wrap.appendChild(desc);
             const ta = document.createElement("textarea");
             ta.rows = 3;
@@ -3517,7 +3517,7 @@ export function setup(ctx, opts) {
             wrap.appendChild(ta);
             const out = document.createElement("div");
             out.style.cssText =
-                "font-size:12px;line-height:1.45;min-height:1em;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+                "font-size:calc(12px * var(--lumiverse-font-scale,1));line-height:1.45;min-height:1em;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
             const check = btn("Check this text", false);
             check.style.cssText += "min-height:0;padding:6px 12px;align-self:flex-start";
             check.addEventListener("click", () => {
@@ -3562,7 +3562,7 @@ export function setup(ctx, opts) {
         // options list below scrolls. vh units keep it sane on phones too.
         const panel = document.createElement("div");
         panel.style.cssText =
-            "display:flex;flex-direction:column;max-height:min(72vh,460px);overflow:hidden;box-sizing:border-box;font:13px/1.45 var(--lumiverse-font-family,system-ui);color:var(--lumiverse-text,#eee)";
+            "display:flex;flex-direction:column;max-height:min(72vh,460px);overflow:hidden;box-sizing:border-box;font:calc(13px * var(--lumiverse-font-scale,1))/1.45 var(--lumiverse-font-family,system-ui);color:var(--lumiverse-text,#eee)";
         // the one scroll area: flexes to fill whatever height is left after the
         // footer. min-height:0 lets it actually shrink and scroll inside the flex.
         const scroller = document.createElement("div");
@@ -3594,7 +3594,7 @@ export function setup(ctx, opts) {
             const advanced = /^advanced\b/i.test(group.title);
             const h = document.createElement("div");
             h.style.cssText =
-                "font-size:11px;letter-spacing:.07em;text-transform:uppercase;font-family:var(--lumiverse-font-family,system-ui);color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+                "font-size:calc(11px * var(--lumiverse-font-scale,1));letter-spacing:.07em;text-transform:uppercase;font-family:var(--lumiverse-font-family,system-ui);color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
             if (advanced) {
                 h.style.cursor = "pointer";
                 h.style.userSelect = "none";
@@ -3603,7 +3603,7 @@ export function setup(ctx, opts) {
                 h.style.gap = "6px";
                 const caret = document.createElement("span");
                 caret.textContent = "\u25B8"; // right triangle when collapsed
-                caret.style.cssText = "font-size:9px";
+                caret.style.cssText = "font-size:calc(9px * var(--lumiverse-font-scale,1))";
                 const label = document.createElement("span");
                 label.textContent = group.title;
                 h.appendChild(caret);
@@ -3615,7 +3615,7 @@ export function setup(ctx, opts) {
                     const d = document.createElement("div");
                     d.textContent = group.desc;
                     d.style.cssText =
-                        "font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+                        "font-size:calc(12px * var(--lumiverse-font-scale,1));line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
                     body.appendChild(d);
                 }
                 for (const f of group.fields)
@@ -3638,13 +3638,13 @@ export function setup(ctx, opts) {
                     const pl = document.createElement("div");
                     pl.textContent = "Presets";
                     pl.style.cssText =
-                        "font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+                        "font-size:calc(11px * var(--lumiverse-font-scale,1));letter-spacing:.05em;text-transform:uppercase;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
                     body.appendChild(pl);
                     const pd = document.createElement("div");
                     pd.textContent =
                         "Save your current word swaps as a named setup and switch between them. Applying takes effect right away. Kept on this browser.";
                     pd.style.cssText =
-                        "font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+                        "font-size:calc(12px * var(--lumiverse-font-scale,1));line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
                     body.appendChild(pd);
                     body.appendChild(buildPresetBar("swap"));
                 }
@@ -3673,7 +3673,7 @@ export function setup(ctx, opts) {
                     const d = document.createElement("div");
                     d.textContent = group.desc;
                     d.style.cssText =
-                        "font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65));margin-top:-4px";
+                        "font-size:calc(12px * var(--lumiverse-font-scale,1));line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65));margin-top:-4px";
                     sec.appendChild(d);
                 }
                 for (const f of group.fields)
@@ -3690,10 +3690,10 @@ export function setup(ctx, opts) {
             sec.style.cssText = "display:flex;flex-direction:column;gap:10px";
             const h = document.createElement("div");
             h.style.cssText =
-                "font-size:11px;letter-spacing:.07em;text-transform:uppercase;font-family:var(--lumiverse-font-family,system-ui);color:var(--lumiverse-text-muted,rgba(255,255,255,.65));cursor:pointer;user-select:none;display:flex;align-items:center;gap:6px";
+                "font-size:calc(11px * var(--lumiverse-font-scale,1));letter-spacing:.07em;text-transform:uppercase;font-family:var(--lumiverse-font-family,system-ui);color:var(--lumiverse-text-muted,rgba(255,255,255,.65));cursor:pointer;user-select:none;display:flex;align-items:center;gap:6px";
             const caret = document.createElement("span");
             caret.textContent = "\u25B8";
-            caret.style.cssText = "font-size:9px";
+            caret.style.cssText = "font-size:calc(9px * var(--lumiverse-font-scale,1))";
             const label = document.createElement("span");
             label.textContent = "Advanced: debug info";
             h.appendChild(caret);
@@ -3712,7 +3712,7 @@ export function setup(ctx, opts) {
             desc.textContent =
                 "A snapshot for your own debugging or a bug report. Tick the parts to include, build a preview, edit out anything you would rather not share, then copy. Nothing leaves your device until you paste it somewhere.";
             desc.style.cssText =
-                "font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+                "font-size:calc(12px * var(--lumiverse-font-scale,1));line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
             body.appendChild(desc);
             const sections = [
                 { id: "settings", label: "Your settings" },
@@ -3726,7 +3726,7 @@ export function setup(ctx, opts) {
             for (const s of sections) {
                 const row = document.createElement("label");
                 row.style.cssText =
-                    "display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer";
+                    "display:flex;align-items:center;gap:8px;font-size:calc(13px * var(--lumiverse-font-scale,1));cursor:pointer";
                 const cb = document.createElement("input");
                 cb.type = "checkbox";
                 cb.checked = true;
@@ -3748,13 +3748,13 @@ export function setup(ctx, opts) {
             };
             const dStatus = document.createElement("div");
             dStatus.style.cssText =
-                "font-size:12px;line-height:1.4;color:var(--lumiverse-text-muted,rgba(255,255,255,.65));min-height:1em";
+                "font-size:calc(12px * var(--lumiverse-font-scale,1));line-height:1.4;color:var(--lumiverse-text-muted,rgba(255,255,255,.65));min-height:1em";
             const dArea = document.createElement("textarea");
             dArea.rows = 6;
             dArea.placeholder =
                 "Press Build preview to fill this, then edit out anything private before copying.";
             dArea.style.cssText =
-                "width:100%;box-sizing:border-box;font-family:var(--lumiverse-font-mono,ui-monospace,monospace) !important;font-size:12px;padding:8px;border-radius:var(--lumiverse-radius,8px);border:1px solid var(--lumiverse-border,#3a3543);background:var(--lumiverse-bg,#1a1720);color:var(--lumiverse-text,#e9e4f0);resize:vertical";
+                "width:100%;box-sizing:border-box;font-family:var(--lumiverse-font-mono,ui-monospace,monospace) !important;font-size:calc(12px * var(--lumiverse-font-scale,1));padding:8px;border-radius:var(--lumiverse-radius,8px);border:1px solid var(--lumiverse-border,#3a3543);background:var(--lumiverse-bg,#1a1720);color:var(--lumiverse-text,#e9e4f0);resize:vertical";
             const buildBtn = btn("Build preview", false);
             buildBtn.addEventListener("click", () => {
                 dArea.value = buildDebugInfo(opts());
@@ -3796,10 +3796,10 @@ export function setup(ctx, opts) {
             sec.style.cssText = "display:flex;flex-direction:column;gap:10px";
             const h = document.createElement("div");
             h.style.cssText =
-                "font-size:11px;letter-spacing:.07em;text-transform:uppercase;font-family:var(--lumiverse-font-family,system-ui);color:var(--lumiverse-text-muted,rgba(255,255,255,.65));cursor:pointer;user-select:none;display:flex;align-items:center;gap:6px";
+                "font-size:calc(11px * var(--lumiverse-font-scale,1));letter-spacing:.07em;text-transform:uppercase;font-family:var(--lumiverse-font-family,system-ui);color:var(--lumiverse-text-muted,rgba(255,255,255,.65));cursor:pointer;user-select:none;display:flex;align-items:center;gap:6px";
             const caret = document.createElement("span");
             caret.textContent = "\u25B8";
-            caret.style.cssText = "font-size:9px";
+            caret.style.cssText = "font-size:calc(9px * var(--lumiverse-font-scale,1))";
             const label = document.createElement("span");
             label.textContent = "Advanced: import / export";
             h.appendChild(caret);
@@ -3818,7 +3818,7 @@ export function setup(ctx, opts) {
             desc.textContent =
                 "Save settings to a file or load them from one. Tick the parts to include, then Export or Import. An import fills in the settings above without saving, so you can review first: press Save to keep it, or close to discard.";
             desc.style.cssText =
-                "font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+                "font-size:calc(12px * var(--lumiverse-font-scale,1));line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
             body.appendChild(desc);
             const checks = [];
             const checkWrap = document.createElement("div");
@@ -3826,7 +3826,7 @@ export function setup(ctx, opts) {
             for (const c of EXPORT_CATEGORIES) {
                 const row = document.createElement("label");
                 row.style.cssText =
-                    "display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer";
+                    "display:flex;align-items:center;gap:8px;font-size:calc(13px * var(--lumiverse-font-scale,1));cursor:pointer";
                 const cb = document.createElement("input");
                 cb.type = "checkbox";
                 cb.checked = true;
@@ -3843,7 +3843,7 @@ export function setup(ctx, opts) {
             const chosen = () => checks.filter((x) => x.input.checked).map((x) => x.id);
             const status = document.createElement("div");
             status.style.cssText =
-                "font-size:12px;line-height:1.4;color:var(--lumiverse-text-muted,rgba(255,255,255,.65));min-height:1em";
+                "font-size:calc(12px * var(--lumiverse-font-scale,1));line-height:1.4;color:var(--lumiverse-text-muted,rgba(255,255,255,.65));min-height:1em";
             const exportBtn = btn("Export to file", false);
             exportBtn.addEventListener("click", () => {
                 const ids = chosen();
@@ -3968,7 +3968,7 @@ export function setup(ctx, opts) {
         search.style.boxSizing = "border-box";
         const searchNote = document.createElement("div");
         searchNote.style.cssText =
-            "font-size:12px;min-height:1em;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+            "font-size:calc(12px * var(--lumiverse-font-scale,1));min-height:1em;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
         const runSearch = () => {
             const q = search.value.trim().toLowerCase();
             // Every row buildRow makes is a flex column, so hidden rows are put back
@@ -4022,7 +4022,7 @@ export function setup(ctx, opts) {
             "display:flex;align-items:center;flex-wrap:wrap;gap:8px;flex:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--lumiverse-border,rgba(255,255,255,.08))";
         const status = document.createElement("span");
         status.style.cssText =
-            "flex:1;min-width:120px;font-size:12px;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+            "flex:1;min-width:120px;font-size:calc(12px * var(--lumiverse-font-scale,1));color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
         const reset = btn("Reset to defaults", false);
         reset.addEventListener("click", async () => {
             let ok = true;
@@ -4108,7 +4108,7 @@ export function setup(ctx, opts) {
         const note = document.createElement("span");
         // Height is held even while empty so the panel doesn't shift when it fills.
         note.style.cssText =
-            "font-size:12px;min-height:16px;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+            "font-size:calc(12px * var(--lumiverse-font-scale,1));min-height:16px;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
         b.addEventListener("click", () => {
             let changed = 0;
             for (const k of keys) {
@@ -4141,7 +4141,7 @@ export function setup(ctx, opts) {
             hintEl = document.createElement("span");
             hintEl.textContent = f.hint;
             hintEl.style.cssText =
-                "display:none;font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+                "display:none;font-size:calc(12px * var(--lumiverse-font-scale,1));line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
         }
         const top = document.createElement("div");
         top.style.cssText =
@@ -4151,7 +4151,7 @@ export function setup(ctx, opts) {
             "display:flex;align-items:center;gap:6px;min-width:0";
         const name = document.createElement("span");
         name.textContent = f.label;
-        name.style.cssText = "font-size:13.5px";
+        name.style.cssText = "font-size:calc(13.5px * var(--lumiverse-font-scale,1))";
         labelWrap.appendChild(name);
         if (hintEl) {
             const info = document.createElement("button");
@@ -4159,7 +4159,7 @@ export function setup(ctx, opts) {
             info.textContent = "?";
             info.setAttribute("aria-label", "Show description for " + f.label);
             info.style.cssText =
-                "flex:none;width:18px;height:18px;padding:0;line-height:1;border-radius:50%;border:1px solid var(--lumiverse-border,rgba(255,255,255,.3));background:transparent;color:var(--lumiverse-text-muted,rgba(255,255,255,.65));font-size:11px;cursor:pointer";
+                "flex:none;width:calc(18px * var(--lumiverse-font-scale,1));height:calc(18px * var(--lumiverse-font-scale,1));padding:0;line-height:1;border-radius:50%;border:1px solid var(--lumiverse-border,rgba(255,255,255,.3));background:transparent;color:var(--lumiverse-text-muted,rgba(255,255,255,.65));font-size:calc(11px * var(--lumiverse-font-scale,1));cursor:pointer";
             const setHint = (show) => {
                 hintEl.style.display = show ? "block" : "none";
                 info.style.borderColor = show
@@ -4198,7 +4198,7 @@ export function setup(ctx, opts) {
             input.type = "checkbox";
             input.checked = !!cfg[f.key];
             input.style.cssText =
-                "flex:none;width:20px;height:20px;accent-color:var(--lumiverse-primary,rgba(147,112,219,.9));cursor:pointer";
+                "flex:none;width:calc(20px * var(--lumiverse-ui-scale,1));height:calc(20px * var(--lumiverse-ui-scale,1));accent-color:var(--lumiverse-primary,rgba(147,112,219,.9));cursor:pointer";
             input.addEventListener("change", () => {
                 cfg[f.key] = input.checked;
             });
@@ -4235,7 +4235,7 @@ export function setup(ctx, opts) {
                 input.style.resize = "vertical";
                 const expand = btn("Expand", false);
                 expand.style.cssText +=
-                    "min-height:0;padding:3px 10px;font-size:12px;flex:none";
+                    "min-height:0;padding:3px 10px;font-size:calc(12px * var(--lumiverse-font-scale,1));flex:none";
                 expand.addEventListener("click", () => {
                     openExpandEditor(f.label, input.value, (val) => {
                         input.value = val;
@@ -4270,7 +4270,7 @@ export function setup(ctx, opts) {
                 test.style.padding = "5px 12px";
                 const res = document.createElement("span");
                 res.style.cssText =
-                    "font-size:12px;min-height:16px;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+                    "font-size:calc(12px * var(--lumiverse-font-scale,1));min-height:16px;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
                 test.addEventListener("click", () => {
                     const sel = input.value.trim();
                     if (!sel) {
@@ -4316,8 +4316,8 @@ export function setup(ctx, opts) {
         input.style.cssText +=
             "padding:9px 10px;border-radius:var(--lumiverse-radius,8px);" +
                 "border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));" +
-                "background:var(--lumiverse-fill-subtle,rgba(255,255,255,.05));" +
-                "color:var(--lumiverse-text,#eee);font:13px var(--lumiverse-font-family,system-ui);outline:none;" +
+                "background:var(--lumiverse-fill-subtle,rgba(0,0,0,.1));" +
+                "color:var(--lumiverse-text,#eee);font:calc(13px * var(--lumiverse-font-scale,1)) var(--lumiverse-font-family,system-ui);outline:none;" +
                 "transition:border-color var(--lumiverse-transition-fast,150ms ease)";
         ensureReadable(input);
         // On focus, tint the border so the active field is clear. No glow ring.
@@ -4333,24 +4333,41 @@ export function setup(ctx, opts) {
         b.textContent = label;
         b.style.cssText =
             "min-height:36px;padding:8px 14px;border-radius:var(--lumiverse-radius,8px);cursor:pointer;" +
-                "font:13px var(--lumiverse-font-family,system-ui);transition:filter var(--lumiverse-transition-fast,150ms ease);" +
+                "font:calc(13px * var(--lumiverse-font-scale,1)) var(--lumiverse-font-family,system-ui);" +
+                "transition:filter var(--lumiverse-transition-fast,150ms ease)," +
+                "background-color var(--lumiverse-transition-fast,150ms ease);" +
                 (primary
-                    ? // A filled button's label must contrast with the fill, not with the
-                        // panel, so this asks for the theme's on-accent colour and falls back
-                        // to white rather than reusing the body text colour, which on a light
-                        // accent is the same colour as the fill. ensureReadable then checks
-                        // what was actually painted and corrects it if the theme's own value
-                        // is no better.
+                    ? // A filled button's label has to contrast with the fill, not with the
+                        // panel. Lumiverse has no on-accent colour to ask for, and the body
+                        // text colour is the wrong answer: on a theme with a light accent it
+                        // is the same colour as the fill, which is what made this button read
+                        // as a blank rectangle. White is the right default for the stock
+                        // accent, and ensureReadable below measures what was actually painted
+                        // and flips it to near-black on an accent too light for white.
                         "border:1px solid transparent;background:var(--lumiverse-primary,rgba(147,112,219,.9));" +
-                            "color:var(--lumiverse-primary-contrast,var(--lumiverse-on-primary,#ffffff))"
-                    : "border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));background:transparent;color:var(--lumiverse-text,#eee)");
+                            "color:#ffffff"
+                    : // Secondary buttons use the theme's own secondary surface rather than
+                        // going transparent, so they read as buttons at rest instead of as
+                        // bare text with an outline.
+                        "border:1px solid var(--lumiverse-secondary-border,rgba(128,128,128,.25));" +
+                            "background:var(--lumiverse-secondary,rgba(128,128,128,.15));color:var(--lumiverse-text,#eee)");
         ensureReadable(b);
-        b.addEventListener("mouseenter", () => {
-            b.style.filter = "brightness(1.12)";
-        });
-        b.addEventListener("mouseleave", () => {
-            b.style.filter = "none";
-        });
+        // Hovering swaps to the theme's own hover colour rather than brightening the
+        // resting one, so a button lights up the same way the rest of Lumiverse does.
+        const restBg = primary
+            ? "var(--lumiverse-primary,rgba(147,112,219,.9))"
+            : "var(--lumiverse-secondary,rgba(128,128,128,.15))";
+        const hoverBg = primary
+            ? "var(--lumiverse-primary-hover,rgba(167,132,239,.95))"
+            : "var(--lumiverse-secondary-hover,rgba(128,128,128,.25))";
+        const setBg = (v) => {
+            b.style.background = v;
+            // A theme is free to make its hover colour lighter or darker than the
+            // resting one, so the label is checked against whichever is showing.
+            ensureReadable(b);
+        };
+        b.addEventListener("mouseenter", () => setBg(hoverBg));
+        b.addEventListener("mouseleave", () => setBg(restBg));
         // Press feedback that also works on touch, where hover never fires.
         const pressClear = () => {
             b.style.filter = "none";
@@ -4360,7 +4377,10 @@ export function setup(ctx, opts) {
         });
         b.addEventListener("pointerup", pressClear);
         b.addEventListener("pointercancel", pressClear);
-        b.addEventListener("pointerleave", pressClear);
+        b.addEventListener("pointerleave", () => {
+            pressClear();
+            setBg(restBg);
+        });
         return b;
     }
     // Full-size editor for a multiline field. Opens a large textarea over the
@@ -4381,16 +4401,16 @@ export function setup(ctx, opts) {
             "position:fixed;inset:0;z-index:2147483600;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;background:var(--lumiverse-modal-backdrop,rgba(0,0,0,.6));font-family:var(--lumiverse-font-family,system-ui)";
         const box = document.createElement("div");
         box.style.cssText =
-            "display:flex;flex-direction:column;gap:10px;width:min(720px,96vw);height:min(80vh,640px);box-sizing:border-box;padding:14px;background:var(--lumiverse-bg-elevated,rgba(35,30,48,.9));border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));border-radius:var(--lumiverse-radius,12px);box-shadow:var(--lumiverse-shadow-xl,0 20px 60px rgba(0,0,0,.5));color:var(--lumiverse-text,#eee)";
+            "display:flex;flex-direction:column;gap:10px;width:min(720px,96vw);height:min(80vh,640px);box-sizing:border-box;padding:14px;background:var(--lumiverse-bg-elevated,rgba(35,30,48,.9));border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));border-radius:var(--lumiverse-radius-lg,12px);box-shadow:var(--lumiverse-shadow-xl,0 20px 60px rgba(0,0,0,.5));color:var(--lumiverse-text,#eee)";
         const title = document.createElement("div");
         title.textContent = label;
         title.style.cssText =
-            "flex:none;font-size:14px;font-family:var(--lumiverse-font-family,system-ui)";
+            "flex:none;font-size:calc(14px * var(--lumiverse-font-scale,1));font-family:var(--lumiverse-font-family,system-ui)";
         const ta = document.createElement("textarea");
         ta.value = initial;
         ta.setAttribute("aria-label", label);
         ta.style.cssText =
-            "flex:1;width:100%;box-sizing:border-box;resize:none;padding:10px;border-radius:var(--lumiverse-radius,8px);border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));background:var(--lumiverse-fill-subtle,rgba(255,255,255,.05));color:var(--lumiverse-text,#eee);outline:none;font:13px/1.5 var(--lumiverse-font-family,system-ui)";
+            "flex:1;width:100%;box-sizing:border-box;resize:none;padding:10px;border-radius:var(--lumiverse-radius,8px);border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));background:var(--lumiverse-fill-subtle,rgba(0,0,0,.1));color:var(--lumiverse-text,#eee);outline:none;font:calc(13px * var(--lumiverse-font-scale,1))/1.5 var(--lumiverse-font-family,system-ui)";
         const row = document.createElement("div");
         row.style.cssText =
             "display:flex;justify-content:flex-end;gap:8px;flex:none";
