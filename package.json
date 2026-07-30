@@ -3,7 +3,7 @@
   "version": "3.3.0",
   "description": "Automatically re-fires failed, stalled, empty, or cut-off replies, with optional accidental-refusal retry and an optional find-and-replace on replies. Written from scratch for Lumiverse, with an in-app settings modal.",
   "author": "starlitcode",
-  "license": "MIT",
+  "license": "GPL-3.0-only",
   "type": "module",
   "homepage": "https://github.com/starlitcode/Lumiverse-Auto-Retry",
   "repository": {
