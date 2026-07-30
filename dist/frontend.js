@@ -11,6 +11,10 @@
  * and pick "Auto Retry settings". Changes are synced to your Lumiverse account and applied
  * to the next generation, so you never have to touch the GitHub files.
  */
+// The section-header carets. Named so the open and shut states are set from
+// one place instead of repeating the escapes at every call site.
+const CARET_OPEN = "\u25BE"; // down triangle
+const CARET_SHUT = "\u25B8"; // right triangle
 const STORE_KEY = "lv-auto-retry:settings:v1";
 // How long (ms) to suppress automatic retries after the user stops or cancels.
 // Long enough to swallow the stopped generation's own trailing events.
@@ -1937,34 +1941,50 @@ export function setup(ctx, opts) {
                 return c.keys.filter((key) => omit.indexOf(key) < 0);
         return [];
     }
+    // Keep only what a preset is allowed to be, whatever the source. The same
+    // check runs on the local copy and on anything the account hands back, so a
+    // malformed or hand-edited store cannot put junk into the dropdown.
+    function coercePresets(data) {
+        const out = { swap: [] };
+        if (!data || typeof data !== "object")
+            return out;
+        for (const kind of Object.keys(out)) {
+            const arr = Array.isArray(data[kind]) ? data[kind] : [];
+            out[kind] = arr
+                .filter((p) => p &&
+                typeof p.name === "string" &&
+                p.values &&
+                typeof p.values === "object")
+                .map((p) => ({ name: p.name, values: p.values }));
+        }
+        return out;
+    }
     function loadPresets() {
-        const empty = { swap: [] };
         try {
             if (typeof localStorage === "undefined")
-                return empty;
+                return coercePresets(null);
             const raw = localStorage.getItem(PRESETS_KEY);
             if (!raw)
-                return empty;
-            const data = JSON.parse(raw);
-            if (!data || typeof data !== "object")
-                return empty;
-            const out = { swap: [] };
-            for (const kind of Object.keys(out)) {
-                const arr = Array.isArray(data[kind]) ? data[kind] : [];
-                out[kind] = arr
-                    .filter((p) => p &&
-                    typeof p.name === "string" &&
-                    p.values &&
-                    typeof p.values === "object")
-                    .map((p) => ({ name: p.name, values: p.values }));
-            }
-            return out;
+                return coercePresets(null);
+            return coercePresets(JSON.parse(raw));
         }
         catch (_) {
-            return empty;
+            return coercePresets(null);
         }
     }
+    // Presets now follow the account as well, the way settings already did. The
+    // browser copy stays the synchronous source every caller reads; the account
+    // copy is what makes them turn up on another device.
+    function savePresetsToAccount(all) {
+        try {
+            if (ctx && typeof ctx.sendToBackend === "function") {
+                ctx.sendToBackend({ type: "save_presets", presets: all });
+            }
+        }
+        catch (_) { }
+    }
     function savePresets(all) {
+        savePresetsToAccount(all);
         try {
             if (typeof localStorage === "undefined")
                 return false;
@@ -1974,6 +1994,47 @@ export function setup(ctx, opts) {
         catch (_) {
             return false;
         }
+    }
+    // Pull the account's presets on load. The account wins when it has any; when
+    // it has none but this browser does, this browser's are migrated up, which is
+    // the same rule the settings use so the two cannot disagree about which copy
+    // is authoritative.
+    function loadPresetsFromAccount() {
+        try {
+            if (!ctx || typeof ctx.sendToBackend !== "function" || typeof ctx.onBackendMessage !== "function")
+                return;
+            const reqId = "ar-presets-" + Date.now() + "-" + Math.random().toString(36).slice(2);
+            const off = ctx.onBackendMessage((msg) => {
+                if (!msg || msg.type !== "loaded_presets" || msg.requestId !== reqId)
+                    return;
+                try {
+                    off && off();
+                }
+                catch (_) { }
+                const incoming = coercePresets(msg.presets);
+                const localCount = loadPresets().swap.length;
+                if (incoming.swap.length) {
+                    try {
+                        if (typeof localStorage !== "undefined")
+                            localStorage.setItem(PRESETS_KEY, JSON.stringify(incoming));
+                    }
+                    catch (_) { }
+                    for (const r of presetBarRefreshers)
+                        r();
+                    log("word swap presets loaded from account");
+                }
+                else if (localCount) {
+                    savePresetsToAccount(loadPresets());
+                    log("word swap presets migrated to account");
+                }
+            });
+            disposers.push(() => { try {
+                off && off();
+            }
+            catch (_) { } });
+            ctx.sendToBackend({ type: "load_presets", requestId: reqId });
+        }
+        catch (_) { }
     }
     // Merge presets from an imported blob into storage. Same-named presets are
     // replaced by the imported one, new names are added. Returns how many came
@@ -2023,28 +2084,57 @@ export function setup(ctx, opts) {
         return n;
     }
     // ---- per-chat state ----
+    // Each chat gets a state object that holds its retry budget, its watchdog
+    // timers and, while a reply is streaming, the text so far. Only cleared on
+    // teardown before, so browsing through a lot of chats in one sitting left a
+    // state object behind for every one of them, streamed text and all.
     const chats = new Map();
+    const CHATS_MAX = 24; // chats kept before the quietest are let go
+    // Anything mid-flight has to stay: dropping it would strand a running
+    // watchdog and lose the budget for a retry that is already in the air.
+    const chatIsBusy = (s) => !!(s && (s.pending || s.timer || s.startTimer || s.idleTimer || s.startWatchdog ||
+        s.expectingStart || s.attempts > 0 || Date.now() < s.suppressUntil));
+    // Recency is a field rather than the Map's own insertion order. Re-inserting
+    // a chat to mark it as used would move it to the end of the Map, and two
+    // places walk the Map calling standDown, which touches each chat as it goes:
+    // an entry moved past the cursor gets visited again, forever.
+    function evictIdleChats() {
+        if (chats.size <= CHATS_MAX)
+            return;
+        const idle = Array.from(chats.entries())
+            .filter(([, s]) => !chatIsBusy(s))
+            .sort((a, b) => (a[1].lastSeen || 0) - (b[1].lastSeen || 0));
+        for (const [id] of idle) {
+            if (chats.size <= CHATS_MAX)
+                break;
+            chats.delete(id);
+        }
+    }
     const st = (chatId) => {
         let s = chats.get(chatId);
-        if (!s) {
-            s = {
-                attempts: 0,
-                pending: false,
-                selfTriggered: false,
-                genId: null,
-                startTimer: null,
-                idleTimer: null,
-                timer: null,
-                sawReasoning: false,
-                sawContent: false,
-                buf: "", // streamed reply text, used when the end event carries no content
-                ignored: new Set(),
-                suppressUntil: 0,
-                startWatchdog: null,
-                expectingStart: 0,
-            };
-            chats.set(chatId, s);
+        if (s) {
+            s.lastSeen = Date.now();
+            return s;
         }
+        s = {
+            lastSeen: Date.now(),
+            attempts: 0,
+            pending: false,
+            selfTriggered: false,
+            genId: null,
+            startTimer: null,
+            idleTimer: null,
+            timer: null,
+            sawReasoning: false,
+            sawContent: false,
+            buf: "", // streamed reply text, used when the end event carries no content
+            ignored: new Set(),
+            suppressUntil: 0,
+            startWatchdog: null,
+            expectingStart: 0,
+        };
+        chats.set(chatId, s);
+        evictIdleChats();
         return s;
     };
     // Circuit breaker. Whole runs that gave up, back to back. Three in a row means
@@ -2892,6 +2982,32 @@ export function setup(ctx, opts) {
             return 0;
         const SKIP = /^(SCRIPT|STYLE|TEXTAREA|INPUT|SELECT|OPTION)$/;
         let done = 0;
+        // The page is walked once, not once per rule. This used to build a fresh
+        // TreeWalker inside the loop below, so a chat swapped with forty rules made
+        // forty full passes over every text node on the page. The candidate list is
+        // the same for every rule, so it is gathered here and reused.
+        const nodes = [];
+        try {
+            const walker = document.createTreeWalker(document.body, 4 /* SHOW_TEXT */);
+            let node = walker.nextNode ? walker.nextNode() : null;
+            while (node) {
+                const parent = node.parentElement;
+                let skip = !parent || SKIP.test(String(parent.tagName || ""));
+                // Our own panels and anything the user is typing into are off limits.
+                if (!skip && parent.closest) {
+                    try {
+                        skip = !!parent.closest("#__lvRetryToast,#__lvRetrySettings,[contenteditable='true']");
+                    }
+                    catch (__) { }
+                }
+                if (!skip)
+                    nodes.push(node);
+                node = walker.nextNode();
+            }
+        }
+        catch (_) {
+            return done;
+        }
         for (const pair of pairs) {
             const from = String(pair && pair[0] != null ? pair[0] : "");
             const to = String(pair && pair[1] != null ? pair[1] : "");
@@ -2910,30 +3026,15 @@ export function setup(ctx, opts) {
             catch (__) {
                 re = null;
             }
+            if (!re)
+                continue;
             const hits = [];
-            let walker = null;
-            try {
-                walker = document.createTreeWalker(document.body, 4 /* SHOW_TEXT */);
-            }
-            catch (_) {
-                return done;
-            }
-            let node = walker.nextNode ? walker.nextNode() : null;
-            while (node) {
-                const parent = node.parentElement;
-                let skip = !parent || SKIP.test(String(parent.tagName || ""));
-                // Our own panels and anything the user is typing into are off limits.
-                if (!skip && parent.closest) {
-                    try {
-                        skip = !!parent.closest("#__lvRetryToast,#__lvRetrySettings,[contenteditable='true']");
-                    }
-                    catch (__) { }
-                }
-                if (!skip && re && re.test(String(node.nodeValue || "")))
-                    hits.push(node);
-                if (re)
-                    re.lastIndex = 0;
-                node = walker.nextNode();
+            for (const n of nodes) {
+                re.lastIndex = 0;
+                // Re-read each time: an earlier rule may already have rewritten this
+                // node, and matching has to see the text as it stands now.
+                if (re.test(String(n.nodeValue || "")))
+                    hits.push(n);
             }
             const targets = last ? hits.slice(-1) : hits;
             for (const t of targets) {
@@ -3571,6 +3672,42 @@ export function setup(ctx, opts) {
         const panelSections = [];
         const searchRows = [];
         const searchText = (...parts) => parts.map((p) => String(p == null ? "" : p)).join(" ").toLowerCase();
+        // Every collapsible header goes through here. They were plain elements with
+        // a click handler, which left all five collapsed sections unreachable
+        // without a pointer: no tab stop, and nothing telling a screen reader that
+        // the header opened anything. Doing it in one place also means the caret,
+        // the remembered open state and the announced state cannot drift apart,
+        // which they could when this was written out three times over.
+        function makeCollapsible(h, body, caret, title) {
+            const apply = (v) => {
+                body.style.display = v ? "flex" : "none";
+                caret.textContent = v ? CARET_OPEN : CARET_SHUT;
+                h.setAttribute("aria-expanded", v ? "true" : "false");
+            };
+            h.setAttribute("role", "button");
+            h.setAttribute("tabindex", "0");
+            const toggle = () => {
+                const open = body.style.display !== "none";
+                apply(!open);
+                if (!open)
+                    openGroups.add(title);
+                else
+                    openGroups.delete(title);
+            };
+            h.addEventListener("click", toggle);
+            h.addEventListener("keydown", (e) => {
+                if (!e)
+                    return;
+                // What a real button answers to. Space is swallowed as well, or it
+                // would page the panel down at the same time as opening the section.
+                if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") {
+                    e.preventDefault();
+                    toggle();
+                }
+            });
+            apply(openGroups.has(title));
+            return apply;
+        }
         for (const group of SCHEMA) {
             const sec = document.createElement("div");
             sec.style.cssText = "display:flex;flex-direction:column;gap:10px";
@@ -3642,29 +3779,14 @@ export function setup(ctx, opts) {
                     body.appendChild(pl);
                     const pd = document.createElement("div");
                     pd.textContent =
-                        "Save your current word swaps as a named setup and switch between them. Applying takes effect right away. Kept on this browser.";
+                        "Save your current word swaps as a named setup and switch between them. Applying takes effect right away. Saved to your account, so they follow you to other devices.";
                     pd.style.cssText =
                         "font-size:calc(12px * var(--lumiverse-font-scale,1));line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
                     body.appendChild(pd);
                     body.appendChild(buildPresetBar("swap"));
                 }
                 sec.appendChild(body);
-                // Opening and closing is done in one place so the search can reveal a
-                // section without the caret and the remembered state falling out of step.
-                const setOpen = (v) => {
-                    body.style.display = v ? "flex" : "none";
-                    caret.textContent = v ? "\u25BE" : "\u25B8"; // down triangle when open
-                };
-                handle.setOpen = setOpen;
-                setOpen(openGroups.has(group.title));
-                h.addEventListener("click", () => {
-                    const open = body.style.display !== "none";
-                    setOpen(!open);
-                    if (!open)
-                        openGroups.add(group.title);
-                    else
-                        openGroups.delete(group.title);
-                });
+                handle.setOpen = makeCollapsible(h, body, caret, group.title);
             }
             else {
                 h.textContent = group.title;
@@ -3774,20 +3896,7 @@ export function setup(ctx, opts) {
             body.appendChild(copyBtn);
             body.appendChild(dStatus);
             sec.appendChild(body);
-            const setOpen = (v) => {
-                body.style.display = v ? "flex" : "none";
-                caret.textContent = v ? "\u25BE" : "\u25B8";
-            };
-            handle.setOpen = setOpen;
-            setOpen(openGroups.has("Advanced: debug info"));
-            h.addEventListener("click", () => {
-                const open = body.style.display !== "none";
-                setOpen(!open);
-                if (!open)
-                    openGroups.add("Advanced: debug info");
-                else
-                    openGroups.delete("Advanced: debug info");
-            });
+            handle.setOpen = makeCollapsible(h, body, caret, "Advanced: debug info");
             scroller.appendChild(sec);
         }
         // import / export section (collapsible, same look as the Advanced groups)
@@ -3936,29 +4045,41 @@ export function setup(ctx, opts) {
             body.appendChild(fileInput);
             body.appendChild(status);
             sec.appendChild(body);
-            const setOpen = (v) => {
-                body.style.display = v ? "flex" : "none";
-                caret.textContent = v ? "\u25BE" : "\u25B8";
-            };
-            handle.setOpen = setOpen;
-            setOpen(openGroups.has("Advanced: import / export"));
-            h.addEventListener("click", () => {
-                const open = body.style.display !== "none";
-                setOpen(!open);
-                if (!open)
-                    openGroups.add("Advanced: import / export");
-                else
-                    openGroups.delete("Advanced: import / export");
-            });
+            handle.setOpen = makeCollapsible(h, body, caret, "Advanced: import / export");
             scroller.appendChild(sec);
         }
         // ---- the search box ----
         // Sits above the scroll area so it stays put while the results move. An
         // empty box puts everything back exactly as it was, including which sections
         // the user had open, so searching never quietly rearranges the panel.
+        // It rests as a single magnifier so it costs almost no height on a phone,
+        // where the panel is tight enough already, and slides open on a tap, on
+        // hover, or on keyboard focus. It stays open for as long as it holds a
+        // query: collapsing with a search still running would leave the list
+        // filtered with nothing on screen to explain why, so closing always clears
+        // it and puts every row back.
         const searchWrap = document.createElement("div");
         searchWrap.style.cssText =
-            "display:flex;flex-direction:column;gap:6px;flex:none;margin-bottom:12px";
+            "display:flex;flex-direction:column;gap:6px;flex:none;margin-bottom:10px";
+        const searchRow = document.createElement("div");
+        searchRow.style.cssText = "display:flex;align-items:center;gap:6px";
+        const searchToggle = document.createElement("button");
+        searchToggle.type = "button";
+        searchToggle.innerHTML =
+            '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>';
+        searchToggle.style.cssText =
+            "flex:none;display:flex;align-items:center;justify-content:center;" +
+                "width:calc(30px * var(--lumiverse-ui-scale,1));height:calc(30px * var(--lumiverse-ui-scale,1));" +
+                "padding:0;cursor:pointer;border-radius:var(--lumiverse-radius,8px);" +
+                "border:1px solid var(--lumiverse-secondary-border,rgba(128,128,128,.25));" +
+                "background:var(--lumiverse-secondary,rgba(128,128,128,.15));" +
+                "color:var(--lumiverse-text,#eee);" +
+                "transition:background-color var(--lumiverse-transition-fast,150ms ease)";
+        ensureReadable(searchToggle);
+        // The field sits in a wrapper that clips it, so opening animates the
+        // wrapper rather than the input's own padding and border, which would
+        // visibly squash the text on the way out.
+        const searchFieldWrap = document.createElement("div");
         const search = document.createElement("input");
         search.type = "search";
         search.placeholder = "Search settings";
@@ -3966,9 +4087,22 @@ export function setup(ctx, opts) {
         styleField(search);
         search.style.width = "100%";
         search.style.boxSizing = "border-box";
+        searchFieldWrap.appendChild(search);
+        // Someone who has asked for less movement gets the same behaviour without
+        // the slide.
+        const reduceMotion = typeof window !== "undefined" &&
+            !!window.matchMedia &&
+            window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        searchFieldWrap.style.cssText =
+            "flex:1 1 auto;min-width:0;overflow:hidden;max-width:0%;opacity:0;transition:" +
+                (reduceMotion
+                    ? "none"
+                    : "max-width var(--lumiverse-transition,200ms ease),opacity var(--lumiverse-transition,200ms ease)");
         const searchNote = document.createElement("div");
+        // No reserved height: with the field shut there is nothing to say, and an
+        // always-present blank line is exactly the wasted space this is avoiding.
         searchNote.style.cssText =
-            "font-size:calc(12px * var(--lumiverse-font-scale,1));min-height:1em;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+            "font-size:calc(12px * var(--lumiverse-font-scale,1));color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
         const runSearch = () => {
             const q = search.value.trim().toLowerCase();
             // Every row buildRow makes is a flex column, so hidden rows are put back
@@ -4010,9 +4144,77 @@ export function setup(ctx, opts) {
                 ? hits + (hits === 1 ? " setting matches" : " settings match")
                 : "Nothing matches that. Clear the box to see everything again.";
         };
+        let searchOpen = false;
+        const setSearchOpen = (open, focus) => {
+            searchOpen = open;
+            searchFieldWrap.style.maxWidth = open ? "100%" : "0%";
+            searchFieldWrap.style.opacity = open ? "1" : "0";
+            searchToggle.setAttribute("aria-expanded", open ? "true" : "false");
+            const label = open ? "Close the settings search" : "Search settings";
+            searchToggle.setAttribute("aria-label", label);
+            searchToggle.title = label;
+            if (open) {
+                if (focus) {
+                    try {
+                        search.focus();
+                    }
+                    catch (_) { }
+                }
+            }
+            else if (search.value) {
+                // Never leave the list filtered by a box that is no longer on screen.
+                search.value = "";
+                runSearch();
+            }
+        };
+        // Closing is refused while there is a query, so a search in progress cannot
+        // be lost to a pointer drifting off the row.
+        const closeSearchIfIdle = () => {
+            if (search.value.trim())
+                return;
+            if (typeof document !== "undefined" && document.activeElement === search)
+                return;
+            setSearchOpen(false);
+        };
         search.addEventListener("input", runSearch);
-        searchWrap.appendChild(search);
+        // Tapping the magnifier opens it with the cursor already in it. Tapping
+        // again shuts it and clears whatever was typed.
+        searchToggle.addEventListener("click", () => {
+            if (searchOpen)
+                setSearchOpen(false);
+            else
+                setSearchOpen(true, true);
+        });
+        // A mouse only has to pass over it. Touch devices never fire this, which is
+        // why the tap above exists and why hovering never takes focus: throwing up
+        // the on-screen keyboard because a finger brushed past would be worse than
+        // the space the box was taking up.
+        const canHoverSearch = typeof window !== "undefined" &&
+            !!window.matchMedia &&
+            window.matchMedia("(hover: hover)").matches;
+        if (canHoverSearch) {
+            searchRow.addEventListener("mouseenter", () => setSearchOpen(true));
+            searchRow.addEventListener("mouseleave", closeSearchIfIdle);
+        }
+        // Keyboard users reach it by tabbing: focus opens it, and it stays open
+        // until it is both empty and unfocused.
+        search.addEventListener("focus", () => setSearchOpen(true));
+        searchToggle.addEventListener("focus", () => setSearchOpen(true));
+        search.addEventListener("blur", () => setTimeout(closeSearchIfIdle, 0));
+        search.addEventListener("keydown", (e) => {
+            if (e && e.key === "Escape") {
+                setSearchOpen(false);
+                try {
+                    searchToggle.focus();
+                }
+                catch (_) { }
+            }
+        });
+        searchRow.appendChild(searchToggle);
+        searchRow.appendChild(searchFieldWrap);
+        searchWrap.appendChild(searchRow);
         searchWrap.appendChild(searchNote);
+        setSearchOpen(false);
         panel.appendChild(searchWrap);
         panel.appendChild(scroller);
         // footer: a plain bar below the scroll area, set off by a single hairline
@@ -4684,6 +4886,7 @@ export function setup(ctx, opts) {
     syncLiveLog();
     syncFloat();
     loadFromAccount();
+    loadPresetsFromAccount();
     syncInputBarActions();
     try {
         if (ctx && typeof ctx.onBackendMessage === "function") {
@@ -4801,3 +5004,25 @@ export function setup(ctx, opts) {
         catch (_) { }
     };
 }
+// Exported for the test suite in test/ only. setup() above is the whole API the
+// host uses; nothing here is part of it. These are the decisions worth pinning
+// down in a test: whether a reply counts as a refusal or as cut off, and
+// whether a colour pairing is readable. All of them are pure functions of their
+// input, so they can be checked without a browser.
+export const __testing = {
+    parseColor,
+    blendColor,
+    relLuminance,
+    contrastRatio,
+    refusalVerdict,
+    looksLikeRefusal,
+    looksLikeRefusalError,
+    looksTruncated,
+    normalizeForMatch,
+    splitPhrases,
+    parseSubs,
+    applySubs,
+    stripThinking,
+    splitSelectorList,
+    REFUSAL_PHRASES,
+};

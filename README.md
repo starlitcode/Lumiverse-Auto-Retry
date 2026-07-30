@@ -34,7 +34,7 @@ Pressing your **Stop** button, or tapping **Cancel** on the retry pop-up, stops 
 
 Open the chat input bar, tap the **Extras** popover, and choose **Auto Retry settings**. Options are grouped by what they do. Simple on/off switches are up top; the groups marked **Advanced** are collapsed by default, so tap one of those headers to reveal its options. Each setting has a **?** next to its name that shows a short description: hover it on a computer, tap it on a phone, so the list stays compact.
 
-The **Search settings** box at the top finds any option by its name or its description, and opens whichever section it lives in, so you never have to remember which group something is under. Clearing the box puts the panel back exactly as it was.
+The **search** at the top finds any option by its name or its description, and opens whichever section it lives in, so you never have to remember which group something is under. It sits as a small magnifier so it takes up almost no room, and slides open when you tap it, hover it, or tab to it. Closing it clears the search and puts every row back, so the list is never left filtered by a box you can't see.
 
 Only **Save** keeps your changes. Closing with the X or tapping outside discards anything you did not save, so you can experiment freely. Saved settings sync to your Lumiverse account, so they follow you to other browsers and devices, and they apply to the next reply. Long text boxes, like your word-swap rules, have an **Expand** button that opens a full-size editor.
 
@@ -74,6 +74,10 @@ The find-and-replace feature runs in a small backend module. The rest of the ext
 Auto Retry listens to Lumiverse's own generation events. When a reply fails, comes back empty, stalls, or looks cut off or refused, it clicks your regenerate button to try again. That button click is the only part that depends on the page layout, so it is the one thing you can fix yourself in the settings if a Lumiverse update ever moves those buttons.
 
 Find and replace works separately, since editing a saved reply is a backend job. A small backend module watches for finished replies and, when swaps are on, edits the saved message through Lumiverse's Chat Mutation API. That edit is treated as an edit, not a new reply, so it can't set itself off in a loop.
+
+## Working on the extension
+
+`src/` is the TypeScript source and `dist/` is what Lumiverse actually loads. `bun run build` regenerates `dist/` from `src/`, `bun test` runs the test suite, and `bun run check` does both the type check and the tests. The tests cover the decisions that are expensive to get wrong: whether a reply counts as a refusal or as cut off, and whether a colour pairing is readable on the user's theme.
 
 ## Credits
 

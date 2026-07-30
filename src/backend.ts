@@ -30,6 +30,11 @@ declare const spindle: any;
 
 const RULES_FILE = 'replace-rules.json';
 const SETTINGS_FILE = 'settings.json';
+// Word-swap presets. These lived only in the browser's local storage, so a
+// user's settings followed them to a new device and their presets silently did
+// not. Kept in account storage alongside the settings, with the browser copy
+// still acting as the fast local cache.
+const PRESETS_FILE = 'presets.json';
 
 interface Group { tos: string[]; from: string; isWord: boolean; }
 
@@ -228,6 +233,16 @@ spindle.onFrontendMessage(async (payload: any) => {
       let settings = null;
       try { settings = JSON.parse(await spindle.storage.read(SETTINGS_FILE)); } catch (__) { settings = null; }
       try { spindle.sendToFrontend({ type: 'loaded_settings', requestId: payload.requestId, settings: settings }); } catch (__) {}
+      return;
+      }
+      if (payload.type === 'save_presets' && payload.presets && typeof payload.presets === 'object') {
+      await spindle.storage.write(PRESETS_FILE, JSON.stringify(payload.presets));
+      return;
+      }
+      if (payload.type === 'load_presets') {
+      let presets = null;
+      try { presets = JSON.parse(await spindle.storage.read(PRESETS_FILE)); } catch (__) { presets = null; }
+      try { spindle.sendToFrontend({ type: 'loaded_presets', requestId: payload.requestId, presets: presets }); } catch (__) {}
       return;
       }
       if (payload.type === 'apply_replace_now') {
