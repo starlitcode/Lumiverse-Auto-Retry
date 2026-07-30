@@ -39,7 +39,3 @@ I maintain this on my own in my spare time, so I cannot promise a fix by any par
 ## Reading it yourself
 
 The files Lumiverse actually loads are `dist/frontend.js` and `dist/backend.js`, and they are committed to the repo as readable code. They are not minified, obfuscated, or bundled, so what you read is what runs. They mirror the TypeScript in `src/` with the type annotations removed, which is why the extension installs without a build step.
-
----
-
-[Back to the README](README.md)
