@@ -8,7 +8,8 @@
   "description": "Automatically retry failed, empty, stalled, or cut-off replies, with optional refusal detection and find-and-replace word swaps.",
   "permissions": [
     "generation",
-    "chat_mutation"
+    "chat_mutation",
+    "ui_panels"
   ],
   "entry_frontend": "dist/frontend.js",
   "entry_backend": "dist/backend.js",
