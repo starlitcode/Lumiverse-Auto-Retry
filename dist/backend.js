@@ -1,3 +1,4 @@
+"use strict";
 /*
  * Auto Retry backend (find and replace in replies).
  *
@@ -43,17 +44,13 @@ let warnedEditError = false;
 // compound swaps on a reply that auto-swap or an earlier tap already changed.
 const swappedIds = new Set();
 const SWAPPED_CAP = 1000;
-function unmarkSwapped(id) {
-    if (id != null) swappedIds.delete(id);
-}
 function markSwapped(id) {
-    if (id == null) return;
+    if (id == null)
+        return;
     swappedIds.add(id);
-    if (swappedIds.size > SWAPPED_CAP) swappedIds.delete(swappedIds.values().next().value);
+    if (swappedIds.size > SWAPPED_CAP)
+        swappedIds.delete(swappedIds.values().next().value);
 }
-// Best-effort: the chat currently active (on screen), which needs the "chats"
-// permission. Method name follows the API's get-naming convention; if it's absent
-// or errors, fall back to the chat the request came from so nothing breaks.
 function escapeRe(s) {
     return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -67,12 +64,17 @@ function buildGroups(raw, cs) {
     const order = [];
     for (const line of String(raw == null ? '' : raw).split(/\r?\n/)) {
         const i = line.indexOf('=>');
-        if (i < 0) continue;
+        if (i < 0)
+            continue;
         const from = line.slice(0, i).trim();
         const to = line.slice(i + 2).trim();
-        if (!from) continue;
+        if (!from)
+            continue;
         const key = cs ? from : from.toLowerCase();
-        if (!map.has(key)) { map.set(key, { from: from, tos: [] }); order.push(key); }
+        if (!map.has(key)) {
+            map.set(key, { from: from, tos: [] });
+            order.push(key);
+        }
         map.get(key).tos.push(to);
     }
     const out = [];
@@ -84,7 +86,8 @@ function buildGroups(raw, cs) {
             // so one bad rule can't take the combined pattern down with it.
             new RegExp(escapeRe(g.from), cs ? 'gu' : 'giu');
             out.push({ tos: g.tos, from: g.from, isWord: isWord });
-        } catch (_) { /* skip a rule that can't compile */ }
+        }
+        catch (_) { /* skip a rule that can't compile */ }
     }
     return out;
 }
@@ -93,7 +96,8 @@ function buildGroups(raw, cs) {
 // let a later rule act on what an earlier one just wrote, so "cat => dog"
 // followed by "dog => wolf" would turn cat into wolf.
 function buildCombined(gs, cs) {
-    if (!gs.length) return null;
+    if (!gs.length)
+        return null;
     // Longest source first. A regex alternation takes the first branch that
     // matches, so without this "cat" would win over "cat nap" and the longer
     // rule would never fire. Equal lengths keep the order they were listed in.
@@ -104,7 +108,8 @@ function buildCombined(gs, cs) {
     });
     try {
         return new RegExp('(?:' + parts.join('|') + ')( ?)', cs ? 'gu' : 'giu');
-    } catch (_) {
+    }
+    catch (_) {
         combinedOrder = [];
         return null;
     }
@@ -113,14 +118,18 @@ function buildCombined(gs, cs) {
 // replaced, so a swap at the start of a sentence still reads right. Only used
 // when matching is case-insensitive.
 function matchCase(sample, repl) {
-    if (!repl) return repl;
-    if (sample.length > 1 && sample === sample.toUpperCase() && sample !== sample.toLowerCase()) return repl.toUpperCase();
-    if (/^[A-Z\u00C0-\u00DE]/.test(sample)) return repl.charAt(0).toUpperCase() + repl.slice(1);
+    if (!repl)
+        return repl;
+    if (sample.length > 1 && sample === sample.toUpperCase() && sample !== sample.toLowerCase())
+        return repl.toUpperCase();
+    if (/^[A-Z\u00C0-\u00DE]/.test(sample))
+        return repl.charAt(0).toUpperCase() + repl.slice(1);
     return repl;
 }
 function applyRules(text, seen) {
     const src = String(text == null ? '' : text);
-    if (!combined || !combinedOrder.length) return src;
+    if (!combined || !combinedOrder.length)
+        return src;
     combined.lastIndex = 0;
     return src.replace(combined, (...args) => {
         // args is: whole match, one slot per rule, the trailing space, offset, input.
@@ -134,13 +143,16 @@ function applyRules(text, seen) {
                 break;
             }
         }
-        if (!g || matched == null) return String(args[0]);
+        if (!g || matched == null)
+            return String(args[0]);
         let repl = (random && g.tos.length > 1) ? g.tos[Math.floor(Math.random() * g.tos.length)] : g.tos[0];
-        if (!caseSensitive) repl = matchCase(matched, repl);
+        if (!caseSensitive)
+            repl = matchCase(matched, repl);
         const out = repl === '' ? '' : repl + trail; // deletion also drops one trailing space
         // Recorded so the frontend can apply the same change to what is on screen.
         // The host writes the message but does not redraw the chat view for it.
-        if (seen && matched + trail !== out) seen.push([matched + trail, out]);
+        if (seen && matched + trail !== out)
+            seen.push([matched + trail, out]);
         return out;
     });
 }
@@ -151,56 +163,6 @@ function applyRules(text, seen) {
 // text the content patch sets, so the message is unchanged either way; only the
 // event that announces it differs. Falls back to a plain content patch when the
 // message carries no usable swipe array.
-// The last swap, kept so it can be put back. Swaps are not reversible by running
-// the rules backwards: two rules can map onto the same word, a random rule has no
-// single answer, and a delete rule leaves nothing to match. The only honest undo
-// is the text as it was, so that is what gets stored.
-//
-// One operation deep. A full history would mean keeping a copy of
-// every reply the extension has ever touched, and the useful case is almost
-// always "that last swap was wrong, put it back".
-const UNDO_FILE = 'last-swap-undo.json';
-const UNDO_MAX = 400; // messages kept for a whole-chat swap
-
-let pendingUndo = null;
-
-function beginUndo(chatId) {
-  pendingUndo = { chatId: chatId, when: Date.now(), items: [] };
-}
-
-function recordUndo(id, before, after) {
-  if (!pendingUndo || pendingUndo.items.length >= UNDO_MAX) return;
-  // Both sides are kept. The after-text is how undo tells an untouched reply
-  // from one the user has since edited: if what is there now is not what the
-  // swap wrote, someone changed it and it is left alone.
-  pendingUndo.items.push({ id: id, before: before, after: after });
-}
-
-async function commitUndo() {
-  if (!pendingUndo || !pendingUndo.items.length) {
-    pendingUndo = null;
-    return;
-  }
-  try {
-    await spindle.storage.write(UNDO_FILE, JSON.stringify(pendingUndo));
-  } catch (_) {}
-  pendingUndo = null;
-}
-
-async function readUndo() {
-  try {
-    const raw = JSON.parse(await spindle.storage.read(UNDO_FILE));
-    if (raw && Array.isArray(raw.items) && raw.items.length) return raw;
-  } catch (_) {}
-  return null;
-}
-
-async function clearUndo() {
-  try {
-    await spindle.storage.write(UNDO_FILE, JSON.stringify({ chatId: '', when: 0, items: [] }));
-  } catch (_) {}
-}
-
 async function writeSwapped(chatId, m, next) {
     const patch = { content: next };
     const swipes = m && Array.isArray(m.swipes) ? m.swipes.slice() : null;
@@ -210,11 +172,8 @@ async function writeSwapped(chatId, m, next) {
         patch.swipes = swipes;
         patch.swipe_id = idx;
     }
-    // Captured before the write, so the stored text is what was actually replaced.
-    recordUndo(m.id, String(m && m.content != null ? m.content : ''), next);
     await spindle.chat.updateMessage(chatId, m.id, patch);
 }
-
 function rebuild() {
     groups = buildGroups(rulesText, caseSensitive);
     combined = buildCombined(groups, caseSensitive);
@@ -229,6 +188,20 @@ function applyReplaceFromSettings(s) {
     confirmBeforeEdit = !!s.confirmBeforeEdit;
     rebuild();
 }
+// An older version kept the text of every reply it had swapped, so that swap
+// could be put back. That feature is gone, and leaving a file full of reply text
+// behind after removing the thing that needed it would be keeping the user's
+// writing for no reason. Upgrading from such a version empties it once; on a
+// fresh install there is nothing there and this does nothing.
+const LEGACY_UNDO_FILE = 'last-swap-undo.json';
+(async () => {
+    try {
+        const raw = await spindle.storage.read(LEGACY_UNDO_FILE);
+        if (raw && String(raw).length > 2)
+            await spindle.storage.write(LEGACY_UNDO_FILE, '{}');
+    }
+    catch (_) { /* nothing to clear */ }
+})();
 // Load persisted settings on startup. The whole settings object now lives in
 // account storage (SETTINGS_FILE) so it follows the user across browsers; an
 // older install that only stored replace rules (RULES_FILE) is read as a fallback.
@@ -236,7 +209,8 @@ function applyReplaceFromSettings(s) {
     try {
         applyReplaceFromSettings(JSON.parse(await spindle.storage.read(SETTINGS_FILE)));
         return;
-    } catch (_) { /* no account settings yet */ }
+    }
+    catch (_) { /* no account settings yet */ }
     try {
         const parsed = JSON.parse(await spindle.storage.read(RULES_FILE));
         enabled = !!parsed.enabled;
@@ -244,13 +218,15 @@ function applyReplaceFromSettings(s) {
         caseSensitive = !!parsed.caseSensitive;
         rulesText = String(parsed.rulesText == null ? '' : parsed.rulesText);
         rebuild();
-    } catch (_) { /* no saved rules yet */ }
+    }
+    catch (_) { /* no saved rules yet */ }
 })();
 // Settings bridge with the UI: save the whole settings object to account storage,
 // hand it back on request, and keep the find-and-replace state in sync with it.
 spindle.onFrontendMessage(async (payload) => {
     try {
-        if (!payload) return;
+        if (!payload)
+            return;
         if (payload.type === 'save_settings' && payload.settings && typeof payload.settings === 'object') {
             applyReplaceFromSettings(payload.settings);
             await spindle.storage.write(SETTINGS_FILE, JSON.stringify(payload.settings));
@@ -258,60 +234,25 @@ spindle.onFrontendMessage(async (payload) => {
         }
         if (payload.type === 'load_settings') {
             let settings = null;
-            try { settings = JSON.parse(await spindle.storage.read(SETTINGS_FILE)); } catch (__) { settings = null; }
-            try { spindle.sendToFrontend({ type: 'loaded_settings', requestId: payload.requestId, settings: settings }); } catch (__) {}
-            return;
-        }
-        if (payload.type === 'undo_swap') {
-          const entry = await readUndo();
-          if (!entry || !entry.items.length) {
-            spindle.sendToFrontend({ type: 'undo_result', requestId: payload.requestId, ok: true, restored: 0, reason: 'nothing' });
-            return;
-          }
-          let restored = 0;
-          const pairs = [];
-          let msgs = null;
-          try { msgs = await spindle.chat.getMessages(entry.chatId); } catch (_) {}
-          for (const it of entry.items) {
             try {
-              const m = Array.isArray(msgs) ? msgs.find((x) => x && x.id === it.id) : null;
-              if (!m) continue;
-              const now = String(m.content == null ? '' : m.content);
-              // Only put back a reply that still reads exactly as the swap left it.
-              // Anything else has been changed since, by a later swap or by the user
-              // editing it, and restoring would throw that away.
-              if (typeof it.after === 'string' && now !== it.after) continue;
-              if (now === it.before) continue;
-              const swipes = Array.isArray(m.swipes) ? m.swipes.slice() : null;
-              const idx = typeof m.swipe_id === 'number' ? m.swipe_id : 0;
-              const patch = { content: it.before };
-              if (swipes && swipes.length > 0 && idx >= 0 && idx < swipes.length) {
-                swipes[idx] = it.before;
-                patch.swipes = swipes;
-                patch.swipe_id = idx;
-              }
-              await spindle.chat.updateMessage(entry.chatId, m.id, patch);
-              pairs.push([now, it.before]);
-              restored += 1;
-              unmarkSwapped(it.id);
-            } catch (_) {}
-          }
-          await clearUndo();
-          spindle.sendToFrontend({
-            type: 'undo_result', requestId: payload.requestId, ok: true,
-            restored: restored, pairs: pairs, wholeChat: entry.items.length > 1,
-          });
-          return;
+                settings = JSON.parse(await spindle.storage.read(SETTINGS_FILE));
+            }
+            catch (__) {
+                settings = null;
+            }
+            try {
+                spindle.sendToFrontend({ type: 'loaded_settings', requestId: payload.requestId, settings: settings });
+            }
+            catch (__) { }
+            return;
         }
         if (payload.type === 'apply_replace_now') {
             let ok = true, found = false, changed = 0, skipped = 0;
-        // Literal substitutions made, passed back so the frontend can update the
-        // rendered text. The host saves the message without redrawing the chat.
-        const pairs = [];
+            // Literal substitutions made, passed back so the frontend can update the
+            // rendered text. The host saves the message without redrawing the chat.
+            const pairs = [];
             try {
                 const chatId = payload.chatId;
-                // Everything this operation rewrites goes into one undo entry.
-                beginUndo(chatId);
                 const wantId = payload.messageId;
                 if (chatId && groups.length) {
                     const msgs = await spindle.chat.getMessages(chatId);
@@ -321,27 +262,52 @@ spindle.onFrontendMessage(async (payload) => {
                         const greetingId = (msgs.length && msgs[0] && msgs[0].role === 'assistant') ? msgs[0].id : null;
                         if (payload.wholeChat && !payload.onlyMessage) {
                             // Every generated assistant reply in the chat (never user messages or the greeting).
-                            for (const x of msgs) { if (x && x.role === 'assistant' && x.id !== greetingId) targets.push(x); }
-                        } else {
+                            for (const x of msgs) {
+                                if (x && x.role === 'assistant' && x.id !== greetingId)
+                                    targets.push(x);
+                            }
+                        }
+                        else {
                             // The exact reply if we have it, else the latest assistant reply, never the greeting.
                             let m = null;
-                            if (wantId != null) m = msgs.find((x) => x && x.id === wantId && x.role === 'assistant') || null;
-                            if (!m) { for (let i = msgs.length - 1; i >= 0; i--) { if (msgs[i] && msgs[i].role === 'assistant' && msgs[i].id !== greetingId) { m = msgs[i]; break; } } }
-                            if (m && m.id !== greetingId) targets.push(m);
+                            if (wantId != null)
+                                m = msgs.find((x) => x && x.id === wantId && x.role === 'assistant') || null;
+                            if (!m) {
+                                for (let i = msgs.length - 1; i >= 0; i--) {
+                                    if (msgs[i] && msgs[i].role === 'assistant' && msgs[i].id !== greetingId) {
+                                        m = msgs[i];
+                                        break;
+                                    }
+                                }
+                            }
+                            if (m && m.id !== greetingId)
+                                targets.push(m);
                         }
                     }
                     found = targets.length > 0;
                     for (const m of targets) {
                         // Skip replies already swapped this session unless re-swapping is allowed.
-                        if (!allowReSwap && swappedIds.has(m.id)) { skipped++; continue; }
+                        if (!allowReSwap && swappedIds.has(m.id)) {
+                            skipped++;
+                            continue;
+                        }
                         const content = String(m.content == null ? '' : m.content);
                         const next = applyRules(content, pairs);
-                        if (next !== content) { await writeSwapped(chatId, m, next); changed++; markSwapped(m.id); }
+                        if (next !== content) {
+                            await writeSwapped(chatId, m, next);
+                            changed++;
+                            markSwapped(m.id);
+                        }
                     }
                 }
-            } catch (_) { ok = false; }
-            await commitUndo();
-            try { spindle.sendToFrontend({ type: 'replace_now_result', requestId: payload.requestId, ok: ok, hasRules: groups.length > 0, found: found, changed: changed, skipped: skipped, pairs: pairs, wholeChat: !!payload.wholeChat }); } catch (__) {}
+            }
+            catch (_) {
+                ok = false;
+            }
+            try {
+                spindle.sendToFrontend({ type: 'replace_now_result', requestId: payload.requestId, ok: ok, hasRules: groups.length > 0, found: found, changed: changed, skipped: skipped, pairs: pairs, wholeChat: !!payload.wholeChat });
+            }
+            catch (__) { }
             return;
         }
         if (payload.type === 'set_replace_rules') {
@@ -354,23 +320,29 @@ spindle.onFrontendMessage(async (payload) => {
             await spindle.storage.write(RULES_FILE, JSON.stringify({ enabled: enabled, random: random, caseSensitive: caseSensitive, rulesText: rulesText }));
             return;
         }
-    } catch (_) {
-        try { spindle.log.warn('auto-retry: could not handle a settings message'); } catch (__) {}
+    }
+    catch (_) {
+        try {
+            spindle.log.warn('auto-retry: could not handle a settings message');
+        }
+        catch (__) { }
     }
 });
 // After each finished reply, apply the rules to the saved message.
 spindle.on('GENERATION_ENDED', async (p) => {
     try {
-        if (!enabled || !groups.length) return;
-        if (!p || p.error || !p.chatId) return;
+        if (!enabled || !groups.length)
+            return;
+        if (!p || p.error || !p.chatId)
+            return;
         const chatId = p.chatId;
         let messageId = p.messageId;
         let content = typeof p.content === 'string' ? p.content : '';
         // Fetch to fill any missing content and to spot the greeting: the opening
         // message is authored, not generated, so it must never be swapped.
-        // target is held so the write below can carry the swipe array, which is what
-        // makes the chat view redraw. Stays null if the message can't be read; the
-        // write then falls back to a plain content patch.
+        // Held so the write below can carry the swipe array, which is what makes the
+        // chat view redraw. Stays null if the message can't be read; the write then
+        // falls back to a plain content patch.
         let target = null;
         try {
             const msgs = await spindle.chat.getMessages(chatId);
@@ -378,36 +350,61 @@ spindle.on('GENERATION_ENDED', async (p) => {
                 const greetingId = (msgs[0] && msgs[0].role === 'assistant') ? msgs[0].id : null;
                 if (!messageId || !content) {
                     let m = messageId ? msgs.find((x) => x && x.id === messageId && x.role === 'assistant') : null;
-                    if (!m) { for (let i = msgs.length - 1; i >= 0; i--) { if (msgs[i] && msgs[i].role === 'assistant') { m = msgs[i]; break; } } }
-                    if (m) { messageId = m.id; if (!content) content = String(m.content == null ? '' : m.content); }
+                    if (!m) {
+                        for (let i = msgs.length - 1; i >= 0; i--) {
+                            if (msgs[i] && msgs[i].role === 'assistant') {
+                                m = msgs[i];
+                                break;
+                            }
+                        }
+                    }
+                    if (m) {
+                        messageId = m.id;
+                        if (!content)
+                            content = String(m.content == null ? '' : m.content);
+                    }
                 }
-                if (messageId != null && greetingId != null && messageId === greetingId) return; // never swap the greeting
+                if (messageId != null && greetingId != null && messageId === greetingId)
+                    return; // never swap the greeting
                 target = msgs.find((x) => x && x.id === messageId) || null;
             }
-        } catch (_) {}
+        }
+        catch (_) { }
         // Both are needed: without an id there is nothing to write to, and the
         // lookup above leaves it unset when the reply cannot be found.
-        if (!messageId || !content) return;
+        if (!messageId || !content)
+            return;
         const autoPairs = [];
         const next = applyRules(content, autoPairs);
-        if (next !== content) beginUndo(chatId);
         if (next !== content) {
             if (confirmBeforeEdit) {
                 // Ask first; the frontend sends apply_replace_now for this reply if the user agrees.
-                try { spindle.sendToFrontend({ type: 'confirm_edit', chatId: chatId, messageId: messageId, requestId: 'ar-auto-' + Date.now() }); } catch (__) {}
+                try {
+                    spindle.sendToFrontend({ type: 'confirm_edit', chatId: chatId, messageId: messageId, requestId: 'ar-auto-' + Date.now() });
+                }
+                catch (__) { }
                 return;
             }
             await writeSwapped(chatId, target || { id: messageId }, next);
-            await commitUndo();
             markSwapped(messageId);
             // Tell the frontend what changed so it can update the visible reply.
-            try { spindle.sendToFrontend({ type: 'swapped', chatId: chatId, pairs: autoPairs, wholeChat: false }); } catch (__) {}
+            try {
+                spindle.sendToFrontend({ type: 'swapped', chatId: chatId, pairs: autoPairs, wholeChat: false });
+            }
+            catch (__) { }
         }
-    } catch (e) {
+    }
+    catch (e) {
         if (!warnedEditError) {
             warnedEditError = true;
-            try { spindle.log.warn('auto-retry replace: ' + (e && e.message ? e.message : String(e)) + ' (further errors suppressed; if this is a permission error, grant chat editing)'); } catch (__) {}
+            try {
+                spindle.log.warn('auto-retry replace: ' + (e && e.message ? e.message : String(e)) + ' (further errors suppressed; if this is a permission error, grant chat editing)');
+            }
+            catch (__) { }
         }
     }
 });
-try { spindle.log.info('Auto Retry backend loaded (find and replace in replies).'); } catch (_) {}
+try {
+    spindle.log.info('Auto Retry backend loaded (find and replace in replies).');
+}
+catch (_) { }

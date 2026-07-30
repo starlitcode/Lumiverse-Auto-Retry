@@ -47,6 +47,14 @@ Everything sits under **Advanced: refusal tuning** in the settings, so the basic
 
 To run entirely on your own phrases, turn off the built-in list and put your wording into "Your own refusal phrases." It is marked beta because the built-in wordlists are still being tuned, so turn the whole thing off with the "It looks like an accidental refusal" toggle if you would rather it never touch a refusal-shaped reply.
 
+## Trying it on a reply
+
+At the bottom of the refusal tuning section there is a box to paste a reply into, and a **Check this text** button. It tells you whether that reply would count as a refusal and what decided it: which phrase list matched, which built-in pattern fired, or why it was passed over (too long, on your whitelist, the built-ins switched off).
+
+It runs the same check a finished reply goes through, against the values in the boxes above rather than the saved ones, so you can try a change before you press Save. Nothing is sent anywhere and no reply is edited; it only reads the text you paste in.
+
+This is the fastest way to work out a phrase list. Paste a refusal your model actually produced and see whether it is caught; paste an in-character line that keeps getting re-rolled and see which rule is catching it, so you know exactly what to put in "Never treat these as a refusal."
+
 ## What the built-in list looks for
 
 So you know what "Reword the built-in phrases" acts on, here is the exact phrase list. A reply is treated as a refusal if it contains any of these (case and curly apostrophes don't matter):
