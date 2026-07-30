@@ -69,4 +69,4 @@ Find and replace works separately, since editing a saved reply is a backend job.
 - **[Hikarushmz](https://github.com/Hikarushmz)** - their SillyTavern fetch-retry gave me the idea. Auto Retry is written from scratch and shares no code with it
 - Everyone who has reported a bug or asked a question that turned into a fix
 
-Licensed under the MIT License. See [LICENSE](LICENSE).
+Licensed under the GPL-3.0 License. See [LICENSE](LICENSE).
