@@ -35,6 +35,16 @@ These last two settle different questions and don't overlap. The longest-left-si
 
 Editing a saved reply needs the `chat_mutation` permission (see Permissions below). If nothing in your rules matches a reply, that reply is left untouched.
 
+## Undoing a swap
+
+Turn on **Show an undo button** under Advanced: find and replace and an **Undo the last word swap** button appears in the Extras menu. It puts the replies back exactly as they read before the most recent swap.
+
+It remembers one swap at a time. That swap might have been a single reply or a whole chat, and either way undo covers all of it, but a second swap replaces what undo remembers rather than stacking on top.
+
+A reply you have edited yourself since the swap is left as you wrote it. Undo only puts back a reply that still reads exactly as the swap left it, so it can never throw away your own writing.
+
+This works by keeping the original text, not by running your rules backwards. Rules are not reversible: two of them can map onto the same word, a random rule has no single answer, and a rule that deletes a word leaves nothing to match.
+
 ## Presets
 
 At the bottom of the find-and-replace settings you can save your word-swap setups as named presets and switch between them without copying rules by hand.
