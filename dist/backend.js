@@ -43,6 +43,9 @@ let warnedEditError = false;
 // compound swaps on a reply that auto-swap or an earlier tap already changed.
 const swappedIds = new Set();
 const SWAPPED_CAP = 1000;
+function unmarkSwapped(id) {
+    if (id != null) swappedIds.delete(id);
+}
 function markSwapped(id) {
     if (id == null) return;
     swappedIds.add(id);
@@ -148,6 +151,56 @@ function applyRules(text, seen) {
 // text the content patch sets, so the message is unchanged either way; only the
 // event that announces it differs. Falls back to a plain content patch when the
 // message carries no usable swipe array.
+// The last swap, kept so it can be put back. Swaps are not reversible by running
+// the rules backwards: two rules can map onto the same word, a random rule has no
+// single answer, and a delete rule leaves nothing to match. The only honest undo
+// is the text as it was, so that is what gets stored.
+//
+// One operation deep. A full history would mean keeping a copy of
+// every reply the extension has ever touched, and the useful case is almost
+// always "that last swap was wrong, put it back".
+const UNDO_FILE = 'last-swap-undo.json';
+const UNDO_MAX = 400; // messages kept for a whole-chat swap
+
+let pendingUndo = null;
+
+function beginUndo(chatId) {
+  pendingUndo = { chatId: chatId, when: Date.now(), items: [] };
+}
+
+function recordUndo(id, before, after) {
+  if (!pendingUndo || pendingUndo.items.length >= UNDO_MAX) return;
+  // Both sides are kept. The after-text is how undo tells an untouched reply
+  // from one the user has since edited: if what is there now is not what the
+  // swap wrote, someone changed it and it is left alone.
+  pendingUndo.items.push({ id: id, before: before, after: after });
+}
+
+async function commitUndo() {
+  if (!pendingUndo || !pendingUndo.items.length) {
+    pendingUndo = null;
+    return;
+  }
+  try {
+    await spindle.storage.write(UNDO_FILE, JSON.stringify(pendingUndo));
+  } catch (_) {}
+  pendingUndo = null;
+}
+
+async function readUndo() {
+  try {
+    const raw = JSON.parse(await spindle.storage.read(UNDO_FILE));
+    if (raw && Array.isArray(raw.items) && raw.items.length) return raw;
+  } catch (_) {}
+  return null;
+}
+
+async function clearUndo() {
+  try {
+    await spindle.storage.write(UNDO_FILE, JSON.stringify({ chatId: '', when: 0, items: [] }));
+  } catch (_) {}
+}
+
 async function writeSwapped(chatId, m, next) {
     const patch = { content: next };
     const swipes = m && Array.isArray(m.swipes) ? m.swipes.slice() : null;
@@ -157,6 +210,8 @@ async function writeSwapped(chatId, m, next) {
         patch.swipes = swipes;
         patch.swipe_id = idx;
     }
+    // Captured before the write, so the stored text is what was actually replaced.
+    recordUndo(m.id, String(m && m.content != null ? m.content : ''), next);
     await spindle.chat.updateMessage(chatId, m.id, patch);
 }
 
@@ -207,6 +262,47 @@ spindle.onFrontendMessage(async (payload) => {
             try { spindle.sendToFrontend({ type: 'loaded_settings', requestId: payload.requestId, settings: settings }); } catch (__) {}
             return;
         }
+        if (payload.type === 'undo_swap') {
+          const entry = await readUndo();
+          if (!entry || !entry.items.length) {
+            spindle.sendToFrontend({ type: 'undo_result', requestId: payload.requestId, ok: true, restored: 0, reason: 'nothing' });
+            return;
+          }
+          let restored = 0;
+          const pairs = [];
+          let msgs = null;
+          try { msgs = await spindle.chat.getMessages(entry.chatId); } catch (_) {}
+          for (const it of entry.items) {
+            try {
+              const m = Array.isArray(msgs) ? msgs.find((x) => x && x.id === it.id) : null;
+              if (!m) continue;
+              const now = String(m.content == null ? '' : m.content);
+              // Only put back a reply that still reads exactly as the swap left it.
+              // Anything else has been changed since, by a later swap or by the user
+              // editing it, and restoring would throw that away.
+              if (typeof it.after === 'string' && now !== it.after) continue;
+              if (now === it.before) continue;
+              const swipes = Array.isArray(m.swipes) ? m.swipes.slice() : null;
+              const idx = typeof m.swipe_id === 'number' ? m.swipe_id : 0;
+              const patch = { content: it.before };
+              if (swipes && swipes.length > 0 && idx >= 0 && idx < swipes.length) {
+                swipes[idx] = it.before;
+                patch.swipes = swipes;
+                patch.swipe_id = idx;
+              }
+              await spindle.chat.updateMessage(entry.chatId, m.id, patch);
+              pairs.push([now, it.before]);
+              restored += 1;
+              unmarkSwapped(it.id);
+            } catch (_) {}
+          }
+          await clearUndo();
+          spindle.sendToFrontend({
+            type: 'undo_result', requestId: payload.requestId, ok: true,
+            restored: restored, pairs: pairs, wholeChat: entry.items.length > 1,
+          });
+          return;
+        }
         if (payload.type === 'apply_replace_now') {
             let ok = true, found = false, changed = 0, skipped = 0;
         // Literal substitutions made, passed back so the frontend can update the
@@ -214,6 +310,8 @@ spindle.onFrontendMessage(async (payload) => {
         const pairs = [];
             try {
                 const chatId = payload.chatId;
+                // Everything this operation rewrites goes into one undo entry.
+                beginUndo(chatId);
                 const wantId = payload.messageId;
                 if (chatId && groups.length) {
                     const msgs = await spindle.chat.getMessages(chatId);
@@ -242,6 +340,7 @@ spindle.onFrontendMessage(async (payload) => {
                     }
                 }
             } catch (_) { ok = false; }
+            await commitUndo();
             try { spindle.sendToFrontend({ type: 'replace_now_result', requestId: payload.requestId, ok: ok, hasRules: groups.length > 0, found: found, changed: changed, skipped: skipped, pairs: pairs, wholeChat: !!payload.wholeChat }); } catch (__) {}
             return;
         }
@@ -291,6 +390,7 @@ spindle.on('GENERATION_ENDED', async (p) => {
         if (!messageId || !content) return;
         const autoPairs = [];
         const next = applyRules(content, autoPairs);
+        if (next !== content) beginUndo(chatId);
         if (next !== content) {
             if (confirmBeforeEdit) {
                 // Ask first; the frontend sends apply_replace_now for this reply if the user agrees.
@@ -298,6 +398,7 @@ spindle.on('GENERATION_ENDED', async (p) => {
                 return;
             }
             await writeSwapped(chatId, target || { id: messageId }, next);
+            await commitUndo();
             markSwapped(messageId);
             // Tell the frontend what changed so it can update the visible reply.
             try { spindle.sendToFrontend({ type: 'swapped', chatId: chatId, pairs: autoPairs, wholeChat: false }); } catch (__) {}
