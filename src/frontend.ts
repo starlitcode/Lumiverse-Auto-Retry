@@ -1090,19 +1090,36 @@ export function setup(ctx: Ctx, opts?: any) {
       sy = e.clientY;
       ox = r.left;
       oy = r.top;
+      mx = 0;
+      my = 0;
       try {
         head.setPointerCapture(e.pointerId);
       } catch (_) {}
       e.preventDefault();
     };
+    // Moved with a transform while dragging rather than by rewriting left and
+    // top. Changing left/top makes the browser redo layout on every pointer
+    // event, which on a phone cannot keep up with a finger and looks like the
+    // panel jumping. A transform is handled by the compositor, so it tracks the
+    // finger, and the offset is folded back into left/top once on release.
+    let mx = 0,
+      my = 0,
+      frame: any = null;
+    const paintDrag = () => {
+      frame = null;
+      el.style.transform = "translate3d(" + mx + "px," + my + "px,0)";
+    };
     const onMove = (e: any) => {
       if (!dragging) return;
-      let nx = ox + (e.clientX - sx),
-        ny = oy + (e.clientY - sy);
-      nx = Math.max(0, Math.min(nx, window.innerWidth - el.offsetWidth));
-      ny = Math.max(0, Math.min(ny, window.innerHeight - el.offsetHeight));
-      el.style.left = nx + "px";
-      el.style.top = ny + "px";
+      const w = el.offsetWidth || 0,
+        h = el.offsetHeight || 0;
+      const vw = (typeof window !== "undefined" && window.innerWidth) || 360;
+      const vh = (typeof window !== "undefined" && window.innerHeight) || 640;
+      // Clamped as an offset, so the panel cannot be dragged off the screen.
+      mx = Math.max(-ox, Math.min(e.clientX - sx, vw - w - ox));
+      my = Math.max(-oy, Math.min(e.clientY - sy, vh - h - oy));
+      // One paint per frame at most, however fast the pointer events arrive.
+      if (!frame) frame = requestAnimationFrame(paintDrag);
     };
     const onUp = (e: any) => {
       if (dragging) {
@@ -1110,6 +1127,15 @@ export function setup(ctx: Ctx, opts?: any) {
         try {
           head.releasePointerCapture(e.pointerId);
         } catch (_) {}
+        if (frame) {
+          cancelAnimationFrame(frame);
+          frame = null;
+        }
+        el.style.transform = "none";
+        el.style.left = ox + mx + "px";
+        el.style.top = oy + my + "px";
+        mx = 0;
+        my = 0;
       }
     };
     head.addEventListener("pointerdown", onDown);
@@ -1183,25 +1209,23 @@ export function setup(ctx: Ctx, opts?: any) {
     liveLogBody = null;
   }
   // A small round button that floats over the chat and turns the extension on or
-  // off in one tap. Built the same way as the live log panel above: created by
-  // the extension, so unlike the Extras entry its size and position are ours to
-  // set. Dragged with a pointer so it works with a finger as well as a mouse,
-  // and where it is left is remembered between sessions.
-  const FLOAT_KEY = "lv-auto-retry:float-pos:v1";
+  // off in one tap. The host owns the placement: ctx.ui.createFloatWidget gives
+  // it dragging, edge snapping, remembered position, and the right-click hide and
+  // reset-position options users get on any float widget. That is why this is not
+  // a hand-rolled fixed-position element with its own pointer handling.
+  let floatWidget: any = null;
   let floatEl: any = null;
-
-  // Viewport size, guarded. Used by both the initial placement and the drag
-  // clamp, so an environment that doesn't report a size can't turn a position
-  // into NaN and leave the button unreachable.
-  const vpW = (): number =>
-    (typeof window !== "undefined" && window.innerWidth) || 360;
-  const vpH = (): number =>
-    (typeof window !== "undefined" && window.innerHeight) || 640;
+  let floatWidgetSize = 0;
 
   function floatSize(): number {
     const v = Math.floor(Number(cfg.floatingToggleSize));
     return Number.isFinite(v) && v >= 28 ? Math.min(v, 96) : 44;
   }
+
+  const vpW = (): number =>
+    (typeof window !== "undefined" && window.innerWidth) || 360;
+  const vpH = (): number =>
+    (typeof window !== "undefined" && window.innerHeight) || 640;
 
   function paintFloat() {
     if (!floatEl) return;
@@ -1212,159 +1236,100 @@ export function setup(ctx: Ctx, opts?: any) {
     floatEl.style.fontSize = Math.max(11, Math.round(d * 0.42)) + "px";
     floatEl.style.background = on
       ? "var(--lumiverse-primary-020,rgba(147,112,219,.2))"
-      : "var(--lumiverse-fill-subtle,rgba(255,255,255,.06))";
+      : "var(--lumiverse-fill-subtle,rgba(0,0,0,.1))";
     floatEl.style.borderColor = on
       ? "var(--lumiverse-primary-050,rgba(147,112,219,.5))"
-      : "var(--lumiverse-border,rgba(255,255,255,.15))";
+      : "var(--lumiverse-border,rgba(147,112,219,.12))";
     floatEl.style.color = on
       ? "var(--lumiverse-primary-text,rgba(186,135,255,.95))"
       : "var(--lumiverse-text-muted,rgba(255,255,255,.65))";
     floatEl.style.opacity = on ? "1" : "0.75";
     floatEl.textContent = on ? "\u21BB" : "\u2298"; // clockwise arrow / slashed circle
-    floatEl.title = on
+    const label = on
       ? "Auto Retry is on, tap to turn off"
       : "Auto Retry is off, tap to turn on";
-    floatEl.setAttribute("aria-label", floatEl.title);
+    floatEl.title = label;
+    floatEl.setAttribute("aria-label", label);
     floatEl.setAttribute("aria-pressed", on ? "true" : "false");
   }
 
-  function loadFloatPos(): { x: number; y: number } | null {
-    try {
-      const raw = localStorage.getItem(FLOAT_KEY);
-      if (!raw) return null;
-      const p = JSON.parse(raw);
-      if (typeof p.x === "number" && typeof p.y === "number") return p;
-    } catch (_) {}
-    return null;
-  }
-
-  function placeFloat() {
-    if (!floatEl) return;
-    const d = floatSize();
-    const vw = vpW();
-    const vh = vpH();
-    const saved = loadFloatPos();
-    // Clamped every time, so a button saved on a wide screen is still reachable
-    // on a narrow one, and a size change can't push it off the edge.
-    const x = Math.max(4, Math.min(saved ? saved.x : vw - d - 12, vw - d - 4));
-    const y = Math.max(4, Math.min(saved ? saved.y : Math.round(vh * 0.62), vh - d - 4));
-    floatEl.style.left = x + "px";
-    floatEl.style.top = y + "px";
-  }
-
   function showFloat() {
-    if (floatEl || typeof document === "undefined") return;
+    if (floatWidget || typeof document === "undefined") return;
+    const d = floatSize();
+    try {
+      floatWidget = (ctx as any).ui.createFloatWidget({
+        width: d,
+        height: d,
+        // Bottom right, clear of the input bar, matching where other extensions
+        // put theirs. The host remembers wherever the user drags it after that.
+        initialPosition: { x: Math.max(16, vpW() - 72), y: Math.max(16, vpH() - 160) },
+        snapToEdge: true,
+        tooltip: "Toggle Auto Retry",
+        chromeless: true,
+      });
+    } catch (_) {
+      // Float widgets need the ui_panels permission. Without it the extension
+      // still works; there is just no floating button.
+      floatWidget = null;
+      log("host would not create a float widget; is ui_panels granted?");
+      return;
+    }
+    floatWidgetSize = d;
     const el = document.createElement("button");
     el.type = "button";
-    el.id = "__lvRetryFloat";
     el.style.cssText =
-      "position:fixed;z-index:2147483000;display:flex;align-items:center;justify-content:center;" +
-      "border-radius:50%;border:1px solid;cursor:pointer;touch-action:none;padding:0;line-height:1;" +
-      "backdrop-filter:blur(6px);box-shadow:var(--lumiverse-shadow-sm,0 2px 8px rgba(0,0,0,.2));font-family:inherit";
-    // A drag and a tap both start with a pointerdown, so the two are told apart
-    // by distance: move more than a few pixels and it is a drag, which also
-    // means the tap is swallowed so dragging never flips the switch by accident.
-    //
-    // While dragging, the button is moved with a transform rather than by
-    // rewriting left and top. Changing left/top makes the browser redo layout on
-    // every pointer event, which on a phone cannot keep up with a finger and
-    // looks like the button jumping between positions. A transform is handled by
-    // the compositor instead, so it tracks the finger. The offset is folded back
-    // into left/top once, on release.
-    let down = false;
-    let moved = false;
-    let sx = 0, sy = 0, ox = 0, oy = 0;
-    let dx = 0, dy = 0;
-    let frame: any = null;
-
-    const paintDrag = () => {
-      frame = null;
-      el.style.transform = "translate3d(" + dx + "px," + dy + "px,0)";
-    };
-
-    const onDown = (e: any) => {
-      down = true;
-      moved = false;
-      dx = 0;
-      dy = 0;
-      const r = el.getBoundingClientRect();
-      sx = e.clientX; sy = e.clientY; ox = r.left; oy = r.top;
-      try { el.setPointerCapture(e.pointerId); } catch (_) {}
-    };
-
-    const onMove = (e: any) => {
-      if (!down) return;
-      const mx = e.clientX - sx, my = e.clientY - sy;
-      if (!moved && Math.abs(mx) + Math.abs(my) < 6) return;
-      if (!moved) {
-        moved = true;
-        // Blur is expensive to recompute while something moves, so it is dropped
-        // for the duration of the drag and put back on release.
-        el.style.backdropFilter = "none";
-      }
-      const d = floatSize();
-      // Clamped as an offset, so the button cannot be dragged off the screen.
-      dx = Math.max(4 - ox, Math.min(mx, vpW() - d - 4 - ox));
-      dy = Math.max(4 - oy, Math.min(my, vpH() - d - 4 - oy));
-      // One paint per frame at most, however fast the pointer events arrive.
-      if (!frame) frame = requestAnimationFrame(paintDrag);
-    };
-
-    const onUp = (e: any) => {
-      if (!down) return;
-      down = false;
-      try { el.releasePointerCapture(e.pointerId); } catch (_) {}
-      if (frame) {
-        cancelAnimationFrame(frame);
-        frame = null;
-      }
-      if (!moved) return;
-      // Fold the drag offset into the real position and clear the transform, so
-      // the next drag starts from zero again.
-      const nx = ox + dx, ny = oy + dy;
+      "display:flex;align-items:center;justify-content:center;box-sizing:border-box;" +
+      "border-radius:50%;border:1px solid;cursor:pointer;padding:0;line-height:1;" +
+      "font-family:var(--lumiverse-font-family,system-ui);" +
+      "box-shadow:var(--lumiverse-shadow-sm,0 2px 8px rgba(0,0,0,.2));" +
+      // Only colour and scale are animated. Position is the host's business, and
+      // a transition on transform would fight its dragging.
+      "transition:background var(--lumiverse-transition-fast,150ms ease)," +
+      "border-color var(--lumiverse-transition-fast,150ms ease)," +
+      "color var(--lumiverse-transition-fast,150ms ease)," +
+      "opacity var(--lumiverse-transition-fast,150ms ease)," +
+      "transform 120ms ease";
+    el.addEventListener("pointerdown", () => {
+      el.style.transform = "scale(.94)";
+    });
+    const springBack = () => {
       el.style.transform = "none";
-      el.style.backdropFilter = "blur(6px)";
-      el.style.left = nx + "px";
-      el.style.top = ny + "px";
-      try {
-        localStorage.setItem(FLOAT_KEY, JSON.stringify({ x: nx, y: ny }));
-      } catch (_) {}
     };
-    el.addEventListener("pointerdown", onDown);
-    el.addEventListener("pointermove", onMove);
-    el.addEventListener("pointerup", onUp);
-    el.addEventListener("pointercancel", onUp);
-    el.addEventListener("click", (e: any) => {
-      if (moved) { // that was a drag, not a tap
-        moved = false;
-        try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
-        return;
-      }
+    el.addEventListener("pointerup", springBack);
+    el.addEventListener("pointercancel", springBack);
+    el.addEventListener("pointerleave", springBack);
+    el.addEventListener("click", () => {
+      springBack();
       toggleEnabled();
     });
     try {
-      (document.body || document.documentElement).appendChild(el);
+      floatWidget.root.replaceChildren(el);
     } catch (_) {
-      return;
+      try { floatWidget.root.innerHTML = ""; floatWidget.root.appendChild(el); } catch (__) {}
     }
     floatEl = el;
     paintFloat();
-    placeFloat();
   }
 
   function hideFloat() {
-    if (floatEl) {
-      try { floatEl.remove(); } catch (_) {}
+    if (floatWidget) {
+      try { floatWidget.destroy(); } catch (_) {}
     }
+    floatWidget = null;
     floatEl = null;
+    floatWidgetSize = 0;
   }
 
   function syncFloat() {
-    if (cfg.showFloatingToggle) {
-      showFloat();
-      paintFloat();
-      placeFloat();
-    } else hideFloat();
+    if (!cfg.showFloatingToggle) {
+      hideFloat();
+      return;
+    }
+    // Width and height are set when the widget is created, so a size change
+    // means building it again rather than restyling it.
+    if (floatWidget && floatWidgetSize !== floatSize()) hideFloat();
+    showFloat();
+    paintFloat();
   }
 
   // The one place the switch is flipped, so the floating button, the Extras
