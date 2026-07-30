@@ -36,6 +36,10 @@ Open the chat input bar, tap the **Extras** popover, and choose **Auto Retry set
 
 Only **Save** keeps your changes. Closing with the X or tapping outside discards anything you did not save, so you can experiment freely. Saved settings sync to your Lumiverse account, so they follow you to other browsers and devices, and they apply to the next reply. Long text boxes, like your word-swap rules, have an **Expand** button that opens a full-size editor.
 
+## Turning it off quickly
+
+If you switch Auto Retry on and off a lot, turn on **Floating on/off button** in Basics. That puts a small button over the chat that toggles it in one tap. Drag it anywhere; it snaps to the nearest edge and stays where you leave it, and you can set its size or right-click it to hide it or reset its position.
+
 ## Documentation
 
 - [When it retries](docs/detection.md) - cut-off detection and accidental-refusal detection
@@ -48,12 +52,13 @@ Only **Save** keeps your changes. Closing with the X or tapping outside discards
 
 ## Permissions
 
-Declares two permissions:
+Declares three permissions:
 
 - `generation`: to hear when replies start, stream, and end. This drives all the retry logic.
 - `chat_mutation`: to edit a saved reply. This is used only by the "Find and replace in replies" feature, and only when you turn it on and enter swaps. If you never use that feature, nothing is edited.
+- `ui_panels`: what Lumiverse requires before an extension may put a floating widget on screen. It is used only by the optional on/off button, and grants screen space rather than access to anything.
 
-`chat_mutation` is a privileged permission, so depending on your Lumiverse setup it may need admin approval before it takes effect. The retry side works without it; only find-and-replace needs it.
+`chat_mutation` is a privileged permission, so depending on your Lumiverse setup it may need admin approval before it takes effect. The retry side works without it; only find-and-replace needs it. Without `ui_panels` everything still works, there is just no floating button.
 
 The find-and-replace feature runs in a small backend module. The rest of the extension is frontend-only. It makes no external network calls. Your settings are saved to your Lumiverse account through the extension's own scoped storage, so they follow you across browsers, with a copy kept in the browser as a fast local cache.
 
