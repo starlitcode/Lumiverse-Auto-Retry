@@ -96,6 +96,9 @@ const CONFIG = {
   replaceRandom: false, // when a word has more than one replacement, pick one at random per occurrence. Off = always the first listed.
   showReplaceButton: false, // optional button in the input's Extras menu that applies the word swaps to the latest reply on demand.
   showSwapAllButton: false, // adds an Extras button that swaps every generated reply in the chat once.
+  // Extras button that puts the last word swap back. One step deep: it restores
+  // the reply text as it was before the most recent swap.
+  showUndoSwapButton: false,
   allowReSwap: false, // let that button swap a reply again even if it was already swapped this session (can stack swaps).
   confirmBeforeEdit: false, // ask for confirmation before any word-swap edit (automatic or manual); the user can cancel.
 
@@ -386,6 +389,12 @@ const SCHEMA: Group[] = [
         label: "Show a swap-whole-chat button",
         type: "bool",
         hint: "Off by default. Adds a button to the input's Extras menu that applies your rules once to every generated reply in the chat you're viewing. The greeting is never touched.",
+      },
+      {
+        key: "showUndoSwapButton",
+        label: "Show an undo button",
+        type: "bool",
+        hint: "Off by default. Adds a button to the Extras menu that puts the last word swap back, restoring the reply exactly as it read before. It remembers one swap at a time, whether that was a single reply or a whole chat. A reply you have edited yourself since the swap is left alone rather than overwritten.",
       },
       {
         key: "allowReSwap",
@@ -951,6 +960,8 @@ export function setup(ctx: Ctx, opts?: any) {
   let replaceAction: any = null;
   let replaceActionOff: any = null;
   let replaceAllAction: any = null;
+  let undoAction: any = null;
+  let undoActionOff: any = null;
   let replaceAllActionOff: any = null;
   // Manual "swap words now": an optional Extras-menu button that applies the word
   // swaps to the latest reply on demand, instead of only automatically on finish.
@@ -975,6 +986,16 @@ export function setup(ctx: Ctx, opts?: any) {
     } catch (_) {}
   }
   // Swap every generated reply in the current chat, once, on request.
+  function undoSwapNow() {
+    try {
+      if (!ctx || typeof (ctx as any).sendToBackend !== "function") {
+        showToast("Undo needs the backend, which this host does not offer.");
+        return;
+      }
+      (ctx as any).sendToBackend({ type: "undo_swap", requestId: "ar-undo-" + Date.now() });
+    } catch (_) {}
+  }
+
   async function applyReplaceAllNow() {
     try {
       if (!ctx || typeof (ctx as any).sendToBackend !== "function") { showToast("Find and replace needs the backend, which this host does not offer."); return; }
@@ -1001,6 +1022,19 @@ export function setup(ctx: Ctx, opts?: any) {
         try { replaceAction.destroy(); } catch (_) {}
         replaceAction = null;
         replaceActionOff = null;
+      }
+      if (cfg.showUndoSwapButton && canReg && !undoAction) {
+        undoAction = (ctx as any).ui.registerInputBarAction({
+          id: "auto-retry-undo-swap",
+          label: "Undo the last word swap",
+          iconSvg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>',
+        });
+        undoActionOff = undoAction.onClick(() => undoSwapNow());
+      } else if ((!cfg.showUndoSwapButton || !canReg) && undoAction) {
+        try { undoActionOff && undoActionOff(); } catch (_) {}
+        try { undoAction.destroy(); } catch (_) {}
+        undoAction = null;
+        undoActionOff = null;
       }
       if (cfg.showSwapAllButton && canReg && !replaceAllAction) {
         replaceAllAction = (ctx as any).ui.registerInputBarAction({
@@ -1152,7 +1186,15 @@ export function setup(ctx: Ctx, opts?: any) {
       rsx = 0,
       rsy = 0,
       rw = 0,
-      rh = 0;
+      rh = 0,
+      pendW = 0,
+      pendH = 0,
+      rzFrame: any = null;
+    const paintResize = () => {
+      rzFrame = null;
+      el.style.width = pendW + "px";
+      el.style.height = pendH + "px";
+    };
     const rzDown = (e: any) => {
       rz = true;
       const r = el.getBoundingClientRect();
@@ -1175,12 +1217,21 @@ export function setup(ctx: Ctx, opts?: any) {
         nh = rh + (e.clientY - rsy);
       nw = Math.max(200, Math.min(nw, window.innerWidth - 16));
       nh = Math.max(120, Math.min(nh, window.innerHeight - 16));
-      el.style.width = nw + "px";
-      el.style.height = nh + "px";
+      // Resizing has to change layout, so a transform cannot help here the way
+      // it does for dragging. Batching to one change per frame still keeps it
+      // from thrashing when pointer events arrive faster than the screen redraws.
+      pendW = nw;
+      pendH = nh;
+      if (!rzFrame) rzFrame = requestAnimationFrame(paintResize);
     };
     const rzUp = (e: any) => {
       if (rz) {
         rz = false;
+        if (rzFrame) {
+          cancelAnimationFrame(rzFrame);
+          rzFrame = null;
+          paintResize();
+        }
         try {
           grip.releasePointerCapture(e.pointerId);
         } catch (_) {}
@@ -1467,6 +1518,7 @@ export function setup(ctx: Ctx, opts?: any) {
         "replaceCaseSensitive",
         "showReplaceButton",
         "showSwapAllButton",
+        "showUndoSwapButton",
         "allowReSwap",
         "confirmBeforeEdit",
       ],
@@ -1575,6 +1627,7 @@ export function setup(ctx: Ctx, opts?: any) {
         "replaceEnabled",
         "showReplaceButton",
         "showSwapAllButton",
+        "showUndoSwapButton",
         "allowReSwap",
         "confirmBeforeEdit",
       ],
@@ -2621,7 +2674,7 @@ export function setup(ctx: Ctx, opts?: any) {
         "font:13px/1.4 var(--lumiverse-font-family,system-ui);padding:9px 12px;border-radius:var(--lumiverse-radius,12px);" +
         "color:var(--lumiverse-text,#fff);background:var(--lumiverse-fill,rgba(20,16,30,.96));" +
         "border:1px solid var(--lumiverse-border,rgba(255,255,255,.18));" +
-        "box-shadow:var(--lumiverse-shadow-md,0 8px 24px rgba(0,0,0,.4));transition:opacity .2s ease;" +
+        "box-shadow:var(--lumiverse-shadow-md,0 8px 24px rgba(0,0,0,.4));transition:opacity var(--lumiverse-transition,200ms ease);" +
         "opacity:0;max-width:min(92vw,460px);text-align:left";
       (document.body || document.documentElement).appendChild(t);
     }
@@ -2765,6 +2818,7 @@ export function setup(ctx: Ctx, opts?: any) {
       "replaceCaseSensitive",
       "showReplaceButton",
       "showSwapAllButton",
+      "showUndoSwapButton",
       "allowReSwap",
       "confirmBeforeEdit",
       "liveLog",
@@ -3812,7 +3866,7 @@ export function setup(ctx: Ctx, opts?: any) {
       "border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));" +
       "background:var(--lumiverse-fill-subtle,rgba(255,255,255,.05));" +
       "color:var(--lumiverse-text,#eee);font:13px var(--lumiverse-font-family,system-ui);outline:none;" +
-      "transition:border-color .12s ease";
+      "transition:border-color var(--lumiverse-transition-fast,150ms ease)";
     // On focus, tint the border so the active field is clear. No glow ring.
     input.addEventListener("focus", () => {
       input.style.borderColor = "var(--lumiverse-primary,rgba(147,112,219,.9))";
@@ -3827,7 +3881,7 @@ export function setup(ctx: Ctx, opts?: any) {
     b.textContent = label;
     b.style.cssText =
       "min-height:36px;padding:8px 14px;border-radius:var(--lumiverse-radius,8px);cursor:pointer;" +
-      "font:13px var(--lumiverse-font-family,system-ui);transition:filter .12s ease;" +
+      "font:13px var(--lumiverse-font-family,system-ui);transition:filter var(--lumiverse-transition-fast,150ms ease);" +
       (primary
         ? "border:1px solid transparent;background:var(--lumiverse-primary,rgba(147,112,219,.9));color:var(--lumiverse-text,rgba(255,255,255,.9))"
         : "border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));background:transparent;color:var(--lumiverse-text,#eee)");
@@ -4142,6 +4196,19 @@ export function setup(ctx: Ctx, opts?: any) {
           applySwapsToView(msg.pairs || [], !msg.wholeChat);
           return;
         }
+        if (msg.type === "undo_result") {
+          if (!msg.ok) showToast("Could not undo the swap.");
+          else if (!msg.restored) showToast("Nothing to undo.");
+          else {
+            applySwapsToView(msg.pairs || [], !msg.wholeChat);
+            showToast(
+              msg.restored === 1
+                ? "Put the last swap back."
+                : "Put " + msg.restored + " replies back.",
+            );
+          }
+          return;
+        }
         if (msg.type !== "replace_now_result") return;
         if (msg.ok) applySwapsToView(msg.pairs || [], !msg.wholeChat);
         if (!msg.ok) showToast("Could not swap words.");
@@ -4155,6 +4222,7 @@ export function setup(ctx: Ctx, opts?: any) {
       disposers.push(() => { try { offRep && offRep(); } catch (_) {} });
     }
   } catch (_) {}
+  disposers.push(() => { try { undoActionOff && undoActionOff(); } catch (_) {} try { undoAction && undoAction.destroy(); } catch (_) {} });
   disposers.push(() => { try { replaceActionOff && replaceActionOff(); } catch (_) {} try { replaceAction && replaceAction.destroy(); } catch (_) {} });
   log("ready v" + VERSION, cfg);
 
