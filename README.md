@@ -44,6 +44,7 @@ Only **Save** keeps your changes. Closing with the X or tapping outside discards
 - [Buttons it clicks](docs/buttons.md) - fixing the regenerate button, Regeneration Feedback, writing selectors
 - [Import and export](docs/import-export.md) - moving your setup between devices
 - [Reporting a bug](docs/troubleshooting.md)
+- [Security](SECURITY.md) - what the extension can and can't reach, and how to check
 
 ## Permissions
 
@@ -64,9 +65,9 @@ Find and replace works separately, since editing a saved reply is a backend job.
 
 ## Credits
 
-- **[starlitcode](https://github.com/starlitcode)** - built and maintains the extension
+- **starlitcode** - built and maintains the extension
 - **[Claude](https://claude.ai)** (Anthropic) - wrote the code, directed and tested by starlitcode
-- **[Hikarushmz](https://github.com/Hikarushmz)** - their SillyTavern fetch-retry gave me the idea. Auto Retry is written from scratch and shares no code with it
+- **[Hikarushmz](https://github.com/Hikarushmz/fetch-retry)** - their SillyTavern fetch-retry gave me the idea. Auto Retry is written from scratch and shares no code with it
 - Everyone who has reported a bug or asked a question that turned into a fix
 
 Licensed under the GPL-3.0 License. See [LICENSE](LICENSE).
