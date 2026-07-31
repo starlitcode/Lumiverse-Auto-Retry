@@ -17,6 +17,8 @@
 // The pure logic (refusal detection, cut-off detection, contrast maths, the
 // word-swap engine) is covered by `bun test`, which needs nothing extra.
 
+import { createRequire } from "node:module";
+const require = createRequire(import.meta.url);
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 
@@ -106,6 +108,57 @@ async function inPanel(browser, { css = "", viewport, touch = false } = {}, fn) 
   const out = await fn(page);
   await page.close();
   return { out, errors };
+}
+
+
+// Decodes a PNG far enough to find its brightest pixel. Only used by the clear
+// button check, which cannot be done any other way: the browser will not report
+// a pseudo-element's own styles back through getComputedStyle.
+function brightestPixel(buf) {
+  const zlib = require("node:zlib");
+  let pos = 8, width = 0, height = 0, depth = 0, colour = 0;
+  const idat = [];
+  while (pos < buf.length) {
+    const len = buf.readUInt32BE(pos);
+    const type = buf.toString("ascii", pos + 4, pos + 8);
+    const data = buf.subarray(pos + 8, pos + 8 + len);
+    if (type === "IHDR") {
+      width = data.readUInt32BE(0); height = data.readUInt32BE(4);
+      depth = data[8]; colour = data[9];
+    } else if (type === "IDAT") idat.push(data);
+    else if (type === "IEND") break;
+    pos += 12 + len;
+  }
+  if (depth !== 8 || (colour !== 6 && colour !== 2)) return null;
+  const ch = colour === 6 ? 4 : 3;
+  const raw = zlib.inflateSync(Buffer.concat(idat));
+  const stride = width * ch;
+  const out = Buffer.alloc(height * stride);
+  let best = null, bestSum = -1;
+  for (let y = 0; y < height; y++) {
+    const filter = raw[y * (stride + 1)];
+    const line = raw.subarray(y * (stride + 1) + 1, y * (stride + 1) + 1 + stride);
+    for (let i = 0; i < stride; i++) {
+      const a = i >= ch ? out[y * stride + i - ch] : 0;
+      const b = y > 0 ? out[(y - 1) * stride + i] : 0;
+      const c = i >= ch && y > 0 ? out[(y - 1) * stride + i - ch] : 0;
+      let v = line[i];
+      if (filter === 1) v += a;
+      else if (filter === 2) v += b;
+      else if (filter === 3) v += (a + b) >> 1;
+      else if (filter === 4) {
+        const pp = a + b - c, pa = Math.abs(pp - a), pb = Math.abs(pp - b), pc = Math.abs(pp - c);
+        v += pa <= pb && pa <= pc ? a : pb <= pc ? b : c;
+      }
+      out[y * stride + i] = v & 255;
+    }
+    for (let x = 0; x < width; x++) {
+      const o = y * stride + x * ch;
+      const sum = out[o] + out[o + 1] + out[o + 2];
+      if (sum > bestSum) { bestSum = sum; best = { r: out[o], g: out[o + 1], b: out[o + 2] }; }
+    }
+  }
+  return best;
 }
 
 let failures = 0;
@@ -457,6 +510,67 @@ console.log("\npreset split");
   check("a search hides the run with no matches", out.onlyPreset.inPreset && !out.onlyPreset.yours, out.onlyPreset);
   check("and the other way round", !out.onlyYours.inPreset && out.onlyYours.yours, out.onlyYours);
   check("clearing brings both back", out.cleared.inPreset && out.cleared.yours, out.cleared);
+  check("no console errors", errors.length === 0, errors);
+}
+
+// ---- the search field's clear button follows the theme ----
+// The browser draws that one itself and colours it from the page's colour
+// scheme, so on a dark page it came out white while everything around it was
+// themed. It is styled through a pseudo-element, which getComputedStyle will
+// not report back, so this reads the pixels instead: it screenshots the right
+// hand end of the field and checks the brightest thing there is the muted theme
+// colour rather than white.
+console.log("\nsearch clear button");
+{
+  const page = await browser.newPage({ viewport: { width: 480, height: 200 } });
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.setContent("<div id=modal></div>");
+  await page.addStyleTag({ content: THEME });
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  const box = await page.evaluate(async () => {
+    window.__acts = {};
+    window.__setup(
+      { events: { on: () => () => {} },
+        ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+              registerInputBarAction: (o) => { const a = { onClick: (cb) => { a.cb = cb; return () => {}; }, destroy: () => {} }; window.__acts[o.id] = a; return a; } } },
+      {},
+    );
+    window.__acts["auto-retry-settings"].cb();
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const s = document.querySelector("input[type=search]");
+    s.value = "zzzzz";
+    s.dispatchEvent(new Event("input"));
+    // Chromium only paints the clear button while the field has focus.
+    s.focus();
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const r = s.getBoundingClientRect();
+    // Well inside the field's own edge: the focus ring sits on the border and
+    // is brighter than the glyph, so sampling that far out would measure the
+    // ring instead of the cross.
+    return { styled: !!document.getElementById("__lvRetryPanelStyle"),
+             id: s.id,
+             x: Math.round(r.right - 30), y: Math.round(r.top + 8),
+             w: 22, h: Math.round(r.height - 16) };
+  });
+  const png = await page.screenshot({ clip: { x: box.x, y: box.y, width: box.w, height: box.h } });
+  await page.close();
+  check("the panel stylesheet is injected", box.styled);
+  check("the search field carries the id the rule targets", box.id === "__lvRetrySearch", box.id);
+  const bright = brightestPixel(png);
+  // With the rule in place the brightest thing at that end of the field is the
+  // cross itself, drawn in the muted theme colour, which over this dark field
+  // lands around 170. Without it nothing is painted there at all and the
+  // brightest thing is the field's own edge, far darker. Checking for "bright
+  // but not white" therefore proves the cross is both present and themed.
+  //
+  // Note this cannot prove the untouched button was white: headless Chromium
+  // never paints the browser's own clear button, which is why this bug reached
+  // a real phone without any check noticing.
+  const themed = !!bright && bright.r > 120 && bright.r < 245 &&
+                 Math.abs(bright.r - bright.b) < 40;
+  check("the clear button is painted in the theme colour, not white", themed, bright);
   check("no console errors", errors.length === 0, errors);
 }
 
