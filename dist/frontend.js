@@ -3938,7 +3938,7 @@ export function setup(ctx, opts) {
                 for (const f of rest)
                     if (isHeld(f))
                         a.appendChild(addRow(buildRow(f), f));
-                const b = subGroup(into, "Yours, whatever preset you load", "No preset touches these. Someone else's preset cannot switch swapping on for you, or take away the confirmation step.");
+                const b = subGroup(into, "Yours, whatever preset you load", "No preset touches these. Loading a preset cannot switch swapping on for you, or take away the confirmation step.");
                 for (const f of rest)
                     if (!isHeld(f))
                         b.appendChild(addRow(buildRow(f), f));
