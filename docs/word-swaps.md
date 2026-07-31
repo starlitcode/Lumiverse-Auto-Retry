@@ -4,7 +4,7 @@ This swaps words in a reply after it arrives and saves the change into the store
 
 It is marked beta: it is new, it runs a backend that edits your saved messages, and it needs a privileged permission.
 
-It never changes what the model generated. A find-and-replace always runs after the reply already exists, so it only edits the text afterward. Because it edits the stored reply rather than just the display, the swap sticks, shows everywhere, and the model reads the swapped wording as context on later turns. Only generated assistant replies are swapped, by either the automatic mode or the button. The opening greeting is authored, not generated, so it is never swapped, and your own messages are never touched.
+It never changes what the model generated. Because it edits the stored reply rather than just the display, the swap sticks, shows everywhere, and the model reads the swapped wording as context on later turns. Only generated assistant replies are swapped, by either the automatic mode or the button. The opening greeting is authored, not generated, so it is never swapped, and your own messages are never touched.
 
 If you would rather apply swaps by hand than have them run on every reply, turn on **Show a 'swap words now' button** under Advanced: find and replace. That adds a button to the chat input's Extras menu (next to the settings button) that applies your swaps on demand. It only ever edits assistant replies, never your own messages.
 
@@ -47,7 +47,7 @@ At the bottom of the find-and-replace settings you can save your word-swap setup
 
 The find-and-replace settings are split into two runs so you can see this at a glance. Under **Saved in a preset** are your rules and the two options that decide how they match, **Pick a swap at random** and **Match case exactly**. Rules saved without those behave differently when loaded, which defeats the point of a preset.
 
-Under **Yours, whatever preset you load** is everything a preset leaves alone. Whether swapping is switched on at all, which buttons appear in your Extras menu, whether a reply can be swapped twice, and whether it confirms before editing all stay as you have them. Those belong to you rather than to the preset, and a preset that could switch swapping on or drop the confirmation step would be changing things you never asked it to. Exporting still carries all of them, since an export is a backup of your whole setup rather than a preset you load.
+Under **Yours, whatever preset you load** is everything a preset leaves alone. Whether swapping is switched on at all, which buttons appear in your Extras menu, whether a reply can be swapped twice, and whether it confirms before editing all stay as you have them. Exporting still carries all of them, since an export is a backup of your whole setup rather than a preset you load.
 
 Pick a saved preset and press **Load** to switch your settings to it. To store the current setup, type a name and press **Save as new**. **Update selected** overwrites the chosen preset with your current settings, **Rename selected** renames it to the name in the box, and **Delete** removes it. Loading a preset takes effect right away and is saved, so there is no separate Save step. Presets are saved to your Lumiverse account the same way your settings are, so they follow you to other browsers and devices. A copy is kept in the browser too, which is what puts the list on screen straight away. To share a preset with someone else, use **Advanced: import / export**, which can include your presets in the file.
 

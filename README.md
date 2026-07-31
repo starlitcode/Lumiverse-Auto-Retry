@@ -28,17 +28,15 @@ https://github.com/starlitcode/Lumiverse-Auto-Retry
 
 ## You are always in charge
 
-Pressing your **Stop** button, or tapping **Cancel** on the retry pop-up, stops the extension right away. It drops any pending retry, resets the count, and briefly ignores new retries so a stopped reply's own trailing events cannot quietly restart it. The Cancel button on the pop-up is the extension's own, so it works no matter what.
+Pressing your **Stop** button, or tapping **Cancel** on the retry pop-up, stops the extension right away. It drops any pending retry, resets the count, and a stopped reply cannot restart itself. The Cancel button on the pop-up is the extension's own, so it works no matter what.
 
 ## Settings
 
-Open the chat input bar, tap the **Extras** popover, and choose **Auto Retry settings**. Options are grouped by what they do. Simple on/off switches are up top; the groups marked **Advanced** are collapsed by default, so tap one of those headers to reveal its options. Each setting has a **?** next to its name that shows a short description: hover it on a computer, tap it on a phone. The description floats just below that setting instead of opening inside the list, so nothing shifts around and the setting you asked about stays visible. It works out where to sit from the row, so it lands right at any text or UI size. Only one shows at a time. To dismiss it, tap the description, tap the **?** again, tap anywhere else, scroll, or press Esc.
+Open the chat input bar, tap the **Extras** popover, and choose **Auto Retry settings**. Options are grouped by what they do. Simple on/off switches are up top; the groups marked **Advanced** are collapsed by default, so tap one of those headers to reveal its options. Each setting has a **?** next to its name that shows a short description: hover it on a computer, tap it on a phone. The description floats just below that setting, so nothing shifts around and the setting you asked about stays visible. Only one shows at a time. To dismiss it, tap the description, tap the **?** again, tap anywhere else, scroll, or press Esc.
 
 The **Search settings** box at the top finds any option by its name or its description, and opens whichever section it lives in, so you never have to remember which group something is under. Clearing the box puts the panel back exactly as it was.
 
 Only **Save** keeps your changes. Closing with the X or tapping outside discards anything you did not save, so you can experiment freely. Saved settings sync to your Lumiverse account, so they follow you to other browsers and devices, and they apply to the next reply. Long text boxes, like your word-swap rules, have an **Expand** button that opens a full-size editor.
-
-The panel uses your Lumiverse theme's own colours, corners, shadows and fonts, so it looks like the rest of the app. It also checks as it draws that every label still stands out from what is behind it. Some themes set an accent close to their text colour, which turns a filled button into a blank rectangle with the label invisible inside it. Only those labels get repainted. Everything else is left exactly as your theme set it.
 
 ## Turning it off quickly
 
