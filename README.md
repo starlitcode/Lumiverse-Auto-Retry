@@ -77,7 +77,15 @@ Find and replace works separately, since editing a saved reply is a backend job.
 
 ## Working on the extension
 
-`src/` is the TypeScript source and `dist/` is what Lumiverse actually loads. `bun run build` regenerates `dist/` from `src/`, `bun test` runs the test suite, and `bun run check` does both the type check and the tests. The tests cover the decisions that are expensive to get wrong: whether a reply counts as a refusal or as cut off, and whether a colour pairing is readable on the user's theme.
+`src/` is the TypeScript source and `dist/` is what Lumiverse actually loads. `bun run build` regenerates `dist/` from `src/`, and `bun run check` runs the type check and the tests together. Run both before committing, so `dist/` never drifts from `src/`.
+
+`bun test` covers the decisions that are expensive to get wrong, and needs nothing installed:
+
+- **Refusal and cut-off detection** - including the in-character lines that must *not* be treated as refusals, since a false positive throws away good writing.
+- **The word-swap engine** - single-pass application, longest match wins, whole-word matching, capitalisation, and the greeting exemption. Driven through `dist/backend.js` itself, so a bad build fails these too.
+- **The contrast maths** that keeps panel text readable on any theme.
+
+`bun run test:ui` adds browser checks for the settings panel: contrast across themes, hints not shifting the list, keyboard reach, and teardown. It needs Playwright, which is deliberately not a dependency here (`bun add -d playwright && bunx playwright install chromium`). Without it the script says so and exits cleanly.
 
 ## Credits
 
