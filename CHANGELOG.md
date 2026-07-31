@@ -13,7 +13,7 @@ _2026-07-31_
 **Reinstall required.** Renaming the repository's main branch broke the link your install used to find updates. Remove Auto Retry and install it again from the same URL and it will pick up the new name. Your settings are saved to your Lumiverse account, so they come back with it.
 
 - **Main is now called `stable`, and there is a new `testing` branch.** Stable only moves when there is a real release, so installing from it means a notification when something has actually shipped. Testing is where work in progress goes, so install from there for an early look, bugs included.
-- **The clear button in the search box follows your theme.** The cross that empties the search field was white. That button is drawn by the browser rather than by the extension, and it takes its colour from whether the page is light or dark instead of from your theme. It now uses the same muted colour as the **?** circles next to each setting. Chrome, Edge and Safari only; Firefox does not add a clear button to search fields at all, so there is nothing there to restyle.
+- **The clear button in the search box follows your theme.** The cross that empties the search field was white. It now uses the same muted colour as the **?** circles next to each setting. Chrome, Edge and Safari only; Firefox does not add a clear button to search fields at all, so there is nothing there to restyle.
 
 Nothing else changed from 3.3.0. The major version is for the forced reinstall, not for the size of the change.
 
