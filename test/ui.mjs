@@ -278,10 +278,17 @@ console.log("\nhints");
 // very setting being asked about. Measuring the row instead also makes this
 // hold at any scale the host applies, since it reads what was actually painted.
 console.log("\nhints do not cover their own row");
+// The scales below are the range of Lumiverse's own UI Scale slider, which
+// runs 0.8 to 1.5. It applies as a zoom on the page, and the popover is
+// parented to the page so it gets zoomed too: an earlier version of this check
+// zoomed only #modal, which left the popover and the row in one coordinate
+// space and passed while the real thing was broken at 0.9.
 for (const [label, css] of [
   ["normal", ""],
-  ["host zooms the panel", "#modal{zoom:1.5}"],
-  ["host transforms the panel", "#modal{transform:scale(1.6);transform-origin:top left}"],
+  ["UI Scale 0.8", "body{zoom:0.8}"],
+  ["UI Scale 0.9", "body{zoom:0.9}"],
+  ["UI Scale 1.5", "body{zoom:1.5}"],
+  ["scaled by transform", "body{transform:scale(0.9);transform-origin:top left}"],
   ["larger host text", "#modal{font-size:20px}"],
 ]) {
   const { out, errors } = await inPanel(
@@ -296,6 +303,7 @@ for (const [label, css] of [
           !(a.bottom <= b.top || a.top >= b.bottom || a.right <= b.left || a.left >= b.right);
         const infos = [...modal.querySelectorAll("button[data-ar-hint]")];
         const covering = [];
+        let offscreen = 0;
         for (const info of infos) {
           info.scrollIntoView({ block: "center" });
           await frame();
@@ -307,9 +315,12 @@ for (const [label, css] of [
             continue;
           }
           const row = info.closest("[data-ar-row]");
-          if (overlaps(pop.getBoundingClientRect(), row.getBoundingClientRect())) {
+          const pr = pop.getBoundingClientRect();
+          if (overlaps(pr, row.getBoundingClientRect())) {
             covering.push((row.textContent || "").trim().slice(0, 28));
           }
+          if (pr.left < -1 || pr.right > innerWidth + 1 || pr.top < -1 || pr.bottom > innerHeight + 1)
+            offscreen++;
           pop.click();
           await frame();
         }
@@ -324,11 +335,13 @@ for (const [label, css] of [
         return {
           checked: infos.length,
           covering,
+          offscreen,
           tapDismiss: wasOpen && !document.querySelector('[role="tooltip"]'),
         };
       }),
   );
   check(`${label}: none of ${out.checked} hints cover their row`, out.covering.length === 0, out.covering.slice(0, 4));
+  check(`${label}: none drift off screen`, out.offscreen === 0, out.offscreen);
   check(`${label}: tapping the description closes it`, out.tapDismiss);
   check(`${label}: no console errors`, errors.length === 0, errors);
 }

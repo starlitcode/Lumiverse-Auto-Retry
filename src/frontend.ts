@@ -3091,8 +3091,7 @@ export function setup(ctx: Ctx, opts?: any) {
 
     const vw = vpW();
     const vh = vpH();
-    const width = Math.min(300, vw - 24);
-    el.style.width = width + "px";
+    el.style.width = Math.min(300, vw - 24) + "px";
     // Measured from the whole row, not from the "?" inside it. The button is
     // 18px tall and sits partway down a row that can be two lines high, so
     // hanging the description off the button covered the very setting it was
@@ -3101,12 +3100,16 @@ export function setup(ctx: Ctx, opts?: any) {
     // painted rather than a size assumed in advance.
     const row = (anchor.closest && anchor.closest("[data-ar-row]")) || anchor;
     const r = row.getBoundingClientRect();
-    const btn = anchor.getBoundingClientRect();
-    const h = el.offsetHeight || 0;
+    // Measured as it ends up on screen. Under a host that scales its interface
+    // an element's offsetHeight is not the height it actually occupies, and
+    // these have to be in the same units as the row's rect to be compared.
+    const box = el.getBoundingClientRect();
+    const h = box.height || el.offsetHeight || 0;
+    const w = box.width || el.offsetWidth || 0;
+    const GAP = 6;
     // Lined up with the row's left edge rather than centred on the "?", which
     // reads as belonging to the row, and nudged back inside a narrow screen.
-    let left = Math.max(12, Math.min(r.left, vw - width - 12));
-    const GAP = 6;
+    const left = Math.max(12, Math.min(r.left, vw - w - 12));
     // Below the row it belongs to. If there is no room, above it: either way it
     // clears the row itself, so the setting being asked about stays readable.
     let top = r.bottom + GAP;
@@ -3116,10 +3119,26 @@ export function setup(ctx: Ctx, opts?: any) {
       // either direction it stays below and is nudged up the screen, which at
       // worst covers rows further down, never this one.
       top = above >= 12 ? above : Math.max(12, Math.min(top, vh - h - 12));
-      if (top < r.bottom + GAP && top + h > btn.top) top = Math.max(12, r.bottom + GAP);
     }
+
+    // Where it is told to go is not always where it lands. Lumiverse's UI Scale
+    // is applied as a zoom, and this is parented to the page so the zoom applies
+    // to it too: at 0.9 a popover set to 800 arrives at 720, most of a row too
+    // high and back on top of the setting it was describing. Rather than guess
+    // at how a host applies its scale, put it somewhere, ask the browser where
+    // it actually went, and correct by the difference. That holds for a zoom, a
+    // transform, or anything else that moves it, because it is measured rather
+    // than assumed.
     el.style.left = Math.round(left) + "px";
     el.style.top = Math.round(top) + "px";
+    const got = el.getBoundingClientRect();
+    const scale = el.offsetWidth > 0 ? got.width / el.offsetWidth : 1;
+    const dx = left - got.left;
+    const dy = top - got.top;
+    if (scale > 0.01 && (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5)) {
+      el.style.left = Math.round(left + dx / scale) + "px";
+      el.style.top = Math.round(top + dy / scale) + "px";
+    }
 
     // Tapping the description dismisses it. On a phone that is the first thing
     // a thumb reaches for, and it did nothing.
