@@ -272,6 +272,67 @@ console.log("\nhints");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- a hint must never cover the setting it explains ----
+// It used to hang off the "?" button, which is 18px tall and sits partway down
+// a row that can be two lines high, so the description landed on top of the
+// very setting being asked about. Measuring the row instead also makes this
+// hold at any scale the host applies, since it reads what was actually painted.
+console.log("\nhints do not cover their own row");
+for (const [label, css] of [
+  ["normal", ""],
+  ["host zooms the panel", "#modal{zoom:1.5}"],
+  ["host transforms the panel", "#modal{transform:scale(1.6);transform-origin:top left}"],
+  ["larger host text", "#modal{font-size:20px}"],
+]) {
+  const { out, errors } = await inPanel(
+    browser,
+    { css, viewport: { width: 480, height: 1030 }, touch: true },
+    (page) =>
+      page.evaluate(async () => {
+        const frame = () =>
+          new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        const modal = document.getElementById("modal");
+        const overlaps = (a, b) =>
+          !(a.bottom <= b.top || a.top >= b.bottom || a.right <= b.left || a.left >= b.right);
+        const infos = [...modal.querySelectorAll("button[data-ar-hint]")];
+        const covering = [];
+        for (const info of infos) {
+          info.scrollIntoView({ block: "center" });
+          await frame();
+          info.click();
+          await frame();
+          const pop = document.querySelector('[role="tooltip"]');
+          if (!pop) {
+            covering.push("no popover opened");
+            continue;
+          }
+          const row = info.closest("[data-ar-row]");
+          if (overlaps(pop.getBoundingClientRect(), row.getBoundingClientRect())) {
+            covering.push((row.textContent || "").trim().slice(0, 28));
+          }
+          pop.click();
+          await frame();
+        }
+        // Tapping the description itself dismisses it, which is the first thing
+        // a thumb reaches for on a phone.
+        infos[0].click();
+        await frame();
+        const wasOpen = !!document.querySelector('[role="tooltip"]');
+        const p2 = document.querySelector('[role="tooltip"]');
+        if (p2) p2.click();
+        await frame();
+        return {
+          checked: infos.length,
+          covering,
+          tapDismiss: wasOpen && !document.querySelector('[role="tooltip"]'),
+        };
+      }),
+  );
+  check(`${label}: none of ${out.checked} hints cover their row`, out.covering.length === 0, out.covering.slice(0, 4));
+  check(`${label}: tapping the description closes it`, out.tapDismiss);
+  check(`${label}: no console errors`, errors.length === 0, errors);
+}
+
 // ---- keyboard reach, and the search ----
 console.log("\nkeyboard and search");
 {
