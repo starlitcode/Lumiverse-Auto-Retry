@@ -4,6 +4,8 @@ The settings modal is the easy path, and the **Search settings** box at the top 
 
 Each option's **?** shows its description in a small popover just below that option. It floats over the panel, so opening one leaves the rows where they are and never hides the setting you are reading about. It works out where to sit from the row, not from the **?**, so it lands right at any text or UI scale. Only one shows at a time. Tap the description, tap the **?** again, tap elsewhere, scroll, or press Esc to close it.
 
+The find-and-replace section is split under two headings, **Saved in a preset** and **Yours, whatever preset you load**, so it is clear which of those options loading a preset will change.
+
 Every section header is a proper button, so the Advanced groups open with Enter or Space if you are working from the keyboard rather than a pointer.
 
 The same options live in the CONFIG block at the top of `src/frontend.ts` and `dist/frontend.js`. `dist/frontend.js` is the file the host actually loads, so editing CONFIG there takes effect with no rebuild; editing `src/frontend.ts` needs a `bun run build`.

@@ -396,6 +396,70 @@ console.log("\nkeyboard and search");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- find and replace says what a preset carries ----
+// Half these options change when you load a preset and half never do, and there
+// was no way to tell which from looking. The lists below are the contract: if
+// the preset definition changes, this fails and the headings get updated with
+// it, rather than quietly starting to lie.
+console.log("\npreset split");
+{
+  const { out, errors } = await inPanel(browser, {}, (page) =>
+    page.evaluate(async () => {
+      const frame = () =>
+        new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const modal = document.getElementById("modal");
+      const head = [...modal.querySelectorAll('[role="button"][aria-expanded]')].find((h) =>
+        /find and replace/i.test(h.textContent || ""));
+      head.click();
+      await frame();
+      // A run's wrapper is the div whose first child is the heading itself.
+      const run = (t) =>
+        [...modal.querySelectorAll("div")].find(
+          (d) => d.firstElementChild && d.firstElementChild.textContent === t);
+      const inPreset = run("Saved in a preset");
+      const yours = run("Yours, whatever preset you load");
+      const labels = (e) =>
+        e ? [...e.querySelectorAll("[data-ar-row]")].map((r) => r.querySelector("span").textContent) : null;
+      const shown = (e) => !!e && e.offsetParent !== null;
+      const search = modal.querySelector("input[type=search]");
+      const filter = async (q) => {
+        search.value = q;
+        search.dispatchEvent(new Event("input"));
+        await frame();
+        return { inPreset: shown(inPreset), yours: shown(yours) };
+      };
+      const onlyPreset = await filter("match case");
+      const onlyYours = await filter("confirm");
+      const cleared = await filter("");
+      return {
+        presetLabels: labels(inPreset),
+        yoursLabels: labels(yours),
+        onlyPreset,
+        onlyYours,
+        cleared,
+      };
+    }),
+  );
+  const expectPreset = [
+    "Word swaps (old => new)",
+    "Pick randomly when a word has more than one swap",
+    "Match case exactly",
+  ];
+  const expectYours = [
+    'Show a "swap words now" button',
+    "Show a swap-whole-chat button",
+    "Allow swapping a reply again",
+    "Ask before editing a reply",
+  ];
+  const same = (a, b) => !!a && a.length === b.length && a.every((x, i) => x === b[i]);
+  check("the preset run holds exactly what a preset saves", same(out.presetLabels, expectPreset), out.presetLabels);
+  check("the other run holds everything a preset leaves alone", same(out.yoursLabels, expectYours), out.yoursLabels);
+  check("a search hides the run with no matches", out.onlyPreset.inPreset && !out.onlyPreset.yours, out.onlyPreset);
+  check("and the other way round", !out.onlyYours.inPreset && out.onlyYours.yours, out.onlyYours);
+  check("clearing brings both back", out.cleared.inPreset && out.cleared.yours, out.cleared);
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- the thing the extension is for ----
 // Retrying means clicking a real button in the host's DOM, so it cannot be
 // checked without one. This drives the generation events the way Lumiverse

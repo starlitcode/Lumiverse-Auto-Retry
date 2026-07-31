@@ -3817,6 +3817,9 @@ export function setup(ctx: Ctx, opts?: any) {
     }
     const panelSections: SectionHandle[] = [];
     const searchRows: Array<{ row: HTMLElement; text: string; section: SectionHandle }> = [];
+    // Labelled runs of rows inside a group, hidden by a search once none of
+    // their rows match so a heading is never left standing over nothing.
+    const subRuns: HTMLElement[] = [];
     const searchText = (...parts: any[]) =>
       parts.map((p) => String(p == null ? "" : p)).join(" ").toLowerCase();
 
@@ -3878,6 +3881,58 @@ export function setup(ctx: Ctx, opts?: any) {
         return row;
       };
 
+      // A labelled run of rows inside a group, so a long list can say what its
+      // parts have in common. Registered so a search can hide the whole run,
+      // heading included, once none of its rows match.
+      const subGroup = (into: HTMLElement, title: string, note: string) => {
+        const wrap = document.createElement("div");
+        wrap.style.cssText = "display:flex;flex-direction:column;gap:10px";
+        const h2 = document.createElement("div");
+        h2.textContent = title;
+        h2.style.cssText =
+          "font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+        wrap.appendChild(h2);
+        const n = document.createElement("div");
+        n.textContent = note;
+        n.style.cssText =
+          "font-size:12px;line-height:1.45;margin-top:-4px;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+        wrap.appendChild(n);
+        into.appendChild(wrap);
+        subRuns.push(wrap);
+        return wrap;
+      };
+
+      // Find and replace is split by what a preset carries. Half these options
+      // change when you load a preset and half never do, and there was no way
+      // to tell which from looking. The split is worked out from the preset
+      // definition rather than written out a second time, so the headings
+      // cannot end up claiming something that is not true.
+      const emitFields = (into: HTMLElement) => {
+        if (!/find and replace/i.test(group.title)) {
+          for (const f of group.fields) into.appendChild(addRow(buildRow(f), f));
+          return;
+        }
+        const held = keysForKind("swap");
+        const isHeld = (f: Field) => held.indexOf(f.key as string) >= 0;
+        // The main switch stays at the top on its own; it reads as the heading
+        // for the whole section rather than as one of the options below it.
+        for (const f of group.fields)
+          if (f.key === "replaceEnabled") into.appendChild(addRow(buildRow(f), f));
+        const rest = group.fields.filter((f) => f.key !== "replaceEnabled");
+        const a = subGroup(
+          into,
+          "Saved in a preset",
+          "Loading a preset replaces these, and saving one stores them.",
+        );
+        for (const f of rest) if (isHeld(f)) a.appendChild(addRow(buildRow(f), f));
+        const b = subGroup(
+          into,
+          "Yours, whatever preset you load",
+          "No preset touches these. Someone else's preset cannot switch swapping on for you, or take away the confirmation step.",
+        );
+        for (const f of rest) if (!isHeld(f)) b.appendChild(addRow(buildRow(f), f));
+      };
+
       // Groups titled "Advanced..." collapse by default so the basic options
       // aren't buried under them. Tap the header to reveal.
       const advanced = /^advanced\b/i.test(group.title);
@@ -3910,7 +3965,7 @@ export function setup(ctx: Ctx, opts?: any) {
             "font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
           body.appendChild(d);
         }
-        for (const f of group.fields) body.appendChild(addRow(buildRow(f), f));
+        emitFields(body);
         const resetSel = buildSelectorResetRow(group);
         if (resetSel) body.appendChild(resetSel);
         // The refusal tuning options are all guesswork without a way to try
@@ -3951,7 +4006,7 @@ export function setup(ctx: Ctx, opts?: any) {
             "font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65));margin-top:-4px";
           sec.appendChild(d);
         }
-        for (const f of group.fields) sec.appendChild(addRow(buildRow(f), f));
+        emitFields(sec);
         const resetSelOpen = buildSelectorResetRow(group);
         if (resetSelOpen) sec.appendChild(resetSelOpen);
       }
@@ -4239,6 +4294,7 @@ export function setup(ctx: Ctx, opts?: any) {
       // fall back to inline and lose its layout.
       if (!q) {
         for (const r of searchRows) r.row.style.display = "flex";
+        for (const w of subRuns) w.style.display = "flex";
         for (const s of panelSections) {
           s.sec.style.display = "flex";
           if (s.setOpen) s.setOpen(openGroups.has(s.title));
@@ -4263,6 +4319,15 @@ export function setup(ctx: Ctx, opts?: any) {
         }
         s.sec.style.display = any ? "flex" : "none";
         if (any && s.setOpen) s.setOpen(true);
+      }
+      // A heading with nothing left under it reads as a mistake, so a run goes
+      // once its last row does.
+      for (const w of subRuns) {
+        const rows = w.querySelectorAll("[data-ar-row]");
+        let any = false;
+        for (let i = 0; i < rows.length; i++)
+          if ((rows[i] as HTMLElement).style.display !== "none") any = true;
+        w.style.display = any ? "flex" : "none";
       }
       searchNote.textContent = hits
         ? hits + (hits === 1 ? " setting matches" : " settings match")
