@@ -16,6 +16,9 @@
 const CARET_OPEN = "\u25BE"; // down triangle
 const CARET_SHUT = "\u25B8"; // right triangle
 const STORE_KEY = "lv-auto-retry:settings:v1";
+// The settings search field. It needs an id because the browser's own clear
+// button inside it can only be reached from a stylesheet, not inline.
+const SEARCH_ID = "__lvRetrySearch";
 // How long (ms) to suppress automatic retries after the user stops or cancels.
 // Long enough to swallow the stopped generation's own trailing events.
 const STAND_DOWN_MS = 2500;
@@ -29,7 +32,7 @@ const START_GRACE_MS = 6000;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "3.3.0";
+const VERSION = "3.3.1";
 // ---- defaults (the UI overrides these; editing here changes the fallback) ----
 const CONFIG = {
     enabled: true,
@@ -2502,6 +2505,37 @@ export function setup(ctx, opts) {
         }
         return null;
     }
+    // The browser draws its own clear button inside a search field, and picks its
+    // colour from the page's colour scheme rather than from any CSS. On a dark
+    // page that is a white cross, which is the one thing in this panel that does
+    // not follow the theme, because it is the browser's element and not ours.
+    // Replacing the glyph with a masked shape lets it take a theme colour like
+    // everything else. A pseudo-element cannot be styled inline, so this needs a
+    // real stylesheet.
+    //
+    // Chrome and Safari only. Firefox puts no clear button in a search field at
+    // all, so there is nothing there to restyle and nothing to break.
+    const SEARCH_X = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M19 6.4 17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z'/%3E%3C/svg%3E\")";
+    let panelStyleEl = null;
+    function ensurePanelStyle() {
+        if (panelStyleEl || typeof document === "undefined")
+            return;
+        try {
+            const el = document.createElement("style");
+            el.id = "__lvRetryPanelStyle";
+            el.textContent =
+                "#" + SEARCH_ID + "::-webkit-search-cancel-button{" +
+                    "-webkit-appearance:none;appearance:none;width:14px;height:14px;cursor:pointer;" +
+                    "background-color:var(--lumiverse-text-muted,rgba(255,255,255,.65));" +
+                    "-webkit-mask:" + SEARCH_X + " center/contain no-repeat;" +
+                    "mask:" + SEARCH_X + " center/contain no-repeat}" +
+                    "#" + SEARCH_ID + "::-webkit-search-cancel-button:hover{" +
+                    "background-color:var(--lumiverse-text,rgba(255,255,255,.9))}";
+            (document.head || document.documentElement).appendChild(el);
+            panelStyleEl = el;
+        }
+        catch (_) { }
+    }
     // Dialogs currently hidden. Hiding is done with a class and a rule marked
     // important, not by writing inline styles: the dialog fades itself in by
     // setting inline opacity every frame, so an inline value of ours would just be
@@ -3508,6 +3542,7 @@ export function setup(ctx, opts) {
     // when the settings modal closes instead of being left floating.
     let closeExpandEditor = null;
     function buildSettingsBody(root, onSaved) {
+        ensurePanelStyle();
         // The buttons a popover can be anchored to are about to be thrown away.
         hideHint();
         root.innerHTML = "";
@@ -4272,6 +4307,7 @@ export function setup(ctx, opts) {
             "display:flex;flex-direction:column;gap:6px;flex:none;margin-bottom:12px";
         const search = document.createElement("input");
         search.type = "search";
+        search.id = SEARCH_ID;
         search.placeholder = "Search settings";
         search.setAttribute("aria-label", "Search settings");
         styleField(search);
@@ -5103,6 +5139,13 @@ export function setup(ctx, opts) {
             }
             catch (_) { }
             hideStyleEl = null;
+        }
+        if (panelStyleEl) {
+            try {
+                panelStyleEl.remove();
+            }
+            catch (_) { }
+            panelStyleEl = null;
         }
         offs.forEach((o) => {
             try {
