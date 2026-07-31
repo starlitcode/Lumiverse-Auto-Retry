@@ -325,6 +325,8 @@ _2026-06-25_
 
 ## 1.1.1
 
+_2026-06-17_
+
 - **Copy debug info includes a recent-activity log**, so a bug report shows what actually happened (generations starting, retries firing and why, a clean finish) rather than just a snapshot of your settings.
 
 ## 1.1.0
