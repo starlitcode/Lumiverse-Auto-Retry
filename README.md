@@ -80,6 +80,8 @@ Find and replace works separately, since editing a saved reply is a backend job.
 
 `src/` is the TypeScript source and `dist/` is what Lumiverse actually loads. `bun run build` regenerates `dist/` from `src/`, and `bun run check` runs the type check and the tests together. Run both before committing, so `dist/` never drifts from `src/`.
 
+`test/` is for working on the extension and nothing else. Lumiverse only ever loads `dist/`, so the tests are not part of the install, add nothing to its size, and never run for anyone using the extension. They run when you type `bun run check`, and that is the only time.
+
 `bun test` covers the decisions that are expensive to get wrong, and needs nothing installed:
 
 - **Refusal and cut-off detection** - including the in-character lines that must *not* be treated as refusals, since a false positive throws away good writing.
