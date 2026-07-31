@@ -19,12 +19,6 @@ _2026-07-31_
 
 Nothing else changed from 3.3.0. The major version is for the forced reinstall, not for the size of the change.
 
-## 3.3.1
-
-_2026-07-31_
-
-Superseded by 4.0.0 on the same day. Contained only the search box clear button fix listed above.
-
 ## 3.3.0
 
 _2026-07-31_
