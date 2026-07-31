@@ -32,13 +32,13 @@ Pressing your **Stop** button, or tapping **Cancel** on the retry pop-up, stops 
 
 ## Settings
 
-Open the chat input bar, tap the **Extras** popover, and choose **Auto Retry settings**. Options are grouped by what they do. Simple on/off switches are up top; the groups marked **Advanced** are collapsed by default, so tap one of those headers to reveal its options. Each setting has a **?** next to its name that shows a short description: hover it on a computer, tap it on a phone. The description floats over the panel rather than opening inside the list, so reading one never pushes the options below it out of place, and only one is ever open at a time. Tap the **?** again, tap anywhere else, scroll, or press Esc to dismiss it.
+Open the chat input bar, tap the **Extras** popover, and choose **Auto Retry settings**. Options are grouped by what they do. Simple on/off switches are up top; the groups marked **Advanced** are collapsed by default, so tap one of those headers to reveal its options. Each setting has a **?** next to its name that shows a short description: hover it on a computer, tap it on a phone. The description floats just below that setting instead of opening inside the list, so nothing shifts around and the setting you asked about stays visible. It works out where to sit from the row, so it lands right at any text or UI size. Only one shows at a time. To dismiss it, tap the description, tap the **?** again, tap anywhere else, scroll, or press Esc.
 
 The **Search settings** box at the top finds any option by its name or its description, and opens whichever section it lives in, so you never have to remember which group something is under. Clearing the box puts the panel back exactly as it was.
 
 Only **Save** keeps your changes. Closing with the X or tapping outside discards anything you did not save, so you can experiment freely. Saved settings sync to your Lumiverse account, so they follow you to other browsers and devices, and they apply to the next reply. Long text boxes, like your word-swap rules, have an **Expand** button that opens a full-size editor.
 
-The panel is built entirely from your Lumiverse theme's own colours, corners, shadows and fonts, so it follows whatever theme you run. As it draws, it also checks that every label still contrasts with what is behind it. On a theme whose accent sits close to its text colour, a filled button would otherwise come out as a blank rectangle with its label invisible inside it; where that would happen the label is repainted and everything else is left exactly as your theme set it.
+The panel uses your Lumiverse theme's own colours, corners, shadows and fonts, so it looks like the rest of the app. It also checks as it draws that every label still stands out from what is behind it. Some themes set an accent close to their text colour, which turns a filled button into a blank rectangle with the label invisible inside it. Only those labels get repainted. Everything else is left exactly as your theme set it.
 
 ## Turning it off quickly
 
@@ -77,7 +77,15 @@ Find and replace works separately, since editing a saved reply is a backend job.
 
 ## Working on the extension
 
-`src/` is the TypeScript source and `dist/` is what Lumiverse actually loads. `bun run build` regenerates `dist/` from `src/`, `bun test` runs the test suite, and `bun run check` does both the type check and the tests. The tests cover the decisions that are expensive to get wrong: whether a reply counts as a refusal or as cut off, and whether a colour pairing is readable on the user's theme.
+`src/` is the TypeScript source and `dist/` is what Lumiverse actually loads. `bun run build` regenerates `dist/` from `src/`, and `bun run check` runs the type check and the tests together. Run both before committing, so `dist/` never drifts from `src/`.
+
+`bun test` covers the decisions that are expensive to get wrong, and needs nothing installed:
+
+- **Refusal and cut-off detection** - including the in-character lines that must *not* be treated as refusals, since a false positive throws away good writing.
+- **The word-swap engine** - single-pass application, longest match wins, whole-word matching, capitalisation, and the greeting exemption. Driven through `dist/backend.js` itself, so a bad build fails these too.
+- **The contrast maths** that keeps panel text readable on any theme.
+
+`bun run test:ui` adds browser checks for the settings panel: contrast across themes, hints not shifting the list, keyboard reach, and teardown. It needs Playwright, which is deliberately not a dependency here (`bun add -d playwright && bunx playwright install chromium`). Without it the script says so and exits cleanly.
 
 ## Credits
 

@@ -3073,7 +3073,14 @@ export function setup(ctx: Ctx, opts?: any) {
     el.style.cssText =
       "position:fixed;z-index:2147483646;box-sizing:border-box;padding:8px 10px;" +
       "border-radius:var(--lumiverse-radius,8px);" +
-      "background:var(--lumiverse-bg-elevated,rgba(35,30,48,.98));" +
+      // Opaque, deliberately. This sits directly on top of the options list, and
+      // --lumiverse-bg-elevated is only 90% opaque, which left the row
+      // underneath legible through the description covering it. The theme's own
+      // solid surface is painted first and the elevated colour laid over it, so
+      // the tint still follows the theme but nothing shows through.
+      "background-color:var(--lumiverse-card-bg-solid,rgb(24,20,34));" +
+      "background-image:linear-gradient(var(--lumiverse-bg-elevated,rgba(35,30,48,.98))," +
+      "var(--lumiverse-bg-elevated,rgba(35,30,48,.98)));" +
       "border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));" +
       "box-shadow:var(--lumiverse-shadow-md,0 8px 24px rgba(0,0,0,.4));" +
       "color:var(--lumiverse-text,#eee);font:12px/1.45 var(--lumiverse-font-family,system-ui);" +
@@ -3086,17 +3093,37 @@ export function setup(ctx: Ctx, opts?: any) {
     const vh = vpH();
     const width = Math.min(300, vw - 24);
     el.style.width = width + "px";
-    const r = anchor.getBoundingClientRect();
+    // Measured from the whole row, not from the "?" inside it. The button is
+    // 18px tall and sits partway down a row that can be two lines high, so
+    // hanging the description off the button covered the very setting it was
+    // describing. Taking the row's own rendered box also means any scaling the
+    // host applies is already accounted for, since this is what was actually
+    // painted rather than a size assumed in advance.
+    const row = (anchor.closest && anchor.closest("[data-ar-row]")) || anchor;
+    const r = row.getBoundingClientRect();
+    const btn = anchor.getBoundingClientRect();
     const h = el.offsetHeight || 0;
-    // Centred under the "?" where there is room, nudged back inside the screen
-    // where there is not, and flipped above it when it would run off the bottom.
-    let left = r.left + r.width / 2 - width / 2;
-    left = Math.max(12, Math.min(left, vw - width - 12));
-    let top = r.bottom + 8;
-    if (top + h > vh - 12) top = Math.max(12, r.top - h - 8);
+    // Lined up with the row's left edge rather than centred on the "?", which
+    // reads as belonging to the row, and nudged back inside a narrow screen.
+    let left = Math.max(12, Math.min(r.left, vw - width - 12));
+    const GAP = 6;
+    // Below the row it belongs to. If there is no room, above it: either way it
+    // clears the row itself, so the setting being asked about stays readable.
+    let top = r.bottom + GAP;
+    if (top + h > vh - 12) {
+      const above = r.top - h - GAP;
+      // Only flip when flipping actually helps. On a row too tall to clear in
+      // either direction it stays below and is nudged up the screen, which at
+      // worst covers rows further down, never this one.
+      top = above >= 12 ? above : Math.max(12, Math.min(top, vh - h - 12));
+      if (top < r.bottom + GAP && top + h > btn.top) top = Math.max(12, r.bottom + GAP);
+    }
     el.style.left = Math.round(left) + "px";
     el.style.top = Math.round(top) + "px";
 
+    // Tapping the description dismisses it. On a phone that is the first thing
+    // a thumb reaches for, and it did nothing.
+    el.addEventListener("click", () => hideHint());
     hintPop = el;
     hintAnchor = anchor;
     hintReset = onClose;
@@ -4341,6 +4368,8 @@ export function setup(ctx: Ctx, opts?: any) {
     // bool/num wrap in <label> so the whole row toggles or focuses its control.
     // text rows use <div> because they contain a Test button, which shouldn't sit inside a label.
     const row = document.createElement(f.type === "text" ? "div" : "label");
+    // Marks the row as the thing a hint popover measures itself against.
+    row.setAttribute("data-ar-row", "1");
     row.style.cssText =
       "display:flex;flex-direction:column;gap:5px;cursor:" +
       (f.type === "text" ? "default" : "pointer");
