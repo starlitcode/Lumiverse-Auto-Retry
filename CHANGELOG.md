@@ -4,7 +4,7 @@ Every released version of Auto Retry, newest first.
 
 **Two releases need a reinstall rather than an update: [4.0.0](#400) and [3.0.0](#300).** Both are marked below. Your settings, presets and word swap rules are stored separately and are not touched by reinstalling.
 
-Release dates are recorded from 3.2.1 onward. The repository history was rewritten at 3.0.0, so nothing earlier has a date left to read.
+Dates are only on 3.2.1 and later. The repository's history begins there, with everything before it uploaded in a single commit, so the earlier versions have no date left to read. The order below is still right, it is only the dates that are missing.
 
 ---
 
@@ -145,9 +145,7 @@ _2026-07-28_
 
 ## 2.5.0
 
-Suggested by a Discord user.
-
-- **Keep your rerolls on retry.** New toggle, "Retry by adding a new reroll", under a "How it redoes a reply" section. Off (the default), a retry redoes the reply in place with your regenerate button, which on some builds clears the other rerolls on that message. On, a retry clicks your next / swipe button instead, adding a fresh reroll and leaving existing ones in place. It falls back to regenerate if the swipe button is not found, so set that selector in the buttons section if retries stop after turning it on.
+- **Keep your rerolls on retry.** Suggested by a Discord user. New toggle, "Retry by adding a new reroll", under a "How it redoes a reply" section. Off (the default), a retry redoes the reply in place with your regenerate button, which on some builds clears the other rerolls on that message. On, a retry clicks your next / swipe button instead, adding a fresh reroll and leaving existing ones in place. It falls back to regenerate if the swipe button is not found, so set that selector in the buttons section if retries stop after turning it on.
 - **Heads up on repeated failures.** In the new mode each retry adds a reroll rather than replacing one, so a reply that fails a few times before it lands can leave a couple of empty or partial rerolls stacked next to the good one. Regenerate mode still replaces in place with no pile-up, so both behaviours are there to pick from.
 - **Easier to debug.** Copy debug info lists which retry mode is active, and the "couldn't find your button" messages no longer assume regenerate, so they read right in either mode.
 
