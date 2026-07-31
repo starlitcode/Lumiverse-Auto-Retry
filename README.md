@@ -95,6 +95,6 @@ Find and replace works separately, since editing a saved reply is a backend job.
 - **starlitcode** - built and maintains the extension
 - **[Claude](https://claude.ai)** (Anthropic) - wrote the code, directed and tested by starlitcode
 - **[Hikarushmz](https://github.com/Hikarushmz/fetch-retry)** - their SillyTavern fetch-retry gave me the idea. Auto Retry is written from scratch and shares no code with it
-- Everyone who has reported a bug or asked a question that turned into a fix
+- Everyone who has reported a bug or suggested something that turned into a fix
 
 Licensed under the GNU General Public License v3.0. See [LICENSE](LICENSE).

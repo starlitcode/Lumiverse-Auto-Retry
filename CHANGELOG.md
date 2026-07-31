@@ -4,8 +4,6 @@ Every released version of Auto Retry, newest first.
 
 **Two releases need a reinstall rather than an update: [4.0.0](#400) and [3.0.0](#300).** Both are marked below. Your settings, presets and word swap rules are stored separately and are not touched by reinstalling.
 
-Dates are the day each version was announced. Anything before 3.2.1 predates this repository's history, so those come from the announcement posts rather than from the code.
-
 ---
 
 ## 4.0.0
