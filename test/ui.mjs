@@ -664,6 +664,168 @@ console.log("\nretrying");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- the box between the click and the reply ----
+// With Regeneration Feedback on, pressing regenerate opens a box asking for
+// guidance, and the reply only starts once that box is dealt with. An
+// unattended retry has to get past it on its own. This stands one in and
+// counts what gets pressed, since pressing the wrong thing there would throw
+// the reply away rather than re-roll it.
+console.log("\nregeneration feedback");
+{
+  const page = await browser.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.setContent(
+    '<div id=modal></div><button data-testid="regenerate">Regenerate</button>',
+  );
+  await page.addStyleTag({ content: THEME });
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  const out = await page.evaluate(async () => {
+    const handlers = {};
+    const pressed = [];
+    let regenClicks = 0;
+    let raise = null;
+
+    // The box the host would put up, recording every press it receives.
+    const openDialog = (attrs, labels) => {
+      const box = document.createElement("div");
+      for (const k of Object.keys(attrs)) box.setAttribute(k, attrs[k]);
+      for (const label of labels) {
+        const b = document.createElement("button");
+        b.textContent = label;
+        b.addEventListener("click", () => {
+          pressed.push(label);
+          if (/^skip$/i.test(label)) box.remove(); // as the real one closes
+        });
+        box.appendChild(b);
+      }
+      document.body.appendChild(box);
+      return box;
+    };
+
+    let toolbar = document.querySelector("[data-testid=regenerate]");
+    const wireRegen = (btn) => {
+      btn.addEventListener("click", () => {
+        regenClicks++;
+        if (raise) raise();
+      });
+    };
+    wireRegen(toolbar);
+
+    // The host rebuilding its toolbar, which is what a framework does when it
+    // re-renders. The button carries the same label but is a different element,
+    // so it looks new to anything comparing identity.
+    const rerenderToolbar = () => {
+      const fresh = document.createElement("button");
+      fresh.setAttribute("data-testid", "regenerate");
+      fresh.textContent = "Regenerate";
+      wireRegen(fresh);
+      toolbar.replaceWith(fresh);
+      toolbar = fresh;
+    };
+
+    window.__setup(
+      {
+        events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
+        ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+              registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) },
+      },
+      { retryDelayMs: 10, backoffFactor: 1, maxDelayMs: 10, jitter: false, maxRetries: 1,
+        toast: false, stuckTimeoutMs: 0, idleTimeoutMs: 0, pauseWhenFailing: false },
+    );
+
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    let chatN = 0;
+    // An empty reply is what makes it retry. Each case gets its own chat so a
+    // budget spent in one does not carry into the next.
+    const retryOnce = async (settleMs) => {
+      const chatId = "fb" + ++chatN;
+      handlers.GENERATION_STARTED({ chatId, generationId: "g" });
+      handlers.GENERATION_ENDED({ chatId, content: "" });
+      await wait(settleMs);
+    };
+
+    // The real shape: Skip, the box's own Regenerate, and a Cancel that must
+    // never be touched. Cancel sits first in the DOM, so picking by document
+    // order rather than by preference would press exactly the wrong one.
+    raise = () => openDialog(
+      { role: "dialog", "data-component": "RegenFeedbackModal" },
+      ["Cancel", "Regenerate", "Skip"],
+    );
+    await retryOnce(500);
+    const feedback = { pressed: pressed.slice(), regenClicks };
+
+    // A box holding nothing safe to press must be left alone, and must come
+    // back on screen rather than being left invisible.
+    pressed.length = 0;
+    let stuck = null;
+    raise = () => { stuck = openDialog({ role: "dialog" }, ["Cancel", "Delete"]); };
+    await retryOnce(1900);
+    const refused = {
+      pressed: pressed.slice(),
+      visible: !!stuck && getComputedStyle(stuck).opacity === "1",
+      clickable: !!stuck && getComputedStyle(stuck).pointerEvents !== "none",
+    };
+
+    // A box the user already had open before the retry is none of its business.
+    pressed.length = 0;
+    const mine = openDialog({ role: "dialog" }, ["Confirm"]);
+    raise = null;
+    await retryOnce(500);
+    const preexisting = {
+      pressed: pressed.slice(),
+      visible: getComputedStyle(mine).opacity === "1",
+    };
+    mine.remove();
+
+    // Found by the component name alone, with no dialog role and no telltale
+    // class, which is how the real box identifies itself.
+    pressed.length = 0;
+    raise = () => openDialog({ "data-component": "RegenFeedbackModal", class: "wrap" }, ["Skip"]);
+    await retryOnce(500);
+    const byComponent = pressed.slice();
+
+    // No box at all, just the host rebuilding its toolbar after the click. The
+    // fresh Regenerate button carries a label the scan is looking for and was
+    // not on screen beforehand, so only its being outside any dialog keeps it
+    // from being pressed. Pressing it would re-render again and loop.
+    pressed.length = 0;
+    const regenBefore = regenClicks;
+    raise = () => rerenderToolbar();
+    await retryOnce(500);
+    const afterRerender = regenClicks - regenBefore;
+
+    // A reply that needs no retry raises no box, so nothing may be pressed.
+    pressed.length = 0;
+    raise = () => openDialog({ role: "dialog" }, ["Skip"]);
+    handlers.GENERATION_STARTED({ chatId: "good", generationId: "g" });
+    handlers.GENERATION_ENDED({ chatId: "good", content: "She opened the door and stepped inside." });
+    await wait(400);
+    const afterGood = pressed.slice();
+
+    return { feedback, refused, preexisting, byComponent, afterRerender, afterGood };
+  });
+  await page.close();
+  check("the feedback box is skipped, never cancelled",
+    out.feedback.pressed.length === 1 && out.feedback.pressed[0] === "Skip", out.feedback.pressed);
+  check("the toolbar regenerate is pressed once, not looped",
+    out.feedback.regenClicks === 1, out.feedback.regenClicks);
+  check("a box with nothing safe to press is left alone",
+    out.refused.pressed.length === 0, out.refused.pressed);
+  check("and is put back on screen afterwards",
+    out.refused.visible && out.refused.clickable, out.refused);
+  check("a box the user already had open is untouched",
+    out.preexisting.pressed.length === 0, out.preexisting.pressed);
+  check("and is never hidden", out.preexisting.visible, out.preexisting);
+  check("the box is found by its component name alone",
+    out.byComponent.length === 1 && out.byComponent[0] === "Skip", out.byComponent);
+  check("a rebuilt toolbar button is not mistaken for the box",
+    out.afterRerender === 1, out.afterRerender);
+  check("a reply needing no retry presses nothing", out.afterGood.length === 0, out.afterGood);
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- nothing is left behind ----
 console.log("\nteardown");
 {

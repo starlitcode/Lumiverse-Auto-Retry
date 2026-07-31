@@ -54,7 +54,7 @@ _2026-07-29_
 
 _2026-07-28_
 
-- **Works with Regeneration Feedback.** With Lumiverse's Regeneration Feedback turned on, pressing regenerate opens a box asking for guidance, and that box is what actually starts the reply. Auto Retry was clicking regenerate and stopping there, so nothing happened. It now presses Skip and carries on. Manual regenerates still open the box normally, so neither setting needs changing.
+- **Works with Regeneration Feedback.** Reported by a Discord user. With Lumiverse's Regeneration Feedback turned on, pressing regenerate opens a box asking for guidance, and that box is what actually starts the reply. Auto Retry was clicking regenerate and stopping there, so nothing happened. It now presses Skip and carries on. Manual regenerates still open the box normally, so neither setting needs changing.
 - **Extra dialog buttons it may press.** New box in the buttons settings, for the rare case where that dialog's button says something other than Skip. Type the wording exactly as it appears, one per line. Most people will not need it.
 - **README.** New sections on how Regeneration Feedback and Auto Retry work together, and on writing selectors by hand.
 
