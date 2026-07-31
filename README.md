@@ -56,6 +56,7 @@ Two options in Basics, and you can use either or both:
 - [Import and export](docs/import-export.md) - moving your setup between devices
 - [Reporting a bug](docs/troubleshooting.md)
 - [Security](SECURITY.md) - what the extension can and can't reach, and how to check
+- [Changelog](CHANGELOG.md) - what changed in every version
 
 ## Permissions
 
@@ -78,6 +79,8 @@ Find and replace works separately, since editing a saved reply is a backend job.
 ## Working on the extension
 
 `src/` is the TypeScript source and `dist/` is what Lumiverse actually loads. `bun run build` regenerates `dist/` from `src/`, and `bun run check` runs the type check and the tests together. Run both before committing, so `dist/` never drifts from `src/`.
+
+`test/` is for working on the extension and nothing else. Lumiverse only ever loads `dist/`, so the tests are not part of the install, add nothing to its size, and never run for anyone using the extension. They run when you type `bun run check`, and that is the only time.
 
 `bun test` covers the decisions that are expensive to get wrong, and needs nothing installed:
 
