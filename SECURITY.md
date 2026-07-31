@@ -24,7 +24,7 @@ It reads a reply only to run its checks on the one that just arrived, and it doe
 
 Your settings and your word-swap presets are saved twice over: once in your browser's local storage, and once in Lumiverse's own per-user storage so they follow your account between devices. That is the only thing written anywhere.
 
-Separately it keeps the last twenty lines of what it did, plus a few counters for the session (replies that came back fine, retries fired, and what they fired for), in memory only, so the Copy debug info button has something to report. Both die with the tab. Neither is written to disk and neither leaves your device.
+Separately it keeps the last twenty lines of what it did, and a few counters for the session: replies that came back fine, retries fired, and what they fired for. That is all in memory, so the Copy debug info button has something to report. Both die with the tab. Neither is written to disk and neither leaves your device.
 
 ## One thing to be careful with
 

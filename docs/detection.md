@@ -53,7 +53,7 @@ At the bottom of the refusal tuning section there is a box to paste a reply into
 
 It runs the same check a finished reply goes through, against the values in the boxes above rather than the saved ones, so you can try a change before you press Save. Nothing is sent anywhere and no reply is edited; it only reads the text you paste in.
 
-This is the fastest way to work out a phrase list. Paste a refusal your model actually produced and see whether it is caught; paste an in-character line that keeps getting re-rolled and see which rule is catching it, so you know exactly what to put in "Never treat these as a refusal."
+This is the fastest way to work out a phrase list. Paste a refusal your model actually produced and see whether it is caught. Paste an in-character line that keeps getting re-rolled and it names the rule catching it, which tells you what to put in "Never treat these as a refusal."
 
 ## What the built-in list looks for
 

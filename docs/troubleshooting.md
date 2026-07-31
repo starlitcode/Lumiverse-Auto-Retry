@@ -2,7 +2,7 @@
 
 The main tool is **Advanced: debug info** in the settings modal. Tick the parts you want (your settings, button match status, browser and screen, session totals and recent activity), press **Build preview**, then edit the text to remove anything private before you copy. It copies a short plain-text snapshot you can paste into a bug report, no developer tools needed. Nothing leaves your device until you paste it somewhere.
 
-The settings it reports are read straight from the option list, so every setting is always in it; there is no separate list to fall out of date and quietly leave something out of your report.
+The settings it reports come straight from the option list, so every setting is always in it. There is no second list to fall out of date and quietly leave something out.
 
 The last section carries two things. **Session totals** count how many replies came back fine, how many retries fired, how many messages it gave up on, and a breakdown of retries by reason since the page was loaded. Those answer the questions a bug report usually can't ("it retries too much" becomes "ninety retries, all of them for cut off"). Under that is the **activity timeline**, the last twenty things it did, kept whether or not console logging is on.
 

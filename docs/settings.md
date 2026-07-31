@@ -2,7 +2,7 @@
 
 The settings modal is the easy path, and the **Search settings** box at the top of it is the quickest way to reach one option out of the forty-odd below: type part of a name or a description and it shows the matching rows, opening whichever Advanced section they live in. Clear the box to put the panel back as it was.
 
-Each option's **?** shows its description in a small popover just below that option, floating over the panel, so opening one never shifts the rows underneath it and never hides the setting you are reading about. It is positioned from the row rather than from the **?** itself, so it holds at any text or UI scale. Only one is open at a time; tap the description, tap the **?** again, tap elsewhere, scroll, or press Esc to close it.
+Each option's **?** shows its description in a small popover just below that option. It floats over the panel, so opening one leaves the rows where they are and never hides the setting you are reading about. It works out where to sit from the row, not from the **?**, so it lands right at any text or UI scale. Only one shows at a time. Tap the description, tap the **?** again, tap elsewhere, scroll, or press Esc to close it.
 
 Every section header is a proper button, so the Advanced groups open with Enter or Space if you are working from the keyboard rather than a pointer.
 
