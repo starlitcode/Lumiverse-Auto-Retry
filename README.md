@@ -56,6 +56,7 @@ Two options in Basics, and you can use either or both:
 - [Import and export](docs/import-export.md) - moving your setup between devices
 - [Reporting a bug](docs/troubleshooting.md)
 - [Security](SECURITY.md) - what the extension can and can't reach, and how to check
+- [Changelog](CHANGELOG.md) - what changed in every version
 
 ## Permissions
 
