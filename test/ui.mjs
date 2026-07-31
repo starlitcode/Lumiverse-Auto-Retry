@@ -215,6 +215,9 @@ console.log("\nhints");
         const el = document.querySelector('[role="tooltip"]');
         const r = el && el.getBoundingClientRect();
         const onScreen = !!r && r.left >= 0 && r.right <= 480 && r.top >= 0 && r.bottom <= 1030;
+        const bg = el && getComputedStyle(el).backgroundColor;
+        const alpha = bg && bg.match(/[\d.]+/g);
+        const opaque = !!alpha && (alpha[3] === undefined || Number(alpha[3]) === 1);
         infos[1].click();
         await frame();
         const afterSecond = pops();
@@ -249,12 +252,18 @@ console.log("\nhints");
           afterRetap,
           afterOutside,
           afterScroll,
+          opaque,
+          background: bg,
           lastOnScreen: !!lr && lr.bottom <= 1030 && lr.top >= 0,
         };
       }),
   );
   check("a hint moves nothing below it", out.moved === 0, out.moved);
   check("the popover lands on screen", out.onScreen);
+  // It covers the row it is explaining. At anything under full opacity that
+  // row's text reads through the description sitting on top of it, which no
+  // contrast measurement catches because both are "correct" colours.
+  check("the popover is opaque", out.opaque, out.background);
   check("only one is ever open", out.afterSecond === 1, out.afterSecond);
   check("a second tap closes it", out.afterRetap === 0);
   check("a tap elsewhere closes it", out.afterOutside === 0);
@@ -313,6 +322,96 @@ console.log("\nkeyboard and search");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- the thing the extension is for ----
+// Retrying means clicking a real button in the host's DOM, so it cannot be
+// checked without one. This drives the generation events the way Lumiverse
+// would and counts the clicks that land on a stand-in regenerate button.
+console.log("\nretrying");
+{
+  const page = await browser.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.setContent(
+    '<div id=modal></div><button data-testid="regenerate">Regenerate</button>',
+  );
+  await page.addStyleTag({ content: THEME });
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  const out = await page.evaluate(async () => {
+    const handlers = {};
+    let clicks = 0;
+    document.querySelector("[data-testid=regenerate]").addEventListener("click", () => clicks++);
+    window.__setup(
+      {
+        events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
+        ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+              registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) },
+      },
+      // Fast and deterministic: no backoff growth, no jitter, no watchdogs.
+      { retryDelayMs: 10, backoffFactor: 1, maxDelayMs: 10, jitter: false, maxRetries: 2,
+        toast: false, stuckTimeoutMs: 0, idleTimeoutMs: 0, pauseWhenFailing: false },
+    );
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    // One message, start to finish. Each case gets its own chat so a budget
+    // spent in one does not carry into the next.
+    let chatN = 0;
+    const run = async (payload) => {
+      const chatId = "chat" + ++chatN;
+      const before = clicks;
+      handlers.GENERATION_STARTED({ chatId, generationId: "g0" });
+      handlers.GENERATION_ENDED(Object.assign({ chatId }, payload));
+      await wait(60);
+      return clicks - before;
+    };
+
+    const afterGood = await run({ content: "She opened the door and stepped inside." });
+    const afterEmpty = await run({ content: "" });
+    // A reply cut off mid-sentence.
+    const afterTruncated = await run({ content: 'He said, "wait' });
+    // An out-of-character refusal.
+    const afterRefusal = await run({ content: "I'm sorry, but I can't create that content." });
+
+    // The cap. A retry click makes the host begin a new generation, and that
+    // start is what keeps the budget attached to the same message, so the loop
+    // has to emit one or every reply looks like a fresh message with a fresh
+    // allowance.
+    const b4 = clicks;
+    handlers.GENERATION_STARTED({ chatId: "capped", generationId: "x0" });
+    for (let i = 0; i < 3; i++) {
+      handlers.GENERATION_ENDED({ chatId: "capped", content: "" });
+      await wait(40);
+      handlers.GENERATION_STARTED({ chatId: "capped", generationId: "x" + (i + 1) });
+    }
+    const cappedClicks = clicks - b4;
+
+    // A hard failure should be skipped, not retried forever.
+    const b5 = clicks;
+    handlers.GENERATION_STARTED({ chatId: "hard", generationId: "y1" });
+    handlers.GENERATION_ENDED({ chatId: "hard", error: "401 invalid api key" });
+    await wait(60);
+    const afterHardError = clicks - b5;
+
+    // A user stop must call everything off.
+    const b6 = clicks;
+    handlers.GENERATION_STARTED({ chatId: "stopped", generationId: "z1" });
+    handlers.GENERATION_ENDED({ chatId: "stopped", content: "" });
+    handlers.GENERATION_STOPPED({ chatId: "stopped", generationId: "z1" });
+    await wait(80);
+    const afterStop = clicks - b6;
+
+    return { afterGood, afterEmpty, afterTruncated, afterRefusal, cappedClicks, afterHardError, afterStop };
+  });
+  await page.close();
+  check("a good reply is left alone", out.afterGood === 0, out.afterGood);
+  check("an empty reply is retried", out.afterEmpty === 1, out.afterEmpty);
+  check("a cut-off reply is retried", out.afterTruncated === 1, out.afterTruncated);
+  check("a refusal is retried", out.afterRefusal === 1, out.afterRefusal);
+  check("the try limit is respected", out.cappedClicks === 2, out.cappedClicks);
+  check("a hard failure is not retried", out.afterHardError === 0, out.afterHardError);
+  check("a user stop cancels the pending retry", out.afterStop === 0, out.afterStop);
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- nothing is left behind ----
 console.log("\nteardown");
 {
@@ -346,11 +445,23 @@ console.log("\nteardown");
       { showExtrasToggle: true, showFloatingToggle: true, showReplaceButton: true, showSwapAllButton: true },
     );
     const registered = [...live.keys()];
+    // Open a hint first, or "the popover is gone afterwards" passes because one
+    // was never there. Same for the toast, which only exists once shown.
+    window.__acts = { settings: live.get("auto-retry-settings") };
+    live.get("auto-retry-settings").cb();
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    document.querySelector("button[data-ar-hint]").dispatchEvent(new MouseEvent("mouseenter"));
+    live.get("auto-retry-toggle").cb();
+    await new Promise((r) => setTimeout(r, 30));
+    const hintWasOpen = !!document.querySelector('[role="tooltip"]');
+    const toastWasUp = !!document.getElementById("__lvRetryToast");
     teardown();
     return {
       registered,
       duplicate,
       left: [...live.keys()],
+      hintWasOpen,
+      toastWasUp,
       toastGone: !document.getElementById("__lvRetryToast"),
       hintGone: !document.querySelector('[role="tooltip"]'),
     };
@@ -359,6 +470,7 @@ console.log("\nteardown");
   check("all four Extras entries register", out.registered.length === 4, out.registered);
   check("none register twice", !out.duplicate);
   check("teardown removes every one", out.left.length === 0, out.left);
+  check("a hint and a toast were actually up first", out.hintWasOpen && out.toastWasUp, out);
   check("teardown removes the toast and any hint", out.toastGone && out.hintGone);
   check("no console errors", errors.length === 0, errors);
 }

@@ -3115,7 +3115,14 @@ export function setup(ctx, opts) {
         el.style.cssText =
             "position:fixed;z-index:2147483646;box-sizing:border-box;padding:8px 10px;" +
                 "border-radius:var(--lumiverse-radius,8px);" +
-                "background:var(--lumiverse-bg-elevated,rgba(35,30,48,.98));" +
+                // Opaque, deliberately. This sits directly on top of the options list, and
+                // --lumiverse-bg-elevated is only 90% opaque, which left the row
+                // underneath legible through the description covering it. The theme's own
+                // solid surface is painted first and the elevated colour laid over it, so
+                // the tint still follows the theme but nothing shows through.
+                "background-color:var(--lumiverse-card-bg-solid,rgb(24,20,34));" +
+                "background-image:linear-gradient(var(--lumiverse-bg-elevated,rgba(35,30,48,.98))," +
+                "var(--lumiverse-bg-elevated,rgba(35,30,48,.98)));" +
                 "border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));" +
                 "box-shadow:var(--lumiverse-shadow-md,0 8px 24px rgba(0,0,0,.4));" +
                 "color:var(--lumiverse-text,#eee);font:12px/1.45 var(--lumiverse-font-family,system-ui);" +
