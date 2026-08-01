@@ -333,6 +333,12 @@ _2026-06-17_
 - **A Copy debug info button**, so reporting a bug is one tap with no dev tools needed.
 - **README updated** with the new settings, defaults, and a how-to-report-a-bug section.
 
+## 1.0.0
+
+_2026-06-08_
+
+First release.
+
 ---
 
 [Back to the README](README.md)
