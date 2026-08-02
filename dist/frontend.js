@@ -1772,7 +1772,7 @@ export function setup(ctx, opts) {
         const el = document.createElement("div");
         el.setAttribute("role", "menu");
         el.style.cssText =
-            "position:fixed;z-index:2147483646;box-sizing:border-box;padding:4px;" +
+            "position:fixed;z-index:2147483647;box-sizing:border-box;padding:4px;" +
                 "border-radius:var(--lumiverse-radius-md,10px);min-width:180px;" +
                 // Opaque for the same reason the hint is: it lands over the chat, and the
                 // elevated colour alone is see-through enough to read words underneath it.
@@ -1791,16 +1791,30 @@ export function setup(ctx, opts) {
             b.style.cssText =
                 "display:block;width:100%;box-sizing:border-box;text-align:left;cursor:pointer;" +
                     "padding:9px 10px;border:0;border-radius:var(--lumiverse-radius-sm,5px);" +
-                    "background:transparent;color:inherit;font:inherit";
+                    // The browser's own focus ring is drawn from its colour scheme, which
+                    // on this menu is a hard white rectangle. Replaced below with a ring in
+                    // the theme's accent, so keyboard focus is still plain to see.
+                    "outline:none;background:transparent;color:inherit;font:inherit";
             const lit = (on) => {
                 b.style.background = on
                     ? "var(--lumiverse-secondary-hover,rgba(128,128,128,.25))"
                     : "transparent";
             };
+            const ring = (on) => {
+                b.style.boxShadow = on
+                    ? "inset 0 0 0 2px var(--lumiverse-primary-050,rgba(147,112,219,.5))"
+                    : "none";
+            };
             b.addEventListener("mouseenter", () => lit(true));
             b.addEventListener("mouseleave", () => lit(false));
-            b.addEventListener("focus", () => lit(true));
-            b.addEventListener("blur", () => lit(false));
+            b.addEventListener("focus", () => {
+                lit(true);
+                ring(true);
+            });
+            b.addEventListener("blur", () => {
+                lit(false);
+                ring(false);
+            });
             b.addEventListener("click", () => {
                 hideFloatMenu();
                 run();
@@ -3396,7 +3410,7 @@ export function setup(ctx, opts) {
         el.setAttribute("role", "tooltip");
         el.textContent = text;
         el.style.cssText =
-            "position:fixed;z-index:2147483646;box-sizing:border-box;padding:8px 10px;" +
+            "position:fixed;z-index:2147483647;box-sizing:border-box;padding:8px 10px;" +
                 "border-radius:var(--lumiverse-radius,8px);" +
                 // This has to be fully opaque. It sits directly on top of the options
                 // list, and --lumiverse-bg-elevated is only 90% opaque, which left the row
@@ -3558,9 +3572,12 @@ export function setup(ctx, opts) {
         if (!t) {
             t = document.createElement("div");
             t.id = "__lvRetryToast";
+            // Deliberately below the hint popover and the float menu. This appears on
+            // its own; those are opened on purpose, and a notification landing on top
+            // of a menu turns a tap on "Hide this button" into a tap on Cancel.
             t.style.cssText =
                 "position:fixed;bottom:max(20px,env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);" +
-                    "z-index:2147483647;display:flex;align-items:center;gap:10px;" +
+                    "z-index:2147483645;display:flex;align-items:center;gap:10px;" +
                     "font:13px/1.4 var(--lumiverse-font-family,system-ui);padding:9px 12px;border-radius:var(--lumiverse-radius-lg,12px);" +
                     "color:var(--lumiverse-text,#fff);" +
                     "background-color:var(--lumiverse-card-bg-solid,rgb(24,20,34));background-image:linear-gradient(var(--lumiverse-bg-elevated,rgba(35,30,48,.94)),var(--lumiverse-bg-elevated,rgba(35,30,48,.94)));" +

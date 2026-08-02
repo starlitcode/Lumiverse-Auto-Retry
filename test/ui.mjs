@@ -1024,6 +1024,19 @@ console.log("\nfloat button menu");
     const rebuilt = widgets > widgetsBefore;
     up(btn());
 
+    // How a menu item shows focus, and where the menu sits in the stack. Read
+    // while the button still exists, since the next step removes it.
+    down(btn(), 130, 130); await wait(620);
+    const item = document.querySelector('[role="menuitem"]');
+    const focus = {
+      outline: getComputedStyle(item).outlineStyle,
+      ringWhenFocused: (item.focus(), getComputedStyle(item).boxShadow),
+      ringWhenBlurred: (item.blur(), getComputedStyle(item).boxShadow),
+    };
+    const menuZ = Number(getComputedStyle(menu()).zIndex);
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    up(btn());
+
     // "Hide this button" takes it away and leaves no menu behind.
     down(btn(), 130, 130); await wait(620);
     [...document.querySelectorAll('[role="menuitem"]')].find((b) => /hide/i.test(b.textContent)).click();
@@ -1034,7 +1047,7 @@ console.log("\nfloat button menu");
     down(document.body, 1, 1);
     teardown();
     const left = { menu: !!menu(), items: items().length };
-    return { wasOn, afterTap, openedByHold, entries, afterHold, onScreen, afterEsc, afterDrag, rebuilt, gone, left };
+    return { wasOn, afterTap, openedByHold, entries, afterHold, onScreen, afterEsc, afterDrag, rebuilt, gone, left, focus, menuZ };
   });
   await page.close();
   check("a quick tap still toggles", out.afterTap.pressed !== out.wasOn, out.afterTap);
@@ -1049,6 +1062,36 @@ console.log("\nfloat button menu");
   check("hiding removes the button", out.gone.button, out.gone);
   check("and leaves no menu behind", !out.gone.menu);
   check("teardown leaves nothing", !out.left.menu && out.left.items === 0, out.left);
+  check("menu items drop the browser's own focus ring", out.focus.outline === "none", out.focus);
+  check("and show focus in the theme's colour instead",
+    out.focus.ringWhenFocused !== "none" && out.focus.ringWhenBlurred === "none", out.focus);
+  // Read from the built stylesheet rather than hard-coded here, so this tracks
+  // whatever the pop-up actually uses.
+  const toastZ = await (async () => {
+    const page2 = await browser.newPage();
+    await page2.setContent('<div id=modal></div><button data-testid="regenerate">Regenerate</button>');
+    await page2.addStyleTag({ content: THEME });
+    await page2.addScriptTag({ content: SOURCE, type: "module" });
+    await page2.waitForFunction(() => !!window.__setup);
+    const z = await page2.evaluate(async () => {
+      const handlers = {};
+      window.__setup(
+        { events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
+          ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+                registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) } },
+        { toast: true, retryDelayMs: 400, backoffFactor: 1, jitter: false, maxRetries: 2,
+          stuckTimeoutMs: 0, idleTimeoutMs: 0, pauseWhenFailing: false },
+      );
+      handlers.GENERATION_STARTED({ chatId: "c", generationId: "g" });
+      handlers.GENERATION_ENDED({ chatId: "c", content: "" });
+      await new Promise((r) => setTimeout(r, 80));
+      const t = document.getElementById("__lvRetryToast");
+      return t ? Number(getComputedStyle(t).zIndex) : null;
+    });
+    await page2.close();
+    return z;
+  })();
+  check("the menu sits above the retry pop-up", out.menuZ > toastZ, { menu: out.menuZ, toast: toastZ });
   check("no console errors", errors.length === 0, errors);
 }
 
