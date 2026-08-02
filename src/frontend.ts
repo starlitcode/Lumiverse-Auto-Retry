@@ -3859,6 +3859,24 @@ export function setup(ctx: Ctx, opts?: any) {
           for (const fl of g.fields)
             if (fl.type === "num") cfg[fl.key] = clampField(fl, cfg[fl.key]);
       };
+      // A control that cannot do anything yet should look that way, rather than
+      // sitting there fully lit and then telling you off when you press it.
+      // With nothing saved, Load, Update, Delete and Rename all had a live
+      // primary button each and nothing to act on.
+      const setEnabled = (b: HTMLButtonElement, on: boolean) => {
+        b.disabled = !on;
+        b.style.opacity = on ? "1" : "0.45";
+        b.style.cursor = on ? "pointer" : "not-allowed";
+      };
+      const syncPresetButtons = () => {
+        const picked = !!select.value;
+        setEnabled(loadBtn, picked);
+        setEnabled(update, picked);
+        setEnabled(del, picked);
+        setEnabled(rename, picked);
+      };
+      select.addEventListener("change", syncPresetButtons);
+
       const refreshSelect = (selectName?: string) => {
         select.innerHTML = "";
         const ph = document.createElement("option");
@@ -3874,6 +3892,7 @@ export function setup(ctx: Ctx, opts?: any) {
           select.appendChild(o);
         }
         if (selectName) select.value = selectName;
+        syncPresetButtons();
       };
       refreshSelect();
       // Re-read storage and rebuild the dropdown, for when an import adds

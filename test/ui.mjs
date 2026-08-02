@@ -73,7 +73,7 @@ async function inPanel(browser, { css = "", viewport, touch = false } = {}, fn) 
   page.on("console", (m) => {
     if (m.type() === "error") errors.push("console: " + m.text());
   });
-  await page.setContent("<div id=modal></div>");
+  await stage(page, "<div id=modal></div>");
   await page.addStyleTag({ content: THEME + css });
   await page.addScriptTag({ content: SOURCE, type: "module" });
   await page.waitForFunction(() => !!window.__setup);
@@ -160,6 +160,19 @@ function brightestPixel(buf) {
     }
   }
   return best;
+}
+
+// page.setContent() leaves the page on about:blank, where localStorage throws a
+// SecurityError. Everything that saves a setting or a preset therefore did
+// nothing at all under these checks, silently. Serving the same markup from a
+// real origin gives the extension working storage, which is what it has in
+// Lumiverse.
+const ORIGIN = "http://lumiverse.test/";
+async function stage(page, body) {
+  await page.route("**/*", (route) =>
+    route.fulfill({ contentType: "text/html", body: "<!doctype html><meta charset=utf-8>" + body }),
+  );
+  await page.goto(ORIGIN);
 }
 
 let failures = 0;
@@ -526,7 +539,7 @@ console.log("\nsearch clear button");
   const page = await browser.newPage({ viewport: { width: 480, height: 200 } });
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  await page.setContent("<div id=modal></div>");
+  await stage(page, "<div id=modal></div>");
   await page.addStyleTag({ content: THEME });
   await page.addScriptTag({ content: SOURCE, type: "module" });
   await page.waitForFunction(() => !!window.__setup);
@@ -584,9 +597,7 @@ console.log("\nretrying");
   const page = await browser.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  await page.setContent(
-    '<div id=modal></div><button data-testid="regenerate">Regenerate</button>',
-  );
+  await stage(page, '<div id=modal></div><button data-testid="regenerate">Regenerate</button>',);
   await page.addStyleTag({ content: THEME });
   await page.addScriptTag({ content: SOURCE, type: "module" });
   await page.waitForFunction(() => !!window.__setup);
@@ -676,9 +687,7 @@ console.log("\nregeneration feedback");
   const page = await browser.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  await page.setContent(
-    '<div id=modal></div><button data-testid="regenerate">Regenerate</button>',
-  );
+  await stage(page, '<div id=modal></div><button data-testid="regenerate">Regenerate</button>',);
   await page.addStyleTag({ content: THEME });
   await page.addScriptTag({ content: SOURCE, type: "module" });
   await page.waitForFunction(() => !!window.__setup);
@@ -837,7 +846,7 @@ console.log("\nicons");
   const page = await browser.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  await page.setContent("<div id=modal></div><div id=host></div>");
+  await stage(page, "<div id=modal></div><div id=host></div>");
   await page.addStyleTag({ content: THEME });
   await page.addScriptTag({ content: SOURCE, type: "module" });
   await page.waitForFunction(() => !!window.__setup);
@@ -912,7 +921,7 @@ console.log("\nicons");
     const page = await browser.newPage({ reducedMotion });
     const errs = [];
     page.on("pageerror", (e) => errs.push(e.message));
-    await page.setContent("<div id=modal></div><div id=host></div>");
+    await stage(page, "<div id=modal></div><div id=host></div>");
     await page.addStyleTag({ content: THEME });
     await page.addScriptTag({ content: SOURCE, type: "module" });
     await page.waitForFunction(() => !!window.__setup);
@@ -958,7 +967,7 @@ console.log("\nfloat button menu");
   const page = await browser.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  await page.setContent("<div id=modal></div><div id=host></div>");
+  await stage(page, "<div id=modal></div><div id=host></div>");
   await page.addStyleTag({ content: THEME });
   await page.addScriptTag({ content: SOURCE, type: "module" });
   await page.waitForFunction(() => !!window.__setup);
@@ -1069,7 +1078,7 @@ console.log("\nfloat button menu");
   // whatever the pop-up actually uses.
   const toastZ = await (async () => {
     const page2 = await browser.newPage();
-    await page2.setContent('<div id=modal></div><button data-testid="regenerate">Regenerate</button>');
+    await stage(page2, '<div id=modal></div><button data-testid="regenerate">Regenerate</button>');
     await page2.addStyleTag({ content: THEME });
     await page2.addScriptTag({ content: SOURCE, type: "module" });
     await page2.waitForFunction(() => !!window.__setup);
@@ -1204,7 +1213,7 @@ console.log("\nfloating surfaces");
   const page = await browser.newPage();
   const errs = [];
   page.on("pageerror", (e) => errs.push(e.message));
-  await page.setContent('<div id=modal></div><button data-testid="regenerate">Regenerate</button>');
+  await stage(page, '<div id=modal></div><button data-testid="regenerate">Regenerate</button>');
   await page.addStyleTag({ content: THEME });
   await page.addScriptTag({ content: SOURCE, type: "module" });
   await page.waitForFunction(() => !!window.__setup);
@@ -1243,13 +1252,63 @@ console.log("\nfloating surfaces");
   check("no console errors on those", errs.length === 0, errs);
 }
 
+// ---- a control with nothing to act on is not offered ----
+// With no presets saved, Load, Update selected, Delete and Rename selected had
+// nothing to work on, Load styled as the primary action. They all guarded on
+// click and answered with a message, which is the wrong end to fix it at.
+console.log("\npreset controls");
+{
+  const { out, errors } = await inPanel(browser, {}, async (page) =>
+    page.evaluate(async () => {
+      for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const sel = document.querySelector("select");
+      const by = (t) => [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === t);
+      const names = ["Load", "Update selected", "Delete", "Rename selected"];
+      const state = () => names.map((n) => { const b = by(n); return { n, off: !!(b && b.disabled) }; });
+
+      const empty = { picked: sel ? sel.value : null, buttons: state(), options: sel ? sel.options.length : 0 };
+
+      // Save one, which selects it, and everything should come alive.
+      document.querySelector('input[placeholder="Preset name"]').value = "trial";
+      by("Save as new").click();
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const saved = { picked: sel.value, buttons: state(), options: sel.options.length };
+
+      // Back to the placeholder, and they should go quiet again.
+      sel.value = "";
+      sel.dispatchEvent(new Event("change", { bubbles: true }));
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const cleared = { picked: sel.value, buttons: state() };
+
+      // Typing a name is the action, so Save as new stays live throughout.
+      const saveAlways = !by("Save as new").disabled;
+      // If this ever reports blocked, these checks are running on about:blank
+      // again and nothing that persists is really being exercised.
+      let storage = "works";
+      try { localStorage.setItem("__lvProbe", "1"); localStorage.removeItem("__lvProbe"); }
+      catch (e) { storage = "BLOCKED: " + e.name; }
+      return { empty, saved, cleared, saveAlways, storage };
+    }),
+  );
+  check("with nothing saved, all four are off",
+    out.empty.buttons.every((b) => b.off), out.empty);
+  check("saving one turns them on",
+    out.saved.picked === "trial" && out.saved.buttons.every((b) => !b.off), out.saved);
+  check("deselecting turns them off again",
+    out.cleared.buttons.every((b) => b.off), out.cleared);
+  check("Save as new is never disabled", out.saveAlways);
+  check("and these checks have real storage to work with", out.storage === "works", out.storage);
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- nothing is left behind ----
 console.log("\nteardown");
 {
   const page = await browser.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  await page.setContent("<div id=modal></div>");
+  await stage(page, "<div id=modal></div>");
   await page.addStyleTag({ content: THEME });
   await page.addScriptTag({ content: SOURCE, type: "module" });
   await page.waitForFunction(() => !!window.__setup);
