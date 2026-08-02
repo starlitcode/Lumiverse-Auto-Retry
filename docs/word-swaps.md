@@ -23,7 +23,7 @@ very =>
 ```
 
 - The left side can be a single word, a phrase, or a whole sentence, and commas inside it are fine (each rule is a whole line, so a comma no longer splits it).
-- A single word matches whole words only, so `cat => dog` changes "cat" but leaves "category" alone.
+- A single word matches whole words only, so `cat => dog` changes "cat" but leaves "category" alone. This works in any language, so `café => bar` and `привет => hello` behave the same way and leave "cafétéria" and "приветствие" alone.
 - A phrase or sentence matches exactly as you type it, so `sort of => kind of` swaps that phrase wherever it appears, and a full sentence swaps that whole sentence. It has to match your text exactly, including spacing and punctuation.
 - Leave the right side empty to delete a word, like `very => ` above. It also removes one trailing space, so a mid-sentence deletion doesn't leave a double space.
 - Put the same left side on more than one line to give it options (for example `sky => blue` on one line and `sky => aqua` on the next). By default it uses the first one. Turn on **Pick randomly when a word has more than one swap** and each time that word appears it picks one of its options at random, which is handy for variety.

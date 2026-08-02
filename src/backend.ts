@@ -100,6 +100,17 @@ function buildGroups(raw: string, cs: boolean): Group[] {
 // stretch of it is replaced at most once. Running rules one after another would
 // let a later rule act on what an earlier one just wrote, so "cat => dog"
 // followed by "dog => wolf" would turn cat into wolf.
+// Whole-word matching, without \b. JavaScript defines \b against \w, which is
+// [A-Za-z0-9_] and stays that way even under the u flag. So "\bcafé\b" never
+// matches anything: the boundary test fails at the é. Every single-word rule
+// whose source was not pure ASCII was therefore compiled and then silently
+// matched nothing, in French, Spanish, German, Polish, Turkish, Greek, Russian
+// and everything else outside plain English. Lookarounds over \p{L} and \p{N}
+// do what \b was meant to do here, and still refuse to fire inside a longer
+// word, so "cat" leaves "category" alone.
+const WORD_BEFORE = '(?<![\\p{L}\\p{N}_])';
+const WORD_AFTER = '(?![\\p{L}\\p{N}_])';
+
 function buildCombined(gs: Group[], cs: boolean): RegExp | null {
   if (!gs.length) return null;
   // Longest source first. A regex alternation takes the first branch that
@@ -107,13 +118,24 @@ function buildCombined(gs: Group[], cs: boolean): RegExp | null {
   // rule would never fire. Equal lengths keep the order they were listed in.
   combinedOrder = gs.map((_, i) => i).sort((a, b) =>
     (gs[b].from.length - gs[a].from.length) || (a - b));
-  const parts = combinedOrder.map((i) => {
-    const body = escapeRe(gs[i].from);
-    return '(' + (gs[i].isWord ? '\\b' + body + '\\b' : body) + ')';
-  });
+  const assemble = (before: string, after: string) =>
+    '(?:' +
+    combinedOrder
+      .map((i) => {
+        const body = escapeRe(gs[i].from);
+        return '(' + (gs[i].isWord ? before + body + after : body) + ')';
+      })
+      .join('|') +
+    ')( ?)';
+  const flags = cs ? 'gu' : 'giu';
   try {
-    return new RegExp('(?:' + parts.join('|') + ')( ?)', cs ? 'gu' : 'giu');
-  } catch (_) {
+    return new RegExp(assemble(WORD_BEFORE, WORD_AFTER), flags);
+  } catch (_) { /* no lookbehind on this engine */ }
+  // A browser too old for lookbehind keeps the ASCII-only behaviour it had
+  // before, rather than losing word swaps altogether.
+  try {
+    return new RegExp(assemble('\\b', '\\b'), flags);
+  } catch (__) {
     combinedOrder = [];
     return null;
   }
@@ -125,7 +147,11 @@ function buildCombined(gs: Group[], cs: boolean): RegExp | null {
 function matchCase(sample: string, repl: string): string {
   if (!repl) return repl;
   if (sample.length > 1 && sample === sample.toUpperCase() && sample !== sample.toLowerCase()) return repl.toUpperCase();
-  if (/^[A-Z\u00C0-\u00DE]/.test(sample)) return repl.charAt(0).toUpperCase() + repl.slice(1);
+  // Any uppercase letter, not just the Latin-1 ones. Whole-word matching uses
+  // \p{L}, so a word in Cyrillic, Greek, Turkish, Polish, Czech or Vietnamese
+  // was matched and swapped and then quietly lost its capital, because the test
+  // for one stopped at \u00DE.
+  if (/^\p{Lu}/u.test(sample)) return repl.charAt(0).toUpperCase() + repl.slice(1);
   return repl;
 }
 

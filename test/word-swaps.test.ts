@@ -173,6 +173,39 @@ describe("letter case", () => {
     expect(await swap("CATS everywhere", "cats => dogs")).toBe("DOGS everywhere");
   });
 
+  test("a word with an accent is swapped at all", async () => {
+    // \b is defined against [A-Za-z0-9_], so "\bcaf\u00e9\b" matched nothing and the
+    // rule was silently dead. Every non-ASCII single-word rule was.
+    expect(await swap("a caf\u00e9 here", "caf\u00e9 => bar")).toBe("a bar here");
+    expect(await swap("sehr \u00fcber alles", "\u00fcber => over")).toBe("sehr over alles");
+    expect(await swap("\u043f\u0440\u0438\u0432\u0435\u0442 there", "\u043f\u0440\u0438\u0432\u0435\u0442 => hello")).toBe("hello there");
+  });
+
+  test("and still leaves a longer word alone", async () => {
+    expect(await swap("\u043f\u0440\u0438\u0432\u0435\u0442\u0441\u0442\u0432\u0438\u0435 stays", "\u043f\u0440\u0438\u0432\u0435\u0442 => hello")).toBe("\u043f\u0440\u0438\u0432\u0435\u0442\u0441\u0442\u0432\u0438\u0435 stays");
+    expect(await swap("caf\u00e9teria stays", "caf\u00e9 => bar")).toBe("caf\u00e9teria stays");
+    expect(await swap("category stays", "cat => dog")).toBe("category stays");
+  });
+
+  test("a capital survives in any script, not just Latin-1", async () => {
+    // Whole-word matching uses \p{L}, so these words were always matched and
+    // swapped. The test for "does it start with a capital" stopped at Þ, so the
+    // swap came back lowercase for anyone not writing in English or French.
+    expect(await swap("\u041F\u0440\u0438\u0432\u0435\u0442 there", "\u043F\u0440\u0438\u0432\u0435\u0442 => \u0437\u0434\u0440\u0430\u0432\u0441\u0442\u0432\u0443\u0439\u0442\u0435"))
+      .toBe("\u0417\u0434\u0440\u0430\u0432\u0441\u0442\u0432\u0443\u0439\u0442\u0435 there");
+    expect(await swap("\u015Eeker please", "\u015Feker => sugar")).toBe("Sugar please");
+    expect(await swap("\u0106ao friend", "\u0107ao => hello")).toBe("Hello friend");
+  });
+
+  test("and a Latin-1 capital still does", async () => {
+    expect(await swap("\u00C9clair time", "\u00E9clair => pastry")).toBe("Pastry time");
+  });
+
+  test("a lowercase match in any script stays lowercase", async () => {
+    expect(await swap("\u043F\u0440\u0438\u0432\u0435\u0442 there", "\u043F\u0440\u0438\u0432\u0435\u0442 => \u0437\u0434\u0440\u0430\u0432\u0441\u0442\u0432\u0443\u0439\u0442\u0435"))
+      .toBe("\u0437\u0434\u0440\u0430\u0432\u0441\u0442\u0432\u0443\u0439\u0442\u0435 there");
+  });
+
   test("case-sensitive mode swaps only an exact case match", async () => {
     expect(
       await swap("Cat and cat.", "cat => dog", { replaceCaseSensitive: true }),
