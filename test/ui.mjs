@@ -902,6 +902,53 @@ console.log("\nicons");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- asking for less movement is honoured ----
+// The float button dips under a press. That is the only thing in the extension
+// that actually moves, so it is the only thing reduced motion has to switch off.
+// The colour change stays either way, or the button would stop acknowledging a
+// tap at all.
+{
+  const press = async (reducedMotion) => {
+    const page = await browser.newPage({ reducedMotion });
+    const errs = [];
+    page.on("pageerror", (e) => errs.push(e.message));
+    await page.setContent("<div id=modal></div><div id=host></div>");
+    await page.addStyleTag({ content: THEME });
+    await page.addScriptTag({ content: SOURCE, type: "module" });
+    await page.waitForFunction(() => !!window.__setup);
+    const out = await page.evaluate(async () => {
+      const host = document.getElementById("host");
+      window.__setup(
+        {
+          events: { on: () => () => {} },
+          ui: {
+            showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+            registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }),
+            createFloatWidget: () => ({ root: host, destroy: () => {}, setPosition: () => {} }),
+          },
+        },
+        { enabled: true, showFloatingToggle: true, floatingToggleSize: 44, toast: false },
+      );
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const btn = host.querySelector("button");
+      btn.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+      const moved = btn.style.transform;
+      const css = getComputedStyle(btn).transition;
+      return { moved, animatesTransform: /transform/.test(css), colours: /background/.test(css) };
+    });
+    await page.close();
+    return { ...out, errs };
+  };
+  const normal = await press("no-preference");
+  const reduced = await press("reduce");
+  check("normally the button dips under a press", normal.moved === "scale(0.94)", normal.moved);
+  check("with reduced motion it does not move", reduced.moved === "", reduced.moved);
+  check("and stops animating transform at all", !reduced.animatesTransform, reduced);
+  check("but still acknowledges the tap in colour", reduced.colours, reduced);
+  check("no console errors", normal.errs.length + reduced.errs.length === 0,
+    normal.errs.concat(reduced.errs));
+}
+
 // ---- nothing is left behind ----
 console.log("\nteardown");
 {

@@ -1110,6 +1110,20 @@ function ensureReadableTree(root: any, min?: number) {
   });
 }
 
+// True when the device has been asked to keep movement down. Read at the point
+// of use rather than once at load, so turning the setting on takes effect
+// without reloading the page.
+function stillness(): boolean {
+  try {
+    return (
+      typeof matchMedia === "function" &&
+      matchMedia("(prefers-reduced-motion: reduce)").matches
+    );
+  } catch (_) {
+    return false;
+  }
+}
+
 // The extension's mark: a die caught mid-tumble. Lumiverse calls a fresh
 // attempt a reroll, so this says what the extension does rather than reusing
 // the refresh arrow every other extension already draws. Strokes are
@@ -1625,10 +1639,13 @@ export function setup(ctx: Ctx, opts?: any) {
       "transition:background var(--lumiverse-transition-fast,150ms ease)," +
       "border-color var(--lumiverse-transition-fast,150ms ease)," +
       "color var(--lumiverse-transition-fast,150ms ease)," +
-      "opacity var(--lumiverse-transition-fast,150ms ease)," +
-      "transform 120ms ease";
+      "opacity var(--lumiverse-transition-fast,150ms ease)" +
+      (stillness() ? "" : ",transform 120ms ease");
     el.addEventListener("pointerdown", () => {
-      el.style.transform = "scale(.94)";
+      // The press dip is the one thing here that actually moves. Someone who
+      // has asked their device for less movement still gets the colour change,
+      // so the button is no less responsive, it just does not spring.
+      if (!stillness()) el.style.transform = "scale(.94)";
     });
     const springBack = () => {
       el.style.transform = "none";
