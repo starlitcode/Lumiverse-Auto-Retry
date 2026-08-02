@@ -1110,6 +1110,33 @@ function ensureReadableTree(root: any, min?: number) {
   });
 }
 
+// The extension's mark: a die caught mid-tumble. Lumiverse calls a fresh
+// attempt a reroll, so this says what the extension does rather than reusing
+// the refresh arrow every other extension already draws. Strokes are
+// currentColor so the mark follows the theme, and so fixContrast can repaint it
+// by setting colour on the element around it.
+const DIE_BODY =
+  '<g transform="rotate(14 12 12)">' +
+  '<rect x="4" y="4" width="16" height="16" rx="5"/>' +
+  '<circle cx="8.8" cy="8.8" r="1.6" fill="currentColor" stroke="none"/>' +
+  '<circle cx="15.2" cy="15.2" r="1.6" fill="currentColor" stroke="none"/>' +
+  "</g>";
+const DIE_SLASH = '<line x1="4" y1="20" x2="20" y2="4"/>';
+
+// size is passed only for the float widget, which owns its own element. The
+// Extras menu sizes the icon it is handed.
+function dieSvg(off?: boolean, size?: number): string {
+  return (
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"' +
+    ' stroke-linecap="round" stroke-linejoin="round"' +
+    (size ? ' width="' + size + '" height="' + size + '"' : "") +
+    ">" +
+    DIE_BODY +
+    (off ? DIE_SLASH : "") +
+    "</svg>"
+  );
+}
+
 export function setup(ctx: Ctx, opts?: any) {
   // cfg is mutable so the settings modal can change it live. Order: code
   // defaults, then GitHub opts, then whatever the user saved in the UI.
@@ -1199,10 +1226,8 @@ export function setup(ctx: Ctx, opts?: any) {
   // The Extras-menu on/off entry. Its label and icon carry the current state,
   // and the host offers no way to relabel an action once it is registered, so a
   // state change registers it again rather than editing it in place.
-  const TOGGLE_ICON_ON =
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>';
-  const TOGGLE_ICON_OFF =
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/><line x1="4" y1="20" x2="20" y2="4"/></svg>';
+  const TOGGLE_ICON_ON = dieSvg(false);
+  const TOGGLE_ICON_OFF = dieSvg(true);
   // The state the registered entry was last labelled for, so it is only rebuilt
   // when the label would actually change.
   let toggleActionState: boolean | null = null;
@@ -1541,7 +1566,9 @@ export function setup(ctx: Ctx, opts?: any) {
     const d = floatSize();
     floatEl.style.width = d + "px";
     floatEl.style.height = d + "px";
-    floatEl.style.fontSize = Math.max(11, Math.round(d * 0.42)) + "px";
+    // The mark is drawn, not typed, so it is sized here rather than by font
+    // size. Just over half the button leaves the ring around it looking even.
+    const glyph = Math.max(14, Math.round(d * 0.56));
     floatEl.style.background = on
       ? "var(--lumiverse-primary-020,rgba(147,112,219,.2))"
       : "var(--lumiverse-fill-subtle,rgba(0,0,0,.1))";
@@ -1552,7 +1579,7 @@ export function setup(ctx: Ctx, opts?: any) {
       ? "var(--lumiverse-primary-text,rgba(186,135,255,.95))"
       : "var(--lumiverse-text-muted,rgba(255,255,255,.65))";
     floatEl.style.opacity = on ? "1" : "0.75";
-    floatEl.textContent = on ? "\u21BB" : "\u2298"; // clockwise arrow / slashed circle
+    floatEl.innerHTML = dieSvg(!on, glyph);
     const label = on
       ? "Auto Retry is on, tap to turn off"
       : "Auto Retry is off, tap to turn on";
@@ -4978,8 +5005,7 @@ export function setup(ctx: Ctx, opts?: any) {
       const action = ctx.ui.registerInputBarAction({
         id: "auto-retry-settings",
         label: "Auto Retry settings",
-        iconSvg:
-          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 4 21 9 16 9"/></svg>',
+        iconSvg: dieSvg(false),
       });
       disposers.push(action.onClick(() => openSettings()));
       disposers.push(() => {

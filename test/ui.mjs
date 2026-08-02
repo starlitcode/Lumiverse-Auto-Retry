@@ -827,6 +827,81 @@ console.log("\nregeneration feedback");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- the mark is drawn, not typed ----
+// The float button used to carry a Unicode character, which meant its shape was
+// whatever font the device happened to pick. These check it is an actual
+// drawing, that on and off are told apart by more than colour, and that the
+// drawing scales with the button instead of staying one size.
+console.log("\nicons");
+{
+  const page = await browser.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.setContent("<div id=modal></div><div id=host></div>");
+  await page.addStyleTag({ content: THEME });
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  const out = await page.evaluate(async () => {
+    const boot = (over) => {
+      const host = document.createElement("div");
+      document.getElementById("host").appendChild(host);
+      const actions = [];
+      window.__setup(
+        {
+          events: { on: () => () => {} },
+          ui: {
+            showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+            registerInputBarAction: (o) => { actions.push(o); return { onClick: () => () => {}, destroy: () => {} }; },
+            createFloatWidget: () => ({ root: host, destroy: () => {}, setPosition: () => {} }),
+          },
+        },
+        Object.assign({ showFloatingToggle: true, showExtrasToggle: true, toast: false }, over),
+      );
+      return { host, actions };
+    };
+
+    const read = (host) => {
+      const btn = host.querySelector("button");
+      const svg = btn && btn.querySelector("svg");
+      return {
+        hasSvg: !!svg,
+        // A leftover character would show up as text on the button itself.
+        text: btn ? btn.textContent.trim() : "(no button)",
+        shapes: svg ? svg.querySelectorAll("rect,circle,line,path").length : 0,
+        slashes: svg ? svg.querySelectorAll("line").length : 0,
+        width: svg ? Number(svg.getAttribute("width")) : 0,
+      };
+    };
+
+    const small = boot({ enabled: true, floatingToggleSize: 28 });
+    const large = boot({ enabled: true, floatingToggleSize: 96 });
+    const off = boot({ enabled: false, floatingToggleSize: 44 });
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+    return {
+      on: read(small.host),
+      big: read(large.host),
+      off: read(off.host),
+      // Every Extras entry has to carry an icon, or a menu row shows a gap.
+      actions: small.actions.map((a) => ({
+        id: a.id,
+        svg: typeof a.iconSvg === "string" && a.iconSvg.indexOf("<svg") === 0,
+      })),
+    };
+  });
+  await page.close();
+  check("the float button holds a drawing", out.on.hasSvg && out.on.shapes >= 3, out.on);
+  check("and no leftover text character", out.on.text === "", JSON.stringify(out.on.text));
+  check("off is marked by a slash, not just colour", out.off.slashes > out.on.slashes, {
+    on: out.on.slashes, off: out.off.slashes });
+  check("the drawing scales with the button", out.big.width > out.on.width, {
+    at28: out.on.width, at96: out.big.width });
+  check("it never scales below legible", out.on.width >= 14, out.on.width);
+  check("every Extras entry carries an icon",
+    out.actions.length > 0 && out.actions.every((a) => a.svg), out.actions);
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- nothing is left behind ----
 console.log("\nteardown");
 {
