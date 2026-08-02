@@ -1548,6 +1548,122 @@ console.log("\nbackup round trip");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- and a backup has to load back in ----
+// Export was covered above. Import is the half that can overwrite a working
+// setup with a bad file, so it gets the harder cases: junk, a file from another
+// app, unknown keys, out-of-range numbers, and the promise that nothing sticks
+// until Save is pressed. Files are fed through the real file input, so the
+// reader and the handler run exactly as they do for a person.
+console.log("\nbackup restore");
+{
+  const page = await browser.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await stage(page, "<div id=modal></div>");
+  await page.addStyleTag({ content: THEME });
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  await page.evaluate(async () => {
+    const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    window.__acts = {};
+    window.__setup(
+      { events: { on: () => () => {} },
+        ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+              registerInputBarAction: (o) => { const a = { onClick: (cb) => { a.cb = cb; return () => {}; }, destroy: () => {} }; window.__acts[o.id] = a; return a; } } },
+      {},
+    );
+    window.__acts["auto-retry-settings"].cb();
+    await frame();
+    for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+    await frame();
+    window.__by = (t) => [...document.querySelectorAll("button")].find((x) => x.textContent.trim() === t);
+    window.__ctl = (k) => { const r = document.querySelector('[data-ar-row="' + k + '"]'); return r && (r.querySelector("textarea") || r.querySelector("input")); };
+    window.__get = (k) => { const el = window.__ctl(k); return el ? (el.type === "checkbox" ? el.checked : el.value) : "(missing)"; };
+    window.__status = () => {
+      const bits = [...document.querySelectorAll("div")].map((d) => d.textContent || "");
+      return bits.filter((t) => /Imported|isn't a valid|Nothing matched|Couldn't read/.test(t)).pop() || "";
+    };
+    // A starting point that the file will contradict.
+    window.__ctl("enabled").click();
+    const r = window.__ctl("replaceRules");
+    r.value = "cat => dog"; r.dispatchEvent(new Event("input", { bubbles: true })); r.dispatchEvent(new Event("change", { bubbles: true }));
+    window.__by("Save").click();
+    await frame();
+  });
+
+  const feed = async (name, body) => {
+    await page.setInputFiles('input[type=file]', {
+      name, mimeType: "application/json", buffer: Buffer.from(body),
+    });
+    await page.waitForTimeout(120);
+  };
+  const read = () =>
+    page.evaluate(() => ({
+      enabled: window.__get("enabled"),
+      maxRetries: window.__get("maxRetries"),
+      rules: window.__get("replaceRules"),
+      status: window.__status(),
+      stored: (() => { try { return JSON.parse(localStorage.getItem("lv-auto-retry:settings:v1")); } catch (_) { return null; } })(),
+    }));
+
+  const before = await read();
+
+  // Junk, then a valid JSON file that is not one of ours.
+  await feed("junk.json", "this is not json at all {{{");
+  const afterJunk = await read();
+  await feed("other.json", JSON.stringify({ someOtherApp: true, version: 3 }));
+  const afterForeign = await read();
+
+  // A category name we do not know sits alongside a real one. The unknown one
+  // must be skipped without taking the rest of the file down with it.
+  await feed("partly-unknown.json", JSON.stringify({
+    autoRetry: "test",
+    settings: { madeUpCategory: { whatever: 1 }, retry: { maxRetries: 6 } },
+  }));
+  const afterUnknownCat = await read();
+
+  // A real backup, including an unknown key and a number far out of range.
+  await feed("backup.json", JSON.stringify({
+    autoRetry: "test",
+    settings: {
+      retry: { enabled: true, maxRetries: 999999, notASetting: "ignore me" },
+      replace: { replaceRules: "hot => cold" },
+    },
+  }));
+  const afterGood = await read();
+
+  // Nothing is kept until Save.
+  await page.evaluate(() => window.__by("Save").click());
+  await page.waitForTimeout(60);
+  const afterSave = await read();
+  await page.close();
+
+  check("junk is refused and nothing changes",
+    afterJunk.enabled === before.enabled && afterJunk.rules === before.rules &&
+    /isn't a valid/.test(afterJunk.status), afterJunk);
+  check("a file from another app is refused too",
+    afterForeign.rules === before.rules && /isn't a valid/.test(afterForeign.status), afterForeign);
+  check("a category we do not know is skipped, not fatal",
+    afterUnknownCat.maxRetries === "6" && /Imported/.test(afterUnknownCat.status), afterUnknownCat.status);
+  check("a real backup fills the fields in", afterGood.rules === "hot => cold" &&
+    afterGood.enabled === true, afterGood);
+  check("an out-of-range number is pulled back to the limit",
+    Number(afterGood.maxRetries) > 0 && Number(afterGood.maxRetries) < 1000, afterGood.maxRetries);
+  // Two independent layers stop this: applyImport reads only the keys it knows,
+  // and saveSaved writes only the keys in the schema. Breaking either on its own
+  // leaves the other holding, which is the point of having both. This checks the
+  // outcome the user cares about rather than one layer.
+  check("an unknown key in the file never reaches your saved settings",
+    !afterSave.stored || !("notASetting" in afterSave.stored), afterSave.stored && Object.keys(afterSave.stored).length);
+  check("an import is not kept until Save is pressed",
+    before.stored && before.stored.replaceRules === "cat => dog" &&
+    afterGood.stored && afterGood.stored.replaceRules === "cat => dog", {
+      beforeSave: afterGood.stored && afterGood.stored.replaceRules });
+  check("and is kept once it is",
+    afterSave.stored && afterSave.stored.replaceRules === "hot => cold", afterSave.stored && afterSave.stored.replaceRules);
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- nothing is left behind ----
 console.log("\nteardown");
 {
