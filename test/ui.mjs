@@ -1437,6 +1437,117 @@ console.log("\non-screen swap");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- a backup has to bring everything back ----
+// Settings have gone missing from exports before: four of them were absent from
+// every backup and nobody noticed until a restore came back short. There is a
+// safety net in the code that folds any unlisted setting into the retry
+// category, and until now nothing checked that it works. This changes every
+// setting in the panel, exports, resets, imports, and compares.
+console.log("\nbackup round trip");
+{
+  const page = await browser.newPage({ acceptDownloads: true });
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await stage(page, "<div id=modal></div>");
+  await page.addStyleTag({ content: THEME });
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+
+  // Capture the export without going near the filesystem: the code makes a blob
+  // and clicks an anchor, so intercepting the anchor click is enough.
+  await page.evaluate(() => {
+    window.__exported = null;
+    const realClick = HTMLAnchorElement.prototype.click;
+    HTMLAnchorElement.prototype.click = function () {
+      if (this.download) {
+        fetch(this.href).then((r) => r.text()).then((t) => { window.__exported = t; });
+        return;
+      }
+      return realClick.apply(this, arguments);
+    };
+  });
+
+  const out = await page.evaluate(async () => {
+    const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const acts = {};
+    window.__setup(
+      { events: { on: () => () => {} },
+        ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+              registerInputBarAction: (o) => { const a = { onClick: (cb) => { a.cb = cb; return () => {}; }, destroy: () => {} }; acts[o.id] = a; return a; } } },
+      {},
+    );
+    acts["auto-retry-settings"].cb();
+    await frame();
+    for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+    await frame();
+    const by = (t) => [...document.querySelectorAll("button")].find((x) => x.textContent.trim() === t);
+
+    // Give every setting a value that is not its default, staying inside each
+    // field's own limits so nothing is clamped back on the way out.
+    const rows = [...document.querySelectorAll("[data-ar-row]")];
+    const wanted = {};
+    for (const r of rows) {
+      const key = r.getAttribute("data-ar-row");
+      const el = r.querySelector("textarea") || r.querySelector("input");
+      if (!el || !key || key === "1") continue;
+      if (el.type === "checkbox") { el.click(); wanted[key] = el.checked; }
+      else if (el.type === "number" || el.inputMode === "numeric") {
+        const lo = Number(el.min) || 0;
+        const hi = el.max === "" || el.max == null ? Number.MAX_SAFE_INTEGER : Number(el.max);
+        const cur = Number(el.value) || lo;
+        const next = cur + 1 <= hi ? cur + 1 : Math.max(lo, cur - 1);
+        el.value = String(next);
+        el.dispatchEvent(new Event("input", { bubbles: true }));
+        el.dispatchEvent(new Event("change", { bubbles: true }));
+        wanted[key] = String(next);
+      } else {
+        el.value = "probe-" + key;
+        el.dispatchEvent(new Event("input", { bubbles: true }));
+        el.dispatchEvent(new Event("change", { bubbles: true }));
+        wanted[key] = "probe-" + key;
+      }
+    }
+    by("Save").click();
+    await frame();
+
+    // The export category boxes only. querySelectorAll("div") hands back
+    // ancestors first, so searching it for a container holding "Export to file"
+    // finds the whole panel and every checkbox in it. Walk up from the button
+    // instead, and stop at the tightest box that holds the categories.
+    const exportBtn = by("Export to file");
+    let scope = exportBtn.parentElement;
+    while (scope && scope.querySelectorAll("input[type=checkbox]").length < 4) scope = scope.parentElement;
+    const boxes = scope ? [...scope.querySelectorAll("input[type=checkbox]")] : [];
+    // Anything this scope holds that is also a settings row means we climbed too
+    // far and are about to undo the values set above.
+    const overreach = scope ? scope.querySelectorAll("[data-ar-row]").length : -1;
+    for (const b of boxes) if (!b.checked) b.click();
+    exportBtn.click();
+    await new Promise((r) => setTimeout(r, 150));
+    return { wanted, exported: window.__exported, categories: boxes.length, overreach };
+  });
+  await page.close();
+
+  const parsed = (() => { try { return JSON.parse(out.exported); } catch (_) { return null; } })();
+  const inFile = new Set();
+  if (parsed && parsed.settings) for (const cat of Object.values(parsed.settings)) for (const k of Object.keys(cat)) inFile.add(k);
+  const missing = Object.keys(out.wanted).filter((k) => !inFile.has(k));
+
+  check("the category boxes were found without catching settings rows", out.overreach === 0, out.overreach);
+  check("the export is valid JSON with a version", !!parsed && !!parsed.autoRetry, out.exported && out.exported.slice(0, 60));
+  check("every setting in the panel is in the backup", missing.length === 0, missing);
+  check("and the values are the ones on screen",
+    !!parsed && Object.keys(out.wanted).every((k) => {
+      for (const cat of Object.values(parsed.settings)) if (k in cat) return String(cat[k]) === String(out.wanted[k]);
+      return false;
+    }),
+    Object.keys(out.wanted).filter((k) => {
+      for (const cat of Object.values(parsed.settings || {})) if (k in cat) return String(cat[k]) !== String(out.wanted[k]);
+      return true;
+    }).slice(0, 6));
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- nothing is left behind ----
 console.log("\nteardown");
 {
