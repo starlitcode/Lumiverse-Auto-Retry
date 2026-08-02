@@ -1366,6 +1366,77 @@ console.log("\npreset boundary");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- the swap has to show up on screen, not just in storage ----
+// The backend writes the swapped reply, but the host does not redraw the chat
+// for it, so the frontend rewrites the visible text itself. That path had no
+// coverage, and it is exactly where the 3.1.1 bug lived: the swap was saved
+// correctly and stayed invisible until the chat was reopened.
+console.log("\non-screen swap");
+{
+  const page = await browser.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await stage(page, '<div id=modal></div><div id=chat></div>');
+  await page.addStyleTag({ content: THEME });
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  const out = await page.evaluate(async () => {
+    let onMsg = null;
+    window.__setup(
+      {
+        events: { on: () => () => {} },
+        sendToBackend: () => {},
+        onBackendMessage: (cb) => { onMsg = cb; return () => {}; },
+        ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+              registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) },
+      },
+      { toast: false },
+    );
+    const chat = document.getElementById("chat");
+    const run = async (html, pairs) => {
+      chat.innerHTML = html;
+      onMsg({ type: "swapped", pairs, wholeChat: true });
+      await new Promise((r) => setTimeout(r, 30));
+      return chat.textContent;
+    };
+    return {
+      ascii: await run("<p>a cat here</p>", [["cat ", "dog "]]),
+      inside: await run("<p>category stays</p>", [["cat ", "dog "]]),
+      accent: await run("<p>a caf\u00e9 here</p>", [["caf\u00e9 ", "bar "]]),
+      accentInside: await run("<p>caf\u00e9teria stays</p>", [["caf\u00e9 ", "bar "]]),
+      cyrillic: await run("<p>\u043f\u0440\u0438\u0432\u0435\u0442 there</p>", [["\u043f\u0440\u0438\u0432\u0435\u0442 ", "hello "]]),
+      cyrillicInside: await run("<p>\u043f\u0440\u0438\u0432\u0435\u0442\u0441\u0442\u0432\u0438\u0435 stays</p>", [["\u043f\u0440\u0438\u0432\u0435\u0442 ", "hello "]]),
+      // The pairs above all carry the trailing space the backend captures, and
+      // that space alone keeps "cat " out of "category". A swap at the end of a
+      // sentence has no trailing space, and then only the boundary protects it.
+      noTrail: await run("<p>category stays</p>", [["cat", "dog"]]),
+      noTrailCyrillic: await run("<p>\u043f\u0440\u0438\u0432\u0435\u0442\u0441\u0442\u0432\u0438\u0435 stays</p>", [["\u043f\u0440\u0438\u0432\u0435\u0442", "hello"]]),
+      noTrailHit: await run("<p>one cat.</p>", [["cat", "dog"]]),
+      // A field the user is typing in must never be rewritten underneath them.
+      input: await (async () => {
+        chat.innerHTML = "<textarea>a cat here</textarea>";
+        onMsg({ type: "swapped", pairs: [["cat ", "dog "]], wholeChat: true });
+        await new Promise((r) => setTimeout(r, 30));
+        return chat.querySelector("textarea").value;
+      })(),
+    };
+  });
+  await page.close();
+  check("an English word is rewritten on screen", out.ascii === "a dog here", out.ascii);
+  check("and not inside a longer word", out.inside === "category stays", out.inside);
+  check("an accented word is rewritten too", out.accent === "a bar here", out.accent);
+  check("and not inside a longer one", out.accentInside === "caf\u00e9teria stays", out.accentInside);
+  check("a Cyrillic word is rewritten too", out.cyrillic === "hello there", out.cyrillic);
+  check("and not inside a longer one", out.cyrillicInside === "\u043f\u0440\u0438\u0432\u0435\u0442\u0441\u0442\u0432\u0438\u0435 stays", out.cyrillicInside);
+  check("with no trailing space, a longer word is still safe",
+    out.noTrail === "category stays", out.noTrail);
+  check("in any script", out.noTrailCyrillic === "\u043f\u0440\u0438\u0432\u0435\u0442\u0441\u0442\u0432\u0438\u0435 stays", out.noTrailCyrillic);
+  check("while the real word at a sentence end still swaps",
+    out.noTrailHit === "one dog.", out.noTrailHit);
+  check("a text box is left alone", out.input === "a cat here", out.input);
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- nothing is left behind ----
 console.log("\nteardown");
 {

@@ -3314,14 +3314,25 @@ export function setup(ctx, opts) {
             // replace here would also hit "dogged" when the rule was "dog". This
             // rebuilds the same boundary the backend used.
             let re = null;
+            const esc = from.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            const needsLead = /^[\p{L}\p{N}]/u.test(from);
+            const needsTail = /[\p{L}\p{N}]$/u.test(from);
+            const build = (lead, tail) => new RegExp((needsLead ? lead : "") + esc + (needsTail ? tail : ""), "gu");
             try {
-                const esc = from.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-                const lead = /^[\p{L}\p{N}]/u.test(from) ? "\\b" : "";
-                const tail = /[\p{L}\p{N}]$/u.test(from) ? "\\b" : "";
-                re = new RegExp(lead + esc + tail, "gu");
+                // Not \b. It is defined against [A-Za-z0-9_] even under the u flag, so
+                // it fails at the first accented letter and the visible text would keep
+                // the old wording while the saved reply had the new one. The backend
+                // matches with these same lookarounds.
+                re = build("(?<![\\p{L}\\p{N}_])", "(?![\\p{L}\\p{N}_])");
             }
             catch (__) {
-                re = null;
+                // No lookbehind on this engine. Same fallback the backend takes.
+                try {
+                    re = build("\\b", "\\b");
+                }
+                catch (___) {
+                    re = null;
+                }
             }
             if (!re)
                 continue;
