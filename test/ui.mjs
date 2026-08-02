@@ -1302,6 +1302,70 @@ console.log("\npreset controls");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- what a preset is allowed to touch ----
+// The docs promise that loading a preset cannot switch swapping on for you, or
+// take away the confirmation step, or move buttons around in your Extras menu.
+// This drives a real save and a real load to prove it, which was not possible
+// until these checks had working storage.
+console.log("\npreset boundary");
+{
+  const { out, errors } = await inPanel(browser, {}, async (page) =>
+    page.evaluate(async () => {
+      const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      await frame();
+      const by = (t) => [...document.querySelectorAll("button")].find((x) => x.textContent.trim() === t);
+      const ctl = (k) => {
+        const r = document.querySelector('[data-ar-row="' + k + '"]');
+        return r && (r.querySelector("textarea") || r.querySelector("input"));
+      };
+      const set = (k, v) => {
+        const i = ctl(k);
+        if (!i) return;
+        if (i.type === "checkbox") { if (i.checked !== v) i.click(); }
+        else { i.value = v; i.dispatchEvent(new Event("input", { bubbles: true })); i.dispatchEvent(new Event("change", { bubbles: true })); }
+      };
+      const get = (k) => { const i = ctl(k); return i ? (i.type === "checkbox" ? i.checked : i.value) : "(missing)"; };
+
+      const OWNED = ["replaceRules", "replaceRandom", "replaceCaseSensitive"];
+      const YOURS = ["replaceEnabled", "showReplaceButton", "showSwapAllButton", "allowReSwap", "confirmBeforeEdit"];
+
+      // Everything on, saved into a preset.
+      set("replaceRules", "cat => dog");
+      for (const k of OWNED.slice(1).concat(YOURS)) set(k, true);
+      by("Save").click(); await frame();
+      document.querySelector('input[placeholder="Preset name"]').value = "A";
+      by("Save as new").click(); await frame();
+
+      // Everything off, saved.
+      set("replaceRules", "hot => cold");
+      for (const k of OWNED.slice(1).concat(YOURS)) set(k, false);
+      by("Save").click(); await frame();
+
+      // Load the preset back.
+      const sel = document.querySelector("select");
+      sel.value = "A";
+      sel.dispatchEvent(new Event("change", { bubbles: true }));
+      by("Load").click(); await frame();
+
+      const owned = {}; for (const k of OWNED) owned[k] = get(k);
+      const yours = {}; for (const k of YOURS) yours[k] = get(k);
+      return { owned, yours };
+    }),
+  );
+  check("a preset restores the rules it saved",
+    out.owned.replaceRules === "cat => dog", out.owned);
+  check("and the two options that decide how they match",
+    out.owned.replaceRandom === true && out.owned.replaceCaseSensitive === true, out.owned);
+  check("loading one cannot switch swapping on for you",
+    out.yours.replaceEnabled === false, out.yours);
+  check("cannot move buttons into your Extras menu",
+    out.yours.showReplaceButton === false && out.yours.showSwapAllButton === false, out.yours);
+  check("and cannot take away the confirmation step",
+    out.yours.confirmBeforeEdit === false && out.yours.allowReSwap === false, out.yours);
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- nothing is left behind ----
 console.log("\nteardown");
 {
