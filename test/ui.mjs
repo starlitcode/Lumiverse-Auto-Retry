@@ -982,7 +982,10 @@ console.log("\nfloat button menu");
     const menu = () => document.querySelector('[role="menu"]');
     const items = () => [...document.querySelectorAll('[role="menuitem"]')].map((b) => b.textContent);
     const down = (el, x, y) => el.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, clientX: x, clientY: y }));
-    const move = (el, x, y) => el.dispatchEvent(new PointerEvent("pointermove", { bubbles: true, clientX: x, clientY: y }));
+    // Dispatched at the document, which is what a host that has captured the
+    // pointer for its drag would produce. A move aimed at the button would not
+    // reach a document listener by bubbling, so this is the harder case.
+    const move = (_el, x, y) => document.dispatchEvent(new PointerEvent("pointermove", { bubbles: true, clientX: x, clientY: y }));
     const up = (el) => el.dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
 
     // A quick tap toggles and opens nothing.
@@ -1046,6 +1049,57 @@ console.log("\nfloat button menu");
   check("hiding removes the button", out.gone.button, out.gone);
   check("and leaves no menu behind", !out.gone.menu);
   check("teardown leaves nothing", !out.left.menu && out.left.items === 0, out.left);
+  check("no console errors", errors.length === 0, errors);
+}
+
+// ---- browser-drawn controls follow the theme ----
+// An unchecked checkbox is painted by the browser, which picks its colours from
+// the page's colour scheme rather than from the theme. Left unset it assumes
+// light, and a white block landed on the dark panel. Same fault as the search
+// field's clear button.
+console.log("\ncolour scheme");
+{
+  const read = async (css, want) => {
+    const { out, errors } = await inPanel(browser, { css }, async (page) =>
+      page.evaluate(() => {
+        const panel = document.querySelector("#modal > div");
+        const box = document.querySelector('input[type=checkbox]');
+        return {
+          scheme: panel ? getComputedStyle(panel).colorScheme : "(no panel)",
+          boxScheme: box ? getComputedStyle(box).colorScheme : "(no checkbox)",
+        };
+      }),
+    );
+    check(`${want} theme is declared ${want}`, out.scheme === want, out);
+    check(`${want}: checkboxes inherit it`, out.boxScheme === want, out);
+    check(`${want}: no console errors`, errors.length === 0, errors);
+  };
+  await read("", "dark");
+  await read("#modal{background:#ffffff} body{background:#fff}", "light");
+}
+
+// ---- a number setting has to say what its number means ----
+// Read from the setting's own key rather than guessed from its wording, so a
+// multiplier like "how much longer each wait gets" is not mistaken for a
+// duration. A bare 1200 on screen means nothing without its unit.
+console.log("\nunits");
+{
+  const { out, errors } = await inPanel(browser, {}, async (page) =>
+    page.evaluate(() => {
+      const bad = [];
+      let durations = 0;
+      for (const r of document.querySelectorAll("[data-ar-row]")) {
+        const key = r.getAttribute("data-ar-row") || "";
+        if (!/Ms$|Minutes$/.test(key)) continue;
+        durations++;
+        const label = (r.textContent || "").replace(/\s+/g, " ").trim();
+        if (!/\(ms\)|\(minutes\)|\(seconds\)/.test(label)) bad.push(key);
+      }
+      return { bad, durations };
+    }),
+  );
+  check("every duration setting names its unit in the label", out.bad.length === 0, out.bad);
+  check("and there were durations to check", out.durations >= 5, out.durations);
   check("no console errors", errors.length === 0, errors);
 }
 

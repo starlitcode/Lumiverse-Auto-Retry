@@ -33,7 +33,7 @@ You don't need to change either setting. Keep Regeneration Feedback on if you us
 
 ## Extra dialog buttons it may press
 
-Only needed if the Regeneration Feedback box stays on screen when a retry opens it, which means Auto Retry didn't recognise its button. It already knows `Skip`, `Regenerate`, `Confirm`, `Proceed`, `Submit` and `OK`. If yours says something else, for example in another language, add that wording here.
+Only needed if the Regeneration Feedback box stays on screen when a retry opens it, which means Auto Retry didn't recognize its button. It already knows `Skip`, `Regenerate`, `Confirm`, `Proceed`, `Submit` and `OK`. If yours says something else, for example in another language, add that wording here.
 
 Type the button's text exactly as it appears, one per line. **Expand** opens a bigger editor if the box is too small:
 

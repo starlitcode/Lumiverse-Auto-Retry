@@ -8,7 +8,7 @@ The parts are grouped so you only move what you mean to: retry behavior, refusal
 
 Between them the groups cover every setting, so an export is a complete backup of your setup. Any setting that isn't in one of the named groups is carried with retry behavior rather than dropped, so a new option can never go missing from a backup made before it was added.
 
-Import puts the values from the file into the settings without saving them, so you can look them over and press **Save** to keep them, or close the modal to discard them. Every imported value runs through the same checks as your normal settings, so a file can only set known options to safe values, and anything it does not recognise is ignored.
+Import puts the values from the file into the settings without saving them, so you can look them over and press **Save** to keep them, or close the modal to discard them. Every imported value runs through the same checks as your normal settings, so a file can only set known options to safe values, and anything it does not recognize is ignored.
 
 ---
 

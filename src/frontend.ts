@@ -228,7 +228,7 @@ const SCHEMA: Group[] = [
       },
       {
         key: "retryDelayMs",
-        label: "Wait before the first retry",
+        label: "Wait before the first retry (ms)",
         type: "num",
         int: true,
         min: 0,
@@ -245,7 +245,7 @@ const SCHEMA: Group[] = [
       },
       {
         key: "maxDelayMs",
-        label: "Longest it will ever wait",
+        label: "Longest it will ever wait (ms)",
         type: "num",
         int: true,
         min: 0,
@@ -254,7 +254,7 @@ const SCHEMA: Group[] = [
       },
       {
         key: "rateLimitDelayMs",
-        label: "Wait when the server is busy",
+        label: "Wait when the server is busy (ms)",
         type: "num",
         int: true,
         min: 0,
@@ -287,7 +287,7 @@ const SCHEMA: Group[] = [
     fields: [
       {
         key: "stuckTimeoutMs",
-        label: "Give up waiting for it to start",
+        label: "Give up waiting for it to start (ms)",
         type: "num",
         int: true,
         min: 0,
@@ -296,7 +296,7 @@ const SCHEMA: Group[] = [
       },
       {
         key: "idleTimeoutMs",
-        label: "Give up on a reply that froze",
+        label: "Give up on a reply that froze (ms)",
         type: "num",
         int: true,
         min: 0,
@@ -1077,6 +1077,24 @@ function afterPaint(fn: () => void) {
   else fn();
 }
 
+// Checkboxes and number spinners are drawn by the browser, not by us. The
+// browser picks their colours from the page's colour scheme rather than from
+// the theme, and with no scheme set it assumes light, which is why an unchecked
+// box came out as a white block sitting on a dark panel. This is the same fault
+// that made the search field's clear button white. Rather than assume dark,
+// measure what the panel is actually sitting on and say which way round it is,
+// so a light theme still gets light controls.
+function matchColorScheme(el: any) {
+  afterPaint(() => {
+    try {
+      if (!el || !el.style) return;
+      const bg = backdropOf(el);
+      if (!bg) return;
+      el.style.colorScheme = relLuminance(bg) < 0.5 ? "dark" : "light";
+    } catch (_) {}
+  });
+}
+
 function ensureReadable(el: any, min?: number) {
   afterPaint(() => fixContrast(el, min));
 }
@@ -1566,6 +1584,9 @@ export function setup(ctx: Ctx, opts?: any) {
   // a hand-rolled fixed-position element with its own pointer handling.
   let floatWidget: any = null;
   let floatMenu: HTMLElement | null = null;
+  // Reassigned each time the button is rebuilt; the document listener below
+  // calls through this so only one listener is ever registered.
+  let holdMoveWatch: ((e: any) => void) | null = null;
   let floatEl: any = null;
   let floatWidgetSize = 0;
 
@@ -1684,11 +1705,18 @@ export function setup(ctx: Ctx, opts?: any) {
     });
     // Dragging is the host moving the button, so it is not a hold. The threshold
     // is loose enough that a thumb resting on glass does not cancel it.
-    el.addEventListener("pointermove", (e: any) => {
+    //
+    // Watched on the document rather than on the button. The host drags the
+    // widget by capturing the pointer on the frame around this button, and once
+    // it does that the moves are delivered there instead. They still pass
+    // through the document on the way down, so this sees them either way. A
+    // listener only on the button would miss a drag entirely and pop the menu
+    // open in the middle of one.
+    holdMoveWatch = (e: any) => {
       if (!pressFrom || !e) return;
       if (Math.abs(e.clientX - pressFrom.x) > 8 || Math.abs(e.clientY - pressFrom.y) > 8)
         dropPress();
-    });
+    };
     // Android raises this on a long press too, so it can arrive alongside the
     // timer above. showFloatMenu closes any open menu first, so a second call
     // reopens rather than stacking.
@@ -3440,11 +3468,16 @@ export function setup(ctx: Ctx, opts?: any) {
         hideFloatMenu();
       }
     };
+    const onHoldMove = (e: any) => {
+      if (holdMoveWatch) holdMoveWatch(e);
+    };
+    document.addEventListener("pointermove", onHoldMove, true);
     document.addEventListener("pointerdown", onHintDismiss, true);
     document.addEventListener("scroll", onHintScroll, true);
     document.addEventListener("keydown", onHintKey, true);
     if (typeof window !== "undefined") window.addEventListener("resize", onHintResize);
     disposers.push(() => {
+      try { document.removeEventListener("pointermove", onHoldMove, true); } catch (_) {}
       try { document.removeEventListener("pointerdown", onHintDismiss, true); } catch (_) {}
       try { document.removeEventListener("scroll", onHintScroll, true); } catch (_) {}
       try { document.removeEventListener("keydown", onHintKey, true); } catch (_) {}
@@ -4071,6 +4104,7 @@ export function setup(ctx: Ctx, opts?: any) {
     const panel = document.createElement("div");
     panel.style.cssText =
       "display:flex;flex-direction:column;max-height:min(74vh,640px);overflow:hidden;box-sizing:border-box;font:13px/1.45 var(--lumiverse-font-family,system-ui);color:var(--lumiverse-text,#eee)";
+    matchColorScheme(panel);
 
     // the one scroll area: flexes to fill whatever height is left after the
     // footer. min-height:0 lets it actually shrink and scroll inside the flex.
@@ -4727,8 +4761,10 @@ export function setup(ctx: Ctx, opts?: any) {
     // bool/num wrap in <label> so the whole row toggles or focuses its control.
     // text rows use <div> because they contain a Test button, which shouldn't sit inside a label.
     const row = document.createElement(f.type === "text" ? "div" : "label");
-    // Marks the row as the thing a hint popover measures itself against.
-    row.setAttribute("data-ar-row", "1");
+    // Marks the row as the thing a hint popover measures itself against, and
+    // names which setting it holds, which is what the checks read to tell a
+    // duration apart from a plain number.
+    row.setAttribute("data-ar-row", String(f.key || "1"));
     row.style.cssText =
       "display:flex;flex-direction:column;gap:5px;cursor:" +
       (f.type === "text" ? "default" : "pointer");
