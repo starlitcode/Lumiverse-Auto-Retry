@@ -1113,6 +1113,10 @@ function ensureReadableTree(root: any, min?: number) {
 // True when the device has been asked to keep movement down. Read at the point
 // of use rather than once at load, so turning the setting on takes effect
 // without reloading the page.
+// Long enough that a normal tap never reaches it, short enough that holding
+// the button does not feel broken.
+const HOLD_MS = 500;
+
 function stillness(): boolean {
   try {
     return (
@@ -1561,6 +1565,7 @@ export function setup(ctx: Ctx, opts?: any) {
   // reset-position options users get on any float widget. That is why this is not
   // a hand-rolled fixed-position element with its own pointer handling.
   let floatWidget: any = null;
+  let floatMenu: HTMLElement | null = null;
   let floatEl: any = null;
   let floatWidgetSize = 0;
 
@@ -1632,6 +1637,9 @@ export function setup(ctx: Ctx, opts?: any) {
     el.style.cssText =
       "display:flex;align-items:center;justify-content:center;box-sizing:border-box;" +
       "border-radius:50%;border:1px solid;cursor:pointer;padding:0;line-height:1;" +
+      // A long press on a phone otherwise starts a text selection or the
+      // browser's own callout, either of which lands on top of the menu.
+      "user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;" +
       "font-family:var(--lumiverse-font-family,system-ui);" +
       "box-shadow:var(--lumiverse-shadow-sm,0 2px 8px rgba(0,0,0,.2));" +
       // Only colour and scale are animated. Position is the host's business, and
@@ -1650,11 +1658,61 @@ export function setup(ctx: Ctx, opts?: any) {
     const springBack = () => {
       el.style.transform = "none";
     };
-    el.addEventListener("pointerup", springBack);
-    el.addEventListener("pointercancel", springBack);
-    el.addEventListener("pointerleave", springBack);
+    // A press held down opens the menu instead of toggling. Right-click does the
+    // same on a pointer device. Without this the only way to put the button away
+    // was to open settings and turn it off, which is a long walk for something
+    // that is in your way right now.
+    let pressTimer: any = null;
+    let pressFrom: { x: number; y: number } | null = null;
+    let openedByHold = false;
+    const dropPress = () => {
+      if (pressTimer) {
+        clearTimeout(pressTimer);
+        pressTimer = null;
+      }
+      pressFrom = null;
+    };
+    el.addEventListener("pointerdown", (e: any) => {
+      openedByHold = false;
+      pressFrom = { x: e && e.clientX, y: e && e.clientY };
+      pressTimer = setTimeout(() => {
+        pressTimer = null;
+        openedByHold = true;
+        springBack();
+        showFloatMenu();
+      }, HOLD_MS);
+    });
+    // Dragging is the host moving the button, so it is not a hold. The threshold
+    // is loose enough that a thumb resting on glass does not cancel it.
+    el.addEventListener("pointermove", (e: any) => {
+      if (!pressFrom || !e) return;
+      if (Math.abs(e.clientX - pressFrom.x) > 8 || Math.abs(e.clientY - pressFrom.y) > 8)
+        dropPress();
+    });
+    // Android raises this on a long press too, so it can arrive alongside the
+    // timer above. showFloatMenu closes any open menu first, so a second call
+    // reopens rather than stacking.
+    el.addEventListener("contextmenu", (e: any) => {
+      try { e.preventDefault(); } catch (_) {}
+      dropPress();
+      springBack();
+      showFloatMenu();
+    });
+    const endPress = () => {
+      dropPress();
+      springBack();
+    };
+    el.addEventListener("pointerup", endPress);
+    el.addEventListener("pointercancel", endPress);
+    el.addEventListener("pointerleave", endPress);
     el.addEventListener("click", () => {
       springBack();
+      // The hold already acted. Toggling here as well would undo it in the same
+      // gesture.
+      if (openedByHold) {
+        openedByHold = false;
+        return;
+      }
       toggleEnabled();
     });
     try {
@@ -1666,7 +1724,123 @@ export function setup(ctx: Ctx, opts?: any) {
     paintFloat();
   }
 
+  function hideFloatMenu() {
+    if (floatMenu) {
+      try { floatMenu.remove(); } catch (_) {}
+    }
+    floatMenu = null;
+  }
+
+  // The menu behind a hold or a right-click on the floating button. Two entries,
+  // both about the button itself rather than about retrying, so nothing here can
+  // change what the extension does to a reply.
+  function showFloatMenu() {
+    hideFloatMenu();
+    if (typeof document === "undefined" || !floatEl || !floatEl.getBoundingClientRect)
+      return;
+    const el = document.createElement("div");
+    el.setAttribute("role", "menu");
+    el.style.cssText =
+      "position:fixed;z-index:2147483646;box-sizing:border-box;padding:4px;" +
+      "border-radius:var(--lumiverse-radius-md,10px);min-width:180px;" +
+      // Opaque for the same reason the hint is: it lands over the chat, and the
+      // elevated colour alone is see-through enough to read words underneath it.
+      "background-color:var(--lumiverse-card-bg-solid,rgb(24,20,34));" +
+      "background-image:linear-gradient(var(--lumiverse-bg-elevated,rgba(35,30,48,.98))," +
+      "var(--lumiverse-bg-elevated,rgba(35,30,48,.98)));" +
+      "border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));" +
+      "box-shadow:var(--lumiverse-shadow-md,0 8px 24px rgba(0,0,0,.4));" +
+      "color:var(--lumiverse-text,#eee);font:13px/1.4 var(--lumiverse-font-family,system-ui);" +
+      "left:0;top:-9999px";
+
+    const entry = (label: string, run: () => void) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.setAttribute("role", "menuitem");
+      b.textContent = label;
+      b.style.cssText =
+        "display:block;width:100%;box-sizing:border-box;text-align:left;cursor:pointer;" +
+        "padding:9px 10px;border:0;border-radius:var(--lumiverse-radius-sm,5px);" +
+        "background:transparent;color:inherit;font:inherit";
+      const lit = (on: boolean) => {
+        b.style.background = on
+          ? "var(--lumiverse-secondary-hover,rgba(128,128,128,.25))"
+          : "transparent";
+      };
+      b.addEventListener("mouseenter", () => lit(true));
+      b.addEventListener("mouseleave", () => lit(false));
+      b.addEventListener("focus", () => lit(true));
+      b.addEventListener("blur", () => lit(false));
+      b.addEventListener("click", () => {
+        hideFloatMenu();
+        run();
+      });
+      el.appendChild(b);
+      return b;
+    };
+
+    // Rebuilding the widget is what puts it back, since where it sits belongs to
+    // the host and a fresh one starts at the position it is handed.
+    const first = entry("Move back to the corner", () => {
+      hideFloat();
+      showFloat();
+    });
+    entry("Hide this button", () => {
+      cfg.showFloatingToggle = false;
+      saveSaved();
+      hideFloat();
+      // Without this it looks like the button broke. Say where it went.
+      showToast("Floating button hidden. Turn it back on in Auto Retry settings.", {
+        force: true,
+      });
+    });
+
+    (document.body || document.documentElement).appendChild(el);
+
+    // Beside the button, nudged back on screen. The button snaps to whichever
+    // edge is nearest, so the menu has to be able to sit on either side of it
+    // and above it as well as below.
+    const vw = vpW();
+    const vh = vpH();
+    const r = floatEl.getBoundingClientRect();
+    const box = el.getBoundingClientRect();
+    const w = box.width || el.offsetWidth || 0;
+    const h = box.height || el.offsetHeight || 0;
+    const GAP = 8;
+    const left = Math.max(8, Math.min(r.left + r.width / 2 - w / 2, vw - w - 8));
+    let top = r.bottom + GAP;
+    if (top + h > vh - 8) {
+      const above = r.top - h - GAP;
+      top = above >= 8 ? above : Math.max(8, vh - h - 8);
+    }
+    // Same correction the hint popover needs: under a host that applies its UI
+    // Scale as a zoom, a fixed element does not land where it was told to. Put
+    // it down, measure where it went, and close the gap.
+    el.style.left = Math.round(left) + "px";
+    el.style.top = Math.round(top) + "px";
+    const got = el.getBoundingClientRect();
+    const scale = el.offsetWidth > 0 ? got.width / el.offsetWidth : 1;
+    const dx = left - got.left;
+    const dy = top - got.top;
+    if (scale > 0.01 && (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5)) {
+      el.style.left = Math.round(left + dx / scale) + "px";
+      el.style.top = Math.round(top + dy / scale) + "px";
+    }
+
+    floatMenu = el;
+    ensureReadableTree(el, 2.6);
+    try { first.focus({ preventScroll: true }); } catch (_) {}
+  }
+
   function hideFloat() {
+    hideFloatMenu();
+    // Take back what we put in before handing the widget over. Destroying it is
+    // the host's job and normally takes the button with it, but if that throws
+    // or does nothing the button would sit there with no code behind it, still
+    // accepting taps.
+    if (floatEl) {
+      try { floatEl.remove(); } catch (_) {}
+    }
     if (floatWidget) {
       try { floatWidget.destroy(); } catch (_) {}
     }
@@ -3231,8 +3405,20 @@ export function setup(ctx: Ctx, opts?: any) {
   // closes it. Scroll is captured, since the options list scrolls, not the page.
   if (typeof document !== "undefined") {
     const onHintDismiss = (e: any) => {
-      if (!hintPop) return;
       const t = e && e.target;
+      // The float menu shares these listeners rather than adding its own. A
+      // press on the button itself is left alone, or opening the menu would
+      // immediately close it again.
+      if (floatMenu) {
+        let inside = false;
+        try {
+          inside =
+            (!!t && floatMenu.contains && floatMenu.contains(t)) ||
+            (!!t && !!floatEl && (t === floatEl || (floatEl.contains && floatEl.contains(t))));
+        } catch (_) {}
+        if (!inside) hideFloatMenu();
+      }
+      if (!hintPop) return;
       try {
         // The "?" itself is left alone so its own handler can close it, rather
         // than this closing it and the click reopening it.
@@ -3241,19 +3427,28 @@ export function setup(ctx: Ctx, opts?: any) {
       } catch (_) {}
       hideHint();
     };
+    // The float button is fixed, so a scroll does not move it and the menu can
+    // stay. A resize can put it somewhere else entirely, so that closes it.
     const onHintScroll = () => hideHint();
+    const onHintResize = () => {
+      hideHint();
+      hideFloatMenu();
+    };
     const onHintKey = (e: any) => {
-      if (e && e.key === "Escape") hideHint();
+      if (e && e.key === "Escape") {
+        hideHint();
+        hideFloatMenu();
+      }
     };
     document.addEventListener("pointerdown", onHintDismiss, true);
     document.addEventListener("scroll", onHintScroll, true);
     document.addEventListener("keydown", onHintKey, true);
-    if (typeof window !== "undefined") window.addEventListener("resize", onHintScroll);
+    if (typeof window !== "undefined") window.addEventListener("resize", onHintResize);
     disposers.push(() => {
       try { document.removeEventListener("pointerdown", onHintDismiss, true); } catch (_) {}
       try { document.removeEventListener("scroll", onHintScroll, true); } catch (_) {}
       try { document.removeEventListener("keydown", onHintKey, true); } catch (_) {}
-      try { if (typeof window !== "undefined") window.removeEventListener("resize", onHintScroll); } catch (_) {}
+      try { if (typeof window !== "undefined") window.removeEventListener("resize", onHintResize); } catch (_) {}
       hideHint();
     });
   }

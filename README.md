@@ -42,7 +42,7 @@ Only **Save** keeps your changes. Closing with the X or tapping outside discards
 
 Two options in Basics, and you can use either or both:
 
-- **Floating on/off button** puts a small button over the chat that toggles it in one tap. Drag it anywhere; it snaps to the nearest edge and stays where you leave it, and you can set its size or right-click it to hide it or reset its position.
+- **Floating on/off button** puts a small button over the chat that toggles it in one tap. Drag it anywhere; it snaps to the nearest edge and stays where you leave it, and you can set its size. Hold it, or right-click on a computer, for a menu with **Move back to the corner** and **Hide this button**.
 - **On/off button in the Extras menu** adds an entry next to the settings button. Its label says which state it is currently in, so you can check and change it without opening settings, and it takes up no room on screen.
 
 ## Documentation

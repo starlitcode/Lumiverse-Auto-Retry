@@ -949,6 +949,106 @@ console.log("\nicons");
     normal.errs.concat(reduced.errs));
 }
 
+// ---- holding the float button ----
+// The README promised a way to put the button away without opening settings.
+// A tap must still toggle, a hold must not, and a drag is the host moving the
+// button rather than a hold.
+console.log("\nfloat button menu");
+{
+  const page = await browser.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.setContent("<div id=modal></div><div id=host></div>");
+  await page.addStyleTag({ content: THEME });
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  const out = await page.evaluate(async () => {
+    const host = document.getElementById("host");
+    host.style.cssText = "position:fixed;left:120px;top:120px";
+    let widgets = 0;
+    let teardown = window.__setup(
+      {
+        events: { on: () => () => {} },
+        ui: {
+          showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+          registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }),
+          createFloatWidget: () => { widgets++; return { root: host, destroy: () => {}, setPosition: () => {} }; },
+        },
+      },
+      { enabled: true, showFloatingToggle: true, floatingToggleSize: 44, toast: false },
+    );
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const btn = () => host.querySelector("button");
+    const menu = () => document.querySelector('[role="menu"]');
+    const items = () => [...document.querySelectorAll('[role="menuitem"]')].map((b) => b.textContent);
+    const down = (el, x, y) => el.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, clientX: x, clientY: y }));
+    const move = (el, x, y) => el.dispatchEvent(new PointerEvent("pointermove", { bubbles: true, clientX: x, clientY: y }));
+    const up = (el) => el.dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
+
+    // A quick tap toggles and opens nothing.
+    const wasOn = btn().getAttribute("aria-pressed");
+    down(btn(), 130, 130); await wait(60); up(btn()); btn().click();
+    const afterTap = { pressed: btn().getAttribute("aria-pressed"), menu: !!menu() };
+    btn().click(); // back on
+
+    // A hold opens the menu and does not toggle.
+    const before = btn().getAttribute("aria-pressed");
+    down(btn(), 130, 130); await wait(620);
+    const openedByHold = !!menu();
+    const entries = items();
+    up(btn()); btn().click();
+    const afterHold = { pressed: btn().getAttribute("aria-pressed"), same: btn().getAttribute("aria-pressed") === before };
+
+    // On screen, not off the edge.
+    const box = menu() ? menu().getBoundingClientRect() : null;
+    const onScreen = !!box && box.left >= 0 && box.top >= 0 &&
+      box.right <= innerWidth + 1 && box.bottom <= innerHeight + 1;
+
+    // Esc closes it.
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    const afterEsc = !!menu();
+
+    // A drag is not a hold.
+    down(btn(), 130, 130); move(btn(), 190, 175); await wait(620);
+    const afterDrag = !!menu();
+    up(btn());
+
+    // "Move back to the corner" rebuilds the widget.
+    const widgetsBefore = widgets;
+    down(btn(), 130, 130); await wait(620);
+    [...document.querySelectorAll('[role="menuitem"]')].find((b) => /corner/i.test(b.textContent)).click();
+    await wait(30);
+    const rebuilt = widgets > widgetsBefore;
+    up(btn());
+
+    // "Hide this button" takes it away and leaves no menu behind.
+    down(btn(), 130, 130); await wait(620);
+    [...document.querySelectorAll('[role="menuitem"]')].find((b) => /hide/i.test(b.textContent)).click();
+    await wait(30);
+    const gone = { button: !host.querySelector("button"), menu: !!menu() };
+
+    // And teardown after all that leaves nothing.
+    down(document.body, 1, 1);
+    teardown();
+    const left = { menu: !!menu(), items: items().length };
+    return { wasOn, afterTap, openedByHold, entries, afterHold, onScreen, afterEsc, afterDrag, rebuilt, gone, left };
+  });
+  await page.close();
+  check("a quick tap still toggles", out.afterTap.pressed !== out.wasOn, out.afterTap);
+  check("and opens no menu", !out.afterTap.menu);
+  check("a hold opens the menu", out.openedByHold);
+  check("with both entries", out.entries.length === 2, out.entries);
+  check("a hold does not also toggle", out.afterHold.same, out.afterHold);
+  check("the menu lands on screen", out.onScreen);
+  check("Esc closes it", !out.afterEsc);
+  check("dragging is not a hold", !out.afterDrag);
+  check("moving it back rebuilds the widget", out.rebuilt);
+  check("hiding removes the button", out.gone.button, out.gone);
+  check("and leaves no menu behind", !out.gone.menu);
+  check("teardown leaves nothing", !out.left.menu && out.left.items === 0, out.left);
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- nothing is left behind ----
 console.log("\nteardown");
 {
