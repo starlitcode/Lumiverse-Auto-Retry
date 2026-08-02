@@ -31,8 +31,6 @@ _2026-08-02_
 - **The menu's focus ring was a hard white rectangle**, taken from the browser rather than your theme. It uses your accent colour now.
 - **Preset buttons that had nothing to act on.** With no presets saved, Load, Update selected, Delete and Rename selected were all lit, Load styled as the main action, and each one answered a press with a message telling you to pick a preset first. They wait until there is a preset to act on.
 
-**Updating:** if you have a word swap rule for a word starting or ending with an accented or non-English letter, it has been doing nothing and will start working now. Worth a look at your rules before you next generate.
-
 ## 4.0.0
 
 _2026-07-31_
