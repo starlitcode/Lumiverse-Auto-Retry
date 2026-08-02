@@ -8,9 +8,10 @@
 //
 //   bun run test:ui
 //
-// Playwright is deliberately NOT a dependency of this project: it pulls a few
-// hundred megabytes of browsers, and the install path here is "Lumiverse clones
-// the repo". If it is not present this skips and exits cleanly. To run it:
+// Playwright is not a dependency of this project and should not become one: it
+// pulls a few hundred megabytes of browsers, and the install path here is
+// "Lumiverse clones the repo". If it is not present this skips and exits
+// cleanly. To run it:
 //
 //   bun add -d playwright && bunx playwright install chromium
 //

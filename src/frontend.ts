@@ -3107,8 +3107,8 @@ export function setup(ctx: Ctx, opts?: any) {
     el.style.cssText =
       "position:fixed;z-index:2147483646;box-sizing:border-box;padding:8px 10px;" +
       "border-radius:var(--lumiverse-radius,8px);" +
-      // Opaque, deliberately. This sits directly on top of the options list, and
-      // --lumiverse-bg-elevated is only 90% opaque, which left the row
+      // This has to be fully opaque. It sits directly on top of the options
+      // list, and --lumiverse-bg-elevated is only 90% opaque, which left the row
       // underneath legible through the description covering it. The theme's own
       // solid surface is painted first and the elevated colour laid over it, so
       // the tint still follows the theme but nothing shows through.

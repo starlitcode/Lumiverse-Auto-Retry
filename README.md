@@ -86,7 +86,7 @@ Find and replace works separately, since editing a saved reply is a backend job.
 - **The word-swap engine** - single-pass application, longest match wins, whole-word matching, capitalisation, and the greeting exemption. Driven through `dist/backend.js` itself, so a bad build fails these too.
 - **The contrast maths** that keeps panel text readable on any theme.
 
-`bun run test:ui` adds browser checks for the settings panel: contrast across themes, hints not shifting the list, keyboard reach, and teardown. It needs Playwright, which is deliberately not a dependency here (`bun add -d playwright && bunx playwright install chromium`). Without it the script says so and exits cleanly.
+`bun run test:ui` adds browser checks for the settings panel: contrast across themes, hints not shifting the list, keyboard reach, and teardown. It needs Playwright, which is not a dependency here and should not become one, since it pulls a few hundred megabytes of browsers (`bun add -d playwright && bunx playwright install chromium`). Without it the script says so and exits cleanly.
 
 ## Credits
 
