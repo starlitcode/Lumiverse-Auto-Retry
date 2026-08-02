@@ -1103,6 +1103,103 @@ console.log("\nunits");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- everything that floats over something else has to be solid ----
+// A surface painted with --lumiverse-bg-elevated alone is 90% opaque, so the
+// content behind it stays legible through it. That has now bitten the hint
+// popover, the retry pop-up, the live log and the full-size editor. This checks
+// every floating surface at once rather than one at a time.
+console.log("\nfloating surfaces");
+{
+  const { out, errors } = await inPanel(browser, {}, async (page) =>
+    page.evaluate(async () => {
+      const opaque = (el) => {
+        if (!el) return null;
+        const bg = getComputedStyle(el).backgroundColor;
+        const m = bg.match(/rgba?\(([^)]+)\)/);
+        if (!m) return { bg, ok: false };
+        const parts = m[1].split(",").map((x) => x.trim());
+        const a = parts.length > 3 ? Number(parts[3]) : 1;
+        return { bg, ok: a === 1 };
+      };
+      const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const found = {};
+
+      // the hint popover
+      document.querySelector("button[data-ar-hint]").dispatchEvent(new MouseEvent("mouseenter"));
+      await frame();
+      found.hint = opaque(document.querySelector('[role="tooltip"]'));
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+
+      // the full-size editor
+      for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      await frame();
+      const ex = [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === "Expand");
+      if (ex) ex.click();
+      await frame();
+      const box = [...document.querySelectorAll("body > div")]
+        .filter((d) => d.id !== "modal")
+        .map((d) => d.querySelector("textarea") && d.querySelector("textarea").parentElement)
+        .find(Boolean);
+      found.editor = opaque(box);
+      const cancel = [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === "Cancel");
+      if (cancel) cancel.click();
+      await frame();
+
+      // the live log and the retry pop-up, reached through the module's own
+      // entry points rather than by rebuilding them here
+      found.log = opaque(document.getElementById("__lvRetryLog"));
+      found.toast = opaque(document.getElementById("__lvRetryToast"));
+      return found;
+    }),
+  );
+  check("the hint popover is solid", out.hint && out.hint.ok, out.hint);
+  check("the full-size editor is solid", out.editor && out.editor.ok, out.editor);
+  check("no console errors", errors.length === 0, errors);
+
+  // The live log and the retry pop-up only exist once something has happened,
+  // so these are driven rather than opened by hand.
+  const page = await browser.newPage();
+  const errs = [];
+  page.on("pageerror", (e) => errs.push(e.message));
+  await page.setContent('<div id=modal></div><button data-testid="regenerate">Regenerate</button>');
+  await page.addStyleTag({ content: THEME });
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  const live = await page.evaluate(async () => {
+    const handlers = {};
+    window.__setup(
+      {
+        events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
+        ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+              registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) },
+      },
+      { liveLog: true, toast: true, retryDelayMs: 400, backoffFactor: 1, jitter: false, maxRetries: 2,
+        stuckTimeoutMs: 0, idleTimeoutMs: 0, pauseWhenFailing: false },
+    );
+    // An empty reply schedules a retry, and the pop-up counts it down.
+    handlers.GENERATION_STARTED({ chatId: "c", generationId: "g" });
+    handlers.GENERATION_ENDED({ chatId: "c", content: "" });
+    await new Promise((r) => setTimeout(r, 80));
+    const opaque = (el) => {
+      if (!el) return null;
+      const bg = getComputedStyle(el).backgroundColor;
+      const m = bg.match(/rgba?\(([^)]+)\)/);
+      if (!m) return { bg, ok: false };
+      const parts = m[1].split(",").map((x) => x.trim());
+      return { bg, ok: (parts.length > 3 ? Number(parts[3]) : 1) === 1 };
+    };
+    // The log is the fixed panel bottom-right that is not the pop-up.
+    const logEl = [...document.querySelectorAll("body > div")].find(
+      (d) => d.id !== "modal" && getComputedStyle(d).position === "fixed" && d.id !== "__lvRetryToast",
+    );
+    return { toast: opaque(document.getElementById("__lvRetryToast")), log: opaque(logEl) };
+  });
+  await page.close();
+  check("the retry pop-up is solid", live.toast && live.toast.ok, live.toast);
+  check("the live log is solid", live.log && live.log.ok, live.log);
+  check("no console errors on those", errs.length === 0, errs);
+}
+
 // ---- nothing is left behind ----
 console.log("\nteardown");
 {
