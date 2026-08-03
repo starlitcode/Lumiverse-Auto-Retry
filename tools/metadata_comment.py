@@ -4,19 +4,52 @@ The block returned by :func:`embed_metadata_comment` is plain text written in
 the comment syntax of the target language, so it can be pasted into a source
 file and recovered later by stripping the comment markers and running the
 payload through :func:`base64.b64decode`.
+:func:`extract_metadata_from_comment` does that recovery, reading a file back
+and returning the original string.
 """
 
 from __future__ import annotations
 
 import base64
+import binascii
 from typing import NamedTuple
 
-__all__ = ["HEADER", "LINE_WIDTH", "SUPPORTED_LANGUAGES", "embed_metadata_comment"]
+__all__ = [
+    "HEADER",
+    "LINE_WIDTH",
+    "SUPPORTED_LANGUAGES",
+    "MetadataError",
+    "MetadataDecodeError",
+    "MetadataNotFoundError",
+    "embed_metadata_comment",
+    "extract_metadata_from_comment",
+]
 
 HEADER = "Encoded metadata (Base64) – decode with base64.b64decode"
 
+#: Leading part of :data:`HEADER` used to recognise a block on the way back in.
+#: Stopping before the dash keeps extraction working across the hyphen and
+#: en dash spellings that editors and copy-paste tend to swap.
+HEADER_MARKER = "Encoded metadata (Base64)"
+
 #: Width of a payload line, matching the MIME convention of 76 characters.
 LINE_WIDTH = 76
+
+_BASE64_ALPHABET = frozenset(
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/="
+)
+
+
+class MetadataError(Exception):
+    """Base class for failures while recovering an embedded metadata block."""
+
+
+class MetadataNotFoundError(MetadataError):
+    """Raised when a file holds no recognisable metadata header."""
+
+
+class MetadataDecodeError(MetadataError):
+    """Raised when a block is found but its payload will not decode."""
 
 
 class _CommentStyle(NamedTuple):
@@ -81,6 +114,34 @@ _ALIASES = {
 SUPPORTED_LANGUAGES = tuple(sorted({*_STYLES, *_ALIASES}))
 
 
+def _resolve_style(language: str) -> _CommentStyle:
+    """Return the comment style for ``language``, or raise :class:`ValueError`."""
+    key = language.strip().lower()
+    style = _STYLES.get(_ALIASES.get(key, key))
+    if style is None:
+        raise ValueError(
+            f"Unsupported language {language!r}; expected one of: "
+            + ", ".join(SUPPORTED_LANGUAGES)
+        )
+    return style
+
+
+def _uncomment(line: str, style: _CommentStyle) -> str | None:
+    """Strip ``style``'s comment marker off ``line``.
+
+    Returns the remaining text, or ``None`` when the line does not carry the
+    marker at all. Block styles have no per-line marker, so every line of one
+    is treated as content.
+    """
+    text = line.strip()
+    marker = style.prefix.strip()
+    if marker:
+        if not text.startswith(marker):
+            return None
+        text = text[len(marker) :]
+    return text.strip()
+
+
 def embed_metadata_comment(metadata: str, language: str = "python") -> str:
     """Return ``metadata`` as a Base64 comment block for ``language``.
 
@@ -112,14 +173,7 @@ def embed_metadata_comment(metadata: str, language: str = "python") -> str:
         YnVpbGQ9NDI=
         -->
     """
-    key = language.strip().lower()
-    style = _STYLES.get(_ALIASES.get(key, key))
-    if style is None:
-        raise ValueError(
-            f"Unsupported language {language!r}; expected one of: "
-            + ", ".join(SUPPORTED_LANGUAGES)
-        )
-
+    style = _resolve_style(language)
     payload = base64.b64encode(metadata.encode("utf-8")).decode("ascii")
     chunks = [
         payload[start : start + LINE_WIDTH]
@@ -134,3 +188,85 @@ def embed_metadata_comment(metadata: str, language: str = "python") -> str:
     if style.closer:
         lines.append(style.closer)
     return "\n".join(lines)
+
+
+def extract_metadata_from_comment(file_path: str, language: str = "python") -> str:
+    """Return the metadata embedded in ``file_path`` by :func:`embed_metadata_comment`.
+
+    The file is scanned for a header line in ``language``'s comment syntax, and
+    the Base64 payload directly beneath it is collected and decoded. Collection
+    stops at the first line that is not a full-width run of Base64 characters,
+    which is how the block's last line is recognised, so ordinary comments and
+    code following the block are never swallowed. If a file holds more than one
+    block, the first one carrying a payload is returned, which lets a file
+    quote the header in prose without shadowing its real block.
+
+    Args:
+        file_path: Path to the file to scan. Read as UTF-8, with undecodable
+            bytes replaced rather than raised, since a Base64 payload is always
+            ASCII and the rest of the file only has to be searchable.
+        language: A name or alias from :data:`SUPPORTED_LANGUAGES`, matched
+            case-insensitively. It must match the language the block was
+            written with, since it selects the comment syntax to strip.
+
+    Returns:
+        The decoded metadata. A file whose only headers carry no payload
+        returns the empty string, mirroring what :func:`embed_metadata_comment`
+        writes for empty metadata.
+
+    Raises:
+        ValueError: If ``language`` is not one of :data:`SUPPORTED_LANGUAGES`.
+        MetadataNotFoundError: If no header for ``language`` is found.
+        MetadataDecodeError: If the payload is not valid Base64, or does not
+            decode to UTF-8 text.
+        OSError: If the file cannot be read. :class:`FileNotFoundError` and
+            :class:`PermissionError` are the usual cases, and both propagate
+            unchanged so callers can tell them apart.
+    """
+    style = _resolve_style(language)
+
+    with open(file_path, encoding="utf-8", errors="replace") as handle:
+        lines = handle.read().splitlines()
+
+    saw_header = False
+    for index, line in enumerate(lines):
+        content = _uncomment(line, style)
+        if content is None or not content.startswith(HEADER_MARKER):
+            continue
+        saw_header = True
+
+        chunks: list[str] = []
+        closer = style.closer.strip()
+        for payload_line in lines[index + 1 :]:
+            if closer and payload_line.strip() == closer:
+                break
+            chunk = _uncomment(payload_line, style)
+            if not chunk or not _BASE64_ALPHABET.issuperset(chunk):
+                break
+            chunks.append(chunk)
+            # Only the closing chunk is short or padded; anything after it
+            # belongs to the file, not to the block.
+            if len(chunk) < LINE_WIDTH or "=" in chunk:
+                break
+
+        if not chunks:
+            # A header with nothing usable under it: either a block for empty
+            # metadata, or prose quoting the header. Neither is worth failing
+            # over while a real block may still be further down the file.
+            continue
+
+        try:
+            return base64.b64decode("".join(chunks), validate=True).decode("utf-8")
+        except (binascii.Error, UnicodeDecodeError) as error:
+            raise MetadataDecodeError(
+                f"Found a metadata block at line {index + 1} of {file_path!r}, "
+                f"but its payload could not be decoded: {error}"
+            ) from error
+
+    if saw_header:
+        return ""
+
+    raise MetadataNotFoundError(
+        f"No {language} metadata block found in {file_path!r}; "
+        f"expected a comment line starting with {HEADER_MARKER!r}."
+    )
