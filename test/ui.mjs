@@ -2052,6 +2052,43 @@ console.log("\nhint placement");
     check("no console errors", errors.length === 0, errors);
   }
 
+  // Under a host that applies its UI Scale as a zoom, the room on the screen
+  // and the element's own units are not the same. A cap written in the wrong
+  // one ran the popover off the bottom of the screen at 1.4.
+  {
+    const { out, errors } = await inPanel(
+      browser, { css: PANEL + "body{zoom:1.4}", viewport: { width: 500, height: 800 } },
+      async (page) => page.evaluate(async () => {
+        const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+        await frame();
+        const row = [...document.querySelectorAll("[data-ar-row]")]
+          .find((r) => (r.textContent || "").includes("What the notes say"));
+        // Mid screen on purpose. Jammed against the bottom there is barely any
+        // room to cap to, so a cap in the wrong units is too small to notice;
+        // with room to spare the same mistake overshoots by half the screen.
+        row.scrollIntoView({ block: "center" });
+        await frame();
+        row.querySelector("[data-ar-hint]").dispatchEvent(new MouseEvent("mouseenter"));
+        await frame();
+        const tip = document.querySelector('[role="tooltip"]');
+        const rr = row.getBoundingClientRect();
+        const tr = tip.getBoundingClientRect();
+        return {
+          below: tr.top >= rr.bottom - 1,
+          withinBottom: tr.bottom <= innerHeight,
+          capped: getComputedStyle(tip).maxHeight !== "none",
+          rowBottom: Math.round(rr.bottom), tipTop: Math.round(tr.top),
+          tipBottom: Math.round(tr.bottom), vh: innerHeight,
+        };
+      }),
+    );
+    check("a zoomed host still opens it below the row", out.below, out);
+    check("and caps it against the room on the screen, not its own units",
+      out.capped && out.withinBottom, out);
+    check("no console errors", errors.length === 0, errors);
+  }
+
   // A short description with room to spare is left alone entirely.
   {
     const { out, errors } = await inPanel(

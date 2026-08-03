@@ -3619,19 +3619,22 @@ export function setup(ctx: Ctx, opts?: any) {
     // of the others do: the reader looks under the setting and the text is over
     // it instead. A description too tall for the room below is capped and
     // scrolls rather than moving, so every one of them opens in the same place.
-    let top = r.bottom + GAP;
-    // Enough to be worth reading before it has to scroll. If the row sits so
-    // low that even this will not fit under it, the popover is brought up the
-    // screen far enough to show that much, which is the only case where it
-    // covers anything.
-    const MIN_HINT = 120;
-    let room = vh - EDGE - top;
-    if (room < MIN_HINT) {
-      top = Math.max(EDGE, vh - EDGE - MIN_HINT);
-      room = vh - EDGE - top;
-    }
+    const top = r.bottom + GAP;
+    // However little room there is, it is not bought by moving over the row.
+    // Covering the setting is the thing the popover exists to avoid, and a
+    // short popover still scrolls, so nothing in it is out of reach. A row low
+    // enough to make this tight is one the reader can move by scrolling a
+    // little, and scrolling closes the popover anyway.
+    const room = vh - EDGE - top;
     if (h > room) {
-      el.style.maxHeight = Math.floor(room) + "px";
+      // room is space on the screen; max-height is written in the element's own
+      // units, and under a host that applies its UI Scale as a zoom those are
+      // not the same. At 1.4 a cap of 120 rendered as 168 and the popover ran
+      // off the bottom of the screen. Divide by however much the host is
+      // scaling, measured rather than assumed, the same as the left and top
+      // below. Without a zoom this is a division by 1 and changes nothing.
+      const zoom = el.offsetWidth > 0 ? w / el.offsetWidth : 1;
+      el.style.maxHeight = Math.floor(room / (zoom > 0.01 ? zoom : 1)) + "px";
       el.style.overflowY = "auto";
       // Reaching the end of the description must not start scrolling the panel
       // behind it, because a scroll out there is what closes it.
