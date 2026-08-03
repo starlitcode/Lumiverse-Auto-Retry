@@ -470,6 +470,7 @@ const SCHEMA = [
             {
                 key: "refusalNotes",
                 needs: ["refusalNote"],
+                hintAbove: true,
                 label: "What the notes say",
                 type: "notes",
                 hint: "Goes to the model, not to your chat. Whatever you type is sent exactly as written: nothing is added to it, nothing is removed, and nothing in it is checked. Add up to ten with the plus button and they are sent in order, as one block, so a note can answer the one before it. Each carries its own role: system puts it alongside the instructions your setup already sends, you puts it in the same role as your own messages, and the character puts it in the same role as the replies. Models treat the three differently, so which one works best depends on your model and your setup. An empty note is skipped.",
@@ -3698,18 +3699,30 @@ export function setup(ctx, opts) {
         // Lined up with the row's left edge rather than centred on the "?", which
         // reads as belonging to the row, and nudged back inside a narrow screen.
         const left = Math.max(EDGE, Math.min(r.left, vw - w - EDGE));
-        // Below the row it belongs to, always. This used to flip above when there
-        // was no room below, which meant a long description opened somewhere none
-        // of the others do: the reader looks under the setting and the text is over
-        // it instead. A description too tall for the room below is capped and
-        // scrolls rather than moving, so every one of them opens in the same place.
-        const top = r.bottom + GAP;
+        // Below the row it belongs to unless the field asked otherwise, and never
+        // flipped between the two on the fly. It used to flip whenever there was no
+        // room below, which meant a long description opened somewhere none of the
+        // others do. Where it opens is now a property of the setting, so it is the
+        // same place every time for a given row.
+        //
+        // Above is for a row tall enough that below it is a long way from the "?"
+        // that was pressed. Whichever side it is on, a description too tall for the
+        // room there is capped and scrolls rather than moving to the other side.
+        let above = false;
+        try {
+            above = !!(anchor.getAttribute && anchor.getAttribute("data-ar-hint-above"));
+        }
+        catch (_) { }
         // However little room there is, it is not bought by moving over the row.
         // Covering the setting is the thing the popover exists to avoid, and a
-        // short popover still scrolls, so nothing in it is out of reach. A row low
-        // enough to make this tight is one the reader can move by scrolling a
-        // little, and scrolling closes the popover anyway.
-        const room = vh - EDGE - top;
+        // short popover still scrolls, so nothing in it is out of reach.
+        const room = above ? r.top - GAP - EDGE : vh - EDGE - (r.bottom + GAP);
+        // Above, the bottom edge is pinned a gap over the row and the top follows
+        // from however tall it ends up, capped included. Below, the top is pinned
+        // and the bottom follows.
+        const top = above
+            ? Math.max(EDGE, r.top - GAP - Math.min(h, room))
+            : r.bottom + GAP;
         if (h > room) {
             // room is space on the screen; max-height is written in the element's own
             // units, and under a host that applies its UI Scale as a zoom those are
@@ -5234,6 +5247,8 @@ export function setup(ctx, opts) {
             // Marks it for the dismiss handler, which leaves the "?" alone so its own
             // click can close a popover rather than closing and reopening it.
             info.setAttribute("data-ar-hint", "1");
+            if (f.hintAbove)
+                info.setAttribute("data-ar-hint-above", "1");
             info.style.cssText =
                 "flex:none;width:18px;height:18px;padding:0;line-height:1;border-radius:50%;border:1px solid var(--lumiverse-border,rgba(255,255,255,.3));background:transparent;color:var(--lumiverse-text-muted,rgba(255,255,255,.65));font-size:11px;cursor:pointer";
             const paint = (on) => {

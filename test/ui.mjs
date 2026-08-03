@@ -2066,15 +2066,16 @@ console.log("\nhint placement");
   const PANEL = "#modal{position:fixed;inset:12px;overflow:auto;background:rgb(24,20,34);padding:10px;box-sizing:border-box}";
   // The long one, on a viewport too short to fit it under the row.
   {
-    const want = "What the notes say";
+    // A long description on a row of ordinary height. The note list is no
+    // longer the one to use here: it opens above on purpose now.
+    const want = "confirmButtonLabels";
     const { out, errors } = await inPanel(
-      browser, { css: PANEL, viewport: { width: 393, height: 800 }, settings: { refusalNote: true } },
+      browser, { css: PANEL, viewport: { width: 393, height: 460 }, settings: { refusalNote: true } },
       async (page) => page.evaluate(async (want) => {
         const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
         for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
         await frame();
-        const row = [...document.querySelectorAll("[data-ar-row]")]
-          .find((r) => (r.textContent || "").includes(want));
+        const row = document.querySelector('[data-ar-row="' + want + '"]');
         if (!row) return { err: "no row" };
         row.scrollIntoView({ block: "end" });
         await frame();
@@ -2119,14 +2120,13 @@ console.log("\nhint placement");
   // one ran the popover off the bottom of the screen at 1.4.
   {
     const { out, errors } = await inPanel(
-      browser, { css: PANEL + "body{zoom:1.4}", viewport: { width: 500, height: 800 },
+      browser, { css: PANEL + "body{zoom:1.4}", viewport: { width: 500, height: 520 },
                  settings: { refusalNote: true } },
       async (page) => page.evaluate(async () => {
         const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
         for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
         await frame();
-        const row = [...document.querySelectorAll("[data-ar-row]")]
-          .find((r) => (r.textContent || "").includes("What the notes say"));
+        const row = document.querySelector('[data-ar-row="confirmButtonLabels"]');
         // Mid screen on purpose. Jammed against the bottom there is barely any
         // room to cap to, so a cap in the wrong units is too small to notice;
         // with room to spare the same mistake overshoots by half the screen.
@@ -2149,6 +2149,74 @@ console.log("\nhint placement");
     check("a zoomed host still opens it below the row", out.below, out);
     check("and caps it against the room on the screen, not its own units",
       out.capped && out.withinBottom, out);
+    check("no console errors", errors.length === 0, errors);
+  }
+
+  // The note list asks for its description above instead. That row holds the
+  // whole list, every role, both buttons and the counter, so below it is a long
+  // way from the "?" that was pressed.
+  {
+    const { out, errors } = await inPanel(
+      browser, { css: PANEL, viewport: { width: 393, height: 800 }, settings: { refusalNote: true } },
+      async (page) => page.evaluate(async () => {
+        const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+        await frame();
+        const row = document.querySelector('[data-ar-row="refusalNotes"]');
+        row.scrollIntoView({ block: "center" });
+        await frame();
+        row.querySelector("[data-ar-hint]").dispatchEvent(new MouseEvent("mouseenter"));
+        await frame();
+        const tip = document.querySelector('[role="tooltip"]');
+        if (!tip) return { err: "no tip" };
+        const rr = row.getBoundingClientRect();
+        const tr = tip.getBoundingClientRect();
+        return {
+          above: tr.bottom <= rr.top + 1,
+          onScreen: tr.top >= 0 && tr.bottom <= innerHeight,
+          // The point of putting it there: it lands near the "?" rather than
+          // past the end of a very tall row.
+          gapToTop: Math.round(rr.top - tr.bottom),
+          rowHeight: Math.round(rr.height),
+        };
+      }),
+    );
+    check("the note list's description opens above its row", out.above === true, out);
+    check("and sits just over it, not somewhere else",
+      out.gapToTop >= 0 && out.gapToTop <= 12, out);
+    check("the row really is a tall one, so this is worth doing",
+      out.rowHeight > 150, out);
+    check("and it stays on the screen", out.onScreen === true, out);
+    check("no console errors", errors.length === 0, errors);
+  }
+
+  // Squeezed: the same row with almost no room above it must still open above
+  // and still fit, rather than crossing over the row.
+  {
+    const { out, errors } = await inPanel(
+      browser, { css: PANEL, viewport: { width: 393, height: 620 }, settings: { refusalNote: true } },
+      async (page) => page.evaluate(async () => {
+        const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+        await frame();
+        const row = document.querySelector('[data-ar-row="refusalNotes"]');
+        row.scrollIntoView({ block: "start" });
+        await frame();
+        row.querySelector("[data-ar-hint]").dispatchEvent(new MouseEvent("mouseenter"));
+        await frame();
+        const tip = document.querySelector('[role="tooltip"]');
+        const rr = row.getBoundingClientRect();
+        const tr = tip.getBoundingClientRect();
+        return {
+          above: tr.bottom <= rr.top + 1,
+          onScreen: tr.top >= 0 && tr.bottom <= innerHeight,
+          capped: getComputedStyle(tip).maxHeight !== "none",
+        };
+      }),
+    );
+    check("with little room above it is still above", out.above === true, out);
+    check("still on the screen", out.onScreen === true, out);
+    check("and capped to what room there was", out.capped === true, out);
     check("no console errors", errors.length === 0, errors);
   }
 
