@@ -22,6 +22,7 @@ __all__ = [
     "MetadataDecodeError",
     "MetadataNotFoundError",
     "embed_metadata_comment",
+    "encode_with_custom_comment",
     "extract_metadata_from_comment",
 ]
 
@@ -184,6 +185,68 @@ def embed_metadata_comment(metadata: str, language: str = "python") -> str:
     if style.opener:
         lines.append(style.opener)
     lines.append(f"{style.prefix}{HEADER}".rstrip())
+    lines.extend(f"{style.prefix}{chunk}" for chunk in chunks)
+    if style.closer:
+        lines.append(style.closer)
+    return "\n".join(lines)
+
+
+def encode_with_custom_comment(
+    text: str,
+    header: str = "Encoded data",
+    note: str | None = None,
+    language: str = "python",
+) -> str:
+    """Return ``text`` as a Base64 comment block under a caller-chosen header.
+
+    This is the free-form sibling of :func:`embed_metadata_comment`: the block
+    has the same shape and reuses the same comment styles, but the header line
+    is whatever the caller passes, and an optional ``note`` line sits between
+    the header and the payload. Unlike :func:`embed_metadata_comment`, the
+    header carries no fixed marker, so the result is not meant to be recovered
+    by :func:`extract_metadata_from_comment`.
+
+    Args:
+        text: The text to encode. Encoded as UTF-8 before Base64.
+        header: The first comment line of the block.
+        note: An optional second comment line, written between the header and
+            the payload. Omitted entirely when ``None``.
+        language: A name or alias from :data:`SUPPORTED_LANGUAGES`, matched
+            case-insensitively.
+
+    Returns:
+        The formatted comment block, with no trailing newline. Empty ``text``
+        yields the header (and note, if any) alone, since it has no payload to
+        wrap.
+
+    Raises:
+        ValueError: If ``language`` is not one of :data:`SUPPORTED_LANGUAGES`.
+
+    Examples:
+        >>> print(encode_with_custom_comment("hi", header="Snippet", note="v1"))
+        # Snippet
+        # v1
+        # aGk=
+
+        >>> print(encode_with_custom_comment("hi", language="html"))
+        <!--
+        Encoded data
+        aGk=
+        -->
+    """
+    style = _resolve_style(language)
+    payload = base64.b64encode(text.encode("utf-8")).decode("ascii")
+    chunks = [
+        payload[start : start + LINE_WIDTH]
+        for start in range(0, len(payload), LINE_WIDTH)
+    ]
+
+    lines: list[str] = []
+    if style.opener:
+        lines.append(style.opener)
+    lines.append(f"{style.prefix}{header}".rstrip())
+    if note is not None:
+        lines.append(f"{style.prefix}{note}".rstrip())
     lines.extend(f"{style.prefix}{chunk}" for chunk in chunks)
     if style.closer:
         lines.append(style.closer)
