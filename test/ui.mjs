@@ -175,6 +175,24 @@ async function stage(page, body) {
   await page.goto(ORIGIN);
 }
 
+// A light theme, built the way Lumiverse's own variables invert: every value
+// the stock dark theme sets, given a light counterpart. Until this existed the
+// checks only ever ran on dark surfaces, so nothing held light themes to the
+// same standard even though the extension is used on them.
+const LIGHT = `:root{
+--lumiverse-primary:rgba(124,92,196,.95);--lumiverse-primary-hover:rgba(108,76,180,.95);
+--lumiverse-primary-text:rgba(96,64,168,1);--lumiverse-primary-020:rgba(124,92,196,.14);
+--lumiverse-primary-050:rgba(124,92,196,.45);--lumiverse-secondary:rgba(0,0,0,.05);
+--lumiverse-secondary-hover:rgba(0,0,0,.09);--lumiverse-secondary-border:rgba(0,0,0,.14);
+--lumiverse-danger:#dc2626;--lumiverse-success:#16a34a;
+--lumiverse-bg:rgba(250,249,253,.95);--lumiverse-bg-elevated:rgba(255,255,255,.9);
+--lumiverse-card-bg-solid:rgb(255,255,255);--lumiverse-border:rgba(124,92,196,.18);
+--lumiverse-text:rgba(24,22,30,.92);--lumiverse-text-muted:rgba(24,22,30,.6);
+--lumiverse-shadow-sm:0 2px 8px rgba(0,0,0,.08);--lumiverse-shadow-md:0 8px 24px rgba(0,0,0,.14);
+--lumiverse-shadow-xl:0 20px 60px rgba(0,0,0,.18);--lumiverse-modal-backdrop:rgba(0,0,0,.35);
+--lumiverse-fill-subtle:rgba(0,0,0,.035);--lumiverse-fill:rgba(0,0,0,.06);}
+body{background:rgb(244,242,249)}#modal{background:rgb(252,251,254)}`;
+
 let failures = 0;
 const check = (name, ok, detail) => {
   console.log(`  ${ok ? "ok  " : "FAIL"} ${name}${ok || detail === undefined ? "" : "  -> " + JSON.stringify(detail)}`);
@@ -206,6 +224,11 @@ for (const [label, css] of [
   // button rendered as a blank rectangle.
   ["light accent", ":root{--lumiverse-primary:#e0c0ff;--lumiverse-primary-hover:#ecd8ff;--lumiverse-text:#e2c8fa}"],
   ["raised text scale", ":root{--lumiverse-font-scale:1.5;--lumiverse-ui-scale:1.5}"],
+  // The whole panel on a light theme, held to exactly the same floor as dark.
+  ["light theme", LIGHT],
+  // And a light theme whose accent has drifted close to its own text colour,
+  // which is the light-side version of the bug that started all of this.
+  ["light theme, pale accent", LIGHT + ":root{--lumiverse-primary:rgba(196,180,232,.9);--lumiverse-primary-hover:rgba(206,192,240,.95)}"],
 ]) {
   const { out, errors } = await inPanel(browser, { css }, (page) =>
     page.evaluate(() => {
@@ -1162,7 +1185,11 @@ console.log("\nunits");
 // every floating surface at once rather than one at a time.
 console.log("\nfloating surfaces");
 {
-  const { out, errors } = await inPanel(browser, {}, async (page) =>
+  // Run on light as well as dark. Every fallback colour in the source is a dark
+  // one, so a surface that reached for a variable the host does not set would
+  // show up here as a dark box on a light panel.
+  for (const [themeName, themeCss] of [["dark", ""], ["light", LIGHT]]) {
+  const { out, errors } = await inPanel(browser, { css: themeCss }, async (page) =>
     page.evaluate(async () => {
       const opaque = (el) => {
         if (!el) return null;
@@ -1204,9 +1231,20 @@ console.log("\nfloating surfaces");
       return found;
     }),
   );
-  check("the hint popover is solid", out.hint && out.hint.ok, out.hint);
-  check("the full-size editor is solid", out.editor && out.editor.ok, out.editor);
-  check("no console errors", errors.length === 0, errors);
+  check(themeName + ": the hint popover is solid", out.hint && out.hint.ok, out.hint);
+  check(themeName + ": the full-size editor is solid", out.editor && out.editor.ok, out.editor);
+  // A dark fallback leaking onto a light panel would show up as a dark surface.
+  const surfaceIsDark = (bg) => {
+    const m = bg && bg.match(/rgba?\(([^)]+)\)/);
+    if (!m) return false;
+    const [r, g, b2] = m[1].split(",").map(Number);
+    return (r + g + b2) / 3 < 90;
+  };
+  check(themeName + ": the surfaces follow the theme rather than a fallback",
+    surfaceIsDark(out.hint && out.hint.bg) === (themeName === "dark"), {
+      hint: out.hint && out.hint.bg, editor: out.editor && out.editor.bg });
+  check(themeName + ": no console errors", errors.length === 0, errors);
+  }
 
   // The live log and the retry pop-up only exist once something has happened,
   // so these are driven rather than opened by hand.
