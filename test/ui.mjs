@@ -2303,6 +2303,49 @@ console.log("\ndependent rows");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- hiding a row is only hiding it ----
+// Nothing about a switch being off may cost someone what they typed or what a
+// section had open. Hiding is meant to be about what is on screen and nothing
+// else. A backup needs no check here: buildExport reads the settings and never
+// the panel, and the round trip above already covers a hidden row, since
+// refusalNotes is hidden by default and still has to appear in the file.
+console.log("\nhiding keeps everything");
+{
+  const { out, errors } = await inPanel(browser, {}, async (page) =>
+    page.evaluate(async () => {
+      const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      await frame();
+      const head = () => [...document.querySelectorAll('[role="button"]')]
+        .find((h) => /refusal tuning/i.test(h.textContent || ""));
+      const box = (k) => document.querySelector('[data-ar-row="' + k + '"]')
+        .querySelector("input[type=checkbox]");
+      const phrases = () => document.querySelector('[data-ar-row="refusalExtraPhrases"]')
+        .querySelector("textarea");
+
+      const openBefore = head().getAttribute("aria-expanded");
+      const ta = phrases();
+      ta.value = "my own phrase";
+      ta.dispatchEvent(new Event("input", { bubbles: true }));
+
+      // Away and back again.
+      box("retryOnRefusal").click();
+      await frame();
+      box("retryOnRefusal").click();
+      await frame();
+
+      return {
+        openBefore,
+        openAfter: head().getAttribute("aria-expanded"),
+        textKept: phrases().value,
+      };
+    }),
+  );
+  check("a section that comes back is still open if it was", out.openAfter === out.openBefore, out);
+  check("and what was typed inside it is still there", out.textKept === "my own phrase", out);
+  check("no console errors", errors.length === 0, errors);
+}
+
 console.log("\nnote list");
 {
   const { out, errors } = await inPanel(browser, { settings: { refusalNote: true } }, async (page) =>
