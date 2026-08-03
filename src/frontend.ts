@@ -484,13 +484,13 @@ const SCHEMA: Group[] = [
         key: "refusalNote",
         label: "Send a note with a refusal retry",
         type: "bool",
-        hint: "Off by default. Every other kind of retry re-sends your request exactly as it was. This one, and only this one, adds a note to the prompt for that single try, which is useful when a scene keeps getting refused for the wrong reason. It goes to the model only: nothing is written to your chat and nothing shows in the reply. Needs the new interceptor permission, and does nothing while the box below is empty.",
+        hint: "Off by default. Every other kind of retry re-sends your request exactly as it was, and still does. This one adds your note to the prompt for that single try. It goes to the model only: nothing is written to your chat and nothing appears in the reply. Needs the interceptor permission, and does nothing while the box below is empty.",
       },
       {
         key: "refusalNoteText",
         label: "What the note says",
         type: "text",
-        hint: "Written to the model, not to your chat. Say what the scene actually is. For example: this reply was refused by mistake, this is a safe-for-work roleplay and I am playing a therapist trying to help. Keep it short and factual. A long note crowds out the scene, and one that argues with the model tends to work less well than one that simply explains.",
+        hint: "Goes to the model, not to your chat. Whatever you type is sent exactly as written: nothing is added to it, nothing is removed, and nothing in it is checked. It is sent only on a refusal retry, only from the try set below, and only for that one generation.",
       },
       {
         key: "refusalNoteRole",
@@ -501,7 +501,7 @@ const SCHEMA: Group[] = [
           { value: "user", label: "You" },
           { value: "assistant", label: "The character" },
         ],
-        hint: "System reads as an instruction and cannot be mistaken for dialogue, which is why it is the default. You reads as if you said it, which some models weigh more heavily but can pull the model into replying to you instead of continuing the scene. The character puts the words in your character's mouth, which is the strongest and the easiest to overdo.",
+        hint: "Which role the note is sent under. System puts it alongside the instructions your setup already sends. You puts it in the same role as your own messages. The character puts it in the same role as the replies. Models treat the three differently, so which one works best depends on your model and your setup.",
       },
       {
         key: "refusalNotePlacement",
@@ -512,7 +512,7 @@ const SCHEMA: Group[] = [
           { value: "before", label: "Before the last message" },
           { value: "start", label: "At the very start" },
         ],
-        hint: "After the last message puts it closest to the model's attention, which usually carries the most weight. Before the last message tucks it behind the newest line so the scene still ends on the reply. At the very start sits it with the setup, furthest from attention in a long chat but least likely to interfere.",
+        hint: "Where the note is inserted. After the last message puts it at the end, right before the point the reply continues from. Before the last message puts it one place earlier, so the newest line is still last. At the very start puts it ahead of everything, with the setup.",
       },
       {
         key: "refusalNoteFromTry",
@@ -521,7 +521,7 @@ const SCHEMA: Group[] = [
         int: true,
         min: 1,
         max: 20,
-        hint: "2 by default, so the first retry re-sends unchanged and the note only appears if that also comes back refused. A plain re-roll fixes most accidental refusals on its own, and this keeps the note out of those. Set it to 1 to send the note on every refusal retry.",
+        hint: "Which retry the note starts on. At 2, the first retry re-sends unchanged and the note is added from the second onward. At 1, it is added to every refusal retry.",
       },
     ],
   },

@@ -14,8 +14,8 @@ _2026-08-02_
 
 ### Added
 
-- **Send a note with a refusal retry.** Off by default. Every other kind of retry re-sends your request exactly as it was, and still does. This one, and only this one, can add a note you write to the prompt for that single try. It is for scenes that keep getting refused for the wrong reason: action, medical or therapy roleplay, anything a filter reads badly. Write what the scene actually is, for example that the reply was refused by mistake and you are playing a therapist in a safe-for-work story.
-- **Three things control how the note is sent.** Who it comes from: system, which reads as an instruction and cannot be mistaken for dialogue, or you, or your character. Where it goes: after the last message, before it, or at the very start. And which try it starts on, 2 by default, so a plain re-roll gets first go and the note only appears if that also comes back refused. Set it to 1 to send it every time.
+- **Send a note with a refusal retry.** Off by default. Every other kind of retry re-sends your request exactly as it was, and still does. This one, and only this one, can add a note you write to the prompt for that single try. Whatever you type is sent exactly as written: nothing is added to it, nothing is removed, and nothing in it is checked.
+- **Three things control how the note is sent.** Which role it is sent under: system, you, or your character. Where it is inserted: after the last message, before it, or at the very start. And which try it starts on, 2 by default, so the first retry goes out unchanged and the note is added from the second onward. Set it to 1 to add it every time.
 - **The note never touches your chat.** It goes to the model for one generation and nothing else. No message is written, nothing is edited, and it is not part of the reply. It cannot attach itself to a message you type either: Lumiverse says what kind of generation is running, and anything you send yourself is a normal one, which the note is never applied to. If your Lumiverse shows a Prompt Breakdown, the note appears there as its own block so you can check exactly what went out.
 
 ### Changed

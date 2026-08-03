@@ -51,20 +51,15 @@ To run entirely on your own phrases, turn off the built-in list and put your wor
 
 ## Sending a note with the retry
 
-Off by default. A plain re-roll fixes most accidental refusals on its own, because these models are stochastic and the same request often comes back fine. When a scene keeps getting refused for the wrong reason, though, re-sending the same thing forever does not help. This lets you say what the scene actually is.
+Off by default. Every other retry re-sends your request exactly as it was, and still does. This one can add a note you write to the prompt for that single try.
 
-Turn on **Send a note with a refusal retry** in the refusal tuning section and write the note in the box below it. Something factual works better than something argumentative:
-
-```
-This reply was refused by mistake. This is a safe-for-work roleplay and I am
-playing a therapist trying to help.
-```
+Turn on **Send a note with a refusal retry** in the refusal tuning section and write the note in the box below it. Whatever you type is sent exactly as written. Nothing is added to it, nothing is removed, and nothing in it is checked.
 
 Three things control how it is sent:
 
-- **Who the note comes from.** **System** reads as an instruction and cannot be mistaken for dialogue, which is why it is the default. **You** reads as if you said it, which some models weigh more heavily but can pull the model into answering you instead of continuing the scene. **The character** puts the words in your character's mouth, which is the strongest and the easiest to overdo.
-- **Where the note goes.** **After the last message** is closest to the model's attention and usually carries the most weight. **Before the last message** tucks it behind the newest line so the scene still ends on the reply. **At the very start** sits it with the setup, furthest from attention in a long chat but least likely to interfere.
-- **Start the note on try.** 2 by default, so the first retry goes out unchanged and the note only appears if that also comes back refused. Set it to 1 to send the note every time.
+- **Who the note comes from.** Which role it is sent under. **System** puts it alongside the instructions your setup already sends. **You** puts it in the same role as your own messages. **The character** puts it in the same role as the replies. Models treat the three differently, so which one works best depends on your model and your setup.
+- **Where the note goes.** **After the last message** puts it at the end, right before the point the reply continues from. **Before the last message** puts it one place earlier, so the newest line is still last. **At the very start** puts it ahead of everything, with the setup.
+- **Start the note on try.** 2 by default, so the first retry goes out unchanged and the note is added from the second onward. Set it to 1 to add it to every refusal retry.
 
 What it does not do:
 

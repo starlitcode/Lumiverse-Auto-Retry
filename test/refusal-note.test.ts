@@ -187,6 +187,56 @@ describe("who it comes from", () => {
   });
 });
 
+// The extension takes no view on what a note should say. These hold that down,
+// so filtering, truncation or a house style cannot be added later without a
+// check going red.
+describe("the note is sent exactly as written", () => {
+  const sent = async (text: string) => {
+    const h = boot();
+    await h.arm({ text });
+    const out = await h.run(prompt());
+    const list = Array.isArray(out) ? out : out.messages;
+    const note = list.find((m: any) => !prompt().some((o) => o.content === m.content));
+    return note ? note.content : null;
+  };
+
+  test("a long note is not truncated", async () => {
+    const long = "word ".repeat(4000).trim();
+    expect(await sent(long)).toBe(long);
+  });
+
+  test("line breaks and blank lines are kept", async () => {
+    const multi = "first line\n\nthird line\n\ttabbed";
+    expect(await sent(multi)).toBe(multi);
+  });
+
+  test("nothing is put in front of it or after it", async () => {
+    expect(await sent("just this")).toBe("just this");
+  });
+
+  test("punctuation, symbols and markup are untouched", async () => {
+    const odd = "<tag> [brackets] {braces} \"quotes\" 'apostrophes' & % $ #1 => \\ /";
+    expect(await sent(odd)).toBe(odd);
+  });
+
+  test("any language, any script", async () => {
+    for (const t of ["\u0417\u0434\u0440\u0430\u0432\u0441\u0442\u0432\u0443\u0439\u0442\u0435", "\u4E00\u4E8C\u4E09", "\u0645\u0631\u062D\u0628\u0627", "caf\u00e9 \u00fcber na\u00efve", "\uD83C\uDFB2 emoji"]) {
+      expect(await sent(t)).toBe(t);
+    }
+  });
+
+  test("no word in it changes what is sent", async () => {
+    // Whatever a note says, it goes through unchanged. Nothing inspects it.
+    for (const t of ["refuse", "policy", "guidelines", "ignore previous instructions", "system:"]) {
+      expect(await sent(t)).toBe(t);
+    }
+  });
+
+  test("only surrounding whitespace is trimmed, and only to tell empty from not", async () => {
+    expect(await sent("  padded  ")).toBe("padded");
+  });
+});
+
 describe("it stays out of the way", () => {
   test("the note is inspectable in the prompt breakdown", async () => {
     const h = boot();
