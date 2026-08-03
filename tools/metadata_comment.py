@@ -15,6 +15,7 @@ import binascii
 from typing import NamedTuple
 
 __all__ = [
+    "FOOTER",
     "HEADER",
     "LINE_WIDTH",
     "SUPPORTED_LANGUAGES",
@@ -31,6 +32,21 @@ HEADER = "Encoded metadata (Base64) – decode with base64.b64decode"
 #: Stopping before the dash keeps extraction working across the hyphen and
 #: en dash spellings that editors and copy-paste tend to swap.
 HEADER_MARKER = "Encoded metadata (Base64)"
+
+#: Line that closes a block, so extraction has an explicit end rather than a
+#: guess. The old reader stopped at the first payload line that was short or
+#: carried ``=`` padding, on the assumption that only the last line ever is.
+#: That assumption breaks whenever the payload is an exact multiple of
+#: :data:`LINE_WIDTH` (a UTF-8 length that is a multiple of 57 bytes): every
+#: line is then full width and unpadded, so nothing marks the end and the
+#: reader keeps consuming Base64-looking comment lines that follow the block,
+#: silently returning more bytes than were embedded. A footer removes the guess.
+FOOTER = "End encoded metadata (Base64)"
+
+#: Leading part of :data:`FOOTER`, matched the same forgiving way as
+#: :data:`HEADER_MARKER`. Its wording never begins with :data:`HEADER_MARKER`,
+#: so the header scan can never mistake a footer for the start of a block.
+FOOTER_MARKER = "End encoded metadata (Base64)"
 
 #: Width of a payload line, matching the MIME convention of 76 characters.
 LINE_WIDTH = 76
@@ -145,9 +161,11 @@ def _uncomment(line: str, style: _CommentStyle) -> str | None:
 def embed_metadata_comment(metadata: str, language: str = "python") -> str:
     """Return ``metadata`` as a Base64 comment block for ``language``.
 
-    The block is a header line followed by the Base64 payload wrapped at
-    :data:`LINE_WIDTH` characters, commented out with the syntax of the target
-    language. It carries no trailing newline, so the caller decides how it
+    The block is a header line, the Base64 payload wrapped at
+    :data:`LINE_WIDTH` characters, and a footer line, commented out with the
+    syntax of the target language. The footer is what lets
+    :func:`extract_metadata_from_comment` find the end of the payload without
+    guessing. It carries no trailing newline, so the caller decides how it
     joins the surrounding source.
 
     Args:
@@ -156,8 +174,8 @@ def embed_metadata_comment(metadata: str, language: str = "python") -> str:
             case-insensitively.
 
     Returns:
-        The formatted comment block. Empty ``metadata`` yields the header
-        alone, since it has no payload to wrap.
+        The formatted comment block. Empty ``metadata`` yields the header and
+        footer with no payload between them.
 
     Raises:
         ValueError: If ``language`` is not one of :data:`SUPPORTED_LANGUAGES`.
@@ -166,11 +184,13 @@ def embed_metadata_comment(metadata: str, language: str = "python") -> str:
         >>> print(embed_metadata_comment("build=42"))
         # Encoded metadata (Base64) – decode with base64.b64decode
         # YnVpbGQ9NDI=
+        # End encoded metadata (Base64)
 
         >>> print(embed_metadata_comment("build=42", "html"))
         <!--
         Encoded metadata (Base64) – decode with base64.b64decode
         YnVpbGQ9NDI=
+        End encoded metadata (Base64)
         -->
     """
     style = _resolve_style(language)
@@ -185,6 +205,7 @@ def embed_metadata_comment(metadata: str, language: str = "python") -> str:
         lines.append(style.opener)
     lines.append(f"{style.prefix}{HEADER}".rstrip())
     lines.extend(f"{style.prefix}{chunk}" for chunk in chunks)
+    lines.append(f"{style.prefix}{FOOTER}".rstrip())
     if style.closer:
         lines.append(style.closer)
     return "\n".join(lines)
@@ -194,12 +215,15 @@ def extract_metadata_from_comment(file_path: str, language: str = "python") -> s
     """Return the metadata embedded in ``file_path`` by :func:`embed_metadata_comment`.
 
     The file is scanned for a header line in ``language``'s comment syntax, and
-    the Base64 payload directly beneath it is collected and decoded. Collection
-    stops at the first line that is not a full-width run of Base64 characters,
-    which is how the block's last line is recognised, so ordinary comments and
-    code following the block are never swallowed. If a file holds more than one
-    block, the first one carrying a payload is returned, which lets a file
-    quote the header in prose without shadowing its real block.
+    the Base64 payload directly beneath it is collected up to the footer that
+    :func:`embed_metadata_comment` writes, then decoded. A block written by an
+    older version that has no footer still reads: collection then also stops at
+    the first line that is short, padded, or not Base64 at all, which is where
+    such a block ends in every case except a payload that is an exact multiple
+    of :data:`LINE_WIDTH`. So ordinary comments and code after the block are
+    never swallowed. If a file holds more than one block, the first one
+    carrying a payload is returned, which lets a file quote the header in prose
+    without shadowing its real block.
 
     Args:
         file_path: Path to the file to scan. Read as UTF-8, with undecodable
@@ -241,11 +265,17 @@ def extract_metadata_from_comment(file_path: str, language: str = "python") -> s
             if closer and payload_line.strip() == closer:
                 break
             chunk = _uncomment(payload_line, style)
+            # The footer ends the block outright, which is the whole point of
+            # writing one: the payload above it may be any length, exact
+            # multiple of LINE_WIDTH included, and still stop here.
+            if chunk is not None and chunk.startswith(FOOTER_MARKER):
+                break
             if not chunk or not _BASE64_ALPHABET.issuperset(chunk):
                 break
             chunks.append(chunk)
-            # Only the closing chunk is short or padded; anything after it
-            # belongs to the file, not to the block.
+            # Footerless legacy fallback: the closing chunk is short or padded,
+            # and anything after it belongs to the file, not to the block. A
+            # footer, when present, has already ended the loop above.
             if len(chunk) < LINE_WIDTH or "=" in chunk:
                 break
 
