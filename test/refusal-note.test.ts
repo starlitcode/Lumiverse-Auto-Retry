@@ -232,8 +232,20 @@ describe("the note is sent exactly as written", () => {
     }
   });
 
-  test("only surrounding whitespace is trimmed, and only to tell empty from not", async () => {
-    expect(await sent("  padded  ")).toBe("padded");
+  // The panel promises the note is sent exactly as written. Trimming is how an
+  // empty note is told from a filled one and is not allowed to reach the text:
+  // a line break someone put at the end of theirs is part of what they wrote.
+  test("surrounding whitespace is kept, because it was typed", async () => {
+    expect(await sent("  padded  ")).toBe("  padded  ");
+    expect(await sent("line\n")).toBe("line\n");
+    expect(await sent("\n  indented")).toBe("\n  indented");
+  });
+
+  test("but whitespace alone still counts as empty", async () => {
+    const h = boot();
+    await h.arm({ notes: [{ text: "   \n\t ", role: "system" }] });
+    const out = await h.run(prompt());
+    expect(out.length).toBe(prompt().length);
   });
 });
 

@@ -1909,6 +1909,11 @@ console.log("\nrefusal note");
       // What actually gets sent across the bridge.
       payload: (await drive({ refusalNoteFromTry: 1, refusalNotePlacement: "start",
         refusalNotes: [{ text: "This was refused by mistake.", role: "user" }] }, REFUSED))[0],
+      // The panel promises the note goes out exactly as written, so the
+      // spacing someone typed has to survive the trip across the bridge.
+      // Trimming is only how an empty note is told from a filled one.
+      padded: (await drive({ refusalNoteFromTry: 1,
+        refusalNotes: [{ text: "  keep\n  my spacing\n", role: "system" }] }, REFUSED))[0],
     };
   });
   await page.close();
@@ -1923,6 +1928,8 @@ console.log("\nrefusal note");
     out.payload.notes[0].text === "This was refused by mistake." &&
     out.payload.notes[0].role === "user" && out.payload.placement === "start" && !!out.payload.chatId,
     out.payload);
+  check("the spacing someone typed is sent as they typed it",
+    !!out.padded && out.padded.notes[0].text === "  keep\n  my spacing\n", out.padded);
   check("no console errors", errors.length === 0, errors);
 }
 

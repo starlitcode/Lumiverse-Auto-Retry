@@ -3184,13 +3184,18 @@ export function setup(ctx, opts) {
                 return;
             // An empty note is skipped rather than sent blank, so a half-filled list
             // is not a trap. Nothing is armed when they are all empty.
+            //
+            // Trimmed to decide whether a note counts as empty, and not otherwise:
+            // what goes out is what was typed, spacing and all. The panel says the
+            // note is sent exactly as written, and a line break someone put at the
+            // end of theirs is part of what they wrote.
             const notes = (Array.isArray(cfg.refusalNotes) ? cfg.refusalNotes : [])
                 .slice(0, MAX_NOTES)
                 .map((n) => ({
-                text: String((n && n.text) || "").trim(),
+                text: String((n && n.text) || ""),
                 role: NOTE_ROLES.indexOf(String(n && n.role)) >= 0 ? String(n.role) : "system",
             }))
-                .filter((n) => n.text);
+                .filter((n) => n.text.trim());
             if (!notes.length)
                 return;
             const from = Math.max(1, Number(cfg.refusalNoteFromTry) || 1);

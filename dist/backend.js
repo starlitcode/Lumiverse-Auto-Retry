@@ -307,8 +307,10 @@ spindle.onFrontendMessage(async (payload) => {
             const raw = Array.isArray(payload.notes) ? payload.notes : [];
             const notes = [];
             for (const n of raw.slice(0, MAX_NOTES)) {
-                const text = String(n && n.text != null ? n.text : '').trim();
-                if (!text)
+                // Trimmed to decide whether it is empty, and not otherwise. What goes
+                // into the prompt is what was typed, spacing and all.
+                const text = String(n && n.text != null ? n.text : '');
+                if (!text.trim())
                     continue;
                 notes.push({ text: text, role: NOTE_ROLES.indexOf(String(n && n.role)) >= 0 ? String(n.role) : 'system' });
             }
