@@ -55,11 +55,15 @@ Off by default. Every other retry re-sends your request exactly as it was, and s
 
 Turn on **Send a note with a refusal retry** in the refusal tuning section and write the note in the box below it. Whatever you type is sent exactly as written. Nothing is added to it, nothing is removed, and nothing in it is checked.
 
-Three things control how it is sent:
+**You can send more than one.** The **+** button adds another note and **−** removes it, up to ten. They go out together, in the order you wrote them, so a note can answer the one before it: a system note explaining the scene, then a line in the character's voice picking it back up, then a line from you asking it to continue. Each note carries its own role. An empty note is skipped, so a half-filled list is not a trap, and nothing is sent at all when they are all empty.
 
-- **Who the note comes from.** Which role it is sent under. **System** puts it alongside the instructions your setup already sends. **You** puts it in the same role as your own messages. **The character** puts it in the same role as the replies. Models treat the three differently, so which one works best depends on your model and your setup.
-- **Where the note goes.** **After the last message** puts it at the end, right before the point the reply continues from. **Before the last message** puts it one place earlier, so the newest line is still last. **At the very start** puts it ahead of everything, with the setup.
-- **Start the note on try.** 2 by default, so the first retry goes out unchanged and the note is added from the second onward. Set it to 1 to add it to every refusal retry.
+Ten is the ceiling because every note is a whole message added to the prompt on every refusal retry. Past that they stop reading as a note and start crowding out the scene they are meant to rescue. There is no floor beyond one: use fewer by adding fewer.
+
+Three things control how they are sent:
+
+- **Who each note comes from.** Which role it is sent under. **System** puts it alongside the instructions your setup already sends. **You** puts it in the same role as your own messages. **The character** puts it in the same role as the replies. Models treat the three differently, so which one works best depends on your model and your setup.
+- **Where the notes go.** They are inserted together as one block. **After the last message** puts them at the end, right before the point the reply continues from. **Before the last message** puts them one place earlier, so the newest line is still last. **At the very start** puts them ahead of everything, with the setup.
+- **Start the note on try.** 2 by default, so the first retry goes out unchanged and the notes are added from the second onward. Set it to 1 to add them to every refusal retry.
 
 What it does not do:
 
@@ -70,7 +74,7 @@ What it does not do:
 
 This needs the `interceptor` permission, which is what lets an extension add to a prompt before it reaches the model. Without it granted the rest of the extension works and this one feature does nothing.
 
-If your Lumiverse shows a **Prompt Breakdown**, the note appears there as its own block named "Auto Retry refusal note", so you can check exactly what was sent.
+If your Lumiverse shows a **Prompt Breakdown**, each note appears there as its own block, named "Auto Retry refusal note" and numbered when there is more than one, so you can check exactly what was sent.
 
 ## Trying it on a reply
 

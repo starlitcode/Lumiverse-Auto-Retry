@@ -1533,6 +1533,18 @@ console.log("\nbackup round trip");
       // in silence, and this check passed while covering 48 settings out of 50.
       const el = r.querySelector("textarea") || r.querySelector("input") || r.querySelector("select");
       if (!el) { unreachable.push(key); continue; }
+      // A note list holds several controls and exports an array, so it is set
+      // and compared on its own terms rather than as one scalar.
+      if (r.querySelectorAll("textarea").length && r.querySelectorAll("select").length) {
+        const box = r.querySelector("textarea");
+        const who = r.querySelector("select");
+        box.value = "probe-" + key;
+        box.dispatchEvent(new Event("input", { bubbles: true }));
+        const other = [...who.options].map((o) => o.value).find((v) => v !== who.value);
+        if (other != null) { who.value = other; who.dispatchEvent(new Event("change", { bubbles: true })); }
+        wanted[key] = { list: true, text: "probe-" + key, role: who.value };
+        continue;
+      }
       if (el.tagName === "SELECT") {
         const other = [...el.options].map((o) => o.value).find((v) => v !== el.value);
         if (other != null) { el.value = other; el.dispatchEvent(new Event("change", { bubbles: true })); }
@@ -1586,15 +1598,25 @@ console.log("\nbackup round trip");
   check("the category boxes were found without catching settings rows", out.overreach === 0, out.overreach);
   check("the export is valid JSON with a version", !!parsed && !!parsed.autoRetry, out.exported && out.exported.slice(0, 60));
   check("every setting in the panel is in the backup", missing.length === 0, missing);
+  const matches = (k) => {
+    for (const cat of Object.values((parsed && parsed.settings) || {})) {
+      if (!(k in cat)) continue;
+      const want = out.wanted[k];
+      const got = cat[k];
+      if (want && want.list) {
+        return Array.isArray(got) && got.length >= 1 &&
+          got[0].text === want.text && got[0].role === want.role;
+      }
+      return String(got) === String(want);
+    }
+    return false;
+  };
   check("and the values are the ones on screen",
-    !!parsed && Object.keys(out.wanted).every((k) => {
-      for (const cat of Object.values(parsed.settings)) if (k in cat) return String(cat[k]) === String(out.wanted[k]);
-      return false;
-    }),
-    Object.keys(out.wanted).filter((k) => {
-      for (const cat of Object.values(parsed.settings || {})) if (k in cat) return String(cat[k]) !== String(out.wanted[k]);
-      return true;
-    }).slice(0, 6));
+    !!parsed && Object.keys(out.wanted).every(matches),
+    Object.keys(out.wanted).filter((k) => !matches(k)).slice(0, 6));
+  check("a note list is backed up with its text and its role, not flattened",
+    matches("refusalNotes"),
+    (() => { for (const cat of Object.values((parsed && parsed.settings) || {})) if ("refusalNotes" in cat) return cat.refusalNotes; return "(absent)"; })());
   check("no console errors", errors.length === 0, errors);
 }
 
@@ -1742,8 +1764,8 @@ console.log("\nrefusal note");
                 registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) },
         },
         Object.assign(
-          { refusalNote: true, refusalNoteText: "This was refused by mistake.",
-            refusalNoteRole: "system", refusalNotePlacement: "after", refusalNoteFromTry: 2,
+          { refusalNote: true, refusalNotes: [{ text: "This was refused by mistake.", role: "system" }],
+            refusalNotePlacement: "after", refusalNoteFromTry: 2,
             retryDelayMs: 10, backoffFactor: 1, maxDelayMs: 10, jitter: false, maxRetries: 4,
             toast: false, stuckTimeoutMs: 0, idleTimeoutMs: 0, pauseWhenFailing: false },
           over,
@@ -1775,9 +1797,10 @@ console.log("\nrefusal note");
       // Set to 1 and it goes with every refusal retry.
       fromFirst: (await drive({ refusalNoteFromTry: 1 }, REFUSED)).length,
       off: (await drive({ refusalNote: false }, REFUSED)).length,
-      empty: (await drive({ refusalNoteText: "   " }, REFUSED)).length,
+      empty: (await drive({ refusalNotes: [{ text: "   ", role: "system" }] }, REFUSED)).length,
       // What actually gets sent across the bridge.
-      payload: (await drive({ refusalNoteFromTry: 1, refusalNoteRole: "user", refusalNotePlacement: "start" }, REFUSED))[0],
+      payload: (await drive({ refusalNoteFromTry: 1, refusalNotePlacement: "start",
+        refusalNotes: [{ text: "This was refused by mistake.", role: "user" }] }, REFUSED))[0],
     };
   });
   await page.close();
@@ -1788,8 +1811,9 @@ console.log("\nrefusal note");
   check("nor does anything while the setting is off", out.off === 0, out.off);
   check("nor while the box is empty", out.empty === 0, out.empty);
   check("the note carries its text, role, placement and chat",
-    !!out.payload && out.payload.text === "This was refused by mistake." &&
-    out.payload.role === "user" && out.payload.placement === "start" && !!out.payload.chatId,
+    !!out.payload && out.payload.notes && out.payload.notes.length === 1 &&
+    out.payload.notes[0].text === "This was refused by mistake." &&
+    out.payload.notes[0].role === "user" && out.payload.placement === "start" && !!out.payload.chatId,
     out.payload);
   check("no console errors", errors.length === 0, errors);
 }
@@ -1855,6 +1879,74 @@ console.log("\nbutton edges");
   check("the edge is judged against the panel, not the button's own fill",
     mid.out.save.border === "rgb(20, 18, 26)", mid.out.save);
   check("no console errors on that one", mid.errors.length === 0, mid.errors);
+}
+
+// ---- adding and removing notes ----
+// A note can answer the one before it, so the list needs a way to grow and
+// shrink. Ten is the ceiling and one is the floor: removing the last note would
+// leave nothing to type into.
+console.log("\nnote list");
+{
+  const { out, errors } = await inPanel(browser, {}, async (page) =>
+    page.evaluate(async () => {
+      const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      await frame();
+      const row = document.querySelector('[data-ar-row="refusalNotes"]');
+      const plus = [...row.querySelectorAll("button")].find((b) => b.textContent.trim() === "+");
+      const minuses = () => [...row.querySelectorAll("button")].filter((b) => b.textContent.trim() === "\u2212");
+      const boxes = () => row.querySelectorAll("textarea");
+      const picks = () => row.querySelectorAll("select");
+
+      const start = { notes: boxes().length, roles: picks().length, minusOff: minuses()[0].disabled };
+
+      // Typing in one, then adding another, must not disturb the first.
+      boxes()[0].value = "first";
+      boxes()[0].dispatchEvent(new Event("input", { bubbles: true }));
+      picks()[0].value = "user";
+      picks()[0].dispatchEvent(new Event("change", { bubbles: true }));
+      plus.click();
+      await frame();
+      const afterAdd = {
+        notes: boxes().length,
+        firstKept: boxes()[0].value,
+        firstRole: picks()[0].value,
+        minusOn: !minuses()[0].disabled,
+      };
+
+      // Fill the second, remove the first, and the second must survive as the
+      // one that is left.
+      boxes()[1].value = "second";
+      boxes()[1].dispatchEvent(new Event("input", { bubbles: true }));
+      minuses()[0].click();
+      await frame();
+      const afterRemove = { notes: boxes().length, left: boxes()[0].value };
+
+      // Climb to the ceiling.
+      for (let i = 0; i < 30; i++) plus.click();
+      await frame();
+      const atCap = { notes: boxes().length, plusOff: plus.disabled };
+
+      // And back down to the floor.
+      for (let i = 0; i < 30; i++) { const m = minuses(); if (m.length) m[m.length - 1].click(); }
+      await frame();
+      const atFloor = { notes: boxes().length, minusOff: minuses()[0].disabled, plusOn: !plus.disabled };
+
+      return { start, afterAdd, afterRemove, atCap, atFloor };
+    }),
+  );
+  check("it opens with one note", out.start.notes === 1 && out.start.roles === 1, out.start);
+  check("and that one cannot be removed", out.start.minusOff, out.start);
+  check("plus adds another", out.afterAdd.notes === 2, out.afterAdd);
+  check("without disturbing what is already typed",
+    out.afterAdd.firstKept === "first" && out.afterAdd.firstRole === "user", out.afterAdd);
+  check("with two, either can be removed", out.afterAdd.minusOn, out.afterAdd);
+  check("removing one keeps the other's text",
+    out.afterRemove.notes === 1 && out.afterRemove.left === "second", out.afterRemove);
+  check("it stops at ten", out.atCap.notes === 10 && out.atCap.plusOff, out.atCap);
+  check("and never goes below one", out.atFloor.notes === 1 && out.atFloor.minusOff, out.atFloor);
+  check("with room again after coming back down", out.atFloor.plusOn, out.atFloor);
+  check("no console errors", errors.length === 0, errors);
 }
 
 // ---- nothing is left behind ----

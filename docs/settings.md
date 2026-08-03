@@ -44,9 +44,8 @@ The same options live in the CONFIG block at the top of `src/frontend.ts` and `d
 | refusalStripThinking | true | Only check the final reply, stripping known reasoning tags first. Off checks the whole raw output. |
 | refusalThinkTags | (empty) | Extra reasoning tag names, one per line, for unusual thinking wrappers. |
 | refusalNote | false | Send a note with a refusal retry, and only a refusal retry. Needs the `interceptor` permission. |
-| refusalNoteText | (empty) | What the note says. Nothing is sent while this is empty. |
-| refusalNoteRole | system | Who the note comes from: system, user or assistant. |
-| refusalNotePlacement | after | Where it goes: after the last message, before it, or at the very start. |
+| refusalNotes | one empty note | The notes themselves, each with its own role (system, user or assistant). Up to ten, sent in order as one block. Empty ones are skipped, and nothing is sent while they all are. |
+| refusalNotePlacement | after | Where the block goes: after the last message, before it, or at the very start. |
 | refusalNoteFromTry | 2 | Which retry the note starts on. 1 sends it every time. |
 | replaceEnabled | false | (beta) Turn on find-and-replace on replies. Edits the saved message. |
 | replaceRules | (empty) | "old => new" word swaps, one per line. |

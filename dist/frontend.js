@@ -30,6 +30,18 @@ const START_GRACE_MS = 6000;
 // The retry reason that carries the optional note. Named once so the arming
 // check below cannot drift away from the callers that raise it.
 const REFUSAL_REASON = "looks like an accidental refusal";
+// How many notes one refusal retry may carry.
+//
+// A note is a whole message in the prompt, sent on every refusal retry once the
+// list is in use, so the ceiling is about what stops being a note and starts
+// being a second system prompt crowding the scene out. Ten covers the case this
+// was asked for, a note answering the note before it, with room left for a
+// short worked example if someone wants one, and it is still a list you can
+// read at a glance. Below ten nobody is stopped from doing anything reasonable;
+// above it the notes start costing more than they buy on every single retry.
+// Use fewer by adding fewer: one is the floor and it is the default.
+const MAX_NOTES = 10;
+const NOTE_ROLES = ["system", "user", "assistant"];
 // Largest amount of streamed text kept per chat as a fallback when the end
 // event arrives without a content field. Trimmed from the front past this.
 const STREAM_BUF_MAX = 200000;
@@ -90,8 +102,10 @@ const CONFIG = {
     // into the prompt for that one generation and is never written to the chat.
     // Off by default, and does nothing at all while the text is empty.
     refusalNote: false,
-    refusalNoteText: "",
-    refusalNoteRole: "system", // system | user | assistant
+    // A list rather than one string, so a note can answer the one before it. Each
+    // entry carries its own role. Sent in order, as one block, at the placement
+    // below. Empty entries are skipped, so a half-filled list is not a trap.
+    refusalNotes: [{ text: "", role: "system" }],
     refusalNotePlacement: "after", // after | before | start, relative to the last real message
     refusalNoteFromTry: 2, // which retry it starts on. 1 sends it every time.
     // Find and replace in replies (handled by the backend via the Chat Mutation API).
@@ -442,21 +456,10 @@ const SCHEMA = [
                 hint: "Off by default. Every other kind of retry re-sends your request exactly as it was, and still does. This one adds your note to the prompt for that single try. It goes to the model only: nothing is written to your chat and nothing appears in the reply. Needs the interceptor permission, and does nothing while the box below is empty.",
             },
             {
-                key: "refusalNoteText",
-                label: "What the note says",
-                type: "text",
-                hint: "Goes to the model, not to your chat. Whatever you type is sent exactly as written: nothing is added to it, nothing is removed, and nothing in it is checked. It is sent only on a refusal retry, only from the try set below, and only for that one generation.",
-            },
-            {
-                key: "refusalNoteRole",
-                label: "Who the note comes from",
-                type: "pick",
-                options: [
-                    { value: "system", label: "System" },
-                    { value: "user", label: "You" },
-                    { value: "assistant", label: "The character" },
-                ],
-                hint: "Which role the note is sent under. System puts it alongside the instructions your setup already sends. You puts it in the same role as your own messages. The character puts it in the same role as the replies. Models treat the three differently, so which one works best depends on your model and your setup.",
+                key: "refusalNotes",
+                label: "What the notes say",
+                type: "notes",
+                hint: "Goes to the model, not to your chat. Whatever you type is sent exactly as written: nothing is added to it, nothing is removed, and nothing in it is checked. Add up to ten with the plus button and they are sent in order, as one block, so a note can answer the one before it. Each carries its own role: system puts it alongside the instructions your setup already sends, you puts it in the same role as your own messages, and the character puts it in the same role as the replies. Models treat the three differently, so which one works best depends on your model and your setup. An empty note is skipped.",
             },
             {
                 key: "refusalNotePlacement",
@@ -2021,6 +2024,15 @@ export function setup(ctx, opts) {
         const out = {};
         if (!parsed || typeof parsed !== "object")
             return out;
+        // 4.2.0 held one note in two keys. Anyone who set it on the testing branch
+        // keeps it rather than finding the box empty after updating.
+        if (!parsed.refusalNotes && parsed.refusalNoteText != null) {
+            const text = String(parsed.refusalNoteText || "");
+            if (text.trim())
+                parsed = Object.assign({}, parsed, {
+                    refusalNotes: [{ text: text, role: String(parsed.refusalNoteRole || "system") }],
+                });
+        }
         for (const g of SCHEMA)
             for (const f of g.fields) {
                 if (!(f.key in parsed))
@@ -2063,6 +2075,16 @@ export function setup(ctx, opts) {
         if (type === "num") {
             const n = Number(val);
             return Number.isFinite(n) ? n : fallback;
+        }
+        if (type === "notes") {
+            const list = Array.isArray(val) ? val : [];
+            const out = [];
+            for (const item of list.slice(0, MAX_NOTES)) {
+                const text = item && item.text != null ? String(item.text) : "";
+                const role = item && NOTE_ROLES.indexOf(String(item.role)) >= 0 ? String(item.role) : "system";
+                out.push({ text: text, role: role });
+            }
+            return out.length ? out : [{ text: "", role: "system" }];
         }
         if (type === "pick") {
             const want = val == null ? "" : String(val);
@@ -2139,8 +2161,7 @@ export function setup(ctx, opts) {
                 "refusalStripThinking",
                 "refusalThinkTags",
                 "refusalNote",
-                "refusalNoteText",
-                "refusalNoteRole",
+                "refusalNotes",
                 "refusalNotePlacement",
                 "refusalNoteFromTry",
             ],
@@ -3115,8 +3136,16 @@ export function setup(ctx, opts) {
                 return;
             if (reason !== REFUSAL_REASON)
                 return;
-            const text = String(cfg.refusalNoteText || "").trim();
-            if (!text)
+            // An empty note is skipped rather than sent blank, so a half-filled list
+            // is not a trap. Nothing is armed when they are all empty.
+            const notes = (Array.isArray(cfg.refusalNotes) ? cfg.refusalNotes : [])
+                .slice(0, MAX_NOTES)
+                .map((n) => ({
+                text: String((n && n.text) || "").trim(),
+                role: NOTE_ROLES.indexOf(String(n && n.role)) >= 0 ? String(n.role) : "system",
+            }))
+                .filter((n) => n.text);
+            if (!notes.length)
                 return;
             const from = Math.max(1, Number(cfg.refusalNoteFromTry) || 1);
             if (attempt < from)
@@ -3126,8 +3155,7 @@ export function setup(ctx, opts) {
             ctx.sendToBackend({
                 type: "arm_refusal_note",
                 chatId: chatId,
-                text: text,
-                role: String(cfg.refusalNoteRole || "system"),
+                notes: notes,
                 placement: String(cfg.refusalNotePlacement || "after"),
             });
             log("note armed for the next retry in this chat", chatId);
@@ -5039,6 +5067,127 @@ export function setup(ctx, opts) {
             };
             top.appendChild(input);
             row.appendChild(top);
+        }
+        else if (f.type === "notes") {
+            row.appendChild(top);
+            const list = document.createElement("div");
+            list.style.cssText = "display:flex;flex-direction:column;gap:8px";
+            const foot = document.createElement("div");
+            foot.style.cssText = "display:flex;align-items:center;gap:8px;flex-wrap:wrap";
+            const add = btn("+", false);
+            const count = document.createElement("span");
+            count.style.cssText =
+                "font-size:11px;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+            for (const b2 of [add])
+                b2.style.cssText += "min-height:0;padding:4px 12px;flex:none";
+            // Held here rather than read back off the DOM, so a half-typed row is
+            // still the value the panel is holding.
+            let notes = coerce("notes", cfg[f.key], CONFIG[f.key], f);
+            const push = () => {
+                cfg[f.key] = notes.map((n) => ({ text: n.text, role: n.role }));
+            };
+            const draw = () => {
+                list.replaceChildren();
+                notes.forEach((note, i) => {
+                    const wrap = document.createElement("div");
+                    wrap.style.cssText = "display:flex;flex-direction:column;gap:5px";
+                    const bar = document.createElement("div");
+                    bar.style.cssText = "display:flex;align-items:center;gap:8px;flex-wrap:wrap";
+                    const num = document.createElement("span");
+                    num.textContent = notes.length > 1 ? "Note " + (i + 1) : "Note";
+                    num.style.cssText =
+                        "font-size:11px;color:var(--lumiverse-text-muted,rgba(255,255,255,.65));flex:1";
+                    const who = document.createElement("select");
+                    for (const o of [
+                        { value: "system", label: "System" },
+                        { value: "user", label: "You" },
+                        { value: "assistant", label: "The character" },
+                    ]) {
+                        const opt = document.createElement("option");
+                        opt.value = o.value;
+                        opt.textContent = o.label;
+                        who.appendChild(opt);
+                    }
+                    who.value = note.role;
+                    styleField(who);
+                    who.style.cssText += "flex:none;padding:5px 8px;font-size:12px";
+                    who.setAttribute("aria-label", "Who note " + (i + 1) + " comes from");
+                    who.addEventListener("change", () => {
+                        note.role = coerce("pick", who.value, "system", {
+                            options: [
+                                { value: "system", label: "System" },
+                                { value: "user", label: "You" },
+                                { value: "assistant", label: "The character" },
+                            ],
+                        });
+                        push();
+                    });
+                    const drop = btn("\u2212", false);
+                    drop.style.cssText += "min-height:0;padding:4px 12px;flex:none";
+                    drop.setAttribute("aria-label", "Remove note " + (i + 1));
+                    // One note is the floor. Removing the last one would leave nothing to
+                    // type into and no way back except the plus button.
+                    const canDrop = notes.length > 1;
+                    drop.disabled = !canDrop;
+                    drop.style.opacity = canDrop ? "1" : "0.45";
+                    drop.style.cursor = canDrop ? "pointer" : "not-allowed";
+                    drop.addEventListener("click", () => {
+                        if (notes.length <= 1)
+                            return;
+                        notes.splice(i, 1);
+                        push();
+                        draw();
+                    });
+                    bar.appendChild(num);
+                    bar.appendChild(who);
+                    bar.appendChild(drop);
+                    const ta = document.createElement("textarea");
+                    ta.rows = 3;
+                    ta.value = note.text;
+                    ta.setAttribute("aria-label", "Note " + (i + 1));
+                    styleField(ta);
+                    ta.style.cssText += "width:100%;box-sizing:border-box;resize:vertical";
+                    ta.addEventListener("input", () => {
+                        note.text = ta.value;
+                        push();
+                    });
+                    wrap.appendChild(bar);
+                    wrap.appendChild(ta);
+                    list.appendChild(wrap);
+                });
+                const room = notes.length < MAX_NOTES;
+                add.disabled = !room;
+                add.style.opacity = room ? "1" : "0.45";
+                add.style.cursor = room ? "pointer" : "not-allowed";
+                count.textContent = room
+                    ? notes.length + " of " + MAX_NOTES
+                    : "10 is the most one retry can carry";
+                ensureReadableTree(list, 2.6);
+            };
+            add.setAttribute("aria-label", "Add another note");
+            add.addEventListener("click", () => {
+                if (notes.length >= MAX_NOTES)
+                    return;
+                notes.push({ text: "", role: notes.length ? notes[notes.length - 1].role : "system" });
+                push();
+                draw();
+                const boxes = list.querySelectorAll("textarea");
+                const last = boxes[boxes.length - 1];
+                if (last && last.focus)
+                    try {
+                        last.focus({ preventScroll: true });
+                    }
+                    catch (_) { }
+            });
+            fieldSetters[f.key] = (v) => {
+                notes = coerce("notes", v, CONFIG[f.key], f);
+                draw();
+            };
+            draw();
+            foot.appendChild(add);
+            foot.appendChild(count);
+            row.appendChild(list);
+            row.appendChild(foot);
         }
         else if (f.type === "pick") {
             const sel = document.createElement("select");

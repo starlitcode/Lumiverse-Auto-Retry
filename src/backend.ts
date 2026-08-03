@@ -60,27 +60,31 @@ let warnedEditError = false;
 // which is what a retry produces. Anything you type yourself is a "normal"
 // generation and can never pick this up, however stale the arm is. The age
 // limit is a third guard for the case where the click never starts anything.
-interface RefusalNote { chatId: string; text: string; role: string; placement: string; at: number; }
+interface RefusalNote { chatId: string; notes: Array<{ text: string; role: string }>; placement: string; at: number; }
 let refusalNote: RefusalNote | null = null;
 const NOTE_MAX_AGE_MS = 60000;
 const NOTE_ROLES = ['system', 'user', 'assistant'];
+// Matches the cap the panel offers, so a hand-edited payload cannot exceed it.
+const MAX_NOTES = 10;
 
 // Where the note sits relative to the conversation. __isChatHistory marks the
 // messages that came from stored chat turns, so "after the last message" means
 // after the last real one rather than after whatever the host appended behind
 // it. With nothing marked, the ends of the array are the best guess available.
-function placeNote(messages: any[], note: any, placement: string): { list: any[]; index: number } {
+function placeNotes(messages: any[], notes: any[], placement: string): { list: any[]; from: number } {
   const list = messages.slice();
   if (placement === 'start') {
-    list.unshift(note);
-    return { list: list, index: 0 };
+    list.unshift.apply(list, notes);
+    return { list: list, from: 0 };
   }
   let last = -1;
   for (let i = 0; i < list.length; i++) if (list[i] && list[i].__isChatHistory) last = i;
   if (last < 0) last = list.length - 1;
   const at = placement === 'before' ? Math.max(0, last) : last + 1;
-  list.splice(at, 0, note);
-  return { list: list, index: at };
+  // Inserted in one go so they stay in the order they were written, which is
+  // what lets a note answer the one before it.
+  list.splice.apply(list, ([at, 0] as any[]).concat(notes));
+  return { list: list, from: at };
 }
 // Messages a swap has already changed this session, so the manual button won't
 // compound swaps on a reply that auto-swap or an earlier tap already changed.
@@ -294,10 +298,15 @@ spindle.onFrontendMessage(async (payload: any) => {
       return;
       }
       if (payload.type === 'arm_refusal_note') {
-      const text = String(payload.text == null ? '' : payload.text).trim();
-      const role = NOTE_ROLES.indexOf(String(payload.role)) >= 0 ? String(payload.role) : 'system';
-      refusalNote = text && payload.chatId
-        ? { chatId: String(payload.chatId), text: text, role: role, placement: String(payload.placement || 'after'), at: Date.now() }
+      const raw = Array.isArray(payload.notes) ? payload.notes : [];
+      const notes: Array<{ text: string; role: string }> = [];
+      for (const n of raw.slice(0, MAX_NOTES)) {
+        const text = String(n && n.text != null ? n.text : '').trim();
+        if (!text) continue;
+        notes.push({ text: text, role: NOTE_ROLES.indexOf(String(n && n.role)) >= 0 ? String(n.role) : 'system' });
+      }
+      refusalNote = notes.length && payload.chatId
+        ? { chatId: String(payload.chatId), notes: notes, placement: String(payload.placement || 'after'), at: Date.now() }
         : null;
       return;
       }
@@ -433,10 +442,15 @@ try {
       refusalNote = null; // one generation, collected or not
       if (Date.now() - armed.at > NOTE_MAX_AGE_MS) return messages;
       if (!Array.isArray(messages)) return messages;
-      const placed = placeNote(messages, { role: armed.role, content: armed.text }, armed.placement);
-      // Named in the Prompt Breakdown so the note is inspectable rather than
+      const built = armed.notes.map((n) => ({ role: n.role, content: n.text }));
+      const placed = placeNotes(messages, built, armed.placement);
+      // Named in the Prompt Breakdown so each note is inspectable rather than
       // something that silently happened to the prompt.
-      return { messages: placed.list, breakdown: [{ messageIndex: placed.index, name: 'Auto Retry refusal note' }] };
+      const breakdown = built.map((_, i) => ({
+        messageIndex: placed.from + i,
+        name: built.length > 1 ? 'Auto Retry refusal note ' + (i + 1) : 'Auto Retry refusal note',
+      }));
+      return { messages: placed.list, breakdown: breakdown };
     } catch (_) {
       return messages; // a fault here must never cost the user their generation
     }
