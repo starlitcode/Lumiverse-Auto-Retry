@@ -112,10 +112,10 @@ async function inPanel(browser, { css = "", viewport, touch = false } = {}, fn) 
 }
 
 
-// Decodes a PNG far enough to find its brightest pixel. Only used by the clear
-// button check, which cannot be done any other way: the browser will not report
-// a pseudo-element's own styles back through getComputedStyle.
-function brightestPixel(buf) {
+// Decodes a PNG far enough to read its pixels. Only used by the clear button
+// check, which cannot be done any other way: the browser will not report a
+// pseudo-element's own styles back through getComputedStyle.
+function decodePixels(buf) {
   const zlib = require("node:zlib");
   let pos = 8, width = 0, height = 0, depth = 0, colour = 0;
   const idat = [];
@@ -135,7 +135,7 @@ function brightestPixel(buf) {
   const raw = zlib.inflateSync(Buffer.concat(idat));
   const stride = width * ch;
   const out = Buffer.alloc(height * stride);
-  let best = null, bestSum = -1;
+  const px = [];
   for (let y = 0; y < height; y++) {
     const filter = raw[y * (stride + 1)];
     const line = raw.subarray(y * (stride + 1) + 1, y * (stride + 1) + 1 + stride);
@@ -155,11 +155,47 @@ function brightestPixel(buf) {
     }
     for (let x = 0; x < width; x++) {
       const o = y * stride + x * ch;
-      const sum = out[o] + out[o + 1] + out[o + 2];
-      if (sum > bestSum) { bestSum = sum; best = { r: out[o], g: out[o + 1], b: out[o + 2] }; }
+      px.push({ r: out[o], g: out[o + 1], b: out[o + 2] });
     }
   }
-  return best;
+  return px;
+}
+
+function brightestPixel(buf) {
+  const px = decodePixels(buf);
+  if (!px) return null;
+  return px.reduce((a, p) => (p.r + p.g + p.b > a.r + a.g + a.b ? p : a), px[0]);
+}
+
+// The field is whatever colour covers most of the sample; the cross is whatever
+// stands out furthest from it. That works whichever way round the theme is,
+// which "the brightest thing there" did not: on a light theme the brightest
+// thing in the sample is the field itself.
+function crossOnField(buf) {
+  const px = decodePixels(buf);
+  if (!px || !px.length) return null;
+  const counts = new Map();
+  for (const p of px) {
+    const k = p.r + "," + p.g + "," + p.b;
+    counts.set(k, (counts.get(k) || 0) + 1);
+  }
+  let fieldKey = null, most = -1;
+  for (const [k, n] of counts) if (n > most) { most = n; fieldKey = k; }
+  const field = fieldKey.split(",").map(Number);
+  const lum = (c) => {
+    const ch = c.map((v) => { const x = v / 255; return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4); });
+    return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+  };
+  const ratio = (c) => {
+    const x = lum(c), y = lum(field);
+    return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+  };
+  let cross = field, best = 1;
+  for (const p of px) {
+    const r = ratio([p.r, p.g, p.b]);
+    if (r > best) { best = r; cross = [p.r, p.g, p.b]; }
+  }
+  return { field, cross, ratio: best };
 }
 
 // page.setContent() leaves the page on about:blank, where localStorage throws a
@@ -191,6 +227,18 @@ const LIGHT = `:root{
 --lumiverse-shadow-sm:0 2px 8px rgba(0,0,0,.08);--lumiverse-shadow-md:0 8px 24px rgba(0,0,0,.14);
 --lumiverse-shadow-xl:0 20px 60px rgba(0,0,0,.18);--lumiverse-modal-backdrop:rgba(0,0,0,.35);
 --lumiverse-fill-subtle:rgba(0,0,0,.035);--lumiverse-fill:rgba(0,0,0,.06);}
+body{background:rgb(244,242,249)}#modal{background:rgb(252,251,254)}`;
+
+// A light theme pack that overrides the common variables and not all 92, which
+// is what a hand-written theme actually looks like. Every fallback in the
+// source is a dark colour, so anything reaching for a variable this leaves
+// unset is measured against, or painted in, the wrong one.
+const PARTIAL_LIGHT = `:root{
+--lumiverse-primary:rgba(124,92,196,.95);--lumiverse-primary-hover:rgba(108,76,180,.95);
+--lumiverse-secondary:rgba(0,0,0,.05);--lumiverse-secondary-border:rgba(0,0,0,.14);
+--lumiverse-bg-elevated:rgba(252,251,254,.94);--lumiverse-border:rgba(124,92,196,.18);
+--lumiverse-text:rgba(24,22,30,.92);--lumiverse-text-muted:rgba(24,22,30,.6);
+--lumiverse-fill-subtle:rgba(0,0,0,.035);}
 body{background:rgb(244,242,249)}#modal{background:rgb(252,251,254)}`;
 
 let failures = 0;
@@ -232,13 +280,7 @@ for (const [label, css] of [
   // leaves unset is measured against the wrong surface. The reported bug: the
   // hint popover painted near-white over an unset card-bg-solid, measured as
   // the dark fallback underneath, and had its text repainted white to match.
-  ["partial light theme", `:root{
---lumiverse-primary:rgba(124,92,196,.95);--lumiverse-primary-hover:rgba(108,76,180,.95);
---lumiverse-secondary:rgba(0,0,0,.05);--lumiverse-secondary-border:rgba(0,0,0,.14);
---lumiverse-bg-elevated:rgba(252,251,254,.94);--lumiverse-border:rgba(124,92,196,.18);
---lumiverse-text:rgba(24,22,30,.92);--lumiverse-text-muted:rgba(24,22,30,.6);
---lumiverse-fill-subtle:rgba(0,0,0,.035);}
-body{background:rgb(244,242,249)}#modal{background:rgb(252,251,254)}`],
+  ["partial light theme", PARTIAL_LIGHT],
   // And a light theme whose accent has drifted close to its own text colour,
   // which is the light-side version of the bug that started all of this.
   ["light theme, pale accent", LIGHT + ":root{--lumiverse-primary:rgba(196,180,232,.9);--lumiverse-primary-hover:rgba(206,192,240,.95)}"],
@@ -572,11 +614,22 @@ console.log("\npreset split");
 // colour rather than white.
 console.log("\nsearch clear button");
 {
+  // The fallback in that rule is a dark-theme colour, like every fallback in
+  // the source. A light theme that sets the common variables but not
+  // --lumiverse-text-muted let it through, and the cross came out near-white on
+  // a near-white field. So this runs on light themes too, and asks whether the
+  // cross can be told apart from the field rather than whether it is bright.
+  const NO_MUTED = PARTIAL_LIGHT.replace("--lumiverse-text-muted:rgba(24,22,30,.6);", "");
+  for (const [themeName, themeCss] of [
+    ["dark", ""],
+    ["light", LIGHT],
+    ["light, no muted colour set", NO_MUTED],
+  ]) {
   const page = await browser.newPage({ viewport: { width: 480, height: 200 } });
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await stage(page, "<div id=modal></div>");
-  await page.addStyleTag({ content: THEME });
+  await page.addStyleTag({ content: THEME + themeCss });
   await page.addScriptTag({ content: SOURCE, type: "module" });
   await page.waitForFunction(() => !!window.__setup);
   const box = await page.evaluate(async () => {
@@ -606,22 +659,22 @@ console.log("\nsearch clear button");
   });
   const png = await page.screenshot({ clip: { x: box.x, y: box.y, width: box.w, height: box.h } });
   await page.close();
-  check("the panel stylesheet is injected", box.styled);
-  check("the search field carries the id the rule targets", box.id === "__lvRetrySearch", box.id);
-  const bright = brightestPixel(png);
-  // With the rule in place the brightest thing at that end of the field is the
-  // cross itself, drawn in the muted theme colour, which over this dark field
-  // lands around 170. Without it nothing is painted there at all and the
-  // brightest thing is the field's own edge, far darker. Checking for "bright
-  // but not white" therefore proves the cross is both present and themed.
+  check(themeName + ": the panel stylesheet is injected", box.styled);
+  check(themeName + ": the search field carries the id the rule targets",
+    box.id === "__lvRetrySearch", box.id);
+  // The field is the colour covering most of the sample and the cross is
+  // whatever stands out furthest from it, so this reads the same way round on
+  // either kind of theme. A cross that has taken the field's own colour, which
+  // is what the leaked fallback amounts to, leaves nothing standing out.
   //
   // Note this cannot prove the untouched button was white: headless Chromium
   // never paints the browser's own clear button, which is why this bug reached
   // a real phone without any check noticing.
-  const themed = !!bright && bright.r > 120 && bright.r < 245 &&
-                 Math.abs(bright.r - bright.b) < 40;
-  check("the clear button is painted in the theme colour, not white", themed, bright);
-  check("no console errors", errors.length === 0, errors);
+  const seen = crossOnField(png);
+  check(themeName + ": the clear button stands out from the field",
+    !!seen && seen.ratio >= 3, seen);
+  check(themeName + ": no console errors", errors.length === 0, errors);
+  }
 }
 
 // ---- the thing the extension is for ----
@@ -1962,6 +2015,71 @@ console.log("\nnote list");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- adding a note does not raise the keyboard on a phone ----
+// Focusing the new note is what someone with a keyboard wants and what someone
+// on a phone does not: it raises the on-screen keyboard, which covers the panel
+// and the note just added. So it turns on what pressed the button rather than
+// on what kind of device it is, which is the only thing that gets a tablet with
+// a keyboard right.
+console.log("\nadding a note");
+{
+  const { out, errors } = await inPanel(browser, {}, async (page) =>
+    page.evaluate(async () => {
+      const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      await frame();
+      const row = document.querySelector('[data-ar-row="refusalNotes"]');
+      const plus = [...row.querySelectorAll("button")].find((b) => b.textContent.trim() === "+");
+      const boxes = () => row.querySelectorAll("textarea");
+      const minuses = () => [...row.querySelectorAll("button")].filter((b) => b.textContent.trim() === "−");
+      // Whether the note that was just added is the thing holding focus.
+      const landedInNew = () => {
+        const b = boxes();
+        return document.activeElement === b[b.length - 1];
+      };
+      const add = async (pointerType) => {
+        if (pointerType) {
+          plus.dispatchEvent(new PointerEvent("pointerdown", { pointerType, bubbles: true }));
+        }
+        plus.click();
+        await frame();
+      };
+      const reset = async () => {
+        for (let i = 0; i < 30; i++) { const m = minuses(); if (m.length) m[m.length - 1].click(); }
+        if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+        await frame();
+      };
+
+      await add("touch");
+      const byTouch = { notes: boxes().length, focused: landedInNew() };
+      await reset();
+
+      // A keyboard press straight after a tap, to prove the tap does not leave
+      // the button stuck in the state it set.
+      await add(null);
+      const byKeyboard = { notes: boxes().length, focused: landedInNew() };
+      await reset();
+
+      await add("mouse");
+      const byMouse = { notes: boxes().length, focused: landedInNew() };
+      await reset();
+
+      await add("pen");
+      const byPen = { notes: boxes().length, focused: landedInNew() };
+
+      return { byTouch, byKeyboard, byMouse, byPen };
+    }),
+  );
+  check("a tap adds the note", out.byTouch.notes === 2, out.byTouch);
+  check("and does not put the cursor in it, so no keyboard comes up",
+    out.byTouch.focused === false, out.byTouch);
+  check("a keyboard press right after a tap still lands in the new note",
+    out.byKeyboard.focused === true, out.byKeyboard);
+  check("a mouse click lands in the new note", out.byMouse.focused === true, out.byMouse);
+  check("a stylus is treated like a finger", out.byPen.focused === false, out.byPen);
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- a surface is measured by what it paints ----
 // The floating panels build an opaque surface by painting a solid colour and
 // laying the theme's tint over it as a gradient. background-color reports only
@@ -1970,12 +2088,6 @@ console.log("\nnote list");
 // its text repainted white to suit, which made it disappear.
 console.log("\npainted surfaces");
 {
-  const PARTIAL = `:root{
---lumiverse-primary:rgba(124,92,196,.95);--lumiverse-bg-elevated:rgba(252,251,254,.94);
---lumiverse-border:rgba(124,92,196,.18);--lumiverse-text:rgba(24,22,30,.92);
---lumiverse-text-muted:rgba(24,22,30,.6);--lumiverse-secondary:rgba(0,0,0,.05);
---lumiverse-secondary-border:rgba(0,0,0,.14);--lumiverse-fill-subtle:rgba(0,0,0,.035);}
-body{background:rgb(244,242,249)}#modal{background:rgb(252,251,254)}`;
   // Every surface below declares a dark background-colour and lays the theme's
   // tint over it as a gradient, and every one of them has its text repainted
   // against whatever it measures as sitting on. They share the fault and so
@@ -2048,7 +2160,7 @@ body{background:rgb(244,242,249)}#modal{background:rgb(252,251,254)}`;
   };
   await look("stock", "");
   await look("full light", LIGHT);
-  await look("partial light", PARTIAL);
+  await look("partial light", PARTIAL_LIGHT);
 }
 
 // ---- nothing is left behind ----
