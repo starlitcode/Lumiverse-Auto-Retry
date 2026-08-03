@@ -9,6 +9,7 @@ node_modules/
 *.log
 .cache/
 .bun/
+__pycache__/
 
 # build info from incremental typechecks
 *.tsbuildinfo
