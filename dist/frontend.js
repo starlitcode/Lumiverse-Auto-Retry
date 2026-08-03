@@ -3659,18 +3659,32 @@ export function setup(ctx, opts) {
         const h = box.height || el.offsetHeight || 0;
         const w = box.width || el.offsetWidth || 0;
         const GAP = 6;
+        const EDGE = 12;
         // Lined up with the row's left edge rather than centred on the "?", which
         // reads as belonging to the row, and nudged back inside a narrow screen.
-        const left = Math.max(12, Math.min(r.left, vw - w - 12));
-        // Below the row it belongs to. If there is no room, above it: either way it
-        // clears the row itself, so the setting being asked about stays readable.
+        const left = Math.max(EDGE, Math.min(r.left, vw - w - EDGE));
+        // Below the row it belongs to, always. This used to flip above when there
+        // was no room below, which meant a long description opened somewhere none
+        // of the others do: the reader looks under the setting and the text is over
+        // it instead. A description too tall for the room below is capped and
+        // scrolls rather than moving, so every one of them opens in the same place.
         let top = r.bottom + GAP;
-        if (top + h > vh - 12) {
-            const above = r.top - h - GAP;
-            // Only flip when flipping actually helps. On a row too tall to clear in
-            // either direction it stays below and is nudged up the screen, which at
-            // worst covers rows further down, never this one.
-            top = above >= 12 ? above : Math.max(12, Math.min(top, vh - h - 12));
+        // Enough to be worth reading before it has to scroll. If the row sits so
+        // low that even this will not fit under it, the popover is brought up the
+        // screen far enough to show that much, which is the only case where it
+        // covers anything.
+        const MIN_HINT = 120;
+        let room = vh - EDGE - top;
+        if (room < MIN_HINT) {
+            top = Math.max(EDGE, vh - EDGE - MIN_HINT);
+            room = vh - EDGE - top;
+        }
+        if (h > room) {
+            el.style.maxHeight = Math.floor(room) + "px";
+            el.style.overflowY = "auto";
+            // Reaching the end of the description must not start scrolling the panel
+            // behind it, because a scroll out there is what closes it.
+            el.style.overscrollBehavior = "contain";
         }
         // Where it is told to go is not always where it lands. Lumiverse's UI Scale
         // is applied as a zoom, and this is parented to the page so the zoom applies
@@ -3732,7 +3746,17 @@ export function setup(ctx, opts) {
         };
         // The float button is fixed, so a scroll does not move it and the menu can
         // stay. A resize can put it somewhere else entirely, so that closes it.
-        const onHintScroll = () => hideHint();
+        // A long description scrolls inside itself. That scroll is someone reading
+        // it, not the anchor moving, so it is the one scroll that leaves it open.
+        const onHintScroll = (e) => {
+            try {
+                const t = e && e.target;
+                if (hintPop && t && hintPop.contains && hintPop.contains(t))
+                    return;
+            }
+            catch (_) { }
+            hideHint();
+        };
         const onHintResize = () => {
             hideHint();
             hideFloatMenu();

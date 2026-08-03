@@ -1993,6 +1993,93 @@ console.log("\nbutton edges");
 // A note can answer the one before it, so the list needs a way to grow and
 // shrink. Ten is the ceiling and one is the floor: removing the last note would
 // leave nothing to type into.
+// ---- a description opens under the setting it describes ----
+// It used to flip above the row when there was no room below, so a long
+// description opened somewhere none of the others do: you look under the
+// setting and the text is over it instead. It stays below now and scrolls.
+console.log("\nhint placement");
+{
+  // A short viewport with a scrolling panel, so a row can be pushed low enough
+  // that its description will not fit underneath.
+  const PANEL = "#modal{position:fixed;inset:12px;overflow:auto;background:rgb(24,20,34);padding:10px;box-sizing:border-box}";
+  // The long one, on a viewport too short to fit it under the row.
+  {
+    const want = "What the notes say";
+    const { out, errors } = await inPanel(
+      browser, { css: PANEL, viewport: { width: 393, height: 800 } },
+      async (page) => page.evaluate(async (want) => {
+        const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+        await frame();
+        const row = [...document.querySelectorAll("[data-ar-row]")]
+          .find((r) => (r.textContent || "").includes(want));
+        if (!row) return { err: "no row" };
+        row.scrollIntoView({ block: "end" });
+        await frame();
+        row.querySelector("[data-ar-hint]").dispatchEvent(new MouseEvent("mouseenter"));
+        await frame();
+        const tip = document.querySelector('[role="tooltip"]');
+        if (!tip) return { err: "no tip" };
+        const rr = row.getBoundingClientRect();
+        const tr = tip.getBoundingClientRect();
+        const cs = getComputedStyle(tip);
+        const res = {
+          below: tr.top >= rr.bottom - 1,
+          withinBottom: tr.bottom <= innerHeight,
+          capped: cs.maxHeight !== "none",
+          scrolls: tip.scrollHeight > tip.clientHeight,
+          contains: cs.overscrollBehaviorY === "contain",
+        };
+        tip.scrollTop = 20;
+        tip.dispatchEvent(new Event("scroll", { bubbles: true }));
+        await frame();
+        res.stillOpenAfterOwnScroll = !!document.querySelector('[role="tooltip"]');
+        const modal = document.getElementById("modal");
+        modal.scrollTop = modal.scrollTop + 30;
+        modal.dispatchEvent(new Event("scroll", { bubbles: true }));
+        await frame();
+        res.closedByPanelScroll = !document.querySelector('[role="tooltip"]');
+        return res;
+      }, want),
+    );
+    check("a long description opens below the row, not above it", out.below, out);
+    check("and stays on screen", out.withinBottom, out);
+    check("capped to the room there is", out.capped, out);
+    check("and scrolls instead of moving", out.scrolls, out);
+    check("its scroll does not chain to the panel", out.contains, out);
+    check("reading it does not close it", out.stillOpenAfterOwnScroll, out);
+    check("scrolling the panel still closes it", out.closedByPanelScroll, out);
+    check("no console errors", errors.length === 0, errors);
+  }
+
+  // A short description with room to spare is left alone entirely.
+  {
+    const { out, errors } = await inPanel(
+      browser, { css: PANEL, viewport: { width: 900, height: 1000 } },
+      async (page) => page.evaluate(async () => {
+        const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        const row = [...document.querySelectorAll("[data-ar-row]")]
+          .find((r) => (r.textContent || "").includes("Turn auto-retry on"));
+        row.scrollIntoView({ block: "start" });
+        await frame();
+        row.querySelector("[data-ar-hint]").dispatchEvent(new MouseEvent("mouseenter"));
+        await frame();
+        const tip = document.querySelector('[role="tooltip"]');
+        const rr = row.getBoundingClientRect();
+        const tr = tip.getBoundingClientRect();
+        return {
+          below: tr.top >= rr.bottom - 1,
+          capped: getComputedStyle(tip).maxHeight !== "none",
+          scrolls: tip.scrollHeight > tip.clientHeight,
+        };
+      }),
+    );
+    check("a short description with room is below the row too", out.below, out);
+    check("and is not capped or scrolled", !out.capped && !out.scrolls, out);
+    check("no console errors", errors.length === 0, errors);
+  }
+}
+
 console.log("\nnote list");
 {
   const { out, errors } = await inPanel(browser, {}, async (page) =>

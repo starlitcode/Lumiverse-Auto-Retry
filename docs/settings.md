@@ -2,7 +2,7 @@
 
 The settings modal is the easy path, and the **Search settings** box at the top of it is the quickest way to reach one option out of the forty-odd below: type part of a name or a description and it shows the matching rows, opening whichever Advanced section they live in. Clear the box to put the panel back as it was.
 
-Each option's **?** shows its description in a small popover just below that option. It floats over the panel, so opening one leaves the rows where they are and never hides the setting you are reading about. Only one shows at a time. Tap the description, tap the **?** again, tap elsewhere, scroll, or press Esc to close it.
+Each option's **?** shows its description in a small popover just below that option, always below it and never above. It floats over the panel, so opening one leaves the rows where they are and never hides the setting you are reading about. A description too long for the room under it scrolls inside itself rather than moving somewhere else. Only one shows at a time. Tap the description, tap the **?** again, tap elsewhere, scroll the panel, or press Esc to close it.
 
 The find-and-replace section is split under two headings, **Saved in a preset** and **Yours, whatever preset you load**, so it is clear which of those options loading a preset will change.
 
