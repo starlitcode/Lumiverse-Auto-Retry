@@ -407,6 +407,12 @@ const SCHEMA = [
     },
     {
         title: "Advanced: refusal tuning (beta)",
+        // Every setting under here feeds looksLikeRefusal, and all three places
+        // that call it sit behind retryOnRefusal, so with that off the section is
+        // inert. One exception: refusalThinkTags is still read by the empty and
+        // short checks through stripThinkingAlways. Searching finds it, because a
+        // search ignores all of this.
+        needs: ["retryOnRefusal"],
         desc: "Only matters if the refusal option above is on. Fine-tunes what counts as a refusal.",
         fields: [
             {
@@ -4458,6 +4464,7 @@ export function setup(ctx, opts) {
         // Rows that only mean something while some switch is on. Kept out of the
         // panel while it is off, so what is on screen is what is in use.
         const depRows = [];
+        const depSections = [];
         // Called whenever one of those switches moves, and after anything that
         // reloads the whole form, which is a preset, an import or a reset.
         //
@@ -4473,6 +4480,10 @@ export function setup(ctx, opts) {
             for (const d of depRows) {
                 const on = d.needs.some((k) => !!cfg[k]);
                 d.row.style.display = on ? "flex" : "none";
+            }
+            for (const d of depSections) {
+                const on = d.needs.some((k) => !!cfg[k]);
+                d.sec.style.display = on ? "flex" : "none";
             }
             // A run whose rows have all gone takes its heading with it, the same way
             // it does under a search.
@@ -4532,6 +4543,8 @@ export function setup(ctx, opts) {
                 setOpen: null,
             };
             panelSections.push(handle);
+            if (group.needs && group.needs.length)
+                depSections.push({ sec: sec, needs: group.needs });
             const addRow = (row, f) => {
                 searchRows.push({
                     row: row,

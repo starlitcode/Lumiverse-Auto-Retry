@@ -4,9 +4,11 @@ The settings modal is the easy path, and the **Search settings** box at the top 
 
 Each option's **?** shows its description in a small popover just below that option, always below it and never above. It floats over the panel, so opening one leaves the rows where they are and never hides the setting you are reading about. A description too long for the room under it scrolls inside itself rather than moving somewhere else. Only one shows at a time. Tap the description, tap the **?** again, tap elsewhere, scroll the panel, or press Esc to close it.
 
-A setting that does nothing until something else is switched on is not shown until it is. Turning **Send a note with a refusal retry** on adds the note rows below it, and turning it off takes them away again, so the panel only lists what is actually in use. The switch itself never moves. The search box ignores this and finds a setting whichever way its switch is set, so nothing is ever hidden from you when you go looking for it by name.
+A setting that does nothing until something else is switched on is not shown until it is. Whole sections work the same way: turning **It looks like an accidental refusal** off takes the entire **Advanced: refusal tuning** section away, heading included, because nothing under it does anything while that is off. Turning **Send a note with a refusal retry** on adds the note rows below it, and turning it off takes them away again, so the panel only lists what is actually in use. The switch itself never moves. The search box ignores this and finds a setting whichever way its switch is set, so nothing is ever hidden from you when you go looking for it by name.
 
-Only settings the extension genuinely ignores are hidden this way. Some options look dependent and are not: extra thinking tag names are still used to find the reply when the reasoning option is off, and the word swap rules are still read by the two manual swap buttons whether or not automatic swapping is on.
+Only settings the extension genuinely ignores are hidden this way. Some options look dependent and are not: the word swap rules are still read by the two manual swap buttons whether or not automatic swapping is on, so they stay put.
+
+One setting inside the refusal tuning section is an exception worth knowing about. `refusalThinkTags` goes away with the rest of that section, but it is still used with accidental-refusal retrying off: the blank-reply and short-reply checks read it to find where the reply starts. Search for it by name to reach it while the section is hidden.
 
 The find-and-replace section is split under two headings, **Saved in a preset** and **Yours, whatever preset you load**, so it is clear which of those options loading a preset will change.
 

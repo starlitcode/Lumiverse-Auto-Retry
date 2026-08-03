@@ -2243,7 +2243,41 @@ console.log("\ndependent rows");
       await frame();
       const hiddenAfterClearing = shown("refusalNotePlacement");
 
-      return { offAtFirst, switchStillThere, onAfterTick, goneAgain,
+      // A whole section can hang off a switch too. Turning off the accidental
+      // refusal option leaves nothing under refusal tuning that does anything,
+      // so the heading goes with the rows.
+      //
+      // Measured by whether things are actually rendered rather than by their
+      // own display, because the section hides them from above.
+      const rendered = (el) => !!el && el.getClientRects().length > 0;
+      const tuningHead = () => [...document.querySelectorAll('[role="button"]')]
+        .find((h) => /refusal tuning/i.test(h.textContent || ""));
+      const tuningRow = () => document.querySelector('[data-ar-row="refusalUseBuiltins"]');
+      const refusalBox = () => document.querySelector('[data-ar-row="retryOnRefusal"]')
+        .querySelector("input[type=checkbox]");
+
+      const sectionOnAtFirst = rendered(tuningHead()) && rendered(tuningRow());
+      refusalBox().click();
+      await frame();
+      const sectionGone = !rendered(tuningHead()) && !rendered(tuningRow());
+      // The switch that hides it has to stay put, or there is no way back.
+      const refusalSwitchStays = rendered(document.querySelector('[data-ar-row="retryOnRefusal"]'));
+      // And searching still reaches inside it.
+      search.value = "extra thinking tag names";
+      search.dispatchEvent(new Event("input", { bubbles: true }));
+      await frame();
+      const searchReachesInside = rendered(document.querySelector('[data-ar-row="refusalThinkTags"]'));
+      search.value = "";
+      search.dispatchEvent(new Event("input", { bubbles: true }));
+      await frame();
+      const goneAfterClearing = !rendered(tuningRow());
+      refusalBox().click();
+      await frame();
+      const sectionBack = rendered(tuningHead()) && rendered(tuningRow());
+
+      return { sectionOnAtFirst, sectionGone, refusalSwitchStays, searchReachesInside,
+               goneAfterClearing, sectionBack,
+               offAtFirst, switchStillThere, onAfterTick, goneAgain,
                shortBefore, shortAfter, foundWhileOff, hiddenAfterClearing,
                matchedBefore, matchedAfter };
     }),
@@ -2258,6 +2292,14 @@ console.log("\ndependent rows");
   check("and clearing the search puts it away again", out.hiddenAfterClearing === false, out);
   check("ticking a switch during a search leaves the results alone",
     out.matchedBefore > 0 && out.matchedAfter === out.matchedBefore, out);
+  check("a whole section is there while its switch is on", out.sectionOnAtFirst === true, out);
+  check("and the heading goes with the rows when it is off", out.sectionGone === true, out);
+  check("the switch that hides it stays put", out.refusalSwitchStays === true, out);
+  check("a search still reaches a row inside a hidden section",
+    out.searchReachesInside === true, out);
+  check("and clearing the search puts the section away again",
+    out.goneAfterClearing === true, out);
+  check("turning it back on brings the section back", out.sectionBack === true, out);
   check("no console errors", errors.length === 0, errors);
 }
 

@@ -34,6 +34,52 @@ function defaults(): Record<string, string> {
   return out;
 }
 
+// A whole section can hang off a switch the same way a row can.
+function sectionDependencies(): Array<{ title: string; needs: string[] }> {
+  const out: Array<{ title: string; needs: string[] }> = [];
+  const re = /title:\s*"([^"]+)",\s*\n(?:\s*\/\/[^\n]*\n)*\s*needs:\s*\[([^\]]*)\]/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(SRC))) {
+    out.push({
+      title: m[1],
+      needs: m[2].split(",").map((x) => x.trim().replace(/"/g, "")).filter(Boolean),
+    });
+  }
+  return out;
+}
+
+describe("a section that hangs off a switch", () => {
+  const secs = sectionDependencies();
+  const CONFIG = defaults();
+
+  test("refusal tuning hangs off the accidental refusal switch", () => {
+    const s = secs.find((x) => /refusal tuning/i.test(x.title));
+    expect(s && s.needs).toEqual(["retryOnRefusal"]);
+  });
+
+  test("every switch a section names is a real one, and a switch", () => {
+    const bad = secs.flatMap((s) =>
+      s.needs
+        .filter((n) => CONFIG[n] !== "true" && CONFIG[n] !== "false")
+        .map((n) => s.title + " needs " + n),
+    );
+    expect(bad).toEqual([]);
+  });
+
+  test("and no section hides the switch that controls it", () => {
+    // retryOnRefusal lives in "When to count a reply as bad", not in the
+    // section it governs. If it were moved inside, turning it off would take
+    // away the only way to turn it back on.
+    const block = SRC.slice(SRC.indexOf("const SCHEMA"), SRC.indexOf("];", SRC.indexOf("const SCHEMA")));
+    for (const s of secs) {
+      const start = block.indexOf('title: "' + s.title + '"');
+      const nextTitle = block.indexOf("    title: ", start + 10);
+      const body = block.slice(start, nextTitle < 0 ? undefined : nextTitle);
+      for (const n of s.needs) expect(body).not.toContain('key: "' + n + '"');
+    }
+  });
+});
+
 describe("a row that hangs off a switch", () => {
   const deps = dependencies();
   const CONFIG = defaults();
