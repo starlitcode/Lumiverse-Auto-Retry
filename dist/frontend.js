@@ -4465,6 +4465,37 @@ export function setup(ctx, opts) {
         // panel while it is off, so what is on screen is what is in use.
         const depRows = [];
         const depSections = [];
+        // A row found by searching while the switch it hangs off is still off. The
+        // row is shown, because refusing to find a setting that exists is the worse
+        // answer, and this line says which switch would make it do something. Its
+        // needs are the row's own plus its section's, since a row inside a section
+        // that is switched off is just as inert as one hidden on its own.
+        // Held as a list of groups rather than one flat list of switches, because
+        // the two kinds of dependency combine differently. Any one switch inside a
+        // group is enough, which is the case for a setting two buttons both read.
+        // Every group has to be satisfied, because a row inside a section that is
+        // switched off is inert whatever its own switch says.
+        const depNotes = [];
+        const nameOf = (k) => {
+            const f = fieldByKey[k];
+            return f ? f.label : k;
+        };
+        const paintDepNotes = (searching) => {
+            for (const d of depNotes) {
+                const unmet = d.groups.filter((g) => !g.some((k) => !!cfg[k]));
+                const show = searching && unmet.length > 0 && d.row.style.display !== "none";
+                d.note.style.display = show ? "block" : "none";
+                // Rebuilt each time: which switch is the one still missing changes as
+                // the others are turned on.
+                d.note.textContent = show
+                    ? "Needs " +
+                        unmet
+                            .map((g) => g.map((k) => '"' + nameOf(k) + '"').join(" or "))
+                            .join(" and ") +
+                        " switched on."
+                    : "";
+            }
+        };
         // Called whenever one of those switches moves, and after anything that
         // reloads the whole form, which is a preset, an import or a reset.
         //
@@ -4474,7 +4505,14 @@ export function setup(ctx, opts) {
         // Held rather than closed over directly, because applyDeps can run before
         // the search box has been built and a const would still be in its dead zone.
         let searchBox = null;
+        // Same reason as searchBox: applyDeps is defined long before this element
+        // is built, and a const would still be in its dead zone if it ever ran early.
+        let masterNoteEl = null;
         applyDeps = () => {
+            // Ahead of the search guard: whether the master switch is off has nothing
+            // to do with what is being searched for, and this must not go stale.
+            if (masterNoteEl)
+                masterNoteEl.style.display = cfg.enabled === false ? "block" : "none";
             if (searchBox && String(searchBox.value || "").trim())
                 return;
             for (const d of depRows) {
@@ -4553,6 +4591,18 @@ export function setup(ctx, opts) {
                 });
                 if (f.needs && f.needs.length)
                     depRows.push({ row: row, needs: f.needs });
+                const groups = [];
+                if (group.needs && group.needs.length)
+                    groups.push(group.needs);
+                if (f.needs && f.needs.length)
+                    groups.push(f.needs);
+                if (groups.length) {
+                    const note = document.createElement("div");
+                    note.style.cssText =
+                        "display:none;font-size:11px;line-height:1.4;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+                    row.appendChild(note);
+                    depNotes.push({ row: row, note: note, groups: groups });
+                }
                 return row;
             };
             // A labelled run of rows inside a group, so a long list can say what its
@@ -4962,6 +5012,7 @@ export function setup(ctx, opts) {
                 // Everything came back, including rows whose switch is off. They go
                 // again here rather than being left behind by the search.
                 applyDeps();
+                paintDepNotes(false);
                 searchNote.textContent = "";
                 return;
             }
@@ -4995,6 +5046,9 @@ export function setup(ctx, opts) {
                         any = true;
                 w.style.display = any ? "flex" : "none";
             }
+            // Anything the search turned up that its switch has not enabled says so,
+            // rather than looking like a setting that does nothing when changed.
+            paintDepNotes(true);
             searchNote.textContent = hits
                 ? hits + (hits === 1 ? " setting matches" : " settings match")
                 : "Nothing matches that. Clear the box to see everything again.";
@@ -5003,6 +5057,22 @@ export function setup(ctx, opts) {
         search.addEventListener("input", runSearch);
         searchWrap.appendChild(search);
         searchWrap.appendChild(searchNote);
+        // Auto Retry can be switched off from the floating button or the Extras
+        // menu without opening this panel, so someone can arrive here with it off
+        // and no sign of why nothing is happening. Nothing is hidden or greyed for
+        // it: off means paused, not unconfigured, and setting it up while it is off
+        // is a normal thing to want to do.
+        const masterNote = document.createElement("div");
+        masterNote.style.cssText =
+            "display:none;flex:none;margin:0 0 10px;font-size:12px;line-height:1.45;" +
+                "color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+        masterNote.textContent =
+            "Auto Retry is off. These settings are saved and apply when you turn it back on.";
+        // Above the search box rather than below it. This is the panel's own state
+        // and it stays put, while the line under the box is about the search and
+        // comes and goes, so the lasting one reads first.
+        panel.appendChild(masterNote);
+        masterNoteEl = masterNote;
         panel.appendChild(searchWrap);
         panel.appendChild(scroller);
         // footer: a plain bar below the scroll area, set off by a single hairline

@@ -2303,6 +2303,107 @@ console.log("\ndependent rows");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- a search says which switch a row is waiting on ----
+// Searching finds a setting whichever way its switch is set, because refusing
+// to find one that exists is the worse answer. That leaves the other half of
+// the problem: changing it appears to do nothing. The row says what it wants.
+console.log("\nwhat a hidden row is waiting on");
+{
+  const { out, errors } = await inPanel(browser, {}, async (page) =>
+    page.evaluate(async () => {
+      const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      await frame();
+      const search = document.querySelector("input[type=search]");
+      const find = (q) => { search.value = q; search.dispatchEvent(new Event("input", { bubbles: true })); };
+      // The text a row is showing under itself, if any.
+      const waitingOn = (k) => {
+        const r = document.querySelector('[data-ar-row="' + k + '"]');
+        if (!r) return null;
+        const bits = [...r.querySelectorAll("div")]
+          .filter((d) => d.style.display !== "none" && /^Needs /.test(d.textContent || ""));
+        return bits.length ? bits[bits.length - 1].textContent : "";
+      };
+
+      // A row hidden by its own switch.
+      find("where the note goes");
+      await frame();
+      const noteRow = waitingOn("refusalNotePlacement");
+
+      // A row hidden by the section it sits in, which has no switch of its own.
+      // The section's switch has to actually be off for there to be anything
+      // to say, so it is turned off first.
+      find("");
+      await frame();
+      document.querySelector('[data-ar-row="retryOnRefusal"]').querySelector("input[type=checkbox]").click();
+      await frame();
+      find("extra thinking tag names");
+      await frame();
+      const inSection = waitingOn("refusalThinkTags");
+      find("");
+      await frame();
+      document.querySelector('[data-ar-row="retryOnRefusal"]').querySelector("input[type=checkbox]").click();
+      await frame();
+
+      // With the switch on there is nothing to say.
+      document.querySelector('[data-ar-row="refusalNote"]').querySelector("input[type=checkbox]").click();
+      await frame();
+      find("where the note goes");
+      await frame();
+      const onceOn = waitingOn("refusalNotePlacement");
+
+      // And it is a search-time thing only, not something left on the row.
+      find("");
+      await frame();
+      const afterClearing = waitingOn("refusalNotePlacement");
+      return { noteRow, inSection, onceOn, afterClearing };
+    }),
+  );
+  check("a row found while its own switch is off names that switch",
+    /^Needs "/.test(out.noteRow || "") && /refusal retry/i.test(out.noteRow || ""), out);
+  check("so does one inside a section that is switched off",
+    /^Needs "/.test(out.inSection || "") && /accidental refusal/i.test(out.inSection || ""), out);
+  check("and it says nothing once the switch is on", out.onceOn === "", out);
+  check("nor is it left behind after the search is cleared", out.afterClearing === "", out);
+  check("no console errors", errors.length === 0, errors);
+}
+
+// ---- the master switch says it is off rather than emptying the panel ----
+// Auto Retry can be switched off without opening this panel, so someone can
+// arrive with it off and nothing saying why. Off means paused, not
+// unconfigured, so nothing is hidden or greyed for it.
+console.log("\nmaster switch off");
+{
+  const { out, errors } = await inPanel(browser, {}, async (page) =>
+    page.evaluate(async () => {
+      const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const note = () => [...document.querySelectorAll("#modal > div, #modal div")]
+        .find((d) => /Auto Retry is off/.test(d.textContent || "") && d.children.length === 0);
+      const showing = () => { const n = note(); return !!n && n.style.display !== "none"; };
+      const rowsUp = () => [...document.querySelectorAll("[data-ar-row]")]
+        .filter((r) => r.getClientRects().length > 0).length;
+
+      for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      await frame();
+      const quietWhileOn = !showing();
+      const before = rowsUp();
+      const box = document.querySelector('[data-ar-row="enabled"]').querySelector("input[type=checkbox]");
+      box.click();
+      await frame();
+      const after = rowsUp();
+      const saysSo = showing();
+      box.click();
+      await frame();
+      return { quietWhileOn, saysSo, before, after, quietAgain: !showing() };
+    }),
+  );
+  check("nothing is said while it is on", out.quietWhileOn === true, out);
+  check("switching it off says so", out.saysSo === true, out);
+  check("and takes away nothing at all", out.before > 20 && out.after === out.before, out);
+  check("switching it back on takes the line away", out.quietAgain === true, out);
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- hiding a row is only hiding it ----
 // Nothing about a switch being off may cost someone what they typed or what a
 // section had open. Hiding is meant to be about what is on screen and nothing

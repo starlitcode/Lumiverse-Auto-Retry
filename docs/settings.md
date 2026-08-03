@@ -1,10 +1,12 @@
 # All settings
 
+Switching Auto Retry itself off changes nothing in here. Every setting stays where it is and stays editable, because off means paused rather than unconfigured, and setting it up while it is off is a normal thing to want to do. A line at the top says it is off and that your settings are saved.
+
 The settings modal is the easy path, and the **Search settings** box at the top of it is the quickest way to reach one option out of the forty-odd below: type part of a name or a description and it shows the matching rows, opening whichever Advanced section they live in. Clear the box to put the panel back as it was.
 
 Each option's **?** shows its description in a small popover just below that option, always below it and never above. It floats over the panel, so opening one leaves the rows where they are and never hides the setting you are reading about. A description too long for the room under it scrolls inside itself rather than moving somewhere else. Only one shows at a time. Tap the description, tap the **?** again, tap elsewhere, scroll the panel, or press Esc to close it.
 
-A setting that does nothing until something else is switched on is not shown until it is. Whole sections work the same way: turning **It looks like an accidental refusal** off takes the entire **Advanced: refusal tuning** section away, heading included, because nothing under it does anything while that is off. Turning **Send a note with a refusal retry** on adds the note rows below it, and turning it off takes them away again, so the panel only lists what is actually in use. The switch itself never moves. The search box ignores this and finds a setting whichever way its switch is set, so nothing is ever hidden from you when you go looking for it by name.
+A setting that does nothing until something else is switched on is not shown until it is. Whole sections work the same way: turning **It looks like an accidental refusal** off takes the entire **Advanced: refusal tuning** section away, heading included, because nothing under it does anything while that is off. Turning **Send a note with a refusal retry** on adds the note rows below it, and turning it off takes them away again, so the panel only lists what is actually in use. The switch itself never moves. The search box ignores this and finds a setting whichever way its switch is set, so nothing is ever hidden from you when you go looking for it by name. A row found that way says which switch it is waiting on, so changing it never looks like it did nothing.
 
 Only settings the extension genuinely ignores are hidden this way. Some options look dependent and are not: the word swap rules are still read by the two manual swap buttons whether or not automatic swapping is on, so they stay put.
 
