@@ -1756,6 +1756,69 @@ console.log("\nrefusal note");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- a filled button has to look like one ----
+// Repainting the label fixed half of this. On a theme whose accent sits near
+// the panel colour, Save stayed legible and lost its edge, so nothing said it
+// was a button. It gets a border only when its fill has all but vanished, and
+// a theme with an ordinary accent must be left completely alone.
+console.log("\nbutton edges");
+{
+  const read = async (css) => {
+    const { out, errors } = await inPanel(browser, { css }, async (page) =>
+      page.evaluate(() => {
+        const by = (t) => [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === t);
+        const seen = (b) => {
+          const cs = getComputedStyle(b);
+          return { border: cs.borderTopColor, bg: cs.backgroundColor, colour: cs.color };
+        };
+        return { save: seen(by("Save")), reset: seen(by("Reset to defaults")) };
+      }),
+    );
+    return { out, errors };
+  };
+  const clear = (c) => c === "rgba(0, 0, 0, 0)" || c === "transparent";
+
+  const stock = await read("");
+  check("on a normal theme the filled button keeps no border",
+    clear(stock.out.save.border), stock.out.save);
+  check("and its fill is still the theme's accent",
+    !clear(stock.out.save.bg), stock.out.save.bg);
+  check("no console errors", stock.errors.length === 0, stock.errors);
+
+  // An accent all but identical to the panel behind it.
+  const pale = await read(
+    "#modal{background:rgb(250,249,253)}body{background:rgb(245,244,250)}" +
+    ":root{--lumiverse-primary:rgba(250,248,255,.95);--lumiverse-text:rgba(20,18,26,.92);" +
+    "--lumiverse-bg-elevated:rgba(248,246,252,.95);--lumiverse-card-bg-solid:rgb(250,249,253)}",
+  );
+  check("on a theme whose accent has vanished it gets one",
+    !clear(pale.out.save.border), pale.out.save);
+  check("and the label is still readable against the fill",
+    pale.out.save.colour !== pale.out.save.bg, pale.out.save);
+  // The edge fix paints in near-white or near-black. A secondary button must
+  // keep the theme's own border colour, which is quieter on purpose, so seeing
+  // either of those there means the fix reached a button it should not have.
+  const FORCED = ["rgb(255, 255, 255)", "rgb(20, 18, 26)"];
+  check("the secondary button keeps the theme's own border, not a forced one",
+    !FORCED.includes(stock.out.reset.border) && !FORCED.includes(pale.out.reset.border),
+    { stock: stock.out.reset.border, pale: pale.out.reset.border });
+  check("no console errors on that theme", pale.errors.length === 0, pale.errors);
+
+  // A mid-grey pair chosen so the two candidate edge colours disagree: judged
+  // against the panel behind the button, near-black wins (4.70 to 3.95); judged
+  // against the button's own fill, white wins (5.25 to 3.54). The edge has to
+  // separate the button from what is behind it, so the panel is the right
+  // reference. Without a case like this, using the fill instead looks correct.
+  const mid = await read(
+    "#modal{background:rgb(128,128,128)}body{background:rgb(128,128,128)}" +
+    ":root{--lumiverse-primary:rgb(108,108,108);--lumiverse-bg-elevated:rgb(128,128,128);" +
+    "--lumiverse-card-bg-solid:rgb(128,128,128)}",
+  );
+  check("the edge is judged against the panel, not the button's own fill",
+    mid.out.save.border === "rgb(20, 18, 26)", mid.out.save);
+  check("no console errors on that one", mid.errors.length === 0, mid.errors);
+}
+
 // ---- nothing is left behind ----
 console.log("\nteardown");
 {

@@ -1097,6 +1097,38 @@ function matchColorScheme(el) {
         catch (_) { }
     });
 }
+// A filled button whose fill is close to the surface behind it reads as plain
+// text, however readable its label is. Repainting the label fixed half of that
+// and left the other half: on a theme whose accent is near the panel colour,
+// Save was legible and had no edge, so nothing said it was a button.
+//
+// The threshold is deliberately low. Plenty of themes use a quiet accent on
+// purpose and still read fine; this is only meant to catch a fill that has all
+// but vanished. The border is already there at one pixel and transparent, so
+// colouring it costs no layout.
+const MIN_EDGE = 1.45;
+function fixEdge(el, min) {
+    try {
+        if (!el || typeof getComputedStyle !== "function")
+            return;
+        const fill = parseColor(getComputedStyle(el).backgroundColor);
+        if (!fill)
+            return;
+        const behind = backdropOf(el.parentElement || el);
+        if (contrastRatio(blendColor(fill, behind), behind) >= (typeof min === "number" ? min : MIN_EDGE))
+            return;
+        const light = [255, 255, 255, 1];
+        const dark = [20, 18, 26, 1];
+        // Judged against the surface behind the button, since that is what the
+        // edge has to separate it from.
+        el.style.borderColor =
+            contrastRatio(light, behind) >= contrastRatio(dark, behind) ? NEAR_WHITE : NEAR_BLACK;
+    }
+    catch (_) { }
+}
+function ensureEdge(el, min) {
+    afterPaint(() => fixEdge(el, min));
+}
 function ensureReadable(el, min) {
     afterPaint(() => fixContrast(el, min));
 }
@@ -5171,6 +5203,8 @@ export function setup(ctx, opts) {
                         "border:1px solid var(--lumiverse-secondary-border,rgba(128,128,128,.25));" +
                             "background:var(--lumiverse-secondary,rgba(128,128,128,.15));color:var(--lumiverse-text,#eee)");
         ensureReadable(b);
+        if (primary)
+            ensureEdge(b);
         // Hovering swaps to the theme's own hover colour rather than brightening the
         // resting one, so a button lights up the same way the rest of Lumiverse does.
         const restBg = primary
