@@ -1486,11 +1486,21 @@ console.log("\nbackup round trip");
     // field's own limits so nothing is clamped back on the way out.
     const rows = [...document.querySelectorAll("[data-ar-row]")];
     const wanted = {};
+    const unreachable = [];
     for (const r of rows) {
       const key = r.getAttribute("data-ar-row");
-      const el = r.querySelector("textarea") || r.querySelector("input");
-      if (!el || !key || key === "1") continue;
-      if (el.type === "checkbox") { el.click(); wanted[key] = el.checked; }
+      if (!key || key === "1") continue;
+      // Every control kind, not just the two this started with. Looking only
+      // for textarea and input meant the picker rows added later were skipped
+      // in silence, and this check passed while covering 48 settings out of 50.
+      const el = r.querySelector("textarea") || r.querySelector("input") || r.querySelector("select");
+      if (!el) { unreachable.push(key); continue; }
+      if (el.tagName === "SELECT") {
+        const other = [...el.options].map((o) => o.value).find((v) => v !== el.value);
+        if (other != null) { el.value = other; el.dispatchEvent(new Event("change", { bubbles: true })); }
+        wanted[key] = el.value;
+      }
+      else if (el.type === "checkbox") { el.click(); wanted[key] = el.checked; }
       else if (el.type === "number" || el.inputMode === "numeric") {
         const lo = Number(el.min) || 0;
         const hi = el.max === "" || el.max == null ? Number.MAX_SAFE_INTEGER : Number(el.max);
@@ -1524,7 +1534,7 @@ console.log("\nbackup round trip");
     for (const b of boxes) if (!b.checked) b.click();
     exportBtn.click();
     await new Promise((r) => setTimeout(r, 150));
-    return { wanted, exported: window.__exported, categories: boxes.length, overreach };
+    return { wanted, exported: window.__exported, categories: boxes.length, overreach, unreachable, rows: rows.length };
   });
   await page.close();
 
@@ -1533,6 +1543,8 @@ console.log("\nbackup round trip");
   if (parsed && parsed.settings) for (const cat of Object.values(parsed.settings)) for (const k of Object.keys(cat)) inFile.add(k);
   const missing = Object.keys(out.wanted).filter((k) => !inFile.has(k));
 
+  check("every settings row could be read, whatever kind of control it holds",
+    out.unreachable.length === 0, out.unreachable);
   check("the category boxes were found without catching settings rows", out.overreach === 0, out.overreach);
   check("the export is valid JSON with a version", !!parsed && !!parsed.autoRetry, out.exported && out.exported.slice(0, 60));
   check("every setting in the panel is in the backup", missing.length === 0, missing);
