@@ -152,6 +152,7 @@ const SCHEMA = [
             },
             {
                 key: "floatingToggleSize",
+                needs: ["showFloatingToggle"],
                 label: "Size of the floating button",
                 type: "num",
                 int: true,
@@ -194,6 +195,7 @@ const SCHEMA = [
             },
             {
                 key: "breakerRuns",
+                needs: ["pauseWhenFailing"],
                 label: "Failed runs before pausing",
                 type: "num",
                 int: true,
@@ -203,6 +205,7 @@ const SCHEMA = [
             },
             {
                 key: "breakerPauseMins",
+                needs: ["pauseWhenFailing"],
                 label: "How long to pause (minutes)",
                 type: "num",
                 int: true,
@@ -331,6 +334,7 @@ const SCHEMA = [
             },
             {
                 key: "minChars",
+                needs: ["retryOnShort"],
                 label: 'What counts as "very short"',
                 type: "num",
                 int: true,
@@ -388,6 +392,7 @@ const SCHEMA = [
             },
             {
                 key: "allowReSwap",
+                needs: ["showReplaceButton", "showSwapAllButton"],
                 label: "Allow swapping a reply again",
                 type: "bool",
                 hint: "Off by default. Normally a reply is swapped at most once per session, so swaps don't stack. Turn this on to let the button swap a reply again even if it was already swapped, for example after you change your rules. This can apply your rules on top of an earlier swap.",
@@ -418,6 +423,7 @@ const SCHEMA = [
             },
             {
                 key: "refusalPhraseSubs",
+                needs: ["refusalUseBuiltins"],
                 label: "Reword the built-in phrases",
                 type: "text",
                 hint: 'Optional. Swap wording inside the built-in list using "old => new" rules, one per line. Example: assist => help. It changes what the built-in list matches, so only swap for wording your model actually uses.',
@@ -457,12 +463,14 @@ const SCHEMA = [
             },
             {
                 key: "refusalNotes",
+                needs: ["refusalNote"],
                 label: "What the notes say",
                 type: "notes",
                 hint: "Goes to the model, not to your chat. Whatever you type is sent exactly as written: nothing is added to it, nothing is removed, and nothing in it is checked. Add up to ten with the plus button and they are sent in order, as one block, so a note can answer the one before it. Each carries its own role: system puts it alongside the instructions your setup already sends, you puts it in the same role as your own messages, and the character puts it in the same role as the replies. Models treat the three differently, so which one works best depends on your model and your setup. An empty note is skipped.",
             },
             {
                 key: "refusalNotePlacement",
+                needs: ["refusalNote"],
                 label: "Where the note goes",
                 type: "pick",
                 options: [
@@ -474,6 +482,7 @@ const SCHEMA = [
             },
             {
                 key: "refusalNoteFromTry",
+                needs: ["refusalNote"],
                 label: "Start the note on try",
                 type: "num",
                 int: true,
@@ -2255,6 +2264,10 @@ export function setup(ctx, opts) {
     // rebuild (which would jump the scroll and close open sections). Repopulated
     // each time the settings body is built.
     let fieldSetters = {};
+    // Reapplies the rows that only matter while some switch is on. Held out here
+    // beside fieldSetters because the controls that move those switches are built
+    // by buildRow, which is its own function. Does nothing until a panel is built.
+    let applyDeps = () => { };
     // Rebuild-free refreshers for the preset dropdowns, so an import that adds
     // presets can update them without rebuilding the panel.
     let presetBarRefreshers = [];
@@ -4091,6 +4104,9 @@ export function setup(ctx, opts) {
         hideHint();
         root.innerHTML = "";
         fieldSetters = {};
+        // The rows the old one closed over have just been thrown away with the
+        // panel, so it is put back to doing nothing until the new one assigns it.
+        applyDeps = () => { };
         presetBarRefreshers = [];
         // A preset switcher: pick a saved preset and Load it into the settings, or
         // save the current settings as a preset. Load updates the on-screen fields in
@@ -4218,6 +4234,7 @@ export function setup(ctx, opts) {
                     if (fieldSetters[k])
                         fieldSetters[k](cfg[k]);
                 }
+                applyDeps();
                 saveSaved();
                 saveToAccount();
                 syncLiveLog();
@@ -4438,6 +4455,36 @@ export function setup(ctx, opts) {
         // Labelled runs of rows inside a group, hidden by a search once none of
         // their rows match so a heading is never left standing over nothing.
         const subRuns = [];
+        // Rows that only mean something while some switch is on. Kept out of the
+        // panel while it is off, so what is on screen is what is in use.
+        const depRows = [];
+        // Called whenever one of those switches moves, and after anything that
+        // reloads the whole form, which is a preset, an import or a reset.
+        //
+        // A search is left alone. Searching is someone asking where a setting is,
+        // and answering "nothing matches that" for one that exists, because a
+        // switch it depends on is off, would be a worse answer than showing it.
+        // Held rather than closed over directly, because applyDeps can run before
+        // the search box has been built and a const would still be in its dead zone.
+        let searchBox = null;
+        applyDeps = () => {
+            if (searchBox && String(searchBox.value || "").trim())
+                return;
+            for (const d of depRows) {
+                const on = d.needs.some((k) => !!cfg[k]);
+                d.row.style.display = on ? "flex" : "none";
+            }
+            // A run whose rows have all gone takes its heading with it, the same way
+            // it does under a search.
+            for (const w of subRuns) {
+                const rows = w.querySelectorAll("[data-ar-row]");
+                let any = rows.length === 0;
+                for (let i = 0; i < rows.length; i++)
+                    if (rows[i].style.display !== "none")
+                        any = true;
+                w.style.display = any ? "flex" : "none";
+            }
+        };
         const searchText = (...parts) => parts.map((p) => String(p == null ? "" : p)).join(" ").toLowerCase();
         // Every collapsible header goes through here. They were plain elements with
         // a click handler, which left all five collapsed sections unreachable
@@ -4491,6 +4538,8 @@ export function setup(ctx, opts) {
                     text: searchText(f.label, f.hint, f.key, group.title),
                     section: handle,
                 });
+                if (f.needs && f.needs.length)
+                    depRows.push({ row: row, needs: f.needs });
                 return row;
             };
             // A labelled run of rows inside a group, so a long list can say what its
@@ -4828,6 +4877,7 @@ export function setup(ctx, opts) {
                     // so the panel doesn't jump back to the top.
                     for (const k of Object.keys(fieldSetters))
                         fieldSetters[k](cfg[k]);
+                    applyDeps();
                     let msg = "";
                     if (applied.length)
                         msg = "Imported: " + applied.join(", ") + ". Press Save to keep it.";
@@ -4896,6 +4946,9 @@ export function setup(ctx, opts) {
                     if (s.setOpen)
                         s.setOpen(openGroups.has(s.title));
                 }
+                // Everything came back, including rows whose switch is off. They go
+                // again here rather than being left behind by the search.
+                applyDeps();
                 searchNote.textContent = "";
                 return;
             }
@@ -4933,6 +4986,7 @@ export function setup(ctx, opts) {
                 ? hits + (hits === 1 ? " setting matches" : " settings match")
                 : "Nothing matches that. Clear the box to see everything again.";
         };
+        searchBox = search;
         search.addEventListener("input", runSearch);
         searchWrap.appendChild(search);
         searchWrap.appendChild(searchNote);
@@ -5005,6 +5059,9 @@ export function setup(ctx, opts) {
         actions.appendChild(save);
         panel.appendChild(actions);
         root.appendChild(panel);
+        // The panel opens showing only what is switched on, rather than showing
+        // everything for a frame and then dropping the rows that are not in use.
+        applyDeps();
         // Secondary text (hints, section headers, status lines) is meant to read
         // quieter than the rest, so it is held to a gentler floor than the controls
         // and only repainted on a theme where it has all but vanished.
@@ -5042,6 +5099,7 @@ export function setup(ctx, opts) {
                 if (set)
                     set(cfg[k]);
             }
+            applyDeps();
             note.textContent = changed
                 ? "back to defaults, press Save to keep"
                 : "already at the defaults";
@@ -5139,6 +5197,8 @@ export function setup(ctx, opts) {
                 "flex:none;width:20px;height:20px;accent-color:var(--lumiverse-primary,rgba(147,112,219,.9));cursor:pointer";
             input.addEventListener("change", () => {
                 cfg[f.key] = input.checked;
+                // Rows that hang off this switch appear or go with it.
+                applyDeps();
             });
             fieldSetters[f.key] = (v) => {
                 input.checked = !!v;

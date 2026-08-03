@@ -64,7 +64,7 @@ body{background:rgb(10,8,18);margin:0}#modal{background:rgb(35,30,48);padding:0;
 
 // Boots the extension in a page with the settings panel open, and hands the
 // callback the same helpers every check needs.
-async function inPanel(browser, { css = "", viewport, touch = false } = {}, fn) {
+async function inPanel(browser, { css = "", viewport, touch = false, settings = null } = {}, fn) {
   const page = await browser.newPage(
     viewport ? { viewport, hasTouch: touch, isMobile: touch } : {},
   );
@@ -77,7 +77,7 @@ async function inPanel(browser, { css = "", viewport, touch = false } = {}, fn) 
   await page.addStyleTag({ content: THEME + css });
   await page.addScriptTag({ content: SOURCE, type: "module" });
   await page.waitForFunction(() => !!window.__setup);
-  await page.evaluate(async () => {
+  await page.evaluate(async (over) => {
     window.__acts = {};
     window.__setup(
       {
@@ -101,11 +101,11 @@ async function inPanel(browser, { css = "", viewport, touch = false } = {}, fn) 
           },
         },
       },
-      {},
+      over || {},
     );
     window.__acts["auto-retry-settings"].cb();
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-  });
+  }, settings);
   const out = await fn(page);
   await page.close();
   return { out, errors };
@@ -2068,7 +2068,7 @@ console.log("\nhint placement");
   {
     const want = "What the notes say";
     const { out, errors } = await inPanel(
-      browser, { css: PANEL, viewport: { width: 393, height: 800 } },
+      browser, { css: PANEL, viewport: { width: 393, height: 800 }, settings: { refusalNote: true } },
       async (page) => page.evaluate(async (want) => {
         const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
         for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
@@ -2119,7 +2119,8 @@ console.log("\nhint placement");
   // one ran the popover off the bottom of the screen at 1.4.
   {
     const { out, errors } = await inPanel(
-      browser, { css: PANEL + "body{zoom:1.4}", viewport: { width: 500, height: 800 } },
+      browser, { css: PANEL + "body{zoom:1.4}", viewport: { width: 500, height: 800 },
+                 settings: { refusalNote: true } },
       async (page) => page.evaluate(async () => {
         const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
         for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
@@ -2179,9 +2180,90 @@ console.log("\nhint placement");
   }
 }
 
-console.log("\nnote list");
+// ---- a row that hangs off a switch goes when the switch is off ----
+// The panel was showing every setting whether or not it was in use, so the
+// rows that only matter under a switch took up the space the rest needed.
+console.log("\ndependent rows");
 {
   const { out, errors } = await inPanel(browser, {}, async (page) =>
+    page.evaluate(async () => {
+      const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      await frame();
+      const shown = (k) => {
+        const r = document.querySelector('[data-ar-row="' + k + '"]');
+        return r ? r.style.display !== "none" : null;
+      };
+      // The switch itself, and the rows that hang off it.
+      const box = (k) => document.querySelector('[data-ar-row="' + k + '"]').querySelector("input[type=checkbox]");
+      const NOTE_ROWS = ["refusalNotes", "refusalNotePlacement", "refusalNoteFromTry"];
+      const all = (f) => NOTE_ROWS.every(f);
+
+      const offAtFirst = all((k) => shown(k) === false);
+      const switchStillThere = shown("refusalNote");
+
+      box("refusalNote").click();
+      await frame();
+      const onAfterTick = all((k) => shown(k) === true);
+
+      box("refusalNote").click();
+      await frame();
+      const goneAgain = all((k) => shown(k) === false);
+
+      // The same wiring on a different switch, to prove it is not special-cased.
+      const shortBefore = shown("minChars");
+      box("retryOnShort").click();
+      await frame();
+      const shortAfter = shown("minChars");
+
+      // A search is the deliberate exception: it finds a row whose switch is
+      // off, because answering "nothing matches that" for a setting that
+      // exists would be the worse answer.
+      const search = document.querySelector("input[type=search]");
+      search.value = "where the note goes";
+      search.dispatchEvent(new Event("input", { bubbles: true }));
+      await frame();
+      const foundWhileOff = shown("refusalNotePlacement");
+      // Ticking a switch while the search is up must not start hiding and
+      // showing rows underneath the results.
+      search.value = "note";
+      search.dispatchEvent(new Event("input", { bubbles: true }));
+      await frame();
+      const matchedBefore = [...document.querySelectorAll("[data-ar-row]")]
+        .filter((r) => r.style.display !== "none").length;
+      box("refusalNote").click();
+      await frame();
+      const matchedAfter = [...document.querySelectorAll("[data-ar-row]")]
+        .filter((r) => r.style.display !== "none").length;
+      box("refusalNote").click();
+      await frame();
+
+      search.value = "";
+      search.dispatchEvent(new Event("input", { bubbles: true }));
+      await frame();
+      const hiddenAfterClearing = shown("refusalNotePlacement");
+
+      return { offAtFirst, switchStillThere, onAfterTick, goneAgain,
+               shortBefore, shortAfter, foundWhileOff, hiddenAfterClearing,
+               matchedBefore, matchedAfter };
+    }),
+  );
+  check("the rows under a switch are not there while it is off", out.offAtFirst, out);
+  check("but the switch itself always is", out.switchStillThere === true, out);
+  check("ticking it brings them back with no reload", out.onAfterTick, out);
+  check("unticking takes them away again", out.goneAgain, out);
+  check("the same holds for another switch entirely",
+    out.shortBefore === false && out.shortAfter === true, out);
+  check("a search still finds a row whose switch is off", out.foundWhileOff === true, out);
+  check("and clearing the search puts it away again", out.hiddenAfterClearing === false, out);
+  check("ticking a switch during a search leaves the results alone",
+    out.matchedBefore > 0 && out.matchedAfter === out.matchedBefore, out);
+  check("no console errors", errors.length === 0, errors);
+}
+
+console.log("\nnote list");
+{
+  const { out, errors } = await inPanel(browser, { settings: { refusalNote: true } }, async (page) =>
     page.evaluate(async () => {
       const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
@@ -2251,7 +2333,7 @@ console.log("\nnote list");
 // a keyboard right.
 console.log("\nadding a note");
 {
-  const { out, errors } = await inPanel(browser, {}, async (page) =>
+  const { out, errors } = await inPanel(browser, { settings: { refusalNote: true } }, async (page) =>
     page.evaluate(async () => {
       const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
