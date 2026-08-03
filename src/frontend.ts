@@ -5222,7 +5222,7 @@ export function setup(ctx: Ctx, opts?: any) {
         add.style.cursor = room ? "pointer" : "not-allowed";
         count.textContent = room
           ? notes.length + " of " + MAX_NOTES
-          : "10 is the most one retry can carry";
+          : MAX_NOTES + " is the most one retry can carry";
         ensureReadableTree(list, 2.6);
       };
 

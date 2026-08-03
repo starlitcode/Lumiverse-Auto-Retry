@@ -367,3 +367,40 @@ describe("it stays out of the way", () => {
     expect(list.length).toBe(3);
   });
 });
+
+// The limit and the roles are written out in both src/frontend.ts and
+// src/backend.ts, because the two halves do not share a module. Nothing made
+// them agree. Raising the limit in the panel alone would let someone add notes
+// the interceptor then drops on every retry, with no error and nothing in the
+// log to say so, which is the quietest kind of wrong.
+describe("both halves agree on the limit", () => {
+  const frontend = readFileSync(new URL("../src/frontend.ts", import.meta.url), "utf8");
+  const backend = readFileSync(new URL("../src/backend.ts", import.meta.url), "utf8");
+  const limitOf = (src: string) => {
+    const m = src.match(/const MAX_NOTES\s*=\s*(\d+)/);
+    return m ? Number(m[1]) : null;
+  };
+  const rolesOf = (src: string) => {
+    const m = src.match(/const NOTE_ROLES\s*=\s*\[([^\]]*)\]/);
+    return m ? m[1].split(",").map((s) => s.trim().replace(/['"]/g, "")).filter(Boolean) : null;
+  };
+
+  test("the same number of notes", () => {
+    const a = limitOf(frontend), b = limitOf(backend);
+    expect(a).toBeGreaterThan(0);
+    expect(b).toBe(a);
+  });
+
+  test("the same roles, in the same order", () => {
+    const a = rolesOf(frontend), b = rolesOf(backend);
+    expect(a).toEqual(["system", "user", "assistant"]);
+    expect(b).toEqual(a);
+  });
+
+  test("and the panel says the number it actually enforces", () => {
+    // The label had the limit spelled out in one branch and taken from the
+    // constant in the other, so changing the constant left the message lying.
+    expect(frontend).not.toMatch(/"\d+ is the most one retry can carry"/);
+    expect(frontend).toMatch(/MAX_NOTES \+ " is the most one retry can carry"/);
+  });
+});

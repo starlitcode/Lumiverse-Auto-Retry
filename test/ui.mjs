@@ -1812,6 +1812,52 @@ console.log("\nbackup restore");
   }));
   const afterGood = await read();
 
+  // A note list is the one setting that is not a string, a number or a flag, so
+  // it is the one a file can be shaped wrongly for. A good one first.
+  await feed("notes.json", JSON.stringify({
+    autoRetry: "test",
+    settings: { refusal: { refusalNotes: [
+      { text: "first note", role: "assistant" },
+      { text: "second note", role: "user" },
+    ] } },
+  }));
+  const afterNotes = await page.evaluate(() => {
+    const row = document.querySelector('[data-ar-row="refusalNotes"]');
+    return {
+      texts: [...row.querySelectorAll("textarea")].map((t) => t.value),
+      roles: [...row.querySelectorAll("select")].map((t) => t.value),
+      status: window.__status(),
+    };
+  });
+
+  // Then every wrong shape at once: not a list, a role that does not exist, an
+  // item that is not an object, and more notes than the limit allows.
+  await feed("notes-bad.json", JSON.stringify({
+    autoRetry: "test",
+    settings: { refusal: { refusalNotes: "not a list" } },
+  }));
+  const afterNotAList = await page.evaluate(() => {
+    const row = document.querySelector('[data-ar-row="refusalNotes"]');
+    return { count: row.querySelectorAll("textarea").length,
+             texts: [...row.querySelectorAll("textarea")].map((t) => t.value) };
+  });
+  await feed("notes-odd.json", JSON.stringify({
+    autoRetry: "test",
+    settings: { refusal: { refusalNotes: [
+      { text: "kept", role: "sudo" },
+      null,
+      ...Array.from({ length: 40 }, (_, i) => ({ text: "n" + i, role: "user" })),
+    ] } },
+  }));
+  const afterOdd = await page.evaluate(() => {
+    const row = document.querySelector('[data-ar-row="refusalNotes"]');
+    return {
+      count: row.querySelectorAll("textarea").length,
+      firstRole: row.querySelector("select").value,
+      firstText: row.querySelector("textarea").value,
+    };
+  });
+
   // Nothing is kept until Save.
   await page.evaluate(() => window.__by("Save").click());
   await page.waitForTimeout(60);
@@ -1827,6 +1873,15 @@ console.log("\nbackup restore");
     afterUnknownCat.maxRetries === "6" && /Imported/.test(afterUnknownCat.status), afterUnknownCat.status);
   check("a real backup fills the fields in", afterGood.rules === "hot => cold" &&
     afterGood.enabled === true, afterGood);
+  check("a backed-up note list comes back with its text and its roles",
+    afterNotes.texts[0] === "first note" && afterNotes.texts[1] === "second note" &&
+    afterNotes.roles[0] === "assistant" && afterNotes.roles[1] === "user", afterNotes);
+  check("a note list that is not a list leaves one empty note, not a broken panel",
+    afterNotAList.count === 1 && afterNotAList.texts[0] === "", afterNotAList);
+  check("a role that does not exist falls back rather than being sent",
+    afterOdd.firstRole === "system" && afterOdd.firstText === "kept", afterOdd);
+  check("and a file with more notes than the limit is cut to the limit",
+    afterOdd.count === 10, afterOdd);
   check("an out-of-range number is pulled back to the limit",
     Number(afterGood.maxRetries) > 0 && Number(afterGood.maxRetries) < 1000, afterGood.maxRetries);
   // Two independent layers stop this: applyImport reads only the keys it knows,

@@ -5239,7 +5239,7 @@ export function setup(ctx, opts) {
                 add.style.cursor = room ? "pointer" : "not-allowed";
                 count.textContent = room
                     ? notes.length + " of " + MAX_NOTES
-                    : "10 is the most one retry can carry";
+                    : MAX_NOTES + " is the most one retry can carry";
                 ensureReadableTree(list, 2.6);
             };
             add.setAttribute("aria-label", "Add another note");
