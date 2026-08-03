@@ -24,6 +24,10 @@ _2026-08-02_
 - **A filled button gets an outline when your theme's accent has all but vanished.** On a theme whose accent sits close to the panel colour, Save stayed readable but lost its edge, so nothing said it was a button. It now gets a border only when its fill has faded into the surface behind it. A theme with an ordinary accent is left exactly as it was, and the quieter secondary buttons keep the border your theme gives them.
 - **A new permission, `interceptor`.** This is what lets an extension add to a prompt before it reaches the model, and it is the only way the note above can work. Without it granted, everything else in the extension works as before and the note is simply not sent.
 
+### Fixed
+
+- **The hint text and the full-size editor were blank boxes on some light themes.** Making those panels solid in 4.1.0 meant painting a background colour and laying your theme's tint over the top of it. The extension then reads that background to decide whether text on it should be light or dark, and it was reading the colour underneath rather than the one you can see. On a theme that sets the common colour variables but not the one behind those panels, the fallback under the tint is dark, so the panel painted near-white and its text was turned white to match. It now reads what the panel actually paints. A theme that sets every variable was never affected, which is why this only showed up on hand-written ones.
+
 ## 4.1.0
 
 _2026-08-02_

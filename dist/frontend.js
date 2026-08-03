@@ -1025,6 +1025,41 @@ function contrastRatio(a, b) {
 // What is actually behind an element: its own background when that is opaque,
 // otherwise the ancestors' backgrounds composited underneath it.
 const PAGE_FALLBACK = [20, 16, 30, 1]; // Lumiverse ships dark; last resort only
+// What a surface actually paints, rather than only what its background-color
+// says. Every floating panel here builds an opaque surface by painting a solid
+// colour and laying the theme's translucent tint over it as a gradient, because
+// the tint alone is 90% opaque and lets the text behind read through.
+// getComputedStyle reports the colour underneath and says nothing about the
+// gradient, so on a theme that leaves --lumiverse-card-bg-solid unset the
+// popover measured as the dark fallback while painting near-white, and its text
+// was helpfully repainted white to suit. It vanished.
+function paintedBg(el) {
+    let base = null;
+    let img = "";
+    try {
+        const cs = getComputedStyle(el);
+        base = parseColor(cs.backgroundColor);
+        img = String(cs.backgroundImage || "");
+    }
+    catch (_) {
+        return base;
+    }
+    if (img.indexOf("gradient") < 0)
+        return base;
+    // Only the first stop is read. These gradients are one colour repeated, used
+    // to lay a flat tint rather than to shade anything.
+    const stop = img.match(/rgba?\([^)]*\)|#[0-9a-fA-F]{3,8}/);
+    const over = stop ? parseColor(stop[0]) : null;
+    if (!over)
+        return base;
+    if (!base || base[3] <= 0)
+        return over;
+    const mixed = blendColor(over, base);
+    // An opaque layer under a translucent one is still opaque. A translucent one
+    // under it is not, so the walk upward has to continue.
+    mixed[3] = base[3] >= 0.999 ? 1 : Math.min(1, base[3] + over[3] * (1 - base[3]));
+    return mixed;
+}
 function backdropOf(el) {
     const layers = [];
     let p = el;
@@ -1032,7 +1067,7 @@ function backdropOf(el) {
     while (p && hops < 24) {
         let c = null;
         try {
-            c = parseColor(getComputedStyle(p).backgroundColor);
+            c = paintedBg(p);
         }
         catch (_) { }
         if (c && c[3] > 0) {
@@ -1114,7 +1149,7 @@ function fixEdge(el, min) {
     try {
         if (!el || typeof getComputedStyle !== "function")
             return;
-        const fill = parseColor(getComputedStyle(el).backgroundColor);
+        const fill = paintedBg(el);
         if (!fill)
             return;
         const behind = backdropOf(el.parentElement || el);

@@ -226,6 +226,19 @@ for (const [label, css] of [
   ["raised text scale", ":root{--lumiverse-font-scale:1.5;--lumiverse-ui-scale:1.5}"],
   // The whole panel on a light theme, held to exactly the same floor as dark.
   ["light theme", LIGHT],
+  // A light theme pack that overrides the common variables and not all 92,
+  // which is what a hand-written theme actually looks like. Every fallback in
+  // the source is a dark colour, so anything reaching for a variable this
+  // leaves unset is measured against the wrong surface. The reported bug: the
+  // hint popover painted near-white over an unset card-bg-solid, measured as
+  // the dark fallback underneath, and had its text repainted white to match.
+  ["partial light theme", `:root{
+--lumiverse-primary:rgba(124,92,196,.95);--lumiverse-primary-hover:rgba(108,76,180,.95);
+--lumiverse-secondary:rgba(0,0,0,.05);--lumiverse-secondary-border:rgba(0,0,0,.14);
+--lumiverse-bg-elevated:rgba(252,251,254,.94);--lumiverse-border:rgba(124,92,196,.18);
+--lumiverse-text:rgba(24,22,30,.92);--lumiverse-text-muted:rgba(24,22,30,.6);
+--lumiverse-fill-subtle:rgba(0,0,0,.035);}
+body{background:rgb(244,242,249)}#modal{background:rgb(252,251,254)}`],
   // And a light theme whose accent has drifted close to its own text colour,
   // which is the light-side version of the bug that started all of this.
   ["light theme, pale accent", LIGHT + ":root{--lumiverse-primary:rgba(196,180,232,.9);--lumiverse-primary-hover:rgba(206,192,240,.95)}"],
@@ -1947,6 +1960,95 @@ console.log("\nnote list");
   check("and never goes below one", out.atFloor.notes === 1 && out.atFloor.minusOff, out.atFloor);
   check("with room again after coming back down", out.atFloor.plusOn, out.atFloor);
   check("no console errors", errors.length === 0, errors);
+}
+
+// ---- a surface is measured by what it paints ----
+// The floating panels build an opaque surface by painting a solid colour and
+// laying the theme's tint over it as a gradient. background-color reports only
+// the colour underneath. On a theme that leaves the solid one unset, the
+// popover painted near-white, measured as the dark fallback beneath, and had
+// its text repainted white to suit, which made it disappear.
+console.log("\npainted surfaces");
+{
+  const PARTIAL = `:root{
+--lumiverse-primary:rgba(124,92,196,.95);--lumiverse-bg-elevated:rgba(252,251,254,.94);
+--lumiverse-border:rgba(124,92,196,.18);--lumiverse-text:rgba(24,22,30,.92);
+--lumiverse-text-muted:rgba(24,22,30,.6);--lumiverse-secondary:rgba(0,0,0,.05);
+--lumiverse-secondary-border:rgba(0,0,0,.14);--lumiverse-fill-subtle:rgba(0,0,0,.035);}
+body{background:rgb(244,242,249)}#modal{background:rgb(252,251,254)}`;
+  // Every surface below declares a dark background-colour and lays the theme's
+  // tint over it as a gradient, and every one of them has its text repainted
+  // against whatever it measures as sitting on. They share the fault and so
+  // they are checked together.
+  const look = async (name, css) => {
+    const { out, errors } = await inPanel(browser, { css }, async (page) =>
+      page.evaluate(async () => {
+        const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        const num = (c) => (c.match(/[\d.]+/g) || []).map(Number);
+        const lum = (c) => {
+          const ch = c.map((v) => { const x = v / 255; return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4); });
+          return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+        };
+        // What the surface paints: the gradient tint over the declared colour.
+        // The text is read off whichever element actually carries it, which on
+        // the editor is a child of the surface rather than the surface itself.
+        // Only a child gets its colour recomputed, so measuring the surface's
+        // own inherited colour would miss the fault entirely.
+        const reading = (el, textEl) => {
+          if (!el || (textEl !== undefined && !textEl)) return null;
+          const cs = getComputedStyle(el);
+          const stop = (cs.backgroundImage || "").match(/rgba?\([^)]*\)/);
+          const [br, bg, bb] = num(cs.backgroundColor);
+          let painted = [br, bg, bb];
+          if (stop) {
+            const [gr, gg, gb, ga = 1] = num(stop[0]);
+            painted = [gr * ga + br * (1 - ga), gg * ga + bg * (1 - ga), gb * ga + bb * (1 - ga)];
+          }
+          const colour = getComputedStyle(textEl || el).color;
+          const [tr, tg, tb, ta = 1] = num(colour);
+          const over = [tr * ta + painted[0] * (1 - ta), tg * ta + painted[1] * (1 - ta), tb * ta + painted[2] * (1 - ta)];
+          const a = lum(over), b = lum(painted);
+          return {
+            ratio: (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05),
+            text: colour, declared: cs.backgroundColor,
+          };
+        };
+        const found = {};
+
+        document.querySelector("button[data-ar-hint]").dispatchEvent(new MouseEvent("mouseenter"));
+        await frame();
+        found.tip = reading(document.querySelector('[role="tooltip"]'));
+        document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+
+        // The full-size editor, reached the way someone would reach it.
+        for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+        await frame();
+        const ex = [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === "Expand");
+        if (ex) ex.click();
+        await frame();
+        const box = [...document.querySelectorAll("body > div")]
+          .filter((d) => d.id !== "modal")
+          .map((d) => d.querySelector("textarea") && d.querySelector("textarea").parentElement)
+          .find(Boolean);
+        // The editor's title: a plain line of text on the surface, and one of
+        // the elements the sweep repaints.
+        const title = box && [...box.children].find(
+          (c) => c.tagName === "DIV" &&
+            [...c.childNodes].some((n) => n.nodeType === 3 && n.nodeValue.trim()),
+        );
+        found.editor = reading(box, title);
+        return found;
+      }),
+    );
+    check(name + ": the tip's text reads against what the tip paints",
+      out.tip && out.tip.ratio >= 3, out.tip);
+    check(name + ": the editor's text reads against what the editor paints",
+      out.editor && out.editor.ratio >= 3, out.editor);
+    check(name + ": no console errors", errors.length === 0, errors);
+  };
+  await look("stock", "");
+  await look("full light", LIGHT);
+  await look("partial light", PARTIAL);
 }
 
 // ---- nothing is left behind ----
