@@ -43,6 +43,11 @@ The same options live in the CONFIG block at the top of `src/frontend.ts` and `d
 | refusalMaxChars | 2000 | Longest reply still treated as a possible refusal. 0 = no limit. |
 | refusalStripThinking | true | Only check the final reply, stripping known reasoning tags first. Off checks the whole raw output. |
 | refusalThinkTags | (empty) | Extra reasoning tag names, one per line, for unusual thinking wrappers. |
+| refusalNote | false | Send a note with a refusal retry, and only a refusal retry. Needs the `interceptor` permission. |
+| refusalNoteText | (empty) | What the note says. Nothing is sent while this is empty. |
+| refusalNoteRole | system | Who the note comes from: system, user or assistant. |
+| refusalNotePlacement | after | Where it goes: after the last message, before it, or at the very start. |
+| refusalNoteFromTry | 2 | Which retry the note starts on. 1 sends it every time. |
 | replaceEnabled | false | (beta) Turn on find-and-replace on replies. Edits the saved message. |
 | replaceRules | (empty) | "old => new" word swaps, one per line. |
 | replaceRandom | false | When a word has more than one swap, pick one at random each time. |

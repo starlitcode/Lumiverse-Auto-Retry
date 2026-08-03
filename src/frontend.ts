@@ -33,6 +33,9 @@ const IGNORE_MAX = 16; // most aborted-generation ids kept around to swallow the
 // click started nothing. A swipe control can move between existing rerolls
 // instead of making a new one, and a stale control does nothing at all.
 const START_GRACE_MS = 6000;
+// The retry reason that carries the optional note. Named once so the arming
+// check below cannot drift away from the callers that raise it.
+const REFUSAL_REASON = "looks like an accidental refusal";
 
 // Largest amount of streamed text kept per chat as a fallback when the end
 // event arrives without a content field. Trimmed from the front past this.
@@ -40,7 +43,7 @@ const STREAM_BUF_MAX = 200000;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "4.1.0";
+const VERSION = "4.2.0";
 
 // ---- defaults (the UI overrides these; editing here changes the fallback) ----
 const CONFIG = {
@@ -98,6 +101,14 @@ const CONFIG = {
 
   refusalStripThinking: true, // ignore the model's thinking when checking for a refusal, so a refusal that lives only in a <think> block does not trigger a retry when the visible reply is fine.
   refusalThinkTags: "", // extra reasoning tag names (one per line) the model wraps its thinking in, on top of the built-in set. Both <tag> and [tag] forms are handled.
+  // A note sent with a refusal retry, and only with a refusal retry. It goes
+  // into the prompt for that one generation and is never written to the chat.
+  // Off by default, and does nothing at all while the text is empty.
+  refusalNote: false,
+  refusalNoteText: "",
+  refusalNoteRole: "system", // system | user | assistant
+  refusalNotePlacement: "after", // after | before | start, relative to the last real message
+  refusalNoteFromTry: 2, // which retry it starts on. 1 sends it every time.
   // Find and replace in replies (handled by the backend via the Chat Mutation API).
   replaceEnabled: false, // off by default. When on, applies replaceRules to each finished reply and edits the saved message.
   replaceRules: "", // "old => new" rules, one per line. A single word matches whole words; empty right side deletes it. Same word can appear more than once.
@@ -133,7 +144,7 @@ const CONFIG = {
 // Fields the settings UI can edit, in display order. The one place that defines
 // both the form and what gets persisted. Every option above (except the two
 // internal timing constants) is listed here, so everything is user-editable.
-type FieldType = "bool" | "num" | "text";
+type FieldType = "bool" | "num" | "text" | "pick";
 interface Field {
   key: keyof typeof CONFIG;
   label: string;
@@ -143,6 +154,10 @@ interface Field {
   min?: number;
   max?: number;
   int?: boolean;
+  // "pick" only: the values this setting is allowed to hold, in the order they
+  // are offered. Anything else, from a hand-edited backup or an older version,
+  // falls back to the first one.
+  options?: Array<{ value: string; label: string }>;
 }
 interface Group {
   title: string;
@@ -464,6 +479,49 @@ const SCHEMA: Group[] = [
         label: "Extra thinking tag names",
         type: "text",
         hint: "Optional, one per line. The common reasoning tags are already handled. Add a tag name only if your model wraps its thinking in an unusual one (for example: mythink). Just the name, no brackets. Both <name> and [name] forms are covered.",
+      },
+      {
+        key: "refusalNote",
+        label: "Send a note with a refusal retry",
+        type: "bool",
+        hint: "Off by default. Every other kind of retry re-sends your request exactly as it was. This one, and only this one, adds a note to the prompt for that single try, which is useful when a scene keeps getting refused for the wrong reason. It goes to the model only: nothing is written to your chat and nothing shows in the reply. Needs the new interceptor permission, and does nothing while the box below is empty.",
+      },
+      {
+        key: "refusalNoteText",
+        label: "What the note says",
+        type: "text",
+        hint: "Written to the model, not to your chat. Say what the scene actually is. For example: this reply was refused by mistake, this is a safe-for-work roleplay and I am playing a therapist trying to help. Keep it short and factual. A long note crowds out the scene, and one that argues with the model tends to work less well than one that simply explains.",
+      },
+      {
+        key: "refusalNoteRole",
+        label: "Who the note comes from",
+        type: "pick",
+        options: [
+          { value: "system", label: "System" },
+          { value: "user", label: "You" },
+          { value: "assistant", label: "The character" },
+        ],
+        hint: "System reads as an instruction and cannot be mistaken for dialogue, which is why it is the default. You reads as if you said it, which some models weigh more heavily but can pull the model into replying to you instead of continuing the scene. The character puts the words in your character's mouth, which is the strongest and the easiest to overdo.",
+      },
+      {
+        key: "refusalNotePlacement",
+        label: "Where the note goes",
+        type: "pick",
+        options: [
+          { value: "after", label: "After the last message" },
+          { value: "before", label: "Before the last message" },
+          { value: "start", label: "At the very start" },
+        ],
+        hint: "After the last message puts it closest to the model's attention, which usually carries the most weight. Before the last message tucks it behind the newest line so the scene still ends on the reply. At the very start sits it with the setup, furthest from attention in a long chat but least likely to interfere.",
+      },
+      {
+        key: "refusalNoteFromTry",
+        label: "Start the note on try",
+        type: "num",
+        int: true,
+        min: 1,
+        max: 20,
+        hint: "2 by default, so the first retry re-sends unchanged and the note only appears if that also comes back refused. A plain re-roll fixes most accidental refusals on its own, and this keeps the note out of those. Set it to 1 to send the note on every refusal retry.",
       },
     ],
   },
@@ -1957,11 +2015,17 @@ export function setup(ctx: Ctx, opts?: any) {
       localStorage.setItem(STORE_KEY, JSON.stringify(out));
     } catch (_) {}
   }
-  function coerce(type: FieldType, val: any, fallback: any) {
+  function coerce(type: FieldType, val: any, fallback: any, f?: Field) {
     if (type === "bool") return !!val;
     if (type === "num") {
       const n = Number(val);
       return Number.isFinite(n) ? n : fallback;
+    }
+    if (type === "pick") {
+      const want = val == null ? "" : String(val);
+      const opts = (f && f.options) || [];
+      for (const o of opts) if (o.value === want) return want;
+      return opts.length ? opts[0].value : fallback;
     }
     return val == null ? fallback : String(val);
   }
@@ -2030,6 +2094,11 @@ export function setup(ctx: Ctx, opts?: any) {
         "refusalIgnorePhrases",
         "refusalStripThinking",
         "refusalThinkTags",
+        "refusalNote",
+        "refusalNoteText",
+        "refusalNoteRole",
+        "refusalNotePlacement",
+        "refusalNoteFromTry",
       ],
     },
     {
@@ -2093,7 +2162,7 @@ export function setup(ctx: Ctx, opts?: any) {
     if (!f) return undefined;
     return f.type === "num"
       ? clampField(f, val)
-      : coerce(f.type, val, (CONFIG as any)[key]);
+      : coerce(f.type, val, (CONFIG as any)[key], f);
   }
   function buildExport(catIds: string[]): string {
     const settings: any = {};
@@ -2949,6 +3018,30 @@ export function setup(ctx: Ctx, opts?: any) {
     }, START_GRACE_MS);
   }
 
+  // Tell the backend to attach the note to the next generation in this chat.
+  // Sent immediately before the click, so it is in place before the generation
+  // starts. The backend only honours it for a regenerate or a swipe, so a note
+  // that is never collected cannot attach itself to something you type.
+  function armRefusalNote(chatId: string, reason: string, attempt: number) {
+    try {
+      if (!cfg.refusalNote) return;
+      if (reason !== REFUSAL_REASON) return;
+      const text = String(cfg.refusalNoteText || "").trim();
+      if (!text) return;
+      const from = Math.max(1, Number(cfg.refusalNoteFromTry) || 1);
+      if (attempt < from) return;
+      if (!ctx || typeof (ctx as any).sendToBackend !== "function") return;
+      (ctx as any).sendToBackend({
+        type: "arm_refusal_note",
+        chatId: chatId,
+        text: text,
+        role: String(cfg.refusalNoteRole || "system"),
+        placement: String(cfg.refusalNotePlacement || "after"),
+      });
+      log("note armed for the next retry in this chat", chatId);
+    } catch (_) {}
+  }
+
   function scheduleRetry(chatId: string, reason: string, err?: any) {
     const s = st(chatId);
     if (!cfg.enabled || s.pending) return;
@@ -3027,6 +3120,7 @@ export function setup(ctx: Ctx, opts?: any) {
       // straight off the click, and that start has to be able to cancel the
       // watchdog rather than land before it exists.
       s.expectingStart = Date.now();
+      armRefusalNote(chatId, reason, s.attempts);
       const before = confirmSnapshot();
       // Armed before the click, not after: a build that puts its dialog on
       // screen during the click itself would otherwise not be seen until the
@@ -3158,7 +3252,7 @@ export function setup(ctx: Ctx, opts?: any) {
         return;
       }
       if (cfg.retryOnRefusal && looksLikeRefusalError(String(p.error), cfg)) {
-        scheduleRetry(p.chatId, "looks like an accidental refusal");
+        scheduleRetry(p.chatId, REFUSAL_REASON);
         return;
       }
       return;
@@ -3200,7 +3294,7 @@ export function setup(ctx: Ctx, opts?: any) {
       return;
     }
     if (cfg.retryOnRefusal && looksLikeRefusal(content, cfg)) {
-      scheduleRetry(p.chatId, "looks like an accidental refusal");
+      scheduleRetry(p.chatId, REFUSAL_REASON);
       return;
     }
     // Measured on the visible reply, not the raw output. A reasoning block can
@@ -4898,6 +4992,26 @@ export function setup(ctx: Ctx, opts?: any) {
       };
       top.appendChild(input);
       row.appendChild(top);
+    } else if (f.type === "pick") {
+      const sel = document.createElement("select");
+      for (const o of f.options || []) {
+        const opt = document.createElement("option");
+        opt.value = o.value;
+        opt.textContent = o.label;
+        sel.appendChild(opt);
+      }
+      sel.value = String(cfg[f.key]);
+      styleField(sel);
+      sel.style.flex = "none";
+      sel.style.maxWidth = "60%";
+      sel.addEventListener("change", () => {
+        cfg[f.key] = coerce("pick", sel.value, (CONFIG as any)[f.key], f);
+      });
+      fieldSetters[f.key] = (v: any) => {
+        sel.value = coerce("pick", v, (CONFIG as any)[f.key], f);
+      };
+      top.appendChild(sel);
+      row.appendChild(top);
     } else if (f.type === "num") {
       const input = document.createElement("input");
       input.type = "number";
@@ -5003,7 +5117,7 @@ export function setup(ctx: Ctx, opts?: any) {
     return row;
   }
 
-  function styleField(input: HTMLInputElement) {
+  function styleField(input: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement) {
     input.style.cssText +=
       "padding:9px 10px;border-radius:var(--lumiverse-radius,8px);" +
       "border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));" +

@@ -58,13 +58,14 @@ Two options in Basics, and you can use either or both:
 
 ## Permissions
 
-Declares three permissions:
+Declares four permissions:
 
 - `generation`: to hear when replies start, stream, and end. This drives all the retry logic.
 - `chat_mutation`: to edit a saved reply. This is used only by the "Find and replace in replies" feature, and only when you turn it on and enter swaps. If you never use that feature, nothing is edited.
 - `ui_panels`: what Lumiverse requires before an extension may put a floating widget on screen. It is used only by the optional on/off button, and grants screen space rather than access to anything.
+- `interceptor`: to add to a prompt before it reaches the model. Used only by "Send a note with a refusal retry", and only on a refusal retry once you turn it on and write a note. Nothing is read from your prompt and nothing is stored.
 
-`chat_mutation` is a privileged permission, so depending on your Lumiverse setup it may need admin approval before it takes effect. The retry side works without it; only find-and-replace needs it. Without `ui_panels` everything still works, there is just no floating button.
+`chat_mutation` is a privileged permission, so depending on your Lumiverse setup it may need admin approval before it takes effect. The retry side works without it; only find-and-replace needs it. Without `ui_panels` everything still works, there is just no floating button. Without `interceptor` everything still works and the refusal note is not sent.
 
 The find-and-replace feature runs in a small backend module. The rest of the extension is frontend-only. It makes no external network calls. Your settings are saved to your Lumiverse account through the extension's own scoped storage, so they follow you across browsers, with a copy kept in the browser as a fast local cache.
 
