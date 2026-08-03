@@ -1189,64 +1189,6 @@ function matchColorScheme(el: any) {
   });
 }
 
-// Resolve a colour the way the browser would, by letting the browser do it.
-// A theme may write a variable as a hex, an hsl() or a colour name, and the
-// value read straight off a custom property is whatever text was authored.
-// Putting it on a real element and reading the colour back gives the resolved
-// form that parseColor understands. Returns null when it cannot be resolved,
-// and every caller treats that as "leave the theme alone".
-function resolveColour(host: any, decl: string): Rgba | null {
-  let probe: any = null;
-  try {
-    if (!host || !host.appendChild || typeof document === "undefined") return null;
-    probe = document.createElement("span");
-    probe.style.cssText =
-      "position:absolute;width:0;height:0;overflow:hidden;opacity:0;pointer-events:none;color:" + decl;
-    host.appendChild(probe);
-    return parseColor(getComputedStyle(probe).color);
-  } catch (_) {
-    return null;
-  } finally {
-    try {
-      if (probe && probe.parentNode) probe.parentNode.removeChild(probe);
-    } catch (_) {}
-  }
-}
-
-// The cross the browser draws inside a search field takes no CSS colour of its
-// own, so it is masked into a shape and filled from the theme's muted text
-// colour instead. That fill has to name a fallback, and every fallback in this
-// file is a dark one, so a light theme that sets the common variables but not
-// --lumiverse-text-muted filled the cross near-white on a near-white field and
-// it disappeared. A stylesheet rule cannot measure anything, so the colour is
-// worked out here and handed to the rule through a variable on the field.
-//
-// The theme's own colour is kept whenever it reads, which is the usual case on
-// both dark and light. This only steps in when the fallback has leaked through.
-function fixClearButton(el: any) {
-  afterPaint(() => {
-    try {
-      if (!el || !el.style) return;
-      const host = el.parentElement;
-      if (!host) return;
-      const bg = backdropOf(el);
-      const pick = (decl: string, prop: string) => {
-        const c = resolveColour(host, decl);
-        if (!c) return;
-        if (contrastRatio(blendColor(c, bg), bg) >= MIN_CONTRAST) return;
-        const light: Rgba = [255, 255, 255, 1];
-        const dark: Rgba = [20, 18, 26, 1];
-        el.style.setProperty(
-          prop,
-          contrastRatio(light, bg) >= contrastRatio(dark, bg) ? NEAR_WHITE : NEAR_BLACK,
-        );
-      };
-      pick("var(--lumiverse-text-muted,rgba(255,255,255,.65))", "--lv-ar-x");
-      pick("var(--lumiverse-text,rgba(255,255,255,.9))", "--lv-ar-x-strong");
-    } catch (_) {}
-  });
-}
-
 // A filled button whose fill is close to the surface behind it reads as plain
 // text, however readable its label is. Repainting the label fixed half of that
 // and left the other half: on a theme whose accent is near the panel colour,
@@ -2936,6 +2878,18 @@ export function setup(ctx: Ctx, opts?: any) {
   // everything else. A pseudo-element cannot be styled inline, so this needs a
   // real stylesheet.
   //
+  // The fill is currentColor, which is the field's own text colour, rather than
+  // a theme variable. Naming a variable means naming a fallback for the themes
+  // that do not set it, and every fallback in this file is a dark one, so a
+  // light theme that set the common colours and not that one painted a
+  // near-white cross on a near-white field. There is nothing to fall back to
+  // here: the field's text colour is whatever the theme asked for, and
+  // styleField has already had ensureReadable correct it if it did not read
+  // against the field. Whatever the cross inherits is therefore legible by the
+  // time it is used, on any theme, with nothing to measure and nothing to keep
+  // in step. The opacity is what makes it quieter than the text, and going to
+  // full strength is what marks the hover.
+  //
   // Chrome and Safari only. Firefox puts no clear button in a search field at
   // all, so there is nothing there to restyle and nothing to break.
   const SEARCH_X =
@@ -2949,11 +2903,10 @@ export function setup(ctx: Ctx, opts?: any) {
       el.textContent =
         "#" + SEARCH_ID + "::-webkit-search-cancel-button{" +
         "-webkit-appearance:none;appearance:none;width:14px;height:14px;cursor:pointer;" +
-        "background-color:var(--lv-ar-x,var(--lumiverse-text-muted,rgba(255,255,255,.65)));" +
+        "background-color:currentColor;opacity:.6;" +
         "-webkit-mask:" + SEARCH_X + " center/contain no-repeat;" +
         "mask:" + SEARCH_X + " center/contain no-repeat}" +
-        "#" + SEARCH_ID + "::-webkit-search-cancel-button:hover{" +
-        "background-color:var(--lv-ar-x-strong,var(--lumiverse-text,rgba(255,255,255,.9)))}";
+        "#" + SEARCH_ID + "::-webkit-search-cancel-button:hover{opacity:1}";
       (document.head || document.documentElement).appendChild(el);
       panelStyleEl = el;
     } catch (_) {}
@@ -4883,7 +4836,6 @@ export function setup(ctx: Ctx, opts?: any) {
     styleField(search);
     search.style.width = "100%";
     search.style.boxSizing = "border-box";
-    fixClearButton(search);
     const searchNote = document.createElement("div");
     searchNote.style.cssText =
       "font-size:12px;min-height:1em;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";

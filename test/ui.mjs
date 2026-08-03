@@ -241,6 +241,9 @@ const PARTIAL_LIGHT = `:root{
 --lumiverse-fill-subtle:rgba(0,0,0,.035);}
 body{background:rgb(244,242,249)}#modal{background:rgb(252,251,254)}`;
 
+// A light page with no light theme behind it at all.
+const LIGHT_PAGE = "body{background:rgb(244,242,249)}#modal{background:rgb(252,251,254)}";
+
 let failures = 0;
 const check = (name, ok, detail) => {
   console.log(`  ${ok ? "ok  " : "FAIL"} ${name}${ok || detail === undefined ? "" : "  -> " + JSON.stringify(detail)}`);
@@ -281,6 +284,10 @@ for (const [label, css] of [
   // hint popover painted near-white over an unset card-bg-solid, measured as
   // the dark fallback underneath, and had its text repainted white to match.
   ["partial light theme", PARTIAL_LIGHT],
+  // The harshest one: a light page with every theme variable left at its dark
+  // value. Nothing here can be got right by reading a variable, so anything
+  // that still reads on this reads anywhere.
+  ["dark variables on a light page", LIGHT_PAGE],
   // And a light theme whose accent has drifted close to its own text colour,
   // which is the light-side version of the bug that started all of this.
   ["light theme, pale accent", LIGHT + ":root{--lumiverse-primary:rgba(196,180,232,.9);--lumiverse-primary-hover:rgba(206,192,240,.95)}"],
@@ -299,15 +306,36 @@ for (const [label, css] of [
         const x = lum(a), y = lum(b);
         return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
       };
+      // Composite the layers rather than hunting for an opaque one. Looking for
+      // the first background over 90% opaque walked straight past a button
+      // whose fill is exactly 90%, and measured its label against the panel
+      // behind it instead of against the button. Gradients count too: a tinted
+      // surface paints a colour its background-color never mentions.
       const solid = (el) => {
+        const layers = [];
         let p = el;
         while (p) {
-          const c = getComputedStyle(p).backgroundColor;
-          const m = c.match(/[\d.]+/g);
-          if (m && (m[3] === undefined || Number(m[3]) > 0.9)) return c;
+          const cs = getComputedStyle(p);
+          const n = (cs.backgroundColor.match(/[\d.]+/g) || []).map(Number);
+          let c = n.slice(0, 3);
+          let a = n[3] === undefined ? 1 : n[3];
+          const stop = (cs.backgroundImage || "").match(/rgba?\([^)]*\)/);
+          if (stop) {
+            const g = (stop[0].match(/[\d.]+/g) || []).map(Number);
+            const ga = g[3] === undefined ? 1 : g[3];
+            c = [g[0] * ga + c[0] * (1 - ga), g[1] * ga + c[1] * (1 - ga), g[2] * ga + c[2] * (1 - ga)];
+            a = Math.min(1, a + ga * (1 - a));
+          }
+          if (a > 0) layers.push([c, a]);
+          if (a >= 0.999) break;
           p = p.parentElement;
         }
-        return "rgb(0,0,0)";
+        let base = [0, 0, 0];
+        for (let i = layers.length - 1; i >= 0; i--) {
+          const [c, a] = layers[i];
+          base = [c[0] * a + base[0] * (1 - a), c[1] * a + base[1] * (1 - a), c[2] * a + base[2] * (1 - a)];
+        }
+        return "rgb(" + base.map((v) => Math.round(v)).join(",") + ")";
       };
       const modal = document.getElementById("modal");
       const paints = [...modal.querySelectorAll("*")].filter((e) => {
@@ -624,6 +652,11 @@ console.log("\nsearch clear button");
     ["dark", ""],
     ["light", LIGHT],
     ["light, no muted colour set", NO_MUTED],
+    // The worst of it: a light page with every theme variable still dark, so
+    // the field's own text colour starts out near-white and has to be put
+    // right before the cross can inherit anything worth having. Nothing
+    // reading a variable could survive this one.
+    ["dark variables on a light page", LIGHT_PAGE],
   ]) {
   const page = await browser.newPage({ viewport: { width: 480, height: 200 } });
   const errors = [];
@@ -1254,7 +1287,16 @@ console.log("\nfloating surfaces");
   // Run on light as well as dark. Every fallback colour in the source is a dark
   // one, so a surface that reached for a variable the host does not set would
   // show up here as a dark box on a light panel.
-  for (const [themeName, themeCss] of [["dark", ""], ["light", LIGHT]]) {
+  // wantsDark says what the theme itself asked for, which is not the same as
+  // what the page behind it looks like. On a light page whose variables are all
+  // still dark, a dark surface is the theme being followed, not a fallback
+  // leaking, so that theme is checked for being solid and readable and not for
+  // being light.
+  for (const [themeName, themeCss, wantsDark] of [
+    ["dark", "", true],
+    ["light", LIGHT, false],
+    ["dark variables on a light page", LIGHT_PAGE, true],
+  ]) {
   const { out, errors } = await inPanel(browser, { css: themeCss }, async (page) =>
     page.evaluate(async () => {
       const opaque = (el) => {
@@ -1307,7 +1349,7 @@ console.log("\nfloating surfaces");
     return (r + g + b2) / 3 < 90;
   };
   check(themeName + ": the surfaces follow the theme rather than a fallback",
-    surfaceIsDark(out.hint && out.hint.bg) === (themeName === "dark"), {
+    surfaceIsDark(out.hint && out.hint.bg) === wantsDark, {
       hint: out.hint && out.hint.bg, editor: out.editor && out.editor.bg });
   check(themeName + ": no console errors", errors.length === 0, errors);
   }
@@ -2161,6 +2203,7 @@ console.log("\npainted surfaces");
   await look("stock", "");
   await look("full light", LIGHT);
   await look("partial light", PARTIAL_LIGHT);
+  await look("dark variables on a light page", LIGHT_PAGE);
 }
 
 // ---- nothing is left behind ----
