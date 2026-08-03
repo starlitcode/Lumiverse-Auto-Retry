@@ -1197,6 +1197,17 @@ function paintsText(el) {
         if (n && n.nodeType === 3 && String(n.nodeValue || "").trim())
             return true;
     }
+    // An element that has been given a colour of its own but is empty right now
+    // is a status line waiting for something to say. The sweep runs once, while
+    // they are all still empty, so on the old rule it walked past every one of
+    // them and they were never checked against the surface they sit on. The
+    // colour does not change when the text arrives, so checking it now is the
+    // same answer, arrived at before anyone has to read it.
+    try {
+        if (el && el.style && String(el.style.color || ""))
+            return true;
+    }
+    catch (_) { }
     return false;
 }
 // One sweep over everything a panel painted, once per build. Secondary text

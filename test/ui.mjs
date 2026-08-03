@@ -2303,6 +2303,95 @@ console.log("\ndependent rows");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- the lines that only appear once something happens ----
+// The panel-wide contrast sweep runs once, at build, and used to look only at
+// elements that were painting text right then. Every status line in the panel
+// is empty at that moment and fills in later, so not one of them was ever
+// checked. On a light page whose theme variables are all dark they came out
+// white on white: the search count, the reset note, and the line that confirms
+// a save, which is the one that tells you your settings were kept.
+console.log("\nlines that fill in later");
+{
+  for (const [themeName, themeCss] of [["dark", ""], ["light", LIGHT], ["dark variables on a light page", LIGHT_PAGE]]) {
+    const { out, errors } = await inPanel(browser, { css: themeCss }, async (page) =>
+      page.evaluate(async () => {
+        const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+        await frame();
+        // Everything that puts words into a line that started out empty.
+        const by = (t) => [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === t);
+        const s = document.querySelector("input[type=search]");
+        s.value = "retry";
+        s.dispatchEvent(new Event("input", { bubbles: true }));
+        await frame();
+        if (by("Save")) by("Save").click();
+        if (by("Check this text")) by("Check this text").click();
+        for (const b of [...document.querySelectorAll("button")])
+          if (/^Reset/.test(b.textContent || "")) { b.click(); break; }
+        await frame();
+
+        const num = (c) => (c.match(/[\d.]+/g) || []).map(Number);
+        const lum = (c) => {
+          const ch = c.map((v) => { const x = v / 255; return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4); });
+          return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+        };
+        // Composites the layers, the way the extension does. Looking for the
+        // first background over 90% opaque walks past a button whose fill is
+        // exactly 90% and measures its label against the panel behind it.
+        const solid = (el) => {
+          const layers = [];
+          let p = el;
+          while (p) {
+            const cs = getComputedStyle(p);
+            const n = num(cs.backgroundColor);
+            let c = n.slice(0, 3);
+            let a = n[3] === undefined ? 1 : n[3];
+            const stop = (cs.backgroundImage || "").match(/rgba?\([^)]*\)/);
+            if (stop) {
+              const g = num(stop[0]);
+              const ga = g[3] === undefined ? 1 : g[3];
+              c = [g[0] * ga + c[0] * (1 - ga), g[1] * ga + c[1] * (1 - ga), g[2] * ga + c[2] * (1 - ga)];
+              a = Math.min(1, a + ga * (1 - a));
+            }
+            if (a > 0) layers.push([c, a]);
+            if (a >= 0.999) break;
+            p = p.parentElement;
+          }
+          let base = [0, 0, 0];
+          for (let i = layers.length - 1; i >= 0; i--) {
+            const [c, a] = layers[i];
+            base = [c[0] * a + base[0] * (1 - a), c[1] * a + base[1] * (1 - a), c[2] * a + base[2] * (1 - a)];
+          }
+          return base;
+        };
+
+        const bad = [];
+        let seen = 0;
+        for (const el of document.querySelectorAll("#modal *")) {
+          const own = [...el.childNodes].some((n) => n.nodeType === 3 && n.nodeValue.trim());
+          if (!own || el.getClientRects().length === 0) continue;
+          seen++;
+          const bg = solid(el);
+          const c = num(getComputedStyle(el).color);
+          const a = c[3] === undefined ? 1 : c[3];
+          const over = [c[0] * a + bg[0] * (1 - a), c[1] * a + bg[1] * (1 - a), c[2] * a + bg[2] * (1 - a)];
+          const x = lum(over), y = lum(bg);
+          const r = (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+          if (r < 2.6) bad.push({ t: (el.textContent || "").trim().slice(0, 40), r: Number(r.toFixed(2)) });
+        }
+        // The lines this is really about had better be among what was measured.
+        const wanted = ["settings match", "Saved", "defaults"];
+        const texts = [...document.querySelectorAll("#modal *")].map((e) => e.textContent || "").join(" ");
+        return { bad, seen, covered: wanted.filter((w) => texts.indexOf(w) >= 0).length };
+      }),
+    );
+    check(themeName + ": every line that filled in can be read", out.bad.length === 0, out.bad);
+    check(themeName + ": and the status lines were actually on screen to check",
+      out.covered >= 2 && out.seen > 40, out);
+    check(themeName + ": no console errors", errors.length === 0, errors);
+  }
+}
+
 // ---- a search says which switch a row is waiting on ----
 // Searching finds a setting whichever way its switch is set, because refusing
 // to find one that exists is the worse answer. That leaves the other half of
@@ -2366,6 +2455,61 @@ console.log("\nwhat a hidden row is waiting on");
   check("and it says nothing once the switch is on", out.onceOn === "", out);
   check("nor is it left behind after the search is cleared", out.afterClearing === "", out);
   check("no console errors", errors.length === 0, errors);
+
+  // The panel-wide contrast sweep runs once, while this line is still empty,
+  // and it only looks at elements that are painting text. So it never saw this
+  // one: on a light page whose theme variables are all dark it came out white
+  // on white at a ratio of 1.02. It is checked when it first has something to
+  // say instead, and this holds that on the themes that would expose it.
+  for (const [themeName, themeCss] of [["dark", ""], ["light", LIGHT], ["dark variables on a light page", LIGHT_PAGE]]) {
+    const { out: seen, errors: errs } = await inPanel(browser, { css: themeCss }, async (page) =>
+      page.evaluate(async () => {
+        const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+        await frame();
+        const s = document.querySelector("input[type=search]");
+        s.value = "where the note goes";
+        s.dispatchEvent(new Event("input", { bubbles: true }));
+        await frame();
+        const line = [...document.querySelectorAll("div")]
+          .find((d) => /^Needs "/.test(d.textContent || "") && d.children.length === 0);
+        if (!line) return { err: "no line" };
+        const num = (c) => (c.match(/[\d.]+/g) || []).map(Number);
+        const lum = (c) => {
+          const ch = c.map((v) => { const x = v / 255; return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4); });
+          return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+        };
+        const solid = (el) => {
+          let p = el;
+          while (p) {
+            const cs = getComputedStyle(p);
+            const n = num(cs.backgroundColor);
+            let base = n.slice(0, 3);
+            let a = n[3] === undefined ? 1 : n[3];
+            const stop = (cs.backgroundImage || "").match(/rgba?\([^)]*\)/);
+            if (stop) {
+              const g = num(stop[0]);
+              const ga = g[3] === undefined ? 1 : g[3];
+              base = [g[0] * ga + base[0] * (1 - ga), g[1] * ga + base[1] * (1 - ga), g[2] * ga + base[2] * (1 - ga)];
+              a = Math.min(1, a + ga * (1 - a));
+            }
+            if (a > 0.9) return base;
+            p = p.parentElement;
+          }
+          return [0, 0, 0];
+        };
+        const bg = solid(line);
+        const c = num(getComputedStyle(line).color);
+        const a = c[3] === undefined ? 1 : c[3];
+        const over = [c[0] * a + bg[0] * (1 - a), c[1] * a + bg[1] * (1 - a), c[2] * a + bg[2] * (1 - a)];
+        const x = lum(over), y = lum(bg);
+        return { ratio: (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05), colour: getComputedStyle(line).color };
+      }),
+    );
+    check(themeName + ": the line saying which switch is needed can be read",
+      !!seen && seen.ratio >= 2.6, seen);
+    check(themeName + ": no console errors", errs.length === 0, errs);
+  }
 }
 
 // ---- the master switch says it is off rather than emptying the panel ----
