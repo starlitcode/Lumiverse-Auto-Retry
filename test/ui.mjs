@@ -1541,7 +1541,7 @@ console.log("\non-screen swap");
     const chat = document.getElementById("chat");
     const run = async (html, pairs) => {
       chat.innerHTML = html;
-      onMsg({ type: "swapped", pairs, wholeChat: true });
+      onMsg({ type: "swapped", pairs });
       await new Promise((r) => setTimeout(r, 30));
       return chat.textContent;
     };
@@ -1558,10 +1558,35 @@ console.log("\non-screen swap");
       noTrail: await run("<p>category stays</p>", [["cat", "dog"]]),
       noTrailCyrillic: await run("<p>\u043f\u0440\u0438\u0432\u0435\u0442\u0441\u0442\u0432\u0438\u0435 stays</p>", [["\u043f\u0440\u0438\u0432\u0435\u0442", "hello"]]),
       noTrailHit: await run("<p>one cat.</p>", [["cat", "dog"]]),
+      // The backend records one pair per match it made, so the pairs are the
+      // budget: two matches in the newest reply means two pairs and exactly two
+      // occurrences to change. Rewriting every occurrence in the last matching
+      // node spent both on the first pair, and the second then went hunting
+      // further up the page and rewrote an older message that had never been
+      // edited. Reproduced before it was fixed: the older line read "The dog sat
+      // here." while the stored chat still said cat.
+      bleed: await run(
+        "<div>The cat sat here.</div><div>A cat and a cat and more.</div>",
+        [["cat ", "dog "], ["cat ", "dog "]],
+      ),
+      // The backend only ever edits replies, never anything the user wrote, so
+      // a swap must not touch their messages on screen either. The whole-chat
+      // path used to replace every occurrence everywhere and caught them.
+      //
+      // Sent with the wholeChat flag the backend used to set, even though
+      // nothing reads it now. That flag is what chose the path this went wrong
+      // on, so a check that leaves it out passes against the old code and
+      // guards nothing.
+      userMessage: await (async () => {
+        chat.innerHTML = "<div>I like cat.</div><div>A cat.</div>";
+        onMsg({ type: "swapped", pairs: [["cat", "dog"]], wholeChat: true });
+        await new Promise((r) => setTimeout(r, 30));
+        return chat.textContent;
+      })(),
       // A field the user is typing in must never be rewritten underneath them.
       input: await (async () => {
         chat.innerHTML = "<textarea>a cat here</textarea>";
-        onMsg({ type: "swapped", pairs: [["cat ", "dog "]], wholeChat: true });
+        onMsg({ type: "swapped", pairs: [["cat ", "dog "]] });
         await new Promise((r) => setTimeout(r, 30));
         return chat.querySelector("textarea").value;
       })(),
@@ -1579,6 +1604,10 @@ console.log("\non-screen swap");
   check("in any script", out.noTrailCyrillic === "\u043f\u0440\u0438\u0432\u0435\u0442\u0441\u0442\u0432\u0438\u0435 stays", out.noTrailCyrillic);
   check("while the real word at a sentence end still swaps",
     out.noTrailHit === "one dog.", out.noTrailHit);
+  check("two matches in one reply are both rewritten, and no older message is",
+    out.bleed === "The cat sat here.A dog and a dog and more.", out.bleed);
+  check("a swap never rewrites one of your own messages",
+    out.userMessage === "I like cat.A dog.", out.userMessage);
   check("a text box is left alone", out.input === "a cat here", out.input);
   check("no console errors", errors.length === 0, errors);
 }

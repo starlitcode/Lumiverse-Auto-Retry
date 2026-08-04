@@ -357,7 +357,7 @@ spindle.onFrontendMessage(async (payload: any) => {
             }
           }
         } catch (_) { ok = false; }
-        try { spindle.sendToFrontend({ type: 'replace_now_result', requestId: payload.requestId, ok: ok, hasRules: groups.length > 0, found: found, changed: changed, skipped: skipped, pairs: pairs, wholeChat: !!payload.wholeChat }); } catch (__) {}
+        try { spindle.sendToFrontend({ type: 'replace_now_result', requestId: payload.requestId, ok: ok, hasRules: groups.length > 0, found: found, changed: changed, skipped: skipped, pairs: pairs }); } catch (__) {}
         return;
       }
       if (payload.type === 'set_replace_rules') {
@@ -415,7 +415,7 @@ spindle.on('GENERATION_ENDED', async (p: any) => {
       await writeSwapped(chatId, target || { id: messageId }, next);
       markSwapped(messageId);
       // Tell the frontend what changed so it can update the visible reply.
-      try { spindle.sendToFrontend({ type: 'swapped', chatId: chatId, pairs: autoPairs, wholeChat: false }); } catch (__) {}
+      try { spindle.sendToFrontend({ type: 'swapped', chatId: chatId, pairs: autoPairs }); } catch (__) {}
     }
   } catch (e: any) {
     if (!warnedEditError) {

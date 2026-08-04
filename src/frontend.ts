@@ -3540,13 +3540,26 @@ export function setup(ctx: Ctx, opts?: any) {
   // rendered text. Only text nodes are touched, so markdown, formatting and any
   // element structure are left exactly as they were.
   //
-  // last: replace only the final occurrence in the page, which is the newest
-  // reply. Whole-chat swaps pass false and replace every occurrence, since every
-  // message really was changed.
-  function applySwapsToView(
-    pairs: Array<[string, string]>,
-    last: boolean,
-  ): number {
+  // The backend records one pair per match it made, so the number of pairs is
+  // exactly the number of occurrences it changed. Each pair therefore spends
+  // itself on exactly one occurrence here, taken from the end of the page
+  // backwards, which is the newest text first.
+  //
+  // It used to take the last matching node and rewrite every occurrence inside
+  // it, which does not add up: a reply matching twice in one paragraph had both
+  // done by the first pair, and the second pair then went looking further up
+  // and rewrote an older message the backend had never touched. The whole-chat
+  // path replaced every occurrence everywhere, which caught the user's own
+  // messages, and the backend only ever edits replies. Both left the screen
+  // saying something the stored chat did not, until it was next reopened.
+  //
+  // Counting from the end is right for one reply and close for a whole chat.
+  // A whole-chat swap changes every reply, so the occurrences to change are not
+  // guaranteed to be the last N on the page: a message of the user's sitting
+  // between two replies can still be caught. Fixing that needs knowing which
+  // element is which message, which is the host dependency this extension is
+  // built to avoid, so this stays a heuristic and stays honest about it.
+  function applySwapsToView(pairs: Array<[string, string]>): number {
     if (typeof document === "undefined" || !pairs || !pairs.length) return 0;
     const SKIP = /^(SCRIPT|STYLE|TEXTAREA|INPUT|SELECT|OPTION)$/;
     let done = 0;
@@ -3605,20 +3618,26 @@ export function setup(ctx: Ctx, opts?: any) {
         }
       }
       if (!re) continue;
-      const hits: any[] = [];
-      for (const n of nodes) {
+      // Walk backwards and stop at the first node that still matches, changing
+      // the last occurrence in it. Re-read each node as we go: an earlier pair
+      // may already have rewritten it, and matching has to see the text as it
+      // stands now rather than as it was when the walk started.
+      for (let i = nodes.length - 1; i >= 0; i--) {
+        const text = String(nodes[i].nodeValue || "");
         re.lastIndex = 0;
-        // Re-read each time: an earlier rule may already have rewritten this
-        // node, and matching has to see the text as it stands now.
-        if (re.test(String(n.nodeValue || ""))) hits.push(n);
-      }
-      const targets = last ? hits.slice(-1) : hits;
-      for (const t of targets) {
+        let at = -1;
+        let len = 0;
+        let m: RegExpExecArray | null;
+        while ((m = re.exec(text)) !== null) {
+          at = m.index;
+          len = m[0].length;
+        }
+        if (at < 0) continue;
         try {
-          re.lastIndex = 0;
-          t.nodeValue = String(t.nodeValue).replace(re, to);
+          nodes[i].nodeValue = text.slice(0, at) + to + text.slice(at + len);
           done++;
         } catch (__) {}
+        break;
       }
     }
     return done;
@@ -6012,11 +6031,11 @@ export function setup(ctx: Ctx, opts?: any) {
         // Sent after an automatic swap. The message is already saved; this only
         // brings what is on screen into line with it.
         if (msg.type === "swapped") {
-          applySwapsToView(msg.pairs || [], !msg.wholeChat);
+          applySwapsToView(msg.pairs || []);
           return;
         }
         if (msg.type !== "replace_now_result") return;
-        if (msg.ok) applySwapsToView(msg.pairs || [], !msg.wholeChat);
+        if (msg.ok) applySwapsToView(msg.pairs || []);
         if (!msg.ok) showToast("Could not swap words.");
         else if (!msg.hasRules) showToast("No word swaps are set up yet.");
         else if (!msg.found) showToast("No reply found to swap in this chat.");

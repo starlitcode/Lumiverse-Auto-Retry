@@ -343,7 +343,9 @@ describe("what it tells the frontend", () => {
     // The frontend replays these onto the rendered text, so they must be the
     // literal before/after pairs, not the rules.
     expect(m.pairs).toEqual([["cat ", "dog "]]);
-    expect(m.wholeChat).toBe(false);
+    // The message used to carry a wholeChat flag as well, which told the
+    // frontend whether to rewrite one occurrence or all of them. It now spends
+    // one pair per occurrence either way, so nothing read the flag and it went.
   });
 
   test("asking first sends a confirm instead of editing", async () => {
