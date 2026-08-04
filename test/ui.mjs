@@ -2220,6 +2220,41 @@ console.log("\nhint placement");
     check("no console errors", errors.length === 0, errors);
   }
 
+  // A row pushed off the top of the screen by the host's own layout leaves
+  // negative room above it. A negative max-height is invalid CSS, which the
+  // browser drops, and the popover rendered at full height straight over the
+  // row it belongs to. Measured at a row top of -5, covering it from 12 to 273.
+  {
+    const OFFSET = "#modal{position:fixed;left:0;right:0;top:-70px;bottom:0;overflow:auto;background:rgb(24,20,34);box-sizing:border-box}";
+    const { out, errors } = await inPanel(
+      browser, { css: OFFSET, viewport: { width: 393, height: 800 }, settings: { refusalNote: true } },
+      async (page) => page.evaluate(async () => {
+        const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+        await frame();
+        const row = document.querySelector('[data-ar-row="refusalNotes"]');
+        row.scrollIntoView({ block: "start" });
+        await frame();
+        row.querySelector("[data-ar-hint]").dispatchEvent(new MouseEvent("mouseenter"));
+        await frame();
+        const tip = document.querySelector('[role="tooltip"]');
+        const rr = row.getBoundingClientRect();
+        const tr = tip.getBoundingClientRect();
+        return {
+          rowTop: Math.round(rr.top),
+          // Nothing painted, rather than an empty frame over the setting.
+          painted: tr.width > 0 && tr.height > 0,
+          coversRow: tr.height > 0 && tr.bottom > rr.top && tr.top < rr.bottom,
+          maxH: getComputedStyle(tip).maxHeight,
+        };
+      }),
+    );
+    check("a row pushed off the top really is off the top", out.rowTop < 20, out);
+    check("and its description never lands on top of it", out.coversRow === false, out);
+    check("nothing is painted when there is nowhere to paint it", out.painted === false, out);
+    check("no console errors", errors.length === 0, errors);
+  }
+
   // A short description with room to spare is left alone entirely.
   {
     const { out, errors } = await inPanel(

@@ -3684,7 +3684,15 @@ export function setup(ctx: Ctx, opts?: any) {
     // However little room there is, it is not bought by moving over the row.
     // Covering the setting is the thing the popover exists to avoid, and a
     // short popover still scrolls, so nothing in it is out of reach.
-    const room = above ? r.top - GAP - EDGE : vh - EDGE - (r.bottom + GAP);
+    // Never below zero. A row pushed to the very top of the screen by the host's
+    // own layout leaves negative room above it, and a negative max-height is
+    // invalid CSS, which the browser drops: the popover then rendered at full
+    // height straight over the row it belongs to, which is the one thing it
+    // exists not to do. Measured at a row top of -5, covering it from 12 to 273.
+    const room = Math.max(
+      0,
+      above ? r.top - GAP - EDGE : vh - EDGE - (r.bottom + GAP),
+    );
     // Above, the bottom edge is pinned a gap over the row and the top follows
     // from however tall it ends up, capped included. Below, the top is pinned
     // and the bottom follows.
@@ -3705,6 +3713,11 @@ export function setup(ctx: Ctx, opts?: any) {
       // behind it, because a scroll out there is what closes it.
       el.style.overscrollBehavior = "contain";
     }
+    // With no room at all, a capped popover is still a box of padding sitting
+    // over the row. Nothing is a better answer than an empty frame, and this
+    // only happens when the host has pushed the row off the top of the screen,
+    // where the anchor is half gone too.
+    if (room <= 0) el.style.display = "none";
 
     // Where it is told to go is not always where it lands. Lumiverse's UI Scale
     // is applied as a zoom, and this is parented to the page so the zoom applies
