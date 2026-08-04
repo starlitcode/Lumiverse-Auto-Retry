@@ -50,6 +50,42 @@ let groups: Group[] = [];
 let combined: RegExp | null = null;
 let combinedOrder: number[] = [];
 let warnedEditError = false;
+
+// The note that goes out with a refusal retry. Armed by the frontend the moment
+// before it clicks, collected by the interceptor on the generation that click
+// starts, then thrown away. One generation only.
+//
+// Two things keep it from landing on the wrong generation. It is scoped to the
+// chat it was armed for, and it is only honoured for a regenerate or a swipe,
+// which is what a retry produces. Anything you type yourself is a "normal"
+// generation and can never pick this up, however stale the arm is. The age
+// limit is a third guard for the case where the click never starts anything.
+interface RefusalNote { chatId: string; notes: Array<{ text: string; role: string }>; placement: string; at: number; }
+let refusalNote: RefusalNote | null = null;
+const NOTE_MAX_AGE_MS = 60000;
+const NOTE_ROLES = ['system', 'user', 'assistant'];
+// Matches the cap the panel offers, so a hand-edited payload cannot exceed it.
+const MAX_NOTES = 10;
+
+// Where the note sits relative to the conversation. __isChatHistory marks the
+// messages that came from stored chat turns, so "after the last message" means
+// after the last real one rather than after whatever the host appended behind
+// it. With nothing marked, the ends of the array are the best guess available.
+function placeNotes(messages: any[], notes: any[], placement: string): { list: any[]; from: number } {
+  const list = messages.slice();
+  if (placement === 'start') {
+    list.unshift.apply(list, notes);
+    return { list: list, from: 0 };
+  }
+  let last = -1;
+  for (let i = 0; i < list.length; i++) if (list[i] && list[i].__isChatHistory) last = i;
+  if (last < 0) last = list.length - 1;
+  const at = placement === 'before' ? Math.max(0, last) : last + 1;
+  // Inserted in one go so they stay in the order they were written, which is
+  // what lets a note answer the one before it.
+  list.splice.apply(list, ([at, 0] as any[]).concat(notes));
+  return { list: list, from: at };
+}
 // Messages a swap has already changed this session, so the manual button won't
 // compound swaps on a reply that auto-swap or an earlier tap already changed.
 const swappedIds = new Set<string>();
@@ -261,6 +297,21 @@ spindle.onFrontendMessage(async (payload: any) => {
       try { spindle.sendToFrontend({ type: 'loaded_settings', requestId: payload.requestId, settings: settings }); } catch (__) {}
       return;
       }
+      if (payload.type === 'arm_refusal_note') {
+      const raw = Array.isArray(payload.notes) ? payload.notes : [];
+      const notes: Array<{ text: string; role: string }> = [];
+      for (const n of raw.slice(0, MAX_NOTES)) {
+        // Trimmed to decide whether it is empty, and not otherwise. What goes
+        // into the prompt is what was typed, spacing and all.
+        const text = String(n && n.text != null ? n.text : '');
+        if (!text.trim()) continue;
+        notes.push({ text: text, role: NOTE_ROLES.indexOf(String(n && n.role)) >= 0 ? String(n.role) : 'system' });
+      }
+      refusalNote = notes.length && payload.chatId
+        ? { chatId: String(payload.chatId), notes: notes, placement: String(payload.placement || 'after'), at: Date.now() }
+        : null;
+      return;
+      }
       if (payload.type === 'save_presets' && payload.presets && typeof payload.presets === 'object') {
       await spindle.storage.write(PRESETS_FILE, JSON.stringify(payload.presets));
       return;
@@ -285,7 +336,7 @@ spindle.onFrontendMessage(async (payload: any) => {
             if (Array.isArray(msgs)) {
               // The opening/greeting message is authored, not generated, so never swap it.
               const greetingId = (msgs.length && msgs[0] && msgs[0].role === 'assistant') ? msgs[0].id : null;
-              if (payload.wholeChat && !payload.onlyMessage) {
+              if (payload.wholeChat) {
                 // Every generated assistant reply in the chat (never user messages or the greeting).
                 for (const x of msgs) { if (x && x.role === 'assistant' && x.id !== greetingId) targets.push(x); }
               } else {
@@ -306,7 +357,7 @@ spindle.onFrontendMessage(async (payload: any) => {
             }
           }
         } catch (_) { ok = false; }
-        try { spindle.sendToFrontend({ type: 'replace_now_result', requestId: payload.requestId, ok: ok, hasRules: groups.length > 0, found: found, changed: changed, skipped: skipped, pairs: pairs, wholeChat: !!payload.wholeChat }); } catch (__) {}
+        try { spindle.sendToFrontend({ type: 'replace_now_result', requestId: payload.requestId, ok: ok, hasRules: groups.length > 0, found: found, changed: changed, skipped: skipped, pairs: pairs }); } catch (__) {}
         return;
       }
       if (payload.type === 'set_replace_rules') {
@@ -364,7 +415,7 @@ spindle.on('GENERATION_ENDED', async (p: any) => {
       await writeSwapped(chatId, target || { id: messageId }, next);
       markSwapped(messageId);
       // Tell the frontend what changed so it can update the visible reply.
-      try { spindle.sendToFrontend({ type: 'swapped', chatId: chatId, pairs: autoPairs, wholeChat: false }); } catch (__) {}
+      try { spindle.sendToFrontend({ type: 'swapped', chatId: chatId, pairs: autoPairs }); } catch (__) {}
     }
   } catch (e: any) {
     if (!warnedEditError) {
@@ -373,5 +424,41 @@ spindle.on('GENERATION_ENDED', async (p: any) => {
     }
   }
 });
+
+// Runs after the prompt is assembled and before it reaches the model. Priority
+// 150 rather than the default 100 so the note lands after anything another
+// extension adds, which is what "closest to the model" has to mean to be worth
+// choosing. Registering without the interceptor permission is a silent no-op,
+// so this is safe to call either way.
+try {
+  spindle.registerInterceptor(async (messages: any[], context: any) => {
+    try {
+      if (!refusalNote) return messages;
+      const type = context && context.generationType;
+      // A retry is a regenerate or a swipe. Anything the user typed is
+      // "normal", so a note nobody collected cannot attach itself to it.
+      if (type !== 'regenerate' && type !== 'swipe') return messages;
+      const chatId = context && context.chatId;
+      if (chatId && refusalNote.chatId && String(chatId) !== refusalNote.chatId) return messages;
+      const armed = refusalNote;
+      refusalNote = null; // one generation, collected or not
+      if (Date.now() - armed.at > NOTE_MAX_AGE_MS) return messages;
+      if (!Array.isArray(messages)) return messages;
+      const built = armed.notes.map((n) => ({ role: n.role, content: n.text }));
+      const placed = placeNotes(messages, built, armed.placement);
+      // Named in the Prompt Breakdown so each note is inspectable rather than
+      // something that silently happened to the prompt.
+      const breakdown = built.map((_, i) => ({
+        messageIndex: placed.from + i,
+        name: built.length > 1 ? 'Auto Retry refusal note ' + (i + 1) : 'Auto Retry refusal note',
+      }));
+      return { messages: placed.list, breakdown: breakdown };
+    } catch (_) {
+      return messages; // a fault here must never cost the user their generation
+    }
+  }, 150);
+} catch (_) {
+  try { spindle.log.warn('auto-retry: could not register the interceptor; the refusal note will not be sent'); } catch (__) {}
+}
 
 try { spindle.log.info('Auto Retry backend loaded (find and replace in replies).'); } catch (_) {}

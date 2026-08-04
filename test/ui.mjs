@@ -64,7 +64,7 @@ body{background:rgb(10,8,18);margin:0}#modal{background:rgb(35,30,48);padding:0;
 
 // Boots the extension in a page with the settings panel open, and hands the
 // callback the same helpers every check needs.
-async function inPanel(browser, { css = "", viewport, touch = false } = {}, fn) {
+async function inPanel(browser, { css = "", viewport, touch = false, settings = null } = {}, fn) {
   const page = await browser.newPage(
     viewport ? { viewport, hasTouch: touch, isMobile: touch } : {},
   );
@@ -77,7 +77,7 @@ async function inPanel(browser, { css = "", viewport, touch = false } = {}, fn) 
   await page.addStyleTag({ content: THEME + css });
   await page.addScriptTag({ content: SOURCE, type: "module" });
   await page.waitForFunction(() => !!window.__setup);
-  await page.evaluate(async () => {
+  await page.evaluate(async (over) => {
     window.__acts = {};
     window.__setup(
       {
@@ -101,21 +101,21 @@ async function inPanel(browser, { css = "", viewport, touch = false } = {}, fn) 
           },
         },
       },
-      {},
+      over || {},
     );
     window.__acts["auto-retry-settings"].cb();
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-  });
+  }, settings);
   const out = await fn(page);
   await page.close();
   return { out, errors };
 }
 
 
-// Decodes a PNG far enough to find its brightest pixel. Only used by the clear
-// button check, which cannot be done any other way: the browser will not report
-// a pseudo-element's own styles back through getComputedStyle.
-function brightestPixel(buf) {
+// Decodes a PNG far enough to read its pixels. Only used by the clear button
+// check, which cannot be done any other way: the browser will not report a
+// pseudo-element's own styles back through getComputedStyle.
+function decodePixels(buf) {
   const zlib = require("node:zlib");
   let pos = 8, width = 0, height = 0, depth = 0, colour = 0;
   const idat = [];
@@ -135,7 +135,7 @@ function brightestPixel(buf) {
   const raw = zlib.inflateSync(Buffer.concat(idat));
   const stride = width * ch;
   const out = Buffer.alloc(height * stride);
-  let best = null, bestSum = -1;
+  const px = [];
   for (let y = 0; y < height; y++) {
     const filter = raw[y * (stride + 1)];
     const line = raw.subarray(y * (stride + 1) + 1, y * (stride + 1) + 1 + stride);
@@ -155,11 +155,47 @@ function brightestPixel(buf) {
     }
     for (let x = 0; x < width; x++) {
       const o = y * stride + x * ch;
-      const sum = out[o] + out[o + 1] + out[o + 2];
-      if (sum > bestSum) { bestSum = sum; best = { r: out[o], g: out[o + 1], b: out[o + 2] }; }
+      px.push({ r: out[o], g: out[o + 1], b: out[o + 2] });
     }
   }
-  return best;
+  return px;
+}
+
+function brightestPixel(buf) {
+  const px = decodePixels(buf);
+  if (!px) return null;
+  return px.reduce((a, p) => (p.r + p.g + p.b > a.r + a.g + a.b ? p : a), px[0]);
+}
+
+// The field is whatever colour covers most of the sample; the cross is whatever
+// stands out furthest from it. That works whichever way round the theme is,
+// which "the brightest thing there" did not: on a light theme the brightest
+// thing in the sample is the field itself.
+function crossOnField(buf) {
+  const px = decodePixels(buf);
+  if (!px || !px.length) return null;
+  const counts = new Map();
+  for (const p of px) {
+    const k = p.r + "," + p.g + "," + p.b;
+    counts.set(k, (counts.get(k) || 0) + 1);
+  }
+  let fieldKey = null, most = -1;
+  for (const [k, n] of counts) if (n > most) { most = n; fieldKey = k; }
+  const field = fieldKey.split(",").map(Number);
+  const lum = (c) => {
+    const ch = c.map((v) => { const x = v / 255; return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4); });
+    return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+  };
+  const ratio = (c) => {
+    const x = lum(c), y = lum(field);
+    return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+  };
+  let cross = field, best = 1;
+  for (const p of px) {
+    const r = ratio([p.r, p.g, p.b]);
+    if (r > best) { best = r; cross = [p.r, p.g, p.b]; }
+  }
+  return { field, cross, ratio: best };
 }
 
 // page.setContent() leaves the page on about:blank, where localStorage throws a
@@ -174,6 +210,39 @@ async function stage(page, body) {
   );
   await page.goto(ORIGIN);
 }
+
+// A light theme, built the way Lumiverse's own variables invert: every value
+// the stock dark theme sets, given a light counterpart. Until this existed the
+// checks only ever ran on dark surfaces, so nothing held light themes to the
+// same standard even though the extension is used on them.
+const LIGHT = `:root{
+--lumiverse-primary:rgba(124,92,196,.95);--lumiverse-primary-hover:rgba(108,76,180,.95);
+--lumiverse-primary-text:rgba(96,64,168,1);--lumiverse-primary-020:rgba(124,92,196,.14);
+--lumiverse-primary-050:rgba(124,92,196,.45);--lumiverse-secondary:rgba(0,0,0,.05);
+--lumiverse-secondary-hover:rgba(0,0,0,.09);--lumiverse-secondary-border:rgba(0,0,0,.14);
+--lumiverse-danger:#dc2626;--lumiverse-success:#16a34a;
+--lumiverse-bg:rgba(250,249,253,.95);--lumiverse-bg-elevated:rgba(255,255,255,.9);
+--lumiverse-card-bg-solid:rgb(255,255,255);--lumiverse-border:rgba(124,92,196,.18);
+--lumiverse-text:rgba(24,22,30,.92);--lumiverse-text-muted:rgba(24,22,30,.6);
+--lumiverse-shadow-sm:0 2px 8px rgba(0,0,0,.08);--lumiverse-shadow-md:0 8px 24px rgba(0,0,0,.14);
+--lumiverse-shadow-xl:0 20px 60px rgba(0,0,0,.18);--lumiverse-modal-backdrop:rgba(0,0,0,.35);
+--lumiverse-fill-subtle:rgba(0,0,0,.035);--lumiverse-fill:rgba(0,0,0,.06);}
+body{background:rgb(244,242,249)}#modal{background:rgb(252,251,254)}`;
+
+// A light theme pack that overrides the common variables and not all 92, which
+// is what a hand-written theme actually looks like. Every fallback in the
+// source is a dark colour, so anything reaching for a variable this leaves
+// unset is measured against, or painted in, the wrong one.
+const PARTIAL_LIGHT = `:root{
+--lumiverse-primary:rgba(124,92,196,.95);--lumiverse-primary-hover:rgba(108,76,180,.95);
+--lumiverse-secondary:rgba(0,0,0,.05);--lumiverse-secondary-border:rgba(0,0,0,.14);
+--lumiverse-bg-elevated:rgba(252,251,254,.94);--lumiverse-border:rgba(124,92,196,.18);
+--lumiverse-text:rgba(24,22,30,.92);--lumiverse-text-muted:rgba(24,22,30,.6);
+--lumiverse-fill-subtle:rgba(0,0,0,.035);}
+body{background:rgb(244,242,249)}#modal{background:rgb(252,251,254)}`;
+
+// A light page with no light theme behind it at all.
+const LIGHT_PAGE = "body{background:rgb(244,242,249)}#modal{background:rgb(252,251,254)}";
 
 let failures = 0;
 const check = (name, ok, detail) => {
@@ -206,6 +275,22 @@ for (const [label, css] of [
   // button rendered as a blank rectangle.
   ["light accent", ":root{--lumiverse-primary:#e0c0ff;--lumiverse-primary-hover:#ecd8ff;--lumiverse-text:#e2c8fa}"],
   ["raised text scale", ":root{--lumiverse-font-scale:1.5;--lumiverse-ui-scale:1.5}"],
+  // The whole panel on a light theme, held to exactly the same floor as dark.
+  ["light theme", LIGHT],
+  // A light theme pack that overrides the common variables and not all 92,
+  // which is what a hand-written theme actually looks like. Every fallback in
+  // the source is a dark colour, so anything reaching for a variable this
+  // leaves unset is measured against the wrong surface. The reported bug: the
+  // hint popover painted near-white over an unset card-bg-solid, measured as
+  // the dark fallback underneath, and had its text repainted white to match.
+  ["partial light theme", PARTIAL_LIGHT],
+  // The harshest one: a light page with every theme variable left at its dark
+  // value. Nothing here can be got right by reading a variable, so anything
+  // that still reads on this reads anywhere.
+  ["dark variables on a light page", LIGHT_PAGE],
+  // And a light theme whose accent has drifted close to its own text colour,
+  // which is the light-side version of the bug that started all of this.
+  ["light theme, pale accent", LIGHT + ":root{--lumiverse-primary:rgba(196,180,232,.9);--lumiverse-primary-hover:rgba(206,192,240,.95)}"],
 ]) {
   const { out, errors } = await inPanel(browser, { css }, (page) =>
     page.evaluate(() => {
@@ -221,15 +306,36 @@ for (const [label, css] of [
         const x = lum(a), y = lum(b);
         return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
       };
+      // Composite the layers rather than hunting for an opaque one. Looking for
+      // the first background over 90% opaque walked straight past a button
+      // whose fill is exactly 90%, and measured its label against the panel
+      // behind it instead of against the button. Gradients count too: a tinted
+      // surface paints a colour its background-color never mentions.
       const solid = (el) => {
+        const layers = [];
         let p = el;
         while (p) {
-          const c = getComputedStyle(p).backgroundColor;
-          const m = c.match(/[\d.]+/g);
-          if (m && (m[3] === undefined || Number(m[3]) > 0.9)) return c;
+          const cs = getComputedStyle(p);
+          const n = (cs.backgroundColor.match(/[\d.]+/g) || []).map(Number);
+          let c = n.slice(0, 3);
+          let a = n[3] === undefined ? 1 : n[3];
+          const stop = (cs.backgroundImage || "").match(/rgba?\([^)]*\)/);
+          if (stop) {
+            const g = (stop[0].match(/[\d.]+/g) || []).map(Number);
+            const ga = g[3] === undefined ? 1 : g[3];
+            c = [g[0] * ga + c[0] * (1 - ga), g[1] * ga + c[1] * (1 - ga), g[2] * ga + c[2] * (1 - ga)];
+            a = Math.min(1, a + ga * (1 - a));
+          }
+          if (a > 0) layers.push([c, a]);
+          if (a >= 0.999) break;
           p = p.parentElement;
         }
-        return "rgb(0,0,0)";
+        let base = [0, 0, 0];
+        for (let i = layers.length - 1; i >= 0; i--) {
+          const [c, a] = layers[i];
+          base = [c[0] * a + base[0] * (1 - a), c[1] * a + base[1] * (1 - a), c[2] * a + base[2] * (1 - a)];
+        }
+        return "rgb(" + base.map((v) => Math.round(v)).join(",") + ")";
       };
       const modal = document.getElementById("modal");
       const paints = [...modal.querySelectorAll("*")].filter((e) => {
@@ -536,11 +642,27 @@ console.log("\npreset split");
 // colour rather than white.
 console.log("\nsearch clear button");
 {
+  // The fallback in that rule is a dark-theme colour, like every fallback in
+  // the source. A light theme that sets the common variables but not
+  // --lumiverse-text-muted let it through, and the cross came out near-white on
+  // a near-white field. So this runs on light themes too, and asks whether the
+  // cross can be told apart from the field rather than whether it is bright.
+  const NO_MUTED = PARTIAL_LIGHT.replace("--lumiverse-text-muted:rgba(24,22,30,.6);", "");
+  for (const [themeName, themeCss] of [
+    ["dark", ""],
+    ["light", LIGHT],
+    ["light, no muted colour set", NO_MUTED],
+    // The worst of it: a light page with every theme variable still dark, so
+    // the field's own text colour starts out near-white and has to be put
+    // right before the cross can inherit anything worth having. Nothing
+    // reading a variable could survive this one.
+    ["dark variables on a light page", LIGHT_PAGE],
+  ]) {
   const page = await browser.newPage({ viewport: { width: 480, height: 200 } });
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await stage(page, "<div id=modal></div>");
-  await page.addStyleTag({ content: THEME });
+  await page.addStyleTag({ content: THEME + themeCss });
   await page.addScriptTag({ content: SOURCE, type: "module" });
   await page.waitForFunction(() => !!window.__setup);
   const box = await page.evaluate(async () => {
@@ -570,22 +692,22 @@ console.log("\nsearch clear button");
   });
   const png = await page.screenshot({ clip: { x: box.x, y: box.y, width: box.w, height: box.h } });
   await page.close();
-  check("the panel stylesheet is injected", box.styled);
-  check("the search field carries the id the rule targets", box.id === "__lvRetrySearch", box.id);
-  const bright = brightestPixel(png);
-  // With the rule in place the brightest thing at that end of the field is the
-  // cross itself, drawn in the muted theme colour, which over this dark field
-  // lands around 170. Without it nothing is painted there at all and the
-  // brightest thing is the field's own edge, far darker. Checking for "bright
-  // but not white" therefore proves the cross is both present and themed.
+  check(themeName + ": the panel stylesheet is injected", box.styled);
+  check(themeName + ": the search field carries the id the rule targets",
+    box.id === "__lvRetrySearch", box.id);
+  // The field is the colour covering most of the sample and the cross is
+  // whatever stands out furthest from it, so this reads the same way round on
+  // either kind of theme. A cross that has taken the field's own colour, which
+  // is what the leaked fallback amounts to, leaves nothing standing out.
   //
   // Note this cannot prove the untouched button was white: headless Chromium
   // never paints the browser's own clear button, which is why this bug reached
   // a real phone without any check noticing.
-  const themed = !!bright && bright.r > 120 && bright.r < 245 &&
-                 Math.abs(bright.r - bright.b) < 40;
-  check("the clear button is painted in the theme colour, not white", themed, bright);
-  check("no console errors", errors.length === 0, errors);
+  const seen = crossOnField(png);
+  check(themeName + ": the clear button stands out from the field",
+    !!seen && seen.ratio >= 3, seen);
+  check(themeName + ": no console errors", errors.length === 0, errors);
+  }
 }
 
 // ---- the thing the extension is for ----
@@ -1162,7 +1284,20 @@ console.log("\nunits");
 // every floating surface at once rather than one at a time.
 console.log("\nfloating surfaces");
 {
-  const { out, errors } = await inPanel(browser, {}, async (page) =>
+  // Run on light as well as dark. Every fallback colour in the source is a dark
+  // one, so a surface that reached for a variable the host does not set would
+  // show up here as a dark box on a light panel.
+  // wantsDark says what the theme itself asked for, which is not the same as
+  // what the page behind it looks like. On a light page whose variables are all
+  // still dark, a dark surface is the theme being followed, not a fallback
+  // leaking, so that theme is checked for being solid and readable and not for
+  // being light.
+  for (const [themeName, themeCss, wantsDark] of [
+    ["dark", "", true],
+    ["light", LIGHT, false],
+    ["dark variables on a light page", LIGHT_PAGE, true],
+  ]) {
+  const { out, errors } = await inPanel(browser, { css: themeCss }, async (page) =>
     page.evaluate(async () => {
       const opaque = (el) => {
         if (!el) return null;
@@ -1204,9 +1339,20 @@ console.log("\nfloating surfaces");
       return found;
     }),
   );
-  check("the hint popover is solid", out.hint && out.hint.ok, out.hint);
-  check("the full-size editor is solid", out.editor && out.editor.ok, out.editor);
-  check("no console errors", errors.length === 0, errors);
+  check(themeName + ": the hint popover is solid", out.hint && out.hint.ok, out.hint);
+  check(themeName + ": the full-size editor is solid", out.editor && out.editor.ok, out.editor);
+  // A dark fallback leaking onto a light panel would show up as a dark surface.
+  const surfaceIsDark = (bg) => {
+    const m = bg && bg.match(/rgba?\(([^)]+)\)/);
+    if (!m) return false;
+    const [r, g, b2] = m[1].split(",").map(Number);
+    return (r + g + b2) / 3 < 90;
+  };
+  check(themeName + ": the surfaces follow the theme rather than a fallback",
+    surfaceIsDark(out.hint && out.hint.bg) === wantsDark, {
+      hint: out.hint && out.hint.bg, editor: out.editor && out.editor.bg });
+  check(themeName + ": no console errors", errors.length === 0, errors);
+  }
 
   // The live log and the retry pop-up only exist once something has happened,
   // so these are driven rather than opened by hand.
@@ -1395,7 +1541,7 @@ console.log("\non-screen swap");
     const chat = document.getElementById("chat");
     const run = async (html, pairs) => {
       chat.innerHTML = html;
-      onMsg({ type: "swapped", pairs, wholeChat: true });
+      onMsg({ type: "swapped", pairs });
       await new Promise((r) => setTimeout(r, 30));
       return chat.textContent;
     };
@@ -1412,10 +1558,35 @@ console.log("\non-screen swap");
       noTrail: await run("<p>category stays</p>", [["cat", "dog"]]),
       noTrailCyrillic: await run("<p>\u043f\u0440\u0438\u0432\u0435\u0442\u0441\u0442\u0432\u0438\u0435 stays</p>", [["\u043f\u0440\u0438\u0432\u0435\u0442", "hello"]]),
       noTrailHit: await run("<p>one cat.</p>", [["cat", "dog"]]),
+      // The backend records one pair per match it made, so the pairs are the
+      // budget: two matches in the newest reply means two pairs and exactly two
+      // occurrences to change. Rewriting every occurrence in the last matching
+      // node spent both on the first pair, and the second then went hunting
+      // further up the page and rewrote an older message that had never been
+      // edited. Reproduced before it was fixed: the older line read "The dog sat
+      // here." while the stored chat still said cat.
+      bleed: await run(
+        "<div>The cat sat here.</div><div>A cat and a cat and more.</div>",
+        [["cat ", "dog "], ["cat ", "dog "]],
+      ),
+      // The backend only ever edits replies, never anything the user wrote, so
+      // a swap must not touch their messages on screen either. The whole-chat
+      // path used to replace every occurrence everywhere and caught them.
+      //
+      // Sent with the wholeChat flag the backend used to set, even though
+      // nothing reads it now. That flag is what chose the path this went wrong
+      // on, so a check that leaves it out passes against the old code and
+      // guards nothing.
+      userMessage: await (async () => {
+        chat.innerHTML = "<div>I like cat.</div><div>A cat.</div>";
+        onMsg({ type: "swapped", pairs: [["cat", "dog"]], wholeChat: true });
+        await new Promise((r) => setTimeout(r, 30));
+        return chat.textContent;
+      })(),
       // A field the user is typing in must never be rewritten underneath them.
       input: await (async () => {
         chat.innerHTML = "<textarea>a cat here</textarea>";
-        onMsg({ type: "swapped", pairs: [["cat ", "dog "]], wholeChat: true });
+        onMsg({ type: "swapped", pairs: [["cat ", "dog "]] });
         await new Promise((r) => setTimeout(r, 30));
         return chat.querySelector("textarea").value;
       })(),
@@ -1433,6 +1604,10 @@ console.log("\non-screen swap");
   check("in any script", out.noTrailCyrillic === "\u043f\u0440\u0438\u0432\u0435\u0442\u0441\u0442\u0432\u0438\u0435 stays", out.noTrailCyrillic);
   check("while the real word at a sentence end still swaps",
     out.noTrailHit === "one dog.", out.noTrailHit);
+  check("two matches in one reply are both rewritten, and no older message is",
+    out.bleed === "The cat sat here.A dog and a dog and more.", out.bleed);
+  check("a swap never rewrites one of your own messages",
+    out.userMessage === "I like cat.A dog.", out.userMessage);
   check("a text box is left alone", out.input === "a cat here", out.input);
   check("no console errors", errors.length === 0, errors);
 }
@@ -1486,11 +1661,33 @@ console.log("\nbackup round trip");
     // field's own limits so nothing is clamped back on the way out.
     const rows = [...document.querySelectorAll("[data-ar-row]")];
     const wanted = {};
+    const unreachable = [];
     for (const r of rows) {
       const key = r.getAttribute("data-ar-row");
-      const el = r.querySelector("textarea") || r.querySelector("input");
-      if (!el || !key || key === "1") continue;
-      if (el.type === "checkbox") { el.click(); wanted[key] = el.checked; }
+      if (!key || key === "1") continue;
+      // Every control kind, not just the two this started with. Looking only
+      // for textarea and input meant the picker rows added later were skipped
+      // in silence, and this check passed while covering 48 settings out of 50.
+      const el = r.querySelector("textarea") || r.querySelector("input") || r.querySelector("select");
+      if (!el) { unreachable.push(key); continue; }
+      // A note list holds several controls and exports an array, so it is set
+      // and compared on its own terms rather than as one scalar.
+      if (r.querySelectorAll("textarea").length && r.querySelectorAll("select").length) {
+        const box = r.querySelector("textarea");
+        const who = r.querySelector("select");
+        box.value = "probe-" + key;
+        box.dispatchEvent(new Event("input", { bubbles: true }));
+        const other = [...who.options].map((o) => o.value).find((v) => v !== who.value);
+        if (other != null) { who.value = other; who.dispatchEvent(new Event("change", { bubbles: true })); }
+        wanted[key] = { list: true, text: "probe-" + key, role: who.value };
+        continue;
+      }
+      if (el.tagName === "SELECT") {
+        const other = [...el.options].map((o) => o.value).find((v) => v !== el.value);
+        if (other != null) { el.value = other; el.dispatchEvent(new Event("change", { bubbles: true })); }
+        wanted[key] = el.value;
+      }
+      else if (el.type === "checkbox") { el.click(); wanted[key] = el.checked; }
       else if (el.type === "number" || el.inputMode === "numeric") {
         const lo = Number(el.min) || 0;
         const hi = el.max === "" || el.max == null ? Number.MAX_SAFE_INTEGER : Number(el.max);
@@ -1524,7 +1721,7 @@ console.log("\nbackup round trip");
     for (const b of boxes) if (!b.checked) b.click();
     exportBtn.click();
     await new Promise((r) => setTimeout(r, 150));
-    return { wanted, exported: window.__exported, categories: boxes.length, overreach };
+    return { wanted, exported: window.__exported, categories: boxes.length, overreach, unreachable, rows: rows.length };
   });
   await page.close();
 
@@ -1533,18 +1730,30 @@ console.log("\nbackup round trip");
   if (parsed && parsed.settings) for (const cat of Object.values(parsed.settings)) for (const k of Object.keys(cat)) inFile.add(k);
   const missing = Object.keys(out.wanted).filter((k) => !inFile.has(k));
 
+  check("every settings row could be read, whatever kind of control it holds",
+    out.unreachable.length === 0, out.unreachable);
   check("the category boxes were found without catching settings rows", out.overreach === 0, out.overreach);
   check("the export is valid JSON with a version", !!parsed && !!parsed.autoRetry, out.exported && out.exported.slice(0, 60));
   check("every setting in the panel is in the backup", missing.length === 0, missing);
+  const matches = (k) => {
+    for (const cat of Object.values((parsed && parsed.settings) || {})) {
+      if (!(k in cat)) continue;
+      const want = out.wanted[k];
+      const got = cat[k];
+      if (want && want.list) {
+        return Array.isArray(got) && got.length >= 1 &&
+          got[0].text === want.text && got[0].role === want.role;
+      }
+      return String(got) === String(want);
+    }
+    return false;
+  };
   check("and the values are the ones on screen",
-    !!parsed && Object.keys(out.wanted).every((k) => {
-      for (const cat of Object.values(parsed.settings)) if (k in cat) return String(cat[k]) === String(out.wanted[k]);
-      return false;
-    }),
-    Object.keys(out.wanted).filter((k) => {
-      for (const cat of Object.values(parsed.settings || {})) if (k in cat) return String(cat[k]) !== String(out.wanted[k]);
-      return true;
-    }).slice(0, 6));
+    !!parsed && Object.keys(out.wanted).every(matches),
+    Object.keys(out.wanted).filter((k) => !matches(k)).slice(0, 6));
+  check("a note list is backed up with its text and its role, not flattened",
+    matches("refusalNotes"),
+    (() => { for (const cat of Object.values((parsed && parsed.settings) || {})) if ("refusalNotes" in cat) return cat.refusalNotes; return "(absent)"; })());
   check("no console errors", errors.length === 0, errors);
 }
 
@@ -1632,6 +1841,52 @@ console.log("\nbackup restore");
   }));
   const afterGood = await read();
 
+  // A note list is the one setting that is not a string, a number or a flag, so
+  // it is the one a file can be shaped wrongly for. A good one first.
+  await feed("notes.json", JSON.stringify({
+    autoRetry: "test",
+    settings: { refusal: { refusalNotes: [
+      { text: "first note", role: "assistant" },
+      { text: "second note", role: "user" },
+    ] } },
+  }));
+  const afterNotes = await page.evaluate(() => {
+    const row = document.querySelector('[data-ar-row="refusalNotes"]');
+    return {
+      texts: [...row.querySelectorAll("textarea")].map((t) => t.value),
+      roles: [...row.querySelectorAll("select")].map((t) => t.value),
+      status: window.__status(),
+    };
+  });
+
+  // Then every wrong shape at once: not a list, a role that does not exist, an
+  // item that is not an object, and more notes than the limit allows.
+  await feed("notes-bad.json", JSON.stringify({
+    autoRetry: "test",
+    settings: { refusal: { refusalNotes: "not a list" } },
+  }));
+  const afterNotAList = await page.evaluate(() => {
+    const row = document.querySelector('[data-ar-row="refusalNotes"]');
+    return { count: row.querySelectorAll("textarea").length,
+             texts: [...row.querySelectorAll("textarea")].map((t) => t.value) };
+  });
+  await feed("notes-odd.json", JSON.stringify({
+    autoRetry: "test",
+    settings: { refusal: { refusalNotes: [
+      { text: "kept", role: "sudo" },
+      null,
+      ...Array.from({ length: 40 }, (_, i) => ({ text: "n" + i, role: "user" })),
+    ] } },
+  }));
+  const afterOdd = await page.evaluate(() => {
+    const row = document.querySelector('[data-ar-row="refusalNotes"]');
+    return {
+      count: row.querySelectorAll("textarea").length,
+      firstRole: row.querySelector("select").value,
+      firstText: row.querySelector("textarea").value,
+    };
+  });
+
   // Nothing is kept until Save.
   await page.evaluate(() => window.__by("Save").click());
   await page.waitForTimeout(60);
@@ -1647,6 +1902,15 @@ console.log("\nbackup restore");
     afterUnknownCat.maxRetries === "6" && /Imported/.test(afterUnknownCat.status), afterUnknownCat.status);
   check("a real backup fills the fields in", afterGood.rules === "hot => cold" &&
     afterGood.enabled === true, afterGood);
+  check("a backed-up note list comes back with its text and its roles",
+    afterNotes.texts[0] === "first note" && afterNotes.texts[1] === "second note" &&
+    afterNotes.roles[0] === "assistant" && afterNotes.roles[1] === "user", afterNotes);
+  check("a note list that is not a list leaves one empty note, not a broken panel",
+    afterNotAList.count === 1 && afterNotAList.texts[0] === "", afterNotAList);
+  check("a role that does not exist falls back rather than being sent",
+    afterOdd.firstRole === "system" && afterOdd.firstText === "kept", afterOdd);
+  check("and a file with more notes than the limit is cut to the limit",
+    afterOdd.count === 10, afterOdd);
   check("an out-of-range number is pulled back to the limit",
     Number(afterGood.maxRetries) > 0 && Number(afterGood.maxRetries) < 1000, afterGood.maxRetries);
   // Two independent layers stop this: applyImport reads only the keys it knows,
@@ -1662,6 +1926,1258 @@ console.log("\nbackup restore");
   check("and is kept once it is",
     afterSave.stored && afterSave.stored.replaceRules === "hot => cold", afterSave.stored && afterSave.stored.replaceRules);
   check("no console errors", errors.length === 0, errors);
+}
+
+// ---- a saved setting has to come back ----
+// The backup checks above cover the file. Nothing covered the ordinary path:
+// press Save, come back later, and find the panel showing what you set. It did
+// not for every kind of setting. "Where the note goes" was read back through a
+// check against the values it is allowed to hold, that check was handed the
+// value without the field it belongs to, so the list of allowed values was
+// empty, nothing matched, and it fell back to the first option. Whatever you
+// picked, every reload put it back to "After the last message", silently.
+//
+// Written against every row rather than that one setting, because the fault was
+// in the shared coercion rather than in the setting, and any field type added
+// later goes through the same door.
+console.log("\nsaved settings come back");
+{
+  const page = await browser.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
+  page.on("console", (m) => { if (m.type() === "error") errors.push("console: " + m.text()); });
+  await stage(page, "<div id=modal></div>");
+  await page.addStyleTag({ content: THEME });
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+
+  const out = await page.evaluate(async () => {
+    const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const boot = () => {
+      const acts = {};
+      const teardown = window.__setup({
+        events: { on: () => () => {} },
+        ui: {
+          showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+          registerInputBarAction: (o) => {
+            const a = { onClick: (cb) => { a.cb = cb; return () => {}; }, destroy: () => {} };
+            acts[o.id] = a;
+            return a;
+          },
+        },
+      });
+      return { acts, teardown };
+    };
+    const openAll = async (acts) => {
+      acts["auto-retry-settings"].cb();
+      await frame();
+      for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      await frame();
+    };
+    const rows = () => [...document.querySelectorAll("[data-ar-row]")]
+      .filter((r) => { const k = r.getAttribute("data-ar-row"); return k && k !== "1"; });
+    // A note list holds several controls and is compared on its own terms.
+    const isNoteList = (r) =>
+      r.querySelectorAll("textarea").length > 0 && r.querySelectorAll("select").length > 0;
+    const read = (r) => {
+      if (isNoteList(r))
+        return { text: r.querySelector("textarea").value, role: r.querySelector("select").value };
+      const el = r.querySelector("textarea") || r.querySelector("input") || r.querySelector("select");
+      if (!el) return null;
+      if (el.type === "checkbox") return el.checked;
+      return el.value;
+    };
+
+    const first = boot();
+    await openAll(first.acts);
+    // Move every setting off its default, staying inside each field's own
+    // limits so nothing is clamped on the way through.
+    const wanted = {};
+    const unreachable = [];
+    for (const r of rows()) {
+      const key = r.getAttribute("data-ar-row");
+      if (isNoteList(r)) {
+        const box = r.querySelector("textarea");
+        const who = r.querySelector("select");
+        box.value = "probe-" + key;
+        box.dispatchEvent(new Event("input", { bubbles: true }));
+        const other = [...who.options].map((o) => o.value).find((v) => v !== who.value);
+        if (other != null) { who.value = other; who.dispatchEvent(new Event("change", { bubbles: true })); }
+        wanted[key] = { text: box.value, role: who.value };
+        continue;
+      }
+      const el = r.querySelector("textarea") || r.querySelector("input") || r.querySelector("select");
+      if (!el) { unreachable.push(key); continue; }
+      if (el.tagName === "SELECT") {
+        const other = [...el.options].map((o) => o.value).find((v) => v !== el.value);
+        if (other != null) { el.value = other; el.dispatchEvent(new Event("change", { bubbles: true })); }
+        wanted[key] = el.value;
+      } else if (el.type === "checkbox") {
+        el.click();
+        wanted[key] = el.checked;
+      } else if (el.type === "number" || el.inputMode === "numeric") {
+        const lo = Number(el.min) || 0;
+        const hi = el.max === "" || el.max == null ? Number.MAX_SAFE_INTEGER : Number(el.max);
+        const cur = Number(el.value) || lo;
+        const next = cur + 1 <= hi ? cur + 1 : Math.max(lo, cur - 1);
+        el.value = String(next);
+        el.dispatchEvent(new Event("change", { bubbles: true }));
+        wanted[key] = String(next);
+      } else {
+        el.value = "probe-" + key;
+        el.dispatchEvent(new Event("change", { bubbles: true }));
+        wanted[key] = el.value;
+      }
+    }
+    [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === "Save").click();
+    await frame();
+    const stored = JSON.parse(localStorage.getItem("lv-auto-retry:settings:v1") || "null");
+
+    // A fresh instance against the same storage, which is what a reload is.
+    first.teardown();
+    const second = boot();
+    await openAll(second.acts);
+    const got = {};
+    for (const r of rows()) got[r.getAttribute("data-ar-row")] = read(r);
+    second.teardown();
+    return { wanted, got, stored, unreachable, count: Object.keys(wanted).length };
+  });
+  await page.close();
+
+  const same = (a, b) => {
+    if (a && typeof a === "object") return !!b && a.text === b.text && a.role === b.role;
+    return String(a) === String(b);
+  };
+  const wrong = Object.keys(out.wanted).filter((k) => !same(out.wanted[k], out.got[k]));
+  const storedWrong = Object.keys(out.wanted).filter((k) => {
+    const v = out.stored && out.stored[k];
+    if (out.wanted[k] && typeof out.wanted[k] === "object")
+      return !Array.isArray(v) || !v.length || v[0].text !== out.wanted[k].text || v[0].role !== out.wanted[k].role;
+    return String(v) !== String(out.wanted[k]);
+  });
+
+  check("every settings row could be driven", out.unreachable.length === 0, out.unreachable);
+  check("it covered the whole panel, not a handful of rows", out.count > 40, out.count);
+  check("Save writes every setting to storage", storedWrong.length === 0, storedWrong);
+  check("and a fresh start shows every one of them back",
+    wrong.length === 0,
+    wrong.map((k) => ({ key: k, saved: out.wanted[k], got: out.got[k] })).slice(0, 6));
+  check("including the one that is picked from a list",
+    same(out.wanted.refusalNotePlacement, out.got.refusalNotePlacement),
+    { saved: out.wanted.refusalNotePlacement, got: out.got.refusalNotePlacement });
+  check("no console errors", errors.length === 0, errors);
+}
+
+// ---- the note only gets armed for the right retry ----
+// This is the only thing in the extension that changes what the model is asked,
+// so when it arms matters as much as what it sends. It must go out for a
+// refusal and for nothing else, never before the try it is set to start on, and
+// never at all while it is off or its box is empty.
+console.log("\nrefusal note");
+{
+  const page = await browser.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await stage(page, '<div id=modal></div><button data-testid="regenerate">Regenerate</button>');
+  await page.addStyleTag({ content: THEME });
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  const out = await page.evaluate(async () => {
+    const runs = [];
+    const drive = async (over, ending) => {
+      const handlers = {};
+      const sent = [];
+      const teardown = window.__setup(
+        {
+          events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
+          sendToBackend: (m) => sent.push(m),
+          onBackendMessage: () => () => {},
+          ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+                registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) },
+        },
+        Object.assign(
+          { refusalNote: true, refusalNotes: [{ text: "This was refused by mistake.", role: "system" }],
+            refusalNotePlacement: "after", refusalNoteFromTry: 2,
+            retryDelayMs: 10, backoffFactor: 1, maxDelayMs: 10, jitter: false, maxRetries: 4,
+            toast: false, stuckTimeoutMs: 0, idleTimeoutMs: 0, pauseWhenFailing: false },
+          over,
+        ),
+      );
+      const chatId = "chat" + runs.length;
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      // Each round trip is a generation that ends the same way, so the try
+      // counter climbs the way it would in a chat that keeps being refused.
+      for (let i = 0; i < 3; i++) {
+        handlers.GENERATION_STARTED({ chatId, generationId: "g" + i });
+        handlers.GENERATION_ENDED(Object.assign({ chatId }, ending));
+        await wait(60);
+      }
+      teardown();
+      const notes = sent.filter((m) => m && m.type === "arm_refusal_note");
+      runs.push(notes);
+      return notes;
+    };
+
+    const REFUSED = { content: "I'm sorry, but I can't create that content." };
+    const CUT_OFF = { content: 'He said, "wait' };
+
+    return {
+      // Default: try 1 goes out unchanged, the note starts on try 2.
+      refusal: (await drive({}, REFUSED)).length,
+      // A cut-off reply is not a refusal, so it never carries the note.
+      cutOff: (await drive({}, CUT_OFF)).length,
+      // Set to 1 and it goes with every refusal retry.
+      fromFirst: (await drive({ refusalNoteFromTry: 1 }, REFUSED)).length,
+      off: (await drive({ refusalNote: false }, REFUSED)).length,
+      empty: (await drive({ refusalNotes: [{ text: "   ", role: "system" }] }, REFUSED)).length,
+      // What actually gets sent across the bridge.
+      payload: (await drive({ refusalNoteFromTry: 1, refusalNotePlacement: "start",
+        refusalNotes: [{ text: "This was refused by mistake.", role: "user" }] }, REFUSED))[0],
+      // The panel promises the note goes out exactly as written, so the
+      // spacing someone typed has to survive the trip across the bridge.
+      // Trimming is only how an empty note is told from a filled one.
+      padded: (await drive({ refusalNoteFromTry: 1,
+        refusalNotes: [{ text: "  keep\n  my spacing\n", role: "system" }] }, REFUSED))[0],
+      // A note is armed just before the click, because some builds start the
+      // generation off the click itself. When there is no control to click, the
+      // note has to be taken back: left armed it waits out its full minute and
+      // can then attach itself to a regenerate the user pressed themselves.
+      // The backend reads an empty list as nothing armed, so a disarm is the
+      // same message carrying no notes. Runs last, since it takes the button
+      // off the page.
+      noControl: await (async () => {
+        const btn = document.querySelector('[data-testid="regenerate"]');
+        const parent = btn.parentNode;
+        btn.remove();
+        const msgs = await drive({ refusalNoteFromTry: 1 }, REFUSED);
+        parent.appendChild(btn);
+        return msgs.map((m) => (m.notes || []).length);
+      })(),
+    };
+  });
+  await page.close();
+  check("a refusal arms the note", out.refusal > 0, out.refusal);
+  check("but not on the first try, by default", out.refusal === 2, out.refusal);
+  check("set to 1, it arms on every refusal retry", out.fromFirst === 3, out.fromFirst);
+  check("a cut-off reply never arms it", out.cutOff === 0, out.cutOff);
+  check("nor does anything while the setting is off", out.off === 0, out.off);
+  check("nor while the box is empty", out.empty === 0, out.empty);
+  check("the note carries its text, role, placement and chat",
+    !!out.payload && out.payload.notes && out.payload.notes.length === 1 &&
+    out.payload.notes[0].text === "This was refused by mistake." &&
+    out.payload.notes[0].role === "user" && out.payload.placement === "start" && !!out.payload.chatId,
+    out.payload);
+  check("the spacing someone typed is sent as they typed it",
+    !!out.padded && out.padded.notes[0].text === "  keep\n  my spacing\n", out.padded);
+  check("with nothing to click, the note is armed and then taken back",
+    Array.isArray(out.noControl) && out.noControl.length >= 2 &&
+    out.noControl.every((n, i) => (i % 2 === 0 ? n > 0 : n === 0)), out.noControl);
+  check("no console errors", errors.length === 0, errors);
+}
+
+// ---- taking a note back is scoped to the chat it was armed for ----
+// Taking a note back was first written as a single flag, which said a note was
+// waiting but not which chat it was waiting on. Cancelling a retry in one chat
+// then took back a note armed for a different one, and that chat's next retry
+// went out bare with nothing to say why. Two chats in flight at once is the
+// only way to see it, so nothing else here would have caught it.
+console.log("\ntaking a note back");
+{
+  const page = await browser.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  page.on("console", (m) => { if (m.type() === "error") errors.push("console: " + m.text()); });
+  await stage(page, '<div id=modal></div><button data-testid="regenerate">Regenerate</button>');
+  await page.addStyleTag({ content: THEME });
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+
+  const out = await page.evaluate(async () => {
+    const handlers = {};
+    const sent = [];
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const teardown = window.__setup(
+      {
+        events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
+        sendToBackend: (m) => sent.push(m),
+        onBackendMessage: () => () => {},
+        ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+              registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) },
+      },
+      { refusalNote: true, refusalNotes: [{ text: "This was refused by mistake.", role: "system" }],
+        refusalNoteFromTry: 1, retryDelayMs: 10, backoffFactor: 1, maxDelayMs: 10, jitter: false,
+        maxRetries: 4, toast: false, stuckTimeoutMs: 0, idleTimeoutMs: 0, pauseWhenFailing: false },
+    );
+    const REFUSED = { content: "I'm sorry, but I can't create that content." };
+
+    // Chat A refuses and its retry fires, so a note is armed and waiting on the
+    // generation that click started.
+    handlers.GENERATION_STARTED({ chatId: "A", generationId: "a1" });
+    handlers.GENERATION_ENDED(Object.assign({ chatId: "A" }, REFUSED));
+    await wait(60);
+    const armedForA = sent.filter((m) => m.type === "arm_refusal_note" && (m.notes || []).length).length;
+
+    // Chat B refuses too, so it has a retry pending, and then the user stops it.
+    // B never got as far as arming anything of its own.
+    handlers.GENERATION_STARTED({ chatId: "B", generationId: "b1" });
+    handlers.GENERATION_ENDED(Object.assign({ chatId: "B" }, REFUSED));
+    handlers.GENERATION_STOPPED({ chatId: "B", generationId: "b1" });
+    await wait(60);
+    const disarms = sent.filter((m) => m.type === "arm_refusal_note" && !(m.notes || []).length);
+
+    teardown();
+    return { armedForA, disarmChats: disarms.map((m) => m.chatId) };
+  });
+  await page.close();
+
+  check("chat A armed a note", out.armedForA > 0, out);
+  // On the id the message carries, not on whether one was sent: the flag
+  // version sent a disarm here too, stamped with chat B, and the backend holds
+  // one note at a time so that took chat A's away. Sending nothing at all is
+  // the only outcome that leaves A's note where it belongs.
+  check("stopping a retry in chat B takes nothing back at all",
+    out.disarmChats.length === 0, out.disarmChats);
+  check("no console errors", errors.length === 0, errors);
+}
+
+// ---- a filled button has to look like one ----
+// Repainting the label fixed half of this. On a theme whose accent sits near
+// the panel colour, Save stayed legible and lost its edge, so nothing said it
+// was a button. It gets a border only when its fill has all but vanished, and
+// a theme with an ordinary accent must be left completely alone.
+console.log("\nbutton edges");
+{
+  const read = async (css) => {
+    const { out, errors } = await inPanel(browser, { css }, async (page) =>
+      page.evaluate(() => {
+        const by = (t) => [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === t);
+        const seen = (b) => {
+          const cs = getComputedStyle(b);
+          return { border: cs.borderTopColor, bg: cs.backgroundColor, colour: cs.color };
+        };
+        return { save: seen(by("Save")), reset: seen(by("Reset to defaults")) };
+      }),
+    );
+    return { out, errors };
+  };
+  const clear = (c) => c === "rgba(0, 0, 0, 0)" || c === "transparent";
+
+  const stock = await read("");
+  check("on a normal theme the filled button keeps no border",
+    clear(stock.out.save.border), stock.out.save);
+  check("and its fill is still the theme's accent",
+    !clear(stock.out.save.bg), stock.out.save.bg);
+  check("no console errors", stock.errors.length === 0, stock.errors);
+
+  // An accent all but identical to the panel behind it.
+  const pale = await read(
+    "#modal{background:rgb(250,249,253)}body{background:rgb(245,244,250)}" +
+    ":root{--lumiverse-primary:rgba(250,248,255,.95);--lumiverse-text:rgba(20,18,26,.92);" +
+    "--lumiverse-bg-elevated:rgba(248,246,252,.95);--lumiverse-card-bg-solid:rgb(250,249,253)}",
+  );
+  check("on a theme whose accent has vanished it gets one",
+    !clear(pale.out.save.border), pale.out.save);
+  check("and the label is still readable against the fill",
+    pale.out.save.colour !== pale.out.save.bg, pale.out.save);
+  // The edge fix paints in near-white or near-black. A secondary button must
+  // keep the theme's own border colour, which is quieter on purpose, so seeing
+  // either of those there means the fix reached a button it should not have.
+  const FORCED = ["rgb(255, 255, 255)", "rgb(20, 18, 26)"];
+  check("the secondary button keeps the theme's own border, not a forced one",
+    !FORCED.includes(stock.out.reset.border) && !FORCED.includes(pale.out.reset.border),
+    { stock: stock.out.reset.border, pale: pale.out.reset.border });
+  check("no console errors on that theme", pale.errors.length === 0, pale.errors);
+
+  // A mid-grey pair chosen so the two candidate edge colours disagree: judged
+  // against the panel behind the button, near-black wins (4.70 to 3.95); judged
+  // against the button's own fill, white wins (5.25 to 3.54). The edge has to
+  // separate the button from what is behind it, so the panel is the right
+  // reference. Without a case like this, using the fill instead looks correct.
+  const mid = await read(
+    "#modal{background:rgb(128,128,128)}body{background:rgb(128,128,128)}" +
+    ":root{--lumiverse-primary:rgb(108,108,108);--lumiverse-bg-elevated:rgb(128,128,128);" +
+    "--lumiverse-card-bg-solid:rgb(128,128,128)}",
+  );
+  check("the edge is judged against the panel, not the button's own fill",
+    mid.out.save.border === "rgb(20, 18, 26)", mid.out.save);
+  check("no console errors on that one", mid.errors.length === 0, mid.errors);
+}
+
+// ---- adding and removing notes ----
+// A note can answer the one before it, so the list needs a way to grow and
+// shrink. Ten is the ceiling and one is the floor: removing the last note would
+// leave nothing to type into.
+// ---- a description opens under the setting it describes ----
+// It used to flip above the row when there was no room below, so a long
+// description opened somewhere none of the others do: you look under the
+// setting and the text is over it instead. It stays below now and scrolls.
+console.log("\nhint placement");
+{
+  // A short viewport with a scrolling panel, so a row can be pushed low enough
+  // that its description will not fit underneath.
+  const PANEL = "#modal{position:fixed;inset:12px;overflow:auto;background:rgb(24,20,34);padding:10px;box-sizing:border-box}";
+  // The long one, on a viewport too short to fit it under the row.
+  {
+    // A long description on a row of ordinary height. The note list is no
+    // longer the one to use here: it opens above on purpose now.
+    const want = "confirmButtonLabels";
+    const { out, errors } = await inPanel(
+      browser, { css: PANEL, viewport: { width: 393, height: 460 }, settings: { refusalNote: true } },
+      async (page) => page.evaluate(async (want) => {
+        const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+        await frame();
+        const row = document.querySelector('[data-ar-row="' + want + '"]');
+        if (!row) return { err: "no row" };
+        row.scrollIntoView({ block: "end" });
+        await frame();
+        row.querySelector("[data-ar-hint]").dispatchEvent(new MouseEvent("mouseenter"));
+        await frame();
+        const tip = document.querySelector('[role="tooltip"]');
+        if (!tip) return { err: "no tip" };
+        const rr = row.getBoundingClientRect();
+        const tr = tip.getBoundingClientRect();
+        const cs = getComputedStyle(tip);
+        const res = {
+          below: tr.top >= rr.bottom - 1,
+          withinBottom: tr.bottom <= innerHeight,
+          capped: cs.maxHeight !== "none",
+          scrolls: tip.scrollHeight > tip.clientHeight,
+          contains: cs.overscrollBehaviorY === "contain",
+        };
+        tip.scrollTop = 20;
+        tip.dispatchEvent(new Event("scroll", { bubbles: true }));
+        await frame();
+        res.stillOpenAfterOwnScroll = !!document.querySelector('[role="tooltip"]');
+        const modal = document.getElementById("modal");
+        modal.scrollTop = modal.scrollTop + 30;
+        modal.dispatchEvent(new Event("scroll", { bubbles: true }));
+        await frame();
+        res.closedByPanelScroll = !document.querySelector('[role="tooltip"]');
+        return res;
+      }, want),
+    );
+    check("a long description opens below the row, not above it", out.below, out);
+    check("and stays on screen", out.withinBottom, out);
+    check("capped to the room there is", out.capped, out);
+    check("and scrolls instead of moving", out.scrolls, out);
+    check("its scroll does not chain to the panel", out.contains, out);
+    check("reading it does not close it", out.stillOpenAfterOwnScroll, out);
+    check("scrolling the panel still closes it", out.closedByPanelScroll, out);
+    check("no console errors", errors.length === 0, errors);
+  }
+
+  // Under a host that applies its UI Scale as a zoom, the room on the screen
+  // and the element's own units are not the same. A cap written in the wrong
+  // one ran the popover off the bottom of the screen at 1.4.
+  {
+    const { out, errors } = await inPanel(
+      browser, { css: PANEL + "body{zoom:1.4}", viewport: { width: 500, height: 520 },
+                 settings: { refusalNote: true } },
+      async (page) => page.evaluate(async () => {
+        const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+        await frame();
+        const row = document.querySelector('[data-ar-row="confirmButtonLabels"]');
+        // Mid screen on purpose. Jammed against the bottom there is barely any
+        // room to cap to, so a cap in the wrong units is too small to notice;
+        // with room to spare the same mistake overshoots by half the screen.
+        row.scrollIntoView({ block: "center" });
+        await frame();
+        row.querySelector("[data-ar-hint]").dispatchEvent(new MouseEvent("mouseenter"));
+        await frame();
+        const tip = document.querySelector('[role="tooltip"]');
+        const rr = row.getBoundingClientRect();
+        const tr = tip.getBoundingClientRect();
+        return {
+          below: tr.top >= rr.bottom - 1,
+          withinBottom: tr.bottom <= innerHeight,
+          capped: getComputedStyle(tip).maxHeight !== "none",
+          rowBottom: Math.round(rr.bottom), tipTop: Math.round(tr.top),
+          tipBottom: Math.round(tr.bottom), vh: innerHeight,
+        };
+      }),
+    );
+    check("a zoomed host still opens it below the row", out.below, out);
+    check("and caps it against the room on the screen, not its own units",
+      out.capped && out.withinBottom, out);
+    check("no console errors", errors.length === 0, errors);
+  }
+
+  // The note list asks for its description above instead. That row holds the
+  // whole list, every role, both buttons and the counter, so below it is a long
+  // way from the "?" that was pressed.
+  {
+    const { out, errors } = await inPanel(
+      browser, { css: PANEL, viewport: { width: 393, height: 800 }, settings: { refusalNote: true } },
+      async (page) => page.evaluate(async () => {
+        const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+        await frame();
+        const row = document.querySelector('[data-ar-row="refusalNotes"]');
+        row.scrollIntoView({ block: "center" });
+        await frame();
+        row.querySelector("[data-ar-hint]").dispatchEvent(new MouseEvent("mouseenter"));
+        await frame();
+        const tip = document.querySelector('[role="tooltip"]');
+        if (!tip) return { err: "no tip" };
+        const rr = row.getBoundingClientRect();
+        const tr = tip.getBoundingClientRect();
+        return {
+          above: tr.bottom <= rr.top + 1,
+          onScreen: tr.top >= 0 && tr.bottom <= innerHeight,
+          // The point of putting it there: it lands near the "?" rather than
+          // past the end of a very tall row.
+          gapToTop: Math.round(rr.top - tr.bottom),
+          rowHeight: Math.round(rr.height),
+        };
+      }),
+    );
+    check("the note list's description opens above its row", out.above === true, out);
+    check("and sits just over it, not somewhere else",
+      out.gapToTop >= 0 && out.gapToTop <= 12, out);
+    check("the row really is a tall one, so this is worth doing",
+      out.rowHeight > 150, out);
+    check("and it stays on the screen", out.onScreen === true, out);
+    check("no console errors", errors.length === 0, errors);
+  }
+
+  // Squeezed: the same row with almost no room above it must still open above
+  // and still fit, rather than crossing over the row.
+  {
+    const { out, errors } = await inPanel(
+      browser, { css: PANEL, viewport: { width: 393, height: 620 }, settings: { refusalNote: true } },
+      async (page) => page.evaluate(async () => {
+        const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+        await frame();
+        const row = document.querySelector('[data-ar-row="refusalNotes"]');
+        row.scrollIntoView({ block: "start" });
+        await frame();
+        row.querySelector("[data-ar-hint]").dispatchEvent(new MouseEvent("mouseenter"));
+        await frame();
+        const tip = document.querySelector('[role="tooltip"]');
+        const rr = row.getBoundingClientRect();
+        const tr = tip.getBoundingClientRect();
+        return {
+          above: tr.bottom <= rr.top + 1,
+          onScreen: tr.top >= 0 && tr.bottom <= innerHeight,
+          capped: getComputedStyle(tip).maxHeight !== "none",
+        };
+      }),
+    );
+    check("with little room above it is still above", out.above === true, out);
+    check("still on the screen", out.onScreen === true, out);
+    check("and capped to what room there was", out.capped === true, out);
+    check("no console errors", errors.length === 0, errors);
+  }
+
+  // A row pushed off the top of the screen by the host's own layout leaves
+  // negative room above it. A negative max-height is invalid CSS, which the
+  // browser drops, and the popover rendered at full height straight over the
+  // row it belongs to. Measured at a row top of -5, covering it from 12 to 273.
+  {
+    const OFFSET = "#modal{position:fixed;left:0;right:0;top:-70px;bottom:0;overflow:auto;background:rgb(24,20,34);box-sizing:border-box}";
+    const { out, errors } = await inPanel(
+      browser, { css: OFFSET, viewport: { width: 393, height: 800 }, settings: { refusalNote: true } },
+      async (page) => page.evaluate(async () => {
+        const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+        await frame();
+        const row = document.querySelector('[data-ar-row="refusalNotes"]');
+        row.scrollIntoView({ block: "start" });
+        await frame();
+        row.querySelector("[data-ar-hint]").dispatchEvent(new MouseEvent("mouseenter"));
+        await frame();
+        const tip = document.querySelector('[role="tooltip"]');
+        const rr = row.getBoundingClientRect();
+        const tr = tip.getBoundingClientRect();
+        return {
+          rowTop: Math.round(rr.top),
+          // Nothing painted, rather than an empty frame over the setting.
+          painted: tr.width > 0 && tr.height > 0,
+          coversRow: tr.height > 0 && tr.bottom > rr.top && tr.top < rr.bottom,
+          maxH: getComputedStyle(tip).maxHeight,
+        };
+      }),
+    );
+    check("a row pushed off the top really is off the top", out.rowTop < 20, out);
+    check("and its description never lands on top of it", out.coversRow === false, out);
+    check("nothing is painted when there is nowhere to paint it", out.painted === false, out);
+    check("no console errors", errors.length === 0, errors);
+  }
+
+  // A short description with room to spare is left alone entirely.
+  {
+    const { out, errors } = await inPanel(
+      browser, { css: PANEL, viewport: { width: 900, height: 1000 } },
+      async (page) => page.evaluate(async () => {
+        const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        const row = [...document.querySelectorAll("[data-ar-row]")]
+          .find((r) => (r.textContent || "").includes("Turn auto-retry on"));
+        row.scrollIntoView({ block: "start" });
+        await frame();
+        row.querySelector("[data-ar-hint]").dispatchEvent(new MouseEvent("mouseenter"));
+        await frame();
+        const tip = document.querySelector('[role="tooltip"]');
+        const rr = row.getBoundingClientRect();
+        const tr = tip.getBoundingClientRect();
+        return {
+          below: tr.top >= rr.bottom - 1,
+          capped: getComputedStyle(tip).maxHeight !== "none",
+          scrolls: tip.scrollHeight > tip.clientHeight,
+        };
+      }),
+    );
+    check("a short description with room is below the row too", out.below, out);
+    check("and is not capped or scrolled", !out.capped && !out.scrolls, out);
+    check("no console errors", errors.length === 0, errors);
+  }
+}
+
+// ---- a row that hangs off a switch goes when the switch is off ----
+// The panel was showing every setting whether or not it was in use, so the
+// rows that only matter under a switch took up the space the rest needed.
+console.log("\ndependent rows");
+{
+  const { out, errors } = await inPanel(browser, {}, async (page) =>
+    page.evaluate(async () => {
+      const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      await frame();
+      const shown = (k) => {
+        const r = document.querySelector('[data-ar-row="' + k + '"]');
+        return r ? r.style.display !== "none" : null;
+      };
+      // The switch itself, and the rows that hang off it.
+      const box = (k) => document.querySelector('[data-ar-row="' + k + '"]').querySelector("input[type=checkbox]");
+      const NOTE_ROWS = ["refusalNotes", "refusalNotePlacement", "refusalNoteFromTry"];
+      const all = (f) => NOTE_ROWS.every(f);
+
+      const offAtFirst = all((k) => shown(k) === false);
+      const switchStillThere = shown("refusalNote");
+
+      box("refusalNote").click();
+      await frame();
+      const onAfterTick = all((k) => shown(k) === true);
+
+      box("refusalNote").click();
+      await frame();
+      const goneAgain = all((k) => shown(k) === false);
+
+      // The same wiring on a different switch, to prove it is not special-cased.
+      const shortBefore = shown("minChars");
+      box("retryOnShort").click();
+      await frame();
+      const shortAfter = shown("minChars");
+
+      // A search is the deliberate exception: it finds a row whose switch is
+      // off, because answering "nothing matches that" for a setting that
+      // exists would be the worse answer.
+      const search = document.querySelector("input[type=search]");
+      search.value = "where the note goes";
+      search.dispatchEvent(new Event("input", { bubbles: true }));
+      await frame();
+      const foundWhileOff = shown("refusalNotePlacement");
+      // Ticking a switch while the search is up must not start hiding and
+      // showing rows underneath the results.
+      search.value = "note";
+      search.dispatchEvent(new Event("input", { bubbles: true }));
+      await frame();
+      const matchedBefore = [...document.querySelectorAll("[data-ar-row]")]
+        .filter((r) => r.style.display !== "none").length;
+      box("refusalNote").click();
+      await frame();
+      const matchedAfter = [...document.querySelectorAll("[data-ar-row]")]
+        .filter((r) => r.style.display !== "none").length;
+      box("refusalNote").click();
+      await frame();
+
+      search.value = "";
+      search.dispatchEvent(new Event("input", { bubbles: true }));
+      await frame();
+      const hiddenAfterClearing = shown("refusalNotePlacement");
+
+      // A whole section can hang off a switch too. Turning off the accidental
+      // refusal option leaves nothing under refusal tuning that does anything,
+      // so the heading goes with the rows.
+      //
+      // Measured by whether things are actually rendered rather than by their
+      // own display, because the section hides them from above.
+      const rendered = (el) => !!el && el.getClientRects().length > 0;
+      const tuningHead = () => [...document.querySelectorAll('[role="button"]')]
+        .find((h) => /refusal tuning/i.test(h.textContent || ""));
+      const tuningRow = () => document.querySelector('[data-ar-row="refusalUseBuiltins"]');
+      const refusalBox = () => document.querySelector('[data-ar-row="retryOnRefusal"]')
+        .querySelector("input[type=checkbox]");
+
+      const sectionOnAtFirst = rendered(tuningHead()) && rendered(tuningRow());
+      refusalBox().click();
+      await frame();
+      const sectionGone = !rendered(tuningHead()) && !rendered(tuningRow());
+      // The switch that hides it has to stay put, or there is no way back.
+      const refusalSwitchStays = rendered(document.querySelector('[data-ar-row="retryOnRefusal"]'));
+      // And searching still reaches inside it.
+      search.value = "extra thinking tag names";
+      search.dispatchEvent(new Event("input", { bubbles: true }));
+      await frame();
+      const searchReachesInside = rendered(document.querySelector('[data-ar-row="refusalThinkTags"]'));
+      search.value = "";
+      search.dispatchEvent(new Event("input", { bubbles: true }));
+      await frame();
+      const goneAfterClearing = !rendered(tuningRow());
+      refusalBox().click();
+      await frame();
+      const sectionBack = rendered(tuningHead()) && rendered(tuningRow());
+
+      return { sectionOnAtFirst, sectionGone, refusalSwitchStays, searchReachesInside,
+               goneAfterClearing, sectionBack,
+               offAtFirst, switchStillThere, onAfterTick, goneAgain,
+               shortBefore, shortAfter, foundWhileOff, hiddenAfterClearing,
+               matchedBefore, matchedAfter };
+    }),
+  );
+  check("the rows under a switch are not there while it is off", out.offAtFirst, out);
+  check("but the switch itself always is", out.switchStillThere === true, out);
+  check("ticking it brings them back with no reload", out.onAfterTick, out);
+  check("unticking takes them away again", out.goneAgain, out);
+  check("the same holds for another switch entirely",
+    out.shortBefore === false && out.shortAfter === true, out);
+  check("a search still finds a row whose switch is off", out.foundWhileOff === true, out);
+  check("and clearing the search puts it away again", out.hiddenAfterClearing === false, out);
+  check("ticking a switch during a search leaves the results alone",
+    out.matchedBefore > 0 && out.matchedAfter === out.matchedBefore, out);
+  check("a whole section is there while its switch is on", out.sectionOnAtFirst === true, out);
+  check("and the heading goes with the rows when it is off", out.sectionGone === true, out);
+  check("the switch that hides it stays put", out.refusalSwitchStays === true, out);
+  check("a search still reaches a row inside a hidden section",
+    out.searchReachesInside === true, out);
+  check("and clearing the search puts the section away again",
+    out.goneAfterClearing === true, out);
+  check("turning it back on brings the section back", out.sectionBack === true, out);
+  check("no console errors", errors.length === 0, errors);
+}
+
+// ---- the lines that only appear once something happens ----
+// The panel-wide contrast sweep runs once, at build, and used to look only at
+// elements that were painting text right then. Every status line in the panel
+// is empty at that moment and fills in later, so not one of them was ever
+// checked. On a light page whose theme variables are all dark they came out
+// white on white: the search count, the reset note, and the line that confirms
+// a save, which is the one that tells you your settings were kept.
+console.log("\nlines that fill in later");
+{
+  for (const [themeName, themeCss] of [["dark", ""], ["light", LIGHT], ["dark variables on a light page", LIGHT_PAGE]]) {
+    const { out, errors } = await inPanel(browser, { css: themeCss }, async (page) =>
+      page.evaluate(async () => {
+        const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+        await frame();
+        // Everything that puts words into a line that started out empty.
+        const by = (t) => [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === t);
+        const s = document.querySelector("input[type=search]");
+        s.value = "retry";
+        s.dispatchEvent(new Event("input", { bubbles: true }));
+        await frame();
+        if (by("Save")) by("Save").click();
+        if (by("Check this text")) by("Check this text").click();
+        for (const b of [...document.querySelectorAll("button")])
+          if (/^Reset/.test(b.textContent || "")) { b.click(); break; }
+        await frame();
+
+        const num = (c) => (c.match(/[\d.]+/g) || []).map(Number);
+        const lum = (c) => {
+          const ch = c.map((v) => { const x = v / 255; return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4); });
+          return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+        };
+        // Composites the layers, the way the extension does. Looking for the
+        // first background over 90% opaque walks past a button whose fill is
+        // exactly 90% and measures its label against the panel behind it.
+        const solid = (el) => {
+          const layers = [];
+          let p = el;
+          while (p) {
+            const cs = getComputedStyle(p);
+            const n = num(cs.backgroundColor);
+            let c = n.slice(0, 3);
+            let a = n[3] === undefined ? 1 : n[3];
+            const stop = (cs.backgroundImage || "").match(/rgba?\([^)]*\)/);
+            if (stop) {
+              const g = num(stop[0]);
+              const ga = g[3] === undefined ? 1 : g[3];
+              c = [g[0] * ga + c[0] * (1 - ga), g[1] * ga + c[1] * (1 - ga), g[2] * ga + c[2] * (1 - ga)];
+              a = Math.min(1, a + ga * (1 - a));
+            }
+            if (a > 0) layers.push([c, a]);
+            if (a >= 0.999) break;
+            p = p.parentElement;
+          }
+          let base = [0, 0, 0];
+          for (let i = layers.length - 1; i >= 0; i--) {
+            const [c, a] = layers[i];
+            base = [c[0] * a + base[0] * (1 - a), c[1] * a + base[1] * (1 - a), c[2] * a + base[2] * (1 - a)];
+          }
+          return base;
+        };
+
+        const bad = [];
+        let seen = 0;
+        for (const el of document.querySelectorAll("#modal *")) {
+          const own = [...el.childNodes].some((n) => n.nodeType === 3 && n.nodeValue.trim());
+          if (!own || el.getClientRects().length === 0) continue;
+          seen++;
+          const bg = solid(el);
+          const c = num(getComputedStyle(el).color);
+          const a = c[3] === undefined ? 1 : c[3];
+          const over = [c[0] * a + bg[0] * (1 - a), c[1] * a + bg[1] * (1 - a), c[2] * a + bg[2] * (1 - a)];
+          const x = lum(over), y = lum(bg);
+          const r = (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+          if (r < 2.6) bad.push({ t: (el.textContent || "").trim().slice(0, 40), r: Number(r.toFixed(2)) });
+        }
+        // The lines this is really about had better be among what was measured.
+        const wanted = ["settings match", "Saved", "defaults"];
+        const texts = [...document.querySelectorAll("#modal *")].map((e) => e.textContent || "").join(" ");
+        return { bad, seen, covered: wanted.filter((w) => texts.indexOf(w) >= 0).length };
+      }),
+    );
+    check(themeName + ": every line that filled in can be read", out.bad.length === 0, out.bad);
+    check(themeName + ": and the status lines were actually on screen to check",
+      out.covered >= 2 && out.seen > 40, out);
+    check(themeName + ": no console errors", errors.length === 0, errors);
+  }
+}
+
+// ---- a search says which switch a row is waiting on ----
+// Searching finds a setting whichever way its switch is set, because refusing
+// to find one that exists is the worse answer. That leaves the other half of
+// the problem: changing it appears to do nothing. The row says what it wants.
+console.log("\nwhat a hidden row is waiting on");
+{
+  const { out, errors } = await inPanel(browser, {}, async (page) =>
+    page.evaluate(async () => {
+      const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      await frame();
+      const search = document.querySelector("input[type=search]");
+      const find = (q) => { search.value = q; search.dispatchEvent(new Event("input", { bubbles: true })); };
+      // The text a row is showing under itself, if any.
+      const waitingOn = (k) => {
+        const r = document.querySelector('[data-ar-row="' + k + '"]');
+        if (!r) return null;
+        const bits = [...r.querySelectorAll("div")]
+          .filter((d) => d.style.display !== "none" && /^Needs /.test(d.textContent || ""));
+        return bits.length ? bits[bits.length - 1].textContent : "";
+      };
+
+      // A row hidden by its own switch.
+      find("where the note goes");
+      await frame();
+      const noteRow = waitingOn("refusalNotePlacement");
+
+      // A row hidden by the section it sits in, which has no switch of its own.
+      // The section's switch has to actually be off for there to be anything
+      // to say, so it is turned off first.
+      find("");
+      await frame();
+      document.querySelector('[data-ar-row="retryOnRefusal"]').querySelector("input[type=checkbox]").click();
+      await frame();
+      find("extra thinking tag names");
+      await frame();
+      const inSection = waitingOn("refusalThinkTags");
+      find("");
+      await frame();
+      document.querySelector('[data-ar-row="retryOnRefusal"]').querySelector("input[type=checkbox]").click();
+      await frame();
+
+      // With the switch on there is nothing to say.
+      document.querySelector('[data-ar-row="refusalNote"]').querySelector("input[type=checkbox]").click();
+      await frame();
+      find("where the note goes");
+      await frame();
+      const onceOn = waitingOn("refusalNotePlacement");
+
+      // And it is a search-time thing only, not something left on the row.
+      find("");
+      await frame();
+      const afterClearing = waitingOn("refusalNotePlacement");
+
+      // The switch flipped from inside the results, without clearing the box.
+      // This is the way someone actually acts on the line: they search, read
+      // what it is waiting on, and turn that on there and then. The line was
+      // only ever rebuilt when the search text changed, so it stayed up saying
+      // the row was waiting for a switch that was now on.
+      document.querySelector('[data-ar-row="refusalNote"]').querySelector("input[type=checkbox]").click();
+      await frame();
+      find("note");
+      await frame();
+      const beforeFlip = waitingOn("refusalNotePlacement");
+      const sw = document.querySelector('[data-ar-row="refusalNote"]');
+      const reachable = !!sw && sw.style.display !== "none";
+      sw.querySelector("input[type=checkbox]").click();
+      await frame();
+      const afterFlip = waitingOn("refusalNotePlacement");
+      return { noteRow, inSection, onceOn, afterClearing, beforeFlip, afterFlip, reachable };
+    }),
+  );
+  check("a row found while its own switch is off names that switch",
+    /^Needs "/.test(out.noteRow || "") && /refusal retry/i.test(out.noteRow || ""), out);
+  check("so does one inside a section that is switched off",
+    /^Needs "/.test(out.inSection || "") && /accidental refusal/i.test(out.inSection || ""), out);
+  check("and it says nothing once the switch is on", out.onceOn === "", out);
+  check("nor is it left behind after the search is cleared", out.afterClearing === "", out);
+  check("the switch a row names is reachable from the same search", out.reachable === true, out);
+  check("the row is waiting on it before it is turned on",
+    /^Needs "/.test(out.beforeFlip || ""), out);
+  check("and stops saying so the moment it is, without clearing the search",
+    out.afterFlip === "", out);
+  check("no console errors", errors.length === 0, errors);
+
+  // The panel-wide contrast sweep runs once, while this line is still empty,
+  // and it only looks at elements that are painting text. So it never saw this
+  // one: on a light page whose theme variables are all dark it came out white
+  // on white at a ratio of 1.02. It is checked when it first has something to
+  // say instead, and this holds that on the themes that would expose it.
+  for (const [themeName, themeCss] of [["dark", ""], ["light", LIGHT], ["dark variables on a light page", LIGHT_PAGE]]) {
+    const { out: seen, errors: errs } = await inPanel(browser, { css: themeCss }, async (page) =>
+      page.evaluate(async () => {
+        const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+        await frame();
+        const s = document.querySelector("input[type=search]");
+        s.value = "where the note goes";
+        s.dispatchEvent(new Event("input", { bubbles: true }));
+        await frame();
+        const line = [...document.querySelectorAll("div")]
+          .find((d) => /^Needs "/.test(d.textContent || "") && d.children.length === 0);
+        if (!line) return { err: "no line" };
+        const num = (c) => (c.match(/[\d.]+/g) || []).map(Number);
+        const lum = (c) => {
+          const ch = c.map((v) => { const x = v / 255; return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4); });
+          return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+        };
+        const solid = (el) => {
+          let p = el;
+          while (p) {
+            const cs = getComputedStyle(p);
+            const n = num(cs.backgroundColor);
+            let base = n.slice(0, 3);
+            let a = n[3] === undefined ? 1 : n[3];
+            const stop = (cs.backgroundImage || "").match(/rgba?\([^)]*\)/);
+            if (stop) {
+              const g = num(stop[0]);
+              const ga = g[3] === undefined ? 1 : g[3];
+              base = [g[0] * ga + base[0] * (1 - ga), g[1] * ga + base[1] * (1 - ga), g[2] * ga + base[2] * (1 - ga)];
+              a = Math.min(1, a + ga * (1 - a));
+            }
+            if (a > 0.9) return base;
+            p = p.parentElement;
+          }
+          return [0, 0, 0];
+        };
+        const bg = solid(line);
+        const c = num(getComputedStyle(line).color);
+        const a = c[3] === undefined ? 1 : c[3];
+        const over = [c[0] * a + bg[0] * (1 - a), c[1] * a + bg[1] * (1 - a), c[2] * a + bg[2] * (1 - a)];
+        const x = lum(over), y = lum(bg);
+        return { ratio: (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05), colour: getComputedStyle(line).color };
+      }),
+    );
+    check(themeName + ": the line saying which switch is needed can be read",
+      !!seen && seen.ratio >= 2.6, seen);
+    check(themeName + ": no console errors", errs.length === 0, errs);
+  }
+}
+
+// ---- the master switch says it is off rather than emptying the panel ----
+// Auto Retry can be switched off without opening this panel, so someone can
+// arrive with it off and nothing saying why. Off means paused, not
+// unconfigured, so nothing is hidden or greyed for it.
+console.log("\nmaster switch off");
+{
+  const { out, errors } = await inPanel(browser, {}, async (page) =>
+    page.evaluate(async () => {
+      const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const note = () => [...document.querySelectorAll("#modal > div, #modal div")]
+        .find((d) => /Auto Retry is off/.test(d.textContent || "") && d.children.length === 0);
+      const showing = () => { const n = note(); return !!n && n.style.display !== "none"; };
+      const rowsUp = () => [...document.querySelectorAll("[data-ar-row]")]
+        .filter((r) => r.getClientRects().length > 0).length;
+
+      for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      await frame();
+      const quietWhileOn = !showing();
+      const before = rowsUp();
+      const box = document.querySelector('[data-ar-row="enabled"]').querySelector("input[type=checkbox]");
+      box.click();
+      await frame();
+      const after = rowsUp();
+      const saysSo = showing();
+      box.click();
+      await frame();
+      return { quietWhileOn, saysSo, before, after, quietAgain: !showing() };
+    }),
+  );
+  check("nothing is said while it is on", out.quietWhileOn === true, out);
+  check("switching it off says so", out.saysSo === true, out);
+  check("and takes away nothing at all", out.before > 20 && out.after === out.before, out);
+  check("switching it back on takes the line away", out.quietAgain === true, out);
+  check("no console errors", errors.length === 0, errors);
+}
+
+// ---- hiding a row is only hiding it ----
+// Nothing about a switch being off may cost someone what they typed or what a
+// section had open. Hiding is meant to be about what is on screen and nothing
+// else. A backup needs no check here: buildExport reads the settings and never
+// the panel, and the round trip above already covers a hidden row, since
+// refusalNotes is hidden by default and still has to appear in the file.
+console.log("\nhiding keeps everything");
+{
+  const { out, errors } = await inPanel(browser, {}, async (page) =>
+    page.evaluate(async () => {
+      const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      await frame();
+      const head = () => [...document.querySelectorAll('[role="button"]')]
+        .find((h) => /refusal tuning/i.test(h.textContent || ""));
+      const box = (k) => document.querySelector('[data-ar-row="' + k + '"]')
+        .querySelector("input[type=checkbox]");
+      const phrases = () => document.querySelector('[data-ar-row="refusalExtraPhrases"]')
+        .querySelector("textarea");
+
+      const openBefore = head().getAttribute("aria-expanded");
+      const ta = phrases();
+      ta.value = "my own phrase";
+      ta.dispatchEvent(new Event("input", { bubbles: true }));
+
+      // Away and back again.
+      box("retryOnRefusal").click();
+      await frame();
+      box("retryOnRefusal").click();
+      await frame();
+
+      return {
+        openBefore,
+        openAfter: head().getAttribute("aria-expanded"),
+        textKept: phrases().value,
+      };
+    }),
+  );
+  check("a section that comes back is still open if it was", out.openAfter === out.openBefore, out);
+  check("and what was typed inside it is still there", out.textKept === "my own phrase", out);
+  check("no console errors", errors.length === 0, errors);
+}
+
+console.log("\nnote list");
+{
+  const { out, errors } = await inPanel(browser, { settings: { refusalNote: true } }, async (page) =>
+    page.evaluate(async () => {
+      const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      await frame();
+      const row = document.querySelector('[data-ar-row="refusalNotes"]');
+      const plus = [...row.querySelectorAll("button")].find((b) => b.textContent.trim() === "+");
+      const minuses = () => [...row.querySelectorAll("button")].filter((b) => b.textContent.trim() === "\u2212");
+      const boxes = () => row.querySelectorAll("textarea");
+      const picks = () => row.querySelectorAll("select");
+
+      const start = { notes: boxes().length, roles: picks().length, minusOff: minuses()[0].disabled };
+
+      // Typing in one, then adding another, must not disturb the first.
+      boxes()[0].value = "first";
+      boxes()[0].dispatchEvent(new Event("input", { bubbles: true }));
+      picks()[0].value = "user";
+      picks()[0].dispatchEvent(new Event("change", { bubbles: true }));
+      plus.click();
+      await frame();
+      const afterAdd = {
+        notes: boxes().length,
+        firstKept: boxes()[0].value,
+        firstRole: picks()[0].value,
+        minusOn: !minuses()[0].disabled,
+      };
+
+      // Fill the second, remove the first, and the second must survive as the
+      // one that is left.
+      boxes()[1].value = "second";
+      boxes()[1].dispatchEvent(new Event("input", { bubbles: true }));
+      minuses()[0].click();
+      await frame();
+      const afterRemove = { notes: boxes().length, left: boxes()[0].value };
+
+      // Climb to the ceiling.
+      for (let i = 0; i < 30; i++) plus.click();
+      await frame();
+      const atCap = { notes: boxes().length, plusOff: plus.disabled };
+
+      // And back down to the floor.
+      for (let i = 0; i < 30; i++) { const m = minuses(); if (m.length) m[m.length - 1].click(); }
+      await frame();
+      const atFloor = { notes: boxes().length, minusOff: minuses()[0].disabled, plusOn: !plus.disabled };
+
+      return { start, afterAdd, afterRemove, atCap, atFloor };
+    }),
+  );
+  check("it opens with one note", out.start.notes === 1 && out.start.roles === 1, out.start);
+  check("and that one cannot be removed", out.start.minusOff, out.start);
+  check("plus adds another", out.afterAdd.notes === 2, out.afterAdd);
+  check("without disturbing what is already typed",
+    out.afterAdd.firstKept === "first" && out.afterAdd.firstRole === "user", out.afterAdd);
+  check("with two, either can be removed", out.afterAdd.minusOn, out.afterAdd);
+  check("removing one keeps the other's text",
+    out.afterRemove.notes === 1 && out.afterRemove.left === "second", out.afterRemove);
+  check("it stops at ten", out.atCap.notes === 10 && out.atCap.plusOff, out.atCap);
+  check("and never goes below one", out.atFloor.notes === 1 && out.atFloor.minusOff, out.atFloor);
+  check("with room again after coming back down", out.atFloor.plusOn, out.atFloor);
+  check("no console errors", errors.length === 0, errors);
+}
+
+// ---- adding a note does not raise the keyboard on a phone ----
+// Focusing the new note is what someone with a keyboard wants and what someone
+// on a phone does not: it raises the on-screen keyboard, which covers the panel
+// and the note just added. So it turns on what pressed the button rather than
+// on what kind of device it is, which is the only thing that gets a tablet with
+// a keyboard right.
+console.log("\nadding a note");
+{
+  const { out, errors } = await inPanel(browser, { settings: { refusalNote: true } }, async (page) =>
+    page.evaluate(async () => {
+      const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      await frame();
+      const row = document.querySelector('[data-ar-row="refusalNotes"]');
+      const plus = [...row.querySelectorAll("button")].find((b) => b.textContent.trim() === "+");
+      const boxes = () => row.querySelectorAll("textarea");
+      const minuses = () => [...row.querySelectorAll("button")].filter((b) => b.textContent.trim() === "−");
+      // Whether the note that was just added is the thing holding focus.
+      const landedInNew = () => {
+        const b = boxes();
+        return document.activeElement === b[b.length - 1];
+      };
+      const add = async (pointerType) => {
+        if (pointerType) {
+          plus.dispatchEvent(new PointerEvent("pointerdown", { pointerType, bubbles: true }));
+        }
+        plus.click();
+        await frame();
+      };
+      const reset = async () => {
+        for (let i = 0; i < 30; i++) { const m = minuses(); if (m.length) m[m.length - 1].click(); }
+        if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+        await frame();
+      };
+
+      await add("touch");
+      const byTouch = { notes: boxes().length, focused: landedInNew() };
+      await reset();
+
+      // A keyboard press straight after a tap, to prove the tap does not leave
+      // the button stuck in the state it set.
+      await add(null);
+      const byKeyboard = { notes: boxes().length, focused: landedInNew() };
+      await reset();
+
+      await add("mouse");
+      const byMouse = { notes: boxes().length, focused: landedInNew() };
+      await reset();
+
+      await add("pen");
+      const byPen = { notes: boxes().length, focused: landedInNew() };
+
+      return { byTouch, byKeyboard, byMouse, byPen };
+    }),
+  );
+  check("a tap adds the note", out.byTouch.notes === 2, out.byTouch);
+  check("and does not put the cursor in it, so no keyboard comes up",
+    out.byTouch.focused === false, out.byTouch);
+  check("a keyboard press right after a tap still lands in the new note",
+    out.byKeyboard.focused === true, out.byKeyboard);
+  check("a mouse click lands in the new note", out.byMouse.focused === true, out.byMouse);
+  check("a stylus is treated like a finger", out.byPen.focused === false, out.byPen);
+  check("no console errors", errors.length === 0, errors);
+}
+
+// ---- a surface is measured by what it paints ----
+// The floating panels build an opaque surface by painting a solid colour and
+// laying the theme's tint over it as a gradient. background-color reports only
+// the colour underneath. On a theme that leaves the solid one unset, the
+// popover painted near-white, measured as the dark fallback beneath, and had
+// its text repainted white to suit, which made it disappear.
+console.log("\npainted surfaces");
+{
+  // Every surface below declares a dark background-colour and lays the theme's
+  // tint over it as a gradient, and every one of them has its text repainted
+  // against whatever it measures as sitting on. They share the fault and so
+  // they are checked together.
+  const look = async (name, css) => {
+    const { out, errors } = await inPanel(browser, { css }, async (page) =>
+      page.evaluate(async () => {
+        const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        const num = (c) => (c.match(/[\d.]+/g) || []).map(Number);
+        const lum = (c) => {
+          const ch = c.map((v) => { const x = v / 255; return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4); });
+          return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+        };
+        // What the surface paints: the gradient tint over the declared colour.
+        // The text is read off whichever element actually carries it, which on
+        // the editor is a child of the surface rather than the surface itself.
+        // Only a child gets its colour recomputed, so measuring the surface's
+        // own inherited colour would miss the fault entirely.
+        const reading = (el, textEl) => {
+          if (!el || (textEl !== undefined && !textEl)) return null;
+          const cs = getComputedStyle(el);
+          const stop = (cs.backgroundImage || "").match(/rgba?\([^)]*\)/);
+          const [br, bg, bb] = num(cs.backgroundColor);
+          let painted = [br, bg, bb];
+          if (stop) {
+            const [gr, gg, gb, ga = 1] = num(stop[0]);
+            painted = [gr * ga + br * (1 - ga), gg * ga + bg * (1 - ga), gb * ga + bb * (1 - ga)];
+          }
+          const colour = getComputedStyle(textEl || el).color;
+          const [tr, tg, tb, ta = 1] = num(colour);
+          const over = [tr * ta + painted[0] * (1 - ta), tg * ta + painted[1] * (1 - ta), tb * ta + painted[2] * (1 - ta)];
+          const a = lum(over), b = lum(painted);
+          return {
+            ratio: (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05),
+            text: colour, declared: cs.backgroundColor,
+          };
+        };
+        const found = {};
+
+        document.querySelector("button[data-ar-hint]").dispatchEvent(new MouseEvent("mouseenter"));
+        await frame();
+        found.tip = reading(document.querySelector('[role="tooltip"]'));
+        document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+
+        // The full-size editor, reached the way someone would reach it.
+        for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+        await frame();
+        const ex = [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === "Expand");
+        if (ex) ex.click();
+        await frame();
+        const box = [...document.querySelectorAll("body > div")]
+          .filter((d) => d.id !== "modal")
+          .map((d) => d.querySelector("textarea") && d.querySelector("textarea").parentElement)
+          .find(Boolean);
+        // The editor's title: a plain line of text on the surface, and one of
+        // the elements the sweep repaints.
+        const title = box && [...box.children].find(
+          (c) => c.tagName === "DIV" &&
+            [...c.childNodes].some((n) => n.nodeType === 3 && n.nodeValue.trim()),
+        );
+        found.editor = reading(box, title);
+        return found;
+      }),
+    );
+    check(name + ": the tip's text reads against what the tip paints",
+      out.tip && out.tip.ratio >= 3, out.tip);
+    check(name + ": the editor's text reads against what the editor paints",
+      out.editor && out.editor.ratio >= 3, out.editor);
+    check(name + ": no console errors", errors.length === 0, errors);
+  };
+  await look("stock", "");
+  await look("full light", LIGHT);
+  await look("partial light", PARTIAL_LIGHT);
+  await look("dark variables on a light page", LIGHT_PAGE);
 }
 
 // ---- nothing is left behind ----
@@ -1707,6 +3223,15 @@ console.log("\nteardown");
     await new Promise((r) => setTimeout(r, 30));
     const hintWasOpen = !!document.querySelector('[role="tooltip"]');
     const toastWasUp = !!document.getElementById("__lvRetryToast");
+    // The full-size editor hangs off the page rather than off the modal, so
+    // dismissing the modal never took it with it. It is the one thing here that
+    // covers the whole screen, which makes it the worst thing to leave behind.
+    const doneButton = () =>
+      [...document.querySelectorAll("button")].some((b) => b.textContent.trim() === "Done");
+    const expand = [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === "Expand");
+    if (expand) expand.click();
+    await new Promise((r) => setTimeout(r, 30));
+    const editorWasOpen = doneButton();
     teardown();
     return {
       registered,
@@ -1714,16 +3239,20 @@ console.log("\nteardown");
       left: [...live.keys()],
       hintWasOpen,
       toastWasUp,
+      editorWasOpen,
       toastGone: !document.getElementById("__lvRetryToast"),
       hintGone: !document.querySelector('[role="tooltip"]'),
+      editorGone: !doneButton(),
     };
   });
   await page.close();
   check("all four Extras entries register", out.registered.length === 4, out.registered);
   check("none register twice", !out.duplicate);
   check("teardown removes every one", out.left.length === 0, out.left);
-  check("a hint and a toast were actually up first", out.hintWasOpen && out.toastWasUp, out);
+  check("a hint, a toast and the full-size editor were actually up first",
+    out.hintWasOpen && out.toastWasUp && out.editorWasOpen, out);
   check("teardown removes the toast and any hint", out.toastGone && out.hintGone);
+  check("and the full-size editor with them", out.editorGone, out);
   check("no console errors", errors.length === 0, errors);
 }
 

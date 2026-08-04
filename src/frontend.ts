@@ -33,6 +33,31 @@ const IGNORE_MAX = 16; // most aborted-generation ids kept around to swallow the
 // click started nothing. A swipe control can move between existing rerolls
 // instead of making a new one, and a stale control does nothing at all.
 const START_GRACE_MS = 6000;
+// The retry reason that carries the optional note. Named once so the arming
+// check below cannot drift away from the callers that raise it.
+const REFUSAL_REASON = "looks like an accidental refusal";
+
+// How many notes one refusal retry may carry.
+//
+// A note is a whole message in the prompt, sent on every refusal retry once the
+// list is in use, so the ceiling is about what stops being a note and starts
+// being a second system prompt crowding the scene out. Ten covers the case this
+// was asked for, a note answering the note before it, with room left for a
+// short worked example if someone wants one, and it is still a list you can
+// read at a glance. Below ten nobody is stopped from doing anything reasonable;
+// above it the notes start costing more than they buy on every single retry.
+// Use fewer by adding fewer: one is the floor and it is the default.
+const MAX_NOTES = 10;
+// The roles a note may carry, and how each is offered in the panel. One list,
+// because the picker was written out twice: once to build the dropdown and
+// again to check what came back out of it, so adding a role in one place would
+// have made the other silently reject it.
+const NOTE_ROLE_OPTIONS = [
+  { value: "system", label: "System" },
+  { value: "user", label: "You" },
+  { value: "assistant", label: "The character" },
+];
+const NOTE_ROLES = NOTE_ROLE_OPTIONS.map((o) => o.value);
 
 // Largest amount of streamed text kept per chat as a fallback when the end
 // event arrives without a content field. Trimmed from the front past this.
@@ -40,7 +65,7 @@ const STREAM_BUF_MAX = 200000;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "4.1.0";
+const VERSION = "4.2.0";
 
 // ---- defaults (the UI overrides these; editing here changes the fallback) ----
 const CONFIG = {
@@ -98,6 +123,16 @@ const CONFIG = {
 
   refusalStripThinking: true, // ignore the model's thinking when checking for a refusal, so a refusal that lives only in a <think> block does not trigger a retry when the visible reply is fine.
   refusalThinkTags: "", // extra reasoning tag names (one per line) the model wraps its thinking in, on top of the built-in set. Both <tag> and [tag] forms are handled.
+  // A note sent with a refusal retry, and only with a refusal retry. It goes
+  // into the prompt for that one generation and is never written to the chat.
+  // Off by default, and does nothing at all while the text is empty.
+  refusalNote: false,
+  // A list rather than one string, so a note can answer the one before it. Each
+  // entry carries its own role. Sent in order, as one block, at the placement
+  // below. Empty entries are skipped, so a half-filled list is not a trap.
+  refusalNotes: [{ text: "", role: "system" }] as Array<{ text: string; role: string }>,
+  refusalNotePlacement: "after", // after | before | start, relative to the last real message
+  refusalNoteFromTry: 2, // which retry it starts on. 1 sends it every time.
   // Find and replace in replies (handled by the backend via the Chat Mutation API).
   replaceEnabled: false, // off by default. When on, applies replaceRules to each finished reply and edits the saved message.
   replaceRules: "", // "old => new" rules, one per line. A single word matches whole words; empty right side deletes it. Same word can appear more than once.
@@ -133,7 +168,7 @@ const CONFIG = {
 // Fields the settings UI can edit, in display order. The one place that defines
 // both the form and what gets persisted. Every option above (except the two
 // internal timing constants) is listed here, so everything is user-editable.
-type FieldType = "bool" | "num" | "text";
+type FieldType = "bool" | "num" | "text" | "pick" | "notes";
 interface Field {
   key: keyof typeof CONFIG;
   label: string;
@@ -143,11 +178,35 @@ interface Field {
   min?: number;
   max?: number;
   int?: boolean;
+  // "pick" only: the values this setting is allowed to hold, in the order they
+  // are offered. Anything else, from a hand-edited backup or an older version,
+  // falls back to the first one.
+  options?: Array<{ value: string; label: string }>;
+  // Puts this setting's description above its row instead of below it. Only
+  // worth setting on a row tall enough that "below the row" is a long way from
+  // the "?" that was pressed, which is the note list: the whole list, its
+  // roles, its buttons and its counter are all one row.
+  hintAbove?: boolean;
+  // Switches this setting does nothing without. The row is hidden while every
+  // one of them is off, so the panel only shows what is currently in use.
+  // More than one means any of them is enough, which is the case for a setting
+  // two different buttons both read.
+  //
+  // Only listed where the code genuinely ignores the value. Several settings
+  // look dependent and are not: refusalThinkTags is still used to find the
+  // reply when refusalStripThinking is off, ignoreHardErrors is checked before
+  // retryOnError rather than under it, and the word swap rules are read by the
+  // manual buttons whether or not replaceEnabled is on. Hiding those would
+  // hide a setting that was still doing something.
+  needs?: string[];
 }
 interface Group {
   title: string;
   desc?: string;
   fields: Field[];
+  // Same idea as a field's, for a whole section: while every switch named here
+  // is off, nothing under this heading does anything, so the heading goes too.
+  needs?: string[];
 }
 const SCHEMA: Group[] = [
   {
@@ -168,6 +227,7 @@ const SCHEMA: Group[] = [
       },
       {
         key: "floatingToggleSize",
+        needs: ["showFloatingToggle"],
         label: "Size of the floating button",
         type: "num",
         int: true,
@@ -210,6 +270,7 @@ const SCHEMA: Group[] = [
       },
       {
         key: "breakerRuns",
+        needs: ["pauseWhenFailing"],
         label: "Failed runs before pausing",
         type: "num",
         int: true,
@@ -219,6 +280,7 @@ const SCHEMA: Group[] = [
       },
       {
         key: "breakerPauseMins",
+        needs: ["pauseWhenFailing"],
         label: "How long to pause (minutes)",
         type: "num",
         int: true,
@@ -347,6 +409,7 @@ const SCHEMA: Group[] = [
       },
       {
         key: "minChars",
+        needs: ["retryOnShort"],
         label: 'What counts as "very short"',
         type: "num",
         int: true,
@@ -404,6 +467,7 @@ const SCHEMA: Group[] = [
       },
       {
         key: "allowReSwap",
+        needs: ["showReplaceButton", "showSwapAllButton"],
         label: "Allow swapping a reply again",
         type: "bool",
         hint: "Off by default. Normally a reply is swapped at most once per session, so swaps don't stack. Turn this on to let the button swap a reply again even if it was already swapped, for example after you change your rules. This can apply your rules on top of an earlier swap.",
@@ -418,6 +482,12 @@ const SCHEMA: Group[] = [
   },
   {
     title: "Advanced: refusal tuning (beta)",
+    // Every setting under here feeds looksLikeRefusal, and all three places
+    // that call it sit behind retryOnRefusal, so with that off the section is
+    // inert. One exception: refusalThinkTags is still read by the empty and
+    // short checks through stripThinkingAlways. Searching finds it, because a
+    // search ignores all of this.
+    needs: ["retryOnRefusal"],
     desc: "Only matters if the refusal option above is on. Fine-tunes what counts as a refusal.",
     fields: [
       {
@@ -434,6 +504,7 @@ const SCHEMA: Group[] = [
       },
       {
         key: "refusalPhraseSubs",
+        needs: ["refusalUseBuiltins"],
         label: "Reword the built-in phrases",
         type: "text",
         hint: 'Optional. Swap wording inside the built-in list using "old => new" rules, one per line. Example: assist => help. It changes what the built-in list matches, so only swap for wording your model actually uses.',
@@ -464,6 +535,42 @@ const SCHEMA: Group[] = [
         label: "Extra thinking tag names",
         type: "text",
         hint: "Optional, one per line. The common reasoning tags are already handled. Add a tag name only if your model wraps its thinking in an unusual one (for example: mythink). Just the name, no brackets. Both <name> and [name] forms are covered.",
+      },
+      {
+        key: "refusalNote",
+        label: "Send a note with a refusal retry",
+        type: "bool",
+        hint: "Off by default. Every other kind of retry re-sends your request exactly as it was, and still does. This one adds your note to the prompt for that single try. It goes to the model only: nothing is written to your chat and nothing appears in the reply. Needs the interceptor permission, and does nothing while the box below is empty.",
+      },
+      {
+        key: "refusalNotes",
+        needs: ["refusalNote"],
+        hintAbove: true,
+        label: "What the notes say",
+        type: "notes",
+        hint: "Goes to the model, not to your chat. Whatever you type is sent exactly as written: nothing is added to it, nothing is removed, and nothing in it is checked. Add up to ten with the plus button and they are sent in order, as one block, so a note can answer the one before it. Each carries its own role: system puts it alongside the instructions your setup already sends, you puts it in the same role as your own messages, and the character puts it in the same role as the replies. Models treat the three differently, so which one works best depends on your model and your setup. An empty note is skipped.",
+      },
+      {
+        key: "refusalNotePlacement",
+        needs: ["refusalNote"],
+        label: "Where the note goes",
+        type: "pick",
+        options: [
+          { value: "after", label: "After the last message" },
+          { value: "before", label: "Before the last message" },
+          { value: "start", label: "At the very start" },
+        ],
+        hint: "Where the note is inserted. After the last message puts it at the end, right before the point the reply continues from. Before the last message puts it one place earlier, so the newest line is still last. At the very start puts it ahead of everything, with the setup.",
+      },
+      {
+        key: "refusalNoteFromTry",
+        needs: ["refusalNote"],
+        label: "Start the note on try",
+        type: "num",
+        int: true,
+        min: 1,
+        max: 20,
+        hint: "Which retry the note starts on. At 2, the first retry re-sends unchanged and the note is added from the second onward. At 1, it is added to every refusal retry.",
       },
     ],
   },
@@ -1027,6 +1134,38 @@ function contrastRatio(a: Rgba, b: Rgba): number {
 // What is actually behind an element: its own background when that is opaque,
 // otherwise the ancestors' backgrounds composited underneath it.
 const PAGE_FALLBACK: Rgba = [20, 16, 30, 1]; // Lumiverse ships dark; last resort only
+// What a surface actually paints, rather than only what its background-color
+// says. Every floating panel here builds an opaque surface by painting a solid
+// colour and laying the theme's translucent tint over it as a gradient, because
+// the tint alone is 90% opaque and lets the text behind read through.
+// getComputedStyle reports the colour underneath and says nothing about the
+// gradient, so on a theme that leaves --lumiverse-card-bg-solid unset the
+// popover measured as the dark fallback while painting near-white, and its text
+// was helpfully repainted white to suit. It vanished.
+function paintedBg(el: any): Rgba | null {
+  let base: Rgba | null = null;
+  let img = "";
+  try {
+    const cs = getComputedStyle(el);
+    base = parseColor(cs.backgroundColor);
+    img = String(cs.backgroundImage || "");
+  } catch (_) {
+    return base;
+  }
+  if (img.indexOf("gradient") < 0) return base;
+  // Only the first stop is read. These gradients are one colour repeated, used
+  // to lay a flat tint rather than to shade anything.
+  const stop = img.match(/rgba?\([^)]*\)|#[0-9a-fA-F]{3,8}/);
+  const over = stop ? parseColor(stop[0]) : null;
+  if (!over) return base;
+  if (!base || base[3] <= 0) return over;
+  const mixed = blendColor(over, base);
+  // An opaque layer under a translucent one is still opaque. A translucent one
+  // under it is not, so the walk upward has to continue.
+  mixed[3] = base[3] >= 0.999 ? 1 : Math.min(1, base[3] + over[3] * (1 - base[3]));
+  return mixed;
+}
+
 function backdropOf(el: any): Rgba {
   const layers: Rgba[] = [];
   let p: any = el;
@@ -1034,7 +1173,7 @@ function backdropOf(el: any): Rgba {
   while (p && hops < 24) {
     let c: Rgba | null = null;
     try {
-      c = parseColor(getComputedStyle(p).backgroundColor);
+      c = paintedBg(p);
     } catch (_) {}
     if (c && c[3] > 0) {
       layers.push(c);
@@ -1095,6 +1234,38 @@ function matchColorScheme(el: any) {
   });
 }
 
+// A filled button whose fill is close to the surface behind it reads as plain
+// text, however readable its label is. Repainting the label fixed half of that
+// and left the other half: on a theme whose accent is near the panel colour,
+// Save was legible and had no edge, so nothing said it was a button.
+//
+// The threshold is deliberately low. Plenty of themes use a quiet accent on
+// purpose and still read fine; this is only meant to catch a fill that has all
+// but vanished. The border is already there at one pixel and transparent, so
+// colouring it costs no layout.
+const MIN_EDGE = 1.45;
+
+function fixEdge(el: any, min?: number) {
+  try {
+    if (!el || typeof getComputedStyle !== "function") return;
+    const fill = paintedBg(el);
+    if (!fill) return;
+    const behind = backdropOf(el.parentElement || el);
+    if (contrastRatio(blendColor(fill, behind), behind) >= (typeof min === "number" ? min : MIN_EDGE))
+      return;
+    const light: Rgba = [255, 255, 255, 1];
+    const dark: Rgba = [20, 18, 26, 1];
+    // Judged against the surface behind the button, since that is what the
+    // edge has to separate it from.
+    el.style.borderColor =
+      contrastRatio(light, behind) >= contrastRatio(dark, behind) ? NEAR_WHITE : NEAR_BLACK;
+  } catch (_) {}
+}
+
+function ensureEdge(el: any, min?: number) {
+  afterPaint(() => fixEdge(el, min));
+}
+
 function ensureReadable(el: any, min?: number) {
   afterPaint(() => fixContrast(el, min));
 }
@@ -1110,6 +1281,15 @@ function paintsText(el: any): boolean {
     const n: any = kids[i];
     if (n && n.nodeType === 3 && String(n.nodeValue || "").trim()) return true;
   }
+  // An element that has been given a colour of its own but is empty right now
+  // is a status line waiting for something to say. The sweep runs once, while
+  // they are all still empty, so on the old rule it walked past every one of
+  // them and they were never checked against the surface they sit on. The
+  // colour does not change when the text arrives, so checking it now is the
+  // same answer, arrived at before anyone has to read it.
+  try {
+    if (el && el.style && String(el.style.color || "")) return true;
+  } catch (_) {}
   return false;
 }
 
@@ -1128,13 +1308,13 @@ function ensureReadableTree(root: any, min?: number) {
   });
 }
 
-// True when the device has been asked to keep movement down. Read at the point
-// of use rather than once at load, so turning the setting on takes effect
-// without reloading the page.
 // Long enough that a normal tap never reaches it, short enough that holding
 // the button does not feel broken.
 const HOLD_MS = 500;
 
+// True when the device has been asked to keep movement down. Read at the point
+// of use rather than once at load, so turning the setting on takes effect
+// without reloading the page.
 function stillness(): boolean {
   try {
     return (
@@ -1889,6 +2069,10 @@ export function setup(ctx: Ctx, opts?: any) {
     floatWidget = null;
     floatEl = null;
     floatWidgetSize = 0;
+    // The document-level pointermove listener calls through this. Left set, it
+    // kept a whole button's worth of handlers alive after the button was gone,
+    // and every pointer move on the page went on running its hold check.
+    holdMoveWatch = null;
   }
 
   function syncFloat() {
@@ -1908,6 +2092,15 @@ export function setup(ctx: Ctx, opts?: any) {
   function toggleEnabled() {
     cfg.enabled = cfg.enabled === false;
     saveSaved();
+    // The settings panel can be open while this is flipped from somewhere else.
+    // Its own checkbox and the "Auto Retry is off" line are brought into line,
+    // and so is the baseline the panel restores on dismiss, or closing the panel
+    // would put the switch straight back where it was.
+    if (modalBaseline) modalBaseline.enabled = cfg.enabled;
+    try {
+      if (fieldSetters.enabled) fieldSetters.enabled(cfg.enabled);
+      applyDeps();
+    } catch (_) {}
     if (cfg.enabled === false) {
       chats.forEach((_s: any, id: string) => standDown(id, false));
     }
@@ -1929,13 +2122,27 @@ export function setup(ctx: Ctx, opts?: any) {
   function coerceSaved(parsed: any): any {
     const out: any = {};
     if (!parsed || typeof parsed !== "object") return out;
+    // 4.2.0 held one note in two keys. Anyone who set it on the testing branch
+    // keeps it rather than finding the box empty after updating.
+    if (!parsed.refusalNotes && parsed.refusalNoteText != null) {
+      const text = String(parsed.refusalNoteText || "");
+      if (text.trim())
+        parsed = Object.assign({}, parsed, {
+          refusalNotes: [{ text: text, role: String(parsed.refusalNoteRole || "system") }],
+        });
+    }
     for (const g of SCHEMA)
       for (const f of g.fields) {
         if (!(f.key in parsed)) continue;
+        // The field itself goes through, not just its type. A "pick" is checked
+        // against the values it is allowed to hold, and those live on the field,
+        // so without it every saved choice failed that check and fell back to
+        // the first option: "Where the note goes" read back as "after" however
+        // it had been set, on every load, in every browser.
         out[f.key] =
           f.type === "num"
             ? clampField(f, parsed[f.key])
-            : coerce(f.type, parsed[f.key], (CONFIG as any)[f.key]);
+            : coerce(f.type, parsed[f.key], (CONFIG as any)[f.key], f);
       }
     return out;
   }
@@ -1957,11 +2164,27 @@ export function setup(ctx: Ctx, opts?: any) {
       localStorage.setItem(STORE_KEY, JSON.stringify(out));
     } catch (_) {}
   }
-  function coerce(type: FieldType, val: any, fallback: any) {
+  function coerce(type: FieldType, val: any, fallback: any, f?: Field) {
     if (type === "bool") return !!val;
     if (type === "num") {
       const n = Number(val);
       return Number.isFinite(n) ? n : fallback;
+    }
+    if (type === "notes") {
+      const list = Array.isArray(val) ? val : [];
+      const out: Array<{ text: string; role: string }> = [];
+      for (const item of list.slice(0, MAX_NOTES)) {
+        const text = item && item.text != null ? String(item.text) : "";
+        const role = item && NOTE_ROLES.indexOf(String(item.role)) >= 0 ? String(item.role) : "system";
+        out.push({ text: text, role: role });
+      }
+      return out.length ? out : [{ text: "", role: "system" }];
+    }
+    if (type === "pick") {
+      const want = val == null ? "" : String(val);
+      const opts = (f && f.options) || [];
+      for (const o of opts) if (o.value === want) return want;
+      return opts.length ? opts[0].value : fallback;
     }
     return val == null ? fallback : String(val);
   }
@@ -2030,6 +2253,10 @@ export function setup(ctx: Ctx, opts?: any) {
         "refusalIgnorePhrases",
         "refusalStripThinking",
         "refusalThinkTags",
+        "refusalNote",
+        "refusalNotes",
+        "refusalNotePlacement",
+        "refusalNoteFromTry",
       ],
     },
     {
@@ -2081,6 +2308,10 @@ export function setup(ctx: Ctx, opts?: any) {
   // rebuild (which would jump the scroll and close open sections). Repopulated
   // each time the settings body is built.
   let fieldSetters: Record<string, (v: any) => void> = {};
+  // Reapplies the rows that only matter while some switch is on. Held out here
+  // beside fieldSetters because the controls that move those switches are built
+  // by buildRow, which is its own function. Does nothing until a panel is built.
+  let applyDeps: () => void = () => {};
   // Rebuild-free refreshers for the preset dropdowns, so an import that adds
   // presets can update them without rebuilding the panel.
   let presetBarRefreshers: Array<() => void> = [];
@@ -2093,7 +2324,7 @@ export function setup(ctx: Ctx, opts?: any) {
     if (!f) return undefined;
     return f.type === "num"
       ? clampField(f, val)
-      : coerce(f.type, val, (CONFIG as any)[key]);
+      : coerce(f.type, val, (CONFIG as any)[key], f);
   }
   function buildExport(catIds: string[]): string {
     const settings: any = {};
@@ -2550,6 +2781,8 @@ export function setup(ctx: Ctx, opts?: any) {
     s.suppressUntil = Date.now() + STAND_DOWN_MS;
     if (hadPending) {
       hideToast();
+      // The retry this note was armed for is off, so the note goes with it.
+      disarmRefusalNote(chatId);
       if (announce) showToast("Auto-retry stopped.");
       log("stood down", chatId);
     }
@@ -2723,6 +2956,18 @@ export function setup(ctx: Ctx, opts?: any) {
   // everything else. A pseudo-element cannot be styled inline, so this needs a
   // real stylesheet.
   //
+  // The fill is currentColor, which is the field's own text colour, rather than
+  // a theme variable. Naming a variable means naming a fallback for the themes
+  // that do not set it, and every fallback in this file is a dark one, so a
+  // light theme that set the common colours and not that one painted a
+  // near-white cross on a near-white field. There is nothing to fall back to
+  // here: the field's text colour is whatever the theme asked for, and
+  // styleField has already had ensureReadable correct it if it did not read
+  // against the field. Whatever the cross inherits is therefore legible by the
+  // time it is used, on any theme, with nothing to measure and nothing to keep
+  // in step. The opacity is what makes it quieter than the text, and going to
+  // full strength is what marks the hover.
+  //
   // Chrome and Safari only. Firefox puts no clear button in a search field at
   // all, so there is nothing there to restyle and nothing to break.
   const SEARCH_X =
@@ -2736,11 +2981,10 @@ export function setup(ctx: Ctx, opts?: any) {
       el.textContent =
         "#" + SEARCH_ID + "::-webkit-search-cancel-button{" +
         "-webkit-appearance:none;appearance:none;width:14px;height:14px;cursor:pointer;" +
-        "background-color:var(--lumiverse-text-muted,rgba(255,255,255,.65));" +
+        "background-color:currentColor;opacity:.6;" +
         "-webkit-mask:" + SEARCH_X + " center/contain no-repeat;" +
         "mask:" + SEARCH_X + " center/contain no-repeat}" +
-        "#" + SEARCH_ID + "::-webkit-search-cancel-button:hover{" +
-        "background-color:var(--lumiverse-text,rgba(255,255,255,.9))}";
+        "#" + SEARCH_ID + "::-webkit-search-cancel-button:hover{opacity:1}";
       (document.head || document.documentElement).appendChild(el);
       panelStyleEl = el;
     } catch (_) {}
@@ -2944,9 +3188,69 @@ export function setup(ctx: Ctx, opts?: any) {
         }
       }
       log("retry click produced no generation; resetting stale state", chatId);
+      disarmRefusalNote(chatId);
       s.selfTriggered = false;
       s.attempts = 0;
     }, START_GRACE_MS);
+  }
+
+  // The chat a note is currently armed for, or null when none is. A chat id
+  // rather than a flag, because a retry called off in one chat says nothing
+  // about a note waiting on a click in another, and taking that one back would
+  // quietly drop a note the user is still owed. The backend holds one at a
+  // time, so one id is enough to describe the whole state.
+  let armedNoteChat: string | null = null;
+
+  // Take a note back when the click it was armed for never happened. The
+  // backend reads an empty list as "nothing armed", so a disarm is the same
+  // message carrying nothing. Without it the note sat waiting out its full
+  // minute and could then attach itself to a regenerate the user pressed
+  // themselves, which is the one thing this feature promises never to do.
+  function disarmRefusalNote(chatId: string) {
+    try {
+      if (armedNoteChat == null || String(chatId) !== armedNoteChat) return;
+      armedNoteChat = null;
+      if (!ctx || typeof (ctx as any).sendToBackend !== "function") return;
+      (ctx as any).sendToBackend({ type: "arm_refusal_note", chatId: chatId, notes: [] });
+      log("retry never started; note taken back", chatId);
+    } catch (_) {}
+  }
+
+  // Tell the backend to attach the note to the next generation in this chat.
+  // Sent immediately before the click, so it is in place before the generation
+  // starts. The backend only honours it for a regenerate or a swipe, so a note
+  // that is never collected cannot attach itself to something you type.
+  function armRefusalNote(chatId: string, reason: string, attempt: number) {
+    try {
+      if (!cfg.refusalNote) return;
+      if (reason !== REFUSAL_REASON) return;
+      // An empty note is skipped rather than sent blank, so a half-filled list
+      // is not a trap. Nothing is armed when they are all empty.
+      //
+      // Trimmed to decide whether a note counts as empty, and not otherwise:
+      // what goes out is what was typed, spacing and all. The panel says the
+      // note is sent exactly as written, and a line break someone put at the
+      // end of theirs is part of what they wrote.
+      const notes = (Array.isArray(cfg.refusalNotes) ? cfg.refusalNotes : [])
+        .slice(0, MAX_NOTES)
+        .map((n: any) => ({
+          text: String((n && n.text) || ""),
+          role: NOTE_ROLES.indexOf(String(n && n.role)) >= 0 ? String(n.role) : "system",
+        }))
+        .filter((n: any) => n.text.trim());
+      if (!notes.length) return;
+      const from = Math.max(1, Number(cfg.refusalNoteFromTry) || 1);
+      if (attempt < from) return;
+      if (!ctx || typeof (ctx as any).sendToBackend !== "function") return;
+      (ctx as any).sendToBackend({
+        type: "arm_refusal_note",
+        chatId: chatId,
+        notes: notes,
+        placement: String(cfg.refusalNotePlacement || "after"),
+      });
+      log("note armed for the next retry in this chat", chatId);
+      armedNoteChat = String(chatId);
+    } catch (_) {}
   }
 
   function scheduleRetry(chatId: string, reason: string, err?: any) {
@@ -3027,6 +3331,7 @@ export function setup(ctx: Ctx, opts?: any) {
       // straight off the click, and that start has to be able to cancel the
       // watchdog rather than land before it exists.
       s.expectingStart = Date.now();
+      armRefusalNote(chatId, reason, s.attempts);
       const before = confirmSnapshot();
       // Armed before the click, not after: a build that puts its dialog on
       // screen during the click itself would otherwise not be seen until the
@@ -3034,6 +3339,7 @@ export function setup(ctx: Ctx, opts?: any) {
       watchForConfirm(before);
       const via = fireRetry();
       if (!via) {
+        disarmRefusalNote(chatId);
         clearConfirmWatch();
         s.expectingStart = 0;
         s.selfTriggered = false;
@@ -3158,7 +3464,7 @@ export function setup(ctx: Ctx, opts?: any) {
         return;
       }
       if (cfg.retryOnRefusal && looksLikeRefusalError(String(p.error), cfg)) {
-        scheduleRetry(p.chatId, "looks like an accidental refusal");
+        scheduleRetry(p.chatId, REFUSAL_REASON);
         return;
       }
       return;
@@ -3200,7 +3506,7 @@ export function setup(ctx: Ctx, opts?: any) {
       return;
     }
     if (cfg.retryOnRefusal && looksLikeRefusal(content, cfg)) {
-      scheduleRetry(p.chatId, "looks like an accidental refusal");
+      scheduleRetry(p.chatId, REFUSAL_REASON);
       return;
     }
     // Measured on the visible reply, not the raw output. A reasoning block can
@@ -3234,13 +3540,26 @@ export function setup(ctx: Ctx, opts?: any) {
   // rendered text. Only text nodes are touched, so markdown, formatting and any
   // element structure are left exactly as they were.
   //
-  // last: replace only the final occurrence in the page, which is the newest
-  // reply. Whole-chat swaps pass false and replace every occurrence, since every
-  // message really was changed.
-  function applySwapsToView(
-    pairs: Array<[string, string]>,
-    last: boolean,
-  ): number {
+  // The backend records one pair per match it made, so the number of pairs is
+  // exactly the number of occurrences it changed. Each pair therefore spends
+  // itself on exactly one occurrence here, taken from the end of the page
+  // backwards, which is the newest text first.
+  //
+  // It used to take the last matching node and rewrite every occurrence inside
+  // it, which does not add up: a reply matching twice in one paragraph had both
+  // done by the first pair, and the second pair then went looking further up
+  // and rewrote an older message the backend had never touched. The whole-chat
+  // path replaced every occurrence everywhere, which caught the user's own
+  // messages, and the backend only ever edits replies. Both left the screen
+  // saying something the stored chat did not, until it was next reopened.
+  //
+  // Counting from the end is right for one reply and close for a whole chat.
+  // A whole-chat swap changes every reply, so the occurrences to change are not
+  // guaranteed to be the last N on the page: a message of the user's sitting
+  // between two replies can still be caught. Fixing that needs knowing which
+  // element is which message, which is the host dependency this extension is
+  // built to avoid, so this stays a heuristic and stays honest about it.
+  function applySwapsToView(pairs: Array<[string, string]>): number {
     if (typeof document === "undefined" || !pairs || !pairs.length) return 0;
     const SKIP = /^(SCRIPT|STYLE|TEXTAREA|INPUT|SELECT|OPTION)$/;
     let done = 0;
@@ -3299,20 +3618,26 @@ export function setup(ctx: Ctx, opts?: any) {
         }
       }
       if (!re) continue;
-      const hits: any[] = [];
-      for (const n of nodes) {
+      // Walk backwards and stop at the first node that still matches, changing
+      // the last occurrence in it. Re-read each node as we go: an earlier pair
+      // may already have rewritten it, and matching has to see the text as it
+      // stands now rather than as it was when the walk started.
+      for (let i = nodes.length - 1; i >= 0; i--) {
+        const text = String(nodes[i].nodeValue || "");
         re.lastIndex = 0;
-        // Re-read each time: an earlier rule may already have rewritten this
-        // node, and matching has to see the text as it stands now.
-        if (re.test(String(n.nodeValue || ""))) hits.push(n);
-      }
-      const targets = last ? hits.slice(-1) : hits;
-      for (const t of targets) {
+        let at = -1;
+        let len = 0;
+        let m: RegExpExecArray | null;
+        while ((m = re.exec(text)) !== null) {
+          at = m.index;
+          len = m[0].length;
+        }
+        if (at < 0) continue;
         try {
-          re.lastIndex = 0;
-          t.nodeValue = String(t.nodeValue).replace(re, to);
+          nodes[i].nodeValue = text.slice(0, at) + to + text.slice(at + len);
           done++;
         } catch (__) {}
+        break;
       }
     }
     return done;
@@ -3412,19 +3737,60 @@ export function setup(ctx: Ctx, opts?: any) {
     const h = box.height || el.offsetHeight || 0;
     const w = box.width || el.offsetWidth || 0;
     const GAP = 6;
+    const EDGE = 12;
     // Lined up with the row's left edge rather than centred on the "?", which
     // reads as belonging to the row, and nudged back inside a narrow screen.
-    const left = Math.max(12, Math.min(r.left, vw - w - 12));
-    // Below the row it belongs to. If there is no room, above it: either way it
-    // clears the row itself, so the setting being asked about stays readable.
-    let top = r.bottom + GAP;
-    if (top + h > vh - 12) {
-      const above = r.top - h - GAP;
-      // Only flip when flipping actually helps. On a row too tall to clear in
-      // either direction it stays below and is nudged up the screen, which at
-      // worst covers rows further down, never this one.
-      top = above >= 12 ? above : Math.max(12, Math.min(top, vh - h - 12));
+    const left = Math.max(EDGE, Math.min(r.left, vw - w - EDGE));
+    // Below the row it belongs to unless the field asked otherwise, and never
+    // flipped between the two on the fly. It used to flip whenever there was no
+    // room below, which meant a long description opened somewhere none of the
+    // others do. Where it opens is now a property of the setting, so it is the
+    // same place every time for a given row.
+    //
+    // Above is for a row tall enough that below it is a long way from the "?"
+    // that was pressed. Whichever side it is on, a description too tall for the
+    // room there is capped and scrolls rather than moving to the other side.
+    let above = false;
+    try {
+      above = !!(anchor.getAttribute && anchor.getAttribute("data-ar-hint-above"));
+    } catch (_) {}
+    // However little room there is, it is not bought by moving over the row.
+    // Covering the setting is the thing the popover exists to avoid, and a
+    // short popover still scrolls, so nothing in it is out of reach.
+    // Never below zero. A row pushed to the very top of the screen by the host's
+    // own layout leaves negative room above it, and a negative max-height is
+    // invalid CSS, which the browser drops: the popover then rendered at full
+    // height straight over the row it belongs to, which is the one thing it
+    // exists not to do. Measured at a row top of -5, covering it from 12 to 273.
+    const room = Math.max(
+      0,
+      above ? r.top - GAP - EDGE : vh - EDGE - (r.bottom + GAP),
+    );
+    // Above, the bottom edge is pinned a gap over the row and the top follows
+    // from however tall it ends up, capped included. Below, the top is pinned
+    // and the bottom follows.
+    const top = above
+      ? Math.max(EDGE, r.top - GAP - Math.min(h, room))
+      : r.bottom + GAP;
+    if (h > room) {
+      // room is space on the screen; max-height is written in the element's own
+      // units, and under a host that applies its UI Scale as a zoom those are
+      // not the same. At 1.4 a cap of 120 rendered as 168 and the popover ran
+      // off the bottom of the screen. Divide by however much the host is
+      // scaling, measured rather than assumed, the same as the left and top
+      // below. Without a zoom this is a division by 1 and changes nothing.
+      const zoom = el.offsetWidth > 0 ? w / el.offsetWidth : 1;
+      el.style.maxHeight = Math.floor(room / (zoom > 0.01 ? zoom : 1)) + "px";
+      el.style.overflowY = "auto";
+      // Reaching the end of the description must not start scrolling the panel
+      // behind it, because a scroll out there is what closes it.
+      el.style.overscrollBehavior = "contain";
     }
+    // With no room at all, a capped popover is still a box of padding sitting
+    // over the row. Nothing is a better answer than an empty frame, and this
+    // only happens when the host has pushed the row off the top of the screen,
+    // where the anchor is half gone too.
+    if (room <= 0) el.style.display = "none";
 
     // Where it is told to go is not always where it lands. Lumiverse's UI Scale
     // is applied as a zoom, and this is parented to the page so the zoom applies
@@ -3482,7 +3848,15 @@ export function setup(ctx: Ctx, opts?: any) {
     };
     // The float button is fixed, so a scroll does not move it and the menu can
     // stay. A resize can put it somewhere else entirely, so that closes it.
-    const onHintScroll = () => hideHint();
+    // A long description scrolls inside itself. That scroll is someone reading
+    // it, not the anchor moving, so it is the one scroll that leaves it open.
+    const onHintScroll = (e: any) => {
+      try {
+        const t = e && e.target;
+        if (hintPop && t && hintPop.contains && hintPop.contains(t)) return;
+      } catch (_) {}
+      hideHint();
+    };
     const onHintResize = () => {
       hideHint();
       hideFloatMenu();
@@ -3791,6 +4165,12 @@ export function setup(ctx: Ctx, opts?: any) {
   let modalHandle: any = null;
   let modalRoot: any = null;
   let modalSnapshot: any = null;
+  // Every saved value as it stood when the panel opened. Closing with the X or
+  // a tap outside puts these back, so nothing sticks unless Save is pressed.
+  // Held out here rather than inside openSettings because the on/off switch can
+  // also be flipped from the floating button while the panel is open, and that
+  // has to land here too or dismissing the panel would quietly undo it.
+  let modalBaseline: any = null;
   // Close function for the open expand-editor overlay, if any, so it can be shut
   // when the settings modal closes instead of being left floating.
   let closeExpandEditor: (() => void) | null = null;
@@ -3801,6 +4181,9 @@ export function setup(ctx: Ctx, opts?: any) {
     hideHint();
     root.innerHTML = "";
     fieldSetters = {};
+    // The rows the old one closed over have just been thrown away with the
+    // panel, so it is put back to doing nothing until the new one assigns it.
+    applyDeps = () => {};
     presetBarRefreshers = [];
 
     // A preset switcher: pick a saved preset and Load it into the settings, or
@@ -3932,6 +4315,7 @@ export function setup(ctx: Ctx, opts?: any) {
           if (fld && fld.type === "num") cfg[k] = clampField(fld, cfg[k]);
           if (fieldSetters[k]) fieldSetters[k](cfg[k]);
         }
+        applyDeps();
         saveSaved();
         saveToAccount();
         syncLiveLog();
@@ -4176,6 +4560,85 @@ export function setup(ctx: Ctx, opts?: any) {
     // Labelled runs of rows inside a group, hidden by a search once none of
     // their rows match so a heading is never left standing over nothing.
     const subRuns: HTMLElement[] = [];
+    // Rows that only mean something while some switch is on. Kept out of the
+    // panel while it is off, so what is on screen is what is in use.
+    const depRows: Array<{ row: HTMLElement; needs: string[] }> = [];
+    const depSections: Array<{ sec: HTMLElement; needs: string[] }> = [];
+    // A row found by searching while the switch it hangs off is still off. The
+    // row is shown, because refusing to find a setting that exists is the worse
+    // answer, and this line says which switch would make it do something. Its
+    // needs are the row's own plus its section's, since a row inside a section
+    // that is switched off is just as inert as one hidden on its own.
+    // Held as a list of groups rather than one flat list of switches, because
+    // the two kinds of dependency combine differently. Any one switch inside a
+    // group is enough, which is the case for a setting two buttons both read.
+    // Every group has to be satisfied, because a row inside a section that is
+    // switched off is inert whatever its own switch says.
+    const depNotes: Array<{ row: HTMLElement; note: HTMLElement; groups: string[][] }> = [];
+    const nameOf = (k: string) => {
+      const f = fieldByKey[k];
+      return f ? f.label : k;
+    };
+    const paintDepNotes = (searching: boolean) => {
+      for (const d of depNotes) {
+        const unmet = d.groups.filter((g) => !g.some((k) => !!(cfg as any)[k]));
+        const show = searching && unmet.length > 0 && d.row.style.display !== "none";
+        d.note.style.display = show ? "block" : "none";
+        // Rebuilt each time: which switch is the one still missing changes as
+        // the others are turned on.
+        d.note.textContent = show
+          ? "Needs " +
+            unmet
+              .map((g) => g.map((k) => '"' + nameOf(k) + '"').join(" or "))
+              .join(" and ") +
+            " switched on."
+          : "";
+
+      }
+    };
+    // Called whenever one of those switches moves, and after anything that
+    // reloads the whole form, which is a preset, an import or a reset.
+    //
+    // A search is left alone. Searching is someone asking where a setting is,
+    // and answering "nothing matches that" for one that exists, because a
+    // switch it depends on is off, would be a worse answer than showing it.
+    // Held rather than closed over directly, because applyDeps can run before
+    // the search box has been built and a const would still be in its dead zone.
+    let searchBox: any = null;
+    // Same reason as searchBox: applyDeps is defined long before this element
+    // is built, and a const would still be in its dead zone if it ever ran early.
+    let masterNoteEl: any = null;
+    applyDeps = () => {
+      // Ahead of the search guard: whether the master switch is off has nothing
+      // to do with what is being searched for, and this must not go stale.
+      if (masterNoteEl)
+        masterNoteEl.style.display = cfg.enabled === false ? "block" : "none";
+      if (searchBox && String(searchBox.value || "").trim()) {
+        // The rows stay where the search put them, but the line naming the
+        // switch a row is waiting on does not: turning that switch on from the
+        // search results left the row still claiming to be waiting for it.
+        paintDepNotes(true);
+        return;
+      }
+      for (const d of depRows) {
+        const on = d.needs.some((k) => !!(cfg as any)[k]);
+        d.row.style.display = on ? "flex" : "none";
+      }
+      for (const d of depSections) {
+        const on = d.needs.some((k) => !!(cfg as any)[k]);
+        d.sec.style.display = on ? "flex" : "none";
+      }
+      // A run whose rows have all gone takes its heading with it, the same way
+      // it does under a search.
+      for (const w of subRuns) {
+        const rows = w.querySelectorAll("[data-ar-row]");
+        let any = rows.length === 0;
+        for (let i = 0; i < rows.length; i++)
+          if ((rows[i] as HTMLElement).style.display !== "none") any = true;
+        w.style.display = any ? "flex" : "none";
+      }
+      paintDepNotes(false);
+    };
     const searchText = (...parts: any[]) =>
       parts.map((p) => String(p == null ? "" : p)).join(" ").toLowerCase();
 
@@ -4228,12 +4691,25 @@ export function setup(ctx: Ctx, opts?: any) {
         setOpen: null,
       };
       panelSections.push(handle);
+      if (group.needs && group.needs.length)
+        depSections.push({ sec: sec, needs: group.needs });
       const addRow = (row: HTMLElement, f: Field) => {
         searchRows.push({
           row: row,
           text: searchText(f.label, f.hint, f.key, group.title),
           section: handle,
         });
+        if (f.needs && f.needs.length) depRows.push({ row: row, needs: f.needs });
+        const groups: string[][] = [];
+        if (group.needs && group.needs.length) groups.push(group.needs);
+        if (f.needs && f.needs.length) groups.push(f.needs);
+        if (groups.length) {
+          const note = document.createElement("div");
+          note.style.cssText =
+            "display:none;font-size:11px;line-height:1.4;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+          row.appendChild(note);
+          depNotes.push({ row: row, note: note, groups: groups });
+        }
         return row;
       };
 
@@ -4304,7 +4780,7 @@ export function setup(ctx: Ctx, opts?: any) {
         h.style.alignItems = "center";
         h.style.gap = "6px";
         const caret = document.createElement("span");
-        caret.textContent = "\u25B8"; // right triangle when collapsed
+        caret.textContent = CARET_SHUT;
         caret.style.cssText = "font-size:9px";
         const label = document.createElement("span");
         label.textContent = group.title;
@@ -4377,7 +4853,7 @@ export function setup(ctx: Ctx, opts?: any) {
       h.style.cssText =
         "font-size:11px;letter-spacing:.07em;text-transform:uppercase;font-family:var(--lumiverse-font-family,system-ui);color:var(--lumiverse-text-muted,rgba(255,255,255,.65));cursor:pointer;user-select:none;display:flex;align-items:center;gap:6px";
       const caret = document.createElement("span");
-      caret.textContent = "\u25B8";
+      caret.textContent = CARET_SHUT;
       caret.style.cssText = "font-size:9px";
       const label = document.createElement("span");
       label.textContent = "Advanced: debug info";
@@ -4477,7 +4953,7 @@ export function setup(ctx: Ctx, opts?: any) {
       h.style.cssText =
         "font-size:11px;letter-spacing:.07em;text-transform:uppercase;font-family:var(--lumiverse-font-family,system-ui);color:var(--lumiverse-text-muted,rgba(255,255,255,.65));cursor:pointer;user-select:none;display:flex;align-items:center;gap:6px";
       const caret = document.createElement("span");
-      caret.textContent = "\u25B8";
+      caret.textContent = CARET_SHUT;
       caret.style.cssText = "font-size:9px";
       const label = document.createElement("span");
       label.textContent = "Advanced: import / export";
@@ -4587,6 +5063,7 @@ export function setup(ctx: Ctx, opts?: any) {
           // Reflect imported settings in the visible fields without a rebuild,
           // so the panel doesn't jump back to the top.
           for (const k of Object.keys(fieldSetters)) fieldSetters[k](cfg[k]);
+          applyDeps();
           let msg = "";
           if (applied.length)
             msg = "Imported: " + applied.join(", ") + ". Press Save to keep it.";
@@ -4656,6 +5133,10 @@ export function setup(ctx: Ctx, opts?: any) {
           s.sec.style.display = "flex";
           if (s.setOpen) s.setOpen(openGroups.has(s.title));
         }
+        // Everything came back, including rows whose switch is off. They go
+        // again here rather than being left behind by the search. Clearing the
+        // "waiting on" lines is part of that, so it is not repeated here.
+        applyDeps();
         searchNote.textContent = "";
         return;
       }
@@ -4686,13 +5167,33 @@ export function setup(ctx: Ctx, opts?: any) {
           if ((rows[i] as HTMLElement).style.display !== "none") any = true;
         w.style.display = any ? "flex" : "none";
       }
+      // Anything the search turned up that its switch has not enabled says so,
+      // rather than looking like a setting that does nothing when changed.
+      paintDepNotes(true);
       searchNote.textContent = hits
         ? hits + (hits === 1 ? " setting matches" : " settings match")
         : "Nothing matches that. Clear the box to see everything again.";
     };
+    searchBox = search;
     search.addEventListener("input", runSearch);
     searchWrap.appendChild(search);
     searchWrap.appendChild(searchNote);
+    // Auto Retry can be switched off from the floating button or the Extras
+    // menu without opening this panel, so someone can arrive here with it off
+    // and no sign of why nothing is happening. Nothing is hidden or greyed for
+    // it: off means paused, not unconfigured, and setting it up while it is off
+    // is a normal thing to want to do.
+    const masterNote = document.createElement("div");
+    masterNote.style.cssText =
+      "display:none;flex:none;margin:0 0 10px;font-size:12px;line-height:1.45;" +
+      "color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+    masterNote.textContent =
+      "Auto Retry is off. These settings are saved and apply when you turn it back on.";
+    // Above the search box rather than below it. This is the panel's own state
+    // and it stays put, while the line under the box is about the search and
+    // comes and goes, so the lasting one reads first.
+    panel.appendChild(masterNote);
+    masterNoteEl = masterNote;
     panel.appendChild(searchWrap);
 
     panel.appendChild(scroller);
@@ -4761,6 +5262,9 @@ export function setup(ctx: Ctx, opts?: any) {
     actions.appendChild(save);
     panel.appendChild(actions);
     root.appendChild(panel);
+    // The panel opens showing only what is switched on, rather than showing
+    // everything for a frame and then dropping the rows that are not in use.
+    applyDeps();
     // Secondary text (hints, section headers, status lines) is meant to read
     // quieter than the rest, so it is held to a gentler floor than the controls
     // and only repainted on a theme where it has all but vanished.
@@ -4796,6 +5300,7 @@ export function setup(ctx: Ctx, opts?: any) {
         const set = fieldSetters[k];
         if (set) set(cfg[k]);
       }
+      applyDeps();
       note.textContent = changed
         ? "back to defaults, press Save to keep"
         : "already at the defaults";
@@ -4838,6 +5343,7 @@ export function setup(ctx: Ctx, opts?: any) {
       // Marks it for the dismiss handler, which leaves the "?" alone so its own
       // click can close a popover rather than closing and reopening it.
       info.setAttribute("data-ar-hint", "1");
+      if (f.hintAbove) info.setAttribute("data-ar-hint-above", "1");
       info.style.cssText =
         "flex:none;width:18px;height:18px;padding:0;line-height:1;border-radius:50%;border:1px solid var(--lumiverse-border,rgba(255,255,255,.3));background:transparent;color:var(--lumiverse-text-muted,rgba(255,255,255,.65));font-size:11px;cursor:pointer";
       const paint = (on: boolean) => {
@@ -4892,11 +5398,164 @@ export function setup(ctx: Ctx, opts?: any) {
         "flex:none;width:20px;height:20px;accent-color:var(--lumiverse-primary,rgba(147,112,219,.9));cursor:pointer";
       input.addEventListener("change", () => {
         cfg[f.key] = input.checked;
+        // Rows that hang off this switch appear or go with it.
+        applyDeps();
       });
       fieldSetters[f.key] = (v: any) => {
         input.checked = !!v;
       };
       top.appendChild(input);
+      row.appendChild(top);
+    } else if (f.type === "notes") {
+      row.appendChild(top);
+      const list = document.createElement("div");
+      list.style.cssText = "display:flex;flex-direction:column;gap:8px";
+      const foot = document.createElement("div");
+      foot.style.cssText = "display:flex;align-items:center;gap:8px;flex-wrap:wrap";
+      const add = btn("+", false);
+      const count = document.createElement("span");
+      count.style.cssText =
+        "font-size:11px;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+      for (const b2 of [add]) b2.style.cssText += "min-height:0;padding:4px 12px;flex:none";
+
+      // Held here rather than read back off the DOM, so a half-typed row is
+      // still the value the panel is holding.
+      let notes: Array<{ text: string; role: string }> = coerce(
+        "notes", cfg[f.key], (CONFIG as any)[f.key], f,
+      );
+      const push = () => {
+        cfg[f.key] = notes.map((n) => ({ text: n.text, role: n.role }));
+      };
+
+      const draw = () => {
+        list.replaceChildren();
+        notes.forEach((note, i) => {
+          const wrap = document.createElement("div");
+          wrap.style.cssText = "display:flex;flex-direction:column;gap:5px";
+          const bar = document.createElement("div");
+          bar.style.cssText = "display:flex;align-items:center;gap:8px;flex-wrap:wrap";
+          const num = document.createElement("span");
+          num.textContent = notes.length > 1 ? "Note " + (i + 1) : "Note";
+          num.style.cssText =
+            "font-size:11px;color:var(--lumiverse-text-muted,rgba(255,255,255,.65));flex:1";
+          const who = document.createElement("select");
+          for (const o of NOTE_ROLE_OPTIONS) {
+            const opt = document.createElement("option");
+            opt.value = o.value;
+            opt.textContent = o.label;
+            who.appendChild(opt);
+          }
+          who.value = note.role;
+          styleField(who);
+          who.style.cssText += "flex:none;padding:5px 8px;font-size:12px";
+          who.setAttribute("aria-label", "Who note " + (i + 1) + " comes from");
+          who.addEventListener("change", () => {
+            note.role = coerce("pick", who.value, "system", {
+              options: NOTE_ROLE_OPTIONS,
+            } as any);
+            push();
+          });
+          const drop = btn("\u2212", false);
+          drop.style.cssText += "min-height:0;padding:4px 12px;flex:none";
+          drop.setAttribute("aria-label", "Remove note " + (i + 1));
+          // One note is the floor. Removing the last one would leave nothing to
+          // type into and no way back except the plus button.
+          const canDrop = notes.length > 1;
+          drop.disabled = !canDrop;
+          drop.style.opacity = canDrop ? "1" : "0.45";
+          drop.style.cursor = canDrop ? "pointer" : "not-allowed";
+          drop.addEventListener("click", () => {
+            if (notes.length <= 1) return;
+            notes.splice(i, 1);
+            push();
+            draw();
+          });
+          bar.appendChild(num);
+          bar.appendChild(who);
+          bar.appendChild(drop);
+
+          const ta = document.createElement("textarea");
+          ta.rows = 3;
+          ta.value = note.text;
+          ta.setAttribute("aria-label", "Note " + (i + 1));
+          styleField(ta);
+          ta.style.cssText += "width:100%;box-sizing:border-box;resize:vertical";
+          ta.addEventListener("input", () => {
+            note.text = ta.value;
+            push();
+          });
+          wrap.appendChild(bar);
+          wrap.appendChild(ta);
+          list.appendChild(wrap);
+        });
+        const room = notes.length < MAX_NOTES;
+        add.disabled = !room;
+        add.style.opacity = room ? "1" : "0.45";
+        add.style.cursor = room ? "pointer" : "not-allowed";
+        count.textContent = room
+          ? notes.length + " of " + MAX_NOTES
+          : MAX_NOTES + " is the most one retry can carry";
+        ensureReadableTree(list, 2.6);
+      };
+
+      add.setAttribute("aria-label", "Add another note");
+      // Which kind of pointer opened the last press, so the new note can be
+      // focused for the people who want that and not for the people it gets in
+      // the way of. Focusing a textarea raises the on-screen keyboard, which on
+      // a phone covers the panel and the note that was just added. A keyboard
+      // press fires no pointerdown at all and leaves this empty, so tabbing to
+      // the button and pressing it still lands in the new note.
+      let addedWith = "";
+      add.addEventListener("pointerdown", (e: any) => {
+        addedWith = (e && e.pointerType) || "";
+      });
+      add.addEventListener("click", () => {
+        const finger = addedWith === "touch" || addedWith === "pen";
+        addedWith = "";
+        if (notes.length >= MAX_NOTES) return;
+        notes.push({ text: "", role: notes.length ? notes[notes.length - 1].role : "system" });
+        push();
+        draw();
+        const boxes = list.querySelectorAll("textarea");
+        const last: any = boxes[boxes.length - 1];
+        if (!last) return;
+        // Either way the new note is brought into view. Without focus to do it,
+        // a note added at the bottom of a long list would be off screen.
+        if (finger) {
+          if (last.scrollIntoView) try { last.scrollIntoView({ block: "nearest" }); } catch (_) {}
+          return;
+        }
+        if (last.focus) try { last.focus({ preventScroll: true }); } catch (_) {}
+      });
+
+      fieldSetters[f.key] = (v: any) => {
+        notes = coerce("notes", v, (CONFIG as any)[f.key], f);
+        draw();
+      };
+      draw();
+      foot.appendChild(add);
+      foot.appendChild(count);
+      row.appendChild(list);
+      row.appendChild(foot);
+    } else if (f.type === "pick") {
+      const sel = document.createElement("select");
+      for (const o of f.options || []) {
+        const opt = document.createElement("option");
+        opt.value = o.value;
+        opt.textContent = o.label;
+        sel.appendChild(opt);
+      }
+      sel.value = String(cfg[f.key]);
+      styleField(sel);
+      sel.style.flex = "none";
+      sel.style.maxWidth = "60%";
+      sel.addEventListener("change", () => {
+        cfg[f.key] = coerce("pick", sel.value, (CONFIG as any)[f.key], f);
+      });
+      fieldSetters[f.key] = (v: any) => {
+        sel.value = coerce("pick", v, (CONFIG as any)[f.key], f);
+      };
+      top.appendChild(sel);
       row.appendChild(top);
     } else if (f.type === "num") {
       const input = document.createElement("input");
@@ -5003,7 +5662,7 @@ export function setup(ctx: Ctx, opts?: any) {
     return row;
   }
 
-  function styleField(input: HTMLInputElement) {
+  function styleField(input: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement) {
     input.style.cssText +=
       "padding:9px 10px;border-radius:var(--lumiverse-radius,8px);" +
       "border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));" +
@@ -5044,6 +5703,7 @@ export function setup(ctx: Ctx, opts?: any) {
           "border:1px solid var(--lumiverse-secondary-border,rgba(128,128,128,.25));" +
           "background:var(--lumiverse-secondary,rgba(128,128,128,.15));color:var(--lumiverse-text,#eee)");
     ensureReadable(b);
+    if (primary) ensureEdge(b);
     // Hovering swaps to the theme's own hover colour rather than brightening the
     // resting one, so a button lights up the same way the rest of Lumiverse does.
     const restBg = primary
@@ -5267,11 +5927,10 @@ export function setup(ctx: Ctx, opts?: any) {
       // Baseline of every saved setting at open. Edits below change cfg live, but
       // closing the modal with X or tapping outside restores this baseline, so
       // nothing sticks unless Save is pressed. Save and Reset refresh the baseline.
-      let baseline: any = {};
       const snapshot = () => {
-        baseline = {};
+        modalBaseline = {};
         for (const g of SCHEMA)
-          for (const fl of g.fields) baseline[fl.key] = cfg[fl.key];
+          for (const fl of g.fields) modalBaseline[fl.key] = cfg[fl.key];
       };
       snapshot();
       modalSnapshot = snapshot;
@@ -5284,11 +5943,13 @@ export function setup(ctx: Ctx, opts?: any) {
             closeExpandEditor();
           } catch (_) {}
         }
-        for (const g of SCHEMA)
-          for (const fl of g.fields) cfg[fl.key] = baseline[fl.key];
+        if (modalBaseline)
+          for (const g of SCHEMA)
+            for (const fl of g.fields) cfg[fl.key] = modalBaseline[fl.key];
         modalHandle = null;
         modalRoot = null;
         modalSnapshot = null;
+        modalBaseline = null;
       });
     } catch (e) {
       log("failed to open settings", e);
@@ -5363,18 +6024,18 @@ export function setup(ctx: Ctx, opts?: any) {
         if (msg.type === "confirm_edit") {
           const yes = await confirmEdit("Apply your word swaps to this reply?");
           if (yes && ctx && typeof (ctx as any).sendToBackend === "function") {
-            (ctx as any).sendToBackend({ type: "apply_replace_now", chatId: msg.chatId, messageId: msg.messageId, onlyMessage: true, requestId: "ar-rep-" + Date.now() });
+            (ctx as any).sendToBackend({ type: "apply_replace_now", chatId: msg.chatId, messageId: msg.messageId, requestId: "ar-rep-" + Date.now() });
           }
           return;
         }
         // Sent after an automatic swap. The message is already saved; this only
         // brings what is on screen into line with it.
         if (msg.type === "swapped") {
-          applySwapsToView(msg.pairs || [], !msg.wholeChat);
+          applySwapsToView(msg.pairs || []);
           return;
         }
         if (msg.type !== "replace_now_result") return;
-        if (msg.ok) applySwapsToView(msg.pairs || [], !msg.wholeChat);
+        if (msg.ok) applySwapsToView(msg.pairs || []);
         if (!msg.ok) showToast("Could not swap words.");
         else if (!msg.hasRules) showToast("No word swaps are set up yet.");
         else if (!msg.found) showToast("No reply found to swap in this chat.");
@@ -5396,6 +6057,15 @@ export function setup(ctx: Ctx, opts?: any) {
 
   return () => {
     clearConfirmWatch();
+    // The full-size editor is parented to the page, not to the modal, so
+    // dismissing the modal below does not take it with it. Left open it would
+    // sit over the chat with nothing behind it.
+    if (closeExpandEditor) {
+      try {
+        closeExpandEditor();
+      } catch (_) {}
+      closeExpandEditor = null;
+    }
     if (hideStyleEl) {
       try {
         hideStyleEl.remove();
