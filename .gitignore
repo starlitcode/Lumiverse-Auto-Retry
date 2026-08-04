@@ -13,6 +13,11 @@ node_modules/
 # build info from incremental typechecks
 *.tsbuildinfo
 
+# written by `bun install`. typescript is the only dependency and the install
+# path is a clone, so nobody needs a pinned copy of it.
+bun.lock
+bun.lockb
+
 # editor and OS junk
 .DS_Store
 Thumbs.db
