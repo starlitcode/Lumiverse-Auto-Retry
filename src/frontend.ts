@@ -3194,11 +3194,12 @@ export function setup(ctx: Ctx, opts?: any) {
     }, START_GRACE_MS);
   }
 
-  // True from arming a note until something settles it: the generation it was
-  // meant for starting, or the click that was meant to start one failing. The
-  // backend drops a note after one generation, so the only gap this has to
-  // cover is the one where no generation happened at all.
-  let armedNote = false;
+  // The chat a note is currently armed for, or null when none is. A chat id
+  // rather than a flag, because a retry called off in one chat says nothing
+  // about a note waiting on a click in another, and taking that one back would
+  // quietly drop a note the user is still owed. The backend holds one at a
+  // time, so one id is enough to describe the whole state.
+  let armedNoteChat: string | null = null;
 
   // Take a note back when the click it was armed for never happened. The
   // backend reads an empty list as "nothing armed", so a disarm is the same
@@ -3207,8 +3208,8 @@ export function setup(ctx: Ctx, opts?: any) {
   // themselves, which is the one thing this feature promises never to do.
   function disarmRefusalNote(chatId: string) {
     try {
-      if (!armedNote) return;
-      armedNote = false;
+      if (armedNoteChat == null || String(chatId) !== armedNoteChat) return;
+      armedNoteChat = null;
       if (!ctx || typeof (ctx as any).sendToBackend !== "function") return;
       (ctx as any).sendToBackend({ type: "arm_refusal_note", chatId: chatId, notes: [] });
       log("retry never started; note taken back", chatId);
@@ -3248,7 +3249,7 @@ export function setup(ctx: Ctx, opts?: any) {
         placement: String(cfg.refusalNotePlacement || "after"),
       });
       log("note armed for the next retry in this chat", chatId);
-      armedNote = true;
+      armedNoteChat = String(chatId);
     } catch (_) {}
   }
 
@@ -5114,9 +5115,9 @@ export function setup(ctx: Ctx, opts?: any) {
           if (s.setOpen) s.setOpen(openGroups.has(s.title));
         }
         // Everything came back, including rows whose switch is off. They go
-        // again here rather than being left behind by the search.
+        // again here rather than being left behind by the search. Clearing the
+        // "waiting on" lines is part of that, so it is not repeated here.
         applyDeps();
-        paintDepNotes(false);
         searchNote.textContent = "";
         return;
       }

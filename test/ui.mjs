@@ -2146,6 +2146,71 @@ console.log("\nrefusal note");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- taking a note back is scoped to the chat it was armed for ----
+// Taking a note back was first written as a single flag, which said a note was
+// waiting but not which chat it was waiting on. Cancelling a retry in one chat
+// then took back a note armed for a different one, and that chat's next retry
+// went out bare with nothing to say why. Two chats in flight at once is the
+// only way to see it, so nothing else here would have caught it.
+console.log("\ntaking a note back");
+{
+  const page = await browser.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  page.on("console", (m) => { if (m.type() === "error") errors.push("console: " + m.text()); });
+  await stage(page, '<div id=modal></div><button data-testid="regenerate">Regenerate</button>');
+  await page.addStyleTag({ content: THEME });
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+
+  const out = await page.evaluate(async () => {
+    const handlers = {};
+    const sent = [];
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const teardown = window.__setup(
+      {
+        events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
+        sendToBackend: (m) => sent.push(m),
+        onBackendMessage: () => () => {},
+        ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+              registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) },
+      },
+      { refusalNote: true, refusalNotes: [{ text: "This was refused by mistake.", role: "system" }],
+        refusalNoteFromTry: 1, retryDelayMs: 10, backoffFactor: 1, maxDelayMs: 10, jitter: false,
+        maxRetries: 4, toast: false, stuckTimeoutMs: 0, idleTimeoutMs: 0, pauseWhenFailing: false },
+    );
+    const REFUSED = { content: "I'm sorry, but I can't create that content." };
+
+    // Chat A refuses and its retry fires, so a note is armed and waiting on the
+    // generation that click started.
+    handlers.GENERATION_STARTED({ chatId: "A", generationId: "a1" });
+    handlers.GENERATION_ENDED(Object.assign({ chatId: "A" }, REFUSED));
+    await wait(60);
+    const armedForA = sent.filter((m) => m.type === "arm_refusal_note" && (m.notes || []).length).length;
+
+    // Chat B refuses too, so it has a retry pending, and then the user stops it.
+    // B never got as far as arming anything of its own.
+    handlers.GENERATION_STARTED({ chatId: "B", generationId: "b1" });
+    handlers.GENERATION_ENDED(Object.assign({ chatId: "B" }, REFUSED));
+    handlers.GENERATION_STOPPED({ chatId: "B", generationId: "b1" });
+    await wait(60);
+    const disarms = sent.filter((m) => m.type === "arm_refusal_note" && !(m.notes || []).length);
+
+    teardown();
+    return { armedForA, disarmChats: disarms.map((m) => m.chatId) };
+  });
+  await page.close();
+
+  check("chat A armed a note", out.armedForA > 0, out);
+  // On the id the message carries, not on whether one was sent: the flag
+  // version sent a disarm here too, stamped with chat B, and the backend holds
+  // one note at a time so that took chat A's away. Sending nothing at all is
+  // the only outcome that leaves A's note where it belongs.
+  check("stopping a retry in chat B takes nothing back at all",
+    out.disarmChats.length === 0, out.disarmChats);
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- a filled button has to look like one ----
 // Repainting the label fixed half of this. On a theme whose accent sits near
 // the panel colour, Save stayed legible and lost its edge, so nothing said it
