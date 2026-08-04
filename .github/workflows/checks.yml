@@ -3,12 +3,15 @@
 #
 # dist/ is committed and is the file Lumiverse loads, so a change that lands in
 # src/ and not in dist/ passes review looking correct and ships doing nothing.
-# The parity job rebuilds and fails if anything moved, which is the check a
-# person cannot reliably do by eye.
+# The last step of the first job rebuilds and fails if anything moved, which is
+# the check a person cannot reliably do by eye.
 
 name: Checks
 
 on:
+  # Pull requests are where this earns its keep. The two branch names are here
+  # for anything pushed to them directly, and testing is listed whether or not
+  # it currently exists, so the branch is covered the moment it comes back.
   push:
     branches: [stable, testing]
   pull_request:
