@@ -1899,6 +1899,146 @@ console.log("\nbackup restore");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- a saved setting has to come back ----
+// The backup checks above cover the file. Nothing covered the ordinary path:
+// press Save, come back later, and find the panel showing what you set. It did
+// not for every kind of setting. "Where the note goes" was read back through a
+// check against the values it is allowed to hold, that check was handed the
+// value without the field it belongs to, so the list of allowed values was
+// empty, nothing matched, and it fell back to the first option. Whatever you
+// picked, every reload put it back to "After the last message", silently.
+//
+// Written against every row rather than that one setting, because the fault was
+// in the shared coercion rather than in the setting, and any field type added
+// later goes through the same door.
+console.log("\nsaved settings come back");
+{
+  const page = await browser.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
+  page.on("console", (m) => { if (m.type() === "error") errors.push("console: " + m.text()); });
+  await stage(page, "<div id=modal></div>");
+  await page.addStyleTag({ content: THEME });
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+
+  const out = await page.evaluate(async () => {
+    const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const boot = () => {
+      const acts = {};
+      const teardown = window.__setup({
+        events: { on: () => () => {} },
+        ui: {
+          showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+          registerInputBarAction: (o) => {
+            const a = { onClick: (cb) => { a.cb = cb; return () => {}; }, destroy: () => {} };
+            acts[o.id] = a;
+            return a;
+          },
+        },
+      });
+      return { acts, teardown };
+    };
+    const openAll = async (acts) => {
+      acts["auto-retry-settings"].cb();
+      await frame();
+      for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      await frame();
+    };
+    const rows = () => [...document.querySelectorAll("[data-ar-row]")]
+      .filter((r) => { const k = r.getAttribute("data-ar-row"); return k && k !== "1"; });
+    // A note list holds several controls and is compared on its own terms.
+    const isNoteList = (r) =>
+      r.querySelectorAll("textarea").length > 0 && r.querySelectorAll("select").length > 0;
+    const read = (r) => {
+      if (isNoteList(r))
+        return { text: r.querySelector("textarea").value, role: r.querySelector("select").value };
+      const el = r.querySelector("textarea") || r.querySelector("input") || r.querySelector("select");
+      if (!el) return null;
+      if (el.type === "checkbox") return el.checked;
+      return el.value;
+    };
+
+    const first = boot();
+    await openAll(first.acts);
+    // Move every setting off its default, staying inside each field's own
+    // limits so nothing is clamped on the way through.
+    const wanted = {};
+    const unreachable = [];
+    for (const r of rows()) {
+      const key = r.getAttribute("data-ar-row");
+      if (isNoteList(r)) {
+        const box = r.querySelector("textarea");
+        const who = r.querySelector("select");
+        box.value = "probe-" + key;
+        box.dispatchEvent(new Event("input", { bubbles: true }));
+        const other = [...who.options].map((o) => o.value).find((v) => v !== who.value);
+        if (other != null) { who.value = other; who.dispatchEvent(new Event("change", { bubbles: true })); }
+        wanted[key] = { text: box.value, role: who.value };
+        continue;
+      }
+      const el = r.querySelector("textarea") || r.querySelector("input") || r.querySelector("select");
+      if (!el) { unreachable.push(key); continue; }
+      if (el.tagName === "SELECT") {
+        const other = [...el.options].map((o) => o.value).find((v) => v !== el.value);
+        if (other != null) { el.value = other; el.dispatchEvent(new Event("change", { bubbles: true })); }
+        wanted[key] = el.value;
+      } else if (el.type === "checkbox") {
+        el.click();
+        wanted[key] = el.checked;
+      } else if (el.type === "number" || el.inputMode === "numeric") {
+        const lo = Number(el.min) || 0;
+        const hi = el.max === "" || el.max == null ? Number.MAX_SAFE_INTEGER : Number(el.max);
+        const cur = Number(el.value) || lo;
+        const next = cur + 1 <= hi ? cur + 1 : Math.max(lo, cur - 1);
+        el.value = String(next);
+        el.dispatchEvent(new Event("change", { bubbles: true }));
+        wanted[key] = String(next);
+      } else {
+        el.value = "probe-" + key;
+        el.dispatchEvent(new Event("change", { bubbles: true }));
+        wanted[key] = el.value;
+      }
+    }
+    [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === "Save").click();
+    await frame();
+    const stored = JSON.parse(localStorage.getItem("lv-auto-retry:settings:v1") || "null");
+
+    // A fresh instance against the same storage, which is what a reload is.
+    first.teardown();
+    const second = boot();
+    await openAll(second.acts);
+    const got = {};
+    for (const r of rows()) got[r.getAttribute("data-ar-row")] = read(r);
+    second.teardown();
+    return { wanted, got, stored, unreachable, count: Object.keys(wanted).length };
+  });
+  await page.close();
+
+  const same = (a, b) => {
+    if (a && typeof a === "object") return !!b && a.text === b.text && a.role === b.role;
+    return String(a) === String(b);
+  };
+  const wrong = Object.keys(out.wanted).filter((k) => !same(out.wanted[k], out.got[k]));
+  const storedWrong = Object.keys(out.wanted).filter((k) => {
+    const v = out.stored && out.stored[k];
+    if (out.wanted[k] && typeof out.wanted[k] === "object")
+      return !Array.isArray(v) || !v.length || v[0].text !== out.wanted[k].text || v[0].role !== out.wanted[k].role;
+    return String(v) !== String(out.wanted[k]);
+  });
+
+  check("every settings row could be driven", out.unreachable.length === 0, out.unreachable);
+  check("it covered the whole panel, not a handful of rows", out.count > 40, out.count);
+  check("Save writes every setting to storage", storedWrong.length === 0, storedWrong);
+  check("and a fresh start shows every one of them back",
+    wrong.length === 0,
+    wrong.map((k) => ({ key: k, saved: out.wanted[k], got: out.got[k] })).slice(0, 6));
+  check("including the one that is picked from a list",
+    same(out.wanted.refusalNotePlacement, out.got.refusalNotePlacement),
+    { saved: out.wanted.refusalNotePlacement, got: out.got.refusalNotePlacement });
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- the note only gets armed for the right retry ----
 // This is the only thing in the extension that changes what the model is asked,
 // so when it arms matters as much as what it sends. It must go out for a
@@ -1969,6 +2109,21 @@ console.log("\nrefusal note");
       // Trimming is only how an empty note is told from a filled one.
       padded: (await drive({ refusalNoteFromTry: 1,
         refusalNotes: [{ text: "  keep\n  my spacing\n", role: "system" }] }, REFUSED))[0],
+      // A note is armed just before the click, because some builds start the
+      // generation off the click itself. When there is no control to click, the
+      // note has to be taken back: left armed it waits out its full minute and
+      // can then attach itself to a regenerate the user pressed themselves.
+      // The backend reads an empty list as nothing armed, so a disarm is the
+      // same message carrying no notes. Runs last, since it takes the button
+      // off the page.
+      noControl: await (async () => {
+        const btn = document.querySelector('[data-testid="regenerate"]');
+        const parent = btn.parentNode;
+        btn.remove();
+        const msgs = await drive({ refusalNoteFromTry: 1 }, REFUSED);
+        parent.appendChild(btn);
+        return msgs.map((m) => (m.notes || []).length);
+      })(),
     };
   });
   await page.close();
@@ -1985,6 +2140,9 @@ console.log("\nrefusal note");
     out.payload);
   check("the spacing someone typed is sent as they typed it",
     !!out.padded && out.padded.notes[0].text === "  keep\n  my spacing\n", out.padded);
+  check("with nothing to click, the note is armed and then taken back",
+    Array.isArray(out.noControl) && out.noControl.length >= 2 &&
+    out.noControl.every((n, i) => (i % 2 === 0 ? n > 0 : n === 0)), out.noControl);
   check("no console errors", errors.length === 0, errors);
 }
 
@@ -2548,7 +2706,23 @@ console.log("\nwhat a hidden row is waiting on");
       find("");
       await frame();
       const afterClearing = waitingOn("refusalNotePlacement");
-      return { noteRow, inSection, onceOn, afterClearing };
+
+      // The switch flipped from inside the results, without clearing the box.
+      // This is the way someone actually acts on the line: they search, read
+      // what it is waiting on, and turn that on there and then. The line was
+      // only ever rebuilt when the search text changed, so it stayed up saying
+      // the row was waiting for a switch that was now on.
+      document.querySelector('[data-ar-row="refusalNote"]').querySelector("input[type=checkbox]").click();
+      await frame();
+      find("note");
+      await frame();
+      const beforeFlip = waitingOn("refusalNotePlacement");
+      const sw = document.querySelector('[data-ar-row="refusalNote"]');
+      const reachable = !!sw && sw.style.display !== "none";
+      sw.querySelector("input[type=checkbox]").click();
+      await frame();
+      const afterFlip = waitingOn("refusalNotePlacement");
+      return { noteRow, inSection, onceOn, afterClearing, beforeFlip, afterFlip, reachable };
     }),
   );
   check("a row found while its own switch is off names that switch",
@@ -2557,6 +2731,11 @@ console.log("\nwhat a hidden row is waiting on");
     /^Needs "/.test(out.inSection || "") && /accidental refusal/i.test(out.inSection || ""), out);
   check("and it says nothing once the switch is on", out.onceOn === "", out);
   check("nor is it left behind after the search is cleared", out.afterClearing === "", out);
+  check("the switch a row names is reachable from the same search", out.reachable === true, out);
+  check("the row is waiting on it before it is turned on",
+    /^Needs "/.test(out.beforeFlip || ""), out);
+  check("and stops saying so the moment it is, without clearing the search",
+    out.afterFlip === "", out);
   check("no console errors", errors.length === 0, errors);
 
   // The panel-wide contrast sweep runs once, while this line is still empty,
@@ -2950,6 +3129,15 @@ console.log("\nteardown");
     await new Promise((r) => setTimeout(r, 30));
     const hintWasOpen = !!document.querySelector('[role="tooltip"]');
     const toastWasUp = !!document.getElementById("__lvRetryToast");
+    // The full-size editor hangs off the page rather than off the modal, so
+    // dismissing the modal never took it with it. It is the one thing here that
+    // covers the whole screen, which makes it the worst thing to leave behind.
+    const doneButton = () =>
+      [...document.querySelectorAll("button")].some((b) => b.textContent.trim() === "Done");
+    const expand = [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === "Expand");
+    if (expand) expand.click();
+    await new Promise((r) => setTimeout(r, 30));
+    const editorWasOpen = doneButton();
     teardown();
     return {
       registered,
@@ -2957,16 +3145,20 @@ console.log("\nteardown");
       left: [...live.keys()],
       hintWasOpen,
       toastWasUp,
+      editorWasOpen,
       toastGone: !document.getElementById("__lvRetryToast"),
       hintGone: !document.querySelector('[role="tooltip"]'),
+      editorGone: !doneButton(),
     };
   });
   await page.close();
   check("all four Extras entries register", out.registered.length === 4, out.registered);
   check("none register twice", !out.duplicate);
   check("teardown removes every one", out.left.length === 0, out.left);
-  check("a hint and a toast were actually up first", out.hintWasOpen && out.toastWasUp, out);
+  check("a hint, a toast and the full-size editor were actually up first",
+    out.hintWasOpen && out.toastWasUp && out.editorWasOpen, out);
   check("teardown removes the toast and any hint", out.toastGone && out.hintGone);
+  check("and the full-size editor with them", out.editorGone, out);
   check("no console errors", errors.length === 0, errors);
 }
 

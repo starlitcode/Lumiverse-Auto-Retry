@@ -41,7 +41,16 @@ const REFUSAL_REASON = "looks like an accidental refusal";
 // above it the notes start costing more than they buy on every single retry.
 // Use fewer by adding fewer: one is the floor and it is the default.
 const MAX_NOTES = 10;
-const NOTE_ROLES = ["system", "user", "assistant"];
+// The roles a note may carry, and how each is offered in the panel. One list,
+// because the picker was written out twice: once to build the dropdown and
+// again to check what came back out of it, so adding a role in one place would
+// have made the other silently reject it.
+const NOTE_ROLE_OPTIONS = [
+    { value: "system", label: "System" },
+    { value: "user", label: "You" },
+    { value: "assistant", label: "The character" },
+];
+const NOTE_ROLES = NOTE_ROLE_OPTIONS.map((o) => o.value);
 // Largest amount of streamed text kept per chat as a fallback when the end
 // event arrives without a content field. Trimmed from the front past this.
 const STREAM_BUF_MAX = 200000;
@@ -1227,12 +1236,12 @@ function ensureReadableTree(root, min) {
         catch (_) { }
     });
 }
-// True when the device has been asked to keep movement down. Read at the point
-// of use rather than once at load, so turning the setting on takes effect
-// without reloading the page.
 // Long enough that a normal tap never reaches it, short enough that holding
 // the button does not feel broken.
 const HOLD_MS = 500;
+// True when the device has been asked to keep movement down. Read at the point
+// of use rather than once at load, so turning the setting on takes effect
+// without reloading the page.
 function stillness() {
     try {
         return (typeof matchMedia === "function" &&
@@ -2046,6 +2055,10 @@ export function setup(ctx, opts) {
         floatWidget = null;
         floatEl = null;
         floatWidgetSize = 0;
+        // The document-level pointermove listener calls through this. Left set, it
+        // kept a whole button's worth of handlers alive after the button was gone,
+        // and every pointer move on the page went on running its hold check.
+        holdMoveWatch = null;
     }
     function syncFloat() {
         if (!cfg.showFloatingToggle) {
@@ -2064,6 +2077,18 @@ export function setup(ctx, opts) {
     function toggleEnabled() {
         cfg.enabled = cfg.enabled === false;
         saveSaved();
+        // The settings panel can be open while this is flipped from somewhere else.
+        // Its own checkbox and the "Auto Retry is off" line are brought into line,
+        // and so is the baseline the panel restores on dismiss, or closing the panel
+        // would put the switch straight back where it was.
+        if (modalBaseline)
+            modalBaseline.enabled = cfg.enabled;
+        try {
+            if (fieldSetters.enabled)
+                fieldSetters.enabled(cfg.enabled);
+            applyDeps();
+        }
+        catch (_) { }
         if (cfg.enabled === false) {
             chats.forEach((_s, id) => standDown(id, false));
         }
@@ -2099,10 +2124,15 @@ export function setup(ctx, opts) {
             for (const f of g.fields) {
                 if (!(f.key in parsed))
                     continue;
+                // The field itself goes through, not just its type. A "pick" is checked
+                // against the values it is allowed to hold, and those live on the field,
+                // so without it every saved choice failed that check and fell back to
+                // the first option: "Where the note goes" read back as "after" however
+                // it had been set, on every load, in every browser.
                 out[f.key] =
                     f.type === "num"
                         ? clampField(f, parsed[f.key])
-                        : coerce(f.type, parsed[f.key], CONFIG[f.key]);
+                        : coerce(f.type, parsed[f.key], CONFIG[f.key], f);
             }
         return out;
     }
@@ -2775,6 +2805,8 @@ export function setup(ctx, opts) {
         s.suppressUntil = Date.now() + STAND_DOWN_MS;
         if (hadPending) {
             hideToast();
+            // The retry this note was armed for is off, so the note goes with it.
+            disarmRefusalNote(chatId);
             if (announce)
                 showToast("Auto-retry stopped.");
             log("stood down", chatId);
@@ -3199,9 +3231,32 @@ export function setup(ctx, opts) {
                 }
             }
             log("retry click produced no generation; resetting stale state", chatId);
+            disarmRefusalNote(chatId);
             s.selfTriggered = false;
             s.attempts = 0;
         }, START_GRACE_MS);
+    }
+    // True from arming a note until something settles it: the generation it was
+    // meant for starting, or the click that was meant to start one failing. The
+    // backend drops a note after one generation, so the only gap this has to
+    // cover is the one where no generation happened at all.
+    let armedNote = false;
+    // Take a note back when the click it was armed for never happened. The
+    // backend reads an empty list as "nothing armed", so a disarm is the same
+    // message carrying nothing. Without it the note sat waiting out its full
+    // minute and could then attach itself to a regenerate the user pressed
+    // themselves, which is the one thing this feature promises never to do.
+    function disarmRefusalNote(chatId) {
+        try {
+            if (!armedNote)
+                return;
+            armedNote = false;
+            if (!ctx || typeof ctx.sendToBackend !== "function")
+                return;
+            ctx.sendToBackend({ type: "arm_refusal_note", chatId: chatId, notes: [] });
+            log("retry never started; note taken back", chatId);
+        }
+        catch (_) { }
     }
     // Tell the backend to attach the note to the next generation in this chat.
     // Sent immediately before the click, so it is in place before the generation
@@ -3241,6 +3296,7 @@ export function setup(ctx, opts) {
                 placement: String(cfg.refusalNotePlacement || "after"),
             });
             log("note armed for the next retry in this chat", chatId);
+            armedNote = true;
         }
         catch (_) { }
     }
@@ -3325,6 +3381,7 @@ export function setup(ctx, opts) {
             watchForConfirm(before);
             const via = fireRetry();
             if (!via) {
+                disarmRefusalNote(chatId);
                 clearConfirmWatch();
                 s.expectingStart = 0;
                 s.selfTriggered = false;
@@ -4136,6 +4193,12 @@ export function setup(ctx, opts) {
     let modalHandle = null;
     let modalRoot = null;
     let modalSnapshot = null;
+    // Every saved value as it stood when the panel opened. Closing with the X or
+    // a tap outside puts these back, so nothing sticks unless Save is pressed.
+    // Held out here rather than inside openSettings because the on/off switch can
+    // also be flipped from the floating button while the panel is open, and that
+    // has to land here too or dismissing the panel would quietly undo it.
+    let modalBaseline = null;
     // Close function for the open expand-editor overlay, if any, so it can be shut
     // when the settings modal closes instead of being left floating.
     let closeExpandEditor = null;
@@ -4548,8 +4611,13 @@ export function setup(ctx, opts) {
             // to do with what is being searched for, and this must not go stale.
             if (masterNoteEl)
                 masterNoteEl.style.display = cfg.enabled === false ? "block" : "none";
-            if (searchBox && String(searchBox.value || "").trim())
+            if (searchBox && String(searchBox.value || "").trim()) {
+                // The rows stay where the search put them, but the line naming the
+                // switch a row is waiting on does not: turning that switch on from the
+                // search results left the row still claiming to be waiting for it.
+                paintDepNotes(true);
                 return;
+            }
             for (const d of depRows) {
                 const on = d.needs.some((k) => !!cfg[k]);
                 d.row.style.display = on ? "flex" : "none";
@@ -4568,6 +4636,7 @@ export function setup(ctx, opts) {
                         any = true;
                 w.style.display = any ? "flex" : "none";
             }
+            paintDepNotes(false);
         };
         const searchText = (...parts) => parts.map((p) => String(p == null ? "" : p)).join(" ").toLowerCase();
         // Every collapsible header goes through here. They were plain elements with
@@ -4701,7 +4770,7 @@ export function setup(ctx, opts) {
                 h.style.alignItems = "center";
                 h.style.gap = "6px";
                 const caret = document.createElement("span");
-                caret.textContent = "\u25B8"; // right triangle when collapsed
+                caret.textContent = CARET_SHUT;
                 caret.style.cssText = "font-size:9px";
                 const label = document.createElement("span");
                 label.textContent = group.title;
@@ -4774,7 +4843,7 @@ export function setup(ctx, opts) {
             h.style.cssText =
                 "font-size:11px;letter-spacing:.07em;text-transform:uppercase;font-family:var(--lumiverse-font-family,system-ui);color:var(--lumiverse-text-muted,rgba(255,255,255,.65));cursor:pointer;user-select:none;display:flex;align-items:center;gap:6px";
             const caret = document.createElement("span");
-            caret.textContent = "\u25B8";
+            caret.textContent = CARET_SHUT;
             caret.style.cssText = "font-size:9px";
             const label = document.createElement("span");
             label.textContent = "Advanced: debug info";
@@ -4867,7 +4936,7 @@ export function setup(ctx, opts) {
             h.style.cssText =
                 "font-size:11px;letter-spacing:.07em;text-transform:uppercase;font-family:var(--lumiverse-font-family,system-ui);color:var(--lumiverse-text-muted,rgba(255,255,255,.65));cursor:pointer;user-select:none;display:flex;align-items:center;gap:6px";
             const caret = document.createElement("span");
-            caret.textContent = "\u25B8";
+            caret.textContent = CARET_SHUT;
             caret.style.cssText = "font-size:9px";
             const label = document.createElement("span");
             label.textContent = "Advanced: import / export";
@@ -5356,11 +5425,7 @@ export function setup(ctx, opts) {
                     num.style.cssText =
                         "font-size:11px;color:var(--lumiverse-text-muted,rgba(255,255,255,.65));flex:1";
                     const who = document.createElement("select");
-                    for (const o of [
-                        { value: "system", label: "System" },
-                        { value: "user", label: "You" },
-                        { value: "assistant", label: "The character" },
-                    ]) {
+                    for (const o of NOTE_ROLE_OPTIONS) {
                         const opt = document.createElement("option");
                         opt.value = o.value;
                         opt.textContent = o.label;
@@ -5372,11 +5437,7 @@ export function setup(ctx, opts) {
                     who.setAttribute("aria-label", "Who note " + (i + 1) + " comes from");
                     who.addEventListener("change", () => {
                         note.role = coerce("pick", who.value, "system", {
-                            options: [
-                                { value: "system", label: "System" },
-                                { value: "user", label: "You" },
-                                { value: "assistant", label: "The character" },
-                            ],
+                            options: NOTE_ROLE_OPTIONS,
                         });
                         push();
                     });
@@ -5884,12 +5945,11 @@ export function setup(ctx, opts) {
             // Baseline of every saved setting at open. Edits below change cfg live, but
             // closing the modal with X or tapping outside restores this baseline, so
             // nothing sticks unless Save is pressed. Save and Reset refresh the baseline.
-            let baseline = {};
             const snapshot = () => {
-                baseline = {};
+                modalBaseline = {};
                 for (const g of SCHEMA)
                     for (const fl of g.fields)
-                        baseline[fl.key] = cfg[fl.key];
+                        modalBaseline[fl.key] = cfg[fl.key];
             };
             snapshot();
             modalSnapshot = snapshot;
@@ -5902,12 +5962,14 @@ export function setup(ctx, opts) {
                     }
                     catch (_) { }
                 }
-                for (const g of SCHEMA)
-                    for (const fl of g.fields)
-                        cfg[fl.key] = baseline[fl.key];
+                if (modalBaseline)
+                    for (const g of SCHEMA)
+                        for (const fl of g.fields)
+                            cfg[fl.key] = modalBaseline[fl.key];
                 modalHandle = null;
                 modalRoot = null;
                 modalSnapshot = null;
+                modalBaseline = null;
             });
         }
         catch (e) {
@@ -5983,7 +6045,7 @@ export function setup(ctx, opts) {
                     if (msg.type === "confirm_edit") {
                         const yes = await confirmEdit("Apply your word swaps to this reply?");
                         if (yes && ctx && typeof ctx.sendToBackend === "function") {
-                            ctx.sendToBackend({ type: "apply_replace_now", chatId: msg.chatId, messageId: msg.messageId, onlyMessage: true, requestId: "ar-rep-" + Date.now() });
+                            ctx.sendToBackend({ type: "apply_replace_now", chatId: msg.chatId, messageId: msg.messageId, requestId: "ar-rep-" + Date.now() });
                         }
                         return;
                     }
@@ -6046,6 +6108,16 @@ export function setup(ctx, opts) {
     log("ready v" + VERSION, cfg);
     return () => {
         clearConfirmWatch();
+        // The full-size editor is parented to the page, not to the modal, so
+        // dismissing the modal below does not take it with it. Left open it would
+        // sit over the chat with nothing behind it.
+        if (closeExpandEditor) {
+            try {
+                closeExpandEditor();
+            }
+            catch (_) { }
+            closeExpandEditor = null;
+        }
         if (hideStyleEl) {
             try {
                 hideStyleEl.remove();

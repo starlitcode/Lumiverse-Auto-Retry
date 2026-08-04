@@ -336,7 +336,7 @@ spindle.onFrontendMessage(async (payload: any) => {
             if (Array.isArray(msgs)) {
               // The opening/greeting message is authored, not generated, so never swap it.
               const greetingId = (msgs.length && msgs[0] && msgs[0].role === 'assistant') ? msgs[0].id : null;
-              if (payload.wholeChat && !payload.onlyMessage) {
+              if (payload.wholeChat) {
                 // Every generated assistant reply in the chat (never user messages or the greeting).
                 for (const x of msgs) { if (x && x.role === 'assistant' && x.id !== greetingId) targets.push(x); }
               } else {

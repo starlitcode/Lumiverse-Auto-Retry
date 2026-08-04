@@ -380,9 +380,17 @@ describe("both halves agree on the limit", () => {
     const m = src.match(/const MAX_NOTES\s*=\s*(\d+)/);
     return m ? Number(m[1]) : null;
   };
+  // The backend writes the roles out as a plain list. The frontend needs a label
+  // for each one as well, so it derives its list from the panel's picker rather
+  // than keeping a second copy that could drift from it. Either shape is read
+  // here, so this still compares what each half actually enforces.
   const rolesOf = (src: string) => {
-    const m = src.match(/const NOTE_ROLES\s*=\s*\[([^\]]*)\]/);
-    return m ? m[1].split(",").map((s) => s.trim().replace(/['"]/g, "")).filter(Boolean) : null;
+    const literal = src.match(/const NOTE_ROLES\s*=\s*\[([^\]]*)\]/);
+    if (literal)
+      return literal[1].split(",").map((s) => s.trim().replace(/['"]/g, "")).filter(Boolean);
+    const options = src.match(/const NOTE_ROLE_OPTIONS\s*=\s*\[([\s\S]*?)\n\];/);
+    if (!options) return null;
+    return [...options[1].matchAll(/value:\s*"([^"]+)"/g)].map((m) => m[1]);
   };
 
   test("the same number of notes", () => {
