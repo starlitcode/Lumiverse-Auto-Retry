@@ -16,11 +16,12 @@
  * another rule just wrote. Where two rules could match the same spot, the one
  * with the longer left side wins.
  *
- * This backend also keeps the whole settings object in account storage, so the
- * user's settings follow them across browsers and devices. Rules and settings
- * arrive from the UI over the frontend message bridge and are persisted so they
- * survive a restart. Editing a message emits
- * MESSAGE_EDITED (not GENERATION_ENDED), so this cannot re-trigger itself.
+ * This backend also keeps the whole settings object in per-user account storage,
+ * so the user's settings follow them across browsers and devices. Rules and
+ * settings arrive from the UI over the frontend message bridge and are persisted
+ * so they survive a restart. Editing a message emits MESSAGE_EDITED and
+ * SWIPE_EDITED, neither of which is GENERATION_ENDED, and the edit watcher below
+ * ignores text it wrote itself, so this cannot re-trigger itself.
  *
  * Needs the `generation` permission (to hear GENERATION_ENDED) and
  * `chat_mutation` (to edit the saved message).
@@ -44,12 +45,63 @@ let caseSensitive = false;
 let rulesText = '';
 let allowReSwap = false;
 let confirmBeforeEdit = false;
+let waitForOtherEdits = false;
+let waitStartMs = 15000;
 let groups: Group[] = [];
 // All rules compiled into one pattern, plus the group index each capture slot
 // belongs to. Built once per settings change, used for the single pass.
 let combined: RegExp | null = null;
 let combinedOrder: number[] = [];
 let warnedEditError = false;
+
+// ---- per-user storage ----
+// One backend process can serve every account on the server. spindle.storage
+// resolves to a single shared directory in that case, so settings and presets
+// written through it were pooled across accounts: one person's word swaps could
+// be read back by another. userStorage always resolves per user. On an ordinary
+// single-user install the userId is inferred and this behaves exactly as before.
+function hasUserStorage(): boolean {
+  try {
+    return !!(spindle.userStorage && typeof spindle.userStorage.getJson === 'function');
+  } catch (_) {
+    return false;
+  }
+}
+
+// Reads this user's copy, and on the first read after upgrading copies the old
+// shared-store copy up rather than presenting the user with empty settings.
+async function readUserJson(file: string, userId?: string): Promise<any> {
+  if (hasUserStorage()) {
+    try {
+      const v = await spindle.userStorage.getJson(file, { fallback: null, userId: userId });
+      if (v != null) return v;
+    } catch (_) { /* fall through to the legacy store */ }
+    let legacy: any = null;
+    try { legacy = JSON.parse(await spindle.storage.read(file)); } catch (_) { legacy = null; }
+    if (legacy != null) {
+      try { await spindle.userStorage.setJson(file, legacy, { userId: userId }); } catch (_) {}
+    }
+    return legacy;
+  }
+  try { return JSON.parse(await spindle.storage.read(file)); } catch (_) { return null; }
+}
+
+async function writeUserJson(file: string, value: any, userId?: string): Promise<void> {
+  if (hasUserStorage()) {
+    try {
+      await spindle.userStorage.setJson(file, value, { userId: userId });
+      return;
+    } catch (_) { /* fall through so a save is never silently lost */ }
+  }
+  await spindle.storage.write(file, JSON.stringify(value));
+}
+
+// Replying without a userId broadcasts to every connected user on an
+// operator-scoped install, so every reply to a frontend message carries the id
+// of whoever sent it. A user-scoped install ignores the argument.
+function replyTo(userId: string | undefined, msg: any): void {
+  try { spindle.sendToFrontend(msg, userId); } catch (_) {}
+}
 
 // The note that goes out with a refusal retry. Armed by the frontend the moment
 // before it clicks, collected by the interceptor on the generation that click
@@ -86,6 +138,7 @@ function placeNotes(messages: any[], notes: any[], placement: string): { list: a
   list.splice.apply(list, ([at, 0] as any[]).concat(notes));
   return { list: list, from: at };
 }
+
 // Messages a swap has already changed this session, so the manual button won't
 // compound swaps on a reply that auto-swap or an earlier tap already changed.
 const swappedIds = new Set<string>();
@@ -218,13 +271,14 @@ function applyRules(text: string, seen?: Array<[string, string]>): string {
   });
 }
 
-// Writes swapped text back. Content alone emits only MESSAGE_EDITED, which the
-// chat view does not redraw on, so the swap sat there unseen until the chat was
-// reopened. Supplying the swipe array as well makes the host emit SWIPE_EDITED
-// too, which the view does redraw on. The active slot is rewritten to the same
-// text the content patch sets, so the message is unchanged either way; only the
-// event that announces it differs. Falls back to a plain content patch when the
-// message carries no usable swipe array.
+// Writes swapped text back. The chat view redraws on SWIPE_EDITED and not on
+// MESSAGE_EDITED, and the host emits SWIPE_EDITED when the patch names any one
+// of swipes, swipe_id or swipe_dates. A message carrying a usable swipe array
+// gets the active slot rewritten to the same text the content patch sets, so
+// the message is identical either way. A message without one still names its
+// active index, which is enough for the redraw and changes nothing: without it
+// the swap saved correctly and then sat unseen until the chat was reopened,
+// which is what made a swap look like it had not happened.
 async function writeSwapped(chatId: string, m: any, next: string): Promise<void> {
   const patch: any = { content: next };
   const swipes = m && Array.isArray(m.swipes) ? m.swipes.slice() : null;
@@ -232,6 +286,8 @@ async function writeSwapped(chatId: string, m: any, next: string): Promise<void>
   if (swipes && swipes.length > 0 && idx >= 0 && idx < swipes.length) {
     swipes[idx] = next;
     patch.swipes = swipes;
+    patch.swipe_id = idx;
+  } else {
     patch.swipe_id = idx;
   }
   await spindle.chat.updateMessage(chatId, m.id, patch);
@@ -250,8 +306,113 @@ function applyReplaceFromSettings(s: any) {
   rulesText = String(s.replaceRules == null ? '' : s.replaceRules);
   allowReSwap = !!s.allowReSwap;
   confirmBeforeEdit = !!s.confirmBeforeEdit;
+  waitForOtherEdits = !!s.swapWaitForEdits;
+  const secs = Number(s.swapWaitSecs);
+  waitStartMs = Number.isFinite(secs) && secs > 0
+    ? Math.min(120, Math.max(1, Math.round(secs))) * 1000
+    : 15000;
   rebuild();
 }
+
+// ---- the settle gate ----
+// Another extension may rewrite the same reply asynchronously after it lands.
+// Hone's auto-refine is the case this exists for: it runs a second LLM pass off
+// GENERATION_ENDED and saves the result seconds later, so a swap applied the
+// instant the reply arrived was overwritten by that rewrite. Nothing about
+// another extension is detectable from here, so rather than trying to know who
+// else is editing, this waits for the message to stop changing.
+const SETTLE_MS = 1500;      // quiet period after an edit before swapping
+const MAX_WAIT_MS = 180000;  // ceiling, so a reply that never settles is still swapped
+const RESWAP_CAP = 3;        // re-assertions per message, so two extensions cannot ping-pong
+const OURWRITES_CAP = 200;
+
+const pendingSwaps = new Map<string, any>();
+const ourWrites = new Map<string, string>();
+const reswapCount = new Map<string, number>();
+
+const swapKey = (c: any, m: any) => String(c) + ':' + String(m);
+
+function rememberWrite(k: string, text: string) {
+  ourWrites.set(k, text);
+  if (ourWrites.size > OURWRITES_CAP) ourWrites.delete(ourWrites.keys().next().value as string);
+}
+
+// Reads the message at the moment of the swap rather than using the text the
+// end event carried. That is what lets a deferred swap apply on top of another
+// extension's rewrite instead of replacing it with the pre-rewrite reply.
+async function swapMessageNow(chatId: string, messageId: any): Promise<void> {
+  if (!groups.length) return;
+  let m: any = null;
+  try {
+    const msgs = await spindle.chat.getMessages(chatId);
+    if (!Array.isArray(msgs) || !msgs.length) return;
+    // The opening message is authored, not generated, so it is never swapped.
+    const greetingId = (msgs[0] && msgs[0].role === 'assistant') ? msgs[0].id : null;
+    if (messageId != null && greetingId != null && messageId === greetingId) return;
+    m = msgs.find((x: any) => x && x.id === messageId && x.role === 'assistant') || null;
+  } catch (_) { return; }
+  if (!m) return;
+  const content = String(m.content == null ? '' : m.content);
+  const pairs: Array<[string, string]> = [];
+  const next = applyRules(content, pairs);
+  if (next === content) return;
+  if (confirmBeforeEdit) {
+    // Ask first; the frontend sends apply_replace_now for this reply if the user agrees.
+    try { spindle.sendToFrontend({ type: 'confirm_edit', chatId: chatId, messageId: messageId, requestId: 'ar-auto-' + Date.now() }); } catch (_) {}
+    return;
+  }
+  rememberWrite(swapKey(chatId, messageId), next);
+  await writeSwapped(chatId, m, next);
+  markSwapped(messageId);
+  // Tell the frontend what changed so it can update the visible reply.
+  try { spindle.sendToFrontend({ type: 'swapped', chatId: chatId, pairs: pairs }); } catch (_) {}
+}
+
+function scheduleSwap(chatId: string, messageId: any, sawEdit: boolean) {
+  const k = swapKey(chatId, messageId);
+  let p = pendingSwaps.get(k);
+  if (!p) { p = { capAt: Date.now() + MAX_WAIT_MS, timer: null }; pendingSwaps.set(k, p); }
+  if (p.timer) clearTimeout(p.timer);
+  const want = sawEdit ? SETTLE_MS : waitStartMs;
+  const left = Math.max(0, p.capAt - Date.now());
+  p.timer = setTimeout(() => {
+    pendingSwaps.delete(k);
+    swapMessageNow(chatId, messageId).catch(() => {});
+  }, Math.max(0, Math.min(want, left)));
+}
+
+function clearPending(chatId: any, messageId: any) {
+  const k = swapKey(chatId, messageId);
+  const p = pendingSwaps.get(k);
+  if (p) { if (p.timer) clearTimeout(p.timer); pendingSwaps.delete(k); }
+}
+
+// An edit by anything other than us. While a swap is pending this pushes it
+// back; after one has landed it re-asserts, capped, for the case where the
+// other extension finished later than the wait allowed for.
+function onForeignEdit(chatId: any, messageId: any, content: string) {
+  if (!enabled || !groups.length || !chatId || messageId == null) return;
+  const k = swapKey(chatId, messageId);
+  if (ourWrites.get(k) === content) return; // the event our own write raised
+  if (!pendingSwaps.has(k)) {
+    if (!waitForOtherEdits) return;
+    if (!swappedIds.has(messageId)) return; // never a message we have not touched
+    const n = (reswapCount.get(k) || 0) + 1;
+    if (n > RESWAP_CAP) return;
+    reswapCount.set(k, n);
+  }
+  scheduleSwap(chatId, messageId, true);
+}
+
+const readEdit = (p: any) => {
+  try {
+    if (!p || !p.chatId || !p.message) return;
+    onForeignEdit(p.chatId, p.message.id, String(p.message.content == null ? '' : p.message.content));
+  } catch (_) {}
+};
+try { spindle.on('MESSAGE_EDITED', readEdit); } catch (_) {}
+try { spindle.on('SWIPE_EDITED', readEdit); } catch (_) {}
+
 // An older version kept the text of every reply it had swapped, so that swap
 // could be put back. That feature is gone, and leaving a file full of reply text
 // behind after removing the thing that needed it would be keeping the user's
@@ -264,40 +425,44 @@ const LEGACY_UNDO_FILE = 'last-swap-undo.json';
     if (raw && String(raw).length > 2) await spindle.storage.write(LEGACY_UNDO_FILE, '{}');
   } catch (_) { /* nothing to clear */ }
 })();
-// Load persisted settings on startup. The whole settings object now lives in
-// account storage (SETTINGS_FILE) so it follows the user across browsers; an
-// older install that only stored replace rules (RULES_FILE) is read as a fallback.
+
+// Load persisted settings on startup. No userId is available here, so this only
+// resolves on a user-scoped install, where userStorage infers the owner. On an
+// operator-scoped install the rule state below is set by whichever user's panel
+// saves first, which is a limitation of holding one rule set per process.
 (async () => {
   try {
-      applyReplaceFromSettings(JSON.parse(await spindle.storage.read(SETTINGS_FILE)));
-      return;
+    const s = await readUserJson(SETTINGS_FILE);
+    if (s && typeof s === 'object') { applyReplaceFromSettings(s); return; }
   } catch (_) { /* no account settings yet */ }
   try {
-      const parsed = JSON.parse(await spindle.storage.read(RULES_FILE));
-      enabled = !!parsed.enabled;
-      random = !!parsed.random;
-      caseSensitive = !!parsed.caseSensitive;
-      rulesText = String(parsed.rulesText == null ? '' : parsed.rulesText);
-      rebuild();
+    const parsed = JSON.parse(await spindle.storage.read(RULES_FILE));
+    enabled = !!parsed.enabled;
+    random = !!parsed.random;
+    caseSensitive = !!parsed.caseSensitive;
+    rulesText = String(parsed.rulesText == null ? '' : parsed.rulesText);
+    rebuild();
   } catch (_) { /* no saved rules yet */ }
 })();
-// Settings bridge with the UI: save the whole settings object to account storage,
-// hand it back on request, and keep the find-and-replace state in sync with it.
-spindle.onFrontendMessage(async (payload: any) => {
+
+// Settings bridge with the UI: save the whole settings object to per-user
+// account storage, hand it back on request, and keep the find-and-replace state
+// in sync with it.
+spindle.onFrontendMessage(async (payload: any, userId?: string) => {
   try {
-      if (!payload) return;
-      if (payload.type === 'save_settings' && payload.settings && typeof payload.settings === 'object') {
+    if (!payload) return;
+    if (payload.type === 'save_settings' && payload.settings && typeof payload.settings === 'object') {
       applyReplaceFromSettings(payload.settings);
-      await spindle.storage.write(SETTINGS_FILE, JSON.stringify(payload.settings));
+      await writeUserJson(SETTINGS_FILE, payload.settings, userId);
       return;
-      }
-      if (payload.type === 'load_settings') {
-      let settings = null;
-      try { settings = JSON.parse(await spindle.storage.read(SETTINGS_FILE)); } catch (__) { settings = null; }
-      try { spindle.sendToFrontend({ type: 'loaded_settings', requestId: payload.requestId, settings: settings }); } catch (__) {}
+    }
+    if (payload.type === 'load_settings') {
+      let settings: any = null;
+      try { settings = await readUserJson(SETTINGS_FILE, userId); } catch (__) { settings = null; }
+      replyTo(userId, { type: 'loaded_settings', requestId: payload.requestId, settings: settings });
       return;
-      }
-      if (payload.type === 'arm_refusal_note') {
+    }
+    if (payload.type === 'arm_refusal_note') {
       const raw = Array.isArray(payload.notes) ? payload.notes : [];
       const notes: Array<{ text: string; role: string }> = [];
       for (const n of raw.slice(0, MAX_NOTES)) {
@@ -310,57 +475,71 @@ spindle.onFrontendMessage(async (payload: any) => {
       refusalNote = notes.length && payload.chatId
         ? { chatId: String(payload.chatId), notes: notes, placement: String(payload.placement || 'after'), at: Date.now() }
         : null;
+      // Acknowledged so the frontend can hold the retry click until the note is
+      // actually in place. The arm travels this bridge while the click travels
+      // the DOM to the host to the server, and those are independent: the click
+      // could otherwise reach prompt assembly first and the note would be
+      // silently dropped from that generation.
+      replyTo(userId, { type: 'note_armed', requestId: payload.requestId, armed: !!refusalNote });
       return;
-      }
-      if (payload.type === 'save_presets' && payload.presets && typeof payload.presets === 'object') {
-      await spindle.storage.write(PRESETS_FILE, JSON.stringify(payload.presets));
+    }
+    if (payload.type === 'save_presets' && payload.presets && typeof payload.presets === 'object') {
+      await writeUserJson(PRESETS_FILE, payload.presets, userId);
       return;
-      }
-      if (payload.type === 'load_presets') {
-      let presets = null;
-      try { presets = JSON.parse(await spindle.storage.read(PRESETS_FILE)); } catch (__) { presets = null; }
-      try { spindle.sendToFrontend({ type: 'loaded_presets', requestId: payload.requestId, presets: presets }); } catch (__) {}
+    }
+    if (payload.type === 'load_presets') {
+      let presets: any = null;
+      try { presets = await readUserJson(PRESETS_FILE, userId); } catch (__) { presets = null; }
+      replyTo(userId, { type: 'loaded_presets', requestId: payload.requestId, presets: presets });
       return;
-      }
-      if (payload.type === 'apply_replace_now') {
-        let ok = true, found = false, changed = 0, skipped = 0;
-        // Literal substitutions made, passed back so the frontend can update the
-        // rendered text. The host saves the message without redrawing the chat.
-        const pairs: Array<[string, string]> = [];
-        try {
-          const chatId = payload.chatId;
-          const wantId = payload.messageId;
-          if (chatId && groups.length) {
-            const msgs = await spindle.chat.getMessages(chatId);
-            const targets: any[] = [];
-            if (Array.isArray(msgs)) {
-              // The opening/greeting message is authored, not generated, so never swap it.
-              const greetingId = (msgs.length && msgs[0] && msgs[0].role === 'assistant') ? msgs[0].id : null;
-              if (payload.wholeChat) {
-                // Every generated assistant reply in the chat (never user messages or the greeting).
-                for (const x of msgs) { if (x && x.role === 'assistant' && x.id !== greetingId) targets.push(x); }
-              } else {
-                // The exact reply if we have it, else the latest assistant reply, never the greeting.
-                let m: any = null;
-                if (wantId != null) m = msgs.find((x: any) => x && x.id === wantId && x.role === 'assistant') || null;
-                if (!m) { for (let i = msgs.length - 1; i >= 0; i--) { if (msgs[i] && msgs[i].role === 'assistant' && msgs[i].id !== greetingId) { m = msgs[i]; break; } } }
-                if (m && m.id !== greetingId) targets.push(m);
-              }
-            }
-            found = targets.length > 0;
-            for (const m of targets) {
-              // Skip replies already swapped this session unless re-swapping is allowed.
-              if (!allowReSwap && swappedIds.has(m.id)) { skipped++; continue; }
-              const content = String(m.content == null ? '' : m.content);
-              const next = applyRules(content, pairs);
-              if (next !== content) { await writeSwapped(chatId, m, next); changed++; markSwapped(m.id); }
+    }
+    if (payload.type === 'apply_replace_now') {
+      let ok = true, found = false, changed = 0, skipped = 0;
+      // Literal substitutions made, passed back so the frontend can update the
+      // rendered text. The host saves the message without redrawing the chat.
+      const pairs: Array<[string, string]> = [];
+      try {
+        const chatId = payload.chatId;
+        const wantId = payload.messageId;
+        if (chatId && groups.length) {
+          const msgs = await spindle.chat.getMessages(chatId);
+          const targets: any[] = [];
+          if (Array.isArray(msgs)) {
+            // The opening/greeting message is authored, not generated, so never swap it.
+            const greetingId = (msgs.length && msgs[0] && msgs[0].role === 'assistant') ? msgs[0].id : null;
+            if (payload.wholeChat) {
+              // Every generated assistant reply in the chat (never user messages or the greeting).
+              for (const x of msgs) { if (x && x.role === 'assistant' && x.id !== greetingId) targets.push(x); }
+            } else {
+              // The exact reply if we have it, else the latest assistant reply, never the greeting.
+              let m: any = null;
+              if (wantId != null) m = msgs.find((x: any) => x && x.id === wantId && x.role === 'assistant') || null;
+              if (!m) { for (let i = msgs.length - 1; i >= 0; i--) { if (msgs[i] && msgs[i].role === 'assistant' && msgs[i].id !== greetingId) { m = msgs[i]; break; } } }
+              if (m && m.id !== greetingId) targets.push(m);
             }
           }
-        } catch (_) { ok = false; }
-        try { spindle.sendToFrontend({ type: 'replace_now_result', requestId: payload.requestId, ok: ok, hasRules: groups.length > 0, found: found, changed: changed, skipped: skipped, pairs: pairs }); } catch (__) {}
-        return;
-      }
-      if (payload.type === 'set_replace_rules') {
+          found = targets.length > 0;
+          for (const m of targets) {
+            // A deferred swap waiting on this same reply is dropped, so the two
+            // cannot both fire and stack.
+            clearPending(chatId, m.id);
+            // Skip replies already swapped this session unless re-swapping is allowed.
+            if (!allowReSwap && swappedIds.has(m.id)) { skipped++; continue; }
+            const content = String(m.content == null ? '' : m.content);
+            const next = applyRules(content, pairs);
+            if (next !== content) {
+              rememberWrite(swapKey(chatId, m.id), next);
+              await writeSwapped(chatId, m, next);
+              changed++;
+              markSwapped(m.id);
+            }
+          }
+        }
+      } catch (_) { ok = false; }
+      replyTo(userId, { type: 'replace_now_result', requestId: payload.requestId, ok: ok, hasRules: groups.length > 0, found: found, changed: changed, skipped: skipped, pairs: pairs });
+      return;
+    }
+    if (payload.type === 'set_replace_rules') {
       // Legacy path for an older cached frontend that still sends rules alone.
       enabled = !!payload.enabled;
       random = !!payload.random;
@@ -369,54 +548,35 @@ spindle.onFrontendMessage(async (payload: any) => {
       rebuild();
       await spindle.storage.write(RULES_FILE, JSON.stringify({ enabled: enabled, random: random, caseSensitive: caseSensitive, rulesText: rulesText }));
       return;
-      }
+    }
   } catch (_) {
-      try { spindle.log.warn('auto-retry: could not handle a settings message'); } catch (__) {}
+    try { spindle.log.warn('auto-retry: could not handle a settings message'); } catch (__) {}
   }
 });
-// After each finished reply, apply the rules to the saved message.
+
+// After each finished reply, apply the rules to the saved message, either now or
+// once the reply has stopped being edited by anything else.
 spindle.on('GENERATION_ENDED', async (p: any) => {
   try {
     if (!enabled || !groups.length) return;
     if (!p || p.error || !p.chatId) return;
     const chatId = p.chatId;
     let messageId = p.messageId;
-    let content = typeof p.content === 'string' ? p.content : '';
-    // Fetch to fill any missing content and to spot the greeting: the opening
-    // message is authored, not generated, so it must never be swapped.
-    // Held so the write below can carry the swipe array, which is what makes the
-    // chat view redraw. Stays null if the message can't be read; the write then
-    // falls back to a plain content patch.
-    let target: any = null;
-    try {
-      const msgs = await spindle.chat.getMessages(chatId);
-      if (Array.isArray(msgs) && msgs.length) {
-        const greetingId = (msgs[0] && msgs[0].role === 'assistant') ? msgs[0].id : null;
-        if (!messageId || !content) {
-          let m: any = messageId ? msgs.find((x: any) => x && x.id === messageId && x.role === 'assistant') : null;
-          if (!m) { for (let i = msgs.length - 1; i >= 0; i--) { if (msgs[i] && msgs[i].role === 'assistant') { m = msgs[i]; break; } } }
-          if (m) { messageId = m.id; if (!content) content = String(m.content == null ? '' : m.content); }
+    if (!messageId) {
+      // Not every build puts the id on the end event, so the newest assistant
+      // reply stands in. swapMessageNow rules out the greeting either way.
+      try {
+        const msgs = await spindle.chat.getMessages(chatId);
+        if (Array.isArray(msgs)) {
+          for (let i = msgs.length - 1; i >= 0; i--) {
+            if (msgs[i] && msgs[i].role === 'assistant') { messageId = msgs[i].id; break; }
+          }
         }
-        if (messageId != null && greetingId != null && messageId === greetingId) return; // never swap the greeting
-        target = msgs.find((x: any) => x && x.id === messageId) || null;
-      }
-    } catch (_) {}
-    // Both are needed: without an id there is nothing to write to, and the
-    // lookup above leaves it unset when the reply cannot be found.
-    if (!messageId || !content) return;
-    const autoPairs: Array<[string, string]> = [];
-    const next = applyRules(content, autoPairs);
-    if (next !== content) {
-      if (confirmBeforeEdit) {
-        // Ask first; the frontend sends apply_replace_now for this reply if the user agrees.
-        try { spindle.sendToFrontend({ type: 'confirm_edit', chatId: chatId, messageId: messageId, requestId: 'ar-auto-' + Date.now() }); } catch (__) {}
-        return;
-      }
-      await writeSwapped(chatId, target || { id: messageId }, next);
-      markSwapped(messageId);
-      // Tell the frontend what changed so it can update the visible reply.
-      try { spindle.sendToFrontend({ type: 'swapped', chatId: chatId, pairs: autoPairs }); } catch (__) {}
+      } catch (_) {}
     }
+    if (!messageId) return;
+    if (waitForOtherEdits) { scheduleSwap(chatId, messageId, false); return; }
+    await swapMessageNow(chatId, messageId);
   } catch (e: any) {
     if (!warnedEditError) {
       warnedEditError = true;
@@ -437,12 +597,21 @@ try {
       const type = context && context.generationType;
       // A retry is a regenerate or a swipe. Anything the user typed is
       // "normal", so a note nobody collected cannot attach itself to it.
-      if (type !== 'regenerate' && type !== 'swipe') return messages;
+      if (type !== 'regenerate' && type !== 'swipe') {
+        // Named rather than swallowed. A note that never appears looks the same
+        // whether it was never armed or the host called this generation
+        // something else, and only one of those is fixable by the user.
+        try { spindle.sendToFrontend({ type: 'note_skipped', reason: 'the host called this generation "' + String(type) + '"' }); } catch (__) {}
+        return messages;
+      }
       const chatId = context && context.chatId;
       if (chatId && refusalNote.chatId && String(chatId) !== refusalNote.chatId) return messages;
       const armed = refusalNote;
       refusalNote = null; // one generation, collected or not
-      if (Date.now() - armed.at > NOTE_MAX_AGE_MS) return messages;
+      if (Date.now() - armed.at > NOTE_MAX_AGE_MS) {
+        try { spindle.sendToFrontend({ type: 'note_skipped', reason: 'it was armed too long ago to still belong to this generation' }); } catch (__) {}
+        return messages;
+      }
       if (!Array.isArray(messages)) return messages;
       const built = armed.notes.map((n) => ({ role: n.role, content: n.text }));
       const placed = placeNotes(messages, built, armed.placement);
