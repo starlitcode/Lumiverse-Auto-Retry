@@ -8,6 +8,22 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 4.3.0
+
+_2026-08-05_
+
+### Added
+
+- **Wait for other extensions to finish.** Off by default, under Advanced: find and replace. If another extension also rewrites replies, Hone with auto-refine on being the case this was built for, a swap applied the instant a reply landed was overwritten by that extension's rewrite a few seconds later. With this on, the swap waits for the reply to stop changing and then applies to whatever the text has become, so both extensions' work survives. If a later edit undoes a swap anyway, it is re-applied, up to three times per reply. With it off nothing changes: swaps land immediately, which is right when nothing else is editing.
+
+### Fixed
+
+- **The refusal note was often never sent.** The note was handed to the backend at the same moment the retry button was clicked, and those travel by different routes. The click regularly reached the model first, so the note was not in place yet and the prompt went out without it: nothing in the reply, nothing in the Prompt Breakdown, nothing in the log. The retry now waits for the backend to confirm the note is in place before clicking. If the host has no backend bridge the retry still fires, after a short wait, exactly as before.
+- **The note now says when it was skipped and why.** It is only ever attached to a regenerate or a swipe. If the host called the generation something else, that is now written to the log with the name it used, instead of the note quietly not appearing. The log also says when a note was held back because it does not start until a later try, which is the default.
+- **A swapped reply sometimes did not appear until you left the chat and came back.** The chat view only redraws when a message is saved with its swipe details named. A reply carrying no usable swipe list was saved with its text alone, which the view ignores, so the swap was correctly stored and invisible. Those saves now name the active swipe, which is enough for the redraw and changes nothing about the message.
+- **A deferred swap no longer undoes another extension's edit.** Swaps used to be worked out from the reply as it stood when it finished generating. Anything that rewrote the reply after that was replaced by the older text. The rules are now applied to the message as it stands at the moment of the swap.
+- **The swap buttons work in a chat you have not generated in yet.** They learn the current chat from the chat itself now, rather than only from a generation, so opening an older chat and pressing swap no longer reports that there is no reply to swap.
+
 ## 4.2.0
 
 _2026-08-04_
