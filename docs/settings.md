@@ -63,6 +63,8 @@ The same options live in the CONFIG block at the top of `src/frontend.ts` and `d
 | showSwapAllButton | false | Adds an Extras button that swaps every generated reply in the chat once. |
 | allowReSwap | false | Let either swap button swap a reply again even if it was already swapped (can stack swaps). Applies to both the swap-this-reply and swap-whole-chat buttons. Shown only while one of those two buttons is switched on. |
 | confirmBeforeEdit | false | Ask you to confirm before any word-swap edit (automatic or manual); you can cancel. |
+ swapWaitForEdits | false | Wait for another extension to finish editing a reply before swapping it. For running alongside Hone with auto-refine on. |
+ swapWaitSecs | 15 | How long to wait for that, in seconds (1-120). Each edit restarts the clock. Shown only while `swapWaitForEdits` is on. |
 | regenerateSelector | (see file) | Host button. See below. |
 | swipeNextSelector | (see file) | Backup button if your build retries by swiping. |
 | confirmButtonLabels | (blank) | Extra dialog button labels it may press when a dialog appears after a retry, one per line. Blank uses the built-in list. |
