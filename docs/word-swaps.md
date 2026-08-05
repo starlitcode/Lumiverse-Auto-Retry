@@ -41,6 +41,16 @@ There is no undo. A swap rewrites the saved reply, and the wording it replaced i
 
 That is worth knowing before you turn automatic swapping on. If you would rather see each edit coming, turn on **Ask before editing a reply**, which puts a confirmation in front of every swap. Trying your rules on one reply with the **swap words now** button, rather than switching automatic swapping on straight away, is the easy way to check a new rule does what you meant.
 
+## Working alongside other extensions
+
+If another extension also rewrites replies, the two can undo each other. [Hone](https://github.com/AMousePad/Hone) with **Auto-Refine AI** on is the case this was built for: it runs a second pass over each reply and saves the result a few seconds after the reply lands. Auto Retry swapped immediately, Hone's rewrite arrived afterwards, and the swap was gone.
+
+Turn on **Wait for other extensions to finish** and the swap holds off until the reply stops changing, then applies to whatever the text has become. Hone's refinement is kept, your swaps are applied on top of it, and neither erases the other. If something edits the reply later still and undoes a swap, it is applied again, up to three times per reply, so a slow second pass cannot leave a swap half-done.
+
+**How long to wait** is the wait when nothing else edits at all. Each edit restarts the clock and the swap follows shortly after the last one, so a refinement that takes longer than the wait is still caught. There is a three-minute ceiling, so a reply that never settles is swapped anyway rather than never.
+
+Leave it off if nothing else edits your replies. Auto Retry cannot tell whether Hone's auto-refine is on, since Hone exposes no state to other extensions, so this is a switch rather than something detected. With it off, swaps are instant, which is what you want with Hone set to manual.
+
 ## Presets
 
 At the bottom of the find-and-replace settings you can save your word-swap setups as named presets and switch between them without copying rules by hand.
