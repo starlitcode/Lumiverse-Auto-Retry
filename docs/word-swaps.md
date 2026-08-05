@@ -43,7 +43,7 @@ That is worth knowing before you turn automatic swapping on. If you would rather
 
 ## Working alongside other extensions
 
-If another extension also rewrites replies, the two can undo each other. [Hone](https://github.com/AMousePad/Hone) with **Auto-Refine AI** on is the case this was built for: it runs a second pass over each reply and saves the result a few seconds after the reply lands. Auto Retry swapped immediately, Hone's rewrite arrived afterwards, and the swap was gone.
+If another extension also rewrites replies, the two can undo each other. [Hone](https://github.com/AMousePad/Hone) with **Auto-Refine AI** on is the case this was built for: it runs a second pass over each reply and saves the result a few seconds after the reply lands. **Turn on Wait for other extensions to finish so the two do not undo each other.**
 
 Turn on **Wait for other extensions to finish** and the swap holds off until the reply stops changing, then applies to whatever the text has become. Hone's refinement is kept, your swaps are applied on top of it, and neither erases the other. If something edits the reply later still and undoes a swap, it is applied again, up to three times per reply, so a slow second pass cannot leave a swap half-done.
 
