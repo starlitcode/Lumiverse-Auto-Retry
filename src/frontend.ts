@@ -36,6 +36,8 @@ const START_GRACE_MS = 6000;
 // The retry reason that carries the optional note. Named once so the arming
 // check below cannot drift away from the callers that raise it.
 const REFUSAL_REASON = "looks like an accidental refusal";
+// Longest the retry click waits on the backend confirming the note is in place.
+const NOTE_ACK_MS = 1200;
 
 // How many notes one refusal retry may carry.
 //
@@ -65,7 +67,7 @@ const STREAM_BUF_MAX = 200000;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "4.2.0";
+const VERSION = "4.3.0";
 
 // ---- defaults (the UI overrides these; editing here changes the fallback) ----
 const CONFIG = {
@@ -142,6 +144,8 @@ const CONFIG = {
   showSwapAllButton: false, // adds an Extras button that swaps every generated reply in the chat once.
   allowReSwap: false, // let that button swap a reply again even if it was already swapped this session (can stack swaps).
   confirmBeforeEdit: false, // ask for confirmation before any word-swap edit (automatic or manual); the user can cancel.
+  swapWaitForEdits: false, // wait for another extension to finish editing a reply before swapping it.
+  swapWaitSecs: 15, // how long to give it, in seconds. Only used when the above is on.
 
   // host controls (the only DOM-dependent part). Use the Test buttons in settings.
   // Multiple patterns are listed so a Lumiverse build that renames one attribute
@@ -477,6 +481,22 @@ const SCHEMA: Group[] = [
         label: "Ask before editing a reply",
         type: "bool",
         hint: "Off by default. When on, every word swap (automatic or from the button) asks you to confirm before it changes a reply, and you can cancel. This can get frequent if you use automatic swapping, but nothing is edited without your OK. Needs your Lumiverse to support confirm dialogs.",
+      },
+      {
+        key: "swapWaitForEdits",
+        label: "Wait for other extensions to finish",
+        type: "bool",
+        hint: "Off by default. Turn this on if another extension also rewrites replies, like Hone with auto-refine on. Normally a swap is applied the moment a reply lands, and the other extension's rewrite then arrives on top and undoes it. With this on, the swap waits for the reply to stop changing and then applies to whatever the text has become, so both survive. If a later edit undoes a swap anyway, it is applied again, up to three times per reply. Leave it off if nothing else edits your replies: it only adds a delay.",
+      },
+      {
+        key: "swapWaitSecs",
+        needs: ["swapWaitForEdits"],
+        label: "How long to wait (seconds)",
+        type: "num",
+        int: true,
+        min: 1,
+        max: 120,
+        hint: "How long to give another extension to make its edit before swapping anyway. Each edit restarts the clock and the swap follows shortly after the last one, so this is only the full wait when nothing else edits at all. 15 suits a refinement pass on a fast model; raise it for a slow one. A reply that never stops changing is swapped after three minutes regardless.",
       },
     ],
   },
@@ -2271,6 +2291,8 @@ export function setup(ctx: Ctx, opts?: any) {
         "showSwapAllButton",
         "allowReSwap",
         "confirmBeforeEdit",
+        "swapWaitForEdits",
+        "swapWaitSecs",
       ],
     },
     {
@@ -2401,6 +2423,8 @@ export function setup(ctx: Ctx, opts?: any) {
         "showSwapAllButton",
         "allowReSwap",
         "confirmBeforeEdit",
+        "swapWaitForEdits",
+        "swapWaitSecs",
       ],
     },
   };
@@ -3216,41 +3240,77 @@ export function setup(ctx: Ctx, opts?: any) {
     } catch (_) {}
   }
 
-  // Tell the backend to attach the note to the next generation in this chat.
-  // Sent immediately before the click, so it is in place before the generation
-  // starts. The backend only honours it for a regenerate or a swipe, so a note
-  // that is never collected cannot attach itself to something you type.
-  function armRefusalNote(chatId: string, reason: string, attempt: number) {
-    try {
-      if (!cfg.refusalNote) return;
-      if (reason !== REFUSAL_REASON) return;
-      // An empty note is skipped rather than sent blank, so a half-filled list
-      // is not a trap. Nothing is armed when they are all empty.
-      //
-      // Trimmed to decide whether a note counts as empty, and not otherwise:
-      // what goes out is what was typed, spacing and all. The panel says the
-      // note is sent exactly as written, and a line break someone put at the
-      // end of theirs is part of what they wrote.
-      const notes = (Array.isArray(cfg.refusalNotes) ? cfg.refusalNotes : [])
-        .slice(0, MAX_NOTES)
-        .map((n: any) => ({
-          text: String((n && n.text) || ""),
-          role: NOTE_ROLES.indexOf(String(n && n.role)) >= 0 ? String(n.role) : "system",
-        }))
-        .filter((n: any) => n.text.trim());
-      if (!notes.length) return;
-      const from = Math.max(1, Number(cfg.refusalNoteFromTry) || 1);
-      if (attempt < from) return;
-      if (!ctx || typeof (ctx as any).sendToBackend !== "function") return;
-      (ctx as any).sendToBackend({
-        type: "arm_refusal_note",
-        chatId: chatId,
-        notes: notes,
-        placement: String(cfg.refusalNotePlacement || "after"),
-      });
-      log("note armed for the next retry in this chat", chatId);
-      armedNoteChat = String(chatId);
-    } catch (_) {}
+  // Resolves once the backend confirms the note is in place. The arm travels the
+  // frontend-to-backend bridge while the retry click travels the DOM to the host
+  // to the server, and those are independent: the click could reach prompt
+  // assembly first, the interceptor would find nothing armed, and the note was
+  // silently dropped from that generation. Waiting on the acknowledgement
+  // removes the race. The timeout means a host with no backend bridge, or a slow
+  // one, still gets its retry.
+  function armRefusalNote(
+    chatId: string,
+    reason: string,
+    attempt: number,
+  ): Promise<boolean> {
+    return new Promise((resolve) => {
+      try {
+        if (!cfg.refusalNote || reason !== REFUSAL_REASON) return resolve(false);
+        // An empty note is skipped rather than sent blank, so a half-filled list
+        // is not a trap. Nothing is armed when they are all empty.
+        //
+        // Trimmed to decide whether a note counts as empty, and not otherwise:
+        // what goes out is what was typed, spacing and all. The panel says the
+        // note is sent exactly as written, and a line break someone put at the
+        // end of theirs is part of what they wrote.
+        const notes = (Array.isArray(cfg.refusalNotes) ? cfg.refusalNotes : [])
+          .slice(0, MAX_NOTES)
+          .map((n: any) => ({
+            text: String((n && n.text) || ""),
+            role: NOTE_ROLES.indexOf(String(n && n.role)) >= 0 ? String(n.role) : "system",
+          }))
+          .filter((n: any) => n.text.trim());
+        if (!notes.length) return resolve(false);
+        const from = Math.max(1, Number(cfg.refusalNoteFromTry) || 1);
+        if (attempt < from) {
+          log("note starts on try " + from + ", this is try " + attempt);
+          return resolve(false);
+        }
+        if (!ctx || typeof (ctx as any).sendToBackend !== "function") return resolve(false);
+        const reqId = "ar-arm-" + Date.now() + "-" + Math.random().toString(36).slice(2);
+        let settled = false;
+        let off: any = null;
+        let timer: any = null;
+        const finish = (ok: boolean) => {
+          if (settled) return;
+          settled = true;
+          try { off && off(); } catch (_) {}
+          clearTimeout(timer);
+          resolve(ok);
+        };
+        try {
+          off = (ctx as any).onBackendMessage((msg: any) => {
+            if (msg && msg.type === "note_armed" && msg.requestId === reqId) {
+              log(msg.armed ? "note is in place for the next retry" : "backend accepted no note");
+              finish(!!msg.armed);
+            }
+          });
+        } catch (_) {}
+        timer = setTimeout(() => {
+          log("note was not acknowledged in time; retrying without waiting further");
+          finish(false);
+        }, NOTE_ACK_MS);
+        (ctx as any).sendToBackend({
+          type: "arm_refusal_note",
+          chatId: chatId,
+          notes: notes,
+          placement: String(cfg.refusalNotePlacement || "after"),
+          requestId: reqId,
+        });
+        armedNoteChat = String(chatId);
+      } catch (_) {
+        resolve(false);
+      }
+    });
   }
 
   function scheduleRetry(chatId: string, reason: string, err?: any) {
@@ -3323,15 +3383,24 @@ export function setup(ctx: Ctx, opts?: any) {
         "s",
       { cancel: () => standDown(chatId, true), sticky: true },
     );
-    s.timer = setTimeout(() => {
+    s.timer = setTimeout(async () => {
       s.timer = null;
       s.pending = false;
       s.selfTriggered = true;
+      // Before the click, and awaited, so the note is in place by the time the
+      // generation starts rather than racing it.
+      await armRefusalNote(chatId, reason, s.attempts);
+      // Stop or Cancel can land during that wait, and the click below would
+      // restart a reply the user had just called off.
+      if (Date.now() < s.suppressUntil) {
+        disarmRefusalNote(chatId);
+        s.selfTriggered = false;
+        return;
+      }
       // Marked before the click, not after: some builds dispatch the start event
       // straight off the click, and that start has to be able to cancel the
       // watchdog rather than land before it exists.
       s.expectingStart = Date.now();
-      armRefusalNote(chatId, reason, s.attempts);
       const before = confirmSnapshot();
       // Armed before the click, not after: a build that puts its dialog on
       // screen during the click itself would otherwise not be seen until the
@@ -3398,6 +3467,15 @@ export function setup(ctx: Ctx, opts?: any) {
         cfg.stuckTimeoutMs,
       );
     }
+  }
+
+  // The manual swap buttons need a chat id, and generation events were the only
+  // thing setting one, so opening an older chat and pressing swap reported that
+  // there was no reply to swap until something had been generated in it.
+  function onChatSwitched(p: any) {
+    if (!p || typeof p.chatId === "undefined") return;
+    lastChatId = p.chatId || null;
+    lastMessageId = null;
   }
 
   // The text a token event carries. Builds name this field differently, so the
@@ -6007,6 +6085,8 @@ export function setup(ctx: Ctx, opts?: any) {
       ),
       ctx.events.on("GENERATION_ENDED", safe("GENERATION_ENDED", onEnd)),
       ctx.events.on("GENERATION_STOPPED", safe("GENERATION_STOPPED", onStop)),
+      ctx.events.on("CHAT_CHANGED", safe("CHAT_CHANGED", onChatSwitched)),
+      ctx.events.on("CHAT_SWITCHED", safe("CHAT_SWITCHED", onChatSwitched)),
     ];
   } catch (e) {
     log("failed to subscribe to generation events", e);
@@ -6022,15 +6102,28 @@ export function setup(ctx: Ctx, opts?: any) {
         try {
         if (!msg) return;
         if (msg.type === "confirm_edit") {
+          // A confirmation about a message in a chat that is not open cannot be
+          // acted on, so it is not raised.
+          if (msg.chatId && lastChatId && String(msg.chatId) !== String(lastChatId)) {
+            log("skipped a swap confirmation for a chat that is not open");
+            return;
+          }
           const yes = await confirmEdit("Apply your word swaps to this reply?");
           if (yes && ctx && typeof (ctx as any).sendToBackend === "function") {
             (ctx as any).sendToBackend({ type: "apply_replace_now", chatId: msg.chatId, messageId: msg.messageId, requestId: "ar-rep-" + Date.now() });
           }
           return;
         }
+        if (msg.type === "note_skipped") {
+          log("refusal note not sent: " + String(msg.reason || "unknown"));
+          return;
+        }
         // Sent after an automatic swap. The message is already saved; this only
-        // brings what is on screen into line with it.
+        // brings what is on screen into line with it. A swap can now land well
+        // after the reply did, so a result for a chat we are no longer looking
+        // at must not rewrite the one we are.
         if (msg.type === "swapped") {
+          if (msg.chatId && lastChatId && String(msg.chatId) !== String(lastChatId)) return;
           applySwapsToView(msg.pairs || []);
           return;
         }
