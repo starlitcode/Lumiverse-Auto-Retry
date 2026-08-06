@@ -53,7 +53,7 @@ Two options in Basics, and you can use either or both:
 - [All settings](docs/settings.md) - every option with its default
 - [Buttons it clicks](docs/buttons.md) - fixing the regenerate button, Regeneration Feedback, writing selectors
 - [Import and export](docs/import-export.md) - moving your setup between devices
-- [Seeing what was sent](docs/settings.md#the-prompt-view) - the on-screen prompt viewer
+- [The on-screen panel](docs/settings.md#the-on-screen-panel) - the live log and the prompt viewer
 - [Reporting a bug](docs/troubleshooting.md)
 - [Security](SECURITY.md) - what the extension can and can't reach, and how to check
 - [Changelog](CHANGELOG.md) - what changed in every version

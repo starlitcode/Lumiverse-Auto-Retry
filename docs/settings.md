@@ -32,15 +32,23 @@ The find-and-replace section is split under two headings, **Saved in a preset** 
 
 Every section header is a proper button, so the Advanced groups open with Enter or Space if you are working from the keyboard rather than a pointer.
 
-## The Prompt view
+## The on-screen panel
 
-Turning on **Show what was sent to the model** adds a second view to the on-screen panel, beside the log. It shows the prompt as the extension saw it on its way to the model: every message in order, its role, how large it is, and whether it came from your chat or was added around it. Tap a message to read it.
+One switch, **Show the on-screen panel**, puts a small panel in the corner with two tabs. Drag the header to move it, drag the bottom-right corner to resize it. Both work with a mouse and with a finger.
+
+**Log** is what the extension is doing as it happens: generations starting, retries and why, replies that came back fine, notes going out.
+
+**Prompt** is the whole prompt that went to the model. Every message in order, with its role, how large it is, and whether it came from your chat or was added around it. Tap one to read it.
+
+Your **refusal notes are marked** in that list, in the accent colour, and opened for you. A line at the top says how many went and where in the prompt they landed. That is the thing the Prompt view is most likely to be open for: seeing exactly how and where a note was inserted.
 
 This is what actually went, after your setup, your world info, your persona and every extension have had their turn at it. That is a different question from the one Lumiverse's own **Prompt Breakdown** answers, which is what your chat is built from.
 
-The panel's **Copy** button copies whichever view you are looking at, so on the Prompt view it gives you the whole thing as text, and **Clear** drops the captured prompt.
+**Copy** and **Clear** act on whichever tab you are looking at.
 
-It is off unless you turn it on, for two reasons: a whole prompt crosses from the server to the panel on every reply, and a prompt is the text of your chat. It is captured on your device and shown to you. Nothing is sent anywhere and nothing is written to disk, and it goes when you close the tab. A very long prompt is trimmed for display and says so rather than showing you part of it silently.
+Switching tabs works by tapping, and from a keyboard with the left and right arrows.
+
+The prompt is only captured while the Prompt tab is actually open. Switch to Log, close the panel, or close the tab, and nothing is captured at all. That is why there is no separate switch for it: a setting left on would go on paying for itself in every chat long after you looked once. What is captured is captured on your device and shown to you. Nothing is sent anywhere, nothing is written to disk, and it goes when you close the tab. A very long prompt is trimmed for display and says so rather than showing you part of it silently.
 
 The same options live in the CONFIG block at the top of `src/frontend.ts` and `dist/frontend.js`. `dist/frontend.js` is the file the host actually loads, so editing CONFIG there takes effect with no rebuild; editing `src/frontend.ts` needs a `bun run build`.
 
@@ -98,8 +106,7 @@ The same options live in the CONFIG block at the top of `src/frontend.ts` and `d
 | confirmButtonLabels | (blank) | Extra dialog button labels it may press when a dialog appears after a retry, one per line. Blank uses the built-in list. |
 | stopSelector | (see file) | Host stop button, used to abort a stalled reply. |
 | toast | true | Show the little retry pop-up with its Cancel button. |
-| promptViewer | false | Add a Prompt view to the on-screen panel showing the whole prompt as it went to the model: every message in order, its role, its size, and whether it came from your chat or was added around it. Captured on your device and shown to you; nothing is sent anywhere. |
-| liveLog | false | Show a small on-screen panel with recent activity, updating live. |
+| liveLog | false | Show the on-screen panel. Two tabs: Log for what the extension is doing, Prompt for what went to the model. |
 
 The two watchdog waits (`stuckTimeoutMs`, `idleTimeoutMs`) are long, and the defaults assume a slow model rather than a fast one. A watchdog that fires early on a model that is slow but healthy is worse than one that fires late: it throws away a reply that was still arriving, and the replacement comes from the same slow model, so it fires again on that one too. If your provider is fast and you want quicker recovery, lower them.
 

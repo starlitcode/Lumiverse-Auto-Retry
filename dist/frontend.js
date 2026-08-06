@@ -211,12 +211,14 @@ const CONFIG = {
     stopSelector: '[aria-label="Stop generation"], [data-action="stop"], [data-testid="stop"], ' +
         'button[aria-label*="stop" i], button[title*="stop" i], [class*="_sendBtnStop_"]',
     toast: true,
-    liveLog: false, // show a small on-screen panel with recent activity, updating live. Handy on mobile where dev tools aren't available.
-    // Capture the assembled prompt on its way to the model and show it in the
-    // panel's Prompt view. Off by default: a prompt is large, it crosses the
-    // bridge on every generation, and it is the text of your chat, so none of it
-    // moves while nobody is looking at it.
-    promptViewer: false,
+    // The on-screen panel: a log of what the extension did, and a view of the
+    // prompt that went to the model, as two tabs of one thing. Handy on mobile,
+    // where there is no console to open. Off by default.
+    //
+    // One setting, not two. The prompt is only captured while its tab is actually
+    // open, so there is nothing for a second switch to buy: a switch left on
+    // would go on paying for itself in every chat long after somebody looked once.
+    liveLog: false,
 };
 // A hint that quotes a default reads it from the block above rather than
 // spelling it out. Five of them were written by hand and went stale the moment
@@ -672,16 +674,10 @@ const SCHEMA = [
         desc: "A live panel that shows what the extension is doing, for debugging.",
         fields: [
             {
-                key: "promptViewer",
-                label: "Show what was sent to the model",
-                type: "bool",
-                hint: "Off by default. Adds a Prompt view to the on-screen panel showing the whole prompt as it went to the model: every message in order, its role, its size, and whether it came from your chat or was added around it. This is what actually went, after your setup, your world info and every extension have had their turn, which is not the same as what Lumiverse's own Prompt Breakdown lists. It is captured on your device and shown to you; nothing is sent anywhere and nothing is written to disk. It is off unless you turn it on because a whole prompt crosses from the server to the panel on every reply.",
-            },
-            {
                 key: "liveLog",
-                label: "Show a live log on screen",
+                label: "Show the on-screen panel",
                 type: "bool",
-                hint: "Puts a small panel in the corner that shows recent activity as it happens (generations, retries and why, finishes). Useful for watching what it does without opening the console, especially on mobile. Drag it to move it, drag its corner to resize, and turn this off to hide it.",
+                hint: "Puts a small panel in the corner with two tabs. Log shows what the extension is doing as it happens: generations, retries and why, finishes. Prompt shows the whole prompt that went to the model, every message in order, with your notes marked where they were inserted. Useful without opening the console, especially on a phone. Drag the header to move it, drag the corner to resize, and turn this off to hide it. The prompt is only captured while its tab is open, and only ever on your device.",
             },
         ],
     },
@@ -1912,6 +1908,14 @@ export function setup(ctx, opts) {
     let lastPrompt = null;
     let liveTab = "log";
     let paintTabs = null;
+    let focusTab = null;
+    // The one place the tab changes, so what is on screen and what the backend
+    // has been asked for cannot come apart.
+    function showTab(id) {
+        liveTab = id;
+        renderLiveLog();
+        askForPrompts();
+    }
     const rough = (n) => (n < 1000 ? String(n) : Math.round(n / 100) / 10 + "k");
     function renderLiveLog() {
         if (!liveLogBody)
@@ -1940,11 +1944,6 @@ export function setup(ctx, opts) {
             return;
         body.replaceChildren();
         body.style.whiteSpace = "normal";
-        if (!cfg.promptViewer) {
-            body.textContent =
-                "Turn on \"Show what was sent to the model\" in Auto Retry settings, then send a reply.";
-            return;
-        }
         if (!lastPrompt) {
             body.textContent = "(no prompt seen yet; send a reply)";
             return;
@@ -1958,13 +1957,42 @@ export function setup(ctx, opts) {
                 rough(chars) + " characters, roughly " + rough(Math.round(chars / 4)) + " tokens" +
                 (lastPrompt.dropped ? " (" + lastPrompt.dropped + " not shown)" : "");
         body.appendChild(sum);
+        // Where the notes landed, said in words as well as marked in the list. It
+        // is the question this view is most likely to be open for, and counting
+        // rows to work it out is not an answer.
+        if (lastPrompt.notes) {
+            const at = lastPrompt.messages.findIndex((m) => m && m.note);
+            const where = document.createElement("div");
+            where.style.cssText =
+                "margin:0 0 6px;padding:4px 6px;border-radius:var(--lumiverse-radius-sm,5px);" +
+                    "border-left:3px solid var(--lumiverse-primary,rgba(147,112,219,.9));" +
+                    "background:var(--lumiverse-primary-020,rgba(147,112,219,.2))";
+            where.textContent =
+                lastPrompt.notes +
+                    (lastPrompt.notes === 1 ? " Auto Retry note went with this one" : " Auto Retry notes went with this one") +
+                    (at >= 0
+                        ? ", at position " + (at + 1) + " of " + lastPrompt.total
+                        : "") +
+                    ". Marked below.";
+            body.appendChild(where);
+        }
         lastPrompt.messages.forEach((m, i) => {
             const row = document.createElement("details");
             row.style.cssText =
-                "margin:0 0 4px;border:1px solid var(--lumiverse-border,rgba(255,255,255,.12));" +
-                    "border-radius:var(--lumiverse-radius-sm,5px);padding:4px 6px";
+                "margin:0 0 4px;border:1px solid " +
+                    (m.note
+                        ? "var(--lumiverse-primary-050,rgba(147,112,219,.5))"
+                        : "var(--lumiverse-border,rgba(255,255,255,.12))") +
+                    ";border-radius:var(--lumiverse-radius-sm,5px);padding:4px 6px" +
+                    (m.note
+                        ? ";background:var(--lumiverse-primary-020,rgba(147,112,219,.2))"
+                        : "");
             const head = document.createElement("summary");
-            head.style.cssText = "cursor:pointer;list-style:none;display:flex;gap:6px;align-items:baseline";
+            // Tall enough for a thumb, since this list is read on a phone as often as
+            // on a desktop.
+            head.style.cssText =
+                "cursor:pointer;list-style:none;display:flex;gap:6px;align-items:baseline;" +
+                    "min-height:28px;padding:2px 0;touch-action:manipulation";
             const who = document.createElement("span");
             who.textContent = m.role || "?";
             who.style.cssText =
@@ -1974,8 +2002,16 @@ export function setup(ctx, opts) {
                         : "var(--lumiverse-primary-text,rgba(186,135,255,.95))");
             const where = document.createElement("span");
             // The distinction that matters when a prompt misbehaves: what came from
-            // the conversation, and what something wrapped around it.
-            where.textContent = (m.history ? "chat" : "added") + " \u00b7 " + rough(m.chars || 0);
+            // the conversation, what something wrapped around it, and which of it is
+            // ours. A note is named rather than being one more "added" row, because
+            // seeing where it landed is why someone opens this.
+            where.textContent =
+                (m.note
+                    ? "Auto Retry note" + (m.noteIndex > 1 || lastPrompt.notes > 1 ? " " + m.noteIndex : "")
+                    : m.history
+                        ? "chat"
+                        : "added") +
+                    " \u00b7 " + rough(m.chars || 0);
             where.style.cssText =
                 "font-size:11px;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
             const peek = document.createElement("span");
@@ -1996,8 +2032,9 @@ export function setup(ctx, opts) {
             row.appendChild(head);
             row.appendChild(full);
             body.appendChild(row);
-            if (i === 0)
-                row.open = false;
+            // A note is opened, because it is the thing someone came to look at.
+            if (m.note)
+                row.open = true;
         });
         try {
             ensureReadableTree(body);
@@ -2021,26 +2058,48 @@ export function setup(ctx, opts) {
         // view says what went to the model. They answer different questions and
         // both are wanted in the same place.
         const tabs = document.createElement("div");
+        tabs.setAttribute("role", "tablist");
         tabs.style.cssText = "display:flex;gap:4px;flex:1;min-width:0";
+        const ORDER = ["log", "prompt"];
         const tabBtns = {};
         const mkTab = (id, label) => {
             const b = document.createElement("button");
             b.type = "button";
             b.textContent = label;
             b.setAttribute("role", "tab");
+            b.id = "__lvRetryTab-" + id;
+            b.setAttribute("aria-controls", "__lvRetryLogBody");
             b.style.cssText =
-                "cursor:pointer;border:0;background:transparent;padding:2px 6px;font:inherit;" +
-                    "border-radius:var(--lumiverse-radius-sm,5px);color:inherit";
-            b.addEventListener("click", () => {
-                liveTab = id;
-                renderLiveLog();
-            });
+                // 32px tall and padded wide enough to be a thumb target. A tab strip
+                // that only works with a mouse is the wrong way round here: this panel
+                // exists because there is no console on a phone.
+                "cursor:pointer;border:0;background:transparent;font:inherit;color:inherit;" +
+                    "min-height:32px;padding:4px 12px;border-radius:var(--lumiverse-radius-sm,5px);" +
+                    // The header is the drag handle, and a tap that slides a pixel would
+                    // otherwise be swallowed as the start of a drag.
+                    "touch-action:manipulation";
+            b.addEventListener("click", () => showTab(id));
             tabs.appendChild(b);
             tabBtns[id] = b;
             return b;
         };
         mkTab("log", "Log");
         mkTab("prompt", "Prompt");
+        // Left and right move between tabs, which is how a tab strip is expected to
+        // behave for anyone driving this from a keyboard.
+        tabs.addEventListener("keydown", (e) => {
+            if (!e || (e.key !== "ArrowLeft" && e.key !== "ArrowRight"))
+                return;
+            try {
+                e.preventDefault();
+            }
+            catch (_) { }
+            const at = ORDER.indexOf(liveTab);
+            const next = ORDER[(at + (e.key === "ArrowRight" ? 1 : ORDER.length - 1)) % ORDER.length];
+            showTab(next);
+            if (focusTab)
+                focusTab(next);
+        });
         paintTabs = () => {
             for (const id of Object.keys(tabBtns)) {
                 const on = id === liveTab;
@@ -2050,7 +2109,16 @@ export function setup(ctx, opts) {
                     : "transparent";
                 b.style.fontWeight = on ? "600" : "400";
                 b.setAttribute("aria-selected", on ? "true" : "false");
+                // Only the selected tab is in the tab order, which is what a tab strip
+                // does: Tab reaches the strip, then the arrows move within it.
+                b.tabIndex = on ? 0 : -1;
             }
+        };
+        focusTab = (id) => {
+            try {
+                tabBtns[id] && tabBtns[id].focus({ preventScroll: true });
+            }
+            catch (_) { }
         };
         head.appendChild(tabs);
         // The panel exists because the console is out of reach on a phone, which is
@@ -2255,6 +2323,9 @@ export function setup(ctx, opts) {
         liveLogEl = null;
         liveLogBody = null;
         paintTabs = null;
+        focusTab = null;
+        // The panel is gone, so nothing is watching a prompt any more.
+        askForPrompts();
     }
     // A small round button that floats over the chat and turns the extension on or
     // off in one tap. The host owns the placement: ctx.ui.createFloatWidget gives
@@ -2658,19 +2729,27 @@ export function setup(ctx, opts) {
         catch (_) { }
     }
     function syncLiveLog() {
-        // Either view is a reason for the panel to exist, so turning the prompt
-        // viewer on brings it up without also having to turn the log on.
-        if (cfg.liveLog || cfg.promptViewer)
+        if (cfg.liveLog)
             showLiveLog();
         else
             hideLiveLog();
-        // Someone who turned the viewer on and the log off is looking for the
-        // prompt, so that is the view they land in.
-        if (cfg.promptViewer && !cfg.liveLog)
-            liveTab = "prompt";
-        else if (!cfg.promptViewer && liveTab === "prompt")
-            liveTab = "log";
         renderLiveLog();
+        askForPrompts();
+    }
+    // The backend captures a prompt only while somebody is looking at one. Told
+    // on every change of tab, open and close, and on teardown, so the cost stops
+    // the moment the view does.
+    let promptsAsked = false;
+    function askForPrompts() {
+        const want = !!(cfg.liveLog && liveLogEl && liveTab === "prompt");
+        if (want === promptsAsked)
+            return;
+        promptsAsked = want;
+        try {
+            if (ctx && typeof ctx.sendToBackend === "function")
+                ctx.sendToBackend({ type: "set_prompt_capture", on: want });
+        }
+        catch (_) { }
     }
     const disposers = [];
     // Coerce a raw saved object (local cache or account storage) into a clean
@@ -2866,7 +2945,7 @@ export function setup(ctx, opts) {
                 "confirmButtonLabels",
             ],
         },
-        { id: "notifications", label: "On-screen", keys: ["toast", "liveLog", "promptViewer"] },
+        { id: "notifications", label: "On-screen", keys: ["toast", "liveLog"] },
         // Special entry: carried outside cfg. buildExport and the import handler
         // treat it as the saved word-swap presets, not settings keys.
         { id: "presets", label: "Word swap presets", keys: [] },
@@ -7497,6 +7576,7 @@ export function setup(ctx, opts) {
         swapUndos.length = 0;
         lastPrompt = null;
         paintTabs = null;
+        focusTab = null;
         hideLiveLog();
         hideFloat();
         chats.forEach(clearTimers);

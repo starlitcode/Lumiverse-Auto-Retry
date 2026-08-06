@@ -2273,6 +2273,7 @@ console.log("\nprompt viewer");
   const out = await page.evaluate(async () => {
     const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     let onBackend = null;
+    let tabs0 = false;
     const sent = [];
     const teardown = window.__setup(
       {
@@ -2284,7 +2285,7 @@ console.log("\nprompt viewer");
           registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }),
         },
       },
-      { promptViewer: true, liveLog: false, toast: false },
+      { liveLog: true, toast: false },
     );
     await wait(30);
     const panel = () => document.getElementById("__lvRetryLog");
@@ -2294,8 +2295,14 @@ console.log("\nprompt viewer");
 
     const opened = !!panel();
     const tabs = [...document.querySelectorAll('[role="tab"]')].map((b) => b.textContent.trim());
-    // With the log off and the viewer on, the prompt is what someone is after.
-    const landedOn = tab("Prompt") ? tab("Prompt").getAttribute("aria-selected") : null;
+    // One switch, one panel, two tabs. It opens on the log.
+    const landedOn = tab("Log") ? tab("Log").getAttribute("aria-selected") : null;
+    // Nothing is captured while nobody is looking at a prompt.
+    const askedBefore = sent.filter((m) => m.type === "set_prompt_capture").map((m) => m.on);
+
+    tab("Prompt").click();
+    await wait(20);
+    const askedAfter = sent.filter((m) => m.type === "set_prompt_capture").map((m) => m.on);
     const beforeAny = body() ? body().textContent : "";
 
     // What the backend sends after an interceptor pass.
@@ -2306,43 +2313,86 @@ console.log("\nprompt viewer");
       messages: [
         { role: "system", content: "You are a tavern keeper.", chars: 24, history: false },
         { role: "user", content: "I sat down by the fire.", chars: 23, history: true },
+        { role: "system", content: "This was refused by mistake.", chars: 28, history: false, note: true, noteIndex: 1 },
         { role: "assistant", content: "A long reply.", chars: 9000, history: true },
       ],
-      total: 3,
+      total: 4,
       dropped: 0,
       clipped: 1,
+      notes: 1,
     });
     await wait(30);
     const shown = body() ? body().textContent : "";
     const rows = body() ? body().querySelectorAll("details").length : 0;
     // "added" versus "chat" is the distinction that matters when a prompt
     // misbehaves: what came from the conversation and what was wrapped round it.
+    // Read from the label span rather than the whole summary, which also
+    // carries a preview of the message and could contain the word by chance.
     const marks = body()
-      ? [...body().querySelectorAll("details summary")].map((h) => /chat/.test(h.textContent) ? "chat" : "added")
+      ? [...body().querySelectorAll("details summary")].map((h) => {
+          const label = h.children[1] ? h.children[1].textContent : "";
+          return /note/i.test(label) ? "note" : /chat/.test(label) ? "chat" : "added";
+        })
       : [];
     // A message shown in part has to say so rather than looking complete.
     const saysClipped = /cut for display/.test(shown);
 
-    tab("Log").click();
+    // Where the note went is the question this view is opened for.
+    const noteLine = /Auto Retry note/.test(shown);
+    const notePlace = /at position 3 of 4/.test(shown);
+    const noteRow = body()
+      ? [...body().querySelectorAll("details")].find((d) => /Auto Retry note/.test(d.textContent))
+      : null;
+    const noteOpen = !!(noteRow && noteRow.open);
+
+    // Arrow keys move between tabs for anyone driving this from a keyboard.
+    tab("Prompt").focus();
+    tabs0 = document.activeElement === tab("Prompt");
+    document.querySelector('[role="tablist"]')
+      .dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
     await wait(20);
+    const afterArrow = tab("Log").getAttribute("aria-selected");
     const afterLogTab = body() ? body().textContent : "";
+    // And the capture stops the moment the prompt is not being looked at.
+    const askedOnLeave = sent.filter((m) => m.type === "set_prompt_capture").map((m) => m.on);
+
+    // Big enough to hit with a thumb.
+    const tabBox = tab("Prompt").getBoundingClientRect();
 
     teardown();
     const gone = !panel();
-    return { opened, tabs, landedOn, beforeAny, shown, rows, marks, saysClipped, afterLogTab, gone };
+    const askedOnTeardown = sent.filter((m) => m.type === "set_prompt_capture").map((m) => m.on);
+    return { opened, tabs, landedOn, beforeAny, shown, rows, marks, saysClipped, afterLogTab,
+      gone, askedBefore, askedAfter, askedOnLeave, askedOnTeardown, noteLine, notePlace,
+      noteOpen, tabFocus: tabs0, afterArrow, tabH: Math.round(tabBox.height) };
   });
   await page.close();
-  check("turning the viewer on opens the panel by itself", out.opened, out);
-  check("with both views", out.tabs.join(",") === "Log,Prompt", out.tabs);
-  check("and lands on the prompt, since that is what was asked for",
-    out.landedOn === "true", out.landedOn);
+  check("one switch opens the panel", out.opened, out);
+  check("with both views in it", out.tabs.join(",") === "Log,Prompt", out.tabs);
+  check("and it opens on the log", out.landedOn === "true", out.landedOn);
+  // The reason there is no second setting: the cost is only paid while somebody
+  // is actually looking at a prompt.
+  check("nothing is captured until the prompt tab is opened",
+    out.askedBefore.filter((v) => v).length === 0, out.askedBefore);
+  check("opening it asks for capture", out.askedAfter[out.askedAfter.length - 1] === true, out.askedAfter);
+  check("leaving it stops capture", out.askedOnLeave[out.askedOnLeave.length - 1] === false, out.askedOnLeave);
+  check("and so does closing the panel",
+    out.askedOnTeardown[out.askedOnTeardown.length - 1] === false, out.askedOnTeardown);
   check("it says nothing has been seen yet before a generation",
     /no prompt seen yet/i.test(out.beforeAny), out.beforeAny.slice(0, 80));
-  check("a snapshot fills it in", out.rows === 3, out.rows);
-  check("with a summary of the size", /3 messages/.test(out.shown), out.shown.slice(0, 120));
-  check("marking what came from the chat and what was added",
-    out.marks.join(",") === "added,chat,chat", out.marks);
+  check("a snapshot fills it in", out.rows === 4, out.rows);
+  check("with a summary of the size", /4 messages/.test(out.shown), out.shown.slice(0, 120));
+  check("marking what came from the chat, what was added, and what is ours",
+    out.marks.join(",") === "added,chat,note,chat", out.marks);
   check("a message shown in part says so", out.saysClipped, out.shown.slice(-120));
+  // What the panel is for, in the user's words: knowing how and where a note
+  // was inserted.
+  check("a note is named rather than being one more added row", out.noteLine, out.shown.slice(0, 200));
+  check("and the view says where in the prompt it landed", out.notePlace, out.shown.slice(0, 200));
+  check("and opens it, since that is what was come for", out.noteOpen, out);
+  check("the tabs are big enough for a thumb", out.tabH >= 30, out.tabH);
+  check("a tab can be focused", out.tabFocus, out);
+  check("and the arrows move between them", out.afterArrow === "true", out.afterArrow);
   // The startup line, which the log always carries, so switching back is
   // visibly the log and not a leftover of the prompt view.
   check("the log tab still shows the log",

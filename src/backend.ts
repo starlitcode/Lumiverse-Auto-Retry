@@ -145,10 +145,20 @@ const MAX_NOTES = 10;
 // chat is built from, which is not the same question as "what actually went",
 // so this answers that one.
 //
-// Off unless the panel asks for it. A prompt is large, it is sent over the
-// bridge on every generation, and it is the user's chat text, so none of it
-// moves while nobody is looking at it.
-let promptViewer = false;
+// Captured only while somebody has the Prompt view open, and stopped the
+// moment they close it or switch back to the log. A prompt is large, it crosses
+// the bridge on every generation, and it is the user's chat text, so none of it
+// moves while nobody is looking at it. This is a live request from the panel
+// rather than a saved setting: a setting left on would go on paying for itself
+// in every chat forever after somebody looked once.
+//
+// A set rather than a flag, because one backend can serve several accounts and
+// one person opening the view is not a reason to capture anyone else's prompt.
+const promptWatchers = new Set<string>();
+const watcherKey = (userId?: string) => String(userId == null ? '' : userId);
+function watchingPrompt(userId?: string): boolean {
+  return promptWatchers.has(watcherKey(userId));
+}
 // Enough to see the shape of a long prompt without shipping a novel through the
 // bridge on every generation. Anything past this is cut and said to be cut, so
 // what is on screen is never quietly incomplete.
@@ -156,8 +166,8 @@ const VIEW_MAX_MESSAGES = 200;
 const VIEW_MAX_CHARS_PER_MESSAGE = 4000;
 const VIEW_MAX_CHARS_TOTAL = 300000;
 
-function snapshotPrompt(messages: any[], context: any, userId?: string): void {
-  if (!promptViewer || !Array.isArray(messages)) return;
+function snapshotPrompt(messages: any[], context: any, userId?: string, noteAt?: { from: number; count: number }): void {
+  if (!watchingPrompt(userId) || !Array.isArray(messages)) return;
   try {
     const out: any[] = [];
     let budget = VIEW_MAX_CHARS_TOTAL;
@@ -170,6 +180,11 @@ function snapshotPrompt(messages: any[], context: any, userId?: string): void {
       const text = full.length > room ? full.slice(0, room) : full;
       if (text.length < full.length) clipped++;
       budget -= text.length;
+      // The extension's own notes, marked so the panel can point at them. Where
+      // a note lands is the whole question someone opens this view to answer,
+      // and it is not something they can work out by reading the text.
+      const isNote =
+        !!noteAt && i >= noteAt.from && i < noteAt.from + noteAt.count;
       out.push({
         role: String(m.role == null ? '' : m.role),
         content: text,
@@ -179,6 +194,8 @@ function snapshotPrompt(messages: any[], context: any, userId?: string): void {
         // Marks the messages that came from stored chat turns, which is what
         // separates the conversation from everything wrapped around it.
         history: !!m.__isChatHistory,
+        note: isNote,
+        noteIndex: isNote ? i - noteAt!.from + 1 : 0,
       });
     }
     replyTo(userId, {
@@ -190,6 +207,7 @@ function snapshotPrompt(messages: any[], context: any, userId?: string): void {
       total: messages.length,
       dropped: Math.max(0, messages.length - out.length),
       clipped: clipped,
+      notes: noteAt ? noteAt.count : 0,
     });
   } catch (_) { /* a viewer must never cost anyone their generation */ }
 }
@@ -375,7 +393,6 @@ function rebuild(): void {
 
 // Pull the find-and-replace fields out of a full settings object.
 function applyReplaceFromSettings(s: any) {
-  promptViewer = !!s.promptViewer;
   enabled = !!s.replaceEnabled;
   random = !!s.replaceRandom;
   caseSensitive = !!s.replaceCaseSensitive;
@@ -559,6 +576,12 @@ spindle.onFrontendMessage(async (payload: any, userId?: string) => {
       let settings: any = null;
       try { settings = await readUserJson(SETTINGS_FILE, userId); } catch (__) { settings = null; }
       replyTo(userId, { type: 'loaded_settings', requestId: payload.requestId, settings: settings });
+      return;
+    }
+    if (payload.type === 'set_prompt_capture') {
+      const k = watcherKey(userId);
+      if (payload.on) promptWatchers.add(k);
+      else promptWatchers.delete(k);
       return;
     }
     if (payload.type === 'arm_refusal_note') {
@@ -749,7 +772,7 @@ try {
       try { replyTo(who, { type: 'note_sent', count: built.length, generationType: type }); } catch (__) {}
       // After the note is in, so the panel shows what actually went rather than
       // what would have gone without it.
-      snapshotPrompt(placed.list, context, who);
+      snapshotPrompt(placed.list, context, who, { from: placed.from, count: built.length });
       return { messages: placed.list, breakdown: breakdown };
     } catch (_) {
       return messages; // a fault here must never cost the user their generation
