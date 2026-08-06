@@ -437,6 +437,12 @@ describe("an ending counts in any script", () => {
     ["Arabic", "\u0645\u0631\u062D\u0628\u0627 \u0628\u0643\u061F"],
     ["Greek", "\u03A0\u03AE\u03B3\u03B5 \u03C3\u03C4\u03B7\u03BD \u03C0\u03CC\u03C1\u03C4\u03B1\u00B7"],
     ["an emoji", "She smiled and waved \u{1F44B}"],
+    // U+FE0F is a combining mark, not a symbol, so the last code point of a
+    // heart written this way is not punctuation and the reply read as cut off.
+    // Hearts end a great many roleplay replies.
+    ["an emoji with a variation selector", "She smiled \u2764\uFE0F"],
+    ["an emoji with a skin tone", "She waved \u{1F44B}\u{1F3FD}"],
+    ["a joined emoji", "They arrived \u{1F468}\u200D\u{1F469}\u200D\u{1F467}"],
     ["a closing bracket", "(He said nothing more)"],
     ["an ellipsis", "He hesitated\u2026"],
   ] as const;

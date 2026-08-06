@@ -34,10 +34,11 @@ _2026-08-06_
 - **The reset confirmation says how serious it is, and looks it.** Putting settings back is undone by closing the panel, and deleting presets is not, so the two are not painted the same: the first asks in the theme's warning colour, the second turns red, says "Deleting presets cannot be undone", and relabels its button **Yes, reset and delete**. The preset line in the list is bold and red as well. Painting the mild case like the serious one would make the warning worth ignoring on the one that matters.
 - **The picker says what it cannot reach.** Your chats, your replies and your characters are never touched by any of it. Your saved word swap presets are kept too, unless you tick the line for them, which sits under a rule of its own because it is the one thing there that deletes something for real rather than waiting for Save. **Tick every setting** never ticks it.
 - **The defaults now assume a slow model rather than a fast one.** A watchdog that fires early on a model that is slow but healthy throws away a reply that was still arriving, and the replacement comes from the same slow model, so it fires again on that one too. The wait for a reply that has started but produced nothing goes from 90 seconds to 3 minutes, the wait for a stream that has gone quiet mid-reply from 45 to 90 seconds, the longest wait between tries from 30 to 60 seconds, and the wait when the server says it is busy from 8 to 15 seconds, which clears the per-minute limits most shared tiers use. A retry click also gets 15 seconds rather than 6 to produce a generation before the extension decides the click failed.
+- **The new defaults apply to a fresh install.** Settings already saved to your account keep the values they had, so if you want the new ones, open **Reset…**, tick the parts you want, and Save.
 - **Waiting for another extension to finish now waits 85 seconds instead of 15.** A refinement pass is a whole generation, so how long it takes depends on the model, the prompt and how much it has to read. Fifteen seconds covered a fast model and nothing else, so on anything slower the swap landed first and the refinement arrived on top and wiped it, which is the failure that setting exists to prevent. The most you can set has gone from 2 minutes to 5.
 - **Retrying a reply that stops on a word is now on by default.** This was off because it was wrong too often, and the reason it was wrong is fixed below. It is what catches a reply cut off mid-sentence when nothing else was left open.
 - **Nothing the extension draws sits at the top of the stacking order any more.** Two of its surfaces used the highest number a browser accepts, which meant no other extension could ever draw above them. They are still above the page and now leave room above themselves.
-- **Nothing in the extension animates except a hover colour and a focus outline.** The floating button carried transitions on four colour properties and a scale dip on every press; it now changes instantly, which says the same thing sooner. A leftover transition on `filter`, which nothing has set for several versions, is gone from every button: animating it is what forces a button onto its own compositing layer for no benefit.
+- **Nothing in the extension animates except a hover colour and a focus outline.** The floating button carried transitions on four colour properties and a scale dip on every press; it now changes instantly, which says the same thing sooner. The transition on `filter` is gone from every button: the press feedback that uses it is meant to be instant, and animating `filter` is what forces a button onto its own compositing layer for no benefit.
 
 ### Fixed
 
@@ -59,9 +60,6 @@ _2026-08-06_
 - **The separate Start the note on try setting.** Replaced by a **from try** box on each note, which is what lets a list escalate. Your existing value is carried onto every note you already had.
 - **The separate Reset button selectors button.** It existed because resetting everything to fix one mistyped selector was too blunt. The picker covers that properly: tick **Button selectors** and nothing else.
 
-### A note on the timings
-
-The new defaults apply to a fresh install. Settings already saved to your account keep the values they had, so if you want the new ones, open **Reset…**, tick the parts you want, and Save.
 
 ## 4.3.0
 
@@ -130,7 +128,7 @@ _2026-08-02_
 - **The full-size editor, the live log and the retry pop-up were see-through.** Open the editor over the settings and you could read the rows behind it, Save included. All three were painted with a colour that is 90% opaque, meant to tint a surface rather than be one. Every panel that floats over something else is solid now.
 - **Five settings showed a number with no unit.** "Wait before the first retry" read 1200 with nothing saying whether that meant milliseconds, seconds or minutes, while "How long to pause (minutes)" right above it named its unit. All five say (ms) now.
 - **The retry pop-up covered the floating button's menu.** It sat above everything, so it could land on top of a menu you had just opened and turn a tap on "Hide this button" into a tap on Cancel. Things you open on purpose now sit above things that appear on their own.
-- **The menu's focus ring was a hard white rectangle**, taken from the browser rather than your theme. It uses your accent colour now.
+- **The menu's focus ring was a hard white rectangle.**, taken from the browser rather than your theme. It uses your accent colour now.
 - **Preset buttons that had nothing to act on.** With no presets saved, Load, Update selected, Delete and Rename selected were all lit, Load styled as the main action, and each one answered a press with a message telling you to pick a preset first. They wait until there is a preset to act on.
 
 ## 4.0.0
@@ -465,11 +463,11 @@ _2026-07-13_
 
 ### Added
 
-- **That cap can be set to 0 to turn it off entirely**, so refusals are caught at any length. It stays safe because length alone never triggers a retry: a reply still has to match the refusal patterns, so a long scene will not be re-rolled just for being long.
+- **That cap can be set to 0 to turn it off entirely.**, so refusals are caught at any length. It stays safe because length alone never triggers a retry: a reply still has to match the refusal patterns, so a long scene will not be re-rolled just for being long.
 
 ### Changed
 
-- **The "longest reply to treat as a refusal" cap defaults to 2000** (was 1200). Some models write long, padded refusals (apology, "as an AI", a paragraph of reasoning, then offered alternatives) that ran past the old limit and slipped through. 2000 catches those while leaving genuinely long replies alone.
+- **The "longest reply to treat as a refusal" cap defaults to 2000.** (was 1200). Some models write long, padded refusals (apology, "as an AI", a paragraph of reasoning, then offered alternatives) that ran past the old limit and slipped through. 2000 catches those while leaving genuinely long replies alone.
 
 ## 1.4.1
 
@@ -485,13 +483,13 @@ A patch: fixes and cleanup, nothing new.
 - **Regrouped:** the live log and the debug info section now sit next to each other as one debugging area, instead of being split apart by import/export, which moved to the bottom.
 - **Reworded:** the import/export description, so it is clearer about what importing does.
 
-### Removed
-
-- **The "write technical details to the console" toggle.** Redundant now that the live log shows the same activity on screen and the debug report already captures it.
-
 ### Fixed
 
 - **Resizing the live log on mobile.** Dragging the panel's corner to resize now works on Android and other touch screens. It was mouse-only before, so there was nothing to grab on a phone.
+
+### Removed
+
+- **The "write technical details to the console" toggle.** Redundant now that the live log shows the same activity on screen and the debug report already captures it.
 
 ## 1.4.0
 
@@ -500,8 +498,8 @@ _2026-07-13_
 ### Added
 
 - **Import and export your settings.** Open Advanced: import / export, tick which parts to include (retry behaviour, refusal detection, word swaps, button selectors, notifications), then Export to file to save them or Import from file to load one. An import puts the values into the settings without saving, so you can review them first, then press Save to keep them or close to discard.
-- **Choosable debug info**, in a new Advanced: debug info section. Pick which parts to include (your settings, button match status, browser and screen, recent activity), build a preview, edit out anything you would rather not share, then copy. The old Copy debug info button in the footer is gone, replaced by this section.
-- **A live log you can watch on screen**, under Advanced: feedback. A small panel shows recent activity as it happens: generations, retries and why, finishes. Handy on mobile especially, where the browser console is out of reach.
+- **Choosable debug info.**, in a new Advanced: debug info section. Pick which parts to include (your settings, button match status, browser and screen, recent activity), build a preview, edit out anything you would rather not share, then copy. The old Copy debug info button in the footer is gone, replaced by this section.
+- **A live log you can watch on screen.**, under Advanced: feedback. A small panel shows recent activity as it happens: generations, retries and why, finishes. Handy on mobile especially, where the browser console is out of reach.
 
 ## 1.3.1
 
@@ -509,7 +507,7 @@ _2026-07-12_
 
 ### Fixed
 
-- **Cleaned up a quote in one of the settings descriptions** so it displays properly.
+- **Cleaned up a quote in one of the settings descriptions.** so it displays properly.
 
 ## 1.3.0
 
@@ -530,14 +528,14 @@ _2026-07-12_
 ### Added
 
 - **Accidental-refusal retry (beta).** When the model breaks character to refuse something harmless, it re-sends the exact same request and tries again, capped by your retry limit. It never changes your prompt or swaps any words, it just gives the reply another roll. A refusal the model really means will repeat and stop on its own.
-- **Refusal detection you can tune**, under a new Advanced section: add your own refusal phrases, whitelist lines that should never count, reword the built-in ones, or switch the built-in list off entirely. The whole feature is one toggle to turn off.
+- **Refusal detection you can tune.**, under a new Advanced section: add your own refusal phrases, whitelist lines that should never count, reword the built-in ones, or switch the built-in list off entirely. The whole feature is one toggle to turn off.
 - **Find and replace in replies (beta).** Swap words you do not like for ones you prefer, saved right into the reply. Whole words only by default, so "cat" will not touch "category". It keeps capitalisation, and an empty right side deletes a word. Off by default.
-- **A new chat-editing permission** (`chat_mutation`) alongside the existing generation one. Only used by find and replace, so it can save its edits to a reply. Depending on your setup it may need admin approval when you update, and if you never use find and replace nothing is touched.
+- **A new chat-editing permission.** (`chat_mutation`) alongside the existing generation one. Only used by find and replace, so it can save its edits to a reply. Depending on your setup it may need admin approval when you update, and if you never use find and replace nothing is touched.
 
 ### Changed
 
-- **Advanced settings now collapse**, tucked behind a tap-to-open header so the basic switches stay front and centre.
-- **README cleaned up and updated**, reorganised, and now covering the new settings and permissions.
+- **Advanced settings now collapse.**, tucked behind a tap-to-open header so the basic switches stay front and centre.
+- **README cleaned up and updated.**, reorganised, and now covering the new settings and permissions.
 
 ## 1.1.6
 
@@ -577,7 +575,7 @@ _2026-06-26_
 ### Changed
 
 - **Testing a button selector is clearer.** A button only exists in the page while it is on screen, so a correct selector will not match if that button is not showing. The result now reads "not on screen right now" instead of "no match", and the settings and README explain it: the **Stop** button only appears while a reply is generating, so test that selector mid-generation rather than from an idle screen.
-- **Tightened up the wording** in the settings descriptions and README.
+- **Tightened up the wording.** in the settings descriptions and README.
 
 ## 1.1.2
 
@@ -586,7 +584,7 @@ _2026-06-25_
 ### Fixed
 
 - **Buttons respond to taps on mobile.** Before, they only reacted to mouse hover, which phones do not have, so pressing Save, Test or Cancel gave no feedback. The retry pop-up's Cancel button is also sized to match the others for an easier tap.
-- **A settings hint showed the wrong example time**, so the "wait before the first retry" description matches the actual default.
+- **A settings hint showed the wrong example time.**, so the "wait before the first retry" description matches the actual default.
 
 ## 1.1.1
 
@@ -594,7 +592,7 @@ _2026-06-17_
 
 ### Changed
 
-- **Copy debug info includes a recent-activity log**, so a bug report shows what actually happened (generations starting, retries firing and why, a clean finish) rather than just a snapshot of your settings.
+- **Copy debug info includes a recent-activity log.**, so a bug report shows what actually happened (generations starting, retries firing and why, a clean finish) rather than just a snapshot of your settings.
 
 ## 1.1.0
 
@@ -602,19 +600,19 @@ _2026-06-17_
 
 ### Added
 
-- **A Cancel button on the retry pop-up**, so you can pull the plug even while it is counting down to a retry.
-- **A Copy debug info button**, so reporting a bug is one tap with no dev tools needed.
+- **A Cancel button on the retry pop-up.**, so you can pull the plug even while it is counting down to a retry.
+- **A Copy debug info button.**, so reporting a bug is one tap with no dev tools needed.
 
 ### Changed
 
-- **Settings reworded in plain language**, with a short description on each group.
-- **Tuned the defaults** so a slow reply or a slow local model is not mistaken for a frozen one and retried into a pile-up.
-- **Better on mobile**, with bigger tap targets and a layout that fits narrow screens.
-- **README updated** with the new settings, defaults, and a how-to-report-a-bug section.
+- **Settings reworded in plain language.**, with a short description on each group.
+- **Tuned the defaults.** so a slow reply or a slow local model is not mistaken for a frozen one and retried into a pile-up.
+- **Better on mobile.**, with bigger tap targets and a layout that fits narrow screens.
+- **README updated.** with the new settings, defaults, and a how-to-report-a-bug section.
 
 ### Fixed
 
-- **A couple of menu colours** were not matching the theme.
+- **A couple of menu colours.** were not matching the theme.
 
 ## 1.0.0
 

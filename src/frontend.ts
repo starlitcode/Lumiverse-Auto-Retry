@@ -863,7 +863,20 @@ function stripMarkup(text: string): string {
 // the only thing left that reads as unfinished is a reply that stops on a
 // letter or a digit, which is what being cut off mid-word actually looks like.
 function endsOnPunctuation(t: string): boolean {
-  const last = Array.from(t).pop() || "";
+  const cps = Array.from(t);
+  let last = "";
+  // Walk back past anything that is not a character in its own right. An emoji
+  // written with a variation selector ends on U+FE0F, which is a combining
+  // mark rather than a symbol, so a reply ending on a heart was read as having
+  // no ending at all and re-rolled. The same goes for the joiners inside a
+  // multi-part emoji. What is wanted is the last thing that is actually there.
+  for (let i = cps.length - 1; i >= 0; i--) {
+    try {
+      if (/[\p{M}\p{Cf}]/u.test(cps[i])) continue;
+    } catch (_) { /* no property escapes; take the last one as it is */ }
+    last = cps[i];
+    break;
+  }
   if (!last) return false;
   try {
     // \p{P} is every punctuation mark in every script, \p{S} covers symbols and
@@ -6733,10 +6746,10 @@ export function setup(ctx: Ctx, opts?: any) {
     if (primary) ensureEdge(b);
     // Hovering swaps to the theme's own hover colour rather than brightening the
     // resting one, so a button lights up the same way the rest of Lumiverse does.
-    const restBg = primary
+    let restBg = primary
       ? "var(--lumiverse-primary,rgba(147,112,219,.9))"
       : "var(--lumiverse-secondary,rgba(128,128,128,.15))";
-    const hoverBg = primary
+    let hoverBg = primary
       ? "var(--lumiverse-primary-hover,rgba(167,132,239,.95))"
       : "var(--lumiverse-secondary-hover,rgba(128,128,128,.25))";
     const setBg = (v: string) => {
@@ -6744,6 +6757,16 @@ export function setup(ctx: Ctx, opts?: any) {
       // A theme is free to make its hover colour lighter or darker than the
       // resting one, so the label is checked against whichever is showing.
       ensureReadable(b);
+    };
+    // Changing a button's colour means changing what it rests and hovers at,
+    // not just what it is painted right now. Setting the background alone was
+    // undone by the next mouseleave, so the reset picker's danger red came off
+    // the moment a pointer crossed it and did not come back.
+    (b as any).__setTone = (rest: string, hover: string) => {
+      restBg = rest;
+      hoverBg = hover || rest;
+      b.style.borderColor = rest;
+      setBg(rest);
     };
     b.addEventListener("mouseenter", () => setBg(hoverBg));
     b.addEventListener("mouseleave", () => setBg(restBg));
@@ -7064,12 +7087,14 @@ export function setup(ctx: Ctx, opts?: any) {
         ? "Deleting presets cannot be undone."
         : "Put the ticked parts back to their defaults?";
       yes.textContent = permanent ? "Yes, reset and delete" : "Yes, reset";
-      yes.style.background = edge;
-      yes.style.borderColor = edge;
-      // The fill is now the theme's danger or warning colour rather than its
-      // accent, and the label was coloured for the accent, so it is measured
-      // against what is actually painted.
-      try { ensureReadable(yes); } catch (_) {}
+      // Through the button's own tone, so hovering it does not put the accent
+      // back. ensureReadable runs inside that, measuring the label against
+      // whatever is actually painted rather than against the accent it was
+      // coloured for.
+      const hover = permanent
+        ? "var(--lumiverse-danger-hover,#dc2626)"
+        : "var(--lumiverse-warning,#f59e0b)";
+      try { (yes as any).__setTone(edge, hover); } catch (_) {}
     };
 
     const freeze = (frozen: boolean) => {

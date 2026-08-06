@@ -30,11 +30,13 @@ Your settings and your word-swap presets are saved twice over: once in your brow
 
 Separately it keeps the last twenty lines of what it did, and a few counters for the session: replies that came back fine, retries fired, and what they fired for. That is all in memory, so the Copy debug info button has something to report. Both die with the tab. Neither is written to disk and neither leaves your device.
 
+The on-screen panel's **Prompt** tab is the one part that holds more than that, and only while you are looking at it. Opening that tab asks the extension to keep a copy of the prompt on its way to the model, which is the text of your chat, so that it can show it to you. Switch to the Log tab, close the panel, or close the browser tab and nothing is kept at all. It is never written to disk and never leaves your device, and only one prompt is held at a time: each generation replaces the last. This is why there is no separate switch to leave on and forget about.
+
 ## One thing to be careful with
 
 The Copy debug info button gathers your settings, your button selectors, your browser string, the session counters, and that recent activity log. The activity log records what the extension saw, so it can contain short fragments of a reply. Read what you copied before pasting it somewhere public, and untick any section you would rather keep to yourself. The tick boxes are there for exactly that.
 
-The **Copy** button on the on-screen live log is the same thing in miniature: it puts that whole activity log on your clipboard in one tap, fragments included. It is there because selecting text by hand on a phone is awkward, and the same advice applies before you paste it anywhere.
+The **Copy** button on the on-screen panel is the same thing in miniature: on the Log tab it puts that whole activity log on your clipboard in one tap, fragments included, and on the Prompt tab it copies the entire prompt, which is most of your chat. It is there because selecting text by hand on a phone is awkward, and the same advice applies before you paste either anywhere.
 
 The refusal tester in the settings panel only reads the text you paste into it. It runs the check on your device and reports the verdict; it sends nothing and stores nothing.
 

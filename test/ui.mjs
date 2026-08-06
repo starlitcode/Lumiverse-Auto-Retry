@@ -3851,11 +3851,23 @@ console.log("\nreset urgency");
       inBox(/^Reset ticked/).click();
       await frame();
       const withPresets = read();
+      // A button's colour is what it rests at, not what it is painted right
+      // now. Setting the background alone was undone by the next mouseleave,
+      // so the danger red came off the moment a pointer crossed it.
+      const yes = inBox(/^Yes, reset/);
+      yes.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }));
+      await frame();
+      const onHover = getComputedStyle(yes).backgroundColor;
+      yes.dispatchEvent(new MouseEvent("mouseleave", { bubbles: true }));
+      await frame();
+      const afterHover = getComputedStyle(yes).backgroundColor;
 
       const presetLabel = document.querySelector('[data-ar-reset="presets"] strong');
       return {
         settingsOnly,
         withPresets,
+        onHover,
+        afterHover,
         presetBold: !!presetLabel,
         presetColour: presetLabel ? getComputedStyle(presetLabel).color : "",
         presetWeight: presetLabel ? getComputedStyle(presetLabel).fontWeight : "",
@@ -3884,6 +3896,8 @@ console.log("\nreset urgency");
   check("and the button that commits it says what it will do",
     /delete/i.test(out.withPresets.yesLabel), out.withPresets.yesLabel);
   check("and is red too", red(out.withPresets.yesBg), out.withPresets.yesBg);
+  check("and stays red under a pointer", red(out.onHover), out.onHover);
+  check("and after the pointer leaves", red(out.afterHover), out.afterHover);
   check("no console errors", errors.length === 0, errors);
 }
 
