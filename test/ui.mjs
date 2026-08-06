@@ -2255,18 +2255,17 @@ console.log("\nrefusal note");
   check("no console errors", errors.length === 0, errors);
 }
 
-// ---- quick setup, and the line that says you need none of it ----
+// ---- quick setup ----
 // The panel has forty-odd options and the person opening it for the first time
-// is deciding whether to close it again. These two are the answer to that, so
-// they have to be at the top, they have to be honest about what they changed,
-// and they must not reach anything that is somebody's own setup.
+// is deciding whether to close it again. This is the answer to that, so it has
+// to be at the top, it has to be honest about what it changed, and it must not
+// reach anything that is somebody's own setup.
 console.log("\nquick setup");
 {
   const { out, errors } = await inPanel(browser, {}, async (page) =>
     page.evaluate(async () => {
       const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       const quick = document.querySelector("[data-ar-quick]");
-      const hello = document.querySelector("[data-ar-hello]");
       const preset = (id) => document.querySelector('[data-ar-preset="' + id + '"]');
       for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
       await frame();
@@ -2310,13 +2309,7 @@ console.log("\nquick setup");
       // Filled in and left for Save, like an import.
       const stored = JSON.parse(localStorage.getItem("lv-auto-retry:settings:v1") || "{}");
 
-      const helloText = hello ? hello.textContent : "";
-      const gotIt = hello ? [...hello.querySelectorAll("button")].find((b) => /got it/i.test(b.textContent)) : null;
-      if (gotIt) gotIt.click();
-      await frame();
-      const helloGone = !document.querySelector("[data-ar-hello]");
-      const helloRemembered = !!localStorage.getItem("lv-auto-retry:seen-panel:v1");
-      return { above, names, slow, busy, errs, back, mine, stored, helloText, helloGone, helloRemembered };
+      return { above, names, slow, busy, errs, back, mine, stored };
     }),
   );
   check("the quick setup row is there", out.above, out);
@@ -2335,10 +2328,6 @@ console.log("\nquick setup");
     out.mine.rules === "cat => dog" && out.mine.sel === ".mine", out.mine);
   check("and nothing is saved until you press Save",
     out.stored.stuckTimeoutMs === undefined || out.stored.stuckTimeoutMs === 180000, out.stored.stuckTimeoutMs);
-  check("the first-time note says you need to change nothing",
-    /do not have to change/i.test(out.helloText), out.helloText.slice(0, 90));
-  check("Got it dismisses it", out.helloGone, out);
-  check("and it is remembered", out.helloRemembered, out);
   check("no console errors", errors.length === 0, errors);
 }
 

@@ -6,8 +6,6 @@ Switching Auto Retry itself off changes nothing in here. Every setting stays whe
 
 You do not have to change anything. Auto Retry is on and set up when you install it, and the defaults are picked for what most people and most providers need.
 
-The first time you open the panel it says so, with a **Got it** to put the line away.
-
 Above the options there is a **Quick setup** row with four choices. Tap one and it fills the retry options in for you:
 
 | | For |

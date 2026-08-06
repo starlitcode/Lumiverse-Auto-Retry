@@ -2842,24 +2842,6 @@ export function setup(ctx: Ctx, opts?: any) {
   }
   const disposers: Array<() => void> = [];
 
-  // Whether the panel's opening note has been dismissed. Kept in the browser
-  // rather than in the settings: it is a record of somebody having read a line
-  // once, not a preference, so it has no business in an export or a backup.
-  const SEEN_KEY = "lv-auto-retry:seen-panel:v1";
-  function seenPanelBefore(): boolean {
-    try {
-      return typeof localStorage !== "undefined" && !!localStorage.getItem(SEEN_KEY);
-    } catch (_) {
-      // No storage means it shows every time, which is the harmless way round.
-      return false;
-    }
-  }
-  function markPanelSeen() {
-    try {
-      if (typeof localStorage !== "undefined") localStorage.setItem(SEEN_KEY, "1");
-    } catch (_) {}
-  }
-
   // Coerce a raw saved object (local cache or account storage) into a clean
   // partial config: keep only known fields, run each through its type.
   function coerceSaved(parsed: any): any {
@@ -6202,35 +6184,6 @@ export function setup(ctx: Ctx, opts?: any) {
       wrap.appendChild(said);
       wrap.appendChild(row);
       panel.appendChild(wrap);
-    }
-
-    // ---- the first time ----
-    // Someone opening this for the first time is usually here to find out
-    // whether they have to do something. They do not, and the panel should say
-    // so before they start reading forty options looking for the answer.
-    if (!seenPanelBefore()) {
-      const hello = document.createElement("div");
-      hello.setAttribute("data-ar-hello", "1");
-      hello.style.cssText =
-        "flex:none;display:flex;align-items:flex-start;gap:10px;margin:0 0 10px;" +
-        "padding:8px 10px;border-radius:var(--lumiverse-radius,8px);" +
-        "border-left:3px solid var(--lumiverse-primary,rgba(147,112,219,.9));" +
-        "background:var(--lumiverse-primary-020,rgba(147,112,219,.2));" +
-        "font-size:12px;line-height:1.5";
-      const words = document.createElement("div");
-      words.style.cssText = "flex:1;min-width:0";
-      words.textContent =
-        "Auto Retry is already on and set up for most people. You do not have to change " +
-        "anything in here. Everything below is optional, and each option's ? explains it.";
-      const ok = btn("Got it", false);
-      ok.style.cssText += "min-height:30px;padding:4px 12px;font-size:12px;flex:none";
-      ok.addEventListener("click", () => {
-        markPanelSeen();
-        try { hello.remove(); } catch (_) {}
-      });
-      hello.appendChild(words);
-      hello.appendChild(ok);
-      panel.insertBefore(hello, panel.firstChild);
     }
 
     panel.appendChild(scroller);
