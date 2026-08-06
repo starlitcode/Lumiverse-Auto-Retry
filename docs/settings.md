@@ -8,6 +8,18 @@ Each option's **?** shows its description in a small popover just below that opt
 
 A setting that does nothing until something else is switched on is not shown until it is. Whole sections work the same way: turning **It looks like an accidental refusal** off takes the entire **Advanced: refusal tuning** section away, heading included, because nothing under it does anything while that is off. Turning **Send a note with a refusal retry** on adds the note rows below it, and turning it off takes them away again, so the panel only lists what is actually in use. The switch itself never moves. The search box ignores this and finds a setting whichever way its switch is set, so nothing is ever hidden from you when you go looking for it by name. A row found that way says which switch it is waiting on, so changing it never looks like it did nothing.
 
+## Resetting
+
+**Reset…** at the bottom of the panel opens a picker rather than putting everything back at once. Tick the parts you want returned to their defaults; anything you leave unticked is not touched. The parts are the same ones import and export use, so the names match between the two.
+
+Each line says how many of its settings have actually been changed from the default. A part still at its defaults cannot be ticked, because there would be nothing for it to do. **Tick every setting** ticks all the parts that have something to reset.
+
+A reset fills the settings in behind the box without saving them, the same as an import does, so you can look at what it did first. Press **Save** to keep it, or close the panel to discard it. If you press Reset by mistake, closing the panel undoes it.
+
+**Delete saved word swap presets** sits below a rule of its own, and it is the one thing in the picker that is not undone by closing the panel: presets are stored separately from your settings, so deleting them happens straight away. **Tick every setting** never ticks it.
+
+Nothing a reset does goes near your chats, your replies or your characters. Auto Retry only ever reads replies, and a reset does not touch them at all.
+
 Only settings the extension genuinely ignores are hidden this way. Some options look dependent and are not: the word swap rules are still read by the two manual swap buttons whether or not automatic swapping is on, so they stay put.
 
 One setting inside the refusal tuning section is an exception worth knowing about. `refusalThinkTags` goes away with the rest of that section, but it is still used with accidental-refusal retrying off: the blank-reply and short-reply checks read it to find where the reply starts. Search for it by name to reach it while the section is hidden.
@@ -77,7 +89,7 @@ The same options live in the CONFIG block at the top of `src/frontend.ts` and `d
 
 The two watchdog waits (`stuckTimeoutMs`, `idleTimeoutMs`) are deliberately long, and the defaults assume a slow model rather than a fast one. A watchdog that fires early on a model that is slow but healthy is worse than one that fires late: it throws away a reply that was still arriving, and the replacement comes from the same slow model, so it fires again on that one too. If your provider is fast and you want quicker recovery, lower them.
 
-These defaults only apply to a fresh install. Settings already saved to your account keep the values they had, so if you have been using an earlier version and want the new timings, press **Reset to defaults** in the panel.
+These defaults only apply to a fresh install. Settings already saved to your account keep the values they had, so if you have been using an earlier version and want the new timings, open **Reset…** and tick **Retry behavior**.
 
 ---
 

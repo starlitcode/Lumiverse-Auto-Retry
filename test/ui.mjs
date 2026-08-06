@@ -2259,7 +2259,7 @@ console.log("\nbutton edges");
           const cs = getComputedStyle(b);
           return { border: cs.borderTopColor, bg: cs.backgroundColor, colour: cs.color };
         };
-        return { save: seen(by("Save")), reset: seen(by("Reset to defaults")) };
+        return { save: seen(by("Save")), reset: seen(by("Reset\u2026")) };
       }),
     );
     return { out, errors };
@@ -3169,6 +3169,21 @@ console.log("\npainted surfaces");
             [...c.childNodes].some((n) => n.nodeType === 3 && n.nodeValue.trim()),
         );
         found.editor = reading(box, title);
+        const closeEditor = box && [...box.querySelectorAll("button")].find((b) => b.textContent.trim() === "Cancel");
+        if (closeEditor) closeEditor.click();
+        await frame();
+
+        // The reset picker, which paints the same way and had none of this.
+        const resetBtn = [...document.querySelectorAll("button")].find((b) => /^Reset/.test(b.textContent.trim()));
+        if (resetBtn) resetBtn.click();
+        await frame();
+        const rbox = document.getElementById("__lvRetryReset");
+        const rcard = rbox && rbox.firstElementChild;
+        const rtitle = rcard && [...rcard.children].find(
+          (c) => c.tagName === "DIV" &&
+            [...c.childNodes].some((n) => n.nodeType === 3 && n.nodeValue.trim()),
+        );
+        found.reset = reading(rcard, rtitle);
         return found;
       }),
     );
@@ -3176,12 +3191,204 @@ console.log("\npainted surfaces");
       out.tip && out.tip.ratio >= 3, out.tip);
     check(name + ": the editor's text reads against what the editor paints",
       out.editor && out.editor.ratio >= 3, out.editor);
+    check(name + ": the reset picker's text reads against what it paints",
+      out.reset && out.reset.ratio >= 3, out.reset);
     check(name + ": no console errors", errors.length === 0, errors);
   };
   await look("stock", "");
   await look("full light", LIGHT);
   await look("partial light", PARTIAL_LIGHT);
   await look("dark variables on a light page", LIGHT_PAGE);
+}
+
+// ---- resetting one part leaves the others alone ----
+// Reset used to be all or nothing, plus a second button for the button
+// selectors on their own, because putting those back was the case that came up
+// and doing it cost you your word swaps and your refusal phrases. The picker
+// replaces both. The thing worth holding down is the promise it makes on
+// screen: what you do not tick is not touched.
+console.log("\nreset picker");
+{
+  const openPicker = async (page) =>
+    page.evaluate(async () => {
+      const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const b = [...document.querySelectorAll("button")].find((x) => /^Reset/.test(x.textContent.trim()));
+      b.click();
+      await frame();
+    });
+
+  const { out, errors } = await inPanel(browser, {}, async (page) => {
+    // Move one setting in each of two different parts away from its default.
+    await page.evaluate(async () => {
+      const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      await frame();
+      const row = (k) => document.querySelector('[data-ar-row="' + k + '"]');
+      const set = (k, v) => {
+        const el = row(k).querySelector("input,textarea,select");
+        el.value = v;
+        el.dispatchEvent(new Event("change", { bubbles: true }));
+      };
+      set("maxRetries", "9");                       // Retry behavior
+      set("regenerateSelector", ".my-own-button");  // Button selectors
+      set("refusalExtraPhrases", "nope");           // Refusal detection
+      await frame();
+    });
+    await openPicker(page);
+    const seen = await page.evaluate(() => {
+      const rows = [...document.querySelectorAll("[data-ar-reset]")];
+      return rows.map((r) => ({
+        id: r.getAttribute("data-ar-reset"),
+        disabled: r.querySelector("input").disabled,
+        note: r.lastElementChild.textContent.trim(),
+      }));
+    });
+    // Tick the button selectors only, and go.
+    const after = await page.evaluate(async () => {
+      const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      document.querySelector('[data-ar-reset="buttons"] input').checked = true;
+      [...document.querySelectorAll("#__lvRetryReset button")]
+        .find((b) => b.textContent.trim() === "Reset ticked").click();
+      await frame();
+      const row = (k) => document.querySelector('[data-ar-row="' + k + '"]');
+      const val = (k) => row(k).querySelector("input,textarea,select").value;
+      return {
+        stillOpen: !!document.getElementById("__lvRetryReset"),
+        selector: val("regenerateSelector"),
+        maxRetries: val("maxRetries"),
+        phrases: val("refusalExtraPhrases"),
+      };
+    });
+    return { seen, after };
+  });
+
+  const row = (id) => out.seen.find((r) => r.id === id);
+  check("every part is offered, plus the presets line",
+    out.seen.length >= 6 && !!row("retry") && !!row("buttons") && !!row("refusal") && !!row("presets"),
+    out.seen.map((r) => r.id));
+  check("a part that was changed says how many settings moved",
+    /1 setting changed/.test(row("buttons").note), row("buttons").note);
+  // Nothing to press is the honest state for a part still at its defaults, and
+  // a tickable box that reports "nothing changed" afterwards is not that.
+  check("a part still at its defaults cannot be ticked",
+    row("replace").disabled === true && /already default/.test(row("replace").note), row("replace"));
+  check("with no presets saved, that line cannot be ticked either",
+    row("presets").disabled === true, row("presets"));
+  check("the picker closes when it has run", out.after.stillOpen === false, out.after);
+  check("the ticked part is back at its default",
+    out.after.selector !== ".my-own-button" && out.after.selector.length > 0, out.after.selector);
+  // The whole point of the picker.
+  check("and the parts left unticked are untouched",
+    out.after.maxRetries === "9" && out.after.phrases === "nope", out.after);
+  check("no console errors", errors.length === 0, errors);
+}
+
+// A reset fills the panel in and stops there, the same deal an import offers,
+// so a mistaken press costs a panel close rather than a settings set.
+{
+  const { out, errors } = await inPanel(browser, {}, async (page) => {
+    await page.evaluate(async () => {
+      const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      await frame();
+      const el = document.querySelector('[data-ar-row="maxRetries"] input');
+      el.value = "9";
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+      [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === "Save").click();
+      await frame();
+      [...document.querySelectorAll("button")].find((b) => /^Reset/.test(b.textContent.trim())).click();
+      await frame();
+      document.querySelector('[data-ar-reset="retry"] input').checked = true;
+      [...document.querySelectorAll("#__lvRetryReset button")]
+        .find((b) => b.textContent.trim() === "Reset ticked").click();
+      await frame();
+    });
+    return page.evaluate(() => ({
+      inPanel: document.querySelector('[data-ar-row="maxRetries"] input').value,
+      stored: JSON.parse(localStorage.getItem("lv-auto-retry:settings:v1")).maxRetries,
+    }));
+  });
+  check("the reset shows in the panel", out.inPanel !== "9", out);
+  check("but is not saved until you press Save", out.stored === 9, out);
+  check("no console errors", errors.length === 0, errors);
+}
+
+// Deleting presets is the one line in the picker that does not wait for Save,
+// because presets live outside the settings object. It has to actually delete
+// them, and it has to leave the settings alone while it does.
+{
+  const { out, errors } = await inPanel(browser, {}, async (page) =>
+    page.evaluate(async () => {
+      const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      await frame();
+      const el = document.querySelector('[data-ar-row="maxRetries"] input');
+      el.value = "9";
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+      // Save a preset the way someone would.
+      document.querySelector('[data-ar-row="replaceRules"] textarea').value = "cat => dog";
+      document.querySelector('[data-ar-row="replaceRules"] textarea')
+        .dispatchEvent(new Event("change", { bubbles: true }));
+      document.querySelector('input[placeholder="Preset name"]').value = "trial";
+      [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === "Save as new").click();
+      await frame();
+      const before = JSON.parse(localStorage.getItem("lv-auto-retry:presets:v1")).swap.length;
+      [...document.querySelectorAll("button")].find((b) => /^Reset/.test(b.textContent.trim())).click();
+      await frame();
+      const line = document.querySelector('[data-ar-reset="presets"]');
+      const wasDisabled = line.querySelector("input").disabled;
+      line.querySelector("input").checked = true;
+      [...document.querySelectorAll("#__lvRetryReset button")]
+        .find((b) => b.textContent.trim() === "Reset ticked").click();
+      await frame();
+      return {
+        before,
+        wasDisabled,
+        after: JSON.parse(localStorage.getItem("lv-auto-retry:presets:v1")).swap.length,
+        maxRetries: document.querySelector('[data-ar-row="maxRetries"] input').value,
+      };
+    }),
+  );
+  check("with a preset saved, that line can be ticked", out.before === 1 && out.wasDisabled === false, out);
+  check("ticking it deletes the presets straight away", out.after === 0, out);
+  check("and leaves the settings alone", out.maxRetries === "9", out);
+  check("no console errors", errors.length === 0, errors);
+}
+
+// Cancel and Escape have to leave everything where it was, or the picker is a
+// worse trap than the button it replaced.
+{
+  const { out, errors } = await inPanel(browser, {}, async (page) =>
+    page.evaluate(async () => {
+      const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      await frame();
+      const el = document.querySelector('[data-ar-row="maxRetries"] input');
+      el.value = "9";
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+      const open = async () => {
+        [...document.querySelectorAll("button")].find((b) => /^Reset/.test(b.textContent.trim())).click();
+        await frame();
+      };
+      await open();
+      document.querySelector('[data-ar-reset="retry"] input').checked = true;
+      [...document.querySelectorAll("#__lvRetryReset button")]
+        .find((b) => b.textContent.trim() === "Cancel").click();
+      await frame();
+      const afterCancel = document.querySelector('[data-ar-row="maxRetries"] input').value;
+      await open();
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      await frame();
+      return {
+        afterCancel,
+        afterEsc: document.querySelector('[data-ar-row="maxRetries"] input').value,
+        gone: !document.getElementById("__lvRetryReset"),
+      };
+    }),
+  );
+  check("Cancel changes nothing", out.afterCancel === "9", out);
+  check("Escape shuts it and changes nothing", out.afterEsc === "9" && out.gone, out);
+  check("no console errors", errors.length === 0, errors);
 }
 
 // ---- nothing is left behind ----

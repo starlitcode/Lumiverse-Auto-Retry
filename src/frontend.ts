@@ -1038,7 +1038,7 @@ const DISENGAGE_TAIL_CHARS = 200;
 // the quotation check alone cannot see it. Only the words a tag is built from
 // are listed, so an ordinary sentence starting with "he" is unaffected.
 const DIALOGUE_TAG =
-  /^[,.!?"'—– ]{0,4}(?:he|she|they|it|i|[A-Z][a-z]+)\s+(?:said|says|replied|replies|answered|answers|added|adds|muttered|mutters|murmured|whispered|whispers|told|asked|asks|continued|continues|snapped|snaps|sighed|sighs|declared|announced|insisted|thought|thinks|decided|decides)\b/;
+  /^[,.!?"'\u2014\u2013 ]{0,4}(?:he|she|they|it|i|[A-Z][a-z]+)\s+(?:said|says|replied|replies|answered|answers|added|adds|muttered|mutters|murmured|whispered|whispers|told|asked|asks|continued|continues|snapped|snaps|sighed|sighs|declared|announced|insisted|thought|thinks|decided|decides)\b/;
 
 // Tier 3: soft redirect tells. These lean on a pivot ("...instead", "instead, I
 // can...") so an ordinary helpful reply that just offers to help doesn't match.
@@ -5121,8 +5121,6 @@ export function setup(ctx: Ctx, opts?: any) {
           body.appendChild(d);
         }
         emitFields(body);
-        const resetSel = buildSelectorResetRow(group);
-        if (resetSel) body.appendChild(resetSel);
         // The refusal tuning options are all guesswork without a way to try
         // them, so the section carries its own tester.
         if (/refusal tuning/i.test(group.title)) {
@@ -5162,8 +5160,6 @@ export function setup(ctx: Ctx, opts?: any) {
           sec.appendChild(d);
         }
         emitFields(sec);
-        const resetSelOpen = buildSelectorResetRow(group);
-        if (resetSelOpen) sec.appendChild(resetSelOpen);
       }
       scroller.appendChild(sec);
     }
@@ -5530,31 +5526,23 @@ export function setup(ctx: Ctx, opts?: any) {
     status.style.cssText =
       "flex:1;min-width:120px;font-size:12px;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
 
-    const reset = btn("Reset to defaults", false);
-    reset.addEventListener("click", async () => {
-      let ok = true;
-      try {
-        if (ctx?.ui?.showConfirm) {
-          const r = await ctx.ui.showConfirm({
-            title: "Reset settings",
-            message: "Put every Auto Retry setting back to its default?",
-            variant: "warning",
-            confirmLabel: "Reset",
-          });
-          ok = !!r?.confirmed;
-        }
-      } catch (_) {}
-      if (!ok) return;
-      for (const g of SCHEMA)
-        for (const fl of g.fields) cfg[fl.key] = (CONFIG as any)[fl.key];
-      saveSaved();
-      saveToAccount();
-      syncLiveLog();
-      syncFloat();
-      syncInputBarActions();
-      if (onSaved) onSaved();
-      buildSettingsBody(root, onSaved);
-      log("settings reset to defaults");
+    // Opens the picker rather than resetting on the spot. There is no confirm
+    // dialog in front of it any more: the picker itself is the confirmation,
+    // it says what each part would change before anything happens, and what it
+    // does is undone by closing the panel instead of pressing Save.
+    const reset = btn("Reset…", false);
+    reset.setAttribute("aria-label", "Reset settings, choose which parts");
+    reset.addEventListener("click", () => {
+      openResetPicker((done) => {
+        // Deleting presets is the one thing here that has already happened, so
+        // a line telling the user to press Save after only doing that would be
+        // telling them to save something that is not waiting on them.
+        status.textContent = done.settings
+          ? "Reset in the panel. Press Save to keep it."
+          : done.presets
+            ? "Presets deleted."
+            : "";
+      });
     });
 
     const save = btn("Save", true);
@@ -5594,44 +5582,6 @@ export function setup(ctx: Ctx, opts?: any) {
     ensureReadableTree(panel, 2.6);
   }
 
-  // Puts the button selectors in a section back to what the extension shipped
-  // with. Pick it for me makes these easy to overwrite, including with the wrong
-  // element, and Reset all would take every other setting with it. This undoes
-  // only that mistake. It fills the boxes and leaves Save to the user, so a
-  // mistaken press is undone by closing the panel.
-  function buildSelectorResetRow(group: any): HTMLElement | null {
-    const keys: string[] = (group && group.fields ? group.fields : [])
-      .filter((f: any) => f && f.selector)
-      .map((f: any) => f.key);
-    if (!keys.length) return null;
-    const row = document.createElement("div");
-    // Column, not a wrapping row: with a row the status sits beside the button
-    // when it is short and jumps below it when it is long, which reads as a bug.
-    row.style.cssText =
-      "display:flex;flex-direction:column;align-items:flex-start;gap:6px";
-    const b = btn("Reset button selectors", false);
-    b.style.padding = "5px 12px";
-    const note = document.createElement("span");
-    // Height is held even while empty so the panel doesn't shift when it fills.
-    note.style.cssText =
-      "font-size:12px;min-height:16px;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
-    b.addEventListener("click", () => {
-      let changed = 0;
-      for (const k of keys) {
-        if (cfg[k] !== (CONFIG as any)[k]) changed++;
-        cfg[k] = (CONFIG as any)[k];
-        const set = fieldSetters[k];
-        if (set) set(cfg[k]);
-      }
-      applyDeps();
-      note.textContent = changed
-        ? "back to defaults, press Save to keep"
-        : "already at the defaults";
-    });
-    row.appendChild(b);
-    row.appendChild(note);
-    return row;
-  }
 
   function buildRow(f: Field): HTMLElement {
     // bool/num wrap in <label> so the whole row toggles or focuses its control.
@@ -6059,6 +6009,282 @@ export function setup(ctx: Ctx, opts?: any) {
     return b;
   }
 
+  // ---- reset ----
+  // Reset used to be one button that put every setting back at once. That is
+  // the rarest thing anyone actually wants: the usual case is one part having
+  // been fiddled into a mess, most often the button selectors, since Pick it
+  // for me makes those easy to overwrite with the wrong element. Undoing that
+  // meant losing your word swaps, your refusal phrases and your note along with
+  // it, so there was a second button for selectors alone and nothing for
+  // anything else.
+  //
+  // The parts are the same ones import and export already use, so there is one
+  // definition of what a part is and the names match between the two panels.
+  //
+  // Nothing is reset silently. The picker says, per part, how many settings
+  // would actually change, so a part already at its defaults is visibly nothing
+  // to press, and it says in plain words what it does not touch.
+  function resetPartsFor(): Array<{ id: string; label: string; keys: string[] }> {
+    return EXPORT_CATEGORIES.filter((c) => c.id !== "presets").map((c) => ({
+      id: c.id,
+      label: c.label,
+      keys: c.keys.slice(),
+    }));
+  }
+
+  // Two settings can hold arrays (the note list), so an identity check is not
+  // enough to tell "changed" from "the same as it shipped".
+  function sameAsDefault(key: string): boolean {
+    const a = cfg[key];
+    const b = (CONFIG as any)[key];
+    if (a === b) return true;
+    if (typeof a === "object" || typeof b === "object") {
+      try {
+        return JSON.stringify(a) === JSON.stringify(b);
+      } catch (_) {
+        return false;
+      }
+    }
+    return false;
+  }
+
+  function changedCount(keys: string[]): number {
+    let n = 0;
+    for (const k of keys) if (!sameAsDefault(k)) n++;
+    return n;
+  }
+
+  // Puts the chosen parts back to what the extension shipped with, in the panel
+  // only. Save keeps it, closing the panel discards it, which is the same deal
+  // import already offers and the same one the old selector-only reset offered.
+  // Presets are the exception and are called out as such in the picker: they
+  // live outside the settings object and are deleted for real.
+  function applyReset(ids: string[], alsoPresets: boolean): { settings: number; presets: number } {
+    let settings = 0;
+    for (const part of resetPartsFor()) {
+      if (ids.indexOf(part.id) < 0) continue;
+      for (const k of part.keys) {
+        if (!sameAsDefault(k)) settings++;
+        // Copied, not pointed at. The note list is an array, and handing cfg
+        // the same array the defaults block holds would leave the two sharing
+        // one object for as long as nobody replaced it.
+        const def = (CONFIG as any)[k];
+        cfg[k] = def && typeof def === "object" ? JSON.parse(JSON.stringify(def)) : def;
+        const set = fieldSetters[k];
+        if (set) set(cfg[k]);
+      }
+    }
+    let presets = 0;
+    if (alsoPresets) {
+      const stored = loadPresets();
+      presets = (stored.swap || []).length;
+      if (presets) savePresets({ swap: [] });
+      for (const r of presetBarRefreshers) {
+        try { r(); } catch (_) {}
+      }
+    }
+    applyDeps();
+    syncLiveLog();
+    syncFloat();
+    syncInputBarActions();
+    return { settings: settings, presets: presets };
+  }
+
+  // Open at a time, so a second press replaces the first rather than stacking.
+  let closeResetPicker: (() => void) | null = null;
+
+  function openResetPicker(onApplied: (done: { settings: number; presets: number }) => void) {
+    if (typeof document === "undefined") return;
+    if (closeResetPicker) {
+      try { closeResetPicker(); } catch (_) {}
+    }
+    const parts = resetPartsFor();
+    const overlay = document.createElement("div");
+    overlay.id = "__lvRetryReset";
+    overlay.style.cssText =
+      "position:fixed;inset:0;z-index:2147483600;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;background:var(--lumiverse-modal-backdrop,rgba(0,0,0,.6));font-family:var(--lumiverse-font-family,system-ui)";
+    const box = document.createElement("div");
+    box.setAttribute("role", "dialog");
+    box.setAttribute("aria-modal", "true");
+    box.setAttribute("aria-label", "Reset settings");
+    // Focused on open so Escape and the tab order start inside the box rather
+    // than back in the panel behind it.
+    box.tabIndex = -1;
+    box.style.cssText =
+      "display:flex;flex-direction:column;gap:10px;width:min(520px,96vw);max-height:min(86vh,680px);box-sizing:border-box;padding:14px;background-color:var(--lumiverse-card-bg-solid,rgb(24,20,34));background-image:linear-gradient(var(--lumiverse-bg-elevated,rgba(35,30,48,.9)),var(--lumiverse-bg-elevated,rgba(35,30,48,.9)));border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));border-radius:var(--lumiverse-radius-lg,12px);box-shadow:var(--lumiverse-shadow-xl,0 20px 60px rgba(0,0,0,.5));color:var(--lumiverse-text,#eee)";
+    const title = document.createElement("div");
+    title.textContent = "Reset settings";
+    title.style.cssText = "flex:none;font-size:14px";
+    const desc = document.createElement("div");
+    desc.textContent =
+      "Tick the parts to put back to their defaults. Everything you leave unticked is kept exactly as it is. This fills the settings in behind this box without saving, so you can look first: press Save to keep it, or close the panel to discard it.";
+    desc.style.cssText =
+      "flex:none;font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+
+    const list = document.createElement("div");
+    list.style.cssText =
+      "flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:6px;padding:2px 0";
+
+    const checks: Array<{ id: string; input: HTMLInputElement }> = [];
+    for (const part of parts) {
+      const n = changedCount(part.keys);
+      const row = document.createElement("label");
+      row.setAttribute("data-ar-reset", part.id);
+      // No opacity for the disabled state. The contrast sweep reads colour
+      // against background and cannot see through an opacity, so a faded row on
+      // a hostile theme is one it has no way to repair. The disabled box and
+      // the "already default" note beside it say it well enough.
+      row.style.cssText =
+        "display:flex;align-items:center;gap:8px;font-size:13px;cursor:" +
+        (n ? "pointer" : "default");
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.checked = false;
+      // A part already at its defaults is nothing to press. Left tickable it
+      // reads as an action that did nothing when the count came back zero.
+      cb.disabled = n === 0;
+      cb.style.cssText =
+        "accent-color:var(--lumiverse-primary,rgba(147,112,219,.9));cursor:" +
+        (n ? "pointer" : "default");
+      const txt = document.createElement("span");
+      txt.textContent = part.label;
+      const count = document.createElement("span");
+      count.style.cssText =
+        "margin-left:auto;font-size:12px;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+      count.textContent = n
+        ? n + (n === 1 ? " setting changed" : " settings changed")
+        : "already default";
+      row.appendChild(cb);
+      row.appendChild(txt);
+      row.appendChild(count);
+      list.appendChild(row);
+      checks.push({ id: part.id, input: cb });
+    }
+
+    // Presets sit under a rule of their own, because they are the one thing
+    // here that is deleted for real rather than filled into the panel, and
+    // there is no Save to reconsider at.
+    const rule = document.createElement("div");
+    rule.style.cssText =
+      "flex:none;height:1px;background:var(--lumiverse-border,rgba(255,255,255,.08));margin:2px 0";
+    const presetCount = (loadPresets().swap || []).length;
+    const presetRow = document.createElement("label");
+    presetRow.setAttribute("data-ar-reset", "presets");
+    presetRow.style.cssText =
+      "flex:none;display:flex;align-items:center;gap:8px;font-size:13px;cursor:" +
+      (presetCount ? "pointer" : "default");
+    const presetCb = document.createElement("input");
+    presetCb.type = "checkbox";
+    presetCb.checked = false;
+    presetCb.disabled = presetCount === 0;
+    presetCb.style.cssText =
+      "accent-color:var(--lumiverse-primary,rgba(147,112,219,.9));cursor:" +
+      (presetCount ? "pointer" : "default");
+    const presetTxt = document.createElement("span");
+    presetTxt.textContent = "Delete saved word swap presets";
+    const presetNum = document.createElement("span");
+    presetNum.style.cssText =
+      "margin-left:auto;font-size:12px;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+    presetNum.textContent = presetCount
+      ? presetCount + (presetCount === 1 ? " saved" : " saved")
+      : "none saved";
+    presetRow.appendChild(presetCb);
+    presetRow.appendChild(presetTxt);
+    presetRow.appendChild(presetNum);
+
+    // What a reset cannot reach. Worth saying out loud: the word "reset" reads
+    // as bigger than it is, and the thing people are actually worried about
+    // losing is their chats.
+    const keeps = document.createElement("div");
+    keeps.style.cssText =
+      "flex:none;font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+    keeps.textContent =
+      "Never touched by any of this: your chats, your replies and your characters. " +
+      "Auto Retry only ever reads replies, and a reset does not go near them. " +
+      "Your saved word swap presets are kept too unless you tick the box above, and that one deletes them straight away rather than waiting for Save.";
+
+    const status = document.createElement("div");
+    status.style.cssText =
+      "flex:none;font-size:12px;line-height:1.4;min-height:1em;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+
+    const row = document.createElement("div");
+    row.style.cssText =
+      "display:flex;justify-content:flex-end;gap:8px;flex:none;flex-wrap:wrap";
+    const all = btn("Tick every setting", false);
+    const cancel = btn("Cancel", false);
+    const go = btn("Reset ticked", true);
+
+    const chosen = () => checks.filter((x) => x.input.checked).map((x) => x.id);
+    // Capture, and the event stops here. Without that, the same Escape that
+    // shuts this box carries on to the host's own modal and shuts the settings
+    // panel behind it, so cancelling a reset closed everything.
+    const onKey = (e: any) => {
+      if (!e || e.key !== "Escape") return;
+      try { e.stopPropagation(); } catch (_) {}
+      try { e.preventDefault(); } catch (_) {}
+      close();
+    };
+    function close() {
+      try { overlay.remove(); } catch (_) {}
+      try { document.removeEventListener("keydown", onKey, true); } catch (_) {}
+      if (closeResetPicker === close) closeResetPicker = null;
+    }
+    all.addEventListener("click", () => {
+      // Only what there is something to do to, so this never ticks a row that
+      // reads "already default" right next to it. Deliberately does not reach
+      // the presets line: that one deletes something for real and has no Save
+      // to think again at, so it is only ever ticked on purpose.
+      for (const c of checks) if (!c.input.disabled) c.input.checked = true;
+      status.textContent = "";
+    });
+    cancel.addEventListener("click", close);
+    go.addEventListener("click", () => {
+      const ids = chosen();
+      if (!ids.length && !presetCb.checked) {
+        status.textContent = "Tick at least one part to reset.";
+        return;
+      }
+      const done = applyReset(ids, presetCb.checked);
+      close();
+      const bits: string[] = [];
+      if (done.settings)
+        bits.push(
+          done.settings +
+            (done.settings === 1 ? " setting put back" : " settings put back") +
+            ". Press Save to keep it",
+        );
+      else if (ids.length) bits.push("those parts were already at their defaults");
+      if (done.presets)
+        bits.push(
+          done.presets +
+            (done.presets === 1 ? " preset deleted" : " presets deleted"),
+        );
+      onApplied(done);
+      log("reset: " + ids.join(", ") + (presetCb.checked ? " + presets" : ""));
+      showToast("Reset: " + bits.join(", ") + ".", { force: true });
+    });
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) close();
+    });
+    document.addEventListener("keydown", onKey, true);
+    row.appendChild(all);
+    row.appendChild(cancel);
+    row.appendChild(go);
+    box.appendChild(title);
+    box.appendChild(desc);
+    box.appendChild(list);
+    box.appendChild(rule);
+    box.appendChild(presetRow);
+    box.appendChild(keeps);
+    box.appendChild(status);
+    box.appendChild(row);
+    overlay.appendChild(box);
+    (document.body || document.documentElement).appendChild(overlay);
+    ensureReadableTree(box, 2.6);
+    try { box.focus({ preventScroll: true }); } catch (_) {}
+    closeResetPicker = close;
+  }
+
   // Full-size editor for a multiline field. Opens a large textarea over the
   // modal so long rule lists are easier to read and edit. Done writes the text
   // back; Cancel, Escape, or a click outside discards.
@@ -6266,6 +6492,14 @@ export function setup(ctx: Ctx, opts?: any) {
             closeExpandEditor();
           } catch (_) {}
         }
+        // Parented to the page like the editor is, so dismissing the panel does
+        // not take it with it. Left open it would sit over the chat asking to
+        // reset settings in a panel that is no longer there.
+        if (closeResetPicker) {
+          try {
+            closeResetPicker();
+          } catch (_) {}
+        }
         if (modalBaseline)
           for (const g of SCHEMA)
             for (const fl of g.fields) cfg[fl.key] = modalBaseline[fl.key];
@@ -6411,6 +6645,12 @@ export function setup(ctx: Ctx, opts?: any) {
         closeExpandEditor();
       } catch (_) {}
       closeExpandEditor = null;
+    }
+    if (closeResetPicker) {
+      try {
+        closeResetPicker();
+      } catch (_) {}
+      closeResetPicker = null;
     }
     if (hideStyleEl) {
       try {

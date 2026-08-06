@@ -31,8 +31,12 @@ _2026-08-06_
 
 ### Changed
 
+- **Reset is no longer all or nothing.** **Reset…** at the bottom of the panel now opens a picker: tick the parts you want put back to their defaults, and anything you leave unticked is not touched. The parts are the same ones import and export use, so the names match between the two panels. Each line says how many of its settings you have actually changed, and a part still at its defaults cannot be ticked, since there would be nothing for it to do.
+- **A reset now waits for Save, the way an import does.** It fills the settings in behind the box without saving them, so you can look at what it did first. Press Save to keep it, or close the panel to discard it. Pressing Reset by mistake now costs a panel close rather than your settings.
+- **The picker says what it cannot reach.** Your chats, your replies and your characters are never touched by any of it. Your saved word swap presets are kept too, unless you tick the line for them, which sits under a rule of its own because it is the one thing here that deletes something for real rather than waiting for Save. **Tick every setting** never ticks it.
+- **The separate Reset button selectors button is gone.** It existed because resetting everything to fix one mistyped selector was too blunt, and the picker covers that properly: tick **Button selectors** and nothing else.
 - **The defaults now assume a slow model rather than a fast one.** A watchdog that fires early on a model that is slow but healthy throws away a reply that was still arriving, and the replacement comes from the same slow model, so it fires again on that one too. The wait for a reply that has started but produced nothing goes from 90 seconds to 3 minutes, the wait for a stream that has gone quiet mid-reply from 45 to 90 seconds, the longest wait between tries from 30 to 60 seconds, and the wait when the server says it is busy from 8 to 15 seconds, which clears the per-minute limits most shared tiers use. The extension also gives a retry click 15 seconds rather than 6 to produce a generation before deciding the click failed.
-- **These apply to a fresh install only.** Settings already saved to your account keep the values they had. Press **Reset to defaults** in the panel to take the new ones.
+- **These apply to a fresh install only.** Settings already saved to your account keep the values they had. Press **Reset…** in the panel, tick the parts you want, and take the new ones for those.
 
 ## 4.3.0
 

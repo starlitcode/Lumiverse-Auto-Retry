@@ -52,7 +52,7 @@ Each box takes one CSS selector, or several separated by commas as fallbacks. Th
 
 A comma inside brackets, parentheses or quotes stays part of the selector rather than splitting the list, so `:is(a, b)` and `[aria-label="Next, swipe"]` each count as one entry.
 
-**Reset button selectors** at the bottom of that section puts all three back to the defaults without touching any other setting. It fills the boxes, so press Save to keep it.
+If you have overwritten one of these with the wrong element, **Reset…** at the bottom of the panel puts them back. Tick **Button selectors** in the picker and nothing else, and every other setting is left as it is. It fills the boxes, so press Save to keep it. There is more on the picker in [All settings](settings.md#resetting).
 
 If retries fire (the pop-up shows) but nothing regenerates, the selector needs adjusting:
 
