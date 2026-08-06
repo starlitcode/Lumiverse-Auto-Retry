@@ -14,6 +14,10 @@ A setting that does nothing until something else is switched on is not shown unt
 
 Each line says how many of its settings have actually been changed from the default. A part still at its defaults cannot be ticked, because there would be nothing for it to do. **Tick every setting** ticks all the parts that have something to reset.
 
+**Reset ticked** asks before it does anything. It shows you the parts you picked, how many settings are in each, and whether presets are going with them, and nothing happens until you press **Yes, reset**. **Go back** returns to the list with your ticks where you left them, and Escape or a click outside closes the whole thing without touching a setting. The ticks are held while it is asking, so what it describes and what it does cannot come apart.
+
+The question is asked by the extension rather than handed to Lumiverse's own confirm dialog. Not every Lumiverse build has one, and the old reset treated a missing dialog as a yes.
+
 A reset fills the settings in behind the box without saving them, the same as an import does, so you can look at what it did first. Press **Save** to keep it, or close the panel to discard it. If you press Reset by mistake, closing the panel undoes it.
 
 **Delete saved word swap presets** sits below a rule of its own, and it is the one thing in the picker that is not undone by closing the panel: presets are stored separately from your settings, so deleting them happens straight away. **Tick every setting** never ticks it.

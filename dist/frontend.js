@@ -6272,12 +6272,99 @@ export function setup(ctx, opts) {
             status.textContent = "";
         });
         cancel.addEventListener("click", close);
+        // ---- the confirmation step ----
+        // Pressing Reset ticked asks before it does anything, and the asking is
+        // done here rather than through the host's confirm dialog. Two reasons.
+        // The host may not offer one, and the old all-or-nothing reset treated a
+        // missing dialog as a yes, which is the wrong way round for the one control
+        // that throws settings away. And a host dialog can only be handed a fixed
+        // sentence, where this one names the parts, counts the settings in them,
+        // and says which of the two things about to happen can be undone.
+        //
+        // The boxes are frozen while it is up, so what the summary says and what
+        // the button does cannot come apart.
+        const confirmWrap = document.createElement("div");
+        confirmWrap.style.cssText =
+            "display:none;flex-direction:column;gap:8px;flex:none;padding:10px;border-radius:var(--lumiverse-radius,8px);border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));background:var(--lumiverse-fill-subtle,rgba(0,0,0,.1))";
+        const confirmText = document.createElement("div");
+        confirmText.setAttribute("data-ar-reset-confirm", "1");
+        confirmText.style.cssText = "font-size:13px;line-height:1.45";
+        const confirmRow = document.createElement("div");
+        confirmRow.style.cssText =
+            "display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap";
+        const back = btn("Go back", false);
+        const yes = btn("Yes, reset", true);
+        confirmRow.appendChild(back);
+        confirmRow.appendChild(yes);
+        confirmWrap.appendChild(confirmText);
+        confirmWrap.appendChild(confirmRow);
+        // The boxes that were tickable when the picker opened. Held here because
+        // freezing sets disabled on them, which would otherwise make the ones that
+        // started out disabled indistinguishable from the ones that did not, and
+        // Go back would hand them all back tickable.
+        const tickable = checks
+            .filter((c) => !c.input.disabled)
+            .map((c) => c.input);
+        if (!presetCb.disabled)
+            tickable.push(presetCb);
+        const freeze = (frozen) => {
+            // disabled rather than pointer-events, so a keyboard cannot change a tick
+            // the summary has already been written from. The rows keep their normal
+            // colour, so the list stays readable while it is being read.
+            for (const input of tickable)
+                input.disabled = frozen;
+            all.disabled = frozen;
+            go.disabled = frozen;
+            row.style.display = frozen ? "none" : "flex";
+            confirmWrap.style.display = frozen ? "flex" : "none";
+        };
+        // What is about to happen, in the order it happens, with the reversible
+        // half and the permanent half kept apart.
+        const describe = (ids, withPresets) => {
+            const named = parts
+                .filter((p) => ids.indexOf(p.id) >= 0)
+                .map((p) => {
+                const n = changedCount(p.keys);
+                return p.label + " (" + n + (n === 1 ? " setting)" : " settings)");
+            });
+            const lines = [];
+            if (named.length)
+                lines.push("Put back to defaults: " +
+                    named.join(", ") +
+                    ". Nothing else is touched, and closing the panel without saving undoes it.");
+            if (withPresets)
+                lines.push("Delete " +
+                    presetCount +
+                    (presetCount === 1 ? " saved word swap preset" : " saved word swap presets") +
+                    ". This one happens straight away and closing the panel will not bring them back.");
+            return lines.join(" ");
+        };
+        back.addEventListener("click", () => {
+            freeze(false);
+            status.textContent = "";
+            try {
+                go.focus({ preventScroll: true });
+            }
+            catch (_) { }
+        });
         go.addEventListener("click", () => {
             const ids = chosen();
             if (!ids.length && !presetCb.checked) {
                 status.textContent = "Tick at least one part to reset.";
                 return;
             }
+            confirmText.textContent = describe(ids, presetCb.checked);
+            status.textContent = "";
+            freeze(true);
+            // The safe one is where the finger already is, so a second tap in the
+            // same place goes back rather than through.
+            try {
+                back.focus({ preventScroll: true });
+            }
+            catch (_) { }
+        });
+        yes.addEventListener("click", () => {
+            const ids = chosen();
             const done = applyReset(ids, presetCb.checked);
             close();
             const bits = [];
@@ -6309,6 +6396,7 @@ export function setup(ctx, opts) {
         box.appendChild(presetRow);
         box.appendChild(keeps);
         box.appendChild(status);
+        box.appendChild(confirmWrap);
         box.appendChild(row);
         overlay.appendChild(box);
         (document.body || document.documentElement).appendChild(overlay);

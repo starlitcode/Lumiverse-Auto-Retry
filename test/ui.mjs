@@ -3250,6 +3250,13 @@ console.log("\nreset picker");
       [...document.querySelectorAll("#__lvRetryReset button")]
         .find((b) => b.textContent.trim() === "Reset ticked").click();
       await frame();
+      // Guarded rather than chained straight onto find(). A regression that
+      // skips the asking step leaves no Yes button, and a TypeError here would
+      // take the rest of the file down with it instead of failing one check.
+      const confirmBtn = [...document.querySelectorAll("#__lvRetryReset button")]
+        .find((b) => b.textContent.trim() === "Yes, reset");
+      if (confirmBtn) confirmBtn.click();
+      await frame();
       const row = (k) => document.querySelector('[data-ar-row="' + k + '"]');
       const val = (k) => row(k).querySelector("input,textarea,select").value;
       return {
@@ -3302,6 +3309,13 @@ console.log("\nreset picker");
       [...document.querySelectorAll("#__lvRetryReset button")]
         .find((b) => b.textContent.trim() === "Reset ticked").click();
       await frame();
+      // Guarded rather than chained straight onto find(). A regression that
+      // skips the asking step leaves no Yes button, and a TypeError here would
+      // take the rest of the file down with it instead of failing one check.
+      const confirmBtn = [...document.querySelectorAll("#__lvRetryReset button")]
+        .find((b) => b.textContent.trim() === "Yes, reset");
+      if (confirmBtn) confirmBtn.click();
+      await frame();
     });
     return page.evaluate(() => ({
       inPanel: document.querySelector('[data-ar-row="maxRetries"] input').value,
@@ -3310,6 +3324,121 @@ console.log("\nreset picker");
   });
   check("the reset shows in the panel", out.inPanel !== "9", out);
   check("but is not saved until you press Save", out.stored === 9, out);
+  check("no console errors", errors.length === 0, errors);
+}
+
+// Nothing resets without being asked first. The old all-or-nothing button went
+// through the host's confirm dialog and treated a host with no dialog as a yes,
+// which is the wrong way round for the one control that throws settings away.
+// The picker asks for itself, so a host without a dialog still asks.
+console.log("\nreset confirmation");
+{
+  const { out, errors } = await inPanel(browser, {}, async (page) =>
+    page.evaluate(async () => {
+      const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      await frame();
+      const el = document.querySelector('[data-ar-row="maxRetries"] input');
+      el.value = "9";
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+      await frame();
+      const open = async () => {
+        [...document.querySelectorAll("button")].find((b) => /^Reset/.test(b.textContent.trim())).click();
+        await frame();
+      };
+      // Every lookup below is guarded. A regression that skips the asking step
+      // leaves these buttons missing, and a TypeError would take the rest of
+      // the file down with it instead of failing the one check that caught it.
+      const inBox = (t) => [...document.querySelectorAll("#__lvRetryReset button")]
+        .find((b) => b.textContent.trim() === t) || null;
+      const press = async (t) => { const b = inBox(t); if (b) b.click(); await frame(); };
+      const tick = (id) => document.querySelector('[data-ar-reset="' + id + '"] input');
+      const val = () => document.querySelector('[data-ar-row="maxRetries"] input').value;
+      const confirmEl = () => document.querySelector("[data-ar-reset-confirm]");
+
+      await open();
+      if (tick("retry")) tick("retry").checked = true;
+      await press("Reset ticked");
+      const summary = confirmEl() ? confirmEl().textContent.trim() : "";
+      const untouchedWhileAsking = val();
+      // The ticks cannot move while the summary is on screen describing them.
+      const boxesHeld = tick("retry") ? tick("retry").disabled : null;
+      const hasYes = !!inBox("Yes, reset");
+      const hasGoBack = !!inBox("Go back");
+
+      await press("Go back");
+      const afterBack = {
+        value: val(),
+        stillOpen: !!document.getElementById("__lvRetryReset"),
+        asking: !!confirmEl() && confirmEl().offsetParent !== null,
+        tickKept: tick("retry") ? tick("retry").checked : null,
+        boxesBack: tick("retry") ? !tick("retry").disabled : null,
+      };
+
+      // Escape out of the asking step changes nothing either.
+      await press("Reset ticked");
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      await frame();
+      const afterEsc = { value: val(), gone: !document.getElementById("__lvRetryReset") };
+
+      await open();
+      if (tick("retry")) tick("retry").checked = true;
+      await press("Reset ticked");
+      await press("Yes, reset");
+      return {
+        summary, untouchedWhileAsking, boxesHeld, hasYes, hasGoBack,
+        afterBack, afterEsc, afterYes: val(),
+      };
+    }),
+  );
+  check("Reset ticked asks instead of doing it", out.hasYes && out.hasGoBack, out);
+  check("nothing has changed while it is asking", out.untouchedWhileAsking === "9", out);
+  // A fixed sentence cannot say this, which is why the picker asks for itself
+  // rather than handing the question to the host.
+  check("it names the part and counts what would change",
+    /Retry behavior \(\d+ settings?\)/.test(out.summary), out.summary);
+  check("and says that closing the panel undoes it",
+    /closing the panel/i.test(out.summary), out.summary);
+  check("the ticks are held while it asks", out.boxesHeld === true, out);
+  check("Go back returns to the list with the tick kept",
+    out.afterBack.value === "9" && out.afterBack.stillOpen &&
+    !out.afterBack.asking && out.afterBack.tickKept && out.afterBack.boxesBack, out.afterBack);
+  check("Escape while it asks changes nothing",
+    out.afterEsc.value === "9" && out.afterEsc.gone, out.afterEsc);
+  check("only Yes goes through with it", out.afterYes !== "9", out);
+  check("no console errors", errors.length === 0, errors);
+}
+
+// The permanent half of the picker has to say so before it happens.
+{
+  const { out, errors } = await inPanel(browser, {}, async (page) =>
+    page.evaluate(async () => {
+      const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      await frame();
+      document.querySelector('[data-ar-row="replaceRules"] textarea').value = "cat => dog";
+      document.querySelector('[data-ar-row="replaceRules"] textarea')
+        .dispatchEvent(new Event("change", { bubbles: true }));
+      document.querySelector('input[placeholder="Preset name"]').value = "trial";
+      [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === "Save as new").click();
+      await frame();
+      [...document.querySelectorAll("button")].find((b) => /^Reset/.test(b.textContent.trim())).click();
+      await frame();
+      document.querySelector('[data-ar-reset="presets"] input').checked = true;
+      [...document.querySelectorAll("#__lvRetryReset button")]
+        .find((b) => b.textContent.trim() === "Reset ticked").click();
+      await frame();
+      const el = document.querySelector("[data-ar-reset-confirm]");
+      const summary = el ? el.textContent.trim() : "";
+      const stillThere = JSON.parse(localStorage.getItem("lv-auto-retry:presets:v1")).swap.length;
+      return { summary, stillThere };
+    }),
+  );
+  check("deleting presets is spelled out before it happens",
+    /Delete 1 saved word swap preset\b/.test(out.summary), out.summary);
+  check("and it says that one is not undone by closing the panel",
+    /will not bring them back/i.test(out.summary), out.summary);
+  check("nothing is deleted until Yes", out.stillThere === 1, out);
   check("no console errors", errors.length === 0, errors);
 }
 
@@ -3340,6 +3469,13 @@ console.log("\nreset picker");
       line.querySelector("input").checked = true;
       [...document.querySelectorAll("#__lvRetryReset button")]
         .find((b) => b.textContent.trim() === "Reset ticked").click();
+      await frame();
+      // Guarded rather than chained straight onto find(). A regression that
+      // skips the asking step leaves no Yes button, and a TypeError here would
+      // take the rest of the file down with it instead of failing one check.
+      const confirmBtn = [...document.querySelectorAll("#__lvRetryReset button")]
+        .find((b) => b.textContent.trim() === "Yes, reset");
+      if (confirmBtn) confirmBtn.click();
       await frame();
       return {
         before,
