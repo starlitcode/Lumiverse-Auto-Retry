@@ -9,7 +9,8 @@ It watches each reply and re-fires when:
 - the reply comes back as a provider error (but skips permanent hard failures like invalid API keys by default)
 - the reply comes back empty, including one that "thinks" but never writes anything
 - the reply is cut off mid-sentence (see [Cut-off detection](docs/detection.md#cut-off-detection))
-- the reply is an accidental out-of-character refusal (see [Accidental-refusal detection](docs/detection.md#accidental-refusal-detection-beta))
+- the reply is an accidental out-of-character refusal, or the model breaks off mid-scene
+  (see [Accidental-refusal detection](docs/detection.md#accidental-refusal-detection-beta))
 - the stream stalls mid-reply, tokens stop arriving for a while
 - a reply never starts or never finishes
 - (optional, off by default) the reply is very short

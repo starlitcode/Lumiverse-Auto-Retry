@@ -8,6 +8,32 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 4.4.0
+
+_2026-08-06_
+
+### Fixed
+
+- **The refusal note was never sent on most setups.** The note was only attached when Lumiverse reported the generation as a regenerate or a swipe. Most builds report every generation as "normal", a regenerate included, so on those the note was armed, the retry ran without it, and the only sign was a line in the log saying the host had called it something else. The note is now attached to the retry it was armed for whatever the host calls it. What keeps it off a message you type has not changed: it is armed the moment before the retry is clicked, it belongs to one chat, it is used once, it expires, and it is taken back the moment the click it was armed for turns out to have started nothing. If there is no retry button on screen to click, nothing is armed at all. The old behaviour is still available as **Only send it on a regenerate or a swipe**, off by default.
+- **The log now says when a note went out, not only when one did not.** A working note and no note at all looked identical from the outside.
+- **A refusal inside quotation marks is no longer treated as the model refusing.** `"I can't help with that," the innkeeper muttered` was counted as a refusal and the reply was thrown away. Dialogue is a character speaking, and it is now left alone across every built-in list rather than just the "I am an AI" patterns. Phrases you add yourself are still counted wherever they appear. There is a switch for it in the refusal tuning section.
+- **Line breaks are no longer flattened before a reply is checked.** Every break became a space, which let a refusal pattern match across a paragraph break and made dialogue anywhere in a long reply look like it wrapped everything between it. Both produced retries on replies that were fine.
+- **"That violates my safety guidelines" and "that goes against my content policies" were not matched**, because the pattern only allowed the noun to follow the possessive directly. Neither was "that isn't something I can help with", which was only matched written as "that's not".
+- **A phrase now only has to be listed one way.** "I'm unable to help with that" and "I am unable to help with that" are the same refusal, and only whichever form happened to be in the list was matched. The written-out form of every contracted phrase is now worked out from the contracted one.
+- **The type check on the backend was failing, which took the whole test run with it.** `bun run check` could not get past it, so neither could the checks on every pull request.
+- **On a server shared by several accounts, replies from the backend went to everybody.** A word-swap confirmation, and the text of a swap, were sent without saying which user they belonged to. They are now addressed to the account that caused them. Nothing changes on an ordinary single-user install.
+- **Two of the panel's own browser checks had been failing on correct code.** One was still expecting a list of settings from before two were added to it; the other was waiting less time than the thing it was testing takes.
+
+### Added
+
+- **It now catches the model breaking off rather than declining.** "I'm going to stop here", "I won't continue this discussion", "let's redirect the conversation". On by default, and narrow on purpose: it only counts when that is how the reply ends, never inside quotation marks, and never behind a dialogue tag, so a character who stops walking and carries on with the scene is left alone. Switch it off with **Also catch the model breaking off**.
+- **The built-in refusal list has grown by about twenty wordings**, covering the ones models actually use that were being walked past: "I can't generate that", "I don't create content like that", "I'm not going to comply with that request", "I can't help with illegal activities", "I can't provide advice on that", "I can't process that request" and others. Apologetic openings on their own ("I'm sorry", "Unfortunately", "I apologize") are deliberately still not counted: they open as many ordinary replies as refusals, and a character apologising is one of the most common things in roleplay.
+
+### Changed
+
+- **The defaults now assume a slow model rather than a fast one.** A watchdog that fires early on a model that is slow but healthy throws away a reply that was still arriving, and the replacement comes from the same slow model, so it fires again on that one too. The wait for a reply that has started but produced nothing goes from 90 seconds to 3 minutes, the wait for a stream that has gone quiet mid-reply from 45 to 90 seconds, the longest wait between tries from 30 to 60 seconds, and the wait when the server says it is busy from 8 to 15 seconds, which clears the per-minute limits most shared tiers use. The extension also gives a retry click 15 seconds rather than 6 to produce a generation before deciding the click failed.
+- **These apply to a fresh install only.** Settings already saved to your account keep the values they had. Press **Reset to defaults** in the panel to take the new ones.
+
 ## 4.3.0
 
 _2026-08-05_

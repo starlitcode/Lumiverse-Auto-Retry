@@ -28,14 +28,14 @@ The same options live in the CONFIG block at the top of `src/frontend.ts` and `d
 | pauseWhenFailing | true | Pause auto-retry after several whole runs give up in a row. Cleared by the next reply that comes back fine. |
 | breakerRuns | 3 | How many failed runs in a row trigger the pause. A run is one message that used up all its tries. Shown only while `pauseWhenFailing` is on. |
 | breakerPauseMins | 5 | How long the pause lasts, in minutes. A reply that comes back fine ends it early. Shown only while `pauseWhenFailing` is on. |
-| retryDelayMs | 1200 | Wait before the first retry, in milliseconds. |
+| retryDelayMs | 2000 | Wait before the first retry, in milliseconds. |
 | backoffFactor | 2 | Each wait is this many times longer than the last. |
-| maxDelayMs | 30000 | Longest it will ever wait. |
+| maxDelayMs | 60000 | Longest it will ever wait. |
 | jitter | true | Nudges each wait randomly so retries don't all land at once. |
-| rateLimitDelayMs | 8000 | Floor wait when the server says it's busy. |
+| rateLimitDelayMs | 15000 | Floor wait when the server says it's busy. Most shared tiers meter per minute, so a shorter wait usually spends a try hitting the same limit. |
 | retryByNewReroll | false | Off: a retry redoes the reply in place via the regenerate button. On: a retry clicks the next / swipe button, adding a new reroll and keeping the existing ones. Applies to every retry reason. The other button is the fallback. |
-| stuckTimeoutMs | 90000 | Started, then nothing arrived and it never finished, within this. 0 disables. |
-| idleTimeoutMs | 45000 | Tokens flowed then stopped for this long. 0 disables. |
+| stuckTimeoutMs | 180000 | Started, then nothing arrived and it never finished, within this. 0 disables. |
+| idleTimeoutMs | 90000 | Tokens flowed then stopped for this long. 0 disables. |
 | retryOnError | true | Retry provider errors. |
 | ignoreHardErrors | true | Skip permanent failures like missing models or invalid API keys. |
 | retryOnEmpty | true | Retry empty replies and mid-reasoning cutoffs. |
@@ -45,6 +45,8 @@ The same options live in the CONFIG block at the top of `src/frontend.ts` and `d
 | minChars | 24 | Short threshold, used when retryOnShort is on. Counts the visible reply only, not any reasoning block. Shown only while `retryOnShort` is on. |
 | retryOnRefusal | true | (beta) Retry an accidental out-of-character refusal. |
 | refusalUseBuiltins | true | Use the built-in English refusal lists. Off = only your own phrases. |
+| refusalCatchDisengage | true | Also catch the model breaking off ("I'll stop here", "I won't continue this conversation"). Only counted when it is how the reply ends, never inside quotation marks, and never behind a dialogue tag. Shown only while `refusalUseBuiltins` is on. |
+| refusalIgnoreQuoted | true | A built-in match inside quotation marks is a character speaking, so it is not counted. Your own phrases are counted either way. |
 | refusalExtraPhrases | (empty) | Phrases that also count as a refusal, one per line. |
 | refusalPhraseSubs | (empty) | Reword the built-in phrases with "old => new" rules, one per line. Shown only while `refusalUseBuiltins` is on. |
 | refusalIgnorePhrases | (empty) | Whitelist, one per line; a reply containing any is never a refusal. |
@@ -55,6 +57,7 @@ The same options live in the CONFIG block at the top of `src/frontend.ts` and `d
 | refusalNotes | one empty note | The notes themselves, each with its own role (system, user or assistant). Up to ten, sent in order as one block. Empty ones are skipped, and nothing is sent while they all are. Shown only while `refusalNote` is on. |
 | refusalNotePlacement | after | Where the block goes: after the last message, before it, or at the very start. Shown only while `refusalNote` is on. |
 | refusalNoteFromTry | 2 | Which retry the note starts on. 1 sends it every time. Shown only while `refusalNote` is on. |
+| refusalNoteStrictType | false | Only attach the note when Lumiverse reports the generation as a regenerate or a swipe. Most builds report every generation as "normal", and on those this stops the note going out at all, which is why it is off. Shown only while `refusalNote` is on. |
 | replaceEnabled | false | (beta) Turn on find-and-replace on replies. Edits the saved message. |
 | replaceRules | (empty) | "old => new" word swaps, one per line. |
 | replaceRandom | false | When a word has more than one swap, pick one at random each time. |
@@ -63,8 +66,8 @@ The same options live in the CONFIG block at the top of `src/frontend.ts` and `d
 | showSwapAllButton | false | Adds an Extras button that swaps every generated reply in the chat once. |
 | allowReSwap | false | Let either swap button swap a reply again even if it was already swapped (can stack swaps). Applies to both the swap-this-reply and swap-whole-chat buttons. Shown only while one of those two buttons is switched on. |
 | confirmBeforeEdit | false | Ask you to confirm before any word-swap edit (automatic or manual); you can cancel. |
- swapWaitForEdits | false | Wait for another extension to finish editing a reply before swapping it. For running alongside Hone with auto-refine on. |
- swapWaitSecs | 15 | How long to wait for that, in seconds (1-120). Each edit restarts the clock. Shown only while `swapWaitForEdits` is on. |
+| swapWaitForEdits | false | Wait for another extension to finish editing a reply before swapping it. For running alongside Hone with auto-refine on. |
+| swapWaitSecs | 15 | How long to wait for that, in seconds (1-120). Each edit restarts the clock. Shown only while `swapWaitForEdits` is on. |
 | regenerateSelector | (see file) | Host button. See below. |
 | swipeNextSelector | (see file) | Backup button if your build retries by swiping. |
 | confirmButtonLabels | (blank) | Extra dialog button labels it may press when a dialog appears after a retry, one per line. Blank uses the built-in list. |
@@ -72,7 +75,9 @@ The same options live in the CONFIG block at the top of `src/frontend.ts` and `d
 | toast | true | Show the little retry pop-up with its Cancel button. |
 | liveLog | false | Show a small on-screen panel with recent activity, updating live. |
 
-The two watchdog waits (`stuckTimeoutMs`, `idleTimeoutMs`) are long so a slow connection or a slow local model isn't mistaken for a freeze. If your provider is fast and you want quicker recovery, lower them.
+The two watchdog waits (`stuckTimeoutMs`, `idleTimeoutMs`) are deliberately long, and the defaults assume a slow model rather than a fast one. A watchdog that fires early on a model that is slow but healthy is worse than one that fires late: it throws away a reply that was still arriving, and the replacement comes from the same slow model, so it fires again on that one too. If your provider is fast and you want quicker recovery, lower them.
+
+These defaults only apply to a fresh install. Settings already saved to your account keep the values they had, so if you have been using an earlier version and want the new timings, press **Reset to defaults** in the panel.
 
 ---
 

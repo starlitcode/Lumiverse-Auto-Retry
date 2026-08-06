@@ -80,20 +80,24 @@ describe("when the note goes out", () => {
     expect(roles(out).join("|")).toContain("system:This was refused by mistake.");
   });
 
-  test("a message you typed never collects it, however stale the arm", async () => {
+  // The bug this holds down: most builds report every generation as "normal",
+  // regenerates included. Requiring the host to call it a regenerate meant the
+  // note was armed, the retry ran without it, and the only trace was a line in
+  // the log. What keeps the note off a message the user typed is the arm being
+  // scoped to one chat, used once, expired, and taken back by the frontend when
+  // the retry click it was armed for never started anything.
+  test("a build that calls every generation \"normal\" still gets the note", async () => {
     const h = boot();
     await h.arm();
     const out = await h.run(prompt(), { generationType: "normal" });
-    expect(roles(out)).toEqual(roles(prompt()));
+    expect(roles(out).join("|")).toContain("system:This was refused by mistake.");
   });
 
-  test("neither does a continue or an impersonate", async () => {
-    for (const type of ["continue", "impersonate", "quiet"]) {
-      const h = boot();
-      await h.arm();
-      const out = await h.run(prompt(), { generationType: type });
-      expect(roles(out)).toEqual(roles(prompt()));
-    }
+  test("so does a build that reports no kind at all", async () => {
+    const h = boot();
+    await h.arm();
+    const out = await h.run(prompt(), { generationType: undefined });
+    expect(roles(out).join("|")).toContain("system:This was refused by mistake.");
   });
 
   test("another chat never collects it", async () => {
@@ -122,6 +126,53 @@ describe("when the note goes out", () => {
     await h.arm({ notes: [{ text: "   ", role: "system" }] });
     const out = await h.run(prompt());
     expect(roles(out)).toEqual(roles(prompt()));
+  });
+});
+
+// The opt-in check, for a build that does report the kind properly. Off by
+// default, because on a build that says "normal" it stops the note entirely.
+describe("the strict kind check, when it is asked for", () => {
+  test("a regenerate collects it", async () => {
+    const h = boot();
+    await h.arm({ strictType: true });
+    const out = await h.run(prompt(), { generationType: "regenerate" });
+    expect(roles(out).join("|")).toContain("system:This was refused by mistake.");
+  });
+
+  test("so does a swipe", async () => {
+    const h = boot();
+    await h.arm({ strictType: true });
+    const out = await h.run(prompt(), { generationType: "swipe" });
+    expect(roles(out).join("|")).toContain("system:This was refused by mistake.");
+  });
+
+  test("a normal, a continue or an impersonate does not", async () => {
+    for (const type of ["normal", "continue", "impersonate", "quiet"]) {
+      const h = boot();
+      await h.arm({ strictType: true });
+      const out = await h.run(prompt(), { generationType: type });
+      expect(roles(out)).toEqual(roles(prompt()));
+    }
+  });
+
+  // Rejecting on the kind must not spend the note, or a build that fires one
+  // "normal" generation before the retry would eat it and the retry that
+  // followed would go out bare.
+  test("a rejected kind leaves the note armed for the retry behind it", async () => {
+    const h = boot();
+    await h.arm({ strictType: true });
+    await h.run(prompt(), { generationType: "normal" });
+    const out = await h.run(prompt(), { generationType: "regenerate" });
+    expect(roles(out).join("|")).toContain("system:This was refused by mistake.");
+  });
+
+  // A build that reports no kind cannot be checked against one, so the note
+  // still goes rather than being dropped for a reason nobody can act on.
+  test("a build that reports no kind is not punished for it", async () => {
+    const h = boot();
+    await h.arm({ strictType: true });
+    const out = await h.run(prompt(), { generationType: "" });
+    expect(roles(out).join("|")).toContain("system:This was refused by mistake.");
   });
 });
 

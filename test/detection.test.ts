@@ -21,6 +21,7 @@ const {
   applySubs,
   stripThinking,
   splitSelectorList,
+  withLongForms,
   REFUSAL_PHRASES,
 } = __testing;
 
@@ -72,6 +73,135 @@ describe("refusal detection leaves in-character writing alone", () => {
       expect(looksLikeRefusal(text, cfg)).toBe(false);
     });
   }
+});
+
+// The list the built-ins were rebuilt against. Every wording here is one a
+// model actually declines with, and every one of them used to have at least one
+// spelling the extension walked straight past.
+describe("refusal detection covers the wordings models actually use", () => {
+  const refusals = [
+    "I am unable to help with that.",
+    "I am unable to assist with that.",
+    "I'm unable to provide that.",
+    "I cannot comply with that request.",
+    "I can't generate that.",
+    "I don't create content like that.",
+    "I don't generate content like that.",
+    "I'm not going to comply with that request.",
+    "I'm not going to assist with that.",
+    "That request goes against my guidelines.",
+    "That violates my safety guidelines.",
+    "That goes against my safety policies.",
+    "That isn't something I can help with.",
+    "I can't help with requests of this nature.",
+    "I can't assist with harmful requests.",
+    "I can't help with illegal activities.",
+    "I can't provide advice on that.",
+    "I can't provide assistance with that.",
+    "I can't process that request.",
+  ];
+  for (const text of refusals) {
+    test(JSON.stringify(text.slice(0, 44)), () => {
+      expect(looksLikeRefusal(text, cfg)).toBe(true);
+    });
+  }
+});
+
+// Tier four: the model stopping rather than declining. These are the riskiest
+// entries in the whole list, because most of them are things a person says, so
+// each check here is paired with the scene it must not throw away.
+describe("refusal detection catches the model breaking off", () => {
+  const bail = [
+    "I'm going to stop here.",
+    "I'll end the response here.",
+    "I can't continue this conversation.",
+    "I won't continue this discussion.",
+    "I'm not continuing with that request.",
+    "I'll refrain from continuing.",
+    "Let's redirect the conversation.",
+    "I'd rather discuss something else.",
+    "I'll leave it there. Let me know if there's something else you'd like.",
+  ];
+  for (const text of bail) {
+    test(JSON.stringify(text.slice(0, 44)), () =>
+      expect(looksLikeRefusal(text, cfg)).toBe(true));
+  }
+
+  test("but not when a character says it out loud", () => {
+    expect(looksLikeRefusal(
+      '*She sets down the lantern.* "I\'ll stop here," she says. "You go on ahead."',
+      cfg,
+    )).toBe(false);
+  });
+
+  // Unquoted dialogue, which plenty of writing uses. The attribution behind it
+  // is the only thing marking it as speech.
+  test("nor when a dialogue tag follows it", () => {
+    expect(looksLikeRefusal(
+      "I'm going to stop now, he said, and pulled the cart to the side of the road.",
+      cfg,
+    )).toBe(false);
+  });
+
+  // The reason the window is measured from the end of the match rather than
+  // from the start of the reply: a short scene opening this way is not a bail.
+  test("nor when the scene carries on afterwards", () => {
+    expect(looksLikeRefusal(
+      "I'll stop here and wait for the rain to pass, she thought, then walked on to " +
+        "the mill and found the door ajar. Inside, the smell of wet grain filled the air. " +
+        "She lit a lamp and began to search the sacks one by one, looking for the mark her " +
+        "brother had described, and found nothing at all in the first dozen.",
+      cfg,
+    )).toBe(false);
+  });
+
+  test("and the whole tier can be switched off", () => {
+    expect(looksLikeRefusal("I'm going to stop here.", withCfg({ refusalCatchDisengage: false }))).toBe(false);
+    // The rest of the built-ins are untouched by that switch.
+    expect(looksLikeRefusal("I cannot assist with that.", withCfg({ refusalCatchDisengage: false }))).toBe(true);
+  });
+});
+
+// A refusal inside quotation marks is a character speaking. Before this, the
+// exemption covered only the "I am an AI" patterns, so every other built-in
+// threw away dialogue that happened to share its wording.
+describe("refusal detection leaves quoted dialogue alone", () => {
+  const quoted = [
+    '"I can\'t help with that," the innkeeper muttered, wiping the bar.',
+    '"That\'s not something I can help with," the healer admitted, wiping her hands.',
+    '"I can\'t assist with that," the clerk said, sliding the ledger shut.',
+  ];
+  for (const text of quoted) {
+    test(JSON.stringify(text.slice(0, 44)), () =>
+      expect(looksLikeRefusal(text, cfg)).toBe(false));
+  }
+
+  test("the same line unquoted is still a refusal", () => {
+    expect(looksLikeRefusal("I can't help with that.", cfg)).toBe(true);
+  });
+
+  test("the rule can be switched off", () => {
+    expect(looksLikeRefusal(
+      '"I can\'t help with that," the innkeeper muttered.',
+      withCfg({ refusalIgnoreQuoted: false }),
+    )).toBe(true);
+  });
+
+  // Line breaks survive normalization now, and this is why: with everything
+  // flattened to one line, dialogue anywhere above and below made the refusal
+  // in between look like it was inside the quotes.
+  test("dialogue in other paragraphs does not exempt a refusal between them", () => {
+    const text =
+      '"Good evening," she said.\n\nI cannot assist with that.\n\n"Come back tomorrow," he replied.';
+    expect(looksLikeRefusal(text, cfg)).toBe(true);
+  });
+
+  test("your own phrases are counted wherever they appear", () => {
+    const v = refusalVerdict('"nope, not doing that one," she said.', withCfg({
+      refusalExtraPhrases: "nope, not doing that one",
+    }));
+    expect(v.refusal).toBe(true);
+  });
 });
 
 describe("refusal detection: the user's own lists", () => {
@@ -222,6 +352,22 @@ describe("text helpers", () => {
 
   test("phrase lists split on lines and drop blanks", () => {
     expect(splitPhrases("one\n\n  Two  \nTHREE")).toEqual(["one", "two", "three"]);
+  });
+
+  // The reason a phrase only has to be listed one way. Models write both forms
+  // and only the listed one was ever matched.
+  test("the written-out form of a contraction is generated, not listed", () => {
+    const out = withLongForms(["i'm unable to help with that", "for safety reasons"]);
+    expect(out).toContain("i'm unable to help with that");
+    expect(out).toContain("i am unable to help with that");
+    // Nothing to expand, so nothing is added.
+    expect(out.filter((p: string) => p === "for safety reasons").length).toBe(1);
+  });
+
+  test("normalizing keeps line breaks, and collapses everything else", () => {
+    expect(normalizeForMatch("one   two")).toBe("one two");
+    expect(normalizeForMatch("one\n\n\n  two")).toBe("one\ntwo");
+    expect(normalizeForMatch("  padded  ")).toBe("padded");
   });
 
   test("a selector list splits on top-level commas only", () => {

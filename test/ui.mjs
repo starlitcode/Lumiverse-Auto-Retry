@@ -618,11 +618,16 @@ console.log("\npreset split");
     "Pick randomly when a word has more than one swap",
     "Match case exactly",
   ];
+  // Everything in the find-and-replace group that a preset does not carry.
+  // Two settings were added to this run and this list was not updated with
+  // them, so the check had been failing on a correct panel.
   const expectYours = [
     'Show a "swap words now" button',
     "Show a swap-whole-chat button",
     "Allow swapping a reply again",
     "Ask before editing a reply",
+    "Wait for other extensions to finish",
+    "How long to wait (seconds)",
   ];
   const same = (a, b) => !!a && a.length === b.length && a.every((x, i) => x === b[i]);
   check("the preset run holds exactly what a preset saves", same(out.presetLabels, expectPreset), out.presetLabels);
@@ -2139,12 +2144,12 @@ console.log("\nrefusal note");
       padded: (await drive({ refusalNoteFromTry: 1,
         refusalNotes: [{ text: "  keep\n  my spacing\n", role: "system" }] }, REFUSED))[0],
       // A note is armed just before the click, because some builds start the
-      // generation off the click itself. When there is no control to click, the
-      // note has to be taken back: left armed it waits out its full minute and
-      // can then attach itself to a regenerate the user pressed themselves.
-      // The backend reads an empty list as nothing armed, so a disarm is the
-      // same message carrying no notes. Runs last, since it takes the button
-      // off the page.
+      // generation off the click itself. When there is no control to click
+      // there is no generation to attach one to, so nothing is armed at all.
+      // This used to arm and then take it back, which was correct but spent the
+      // whole acknowledgement wait getting there, and for the length of that
+      // wait the backend held a note for a generation that never came. Runs
+      // last, since it takes the button off the page.
       noControl: await (async () => {
         const btn = document.querySelector('[data-testid="regenerate"]');
         const parent = btn.parentNode;
@@ -2169,9 +2174,8 @@ console.log("\nrefusal note");
     out.payload);
   check("the spacing someone typed is sent as they typed it",
     !!out.padded && out.padded.notes[0].text === "  keep\n  my spacing\n", out.padded);
-  check("with nothing to click, the note is armed and then taken back",
-    Array.isArray(out.noControl) && out.noControl.length >= 2 &&
-    out.noControl.every((n, i) => (i % 2 === 0 ? n > 0 : n === 0)), out.noControl);
+  check("with nothing to click, no note is armed at all",
+    Array.isArray(out.noControl) && out.noControl.length === 0, out.noControl);
   check("no console errors", errors.length === 0, errors);
 }
 

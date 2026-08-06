@@ -28,6 +28,12 @@
  */
 
 declare const spindle: any;
+// The backend runtime has timers, but this module typechecks against ES2020
+// with no DOM lib, and nothing in ES2020 declares them. Without these the
+// settle gate below fails the backend typecheck, which takes `bun run check`
+// and the CI job with it. Declarations emit nothing, so dist is unaffected.
+declare function setTimeout(fn: () => void, ms: number): any;
+declare function clearTimeout(handle: any): void;
 
 const RULES_FILE = 'replace-rules.json';
 const SETTINGS_FILE = 'settings.json';
@@ -107,15 +113,28 @@ function replyTo(userId: string | undefined, msg: any): void {
 // before it clicks, collected by the interceptor on the generation that click
 // starts, then thrown away. One generation only.
 //
-// Two things keep it from landing on the wrong generation. It is scoped to the
-// chat it was armed for, and it is only honoured for a regenerate or a swipe,
-// which is what a retry produces. Anything you type yourself is a "normal"
-// generation and can never pick this up, however stale the arm is. The age
-// limit is a third guard for the case where the click never starts anything.
-interface RefusalNote { chatId: string; notes: Array<{ text: string; role: string }>; placement: string; at: number; }
+// Three things keep it from landing on the wrong generation: it is scoped to
+// the chat it was armed for, it is used once and cleared whether or not it was
+// used, and it expires. The frontend also takes it back when the retry click it
+// was armed for never started anything, so the window between arming and
+// collection is the length of one click, not the age limit below.
+//
+// What is deliberately NOT a guard by default is what the host calls the
+// generation. This used to require context.generationType to read "regenerate"
+// or "swipe". Builds that report "normal" for every generation, which is most
+// of them, therefore never sent the note at all: it was armed, the retry ran
+// without it, and the only sign was a line in the log. The type is now only
+// consulted when the user asks for it, through strictType below.
+interface RefusalNote { chatId: string; notes: Array<{ text: string; role: string }>; placement: string; at: number; strictType: boolean; }
 let refusalNote: RefusalNote | null = null;
-const NOTE_MAX_AGE_MS = 60000;
+// Long enough to cover prompt assembly on a busy server, short enough that a
+// note whose click died is expired rather than sitting around. The frontend
+// disarms on a dead click well inside this.
+const NOTE_MAX_AGE_MS = 45000;
 const NOTE_ROLES = ['system', 'user', 'assistant'];
+// What the host may call a generation that a retry produced. Only used when the
+// user turns the strict check on, since the names vary between builds.
+const RETRY_TYPES = ['regenerate', 'regeneration', 'swipe', 'reroll', 'retry'];
 // Matches the cap the panel offers, so a hand-edited payload cannot exceed it.
 const MAX_NOTES = 10;
 
@@ -340,7 +359,12 @@ function rememberWrite(k: string, text: string) {
 // Reads the message at the moment of the swap rather than using the text the
 // end event carried. That is what lets a deferred swap apply on top of another
 // extension's rewrite instead of replacing it with the pre-rewrite reply.
-async function swapMessageNow(chatId: string, messageId: any): Promise<void> {
+// userId is threaded all the way down because sendToFrontend without one
+// broadcasts to every connected user on an operator-scoped install: one
+// person's "apply your word swaps?" prompt reached everybody, and so did the
+// text of the swap. It is undefined on a user-scoped install, where the host
+// ignores the argument, so this costs nothing there.
+async function swapMessageNow(chatId: string, messageId: any, userId?: string): Promise<void> {
   if (!groups.length) return;
   let m: any = null;
   try {
@@ -358,26 +382,29 @@ async function swapMessageNow(chatId: string, messageId: any): Promise<void> {
   if (next === content) return;
   if (confirmBeforeEdit) {
     // Ask first; the frontend sends apply_replace_now for this reply if the user agrees.
-    try { spindle.sendToFrontend({ type: 'confirm_edit', chatId: chatId, messageId: messageId, requestId: 'ar-auto-' + Date.now() }); } catch (_) {}
+    replyTo(userId, { type: 'confirm_edit', chatId: chatId, messageId: messageId, requestId: 'ar-auto-' + Date.now() });
     return;
   }
   rememberWrite(swapKey(chatId, messageId), next);
   await writeSwapped(chatId, m, next);
   markSwapped(messageId);
   // Tell the frontend what changed so it can update the visible reply.
-  try { spindle.sendToFrontend({ type: 'swapped', chatId: chatId, pairs: pairs }); } catch (_) {}
+  replyTo(userId, { type: 'swapped', chatId: chatId, pairs: pairs });
 }
 
-function scheduleSwap(chatId: string, messageId: any, sawEdit: boolean) {
+function scheduleSwap(chatId: string, messageId: any, sawEdit: boolean, userId?: string) {
   const k = swapKey(chatId, messageId);
   let p = pendingSwaps.get(k);
   if (!p) { p = { capAt: Date.now() + MAX_WAIT_MS, timer: null }; pendingSwaps.set(k, p); }
   if (p.timer) clearTimeout(p.timer);
+  // The owner is remembered from whichever event scheduled the swap first, so a
+  // deferred swap still replies to that user and not to everyone.
+  if (userId != null) p.userId = userId;
   const want = sawEdit ? SETTLE_MS : waitStartMs;
   const left = Math.max(0, p.capAt - Date.now());
   p.timer = setTimeout(() => {
     pendingSwaps.delete(k);
-    swapMessageNow(chatId, messageId).catch(() => {});
+    swapMessageNow(chatId, messageId, p.userId).catch(() => {});
   }, Math.max(0, Math.min(want, left)));
 }
 
@@ -390,7 +417,7 @@ function clearPending(chatId: any, messageId: any) {
 // An edit by anything other than us. While a swap is pending this pushes it
 // back; after one has landed it re-asserts, capped, for the case where the
 // other extension finished later than the wait allowed for.
-function onForeignEdit(chatId: any, messageId: any, content: string) {
+function onForeignEdit(chatId: any, messageId: any, content: string, userId?: string) {
   if (!enabled || !groups.length || !chatId || messageId == null) return;
   const k = swapKey(chatId, messageId);
   if (ourWrites.get(k) === content) return; // the event our own write raised
@@ -401,13 +428,13 @@ function onForeignEdit(chatId: any, messageId: any, content: string) {
     if (n > RESWAP_CAP) return;
     reswapCount.set(k, n);
   }
-  scheduleSwap(chatId, messageId, true);
+  scheduleSwap(chatId, messageId, true, userId);
 }
 
 const readEdit = (p: any) => {
   try {
     if (!p || !p.chatId || !p.message) return;
-    onForeignEdit(p.chatId, p.message.id, String(p.message.content == null ? '' : p.message.content));
+    onForeignEdit(p.chatId, p.message.id, String(p.message.content == null ? '' : p.message.content), p.userId);
   } catch (_) {}
 };
 try { spindle.on('MESSAGE_EDITED', readEdit); } catch (_) {}
@@ -473,7 +500,13 @@ spindle.onFrontendMessage(async (payload: any, userId?: string) => {
         notes.push({ text: text, role: NOTE_ROLES.indexOf(String(n && n.role)) >= 0 ? String(n.role) : 'system' });
       }
       refusalNote = notes.length && payload.chatId
-        ? { chatId: String(payload.chatId), notes: notes, placement: String(payload.placement || 'after'), at: Date.now() }
+        ? {
+            chatId: String(payload.chatId),
+            notes: notes,
+            placement: String(payload.placement || 'after'),
+            at: Date.now(),
+            strictType: !!payload.strictType,
+          }
         : null;
       // Acknowledged so the frontend can hold the retry click until the note is
       // actually in place. The arm travels this bridge while the click travels
@@ -575,8 +608,8 @@ spindle.on('GENERATION_ENDED', async (p: any) => {
       } catch (_) {}
     }
     if (!messageId) return;
-    if (waitForOtherEdits) { scheduleSwap(chatId, messageId, false); return; }
-    await swapMessageNow(chatId, messageId);
+    if (waitForOtherEdits) { scheduleSwap(chatId, messageId, false, p.userId); return; }
+    await swapMessageNow(chatId, messageId, p.userId);
   } catch (e: any) {
     if (!warnedEditError) {
       warnedEditError = true;
@@ -594,22 +627,28 @@ try {
   spindle.registerInterceptor(async (messages: any[], context: any) => {
     try {
       if (!refusalNote) return messages;
-      const type = context && context.generationType;
-      // A retry is a regenerate or a swipe. Anything the user typed is
-      // "normal", so a note nobody collected cannot attach itself to it.
-      if (type !== 'regenerate' && type !== 'swipe') {
+      const who = context && context.userId;
+      const chatId = context && context.chatId;
+      // A note armed in one chat is not for a generation in another, and it
+      // stays armed so the retry it was meant for can still collect it.
+      if (chatId && refusalNote.chatId && String(chatId) !== refusalNote.chatId) return messages;
+      const type = String((context && context.generationType) || '');
+      // Only when the user asked for it. Left on by default this rejected every
+      // generation on any build that reports "normal", which is the bug that
+      // made the note look like it did nothing at all.
+      if (refusalNote.strictType && type && RETRY_TYPES.indexOf(type.toLowerCase()) < 0) {
         // Named rather than swallowed. A note that never appears looks the same
         // whether it was never armed or the host called this generation
-        // something else, and only one of those is fixable by the user.
-        try { spindle.sendToFrontend({ type: 'note_skipped', reason: 'the host called this generation "' + String(type) + '"' }); } catch (__) {}
+        // something else, and only one of those is fixable by the user. The
+        // note stays armed: with the strict check on, the point is to wait for
+        // a generation the host does call a retry.
+        try { replyTo(who, { type: 'note_skipped', reason: 'the strict check is on and the host called this generation "' + type + '"' }); } catch (__) {}
         return messages;
       }
-      const chatId = context && context.chatId;
-      if (chatId && refusalNote.chatId && String(chatId) !== refusalNote.chatId) return messages;
       const armed = refusalNote;
       refusalNote = null; // one generation, collected or not
       if (Date.now() - armed.at > NOTE_MAX_AGE_MS) {
-        try { spindle.sendToFrontend({ type: 'note_skipped', reason: 'it was armed too long ago to still belong to this generation' }); } catch (__) {}
+        try { replyTo(who, { type: 'note_skipped', reason: 'it was armed too long ago to still belong to this generation' }); } catch (__) {}
         return messages;
       }
       if (!Array.isArray(messages)) return messages;
@@ -621,6 +660,9 @@ try {
         messageIndex: placed.from + i,
         name: built.length > 1 ? 'Auto Retry refusal note ' + (i + 1) : 'Auto Retry refusal note',
       }));
+      // Said out loud, so "did my note go?" has an answer in the live log
+      // instead of being something the user has to infer from the reply.
+      try { replyTo(who, { type: 'note_sent', count: built.length, generationType: type }); } catch (__) {}
       return { messages: placed.list, breakdown: breakdown };
     } catch (_) {
       return messages; // a fault here must never cost the user their generation
