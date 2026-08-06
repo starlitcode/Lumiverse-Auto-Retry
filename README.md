@@ -31,6 +31,10 @@ https://github.com/starlitcode/Lumiverse-Auto-Retry
 
 Pressing your **Stop** button, or tapping **Cancel** on the retry pop-up, stops the extension right away. It drops any pending retry, resets the count, and a stopped reply cannot restart itself. The Cancel button on the pop-up is the extension's own, so it works no matter what.
 
+## You do not have to set anything up
+
+It is on and set up when you install it. If you want it to suit your setup better, the settings panel has a **Quick setup** row at the top: tap **Slow model**, **Busy or free provider** or **Only real errors** and it fills the rest in for you. Everything below that row is optional.
+
 ## Settings
 
 Open the chat input bar, tap the **Extras** popover, and choose **Auto Retry settings**. Options are grouped by what they do. Simple on/off switches are up top; the groups marked **Advanced** are collapsed by default, so tap one of those headers to reveal its options. Each setting has a **?** next to its name that shows a short description: hover it on a computer, tap it on a phone. The description floats just below that setting, so nothing shifts around and the setting you asked about stays visible. Only one shows at a time. To dismiss it, tap the description, tap the **?** again, tap anywhere else, scroll, or press Esc.

@@ -2255,6 +2255,93 @@ console.log("\nrefusal note");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- quick setup, and the line that says you need none of it ----
+// The panel has forty-odd options and the person opening it for the first time
+// is deciding whether to close it again. These two are the answer to that, so
+// they have to be at the top, they have to be honest about what they changed,
+// and they must not reach anything that is somebody's own setup.
+console.log("\nquick setup");
+{
+  const { out, errors } = await inPanel(browser, {}, async (page) =>
+    page.evaluate(async () => {
+      const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const quick = document.querySelector("[data-ar-quick]");
+      const hello = document.querySelector("[data-ar-hello]");
+      const preset = (id) => document.querySelector('[data-ar-preset="' + id + '"]');
+      for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      await frame();
+      const val = (k) => {
+        const el = document.querySelector('[data-ar-row="' + k + '"] input,[data-ar-row="' + k + '"] textarea');
+        return el ? (el.type === "checkbox" ? el.checked : el.value) : null;
+      };
+      // Something of the user's own, in a category no preset may touch.
+      const rules = document.querySelector('[data-ar-row="replaceRules"] textarea');
+      rules.value = "cat => dog";
+      rules.dispatchEvent(new Event("change", { bubbles: true }));
+      const sel = document.querySelector('[data-ar-row="regenerateSelector"] input');
+      sel.value = ".mine";
+      sel.dispatchEvent(new Event("change", { bubbles: true }));
+
+      const names = [...document.querySelectorAll("[data-ar-preset]")].map((b) => b.textContent.trim());
+      const above = quick && document.querySelector("#__lvRetrySettings") ? true : !!quick;
+
+      preset("slow").click();
+      await frame();
+      // The status line, which is the first child now: it doubles as the
+      // invitation, so the block is the same height before and after a tap.
+      const slow = { stuck: val("stuckTimeoutMs"), idle: val("idleTimeoutMs"), said: quick.firstElementChild.textContent };
+
+      preset("busy").click();
+      await frame();
+      // The reason every preset names every tuning key: pressing a second one
+      // must not leave the first one's timings behind.
+      const busy = { stuck: val("stuckTimeoutMs"), rate: val("rateLimitDelayMs") };
+
+      preset("errors").click();
+      await frame();
+      const errs = { cut: val("retryOnTruncated"), refusal: val("retryOnRefusal"), err: val("retryOnError") };
+
+      preset("default").click();
+      await frame();
+      const back = { stuck: val("stuckTimeoutMs"), cut: val("retryOnTruncated") };
+
+      // Nothing a preset touched may be anybody's own setup.
+      const mine = { rules: rules.value, sel: sel.value };
+      // Filled in and left for Save, like an import.
+      const stored = JSON.parse(localStorage.getItem("lv-auto-retry:settings:v1") || "{}");
+
+      const helloText = hello ? hello.textContent : "";
+      const gotIt = hello ? [...hello.querySelectorAll("button")].find((b) => /got it/i.test(b.textContent)) : null;
+      if (gotIt) gotIt.click();
+      await frame();
+      const helloGone = !document.querySelector("[data-ar-hello]");
+      const helloRemembered = !!localStorage.getItem("lv-auto-retry:seen-panel:v1");
+      return { above, names, slow, busy, errs, back, mine, stored, helloText, helloGone, helloRemembered };
+    }),
+  );
+  check("the quick setup row is there", out.above, out);
+  check("with all four choices", out.names.length === 4 && /Recommended/.test(out.names[0]), out.names);
+  check("slow model stretches the watchdogs",
+    Number(out.slow.stuck) > 180000 && Number(out.slow.idle) > 90000, out.slow);
+  check("and says what it did", /Press Save/.test(out.slow.said), out.slow.said);
+  check("a second preset does not inherit the first one's timings",
+    Number(out.busy.stuck) === 180000 && Number(out.busy.rate) > 15000, out.busy);
+  check("only real errors turns the reading of replies off",
+    out.errs.cut === false && out.errs.refusal === false && out.errs.err === true, out.errs);
+  check("recommended puts it all back",
+    Number(out.back.stuck) === 180000 && out.back.cut === true, out.back);
+  // The line a preset must never cross.
+  check("no preset touches your word swaps or your selectors",
+    out.mine.rules === "cat => dog" && out.mine.sel === ".mine", out.mine);
+  check("and nothing is saved until you press Save",
+    out.stored.stuckTimeoutMs === undefined || out.stored.stuckTimeoutMs === 180000, out.stored.stuckTimeoutMs);
+  check("the first-time note says you need to change nothing",
+    /do not have to change/i.test(out.helloText), out.helloText.slice(0, 90));
+  check("Got it dismisses it", out.helloGone, out);
+  check("and it is remembered", out.helloRemembered, out);
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- the prompt viewer ----
 // Lumiverse's own Prompt Breakdown lists what a chat is built from, which is a
 // different question from what actually went to the model after every extension
@@ -2705,7 +2792,10 @@ console.log("\nhint placement");
   // browser drops, and the popover rendered at full height straight over the
   // row it belongs to. Measured at a row top of -5, covering it from 12 to 273.
   {
-    const OFFSET = "#modal{position:fixed;left:0;right:0;top:-70px;bottom:0;overflow:auto;background:rgb(24,20,34);box-sizing:border-box}";
+    // Pushed far enough up that the row genuinely has nothing above it. The
+    // panel carries more fixed chrome above its scroll area than it used to
+    // (the quick setup row), so -70px no longer reaches.
+    const OFFSET = "#modal{position:fixed;left:0;right:0;top:-260px;bottom:0;overflow:auto;background:rgb(24,20,34);box-sizing:border-box}";
     const { out, errors } = await inPanel(
       browser, { css: OFFSET, viewport: { width: 393, height: 800 }, settings: { refusalNote: true } },
       async (page) => page.evaluate(async () => {

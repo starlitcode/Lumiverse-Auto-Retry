@@ -2,6 +2,23 @@
 
 Switching Auto Retry itself off changes nothing in here. Every setting stays where it is and stays editable, because off means paused rather than unconfigured, and setting it up while it is off is a normal thing to want to do. A line at the top says it is off and that your settings are saved.
 
+## If you would rather not read all this
+
+You do not have to change anything. Auto Retry is on and set up when you install it, and the defaults are picked for what most people and most providers need.
+
+The first time you open the panel it says so, with a **Got it** to put the line away.
+
+Above the options there is a **Quick setup** row with four choices. Tap one and it fills the retry options in for you:
+
+| | For |
+| --- | --- |
+| **Recommended** | What it ships with. Most people, most providers. |
+| **Slow model** | A local model, a large one, or anything slow to start. Waits far longer before deciding a reply has stalled. |
+| **Busy or free provider** | A free or shared tier that meters per minute. Waits much longer when the server says it is busy, and gives up sooner rather than spending your quota. |
+| **Only real errors** | Retries a reply that failed or came back empty, and nothing else. Nothing reads your replies to judge them. |
+
+Each one sets every retry option, so tapping a second does not leave the first one's timings behind. None of them touches your word swaps, your refusal notes, your button selectors or the on-screen panel: those are yours. Like everything else in the panel, it fills the boxes and waits for **Save**, so tapping one out of curiosity costs nothing.
+
 The settings modal is the easy path, and the **Search settings** box at the top of it is the quickest way to reach one option out of the forty-odd below: type part of a name or a description and it shows the matching rows, opening whichever Advanced section they live in. Clear the box to put the panel back as it was.
 
 Each option's **?** shows its description in a small popover just below that option. Where it opens is fixed per setting rather than decided on the fly, so a given description is always in the same place. The one exception is **What the notes say**, which opens above: that row holds the whole note list, its roles, its buttons and its counter, so below it would be a long way from the **?** you pressed. It floats over the panel, so opening one leaves the rows where they are and never hides the setting you are reading about. A description too long for the room on its side scrolls inside itself rather than moving to the other side. Only one shows at a time. Tap the description, tap the **?** again, tap elsewhere, scroll the panel, or press Esc to close it.

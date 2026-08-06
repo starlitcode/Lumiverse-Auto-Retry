@@ -268,6 +268,91 @@ function defaultMs(key: keyof typeof CONFIG): string {
 }
 const def = (key: keyof typeof CONFIG): string => String((CONFIG as any)[key]);
 
+// ---- quick setup ----
+// The panel has forty-odd options in it, and most people opening it for the
+// first time do not want to learn them: they want to say what their setup is
+// like and be done. These say it in one tap.
+//
+// Every preset gives a value for every key in TUNING_KEYS, so pressing a second
+// one after a first leaves nothing behind from it. A key a preset does not name
+// takes the shipped default, which is what makes "Recommended" simply the list
+// with nothing named.
+//
+// Only how it retries. Word swaps, refusal notes, button selectors and the
+// on-screen panel are somebody's own setup and no preset touches them.
+const TUNING_KEYS = [
+  "maxRetries",
+  "pauseWhenFailing",
+  "breakerRuns",
+  "breakerPauseMins",
+  "retryDelayMs",
+  "backoffFactor",
+  "maxDelayMs",
+  "jitter",
+  "rateLimitDelayMs",
+  "stuckTimeoutMs",
+  "idleTimeoutMs",
+  "retryOnError",
+  "ignoreHardErrors",
+  "retryOnEmpty",
+  "retryOnTruncated",
+  "retryOnNoPunct",
+  "retryOnShort",
+  "retryOnRefusal",
+];
+const SETUP_PRESETS: Array<{
+  id: string;
+  label: string;
+  blurb: string;
+  values: Record<string, any>;
+}> = [
+  {
+    id: "default",
+    label: "Recommended",
+    blurb: "What it ships with. Suits most people and most providers.",
+    values: {},
+  },
+  {
+    id: "slow",
+    label: "Slow model",
+    blurb:
+      "For a local model, a large one, or anything that takes its time before the first word. Waits far longer before deciding a reply has stalled, so a slow but healthy reply is never thrown away.",
+    values: {
+      stuckTimeoutMs: 300000,
+      idleTimeoutMs: 180000,
+      retryDelayMs: 3000,
+      maxDelayMs: 90000,
+      maxRetries: 3,
+    },
+  },
+  {
+    id: "busy",
+    label: "Busy or free provider",
+    blurb:
+      "For a free or shared tier that meters per minute. Waits much longer when the server says it is busy, backs off harder, and gives up sooner rather than spending your quota on retries.",
+    values: {
+      rateLimitDelayMs: 45000,
+      maxDelayMs: 120000,
+      backoffFactor: 3,
+      maxRetries: 3,
+      breakerRuns: 2,
+      breakerPauseMins: 10,
+    },
+  },
+  {
+    id: "errors",
+    label: "Only real errors",
+    blurb:
+      "Retries a reply that failed or came back empty, and nothing else. Nothing reads your replies to judge them, so a reply is never re-rolled for looking cut off or for looking like a refusal.",
+    values: {
+      retryOnTruncated: false,
+      retryOnNoPunct: false,
+      retryOnRefusal: false,
+      retryOnShort: false,
+    },
+  },
+];
+
 // Fields the settings UI can edit, in display order. The one place that defines
 // both the form and what gets persisted. Every option above (except the two
 // internal timing constants) is listed here, so everything is user-editable.
@@ -2756,6 +2841,24 @@ export function setup(ctx: Ctx, opts?: any) {
     } catch (_) {}
   }
   const disposers: Array<() => void> = [];
+
+  // Whether the panel's opening note has been dismissed. Kept in the browser
+  // rather than in the settings: it is a record of somebody having read a line
+  // once, not a preference, so it has no business in an export or a backup.
+  const SEEN_KEY = "lv-auto-retry:seen-panel:v1";
+  function seenPanelBefore(): boolean {
+    try {
+      return typeof localStorage !== "undefined" && !!localStorage.getItem(SEEN_KEY);
+    } catch (_) {
+      // No storage means it shows every time, which is the harmless way round.
+      return false;
+    }
+  }
+  function markPanelSeen() {
+    try {
+      if (typeof localStorage !== "undefined") localStorage.setItem(SEEN_KEY, "1");
+    } catch (_) {}
+  }
 
   // Coerce a raw saved object (local cache or account storage) into a clean
   // partial config: keep only known fields, run each through its type.
@@ -6047,6 +6150,88 @@ export function setup(ctx: Ctx, opts?: any) {
     panel.appendChild(masterNote);
     masterNoteEl = masterNote;
     panel.appendChild(searchWrap);
+
+    // ---- quick setup ----
+    // Above the options rather than buried among them, because the person this
+    // is for is looking at forty settings and deciding whether to close the
+    // panel again.
+    {
+      const wrap = document.createElement("div");
+      wrap.setAttribute("data-ar-quick", "1");
+      wrap.style.cssText =
+        "flex:none;display:flex;flex-direction:column;gap:6px;margin:0 0 10px";
+      // One line, not two. It starts as the invitation and becomes the result,
+      // so the block costs the same height whether or not anything has been
+      // tapped. Everything above the scroll area is height the options do not
+      // get, and on a phone that is most of the panel.
+      const INVITE = "Quick setup: tap one to match your setup, or leave it alone.";
+      const said = document.createElement("div");
+      said.textContent = INVITE;
+      said.style.cssText =
+        "font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+      const row = document.createElement("div");
+      row.style.cssText = "display:flex;flex-wrap:wrap;gap:6px";
+
+      for (const preset of SETUP_PRESETS) {
+        const b = btn(preset.label, false);
+        b.style.cssText += "min-height:32px;padding:5px 11px;font-size:12px;flex:none";
+        b.setAttribute("data-ar-preset", preset.id);
+        b.addEventListener("click", () => {
+          let changed = 0;
+          for (const key of TUNING_KEYS) {
+            const want = key in preset.values ? preset.values[key] : (CONFIG as any)[key];
+            const f = fieldByKey[key];
+            const next = f ? coerceKey(key, want) : want;
+            if (cfg[key] !== next) changed++;
+            cfg[key] = next;
+            const set = fieldSetters[key];
+            if (set) set(next);
+          }
+          applyDeps();
+          // Filled in behind the panel and left for Save, the same deal an
+          // import and a reset offer, so a tap out of curiosity costs nothing.
+          said.textContent =
+            preset.blurb +
+            (changed
+              ? " Changed " + changed + (changed === 1 ? " setting. " : " settings. ") +
+                "Press Save to keep it."
+              : " Nothing to change; that is how it is set already.");
+        });
+        row.appendChild(b);
+      }
+      wrap.appendChild(said);
+      wrap.appendChild(row);
+      panel.appendChild(wrap);
+    }
+
+    // ---- the first time ----
+    // Someone opening this for the first time is usually here to find out
+    // whether they have to do something. They do not, and the panel should say
+    // so before they start reading forty options looking for the answer.
+    if (!seenPanelBefore()) {
+      const hello = document.createElement("div");
+      hello.setAttribute("data-ar-hello", "1");
+      hello.style.cssText =
+        "flex:none;display:flex;align-items:flex-start;gap:10px;margin:0 0 10px;" +
+        "padding:8px 10px;border-radius:var(--lumiverse-radius,8px);" +
+        "border-left:3px solid var(--lumiverse-primary,rgba(147,112,219,.9));" +
+        "background:var(--lumiverse-primary-020,rgba(147,112,219,.2));" +
+        "font-size:12px;line-height:1.5";
+      const words = document.createElement("div");
+      words.style.cssText = "flex:1;min-width:0";
+      words.textContent =
+        "Auto Retry is already on and set up for most people. You do not have to change " +
+        "anything in here. Everything below is optional, and each option's ? explains it.";
+      const ok = btn("Got it", false);
+      ok.style.cssText += "min-height:30px;padding:4px 12px;font-size:12px;flex:none";
+      ok.addEventListener("click", () => {
+        markPanelSeen();
+        try { hello.remove(); } catch (_) {}
+      });
+      hello.appendChild(words);
+      hello.appendChild(ok);
+      panel.insertBefore(hello, panel.firstChild);
+    }
 
     panel.appendChild(scroller);
 
