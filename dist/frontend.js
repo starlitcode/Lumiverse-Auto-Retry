@@ -173,6 +173,28 @@ const CONFIG = {
     toast: true,
     liveLog: false, // show a small on-screen panel with recent activity, updating live. Handy on mobile where dev tools aren't available.
 };
+// A hint that quotes a default reads it from the block above rather than
+// spelling it out. Five of them were written by hand and went stale the moment
+// the timings were retuned: the panel was telling people it waited 30 seconds
+// while the extension waited 60, and that a stalled reply was given 90 seconds
+// when it was given three minutes. A wrong number in a hint is worse than no
+// number, because it is the one thing in the row someone will trust over the
+// box next to it. Nothing below is a literal now, so a default cannot be
+// changed without every hint that mentions it changing with it.
+function humanMs(ms) {
+    if (ms >= 60000 && ms % 60000 === 0) {
+        const m = ms / 60000;
+        return m + (m === 1 ? " minute" : " minutes");
+    }
+    const s = ms / 1000;
+    return s + (s === 1 ? " second" : " seconds");
+}
+// "60000 = 60 seconds", built from whatever the default actually is.
+function defaultMs(key) {
+    const ms = Number(CONFIG[key]);
+    return ms + " = " + humanMs(ms);
+}
+const def = (key) => String(CONFIG[key]);
 const SCHEMA = [
     {
         title: "Basics",
@@ -198,7 +220,7 @@ const SCHEMA = [
                 int: true,
                 min: 28,
                 max: 96,
-                hint: "How wide the floating button is, in pixels. 44 is about a comfortable thumb. Larger is easier to hit on a phone, smaller keeps it out of the way.",
+                hint: "How wide the floating button is, in pixels. The default of " + def("floatingToggleSize") + " is about a comfortable thumb. Larger is easier to hit on a phone, smaller keeps it out of the way.",
             },
             {
                 key: "showExtrasToggle",
@@ -241,7 +263,7 @@ const SCHEMA = [
                 int: true,
                 min: 1,
                 max: 20,
-                hint: "How many whole runs have to give up back to back before it pauses. A run is one message that used up all its tries. At the default of 3, with the try limit at 4, that is 12 retries before it stops. Raise it if your setup is normally flaky, lower it to give up sooner.",
+                hint: "How many whole runs have to give up back to back before it pauses. A run is one message that used up all its tries. At the default of " + def("breakerRuns") + ", with the try limit at " + def("maxRetries") + ", that is " + (CONFIG.breakerRuns * CONFIG.maxRetries) + " retries before it stops. Raise it if your setup is normally flaky, lower it to give up sooner.",
             },
             {
                 key: "breakerPauseMins",
@@ -260,7 +282,7 @@ const SCHEMA = [
                 int: true,
                 min: 0,
                 max: 600000,
-                hint: "How long it pauses before trying again the first time. In milliseconds, so the 1200 default is 1.2 seconds.",
+                hint: "How long it pauses before trying again the first time. In milliseconds, so the default is " + defaultMs("retryDelayMs") + ".",
             },
             {
                 key: "backoffFactor",
@@ -277,7 +299,7 @@ const SCHEMA = [
                 int: true,
                 min: 0,
                 max: 600000,
-                hint: "A ceiling so it never pauses forever. 30000 = 30 seconds.",
+                hint: "A ceiling so it never pauses forever. The default is " + defaultMs("maxDelayMs") + ".",
             },
             {
                 key: "rateLimitDelayMs",
@@ -286,7 +308,7 @@ const SCHEMA = [
                 int: true,
                 min: 0,
                 max: 600000,
-                hint: 'If the server says "too many requests," it waits at least this long. 8000 = 8 seconds.',
+                hint: 'If the server says "too many requests," it waits at least this long. The default is ' + defaultMs("rateLimitDelayMs") + '. Most shared and free tiers count per minute, so a shorter wait usually spends another try hitting the same limit.',
             },
             {
                 key: "jitter",
@@ -319,7 +341,7 @@ const SCHEMA = [
                 int: true,
                 min: 0,
                 max: 600000,
-                hint: "If a reply begins but no words appear in this long, treat it as stuck and retry. 90000 = 90 seconds. Set to 0 to switch off.",
+                hint: "If a reply begins but no words appear in this long, treat it as stuck and retry. The default is " + defaultMs("stuckTimeoutMs") + ", which is long enough for a local model to load and for a long prompt to be read before the first word arrives. Set to 0 to switch off.",
             },
             {
                 key: "idleTimeoutMs",
@@ -328,7 +350,7 @@ const SCHEMA = [
                 int: true,
                 min: 0,
                 max: 600000,
-                hint: "If words were appearing and then stop for this long, treat it as frozen and retry. 45000 = 45 seconds. Set to 0 to switch off.",
+                hint: "If words were appearing and then stop for this long, treat it as frozen and retry. The default is " + defaultMs("idleTimeoutMs") + ". A reasoning model goes quiet between blocks and a slow one can take a while between words, so shorter than this re-rolls replies that were still coming. Set to 0 to switch off.",
             },
         ],
     },
@@ -457,7 +479,7 @@ const SCHEMA = [
                 int: true,
                 min: 1,
                 max: 120,
-                hint: "How long to give another extension to make its edit before swapping anyway. Each edit restarts the clock and the swap follows shortly after the last one, so this is only the full wait when nothing else edits at all. 15 suits a refinement pass on a fast model; raise it for a slow one. A reply that never stops changing is swapped after three minutes regardless.",
+                hint: "How long to give another extension to make its edit before swapping anyway. Each edit restarts the clock and the swap follows shortly after the last one, so this is only the full wait when nothing else edits at all. The default of " + def("swapWaitSecs") + " suits a refinement pass on a fast model; raise it for a slow one. A reply that never stops changing is swapped after three minutes regardless.",
             },
         ],
     },
@@ -516,7 +538,7 @@ const SCHEMA = [
                 int: true,
                 min: 0,
                 max: 100000,
-                hint: "Replies longer than this are treated as real writing, not a refusal, and left alone. 2000 suits most cases. Set to 0 to check replies of any length.",
+                hint: "Replies longer than this are treated as real writing, not a refusal, and left alone. The default of " + def("refusalMaxChars") + " suits most cases. Set to 0 to check replies of any length.",
             },
             {
                 key: "refusalStripThinking",
@@ -6911,4 +6933,9 @@ export const __testing = {
     withLongForms,
     REFUSAL_PHRASES,
     REFUSAL_DISENGAGE,
+    // The defaults block and the form built from it, so a check can hold the two
+    // against each other. Hints used to spell their default out by hand and went
+    // stale every time one was retuned, with nothing to catch it.
+    CONFIG,
+    SCHEMA,
 };

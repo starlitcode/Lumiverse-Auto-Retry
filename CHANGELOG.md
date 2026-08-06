@@ -22,6 +22,7 @@ _2026-08-06_
 - **A phrase now only has to be listed one way.** "I'm unable to help with that" and "I am unable to help with that" are the same refusal, and only whichever form happened to be in the list was matched. The written-out form of every contracted phrase is now worked out from the contracted one.
 - **The type check on the backend was failing, which took the whole test run with it.** `bun run check` could not get past it, so neither could the checks on every pull request.
 - **On a server shared by several accounts, replies from the backend went to everybody.** A word-swap confirmation, and the text of a swap, were sent without saying which user they belonged to. They are now addressed to the account that caused them. Nothing changes on an ordinary single-user install.
+- **The descriptions in the panel were quoting the old timings.** The **?** next to five settings spelled its default out by hand, so after the retune the panel was telling people the longest wait was 30 seconds while the extension waited 60, and that a stalled reply was given 90 seconds when it was given three minutes. Every description that names a default now reads it from the defaults themselves, and a check fails if any of them, or the table in the settings documentation, ever says a number the extension does not actually use.
 - **Two of the panel's own browser checks had been failing on correct code.** One was still expecting a list of settings from before two were added to it; the other was waiting less time than the thing it was testing takes.
 
 ### Added
