@@ -10,8 +10,13 @@ A reply that streams real text and then gets chopped off mid-sentence is easy to
 - an odd number of emphasis `*`, an open action or emphasis (bullet lists are ignored so a list doesn't look half-open)
 - an unbalanced quote, open dialogue
 - it ends on a comma or semicolon, cut mid-clause
+- it stops on a word with nothing after it (`retryOnNoPunct`, on by default)
 
-These are kept careful so a reply that legitimately ends on `...`, an action, or a closed quote is left alone. If you want it stricter, turn on `retryOnNoPunct`, which also retries a reply ending with no punctuation at all. That one is noisier in roleplay, so it is off by default.
+Inline HTML is removed before any of this is counted. Models colour their dialogue with a raw `<span style="...">`, and the two quotes around that style value used to be counted alongside the two around the speech, so a reply whose dialogue was genuinely cut open still came out even and was passed as finished. A trailing `</span>` was also being read as end punctuation, which hid the same fault from the last check.
+
+That last check reads punctuation in any script, and treats an emoji as an ending too, so a scene closing on `。`, `؟`, `!` or `👋` is left alone. What it fires on is a reply that stops mid-word. It was off by default in earlier versions because the test for an ending was a list of Latin characters, which made it wrong too often to leave on.
+
+These are kept careful so a reply that legitimately ends on `...`, an action, or a closed quote is left alone.
 
 ## Accidental-refusal detection (beta)
 
@@ -56,9 +61,20 @@ Some providers deliver a refusal as an *error* instead of as reply text (Gemini'
 
 ## Thinking and reasoning
 
-Only the final reply is ever checked for a refusal, never the model's thinking. Before matching, known reasoning blocks are stripped out (tags like `<think>`, `<thinking>`, `<reasoning>`, `<thought>`, `<reflection>`, `<scratchpad>` and similar, in both `<tag>` and `[tag]` forms). So if a model weighs a refusal while reasoning but then writes a normal reply, nothing is re-rolled. If a refusal ends up in the actual reply, it is caught as usual, and if the model reasons and then produces nothing, that is handled by the empty-reply retry instead.
+Only the final reply is ever checked for a refusal, never the model's thinking. Before matching, known reasoning blocks are stripped out. Four wrappers are recognised, using tag names like `think`, `thinking`, `reasoning`, `thought`, `reflection`, `scratchpad` and `analysis`:
 
-If your model wraps its thinking in an unusual tag the built-in set misses, add its name under **Extra thinking tag names** in the refusal tuning section, one per line, just the name (no brackets). You can turn the whole thing off with **Ignore the thinking / reasoning**, though leaving it on is the safe default.
+| Form | Example |
+| --- | --- |
+| Angle brackets | `<think>` … `</think>` |
+| Square brackets | `[thinking]` … `[/thinking]` |
+| Pipes | `<\|think\|>` … `<\|/think\|>`, and `<\|think>` … `<think\|>` |
+| Channels | `<\|channel\|>analysis<\|message\|>` … `<\|end\|>` |
+
+The channel form is the one models trained on the Harmony format use. It has no closing tag of its own: the reasoning runs until the next control token. Only the thinking channels are removed. The `final` channel is the visible reply and is kept, along with anything outside a block. So if a model weighs a refusal while reasoning but then writes a normal reply, nothing is re-rolled. If a refusal ends up in the actual reply, it is caught as usual, and if the model reasons and then produces nothing, that is handled by the empty-reply retry instead.
+
+If your model wraps its thinking in an unusual tag the built-in set misses, add its name under **Extra thinking tag names** in the refusal tuning section, one per line, just the name (no brackets or pipes). A name you add works in all four forms above. You can turn the whole thing off with **Ignore the thinking / reasoning**, though leaving it on is the safe default.
+
+An opened reasoning block with nothing closing it means the reply was cut off inside the thinking, which counts as cut off rather than as a refusal.
 
 ## Tuning it
 
@@ -102,7 +118,9 @@ What it does not do:
 
 This needs the `interceptor` permission, which is what lets an extension add to a prompt before it reaches the model. Without it granted the rest of the extension works and this one feature does nothing.
 
-If your Lumiverse shows a **Prompt Breakdown**, each note appears there as its own block, named "Auto Retry refusal note" and numbered when there is more than one, so you can check exactly what was sent.
+**Where to check that it went.** Turn on the on-screen log (**Advanced: on-screen log**) and it writes a line saying the note was sent and how many went with it, on the retry it went with. That is the reliable answer.
+
+Do not expect to find it in **Prompt Breakdown**. The note is not a message in your chat: it is added to the prompt for one generation and thrown away, and the breakdown lists the things your chat is built from. The extension does label the note for the breakdown, so it may show up depending on your Lumiverse build, but it not being there does not mean the note was not sent. The log line is what tells you.
 
 ## Trying it on a reply
 

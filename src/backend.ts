@@ -52,7 +52,7 @@ let rulesText = '';
 let allowReSwap = false;
 let confirmBeforeEdit = false;
 let waitForOtherEdits = false;
-let waitStartMs = 15000;
+let waitStartMs = 85000;   // matches the panel's default until settings arrive
 let groups: Group[] = [];
 // All rules compiled into one pattern, plus the group index each capture slot
 // belongs to. Built once per settings change, used for the single pass.
@@ -327,9 +327,11 @@ function applyReplaceFromSettings(s: any) {
   confirmBeforeEdit = !!s.confirmBeforeEdit;
   waitForOtherEdits = !!s.swapWaitForEdits;
   const secs = Number(s.swapWaitSecs);
+  // The clamp matches the panel's own range. It said 120 while the panel said
+  // 300, so anything above two minutes was quietly cut back to two.
   waitStartMs = Number.isFinite(secs) && secs > 0
-    ? Math.min(120, Math.max(1, Math.round(secs))) * 1000
-    : 15000;
+    ? Math.min(300, Math.max(1, Math.round(secs))) * 1000
+    : 85000;
   rebuild();
 }
 
@@ -341,7 +343,10 @@ function applyReplaceFromSettings(s: any) {
 // another extension is detectable from here, so rather than trying to know who
 // else is editing, this waits for the message to stop changing.
 const SETTLE_MS = 1500;      // quiet period after an edit before swapping
-const MAX_WAIT_MS = 180000;  // ceiling, so a reply that never settles is still swapped
+// Ceiling, so a reply that never settles is still swapped. It has to clear the
+// longest wait the panel offers plus a few settle rounds on top, or the ceiling
+// would cut a refinement short that the wait was set long enough for.
+const MAX_WAIT_MS = 420000;
 const RESWAP_CAP = 3;        // re-assertions per message, so two extensions cannot ping-pong
 const OURWRITES_CAP = 200;
 
@@ -388,8 +393,18 @@ async function swapMessageNow(chatId: string, messageId: any, userId?: string): 
   rememberWrite(swapKey(chatId, messageId), next);
   await writeSwapped(chatId, m, next);
   markSwapped(messageId);
-  // Tell the frontend what changed so it can update the visible reply.
-  replyTo(userId, { type: 'swapped', chatId: chatId, pairs: pairs });
+  // Both halves of the message go with the pairs. The pairs patch what is on
+  // screen; the halves let the frontend recognise the pre-swap text if the host
+  // hands it back in its edit box, which it does when its own copy of the
+  // message did not pick the change up.
+  replyTo(userId, {
+    type: 'swapped',
+    chatId: chatId,
+    messageId: messageId,
+    pairs: pairs,
+    before: content,
+    after: next,
+  });
 }
 
 function scheduleSwap(chatId: string, messageId: any, sawEdit: boolean, userId?: string) {
@@ -531,6 +546,9 @@ spindle.onFrontendMessage(async (payload: any, userId?: string) => {
       // Literal substitutions made, passed back so the frontend can update the
       // rendered text. The host saves the message without redrawing the chat.
       const pairs: Array<[string, string]> = [];
+      // One entry per reply actually rewritten, so the frontend can recognise
+      // the pre-swap text of any of them.
+      const edits: Array<{ messageId: any; before: string; after: string }> = [];
       try {
         const chatId = payload.chatId;
         const wantId = payload.messageId;
@@ -565,11 +583,12 @@ spindle.onFrontendMessage(async (payload: any, userId?: string) => {
               await writeSwapped(chatId, m, next);
               changed++;
               markSwapped(m.id);
+              edits.push({ messageId: m.id, before: content, after: next });
             }
           }
         }
       } catch (_) { ok = false; }
-      replyTo(userId, { type: 'replace_now_result', requestId: payload.requestId, ok: ok, hasRules: groups.length > 0, found: found, changed: changed, skipped: skipped, pairs: pairs });
+      replyTo(userId, { type: 'replace_now_result', requestId: payload.requestId, ok: ok, hasRules: groups.length > 0, found: found, changed: changed, skipped: skipped, pairs: pairs, edits: edits });
       return;
     }
     if (payload.type === 'set_replace_rules') {

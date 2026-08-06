@@ -56,7 +56,7 @@ The same options live in the CONFIG block at the top of `src/frontend.ts` and `d
 | ignoreHardErrors | true | Skip permanent failures like missing models or invalid API keys. |
 | retryOnEmpty | true | Retry empty replies and mid-reasoning cutoffs. |
 | retryOnTruncated | true | Retry a reply that ends mid-sentence. |
-| retryOnNoPunct | false | Stricter: also retry a reply ending with no punctuation. Noisy in RP. |
+| retryOnNoPunct | true | Retry a reply that stops on a word with nothing after it. Punctuation in any script counts as an ending, and so does an emoji. |
 | retryOnShort | false | Retry short replies. Off unless you mean it. |
 | minChars | 24 | Short threshold, used when retryOnShort is on. Counts the visible reply only, not any reasoning block. Shown only while `retryOnShort` is on. |
 | retryOnRefusal | true | (beta) Retry an accidental out-of-character refusal. |
@@ -83,7 +83,7 @@ The same options live in the CONFIG block at the top of `src/frontend.ts` and `d
 | allowReSwap | false | Let either swap button swap a reply again even if it was already swapped (can stack swaps). Applies to both the swap-this-reply and swap-whole-chat buttons. Shown only while one of those two buttons is switched on. |
 | confirmBeforeEdit | false | Ask you to confirm before any word-swap edit (automatic or manual); you can cancel. |
 | swapWaitForEdits | false | Wait for another extension to finish editing a reply before swapping it. For running alongside Hone with auto-refine on. |
-| swapWaitSecs | 15 | How long to wait for that, in seconds (1-120). Each edit restarts the clock. Shown only while `swapWaitForEdits` is on. |
+| swapWaitSecs | 85 | How long to wait for that, in seconds (1-300). A refinement pass is a whole generation, so how long it takes depends on the model, the prompt and how much it has to read. Each edit restarts the clock. Shown only while `swapWaitForEdits` is on. |
 | regenerateSelector | (see file) | Host button. See below. |
 | swipeNextSelector | (see file) | Backup button if your build retries by swiping. |
 | confirmButtonLabels | (blank) | Extra dialog button labels it may press when a dialog appears after a retry, one per line. Blank uses the built-in list. |

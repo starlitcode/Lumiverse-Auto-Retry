@@ -275,6 +275,55 @@ describe("refusal detection ignores the model's thinking", () => {
     expect(looksLikeRefusal(text, withCfg({ refusalThinkTags: "mythink" }))).toBe(false);
   });
 
+  // The pipe forms. Several models wrap their reasoning this way rather than in
+  // plain angle brackets, and none of it was recognised, so the whole reasoning
+  // block was read as part of the reply.
+  test("<|think|> ... <|/think|> is stripped", () => {
+    expect(looksLikeRefusal("<|think|>I cannot assist with that.<|/think|>She opened the door.", cfg)).toBe(false);
+  });
+
+  test("<|think> ... <think|> is stripped", () => {
+    expect(looksLikeRefusal("<|think>I cannot assist with that.<think|>She opened the door.", cfg)).toBe(false);
+  });
+
+  // The Harmony channel format, where the reasoning has no closing tag of its
+  // own and the block ends at the next control token.
+  test("an analysis channel is stripped", () => {
+    expect(looksLikeRefusal(
+      "<|channel|>analysis<|message|>I cannot assist with that.<|end|>She opened the door.",
+      cfg,
+    )).toBe(false);
+  });
+
+  test("but the final channel is the reply and survives", () => {
+    const text =
+      "<|channel|>analysis<|message|>I should refuse.<|end|>" +
+      "<|channel|>final<|message|>I cannot assist with that.<|return|>";
+    expect(looksLikeRefusal(text, cfg)).toBe(true);
+    expect(stripThinking(text, {}).trim()).toBe("I cannot assist with that.");
+  });
+
+  test("the leftover control markers do not stay in the reply", () => {
+    expect(stripThinking(
+      "<|channel|>analysis<|message|>hm<|end|><|channel|>final<|message|>She opened the door.<|return|>",
+      {},
+    ).trim()).toBe("She opened the door.");
+  });
+
+  test("a refusal outside a pipe block still counts", () => {
+    expect(looksLikeRefusal("<|think|>seems fine<|/think|>I cannot assist with that.", cfg)).toBe(true);
+  });
+
+  // An unclosed pipe or channel opener means the reply was cut off inside the
+  // thinking, which is the truncation check's business rather than this one's.
+  test("an unclosed pipe block reads as cut off", () => {
+    expect(looksTruncated("<|think|>still working on it", false, {})).toBe(true);
+  });
+
+  test("and so does an analysis channel with nothing after it", () => {
+    expect(looksTruncated("<|channel|>analysis<|message|>still working on it", false, {})).toBe(true);
+  });
+
   test("turning the option off checks the raw output", () => {
     const text = "<think>I cannot assist with that.</think>She opened the door.";
     expect(looksLikeRefusal(text, withCfg({ refusalStripThinking: false }))).toBe(true);
@@ -341,6 +390,73 @@ describe("cut-off detection", () => {
   test("empty text is left to the empty check", () => {
     expect(looksTruncated("", false, {})).toBe(false);
     expect(looksTruncated("   ", false, {})).toBe(false);
+  });
+});
+
+// Inline HTML in a reply, which models produce whenever they colour dialogue.
+// Every case here was a reply the checks read wrongly.
+describe("cut-off detection sees past inline HTML", () => {
+  const coloured = (inner: string) =>
+    '<span style="background: linear-gradient(to right, #E6A15C, #8B4F1D); ' +
+    '-webkit-background-clip: text; color: transparent;">' + inner;
+
+  // The two quotes around a style value were counted alongside the two around
+  // the speech, so an opened quote came out even and read as finished.
+  test("a style attribute's quotes do not balance an opened one", () => {
+    expect(looksTruncated(coloured('"Noel... please... wait,'), false, {})).toBe(true);
+  });
+
+  test("and a closed one is still closed", () => {
+    expect(looksTruncated(coloured('"Noel... please... wait,"</span> he whispered.'), false, {})).toBe(false);
+  });
+
+  // ">" counted as end punctuation, so a trailing tag made anything look
+  // finished.
+  test("a trailing tag is not an ending", () => {
+    expect(looksTruncated("He said <span>something", true, {})).toBe(true);
+  });
+
+  test("the words inside a tag are still the reply", () => {
+    expect(looksTruncated("<b>He walked to the door.</b>", true, {})).toBe(false);
+  });
+
+  // A "<" someone typed in a scene is not markup and must survive.
+  test("a stray angle bracket in a scene is left alone", () => {
+    expect(looksTruncated("The value was < 5 and falling.", true, {})).toBe(false);
+  });
+});
+
+// The reason this check could not be on by default before. The test for an
+// ending was a list of Latin characters, so a finished reply in most of the
+// world's scripts counted as having no ending at all.
+describe("an ending counts in any script", () => {
+  const finished = [
+    ["a full stop", "He walked to the door."],
+    ["Japanese", "\u5F7C\u306F\u6249\u306B\u5411\u304B\u3063\u3066\u6B69\u3044\u305F\u3002"],
+    ["Chinese", "\u4ED6\u8D70\u5411\u95E8\u53E3\uFF01"],
+    ["Arabic", "\u0645\u0631\u062D\u0628\u0627 \u0628\u0643\u061F"],
+    ["Greek", "\u03A0\u03AE\u03B3\u03B5 \u03C3\u03C4\u03B7\u03BD \u03C0\u03CC\u03C1\u03C4\u03B1\u00B7"],
+    ["an emoji", "She smiled and waved \u{1F44B}"],
+    ["a closing bracket", "(He said nothing more)"],
+    ["an ellipsis", "He hesitated\u2026"],
+  ] as const;
+  for (const [name, text] of finished) {
+    test(name + " is an ending", () =>
+      expect(looksTruncated(text, true, {})).toBe(false));
+  }
+
+  const cut = [
+    ["stops on a letter", "He walked to the door and"],
+    ["stops on a digit", "There were exactly 4"],
+    ["stops mid-word", "He was astonis"],
+  ] as const;
+  for (const [name, text] of cut) {
+    test(name + " is not", () =>
+      expect(looksTruncated(text, true, {})).toBe(true));
+  }
+
+  test("and none of them fire while the option is off", () => {
+    for (const [, text] of cut) expect(looksTruncated(text, false, {})).toBe(false);
   });
 });
 

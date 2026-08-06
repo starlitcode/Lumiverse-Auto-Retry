@@ -19,6 +19,22 @@ type Ctx = any;
 const CARET_OPEN = "\u25BE"; // down triangle
 const CARET_SHUT = "\u25B8"; // right triangle
 
+// Stacking order for everything this extension puts on screen, in one place.
+//
+// Two of these sat at 2147483647, the highest a browser accepts. Nothing can be
+// drawn above that, so an Auto Retry hint or menu stayed on top of whatever
+// another extension opened over it, and the other extension had no number left
+// to win with. These are high enough to clear ordinary page content and low
+// enough to leave room above for anyone who needs it.
+//
+// The two overlays are the exception and stay near the top: they open over the
+// host's own settings modal and have to be above it to be usable at all.
+const Z_LIVE_LOG = 2147483000;
+const Z_TOAST = 2147483100;
+const Z_FLOAT_MENU = 2147483200;
+const Z_HINT = 2147483300;
+const Z_OVERLAY = 2147483600;
+
 const STORE_KEY = "lv-auto-retry:settings:v1";
 // The settings search field. It needs an id because the browser's own clear
 // button inside it can only be reached from a stylesheet, not inline.
@@ -134,7 +150,13 @@ const CONFIG = {
   ignoreHardErrors: true,
   retryOnEmpty: true, // also catches a generation cut off mid-reasoning (reasoning seen, content empty)
   retryOnTruncated: true, // final content present but cut off mid-sentence (structural heuristic, see looksTruncated)
-  retryOnNoPunct: false, // extra: also treat "ends with no punctuation" as truncated. Noisy in RP, off by default.
+  // Also treat "the reply stops on a letter" as cut off. This was off because
+  // it was wrong too often: the test for an ending was a list of Latin
+  // characters, so a scene closing on an emoji, or on a Japanese, Chinese,
+  // Greek or Arabic full stop, counted as having no ending at all. It reads any
+  // script's punctuation now, so the only thing it fires on is a reply that
+  // stops mid-word, which is what it was always meant to catch.
+  retryOnNoPunct: true,
   retryOnShort: false, // off by default. Caused endless regen in the original.
   minChars: 24,
   retryOnRefusal: true, // final content is an out-of-character refusal (see looksLikeRefusal). Re-fires the SAME request, capped by maxRetries. Does not alter the request.
@@ -173,7 +195,16 @@ const CONFIG = {
   allowReSwap: false, // let that button swap a reply again even if it was already swapped this session (can stack swaps).
   confirmBeforeEdit: false, // ask for confirmation before any word-swap edit (automatic or manual); the user can cancel.
   swapWaitForEdits: false, // wait for another extension to finish editing a reply before swapping it.
-  swapWaitSecs: 15, // how long to give it, in seconds. Only used when the above is on.
+  // How long to give it, in seconds. Only used when the above is on.
+  //
+  // Hone refines reasoning and non-reasoning replies alike, and that second
+  // pass is a whole generation: how long it takes depends on the model, the
+  // prompt and how much it has to read. Fifteen seconds covered a fast model
+  // and nothing else, so on anything slower the swap landed first and the
+  // refinement arrived on top and wiped it, which is the exact failure this
+  // setting exists to prevent. Each edit restarts the clock, so a refinement
+  // that finishes early is not made to wait this out.
+  swapWaitSecs: 85,
 
   // host controls (the only DOM-dependent part). Use the Test buttons in settings.
   // Multiple patterns are listed so a Lumiverse build that renames one attribute
@@ -242,6 +273,12 @@ interface Field {
   // the "?" that was pressed, which is the note list: the whole list, its
   // roles, its buttons and its counter are all one row.
   hintAbove?: boolean;
+  // Apply this setting as it is typed rather than waiting for Save, so the
+  // thing it controls can be seen changing. Only worth it where the effect is
+  // visible on screen and reading a number tells you nothing.
+  live?: boolean;
+  // Draw the value next to the box at the size it describes.
+  preview?: "circle";
   // Switches this setting does nothing without. The row is hidden while every
   // one of them is off, so the panel only shows what is currently in use.
   // More than one means any of them is enough, which is the case for a setting
@@ -288,7 +325,9 @@ const SCHEMA: Group[] = [
         int: true,
         min: 28,
         max: 96,
-        hint: "How wide the floating button is, in pixels. The default of " + def("floatingToggleSize") + " is about a comfortable thumb. Larger is easier to hit on a phone, smaller keeps it out of the way.",
+        live: true,
+        preview: "circle",
+        hint: "How wide the floating button is, in pixels. The default of " + def("floatingToggleSize") + " is about a comfortable thumb. Larger is easier to hit on a phone, smaller keeps it out of the way. The circle beside the box is drawn at the size you type, and the real button resizes as you type too, so you can see it before you save. Closing without saving puts it back.",
       },
       {
         key: "showExtrasToggle",
@@ -452,9 +491,9 @@ const SCHEMA: Group[] = [
       },
       {
         key: "retryOnNoPunct",
-        label: "Also: it ends with no punctuation",
+        label: "It stops on a word, with nothing after it",
         type: "bool",
-        hint: "A stricter version of the line above. It can wrongly redo a reply that ends on a word, so most people leave this off.",
+        hint: "On by default. Catches a reply that stops on a word with no full stop, question mark or anything else after it, which is what being cut off mid-sentence looks like when nothing else was left open. Punctuation in any script counts as an ending, and so does an emoji, so a scene finishing on one is left alone. Turn it off if your model ends replies without punctuation on purpose.",
       },
       {
         key: "retryOnShort",
@@ -546,8 +585,8 @@ const SCHEMA: Group[] = [
         type: "num",
         int: true,
         min: 1,
-        max: 120,
-        hint: "How long to give another extension to make its edit before swapping anyway. Each edit restarts the clock and the swap follows shortly after the last one, so this is only the full wait when nothing else edits at all. The default of " + def("swapWaitSecs") + " suits a refinement pass on a fast model; raise it for a slow one. A reply that never stops changing is swapped after three minutes regardless.",
+        max: 300,
+        hint: "How long to give another extension to make its edit before swapping anyway. Each edit restarts the clock and the swap follows shortly after the last one, so this is only the full wait when nothing else edits at all. The default of " + def("swapWaitSecs") + " covers a refinement pass on most models: that pass is a whole generation, so how long it takes depends on the model, the prompt and how much it has to read. Raise it if your swaps still get overwritten, lower it if you are only waiting on something quick.",
       },
     ],
   },
@@ -618,7 +657,7 @@ const SCHEMA: Group[] = [
         key: "refusalThinkTags",
         label: "Extra thinking tag names",
         type: "text",
-        hint: "Optional, one per line. The common reasoning tags are already handled. Add a tag name only if your model wraps its thinking in an unusual one (for example: mythink). Just the name, no brackets. Both <name> and [name] forms are covered.",
+        hint: "Optional, one per line. The common reasoning tags are already handled. Add a tag name only if your model wraps its thinking in an unusual one (for example: mythink). Just the name, no brackets or pipes. A name you add is recognised in all four wrappers: <name>, [name], <|name|> and the <|channel|> form some models use.",
       },
       {
         key: "refusalNote",
@@ -716,6 +755,35 @@ const SCHEMA: Group[] = [
 // finish_reason on GENERATION_ENDED (confirmed against the Generation API), so
 // this works off the only signal a frontend extension has: the shape of the
 // text. Kept conservative to avoid re-rolling good roleplay replies.
+// Whole HTML-ish tags, and nothing else. Only the tag is removed; the words
+// between an opening and a closing tag are the reply and stay exactly as they
+// are. Kept narrow on purpose so a stray "<" typed in a scene is left alone:
+// it has to look like a real tag, name and all, before anything is dropped.
+function stripMarkup(text: string): string {
+  return String(text == null ? "" : text).replace(/<\/?[a-zA-Z][^>]{0,400}>/g, "");
+}
+
+// Does the reply end on something that can end a reply?
+//
+// This used to be a list of Latin characters, which meant a scene closing on
+// an emoji, or on a Japanese, Chinese, Greek or Arabic full stop, was read as
+// having no ending at all. Punctuation and symbols in any script count now, so
+// the only thing left that reads as unfinished is a reply that stops on a
+// letter or a digit, which is what being cut off mid-word actually looks like.
+function endsOnPunctuation(t: string): boolean {
+  const last = Array.from(t).pop() || "";
+  if (!last) return false;
+  try {
+    // \p{P} is every punctuation mark in every script, \p{S} covers symbols and
+    // emoji. A reply ending on either has an ending.
+    return /[\p{P}\p{S}]/u.test(last);
+  } catch (_) {
+    // No Unicode property escapes on this engine. Falls back to the Latin set
+    // this check used to have, which is worse but never worse than before.
+    return /[.!?\u2026"'*)\]}\u201D~>\-\u2014:]/.test(last);
+  }
+}
+
 function looksTruncated(
   text: string,
   retryOnNoPunct: boolean,
@@ -727,16 +795,30 @@ function looksTruncated(
   // An opened reasoning block with no close means the reply was cut inside the
   // model's thinking. Checked on the raw text, before anything is removed.
   if (
-    /<(?:think|thinking|reasoning|reflection|thought)\b[^>]*>/i.test(raw) &&
-    !/<\/(?:think|thinking|reasoning|reflection|thought)\s*>/i.test(raw)
+    /<\|?(?:think|thinking|reasoning|reflection|thought)\|?\b[^>]*>/i.test(raw) &&
+    !/<\|?\/?(?:think|thinking|reasoning|reflection|thought)\s*\|?>/i.test(
+      raw.replace(/<\|?(?:think|thinking|reasoning|reflection|thought)\|?\b[^>]*>/i, ""),
+    )
   )
+    return true;
+  // The channel form has no closing tag of its own: the block ends at the next
+  // control token, so an analysis channel with none after it was cut off.
+  if (/<\|channel\|>\s*(?:analysis|thinking|thought|reasoning)\b/i.test(raw) &&
+      !/<\|(?:end|return|start)\|>/i.test(raw))
     return true;
 
   // The checks below count fences, backticks, asterisks and quotes. A closed
   // reasoning block sits outside the visible reply and its punctuation throws
   // those counts off, so it is removed first regardless of the refusal-side
   // thinking option, which governs refusal matching only.
-  const t = stripThinkingAlways(raw, cfg).replace(/\s+$/, "");
+  //
+  // Inline markup goes with it, and for the same reason. Models colour their
+  // dialogue with a raw <span style="...">, and the two quotes around that
+  // style value are counted along with the two around the speech, so a reply
+  // whose dialogue was genuinely cut open still came out even and was passed as
+  // finished. The closing bracket of a trailing tag was also being read as end
+  // punctuation, which hid the same fault from the check below.
+  const t = stripMarkup(stripThinkingAlways(raw, cfg)).replace(/\s+$/, "");
   if (!t) return false;
 
   if ((t.match(/```/g) || []).length % 2 === 1) return true; // open code fence
@@ -753,8 +835,7 @@ function looksTruncated(
     return true; // mismatched smart quotes
   if (/[,;]$/.test(t)) return true; // cut mid-clause
 
-  if (retryOnNoPunct && !/[.!?\u2026"'*)\]}\u201D~>\-\u2014:]$/.test(t))
-    return true;
+  if (retryOnNoPunct && !endsOnPunctuation(t)) return true;
 
   return false;
 }
@@ -1088,10 +1169,43 @@ function stripThinking(text: string, cfg?: any): string {
   const names = THINK_TAGS.concat(extra);
   if (!names.length) return t;
   const alt = names.join("|");
+
+  // The channel form first, because a channel block contains the other shapes
+  // and removing the inside of it first would leave its wrapper behind.
+  //
+  // Models trained on the Harmony format write their reasoning as
+  // <|channel|>analysis<|message|>...<|end|>, with the visible reply in a
+  // second block whose channel is "final". Only the thinking channels go: the
+  // final channel is the reply and has to survive, so this names the channels
+  // it removes rather than removing every block it finds.
+  t = t.replace(
+    /<\|channel\|>\s*(?:analysis|thinking|thought|reasoning|commentary)\b[\s\S]*?(?:<\|(?:end|return|start)\|>|$)/gi,
+    " ",
+  );
+
+  // What is left of the channel format once the thinking channels are gone: the
+  // header that introduces the visible reply, and the control tokens around it.
+  // The host normally strips these before anything is displayed, but when they
+  // reach us they count towards the reply's length and sit in the middle of a
+  // phrase the checks are trying to match. Only the markers go; the reply
+  // between them is what we are keeping.
+  t = t.replace(/<\|channel\|>\s*\w+\s*<\|message\|>/gi, " ");
+  t = t.replace(/<\|(?:start|end|return|message|constrain)\|>/gi, " ");
+
   // <tag ...>...</tag> and [tag ...]...[/tag], same tag both ends, across newlines
   t = t.replace(new RegExp("<(" + alt + ")(?:\\s[^>]*)?>[\\s\\S]*?<\\/\\1\\s*>", "gi"), " ");
   t = t.replace(new RegExp("\\[(" + alt + ")(?:\\s[^\\]]*)?\\][\\s\\S]*?\\[\\/\\1\\s*\\]", "gi"), " ");
+
+  // The pipe forms. Several models wrap their reasoning in <|think|>...<|/think|>
+  // or <|think>...<think|> rather than in plain angle brackets, and neither was
+  // recognised, so the whole reasoning block was read as part of the reply.
+  // Both closers are accepted for either opener, since builds are not
+  // consistent about which way round the pipe goes.
+  const CLOSE = "<\\|?\\/?(?:" + alt + ")\\|?>";
+  t = t.replace(new RegExp("<\\|(" + alt + ")\\|?>[\\s\\S]*?" + CLOSE, "gi"), " ");
+
   // an unclosed opener running to the end (thinking cut off before the reply)
+  t = t.replace(new RegExp("<\\|(?:" + alt + ")\\|?>[\\s\\S]*$", "i"), " ");
   t = t.replace(new RegExp("<(?:" + alt + ")(?:\\s[^>]*)?>[\\s\\S]*$", "i"), " ");
   t = t.replace(new RegExp("\\[(?:" + alt + ")(?:\\s[^\\]]*)?\\][\\s\\S]*$", "i"), " ");
   return t;
@@ -1589,20 +1703,6 @@ function ensureReadableTree(root: any, min?: number) {
 // the button does not feel broken.
 const HOLD_MS = 500;
 
-// True when the device has been asked to keep movement down. Read at the point
-// of use rather than once at load, so turning the setting on takes effect
-// without reloading the page.
-function stillness(): boolean {
-  try {
-    return (
-      typeof matchMedia === "function" &&
-      matchMedia("(prefers-reduced-motion: reduce)").matches
-    );
-  } catch (_) {
-    return false;
-  }
-}
-
 // The extension's mark: a die caught mid-tumble. Lumiverse calls a fresh
 // attempt a reroll, so this says what the extension does rather than reusing
 // the refresh arrow every other extension already draws. Strokes are
@@ -1836,7 +1936,7 @@ export function setup(ctx: Ctx, opts?: any) {
     if (liveLogEl || typeof document === "undefined") return;
     const el = document.createElement("div");
     el.style.cssText =
-      "position:fixed;right:8px;bottom:8px;z-index:2147483000;width:min(340px,92vw);height:min(300px,50vh);min-width:200px;min-height:120px;max-width:96vw;max-height:85vh;display:flex;flex-direction:column;background-color:var(--lumiverse-card-bg-solid,rgb(24,20,34));background-image:linear-gradient(var(--lumiverse-bg-elevated,rgba(35,30,48,.9)),var(--lumiverse-bg-elevated,rgba(35,30,48,.9)));border:1px solid var(--lumiverse-border,rgba(255,255,255,.14));border-radius:var(--lumiverse-radius-md,10px);box-shadow:var(--lumiverse-shadow-md,0 8px 24px rgba(0,0,0,.4));font-family:var(--lumiverse-font-family,system-ui);font-size:13px;color:var(--lumiverse-text,#e9e4f0);overflow:hidden";
+      "position:fixed;right:8px;bottom:8px;z-index:" + Z_LIVE_LOG + ";width:min(340px,92vw);height:min(300px,50vh);min-width:200px;min-height:120px;max-width:96vw;max-height:85vh;display:flex;flex-direction:column;background-color:var(--lumiverse-card-bg-solid,rgb(24,20,34));background-image:linear-gradient(var(--lumiverse-bg-elevated,rgba(35,30,48,.9)),var(--lumiverse-bg-elevated,rgba(35,30,48,.9)));border:1px solid var(--lumiverse-border,rgba(255,255,255,.14));border-radius:var(--lumiverse-radius-md,10px);box-shadow:var(--lumiverse-shadow-md,0 8px 24px rgba(0,0,0,.4));font-family:var(--lumiverse-font-family,system-ui);font-size:13px;color:var(--lumiverse-text,#e9e4f0);overflow:hidden";
     const head = document.createElement("div");
     head.style.cssText =
       "display:flex;align-items:center;gap:8px;padding:7px 9px;border-bottom:1px solid var(--lumiverse-border,rgba(255,255,255,.12));font-weight:600;cursor:move;user-select:none;touch-action:none";
@@ -2088,16 +2188,26 @@ export function setup(ctx: Ctx, opts?: any) {
     ensureReadable(floatEl);
   }
 
-  function showFloat() {
+  function showFloat(at?: { x: number; y: number } | null) {
     if (floatWidget || typeof document === "undefined") return;
     const d = floatSize();
+    // Bottom right, clear of the input bar, matching where other extensions put
+    // theirs. The host remembers wherever the user drags it after that.
+    const home = { x: Math.max(16, vpW() - 72), y: Math.max(16, vpH() - 160) };
+    // Whatever is asked for, the whole button has to land on screen: a position
+    // carried over from a smaller button, or from a larger window, can sit past
+    // the edge otherwise.
+    const start = at
+      ? {
+          x: Math.max(8, Math.min(at.x, vpW() - d - 8)),
+          y: Math.max(8, Math.min(at.y, vpH() - d - 8)),
+        }
+      : home;
     try {
       floatWidget = (ctx as any).ui.createFloatWidget({
         width: d,
         height: d,
-        // Bottom right, clear of the input bar, matching where other extensions
-        // put theirs. The host remembers wherever the user drags it after that.
-        initialPosition: { x: Math.max(16, vpW() - 72), y: Math.max(16, vpH() - 160) },
+        initialPosition: start,
         snapToEdge: true,
         tooltip: "Toggle Auto Retry",
         chromeless: true,
@@ -2119,23 +2229,13 @@ export function setup(ctx: Ctx, opts?: any) {
       // browser's own callout, either of which lands on top of the menu.
       "user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;" +
       "font-family:var(--lumiverse-font-family,system-ui);" +
-      "box-shadow:var(--lumiverse-shadow-sm,0 2px 8px rgba(0,0,0,.2));" +
-      // Only colour and scale are animated. Position is the host's business, and
-      // a transition on transform would fight its dragging.
-      "transition:background var(--lumiverse-transition-fast,150ms ease)," +
-      "border-color var(--lumiverse-transition-fast,150ms ease)," +
-      "color var(--lumiverse-transition-fast,150ms ease)," +
-      "opacity var(--lumiverse-transition-fast,150ms ease)" +
-      (stillness() ? "" : ",transform 120ms ease");
-    el.addEventListener("pointerdown", () => {
-      // The press dip is the one thing here that actually moves. Someone who
-      // has asked their device for less movement still gets the colour change,
-      // so the button is no less responsive, it just does not spring.
-      if (!stillness()) el.style.transform = "scale(.94)";
-    });
-    const springBack = () => {
-      el.style.transform = "none";
-    };
+      "box-shadow:var(--lumiverse-shadow-sm,0 2px 8px rgba(0,0,0,.2));";
+    // Nothing here animates. This button carried transitions on four colour
+    // properties and a scale dip on every press, which is a compositing layer
+    // and four interpolations for a control whose entire job is to flip between
+    // two states. Flipping instantly says the same thing sooner, and there is
+    // nothing left that a device asking for less movement needs spared.
+    //
     // A press held down opens the menu instead of toggling. Right-click does the
     // same on a pointer device. Without this the only way to put the button away
     // was to open settings and turn it off, which is a long walk for something
@@ -2156,7 +2256,6 @@ export function setup(ctx: Ctx, opts?: any) {
       pressTimer = setTimeout(() => {
         pressTimer = null;
         openedByHold = true;
-        springBack();
         showFloatMenu();
       }, HOLD_MS);
     });
@@ -2180,18 +2279,12 @@ export function setup(ctx: Ctx, opts?: any) {
     el.addEventListener("contextmenu", (e: any) => {
       try { e.preventDefault(); } catch (_) {}
       dropPress();
-      springBack();
       showFloatMenu();
     });
-    const endPress = () => {
-      dropPress();
-      springBack();
-    };
-    el.addEventListener("pointerup", endPress);
-    el.addEventListener("pointercancel", endPress);
-    el.addEventListener("pointerleave", endPress);
+    el.addEventListener("pointerup", dropPress);
+    el.addEventListener("pointercancel", dropPress);
+    el.addEventListener("pointerleave", dropPress);
     el.addEventListener("click", () => {
-      springBack();
       // The hold already acted. Toggling here as well would undo it in the same
       // gesture.
       if (openedByHold) {
@@ -2226,7 +2319,7 @@ export function setup(ctx: Ctx, opts?: any) {
     const el = document.createElement("div");
     el.setAttribute("role", "menu");
     el.style.cssText =
-      "position:fixed;z-index:2147483647;box-sizing:border-box;padding:4px;" +
+      "position:fixed;z-index:" + Z_FLOAT_MENU + ";box-sizing:border-box;padding:4px;" +
       "border-radius:var(--lumiverse-radius-md,10px);min-width:180px;" +
       // Opaque for the same reason the hint is: it lands over the chat, and the
       // elevated colour alone is see-through enough to read words underneath it.
@@ -2278,9 +2371,15 @@ export function setup(ctx: Ctx, opts?: any) {
       return b;
     };
 
+    // Settings first. Reaching them otherwise means the input bar's Extras
+    // popover, which is several taps away and is the thing someone holding this
+    // button is most likely to be after.
+    const first = entry("Auto Retry settings", () => {
+      openSettings();
+    });
     // Rebuilding the widget is what puts it back, since where it sits belongs to
     // the host and a fresh one starts at the position it is handed.
-    const first = entry("Move back to the corner", () => {
+    entry("Move back to the corner", () => {
       hideFloat();
       showFloat();
     });
@@ -2352,6 +2451,20 @@ export function setup(ctx: Ctx, opts?: any) {
     holdMoveWatch = null;
   }
 
+  // Where the button is sitting right now, read off the screen. The host owns
+  // the position and does not hand it back, so the only way to keep it across a
+  // rebuild is to measure it before the old widget goes.
+  function floatPos(): { x: number; y: number } | null {
+    try {
+      const root = floatWidget && floatWidget.root;
+      const r = root && root.getBoundingClientRect ? root.getBoundingClientRect() : null;
+      if (!r || (!r.width && !r.height)) return null;
+      return { x: Math.round(r.left), y: Math.round(r.top) };
+    } catch (_) {
+      return null;
+    }
+  }
+
   function syncFloat() {
     if (!cfg.showFloatingToggle) {
       hideFloat();
@@ -2359,8 +2472,20 @@ export function setup(ctx: Ctx, opts?: any) {
     }
     // Width and height are set when the widget is created, so a size change
     // means building it again rather than restyling it.
-    if (floatWidget && floatWidgetSize !== floatSize()) hideFloat();
-    showFloat();
+    //
+    // Rebuilding used to start the new one at the default corner, so changing
+    // the size threw away wherever the button had been dragged to. The old
+    // position is carried across, and showFloat clamps it: a button snapped to
+    // the right edge that gets bigger would otherwise hang off the screen, and
+    // clamping puts it back against the edge, which is where a snapped button
+    // belongs anyway.
+    if (floatWidget && floatWidgetSize !== floatSize()) {
+      const at = floatPos();
+      hideFloat();
+      showFloat(at);
+    } else {
+      showFloat();
+    }
     paintFloat();
   }
 
@@ -2386,6 +2511,15 @@ export function setup(ctx: Ctx, opts?: any) {
     });
     paintFloat();
     syncInputBarActions();
+  }
+
+  // Settings marked live are applied as they are typed. Nothing is saved by
+  // this: cfg is what the panel is holding, and closing the panel without
+  // saving restores the baseline and re-syncs, which puts the preview back.
+  function onLiveEdit(key: string) {
+    try {
+      if (key === "floatingToggleSize") syncFloat();
+    } catch (_) {}
   }
 
   function syncLiveLog() {
@@ -2892,6 +3026,13 @@ export function setup(ctx: Ctx, opts?: any) {
     retries: 0,
     gaveUp: 0,
     good: 0,
+    // Notes the backend confirmed it attached, and notes it dropped with the
+    // reason. Counted because "did my note actually go out" is otherwise only
+    // answerable by watching the log at the moment it happened, and a bug
+    // report written afterwards cannot say either way.
+    notesSent: 0,
+    notesSkipped: 0,
+    lastNoteSkip: "",
     reasons: {} as Record<string, number>,
   };
   // Read at the moment they are needed so a settings change takes effect without
@@ -3913,23 +4054,48 @@ export function setup(ctx: Ctx, opts?: any) {
     // TreeWalker inside the loop below, so a chat swapped with forty rules made
     // forty full passes over every text node on the page. The candidate list is
     // the same for every rule, so it is gathered here and reused.
+    // Only the rendered replies, not the whole page. The host marks each one
+    // with data-component="MessageContent", so the walk starts there.
+    //
+    // It used to start at document.body, which meant every text node on the
+    // page was a candidate: another extension's panel, a menu, a tooltip, the
+    // character list. A rule of "cat => dog" would rewrite the word wherever it
+    // appeared, in somebody else's interface, and that extension had no idea
+    // its own text had been edited underneath it. Nothing outside a message is
+    // ours to touch.
+    //
+    // If the host ever renames that attribute this finds nothing and falls back
+    // to the old behaviour, which is worth having: a swap that reaches too far
+    // is a nuisance, but a swap that silently stops working looks like the
+    // feature is broken.
+    const roots: any[] = [];
+    try {
+      const marked = document.querySelectorAll('[data-component="MessageContent"]');
+      for (let i = 0; i < marked.length; i++) roots.push(marked[i]);
+    } catch (_) {}
+    if (!roots.length && document.body) roots.push(document.body);
+
     const nodes: any[] = [];
     try {
-      const walker: any = document.createTreeWalker(document.body, 4 /* SHOW_TEXT */);
-      let node: any = walker.nextNode ? walker.nextNode() : null;
-      while (node) {
-        const parent = node.parentElement;
-        let skip = !parent || SKIP.test(String(parent.tagName || ""));
-        // Our own panels and anything the user is typing into are off limits.
-        if (!skip && parent.closest) {
-          try {
-            skip = !!parent.closest(
-              "#__lvRetryToast,#__lvRetrySettings,[contenteditable='true']",
-            );
-          } catch (__) {}
+      for (const root of roots) {
+        const walker: any = document.createTreeWalker(root, 4 /* SHOW_TEXT */);
+        let node: any = walker.nextNode ? walker.nextNode() : null;
+        while (node) {
+          const parent = node.parentElement;
+          let skip = !parent || SKIP.test(String(parent.tagName || ""));
+          // Our own panels, anything the user is typing into, and anything that
+          // looks like another extension's surface rather than the chat.
+          if (!skip && parent.closest) {
+            try {
+              skip = !!parent.closest(
+                "#__lvRetryToast,#__lvRetrySettings,#__lvRetryReset," +
+                  "[contenteditable='true'],[role='dialog'],[role='menu'],[role='tooltip']",
+              );
+            } catch (__) {}
+          }
+          if (!skip) nodes.push(node);
+          node = walker.nextNode();
         }
-        if (!skip) nodes.push(node);
-        node = walker.nextNode();
       }
     } catch (_) {
       return done;
@@ -3988,6 +4154,89 @@ export function setup(ctx: Ctx, opts?: any) {
     return done;
   }
 
+  // ---- repairing the host's edit box after a swap ----
+  //
+  // A swap is written to the server through the Chat Mutation API, so the
+  // stored message is the swapped one. The host's own copy of that message in
+  // the browser does not always pick the change up, and when it does not,
+  // pressing Edit fills the box from that stale copy: the pre-swap wording
+  // appears, and pressing Save writes it back over the swap. The swap is lost
+  // and it looks like the extension undid its own work.
+  //
+  // Patching what is on screen does not help here, because the edit box is
+  // filled from the host's state and not from the text on the page.
+  //
+  // So each swap is remembered as the exact text before and the exact text
+  // after. When an edit box turns up holding a whole message that is character
+  // for character the pre-swap text, it is the stale copy, and it is replaced
+  // with the swapped one. Nothing heuristic happens: it is a whole-string
+  // match or it is left alone, so a box holding anything else, including a
+  // message the user has started editing, is never touched.
+  const swapUndos: Array<{ before: string; after: string }> = [];
+  const SWAP_UNDO_CAP = 40;
+  function rememberSwap(before: any, after: any) {
+    const b = String(before == null ? "" : before);
+    const a = String(after == null ? "" : after);
+    if (!b || b === a) return;
+    for (const e of swapUndos) if (e.before === b) return;
+    swapUndos.push({ before: b, after: a });
+    while (swapUndos.length > SWAP_UNDO_CAP) swapUndos.shift();
+  }
+
+  // The host's message editor. Matched on the name attribute rather than on a
+  // class, because the classes are build-hashed and the name is not.
+  const EDIT_BOX_SELECTOR =
+    'textarea[name="message-edit-content"],textarea[aria-label="Message content"]';
+
+  function repairEditBox(): boolean {
+    if (!swapUndos.length || typeof document === "undefined") return false;
+    let fixed = false;
+    let boxes: any[] = [];
+    try {
+      boxes = Array.prototype.slice.call(document.querySelectorAll(EDIT_BOX_SELECTOR));
+    } catch (_) {
+      return false;
+    }
+    for (const box of boxes) {
+      const v = String(box.value == null ? "" : box.value);
+      if (!v) continue;
+      for (const e of swapUndos) {
+        if (v !== e.before) continue;
+        try {
+          box.value = e.after;
+          // The host tracks the box through its own listeners, so a value set
+          // from script has to announce itself or Save writes what the host
+          // still thinks is in there.
+          box.dispatchEvent(new Event("input", { bubbles: true }));
+          box.dispatchEvent(new Event("change", { bubbles: true }));
+          fixed = true;
+          log("put the swapped wording back into the edit box");
+        } catch (__) {}
+        break;
+      }
+    }
+    return fixed;
+  }
+
+  // The edit box is built after the click that opens it, and the host may take
+  // a moment over it, so this looks a few times rather than once. Every pass is
+  // a no-op while nothing has been swapped.
+  let repairTimers: any[] = [];
+  function scheduleEditRepair() {
+    if (!swapUndos.length) return;
+    for (const t of repairTimers) clearTimeout(t);
+    repairTimers = [0, 60, 200, 500].map((ms) => setTimeout(repairEditBox, ms));
+  }
+
+  function onDocFocusIn(e: any) {
+    try {
+      if (!swapUndos.length) return;
+      const t = e && e.target;
+      if (!t || !t.matches || !t.matches(EDIT_BOX_SELECTOR)) return;
+      scheduleEditRepair();
+    } catch (_) {}
+  }
+
   // Backup for the user's Stop press: if the host's GENERATION_STOPPED event is
   // late or never fires, catch the click on the stop button itself and stand
   // every pending retry down. Delegated + capture so it survives the host
@@ -4002,6 +4251,9 @@ export function setup(ctx: Ctx, opts?: any) {
       // user is driving. Back off rather than press a dialog button underneath
       // them, which could take a feedback prompt they opened themselves.
       clearConfirmWatch();
+      // A click is how an edit box gets opened. Costs nothing until something
+      // has actually been swapped.
+      scheduleEditRepair();
       const tgt =
         e && e.target && e.target.closest
           ? e.target.closest(cfg.stopSelector)
@@ -4046,7 +4298,7 @@ export function setup(ctx: Ctx, opts?: any) {
     el.setAttribute("role", "tooltip");
     el.textContent = text;
     el.style.cssText =
-      "position:fixed;z-index:2147483647;box-sizing:border-box;padding:8px 10px;" +
+      "position:fixed;z-index:" + Z_HINT + ";box-sizing:border-box;padding:8px 10px;" +
       "border-radius:var(--lumiverse-radius,8px);" +
       // This has to be fully opaque. It sits directly on top of the options
       // list, and --lumiverse-bg-elevated is only 90% opaque, which left the row
@@ -4242,7 +4494,7 @@ export function setup(ctx: Ctx, opts?: any) {
       // top of a menu turns a tap on "Hide this button" into a tap on Cancel.
       t.style.cssText =
         "position:fixed;bottom:max(20px,env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);" +
-        "z-index:2147483645;display:flex;align-items:center;gap:10px;" +
+        "z-index:" + Z_TOAST + ";display:flex;align-items:center;gap:10px;" +
         "font:13px/1.4 var(--lumiverse-font-family,system-ui);padding:9px 12px;border-radius:var(--lumiverse-radius-lg,12px);" +
         "color:var(--lumiverse-text,#fff);" +
         "background-color:var(--lumiverse-card-bg-solid,rgb(24,20,34));background-image:linear-gradient(var(--lumiverse-bg-elevated,rgba(35,30,48,.94)),var(--lumiverse-bg-elevated,rgba(35,30,48,.94)));" +
@@ -4427,6 +4679,13 @@ export function setup(ctx: Ctx, opts?: any) {
       lines.push("  replies that came back fine: " + stats.good);
       lines.push("  retries fired: " + stats.retries);
       lines.push("  messages it gave up on: " + stats.gaveUp);
+      // Only when the feature is in use, so a report from someone who has never
+      // touched it is not padded with two zeroes.
+      if (cfg.refusalNote || stats.notesSent || stats.notesSkipped) {
+        lines.push("  refusal notes sent: " + stats.notesSent);
+        lines.push("  refusal notes skipped: " + stats.notesSkipped +
+          (stats.lastNoteSkip ? " (last: " + stats.lastNoteSkip + ")" : ""));
+      }
       const reasons = Object.keys(stats.reasons).sort(
         (a, b) => stats.reasons[b] - stats.reasons[a],
       );
@@ -5860,12 +6119,49 @@ export function setup(ctx: Ctx, opts?: any) {
       styleField(input);
       input.style.width = "120px";
       input.style.flex = "none";
+      // Drawn at the size the box says, so the number means something without
+      // having to picture it. Its own box is fixed at the largest the setting
+      // allows, so the row does not grow and shrink as the number is typed.
+      let dot: HTMLElement | null = null;
+      if (f.preview === "circle") {
+        const pad = document.createElement("div");
+        const room = (typeof f.max === "number" ? f.max : 96) + 8;
+        pad.style.cssText =
+          "flex:none;display:flex;align-items:center;justify-content:center;" +
+          "width:" + room + "px;height:" + room + "px";
+        dot = document.createElement("div");
+        dot.setAttribute("aria-hidden", "true");
+        dot.style.cssText =
+          "border-radius:50%;box-sizing:border-box;" +
+          "border:1px solid var(--lumiverse-primary-050,rgba(147,112,219,.5));" +
+          "background:var(--lumiverse-primary-020,rgba(147,112,219,.2))";
+        pad.appendChild(dot);
+        top.appendChild(pad);
+      }
+      const paintPreview = () => {
+        if (!dot) return;
+        const d = clampField(f, input.value);
+        dot.style.width = d + "px";
+        dot.style.height = d + "px";
+      };
+      paintPreview();
+      // On input, not just on change: a number box only raises change when it
+      // is left, and the point of a preview is to move while it is being typed.
+      input.addEventListener("input", () => {
+        paintPreview();
+        if (!f.live) return;
+        cfg[f.key] = clampField(f, input.value);
+        onLiveEdit(String(f.key));
+      });
       input.addEventListener("change", () => {
         cfg[f.key] = clampField(f, input.value);
         input.value = String(cfg[f.key]);
+        paintPreview();
+        if (f.live) onLiveEdit(String(f.key));
       });
       fieldSetters[f.key] = (v: any) => {
         input.value = String(v);
+        paintPreview();
       };
       top.appendChild(input);
       row.appendChild(top);
@@ -5980,8 +6276,11 @@ export function setup(ctx: Ctx, opts?: any) {
     b.style.cssText =
       "min-height:36px;padding:8px 14px;border-radius:var(--lumiverse-radius,8px);cursor:pointer;" +
       "font:13px var(--lumiverse-font-family,system-ui);" +
-      "transition:filter var(--lumiverse-transition-fast,150ms ease)," +
-      "background-color var(--lumiverse-transition-fast,150ms ease);" +
+      // Only the hover colour. This used to animate filter as well, from back
+      // when hovering brightened the button instead of recolouring it; nothing
+      // has set filter since, and animating it is what forces a button onto its
+      // own compositing layer for no benefit.
+      "transition:background-color var(--lumiverse-transition-fast,150ms ease);" +
       (primary
         ? // A filled button's label has to contrast with the fill, not with the
           // panel. Lumiverse has no on-accent colour to ask for, and the body
@@ -6124,7 +6423,7 @@ export function setup(ctx: Ctx, opts?: any) {
     const overlay = document.createElement("div");
     overlay.id = "__lvRetryReset";
     overlay.style.cssText =
-      "position:fixed;inset:0;z-index:2147483600;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;background:var(--lumiverse-modal-backdrop,rgba(0,0,0,.6));font-family:var(--lumiverse-font-family,system-ui)";
+      "position:fixed;inset:0;z-index:" + Z_OVERLAY + ";display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;background:var(--lumiverse-modal-backdrop,rgba(0,0,0,.6));font-family:var(--lumiverse-font-family,system-ui)";
     const box = document.createElement("div");
     box.setAttribute("role", "dialog");
     box.setAttribute("aria-modal", "true");
@@ -6203,7 +6502,14 @@ export function setup(ctx: Ctx, opts?: any) {
       "accent-color:var(--lumiverse-primary,rgba(147,112,219,.9));cursor:" +
       (presetCount ? "pointer" : "default");
     const presetTxt = document.createElement("span");
-    presetTxt.textContent = "Delete saved word swap presets";
+    // The one line in the picker that destroys something no Save can take back,
+    // so it is the one line that does not look like the others.
+    presetTxt.innerHTML = "";
+    const presetStrong = document.createElement("strong");
+    presetStrong.textContent = "Delete saved word swap presets";
+    presetStrong.style.cssText =
+      "color:var(--lumiverse-danger,#ef4444);font-weight:600";
+    presetTxt.appendChild(presetStrong);
     const presetNum = document.createElement("span");
     presetNum.style.cssText =
       "margin-left:auto;font-size:12px;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
@@ -6273,8 +6579,17 @@ export function setup(ctx: Ctx, opts?: any) {
     // The boxes are frozen while it is up, so what the summary says and what
     // the button does cannot come apart.
     const confirmWrap = document.createElement("div");
+    // The question reads as a question, not as another row of the form. A left
+    // edge in the theme's danger colour and a tint behind it, which is what the
+    // rest of Lumiverse uses to mean "this one is different".
     confirmWrap.style.cssText =
-      "display:none;flex-direction:column;gap:8px;flex:none;padding:10px;border-radius:var(--lumiverse-radius,8px);border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));background:var(--lumiverse-fill-subtle,rgba(0,0,0,.1))";
+      "display:none;flex-direction:column;gap:8px;flex:none;padding:10px 12px;" +
+      "border-radius:var(--lumiverse-radius,8px);border:1px solid;border-left-width:3px";
+    // The headline says which of the two situations this is, because they are
+    // not equally serious and saying otherwise on the milder one would make the
+    // warning worth ignoring on the one that matters.
+    const confirmHead = document.createElement("div");
+    confirmHead.style.cssText = "font-size:13px;font-weight:600";
     const confirmText = document.createElement("div");
     confirmText.setAttribute("data-ar-reset-confirm", "1");
     confirmText.style.cssText = "font-size:13px;line-height:1.45";
@@ -6285,6 +6600,7 @@ export function setup(ctx: Ctx, opts?: any) {
     const yes = btn("Yes, reset", true);
     confirmRow.appendChild(back);
     confirmRow.appendChild(yes);
+    confirmWrap.appendChild(confirmHead);
     confirmWrap.appendChild(confirmText);
     confirmWrap.appendChild(confirmRow);
 
@@ -6296,6 +6612,32 @@ export function setup(ctx: Ctx, opts?: any) {
       .filter((c) => !c.input.disabled)
       .map((c) => c.input);
     if (!presetCb.disabled) tickable.push(presetCb);
+
+    // Amber for a reset that Save has not happened to yet, red for one that
+    // takes presets with it. Applied to the box, its headline and the button
+    // that commits it, so all three agree about how serious this is.
+    const dressConfirm = (permanent: boolean) => {
+      const edge = permanent
+        ? "var(--lumiverse-danger,#ef4444)"
+        : "var(--lumiverse-warning,#f59e0b)";
+      const wash = permanent
+        ? "var(--lumiverse-danger-015,rgba(239,68,68,.15))"
+        : "var(--lumiverse-warning-015,rgba(245,158,11,.15))";
+      confirmWrap.style.borderColor = edge;
+      confirmWrap.style.borderLeftColor = edge;
+      confirmWrap.style.background = wash;
+      confirmHead.style.color = edge;
+      confirmHead.textContent = permanent
+        ? "Deleting presets cannot be undone."
+        : "Put the ticked parts back to their defaults?";
+      yes.textContent = permanent ? "Yes, reset and delete" : "Yes, reset";
+      yes.style.background = edge;
+      yes.style.borderColor = edge;
+      // The fill is now the theme's danger or warning colour rather than its
+      // accent, and the label was coloured for the accent, so it is measured
+      // against what is actually painted.
+      try { ensureReadable(yes); } catch (_) {}
+    };
 
     const freeze = (frozen: boolean) => {
       // disabled rather than pointer-events, so a keyboard cannot change a tick
@@ -6347,6 +6689,7 @@ export function setup(ctx: Ctx, opts?: any) {
         return;
       }
       confirmText.textContent = describe(ids, presetCb.checked);
+      dressConfirm(presetCb.checked);
       status.textContent = "";
       freeze(true);
       // The safe one is where the finger already is, so a second tap in the
@@ -6415,7 +6758,7 @@ export function setup(ctx: Ctx, opts?: any) {
     }
     const overlay = document.createElement("div");
     overlay.style.cssText =
-      "position:fixed;inset:0;z-index:2147483600;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;background:var(--lumiverse-modal-backdrop,rgba(0,0,0,.6));font-family:var(--lumiverse-font-family,system-ui)";
+      "position:fixed;inset:0;z-index:" + Z_OVERLAY + ";display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;background:var(--lumiverse-modal-backdrop,rgba(0,0,0,.6));font-family:var(--lumiverse-font-family,system-ui)";
     const box = document.createElement("div");
     box.style.cssText =
       "display:flex;flex-direction:column;gap:10px;width:min(720px,96vw);height:min(80vh,640px);box-sizing:border-box;padding:14px;background-color:var(--lumiverse-card-bg-solid,rgb(24,20,34));background-image:linear-gradient(var(--lumiverse-bg-elevated,rgba(35,30,48,.9)),var(--lumiverse-bg-elevated,rgba(35,30,48,.9)));border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));border-radius:var(--lumiverse-radius-lg,12px);box-shadow:var(--lumiverse-shadow-xl,0 20px 60px rgba(0,0,0,.5));color:var(--lumiverse-text,#eee)";
@@ -6616,6 +6959,13 @@ export function setup(ctx: Ctx, opts?: any) {
         if (modalBaseline)
           for (const g of SCHEMA)
             for (const fl of g.fields) cfg[fl.key] = modalBaseline[fl.key];
+        // A setting applied while it was being typed is on screen right now,
+        // and rolling cfg back does not by itself put it back. Without this a
+        // size previewed and then discarded stayed on the button until
+        // something else happened to rebuild it.
+        syncLiveLog();
+        syncFloat();
+        syncInputBarActions();
         modalHandle = null;
         modalRoot = null;
         modalSnapshot = null;
@@ -6650,9 +7000,13 @@ export function setup(ctx: Ctx, opts?: any) {
   // backup stop-press catcher (see onDocClick)
   if (typeof document !== "undefined") {
     document.addEventListener("click", onDocClick, true);
+    // A keyboard or a screen reader can reach the edit box without a click
+    // anywhere near it, and the host may fill it after focus rather than before.
+    document.addEventListener("focusin", onDocFocusIn, true);
     disposers.push(() => {
       try {
         document.removeEventListener("click", onDocClick, true);
+        document.removeEventListener("focusin", onDocFocusIn, true);
       } catch (_) {}
     });
   }
@@ -6707,13 +7061,16 @@ export function setup(ctx: Ctx, opts?: any) {
           return;
         }
         if (msg.type === "note_skipped") {
-          log("refusal note not sent: " + String(msg.reason || "unknown"));
+          stats.notesSkipped += 1;
+          stats.lastNoteSkip = String(msg.reason || "unknown");
+          log("refusal note not sent: " + stats.lastNoteSkip);
           return;
         }
         // Logged as well as the skip. "Did my note go out?" had no answer here
         // that was not a guess from the reply, so only the failures were ever
         // visible and a working note looked identical to no note at all.
         if (msg.type === "note_sent") {
+          stats.notesSent += 1;
           const n = Number(msg.count) || 0;
           log("refusal note sent with the retry (" + n + (n === 1 ? " note" : " notes") + ")");
           return;
@@ -6723,12 +7080,17 @@ export function setup(ctx: Ctx, opts?: any) {
         // after the reply did, so a result for a chat we are no longer looking
         // at must not rewrite the one we are.
         if (msg.type === "swapped") {
+          // Remembered whatever chat it was for. The edit box for a message in
+          // another chat can still be opened after switching back to it.
+          rememberSwap(msg.before, msg.after);
           if (msg.chatId && lastChatId && String(msg.chatId) !== String(lastChatId)) return;
           applySwapsToView(msg.pairs || []);
+          repairEditBox();
           return;
         }
         if (msg.type !== "replace_now_result") return;
-        if (msg.ok) applySwapsToView(msg.pairs || []);
+        for (const e of msg.edits || []) rememberSwap(e && e.before, e && e.after);
+        if (msg.ok) { applySwapsToView(msg.pairs || []); repairEditBox(); }
         if (!msg.ok) showToast("Could not swap words.");
         else if (!msg.hasRules) showToast("No word swaps are set up yet.");
         else if (!msg.found) showToast("No reply found to swap in this chat.");
@@ -6793,6 +7155,11 @@ export function setup(ctx: Ctx, opts?: any) {
       } catch (_) {}
       modalHandle = null;
     }
+    for (const t of repairTimers) {
+      try { clearTimeout(t); } catch (_) {}
+    }
+    repairTimers = [];
+    swapUndos.length = 0;
     hideLiveLog();
     hideFloat();
     chats.forEach(clearTimers);

@@ -1038,11 +1038,12 @@ console.log("\nicons");
   check("no console errors", errors.length === 0, errors);
 }
 
-// ---- asking for less movement is honoured ----
-// The float button dips under a press. That is the only thing in the extension
-// that actually moves, so it is the only thing reduced motion has to switch off.
-// The colour change stays either way, or the button would stop acknowledging a
-// tap at all.
+// ---- nothing moves, and nothing needs to ----
+// The float button used to carry transitions on four colour properties and a
+// scale dip on every press, which is a compositing layer and four
+// interpolations for a control whose whole job is to flip between two states.
+// It flips instantly now. This is the check that keeps it that way, since a
+// transition is one line to add back and costs a frame every time it runs.
 {
   const press = async (reducedMotion) => {
     const page = await browser.newPage({ reducedMotion });
@@ -1067,20 +1068,30 @@ console.log("\nicons");
       );
       await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       const btn = host.querySelector("button");
+      const was = btn.style.background;
       btn.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
       const moved = btn.style.transform;
-      const css = getComputedStyle(btn).transition;
-      return { moved, animatesTransform: /transform/.test(css), colours: /background/.test(css) };
+      // Duration rather than the shorthand: with nothing set, Chromium
+      // serializes the shorthand as "all", which reads like something is
+      // animating when the duration is what says whether anything is.
+      const css = getComputedStyle(btn).transitionDuration;
+      // The tap still has to say something, and it says it in colour.
+      btn.click();
+      await new Promise((r) => requestAnimationFrame(r));
+      return { moved, transition: css, recoloured: btn.style.background !== was };
     });
     await page.close();
     return { ...out, errs };
   };
   const normal = await press("no-preference");
   const reduced = await press("reduce");
-  check("normally the button dips under a press", normal.moved === "scale(0.94)", normal.moved);
-  check("with reduced motion it does not move", reduced.moved === "", reduced.moved);
-  check("and stops animating transform at all", !reduced.animatesTransform, reduced);
-  check("but still acknowledges the tap in colour", reduced.colours, reduced);
+  for (const [name, r] of [["normally", normal], ["with reduced motion", reduced]]) {
+    check(name + ", the button does not move under a press", !r.moved, r.moved);
+    check(name + ", it animates nothing at all",
+      /^0s(,\s*0s)*$/.test(String(r.transition).trim()), r.transition);
+    // Removing the animation must not remove the feedback with it.
+    check(name + ", a tap still changes its colour", r.recoloured, r);
+  }
   check("no console errors", normal.errs.length + reduced.errs.length === 0,
     normal.errs.concat(reduced.errs));
 }
@@ -1102,13 +1113,23 @@ console.log("\nfloat button menu");
     const host = document.getElementById("host");
     host.style.cssText = "position:fixed;left:120px;top:120px";
     let widgets = 0;
+    const asked = [];
+    const acts = {};
     let teardown = window.__setup(
       {
         events: { on: () => () => {} },
         ui: {
           showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
-          registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }),
-          createFloatWidget: () => { widgets++; return { root: host, destroy: () => {}, setPosition: () => {} }; },
+          registerInputBarAction: (o) => {
+            const a = { onClick: (cb) => { a.cb = cb; return () => {}; }, destroy: () => {} };
+            acts[o.id] = a;
+            return a;
+          },
+          createFloatWidget: (opts) => {
+            widgets++;
+            asked.push(opts);
+            return { root: host, destroy: () => {}, setPosition: () => {} };
+          },
         },
       },
       { enabled: true, showFloatingToggle: true, floatingToggleSize: 44, toast: false },
@@ -1152,6 +1173,30 @@ console.log("\nfloat button menu");
     const afterDrag = !!menu();
     up(btn());
 
+    // Resizing rebuilds the widget, and the rebuild used to start where a fresh
+    // one starts, so wherever the button had been dragged to was thrown away.
+    // Driven through the panel, which is the path a person takes and the one
+    // that exercises the live preview at the same time.
+    host.style.left = "300px";
+    host.style.top = "260px";
+    const askedBefore = asked.length;
+    acts["auto-retry-settings"].cb();
+    await wait(30);
+    for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+    await wait(30);
+    const sizeBox = document.querySelector('[data-ar-row="floatingToggleSize"] input');
+    const dot = document.querySelector('[data-ar-row="floatingToggleSize"] div[aria-hidden="true"]');
+    sizeBox.value = "72";
+    // input, not change: a preview is meant to move while it is being typed.
+    sizeBox.dispatchEvent(new Event("input", { bubbles: true }));
+    await wait(30);
+    const resize = {
+      rebuilt: asked.length > askedBefore,
+      at: asked.length ? asked[asked.length - 1].initialPosition : null,
+      size: asked.length ? asked[asked.length - 1].width : null,
+      previewPx: dot ? dot.style.width : null,
+    };
+
     // "Move back to the corner" rebuilds the widget.
     const widgetsBefore = widgets;
     down(btn(), 130, 130); await wait(620);
@@ -1183,21 +1228,37 @@ console.log("\nfloat button menu");
     down(document.body, 1, 1);
     teardown();
     const left = { menu: !!menu(), items: items().length };
-    return { wasOn, afterTap, openedByHold, entries, afterHold, onScreen, afterEsc, afterDrag, rebuilt, gone, left, focus, menuZ };
+    return { wasOn, afterTap, openedByHold, entries, afterHold, onScreen, afterEsc, afterDrag, rebuilt, resize, gone, left, focus, menuZ };
   });
   await page.close();
   check("a quick tap still toggles", out.afterTap.pressed !== out.wasOn, out.afterTap);
   check("and opens no menu", !out.afterTap.menu);
   check("a hold opens the menu", out.openedByHold);
-  check("with both entries", out.entries.length === 2, out.entries);
+  check("with all three entries", out.entries.length === 3, out.entries);
+  // The thing someone holding this button is most likely to be after, so it is
+  // the one their thumb lands on first.
+  check("settings is the first of them", /settings/i.test(out.entries[0]), out.entries);
   check("a hold does not also toggle", out.afterHold.same, out.afterHold);
   check("the menu lands on screen", out.onScreen);
   check("Esc closes it", !out.afterEsc);
   check("dragging is not a hold", !out.afterDrag);
   check("moving it back rebuilds the widget", out.rebuilt);
+  check("resizing rebuilds it too", out.resize.rebuilt, out.resize);
+  check("at the new size", out.resize.size === 72, out.resize);
+  // The whole point: the rebuild is handed where the button already was, not
+  // the corner a fresh one starts in.
+  check("and keeps where the button was",
+    !!out.resize.at && out.resize.at.x === 300 && out.resize.at.y === 260, out.resize);
+  // A number in a box says nothing about how big the button will be.
+  check("the preview circle is drawn at the size being typed",
+    out.resize.previewPx === "72px", out.resize);
   check("hiding removes the button", out.gone.button, out.gone);
   check("and leaves no menu behind", !out.gone.menu);
   check("teardown leaves nothing", !out.left.menu && out.left.items === 0, out.left);
+  // 2147483647 is the highest a browser accepts. Anything sitting there cannot
+  // be drawn over by another extension, however much it needs to be.
+  check("the menu does not claim the top of the stacking order",
+    out.menuZ > 1000000 && out.menuZ < 2147483647, out.menuZ);
   check("menu items drop the browser's own focus ring", out.focus.outline === "none", out.focus);
   check("and show focus in the theme's colour instead",
     out.focus.ringWhenFocused !== "none" && out.focus.ringWhenBlurred === "none", out.focus);
@@ -3254,7 +3315,7 @@ console.log("\nreset picker");
       // skips the asking step leaves no Yes button, and a TypeError here would
       // take the rest of the file down with it instead of failing one check.
       const confirmBtn = [...document.querySelectorAll("#__lvRetryReset button")]
-        .find((b) => b.textContent.trim() === "Yes, reset");
+        .find((b) => /^Yes, reset/.test(b.textContent.trim()));
       if (confirmBtn) confirmBtn.click();
       await frame();
       const row = (k) => document.querySelector('[data-ar-row="' + k + '"]');
@@ -3313,7 +3374,7 @@ console.log("\nreset picker");
       // skips the asking step leaves no Yes button, and a TypeError here would
       // take the rest of the file down with it instead of failing one check.
       const confirmBtn = [...document.querySelectorAll("#__lvRetryReset button")]
-        .find((b) => b.textContent.trim() === "Yes, reset");
+        .find((b) => /^Yes, reset/.test(b.textContent.trim()));
       if (confirmBtn) confirmBtn.click();
       await frame();
     });
@@ -3351,7 +3412,7 @@ console.log("\nreset confirmation");
       // the file down with it instead of failing the one check that caught it.
       const inBox = (t) => [...document.querySelectorAll("#__lvRetryReset button")]
         .find((b) => b.textContent.trim() === t) || null;
-      const press = async (t) => { const b = inBox(t); if (b) b.click(); await frame(); };
+      const press = async (t) => { const b = inBox(t) || [...document.querySelectorAll("#__lvRetryReset button")].find((x) => x.textContent.trim().startsWith(t)); if (b) b.click(); await frame(); };
       const tick = (id) => document.querySelector('[data-ar-reset="' + id + '"] input');
       const val = () => document.querySelector('[data-ar-row="maxRetries"] input').value;
       const confirmEl = () => document.querySelector("[data-ar-reset-confirm]");
@@ -3474,7 +3535,7 @@ console.log("\nreset confirmation");
       // skips the asking step leaves no Yes button, and a TypeError here would
       // take the rest of the file down with it instead of failing one check.
       const confirmBtn = [...document.querySelectorAll("#__lvRetryReset button")]
-        .find((b) => b.textContent.trim() === "Yes, reset");
+        .find((b) => /^Yes, reset/.test(b.textContent.trim()));
       if (confirmBtn) confirmBtn.click();
       await frame();
       return {
@@ -3488,6 +3549,99 @@ console.log("\nreset confirmation");
   check("with a preset saved, that line can be ticked", out.before === 1 && out.wasDisabled === false, out);
   check("ticking it deletes the presets straight away", out.after === 0, out);
   check("and leaves the settings alone", out.maxRetries === "9", out);
+  check("no console errors", errors.length === 0, errors);
+}
+
+// The two things a reset can do are not equally serious, and the confirmation
+// has to say which one this is. Settings go back and are undone by closing the
+// panel; presets are gone. Painting both the same would make the warning worth
+// ignoring on the one that matters.
+console.log("\nreset urgency");
+{
+  const { out, errors } = await inPanel(browser, {}, async (page) =>
+    page.evaluate(async () => {
+      const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      await frame();
+      const el = document.querySelector('[data-ar-row="maxRetries"] input');
+      el.value = "9";
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+      // Save a preset so its line can be ticked.
+      document.querySelector('[data-ar-row="replaceRules"] textarea').value = "cat => dog";
+      document.querySelector('[data-ar-row="replaceRules"] textarea')
+        .dispatchEvent(new Event("change", { bubbles: true }));
+      document.querySelector('input[placeholder="Preset name"]').value = "trial";
+      [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === "Save as new").click();
+      await frame();
+
+      const inBox = (re) => [...document.querySelectorAll("#__lvRetryReset button")]
+        .find((b) => re.test(b.textContent.trim())) || null;
+      const open = async () => {
+        [...document.querySelectorAll("button")].find((b) => /^Reset/.test(b.textContent.trim())).click();
+        await frame();
+      };
+      const read = () => {
+        const wrap = document.querySelector("[data-ar-reset-confirm]").parentElement;
+        const head = wrap.firstElementChild;
+        const yes = inBox(/^Yes, reset/);
+        return {
+          edge: getComputedStyle(wrap).borderLeftColor,
+          wash: getComputedStyle(wrap).backgroundColor,
+          head: head.textContent.trim(),
+          headWeight: getComputedStyle(head).fontWeight,
+          headColour: getComputedStyle(head).color,
+          yesLabel: yes.textContent.trim(),
+          yesBg: getComputedStyle(yes).backgroundColor,
+        };
+      };
+
+      // Settings only.
+      await open();
+      document.querySelector('[data-ar-reset="retry"] input').checked = true;
+      inBox(/^Reset ticked/).click();
+      await frame();
+      const settingsOnly = read();
+      inBox(/^Go back/).click();
+      await frame();
+
+      // Presets as well.
+      document.querySelector('[data-ar-reset="presets"] input').checked = true;
+      inBox(/^Reset ticked/).click();
+      await frame();
+      const withPresets = read();
+
+      const presetLabel = document.querySelector('[data-ar-reset="presets"] strong');
+      return {
+        settingsOnly,
+        withPresets,
+        presetBold: !!presetLabel,
+        presetColour: presetLabel ? getComputedStyle(presetLabel).color : "",
+        presetWeight: presetLabel ? getComputedStyle(presetLabel).fontWeight : "",
+      };
+    }),
+  );
+
+  // Amber is not red, and a pattern that only looked at the first channel said
+  // it was: #f59e0b starts with 245 the same way #ef4444 starts with 239. The
+  // green channel is what tells them apart (158 against 68).
+  const red = (c) => {
+    const n = (String(c).match(/\d+/g) || []).map(Number);
+    return n.length >= 3 && n[0] > 180 && n[1] < 120 && n[2] < 120;
+  };
+  check("the permanent line is bold", out.presetBold && Number(out.presetWeight) >= 600, out);
+  check("and carries the danger colour", red(out.presetColour), out.presetColour);
+  check("the confirmation headline is bold",
+    Number(out.settingsOnly.headWeight) >= 600, out.settingsOnly);
+  // Settings-only is a question, not a warning: closing the panel undoes it.
+  check("a settings-only reset does not claim to be permanent",
+    !/cannot be undone/i.test(out.settingsOnly.head), out.settingsOnly.head);
+  check("and is not painted red", !red(out.settingsOnly.edge), out.settingsOnly.edge);
+  check("adding presets turns it red", red(out.withPresets.edge), out.withPresets.edge);
+  check("and says so in the headline",
+    /cannot be undone/i.test(out.withPresets.head), out.withPresets.head);
+  check("and the button that commits it says what it will do",
+    /delete/i.test(out.withPresets.yesLabel), out.withPresets.yesLabel);
+  check("and is red too", red(out.withPresets.yesBg), out.withPresets.yesBg);
   check("no console errors", errors.length === 0, errors);
 }
 
