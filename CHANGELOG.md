@@ -28,7 +28,7 @@ _2026-08-06_
 ### Added
 
 - **It now catches the model breaking off rather than declining.** "I'm going to stop here", "I won't continue this discussion", "let's redirect the conversation". On by default, and narrow on purpose: it only counts when that is how the reply ends, never inside quotation marks, and never behind a dialogue tag, so a character who stops walking and carries on with the scene is left alone. Switch it off with **Also catch the model breaking off**.
-- **The built-in refusal list has grown by about twenty wordings**, covering the ones models actually use that were being walked past: "I can't generate that", "I don't create content like that", "I'm not going to comply with that request", "I can't help with illegal activities", "I can't provide advice on that", "I can't process that request" and others. Apologetic openings on their own ("I'm sorry", "Unfortunately", "I apologize") are deliberately still not counted: they open as many ordinary replies as refusals, and a character apologising is one of the most common things in roleplay.
+- **The built-in refusal list has grown by about twenty wordings**, covering the ones models actually use that were being walked past: "I can't generate that", "I don't create content like that", "I'm not going to comply with that request", "I can't help with illegal activities", "I can't provide advice on that", "I can't process that request" and others. Apologetic openings on their own ("I'm sorry", "Unfortunately", "I apologize") are still not counted: they open as many ordinary replies as refusals, and a character apologising is one of the most common things in roleplay.
 
 ### Changed
 

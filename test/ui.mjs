@@ -2575,7 +2575,7 @@ console.log("\ndependent rows");
       await frame();
       const shortAfter = shown("minChars");
 
-      // A search is the deliberate exception: it finds a row whose switch is
+      // A search is the one exception: it finds a row whose switch is
       // off, because answering "nothing matches that" for a setting that
       // exists would be the worse answer.
       const search = document.querySelector("input[type=search]");

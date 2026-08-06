@@ -119,8 +119,8 @@ function replyTo(userId: string | undefined, msg: any): void {
 // was armed for never started anything, so the window between arming and
 // collection is the length of one click, not the age limit below.
 //
-// What is deliberately NOT a guard by default is what the host calls the
-// generation. This used to require context.generationType to read "regenerate"
+// The one thing that no longer guards this is what the host calls the
+// generation. It used to require context.generationType to read "regenerate"
 // or "swipe". Builds that report "normal" for every generation, which is most
 // of them, therefore never sent the note at all: it was armed, the retry ran
 // without it, and the only sign was a line in the log. The type is now only

@@ -91,7 +91,7 @@ The same options live in the CONFIG block at the top of `src/frontend.ts` and `d
 | toast | true | Show the little retry pop-up with its Cancel button. |
 | liveLog | false | Show a small on-screen panel with recent activity, updating live. |
 
-The two watchdog waits (`stuckTimeoutMs`, `idleTimeoutMs`) are deliberately long, and the defaults assume a slow model rather than a fast one. A watchdog that fires early on a model that is slow but healthy is worse than one that fires late: it throws away a reply that was still arriving, and the replacement comes from the same slow model, so it fires again on that one too. If your provider is fast and you want quicker recovery, lower them.
+The two watchdog waits (`stuckTimeoutMs`, `idleTimeoutMs`) are long, and the defaults assume a slow model rather than a fast one. A watchdog that fires early on a model that is slow but healthy is worse than one that fires late: it throws away a reply that was still arriving, and the replacement comes from the same slow model, so it fires again on that one too. If your provider is fast and you want quicker recovery, lower them.
 
 These defaults only apply to a fresh install. Settings already saved to your account keep the values they had, so if you have been using an earlier version and want the new timings, open **Reset…** and tick **Retry behavior**.
 
