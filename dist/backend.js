@@ -124,6 +124,64 @@ const NOTE_ROLES = ['system', 'user', 'assistant'];
 const RETRY_TYPES = ['regenerate', 'regeneration', 'swipe', 'reroll', 'retry'];
 // Matches the cap the panel offers, so a hand-edited payload cannot exceed it.
 const MAX_NOTES = 10;
+// ---- the prompt viewer ----
+// The interceptor is the one place in the extension that sees the whole
+// assembled prompt, in the shape it goes to the model in and after everything
+// else has had its turn at it. Lumiverse's own Prompt Breakdown lists what the
+// chat is built from, which is not the same question as "what actually went",
+// so this answers that one.
+//
+// Off unless the panel asks for it. A prompt is large, it is sent over the
+// bridge on every generation, and it is the user's chat text, so none of it
+// moves while nobody is looking at it.
+let promptViewer = false;
+// Enough to see the shape of a long prompt without shipping a novel through the
+// bridge on every generation. Anything past this is cut and said to be cut, so
+// what is on screen is never quietly incomplete.
+const VIEW_MAX_MESSAGES = 200;
+const VIEW_MAX_CHARS_PER_MESSAGE = 4000;
+const VIEW_MAX_CHARS_TOTAL = 300000;
+function snapshotPrompt(messages, context, userId) {
+    if (!promptViewer || !Array.isArray(messages))
+        return;
+    try {
+        const out = [];
+        let budget = VIEW_MAX_CHARS_TOTAL;
+        let clipped = 0;
+        for (let i = 0; i < messages.length && i < VIEW_MAX_MESSAGES; i++) {
+            const m = messages[i];
+            if (!m)
+                continue;
+            const full = String(m.content == null ? '' : m.content);
+            const room = Math.max(0, Math.min(VIEW_MAX_CHARS_PER_MESSAGE, budget));
+            const text = full.length > room ? full.slice(0, room) : full;
+            if (text.length < full.length)
+                clipped++;
+            budget -= text.length;
+            out.push({
+                role: String(m.role == null ? '' : m.role),
+                content: text,
+                // The whole length, not the length of what was sent, so the panel can
+                // say how big a message is even when it is showing part of it.
+                chars: full.length,
+                // Marks the messages that came from stored chat turns, which is what
+                // separates the conversation from everything wrapped around it.
+                history: !!m.__isChatHistory,
+            });
+        }
+        replyTo(userId, {
+            type: 'prompt_snapshot',
+            at: Date.now(),
+            chatId: context && context.chatId ? String(context.chatId) : '',
+            generationType: String((context && context.generationType) || ''),
+            messages: out,
+            total: messages.length,
+            dropped: Math.max(0, messages.length - out.length),
+            clipped: clipped,
+        });
+    }
+    catch (_) { /* a viewer must never cost anyone their generation */ }
+}
 // Where the note sits relative to the conversation. __isChatHistory marks the
 // messages that came from stored chat turns, so "after the last message" means
 // after the last real one rather than after whatever the host appended behind
@@ -315,6 +373,7 @@ function rebuild() {
 }
 // Pull the find-and-replace fields out of a full settings object.
 function applyReplaceFromSettings(s) {
+    promptViewer = !!s.promptViewer;
     enabled = !!s.replaceEnabled;
     random = !!s.replaceRandom;
     caseSensitive = !!s.replaceCaseSensitive;
@@ -714,19 +773,24 @@ spindle.on('GENERATION_ENDED', async (p) => {
 try {
     spindle.registerInterceptor(async (messages, context) => {
         try {
-            if (!refusalNote)
-                return messages;
             const who = context && context.userId;
+            if (!refusalNote) {
+                snapshotPrompt(messages, context, who);
+                return messages;
+            }
             const chatId = context && context.chatId;
             // A note armed in one chat is not for a generation in another, and it
             // stays armed so the retry it was meant for can still collect it.
-            if (chatId && refusalNote.chatId && String(chatId) !== refusalNote.chatId)
+            if (chatId && refusalNote.chatId && String(chatId) !== refusalNote.chatId) {
+                snapshotPrompt(messages, context, who);
                 return messages;
+            }
             const type = String((context && context.generationType) || '');
             // Only when the user asked for it. Left on by default this rejected every
             // generation on any build that reports "normal", which is the bug that
             // made the note look like it did nothing at all.
             if (refusalNote.strictType && type && RETRY_TYPES.indexOf(type.toLowerCase()) < 0) {
+                snapshotPrompt(messages, context, who);
                 // Named rather than swallowed. A note that never appears looks the same
                 // whether it was never armed or the host called this generation
                 // something else, and only one of those is fixable by the user. The
@@ -745,6 +809,7 @@ try {
                     replyTo(who, { type: 'note_skipped', reason: 'it was armed too long ago to still belong to this generation' });
                 }
                 catch (__) { }
+                snapshotPrompt(messages, context, who);
                 return messages;
             }
             if (!Array.isArray(messages))
@@ -763,6 +828,9 @@ try {
                 replyTo(who, { type: 'note_sent', count: built.length, generationType: type });
             }
             catch (__) { }
+            // After the note is in, so the panel shows what actually went rather than
+            // what would have gone without it.
+            snapshotPrompt(placed.list, context, who);
             return { messages: placed.list, breakdown: breakdown };
         }
         catch (_) {

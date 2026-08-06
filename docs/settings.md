@@ -32,6 +32,16 @@ The find-and-replace section is split under two headings, **Saved in a preset** 
 
 Every section header is a proper button, so the Advanced groups open with Enter or Space if you are working from the keyboard rather than a pointer.
 
+## The Prompt view
+
+Turning on **Show what was sent to the model** adds a second view to the on-screen panel, beside the log. It shows the prompt as the extension saw it on its way to the model: every message in order, its role, how large it is, and whether it came from your chat or was added around it. Tap a message to read it.
+
+This is what actually went, after your setup, your world info, your persona and every extension have had their turn at it. That is a different question from the one Lumiverse's own **Prompt Breakdown** answers, which is what your chat is built from.
+
+The panel's **Copy** button copies whichever view you are looking at, so on the Prompt view it gives you the whole thing as text, and **Clear** drops the captured prompt.
+
+It is off unless you turn it on, for two reasons: a whole prompt crosses from the server to the panel on every reply, and a prompt is the text of your chat. It is captured on your device and shown to you. Nothing is sent anywhere and nothing is written to disk, and it goes when you close the tab. A very long prompt is trimmed for display and says so rather than showing you part of it silently.
+
 The same options live in the CONFIG block at the top of `src/frontend.ts` and `dist/frontend.js`. `dist/frontend.js` is the file the host actually loads, so editing CONFIG there takes effect with no rebuild; editing `src/frontend.ts` needs a `bun run build`.
 
 | Option | Default | Meaning |
@@ -70,9 +80,8 @@ The same options live in the CONFIG block at the top of `src/frontend.ts` and `d
 | refusalStripThinking | true | Only check the final reply, stripping known reasoning tags first. Off checks the whole raw output. |
 | refusalThinkTags | (empty) | Extra reasoning tag names, one per line, for unusual thinking wrappers. |
 | refusalNote | false | Send a note with a refusal retry, and only a refusal retry. Needs the `interceptor` permission. |
-| refusalNotes | one empty note | The notes themselves, each with its own role (system, user or assistant). Up to ten, sent in order as one block. Empty ones are skipped, and nothing is sent while they all are. Shown only while `refusalNote` is on. |
+| refusalNotes | one empty note | The notes themselves. Each carries its own role (system, user or assistant) and its own first try, so notes can be set to escalate. Up to ten. Whichever have come due are sent together, in order. Empty ones are skipped, and nothing is sent while they all are. Shown only while `refusalNote` is on. |
 | refusalNotePlacement | after | Where the block goes: after the last message, before it, or at the very start. Shown only while `refusalNote` is on. |
-| refusalNoteFromTry | 2 | Which retry the note starts on. 1 sends it every time. Shown only while `refusalNote` is on. |
 | refusalNoteStrictType | false | Only attach the note when Lumiverse reports the generation as a regenerate or a swipe. Most builds report every generation as "normal", and on those this stops the note going out at all, which is why it is off. Shown only while `refusalNote` is on. |
 | replaceEnabled | false | (beta) Turn on find-and-replace on replies. Edits the saved message. |
 | replaceRules | (empty) | "old => new" word swaps, one per line. |
@@ -89,6 +98,7 @@ The same options live in the CONFIG block at the top of `src/frontend.ts` and `d
 | confirmButtonLabels | (blank) | Extra dialog button labels it may press when a dialog appears after a retry, one per line. Blank uses the built-in list. |
 | stopSelector | (see file) | Host stop button, used to abort a stalled reply. |
 | toast | true | Show the little retry pop-up with its Cancel button. |
+| promptViewer | false | Add a Prompt view to the on-screen panel showing the whole prompt as it went to the model: every message in order, its role, its size, and whether it came from your chat or was added around it. Captured on your device and shown to you; nothing is sent anywhere. |
 | liveLog | false | Show a small on-screen panel with recent activity, updating live. |
 
 The two watchdog waits (`stuckTimeoutMs`, `idleTimeoutMs`) are long, and the defaults assume a slow model rather than a fast one. A watchdog that fires early on a model that is slow but healthy is worse than one that fires late: it throws away a reply that was still arriving, and the replacement comes from the same slow model, so it fires again on that one too. If your provider is fast and you want quicker recovery, lower them.

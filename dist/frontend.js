@@ -76,6 +76,10 @@ const NOTE_ROLE_OPTIONS = [
     { value: "assistant", label: "The character" },
 ];
 const NOTE_ROLES = NOTE_ROLE_OPTIONS.map((o) => o.value);
+// Which retry a note starts on, when it does not say. Two, so the first retry
+// re-sends unchanged and a note is only added once a plain re-roll has failed.
+const NOTE_FROM_TRY_DEFAULT = 2;
+const NOTE_FROM_TRY_MAX = 20;
 // Largest amount of streamed text kept per chat as a fallback when the end
 // event arrives without a content field. Trimmed from the front past this.
 const STREAM_BUF_MAX = 200000;
@@ -157,11 +161,17 @@ const CONFIG = {
     // Off by default, and does nothing at all while the text is empty.
     refusalNote: false,
     // A list rather than one string, so a note can answer the one before it. Each
-    // entry carries its own role. Sent in order, as one block, at the placement
-    // below. Empty entries are skipped, so a half-filled list is not a trap.
-    refusalNotes: [{ text: "", role: "system" }],
+    // entry carries its own role and its own first try. Sent in order, as one
+    // block, at the placement below. Empty entries are skipped, so a half-filled
+    // list is not a trap.
+    //
+    // The first try is per note because that is what having several notes is for.
+    // One number for the whole list meant more notes could only ever mean more
+    // text at once, never "that did not work, try something stronger". Now a
+    // gentle note can start on try 2 and a firmer one on try 4, and the retry
+    // carries whichever ones have come due.
+    refusalNotes: [{ text: "", role: "system", fromTry: NOTE_FROM_TRY_DEFAULT }],
     refusalNotePlacement: "after", // after | before | start, relative to the last real message
-    refusalNoteFromTry: 2, // which retry it starts on. 1 sends it every time.
     // Off by default. On, the note is only attached when Lumiverse itself calls
     // the generation a regenerate or a swipe. Most builds call every generation
     // "normal", and on those this stops the note going out at all, which is why
@@ -202,6 +212,11 @@ const CONFIG = {
         'button[aria-label*="stop" i], button[title*="stop" i], [class*="_sendBtnStop_"]',
     toast: true,
     liveLog: false, // show a small on-screen panel with recent activity, updating live. Handy on mobile where dev tools aren't available.
+    // Capture the assembled prompt on its way to the model and show it in the
+    // panel's Prompt view. Off by default: a prompt is large, it crosses the
+    // bridge on every generation, and it is the text of your chat, so none of it
+    // moves while nobody is looking at it.
+    promptViewer: false,
 };
 // A hint that quotes a default reads it from the block above rather than
 // spelling it out. Five of them were written by hand and went stale the moment
@@ -596,7 +611,7 @@ const SCHEMA = [
                 hintAbove: true,
                 label: "What the notes say",
                 type: "notes",
-                hint: "Goes to the model, not to your chat. Whatever you type is sent exactly as written: nothing is added to it, nothing is removed, and nothing in it is checked. Add up to ten with the plus button and they are sent in order, as one block, so a note can answer the one before it. Each carries its own role: system puts it alongside the instructions your setup already sends, you puts it in the same role as your own messages, and the character puts it in the same role as the replies. Models treat the three differently, so which one works best depends on your model and your setup. An empty note is skipped.",
+                hint: "Goes to the model, not to your chat. Whatever you type is sent exactly as written: nothing is added to it, nothing is removed, and nothing in it is checked. Add up to ten with the plus button. Each note carries two things of its own. Its role: system puts it alongside the instructions your setup already sends, you puts it in the same role as your own messages, and the character puts it in the same role as the replies. And the try it starts on: at 2 the first retry re-sends unchanged and that note joins from the second onward, at 1 it goes on every refusal retry. Give notes different starting tries to escalate, so a gentle note goes first and a firmer one only if that did not work. Whichever notes have come due are sent together, in order, so one can answer the one before it. An empty note is skipped.",
             },
             {
                 key: "refusalNotePlacement",
@@ -609,16 +624,6 @@ const SCHEMA = [
                     { value: "start", label: "At the very start" },
                 ],
                 hint: "Where the note is inserted. After the last message puts it at the end, right before the point the reply continues from. Before the last message puts it one place earlier, so the newest line is still last. At the very start puts it ahead of everything, with the setup.",
-            },
-            {
-                key: "refusalNoteFromTry",
-                needs: ["refusalNote"],
-                label: "Start the note on try",
-                type: "num",
-                int: true,
-                min: 1,
-                max: 20,
-                hint: "Which retry the note starts on. At 2, the first retry re-sends unchanged and the note is added from the second onward. At 1, it is added to every refusal retry.",
             },
             {
                 key: "refusalNoteStrictType",
@@ -666,6 +671,12 @@ const SCHEMA = [
         title: "Advanced: on-screen log",
         desc: "A live panel that shows what the extension is doing, for debugging.",
         fields: [
+            {
+                key: "promptViewer",
+                label: "Show what was sent to the model",
+                type: "bool",
+                hint: "Off by default. Adds a Prompt view to the on-screen panel showing the whole prompt as it went to the model: every message in order, its role, its size, and whether it came from your chat or was added around it. This is what actually went, after your setup, your world info and every extension have had their turn, which is not the same as what Lumiverse's own Prompt Breakdown lists. It is captured on your device and shown to you; nothing is sent anywhere and nothing is written to disk. It is off unless you turn it on because a whole prompt crosses from the server to the panel on every reply.",
+            },
             {
                 key: "liveLog",
                 label: "Show a live log on screen",
@@ -1895,27 +1906,153 @@ export function setup(ctx, opts) {
     // Optional on-screen log. A small fixed panel that shows recent activity live,
     // so someone can watch what the extension is doing without opening dev tools,
     // which matters most on mobile. Driven by the liveLog setting.
+    // The last prompt the backend saw on its way to the model, and which of the
+    // panel's two views is showing. Held in memory only, thrown away on teardown
+    // and with the tab, the same as the log beside it.
+    let lastPrompt = null;
+    let liveTab = "log";
+    let paintTabs = null;
+    const rough = (n) => (n < 1000 ? String(n) : Math.round(n / 100) / 10 + "k");
     function renderLiveLog() {
         if (!liveLogBody)
             return;
+        if (paintTabs) {
+            try {
+                paintTabs();
+            }
+            catch (_) { }
+        }
+        if (liveTab === "prompt")
+            return renderPromptView();
+        liveLogBody.style.whiteSpace = "pre-wrap";
         liveLogBody.textContent = eventLog.length
             ? eventLog.join("\n")
             : "(nothing yet)";
         liveLogBody.scrollTop = liveLogBody.scrollHeight;
     }
+    // What actually went to the model, as the interceptor saw it: every message
+    // in order, with its role, its size, and whether it came from the chat or was
+    // wrapped around it. Lumiverse's own Prompt Breakdown answers what the chat is
+    // built from, which is a different question from what was sent.
+    function renderPromptView() {
+        const body = liveLogBody;
+        if (!body)
+            return;
+        body.replaceChildren();
+        body.style.whiteSpace = "normal";
+        if (!cfg.promptViewer) {
+            body.textContent =
+                "Turn on \"Show what was sent to the model\" in Auto Retry settings, then send a reply.";
+            return;
+        }
+        if (!lastPrompt) {
+            body.textContent = "(no prompt seen yet; send a reply)";
+            return;
+        }
+        const chars = lastPrompt.messages.reduce((n, m) => n + (m.chars || 0), 0);
+        const sum = document.createElement("div");
+        sum.style.cssText =
+            "margin-bottom:6px;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+        sum.textContent =
+            lastPrompt.total + (lastPrompt.total === 1 ? " message, " : " messages, ") +
+                rough(chars) + " characters, roughly " + rough(Math.round(chars / 4)) + " tokens" +
+                (lastPrompt.dropped ? " (" + lastPrompt.dropped + " not shown)" : "");
+        body.appendChild(sum);
+        lastPrompt.messages.forEach((m, i) => {
+            const row = document.createElement("details");
+            row.style.cssText =
+                "margin:0 0 4px;border:1px solid var(--lumiverse-border,rgba(255,255,255,.12));" +
+                    "border-radius:var(--lumiverse-radius-sm,5px);padding:4px 6px";
+            const head = document.createElement("summary");
+            head.style.cssText = "cursor:pointer;list-style:none;display:flex;gap:6px;align-items:baseline";
+            const who = document.createElement("span");
+            who.textContent = m.role || "?";
+            who.style.cssText =
+                "font-weight:600;color:" +
+                    (m.history
+                        ? "var(--lumiverse-text,#e9e4f0)"
+                        : "var(--lumiverse-primary-text,rgba(186,135,255,.95))");
+            const where = document.createElement("span");
+            // The distinction that matters when a prompt misbehaves: what came from
+            // the conversation, and what something wrapped around it.
+            where.textContent = (m.history ? "chat" : "added") + " \u00b7 " + rough(m.chars || 0);
+            where.style.cssText =
+                "font-size:11px;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+            const peek = document.createElement("span");
+            peek.textContent = String(m.content || "").replace(/\s+/g, " ").slice(0, 60);
+            peek.style.cssText =
+                "flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" +
+                    "color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+            head.appendChild(who);
+            head.appendChild(where);
+            head.appendChild(peek);
+            const full = document.createElement("div");
+            full.textContent =
+                String(m.content || "") +
+                    ((m.chars || 0) > String(m.content || "").length ? "\n\n(cut for display)" : "");
+            full.style.cssText =
+                "margin-top:4px;white-space:pre-wrap;line-height:1.4;" +
+                    "font-family:var(--lumiverse-font-mono,ui-monospace,monospace)";
+            row.appendChild(head);
+            row.appendChild(full);
+            body.appendChild(row);
+            if (i === 0)
+                row.open = false;
+        });
+        try {
+            ensureReadableTree(body);
+        }
+        catch (_) { }
+    }
     function showLiveLog() {
         if (liveLogEl || typeof document === "undefined")
             return;
         const el = document.createElement("div");
+        // Named, like the other surfaces the extension owns. Without an id the
+        // word-swap pass over the page had no way to tell this panel from the chat,
+        // so a rule could rewrite its own log text underneath it.
+        el.id = "__lvRetryLog";
         el.style.cssText =
             "position:fixed;right:8px;bottom:8px;z-index:" + Z_LIVE_LOG + ";width:min(340px,92vw);height:min(300px,50vh);min-width:200px;min-height:120px;max-width:96vw;max-height:85vh;display:flex;flex-direction:column;background-color:var(--lumiverse-card-bg-solid,rgb(24,20,34));background-image:linear-gradient(var(--lumiverse-bg-elevated,rgba(35,30,48,.9)),var(--lumiverse-bg-elevated,rgba(35,30,48,.9)));border:1px solid var(--lumiverse-border,rgba(255,255,255,.14));border-radius:var(--lumiverse-radius-md,10px);box-shadow:var(--lumiverse-shadow-md,0 8px 24px rgba(0,0,0,.4));font-family:var(--lumiverse-font-family,system-ui);font-size:13px;color:var(--lumiverse-text,#e9e4f0);overflow:hidden";
         const head = document.createElement("div");
         head.style.cssText =
             "display:flex;align-items:center;gap:8px;padding:7px 9px;border-bottom:1px solid var(--lumiverse-border,rgba(255,255,255,.12));font-weight:600;cursor:move;user-select:none;touch-action:none";
-        const title = document.createElement("span");
-        title.textContent = "Auto Retry log";
-        title.style.cssText = "flex:1;min-width:0";
-        head.appendChild(title);
+        // Two views, one panel. The log says what the extension did; the prompt
+        // view says what went to the model. They answer different questions and
+        // both are wanted in the same place.
+        const tabs = document.createElement("div");
+        tabs.style.cssText = "display:flex;gap:4px;flex:1;min-width:0";
+        const tabBtns = {};
+        const mkTab = (id, label) => {
+            const b = document.createElement("button");
+            b.type = "button";
+            b.textContent = label;
+            b.setAttribute("role", "tab");
+            b.style.cssText =
+                "cursor:pointer;border:0;background:transparent;padding:2px 6px;font:inherit;" +
+                    "border-radius:var(--lumiverse-radius-sm,5px);color:inherit";
+            b.addEventListener("click", () => {
+                liveTab = id;
+                renderLiveLog();
+            });
+            tabs.appendChild(b);
+            tabBtns[id] = b;
+            return b;
+        };
+        mkTab("log", "Log");
+        mkTab("prompt", "Prompt");
+        paintTabs = () => {
+            for (const id of Object.keys(tabBtns)) {
+                const on = id === liveTab;
+                const b = tabBtns[id];
+                b.style.background = on
+                    ? "var(--lumiverse-secondary-hover,rgba(128,128,128,.25))"
+                    : "transparent";
+                b.style.fontWeight = on ? "600" : "400";
+                b.setAttribute("aria-selected", on ? "true" : "false");
+            }
+        };
+        head.appendChild(tabs);
         // The panel exists because the console is out of reach on a phone, which is
         // also where selecting text by hand is worst, so the log needs its own way
         // out. Clear keeps a long session's timeline readable.
@@ -1925,10 +2062,21 @@ export function setup(ctx, opts) {
                 "min-height:0;padding:3px 9px;font-size:11px;flex:none;cursor:pointer";
             return b;
         };
+        // Copy and Clear act on whichever view is showing, so the buttons mean the
+        // same thing as what is in front of them.
+        const promptAsText = () => {
+            if (!lastPrompt)
+                return "";
+            return lastPrompt.messages
+                .map((m, i) => "--- " + (i + 1) + " " + (m.role || "?") + " " +
+                (m.history ? "(chat)" : "(added)") + " " + (m.chars || 0) + " chars ---\n" +
+                String(m.content || ""))
+                .join("\n\n");
+        };
         const copyBtn = tinyBtn("Copy");
         copyBtn.addEventListener("click", async () => {
             const before = copyBtn.textContent;
-            const ok = await copyText(eventLog.join("\n"));
+            const ok = await copyText(liveTab === "prompt" ? promptAsText() : eventLog.join("\n"));
             copyBtn.textContent = ok ? "Copied" : "Can't";
             setTimeout(() => {
                 copyBtn.textContent = before;
@@ -1936,12 +2084,16 @@ export function setup(ctx, opts) {
         });
         const clearBtn = tinyBtn("Clear");
         clearBtn.addEventListener("click", () => {
-            eventLog.length = 0;
+            if (liveTab === "prompt")
+                lastPrompt = null;
+            else
+                eventLog.length = 0;
             renderLiveLog();
         });
         head.appendChild(copyBtn);
         head.appendChild(clearBtn);
         const bodyEl = document.createElement("div");
+        bodyEl.id = "__lvRetryLogBody";
         bodyEl.style.cssText =
             "flex:1;padding:7px 9px;overflow:auto;white-space:pre-wrap;line-height:1.4;font-family:var(--lumiverse-font-mono,ui-monospace,monospace) !important";
         el.appendChild(head);
@@ -2102,6 +2254,7 @@ export function setup(ctx, opts) {
         }
         liveLogEl = null;
         liveLogBody = null;
+        paintTabs = null;
     }
     // A small round button that floats over the chat and turns the extension on or
     // off in one tap. The host owns the placement: ctx.ui.createFloatWidget gives
@@ -2505,10 +2658,19 @@ export function setup(ctx, opts) {
         catch (_) { }
     }
     function syncLiveLog() {
-        if (cfg.liveLog)
+        // Either view is a reason for the panel to exist, so turning the prompt
+        // viewer on brings it up without also having to turn the log on.
+        if (cfg.liveLog || cfg.promptViewer)
             showLiveLog();
         else
             hideLiveLog();
+        // Someone who turned the viewer on and the log off is looking for the
+        // prompt, so that is the view they land in.
+        if (cfg.promptViewer && !cfg.liveLog)
+            liveTab = "prompt";
+        else if (!cfg.promptViewer && liveTab === "prompt")
+            liveTab = "log";
+        renderLiveLog();
     }
     const disposers = [];
     // Coerce a raw saved object (local cache or account storage) into a clean
@@ -2538,7 +2700,13 @@ export function setup(ctx, opts) {
                 out[f.key] =
                     f.type === "num"
                         ? clampField(f, parsed[f.key])
-                        : coerce(f.type, parsed[f.key], CONFIG[f.key], f);
+                        : coerce(f.type, parsed[f.key], 
+                        // A saved list from before notes carried their own first try
+                        // takes the value the single setting held, so upgrading changes
+                        // nothing about when notes go out.
+                        f.type === "notes"
+                            ? Number(parsed.refusalNoteFromTry) || NOTE_FROM_TRY_DEFAULT
+                            : CONFIG[f.key], f);
             }
         return out;
     }
@@ -2580,9 +2748,15 @@ export function setup(ctx, opts) {
             for (const item of list.slice(0, MAX_NOTES)) {
                 const text = item && item.text != null ? String(item.text) : "";
                 const role = item && NOTE_ROLES.indexOf(String(item.role)) >= 0 ? String(item.role) : "system";
-                out.push({ text: text, role: role });
+                // fallback carries the value the old single setting held, so a list
+                // saved before notes had their own first try keeps behaving the same.
+                const raw = item && item.fromTry != null ? Number(item.fromTry) : Number(fallback);
+                const fromTry = Number.isFinite(raw)
+                    ? Math.min(NOTE_FROM_TRY_MAX, Math.max(1, Math.round(raw)))
+                    : NOTE_FROM_TRY_DEFAULT;
+                out.push({ text: text, role: role, fromTry: fromTry });
             }
-            return out.length ? out : [{ text: "", role: "system" }];
+            return out.length ? out : [{ text: "", role: "system", fromTry: NOTE_FROM_TRY_DEFAULT }];
         }
         if (type === "pick") {
             const want = val == null ? "" : String(val);
@@ -2663,7 +2837,6 @@ export function setup(ctx, opts) {
                 "refusalNote",
                 "refusalNotes",
                 "refusalNotePlacement",
-                "refusalNoteFromTry",
                 "refusalNoteStrictType",
             ],
         },
@@ -2693,7 +2866,7 @@ export function setup(ctx, opts) {
                 "confirmButtonLabels",
             ],
         },
-        { id: "notifications", label: "On-screen", keys: ["toast", "liveLog"] },
+        { id: "notifications", label: "On-screen", keys: ["toast", "liveLog", "promptViewer"] },
         // Special entry: carried outside cfg. buildExport and the import handler
         // treat it as the saved word-swap presets, not settings keys.
         { id: "presets", label: "Word swap presets", keys: [] },
@@ -3698,20 +3871,28 @@ export function setup(ctx, opts) {
                 // what goes out is what was typed, spacing and all. The panel says the
                 // note is sent exactly as written, and a line break someone put at the
                 // end of theirs is part of what they wrote.
-                const notes = (Array.isArray(cfg.refusalNotes) ? cfg.refusalNotes : [])
+                // Each note brings its own first try, so this takes the ones that have
+                // come due rather than holding or sending the list as a whole. Order is
+                // the order they were written, which is what lets one answer another.
+                const all = (Array.isArray(cfg.refusalNotes) ? cfg.refusalNotes : [])
                     .slice(0, MAX_NOTES)
                     .map((n) => ({
                     text: String((n && n.text) || ""),
                     role: NOTE_ROLES.indexOf(String(n && n.role)) >= 0 ? String(n.role) : "system",
+                    fromTry: Math.max(1, Math.round(Number(n && n.fromTry)) || NOTE_FROM_TRY_DEFAULT),
                 }))
                     .filter((n) => n.text.trim());
-                if (!notes.length)
+                if (!all.length)
                     return resolve(false);
-                const from = Math.max(1, Number(cfg.refusalNoteFromTry) || 1);
-                if (attempt < from) {
-                    log("note starts on try " + from + ", this is try " + attempt);
+                const due = all.filter((n) => attempt >= n.fromTry);
+                if (!due.length) {
+                    const soonest = Math.min.apply(null, all.map((n) => n.fromTry));
+                    log("no note is due yet; the earliest starts on try " + soonest + ", this is try " + attempt);
                     return resolve(false);
                 }
+                const notes = due.map((n) => ({ text: n.text, role: n.role }));
+                if (due.length < all.length)
+                    log("sending " + due.length + " of " + all.length + " notes; the rest start on a later try");
                 if (!ctx || typeof ctx.sendToBackend !== "function")
                     return resolve(false);
                 const reqId = "ar-arm-" + Date.now() + "-" + Math.random().toString(36).slice(2);
@@ -4112,7 +4293,7 @@ export function setup(ctx, opts) {
                     // looks like another extension's surface rather than the chat.
                     if (!skip && parent.closest) {
                         try {
-                            skip = !!parent.closest("#__lvRetryToast,#__lvRetrySettings,#__lvRetryReset," +
+                            skip = !!parent.closest("#__lvRetryToast,#__lvRetrySettings,#__lvRetryReset,#__lvRetryLog," +
                                 "[contenteditable='true'],[role='dialog'],[role='menu'],[role='tooltip']");
                         }
                         catch (__) { }
@@ -5984,7 +6165,11 @@ export function setup(ctx, opts) {
             // still the value the panel is holding.
             let notes = coerce("notes", cfg[f.key], CONFIG[f.key], f);
             const push = () => {
-                cfg[f.key] = notes.map((n) => ({ text: n.text, role: n.role }));
+                cfg[f.key] = notes.map((n) => ({
+                    text: n.text,
+                    role: n.role,
+                    fromTry: n.fromTry,
+                }));
             };
             const draw = () => {
                 list.replaceChildren();
@@ -6014,6 +6199,35 @@ export function setup(ctx, opts) {
                         });
                         push();
                     });
+                    // Which retry this note joins on. Its own, not the list's: that is
+                    // what lets a gentle note go first and a firmer one follow only if
+                    // the gentle one did not work.
+                    const fromWrap = document.createElement("label");
+                    fromWrap.style.cssText =
+                        "display:flex;align-items:center;gap:5px;flex:none;font-size:11px;" +
+                            "color:var(--lumiverse-text-muted,rgba(255,255,255,.65));cursor:pointer";
+                    const fromLabel = document.createElement("span");
+                    fromLabel.textContent = "from try";
+                    const from = document.createElement("input");
+                    from.type = "number";
+                    from.inputMode = "numeric";
+                    from.min = "1";
+                    from.max = String(NOTE_FROM_TRY_MAX);
+                    from.value = String(note.fromTry);
+                    styleField(from);
+                    from.style.cssText += "flex:none;width:56px;padding:5px 6px;font-size:12px";
+                    from.setAttribute("aria-label", "Note " + (i + 1) + " starts on try");
+                    const commitFrom = () => {
+                        const n = Math.round(Number(from.value));
+                        note.fromTry = Number.isFinite(n)
+                            ? Math.min(NOTE_FROM_TRY_MAX, Math.max(1, n))
+                            : NOTE_FROM_TRY_DEFAULT;
+                        from.value = String(note.fromTry);
+                        push();
+                    };
+                    from.addEventListener("change", commitFrom);
+                    fromWrap.appendChild(fromLabel);
+                    fromWrap.appendChild(from);
                     const drop = btn("\u2212", false);
                     drop.style.cssText += "min-height:0;padding:4px 12px;flex:none";
                     drop.setAttribute("aria-label", "Remove note " + (i + 1));
@@ -6031,6 +6245,7 @@ export function setup(ctx, opts) {
                         draw();
                     });
                     bar.appendChild(num);
+                    bar.appendChild(fromWrap);
                     bar.appendChild(who);
                     bar.appendChild(drop);
                     const ta = document.createElement("textarea");
@@ -6072,7 +6287,15 @@ export function setup(ctx, opts) {
                 addedWith = "";
                 if (notes.length >= MAX_NOTES)
                     return;
-                notes.push({ text: "", role: notes.length ? notes[notes.length - 1].role : "system" });
+                // A new note copies the last one's role and its starting try, so
+                // adding one does not quietly change when anything goes out. Move it
+                // later by hand to make it an escalation.
+                const prev = notes.length ? notes[notes.length - 1] : null;
+                notes.push({
+                    text: "",
+                    role: prev ? prev.role : "system",
+                    fromTry: prev ? prev.fromTry : NOTE_FROM_TRY_DEFAULT,
+                });
                 push();
                 draw();
                 const boxes = list.querySelectorAll("textarea");
@@ -7122,6 +7345,12 @@ export function setup(ctx, opts) {
                         }
                         return;
                     }
+                    if (msg.type === "prompt_snapshot") {
+                        lastPrompt = msg;
+                        if (liveTab === "prompt")
+                            renderLiveLog();
+                        return;
+                    }
                     if (msg.type === "note_skipped") {
                         stats.notesSkipped += 1;
                         stats.lastNoteSkip = String(msg.reason || "unknown");
@@ -7266,6 +7495,8 @@ export function setup(ctx, opts) {
         }
         repairTimers = [];
         swapUndos.length = 0;
+        lastPrompt = null;
+        paintTabs = null;
         hideLiveLog();
         hideFloat();
         chats.forEach(clearTimers);

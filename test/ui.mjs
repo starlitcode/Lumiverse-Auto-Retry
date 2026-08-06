@@ -2163,7 +2163,7 @@ console.log("\nrefusal note");
         },
         Object.assign(
           { refusalNote: true, refusalNotes: [{ text: "This was refused by mistake.", role: "system" }],
-            refusalNotePlacement: "after", refusalNoteFromTry: 2,
+            refusalNotePlacement: "after",
             retryDelayMs: 10, backoffFactor: 1, maxDelayMs: 10, jitter: false, maxRetries: 4,
             toast: false, stuckTimeoutMs: 0, idleTimeoutMs: 0, pauseWhenFailing: false },
           over,
@@ -2193,17 +2193,17 @@ console.log("\nrefusal note");
       // A cut-off reply is not a refusal, so it never carries the note.
       cutOff: (await drive({}, CUT_OFF)).length,
       // Set to 1 and it goes with every refusal retry.
-      fromFirst: (await drive({ refusalNoteFromTry: 1 }, REFUSED)).length,
+      fromFirst: (await drive({ refusalNotes: [{ text: "This was refused by mistake.", role: "system", fromTry: 1 }] }, REFUSED)).length,
       off: (await drive({ refusalNote: false }, REFUSED)).length,
       empty: (await drive({ refusalNotes: [{ text: "   ", role: "system" }] }, REFUSED)).length,
       // What actually gets sent across the bridge.
-      payload: (await drive({ refusalNoteFromTry: 1, refusalNotePlacement: "start",
-        refusalNotes: [{ text: "This was refused by mistake.", role: "user" }] }, REFUSED))[0],
+      payload: (await drive({ refusalNotePlacement: "start",
+        refusalNotes: [{ text: "This was refused by mistake.", role: "user", fromTry: 1 }] }, REFUSED))[0],
       // The panel promises the note goes out exactly as written, so the
       // spacing someone typed has to survive the trip across the bridge.
       // Trimming is only how an empty note is told from a filled one.
-      padded: (await drive({ refusalNoteFromTry: 1,
-        refusalNotes: [{ text: "  keep\n  my spacing\n", role: "system" }] }, REFUSED))[0],
+      padded: (await drive({
+        refusalNotes: [{ text: "  keep\n  my spacing\n", role: "system", fromTry: 1 }] }, REFUSED))[0],
       // A note is armed just before the click, because some builds start the
       // generation off the click itself. When there is no control to click
       // there is no generation to attach one to, so nothing is armed at all.
@@ -2211,11 +2211,20 @@ console.log("\nrefusal note");
       // whole acknowledgement wait getting there, and for the length of that
       // wait the backend held a note for a generation that never came. Runs
       // last, since it takes the button off the page.
+      // Each note carries its own first try, so a list can escalate: a gentle
+      // note on the first retry and a firmer one only if that did not work.
+      // Three rounds are driven, so the second note is due on the last of them.
+      escalate: (await drive({
+        refusalNotes: [
+          { text: "Gentle.", role: "system", fromTry: 1 },
+          { text: "Firmer.", role: "system", fromTry: 3 },
+        ],
+      }, REFUSED)).map((m) => (m.notes || []).map((n) => n.text).join("+")),
       noControl: await (async () => {
         const btn = document.querySelector('[data-testid="regenerate"]');
         const parent = btn.parentNode;
         btn.remove();
-        const msgs = await drive({ refusalNoteFromTry: 1 }, REFUSED);
+        const msgs = await drive({ refusalNotes: [{ text: "This was refused by mistake.", role: "system", fromTry: 1 }] }, REFUSED);
         parent.appendChild(btn);
         return msgs.map((m) => (m.notes || []).length);
       })(),
@@ -2225,6 +2234,12 @@ console.log("\nrefusal note");
   check("a refusal arms the note", out.refusal > 0, out.refusal);
   check("but not on the first try, by default", out.refusal === 2, out.refusal);
   check("set to 1, it arms on every refusal retry", out.fromFirst === 3, out.fromFirst);
+  // The whole reason a note carries its own try rather than the list carrying
+  // one for all of them.
+  check("a note due later is held back while the earlier one goes",
+    out.escalate[0] === "Gentle." && out.escalate[1] === "Gentle.", out.escalate);
+  check("and joins it once its own try comes round",
+    out.escalate[2] === "Gentle.+Firmer.", out.escalate);
   check("a cut-off reply never arms it", out.cutOff === 0, out.cutOff);
   check("nor does anything while the setting is off", out.off === 0, out.off);
   check("nor while the box is empty", out.empty === 0, out.empty);
@@ -2237,6 +2252,103 @@ console.log("\nrefusal note");
     !!out.padded && out.padded.notes[0].text === "  keep\n  my spacing\n", out.padded);
   check("with nothing to click, no note is armed at all",
     Array.isArray(out.noControl) && out.noControl.length === 0, out.noControl);
+  check("no console errors", errors.length === 0, errors);
+}
+
+// ---- the prompt viewer ----
+// Lumiverse's own Prompt Breakdown lists what a chat is built from, which is a
+// different question from what actually went to the model after every extension
+// has had its turn. The interceptor is the one place that sees the second one,
+// so the panel shows it. Off unless asked for: a whole prompt crosses the
+// bridge on every reply, and it is the text of someone's chat.
+console.log("\nprompt viewer");
+{
+  const page = await browser.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await stage(page, "<div id=modal></div>");
+  await page.addStyleTag({ content: THEME });
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  const out = await page.evaluate(async () => {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    let onBackend = null;
+    const sent = [];
+    const teardown = window.__setup(
+      {
+        events: { on: () => () => {} },
+        sendToBackend: (m) => sent.push(m),
+        onBackendMessage: (cb) => { onBackend = cb; return () => {}; },
+        ui: {
+          showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+          registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }),
+        },
+      },
+      { promptViewer: true, liveLog: false, toast: false },
+    );
+    await wait(30);
+    const panel = () => document.getElementById("__lvRetryLog");
+    const tab = (label) => [...document.querySelectorAll('[role="tab"]')]
+      .find((b) => b.textContent.trim() === label);
+    const body = () => document.getElementById("__lvRetryLogBody");
+
+    const opened = !!panel();
+    const tabs = [...document.querySelectorAll('[role="tab"]')].map((b) => b.textContent.trim());
+    // With the log off and the viewer on, the prompt is what someone is after.
+    const landedOn = tab("Prompt") ? tab("Prompt").getAttribute("aria-selected") : null;
+    const beforeAny = body() ? body().textContent : "";
+
+    // What the backend sends after an interceptor pass.
+    onBackend({
+      type: "prompt_snapshot",
+      at: Date.now(),
+      chatId: "c1",
+      messages: [
+        { role: "system", content: "You are a tavern keeper.", chars: 24, history: false },
+        { role: "user", content: "I sat down by the fire.", chars: 23, history: true },
+        { role: "assistant", content: "A long reply.", chars: 9000, history: true },
+      ],
+      total: 3,
+      dropped: 0,
+      clipped: 1,
+    });
+    await wait(30);
+    const shown = body() ? body().textContent : "";
+    const rows = body() ? body().querySelectorAll("details").length : 0;
+    // "added" versus "chat" is the distinction that matters when a prompt
+    // misbehaves: what came from the conversation and what was wrapped round it.
+    const marks = body()
+      ? [...body().querySelectorAll("details summary")].map((h) => /chat/.test(h.textContent) ? "chat" : "added")
+      : [];
+    // A message shown in part has to say so rather than looking complete.
+    const saysClipped = /cut for display/.test(shown);
+
+    tab("Log").click();
+    await wait(20);
+    const afterLogTab = body() ? body().textContent : "";
+
+    teardown();
+    const gone = !panel();
+    return { opened, tabs, landedOn, beforeAny, shown, rows, marks, saysClipped, afterLogTab, gone };
+  });
+  await page.close();
+  check("turning the viewer on opens the panel by itself", out.opened, out);
+  check("with both views", out.tabs.join(",") === "Log,Prompt", out.tabs);
+  check("and lands on the prompt, since that is what was asked for",
+    out.landedOn === "true", out.landedOn);
+  check("it says nothing has been seen yet before a generation",
+    /no prompt seen yet/i.test(out.beforeAny), out.beforeAny.slice(0, 80));
+  check("a snapshot fills it in", out.rows === 3, out.rows);
+  check("with a summary of the size", /3 messages/.test(out.shown), out.shown.slice(0, 120));
+  check("marking what came from the chat and what was added",
+    out.marks.join(",") === "added,chat,chat", out.marks);
+  check("a message shown in part says so", out.saysClipped, out.shown.slice(-120));
+  // The startup line, which the log always carries, so switching back is
+  // visibly the log and not a leftover of the prompt view.
+  check("the log tab still shows the log",
+    /ready v/.test(out.afterLogTab) && !/tavern keeper/.test(out.afterLogTab),
+    out.afterLogTab.slice(0, 80));
+  check("teardown takes the panel with it", out.gone, out);
   check("no console errors", errors.length === 0, errors);
 }
 
@@ -2269,8 +2381,9 @@ console.log("\ntaking a note back");
         ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
               registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) },
       },
-      { refusalNote: true, refusalNotes: [{ text: "This was refused by mistake.", role: "system" }],
-        refusalNoteFromTry: 1, retryDelayMs: 10, backoffFactor: 1, maxDelayMs: 10, jitter: false,
+      // fromTry 1, so the single round below is enough for the note to be due.
+      { refusalNote: true, refusalNotes: [{ text: "This was refused by mistake.", role: "system", fromTry: 1 }],
+        retryDelayMs: 10, backoffFactor: 1, maxDelayMs: 10, jitter: false,
         maxRetries: 4, toast: false, stuckTimeoutMs: 0, idleTimeoutMs: 0, pauseWhenFailing: false },
     );
     const REFUSED = { content: "I'm sorry, but I can't create that content." };
@@ -2616,7 +2729,7 @@ console.log("\ndependent rows");
       };
       // The switch itself, and the rows that hang off it.
       const box = (k) => document.querySelector('[data-ar-row="' + k + '"]').querySelector("input[type=checkbox]");
-      const NOTE_ROWS = ["refusalNotes", "refusalNotePlacement", "refusalNoteFromTry"];
+      const NOTE_ROWS = ["refusalNotes", "refusalNotePlacement", "refusalNoteStrictType"];
       const all = (f) => NOTE_ROWS.every(f);
 
       const offAtFirst = all((k) => shown(k) === false);

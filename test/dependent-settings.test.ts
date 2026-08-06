@@ -123,7 +123,7 @@ describe("a row that hangs off a switch", () => {
   test("the notes rows hang off the note switch", () => {
     // The three that make up the note feature, named because they are the ones
     // that were asked for by name.
-    for (const k of ["refusalNotes", "refusalNotePlacement", "refusalNoteFromTry"]) {
+    for (const k of ["refusalNotes", "refusalNotePlacement", "refusalNoteStrictType"]) {
       const d = deps.find((x) => x.key === k);
       expect(d && d.needs).toEqual(["refusalNote"]);
     }
