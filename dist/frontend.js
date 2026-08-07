@@ -713,10 +713,16 @@ function stripMarkup(text) {
 // finished reply. When a table really is cut short its own <table> is left
 // open, which is in here, so nothing is lost by leaving its cells out.
 const HTML_CONTAINERS = "div|table|thead|tbody|tfoot|ul|ol|dl|pre|blockquote|details|section|article|figure|figcaption|form|fieldset";
-// Inline tags are left out for the same reason in reverse: a model colouring
-// speech with <span> and forgetting the close has written a finished reply
-// badly, not an unfinished one, and throwing that reply away costs more than
-// the miss does.
+// Inline tags that only count when they carry an attribute. A bare <b> or <i>
+// left open is a finished reply written badly, and models fumble those in
+// ordinary prose often enough that counting them would re-roll good writing.
+// A <span style="..."> is not that. It is there because a card asked for it,
+// and a card that asks for coloured speech gets the closing tag every time, so
+// a missing one means the reply stopped rather than that the model was sloppy.
+// This is how dialogue gets coloured, and it was the one cut that nothing else
+// here noticed: the speech closes its own quotes, so the reply came out even
+// and read as finished with the gradient still open.
+const HTML_STYLED_INLINE = "span|font|mark|a";
 // Markup the reply opened and never closed. This is the code equivalent of an
 // opened quote: the reply stopped inside something it had started, and what it
 // stopped inside happens to be a tag rather than a sentence.
@@ -748,15 +754,28 @@ function markupLeftOpen(shown) {
     // would have been hidden anyway.
     if (shown.lastIndexOf("<!--") > shown.lastIndexOf("-->"))
         return true;
-    for (const name of HTML_CONTAINERS.split("|")) {
+    // How many of a tag were opened and never closed. <div /> closes itself and
+    // is not an opening on its own.
+    const unclosed = (name) => {
         const opened = shown.match(new RegExp("<" + name + "\\b[^>]*>", "gi")) || [];
-        // <div /> closes itself and is not an opening on its own.
         let open = 0;
-        for (const tag of opened)
-            if (!/\/>$/.test(tag))
-                open++;
+        let withAttribute = false;
+        for (const tag of opened) {
+            if (/\/>$/.test(tag))
+                continue;
+            open++;
+            if (/\s[a-zA-Z-]+\s*=/.test(tag))
+                withAttribute = true;
+        }
         const shut = (shown.match(new RegExp("</" + name + "\\s*>", "gi")) || []).length;
-        if (open > shut)
+        return { left: open - shut, withAttribute: withAttribute };
+    };
+    for (const name of HTML_CONTAINERS.split("|"))
+        if (unclosed(name).left > 0)
+            return true;
+    for (const name of HTML_STYLED_INLINE.split("|")) {
+        const u = unclosed(name);
+        if (u.left > 0 && u.withAttribute)
             return true;
     }
     return false;

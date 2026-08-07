@@ -16,6 +16,8 @@ That note is the only thing in the extension that changes what the model is aske
 
 It is put in place the moment before the extension clicks your retry button, and four things keep it to that one generation. It belongs to the chat it was put in place for and is never attached to a generation in another. It is used once and cleared, whether it was used or not. It expires after 45 seconds. And when the retry click it was armed for turns out to have started nothing, it is taken straight back rather than left waiting; if there is no retry button on screen to click at all, nothing is armed in the first place. Lumiverse also reports what kind of generation is running, and you can require that to say "regenerate" or "swipe" as a fifth check, under **Only send them on a regenerate or a swipe**. It is off by default because most builds report every generation as "normal", including a regenerate, so leaving it on stopped the note from ever being sent.
 
+Every one of the four fails soft. `chat_mutation` is privileged, so depending on your Lumiverse setup it may need admin approval before it takes effect; without it the retry side works exactly as it should and only find-and-replace does nothing. Without `ui_panels` everything works and there is no floating button. Without `interceptor` everything works and the refusal note is not sent. Nothing about the extension refuses to start because a permission was withheld.
+
 Behind those it uses five Lumiverse APIs and nothing else: reading the messages in a chat, updating a message, reading and writing its own settings, and registering the interceptor above. Everything the extension does is built out of those five.
 
 ## What it has no way to reach

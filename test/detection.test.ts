@@ -397,17 +397,17 @@ describe("cut-off detection", () => {
 // Every case here was a reply the checks read wrongly.
 describe("cut-off detection sees past inline HTML", () => {
   const coloured = (inner: string) =>
-    '<span style="background: linear-gradient(to right, #E6A15C, #8B4F1D); ' +
+    '<span style="background: linear-gradient(to right, #7FB3D5, #2C5F7C); ' +
     '-webkit-background-clip: text; color: transparent;">' + inner;
 
   // The two quotes around a style value were counted alongside the two around
   // the speech, so an opened quote came out even and read as finished.
   test("a style attribute's quotes do not balance an opened one", () => {
-    expect(looksTruncated(coloured('"Noel... please... wait,'), false, {})).toBe(true);
+    expect(looksTruncated(coloured('"Wait... hold on,'), false, {})).toBe(true);
   });
 
   test("and a closed one is still closed", () => {
-    expect(looksTruncated(coloured('"Noel... please... wait,"</span> he whispered.'), false, {})).toBe(false);
+    expect(looksTruncated(coloured('"Wait... hold on,"</span> he whispered.'), false, {})).toBe(false);
   });
 
   // ">" counted as end punctuation, so a trailing tag made anything look
@@ -516,6 +516,7 @@ describe("code and markup left open", () => {
     ["a tag cut after its name", "She left.\n\n<div"],
     ["a comment with no end", "Done.\n<!-- tracker"],
     ["raw JSON cut mid-field", 'Status:\n{"temp": 24, "sky":'],
+    ["a styled span left open", '<span style="color:red">"Wait... hold on,"'],
   ];
   for (const [name, text] of cut) {
     test(name + " is cut off", () => {
@@ -532,12 +533,44 @@ describe("code and markup left open", () => {
     ["a comparison with no space", "If x<y then he wins."],
     ["a macro that survived", "{{char}} smiled at {{user}}."],
     ["a whole JSON block", 'Status:\n{"temp": 24, "sky": "clear"}'],
-    ["a span left open on a finished reply", '<span style="color:red">She smiled.'],
+    ["a bare inline tag left open", "<b>She smiled."],
     ["list items with no end tags", "<ul><li>one<li>two</ul>"],
   ];
   for (const [name, text] of fine) {
     test(name + " is finished", () => {
       expect(looksTruncated(text, true, {})).toBe(false);
+    });
+  }
+});
+
+// Dialogue coloured with a gradient span, above a details block: a real reply
+// from a real chat, and the format this check has to live with every message.
+// The whole thing has to pass, and every place the stream can stop inside it
+// has to be caught, including the one that reads as finished on every other
+// check: the speech closes its own quotes, so a reply that stopped with the
+// gradient still open came out even and was passed as complete.
+describe("dialogue coloured with a span, and a details block under it", () => {
+  const GRADIENT =
+    '<span style="background: linear-gradient(to right, #7FB3D5, #2C5F7C); ' +
+    '-webkit-background-clip: text; color: transparent;">';
+  const LOG = "<details><summary>\u{1F3A8} Ink Colour Log</summary> \n\n**Heron** - `#7FB3D5` to `#2C5F7C`\n</details>";
+  const whole = GRADIENT + '"Wait... hold on,"</span>\n' + LOG;
+
+  test("the whole reply is finished", () => {
+    expect(looksTruncated(whole, true, {})).toBe(false);
+  });
+
+  const cut: Array<[string, string]> = [
+    ["inside the gradient itself", GRADIENT.slice(0, 60)],
+    ["after the span opens", GRADIENT + '"Wait... hold'],
+    ["after the speech, with the span still open", GRADIENT + '"Wait... hold on,"'],
+    ["before the details block closes", GRADIENT + '"Wait... hold on,"</span>\n<details><summary>Log</summary>'],
+    ["partway down the log", GRADIENT + '"Wait... hold on,"</span>\n<details><summary>Log</summary>\n\n**Heron** - `#7FB3D5` to'],
+    ["inside a colour code", GRADIENT + '"Wait... hold on,"</span>\n<details><summary>Log</summary>\n\n**Heron** - `#7FB3D5'],
+  ];
+  for (const [name, text] of cut) {
+    test("stopping " + name + " is cut off", () => {
+      expect(looksTruncated(text, true, {})).toBe(true);
     });
   }
 });

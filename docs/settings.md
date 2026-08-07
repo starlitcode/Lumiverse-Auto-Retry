@@ -8,6 +8,15 @@ Each option's **?** shows its description in a small popover just below that opt
 
 A setting that does nothing until something else is switched on is not shown until it is. Whole sections work the same way: turning **It looks like an accidental refusal** off takes the entire **Advanced: refusal tuning** section away, heading included, because nothing under it does anything while that is off. Turning **Send a note with a refusal retry** on adds the note rows below it, and turning it off takes them away again, so the panel only lists what is actually in use. The switch itself never moves. The search box ignores this and finds a setting whichever way its switch is set, so nothing is ever hidden from you when you go looking for it by name. A row found that way says which switch it is waiting on, so changing it never looks like it did nothing.
 
+Only **Save** keeps what you changed. Closing with the X or tapping outside discards it, so you can try things freely. Saved settings sync to your Lumiverse account, so they follow you to other browsers and devices, and they apply from the next reply onward. Long text boxes, like your word-swap rules, have an **Expand** button that opens a full-size editor.
+
+## Turning it off everywhere
+
+Two options in **Basics**, and you can use either or both:
+
+- **Floating on/off button** puts a small button over the chat that toggles it in one tap. Drag it anywhere; it snaps to the nearest edge and stays where you leave it, and you can set its size. Hold it, or right-click on a computer, for a menu with **Auto Retry settings**, **Turn off in this chat**, **Move back to the corner** and **Hide this button**.
+- **On/off button in the Extras menu** adds an entry next to the settings button. Its label says which state it is currently in, so you can check and change it without opening settings, and it takes up no room on screen.
+
 ## Turning it off in one chat
 
 The master switch is all or nothing, which is the wrong shape for a scene where the model is meant to refuse, or a chat you are using to test something.
