@@ -12,17 +12,10 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 _2026-08-07_
 
-### Fixed
-
-- **A card that prints a tracker no longer has every reply thrown away.** 4.4.0 turned **Retry when a reply has no ending punctuation** on by default, and a tracker is the one shape that check was worst at. A weather box, a stat block, a status line, a table: none of them end on a full stop, so the reply read as cut off mid-sentence, the retry ended the same way, and it went round until the cap stopped it. A reply that ends on a block ends on a block. Closing HTML, a markdown table row and a run of two or more label lines like `HP: 20/20` all count as an ending now. Prose that stops mid-sentence after a tracker is still caught, and a single line with a colon in it is still an ordinary sentence, since a tracker never has only the one field.
-- **Code in a reply is no longer read as unfinished writing.** The checks below the code fence count are about prose: dialogue left open, a sentence stopping on a comma, an emphasis run with no partner. A snippet is full of the same characters meaning something else, so one `const a = b * 2;` counted as an opened emphasis run and re-rolled a finished answer. Fenced blocks and inline spans are now left out of that counting. The fences and backticks themselves are still counted first, so a reply cut off inside a code block is caught exactly as before.
-- **A row of asterisks is no longer mistaken for an opened emphasis run.** `Mood: ***`, printed by a card as a gauge, or a line of them used as a divider. Emphasis has to touch the words it marks, so `*He nods*` and `**bold**` still count.
-
 ### Added
 
 - **It notices when a tracker was cut off partway through.** The other half of leaving trackers alone. A reply that stopped inside something it had started is cut off whatever it stopped on, the same as one with an opened quote, so markup left open is checked before a block ending is accepted as an ending: a container opened and never closed, a tag with no closing bracket, a tag cut off inside an attribute, an HTML comment with no end. Without this, `<div class="wx"><b>Weather</b>` would read as finished on the strength of the last tag it managed to write.
 - **A status block written as raw JSON is checked too.** `{"temp": 24, "sky":` ends on a colon, and a colon is punctuation, so it read as a finished reply. Braces are counted outside code now, in the one direction that means something.
-
 - **Dialogue coloured with a `<span style="...">` is checked for its closing tag.** This is how cards colour speech, and it was the one cut nothing else here noticed: the speech closes its own quotation marks, so a reply that stopped with the gradient still open came out even on every check and read as finished. A styled span left open now counts as cut off. A bare `<b>` or `<i>` does not, since models fumble those in ordinary prose often enough that counting them would throw away good writing, while a span carrying a style attribute is there because a card asked for it and gets its closing tag every time.
 
 What has not started counting: a `<` someone typed in a scene, `if x<y`, a bare inline tag left open, or list items written without their end tags. Elements whose end tag is optional in HTML are left out of the container count, because models write `<ul><li>one<li>two</ul>` and mean it. An inline tag left hanging is a finished reply written badly, and that is not worth throwing the reply away over.
@@ -39,6 +32,12 @@ What has not started counting: a `<` someone typed in a scene, `if x<y`, a bare 
 - **The two note settings that are not per note now sit under a heading saying so.** The list gives every note a role and a try to start on, which made the two settings underneath it look like more of the same. They are not: where the block goes and whether it is sent at all are set once and apply to whichever notes are due. **For the whole list** now sits above them and says which is which.
 
 ---
+
+### Fixed
+
+- **A card that prints a tracker no longer has every reply thrown away.** 4.4.0 turned **Retry when a reply has no ending punctuation** on by default, and a tracker is the one shape that check was worst at. A weather box, a stat block, a status line, a table: none of them end on a full stop, so the reply read as cut off mid-sentence, the retry ended the same way, and it went round until the cap stopped it. A reply that ends on a block ends on a block. Closing HTML, a markdown table row and a run of two or more label lines like `HP: 20/20` all count as an ending now. Prose that stops mid-sentence after a tracker is still caught, and a single line with a colon in it is still an ordinary sentence, since a tracker never has only the one field.
+- **Code in a reply is no longer read as unfinished writing.** The checks below the code fence count are about prose: dialogue left open, a sentence stopping on a comma, an emphasis run with no partner. A snippet is full of the same characters meaning something else, so one `const a = b * 2;` counted as an opened emphasis run and re-rolled a finished answer. Fenced blocks and inline spans are now left out of that counting. The fences and backticks themselves are still counted first, so a reply cut off inside a code block is caught exactly as before.
+- **A row of asterisks is no longer mistaken for an opened emphasis run.** `Mood: ***`, printed by a card as a gauge, or a line of them used as a divider. Emphasis has to touch the words it marks, so `*He nods*` and `**bold**` still count.
 
 ## 4.4.0
 
