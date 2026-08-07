@@ -101,8 +101,8 @@ The same options live in the CONFIG block at the top of `src/frontend.ts` and `d
 | refusalThinkTags | (empty) | Extra reasoning tag names, one per line, for unusual thinking wrappers. |
 | refusalNote | false | Send a note with a refusal retry, and only a refusal retry. Needs the `interceptor` permission. |
 | refusalNotes | one empty note | The notes themselves. Each carries its own role (system, user or assistant) and its own first try, so notes can be set to escalate. Up to ten. Whichever have come due are sent together, in order. Empty ones are skipped, and nothing is sent while they all are. Shown only while `refusalNote` is on. |
-| refusalNotePlacement | after | Where the block goes: after the last message, before it, or at the very start. Shown only while `refusalNote` is on. |
-| refusalNoteStrictType | false | Only attach the note when Lumiverse reports the generation as a regenerate or a swipe. Most builds report every generation as "normal", and on those this stops the note going out at all, which is why it is off. Shown only while `refusalNote` is on. |
+| refusalNotePlacement | after | For the whole list, not one note. Where the block of due notes goes: after the last message, before it, or at the very start. Shown only while `refusalNote` is on. |
+| refusalNoteStrictType | false | For the whole list, not one note: it decides whether any of them are sent at all. Only attach them when Lumiverse reports the generation as a regenerate or a swipe. Most builds report every generation as "normal", and on those this stops the note going out at all, which is why it is off. Shown only while `refusalNote` is on. |
 | replaceEnabled | false | (beta) Turn on find-and-replace on replies. Edits the saved message. |
 | replaceRules | (empty) | "old => new" word swaps, one per line. |
 | replaceRandom | false | When a word has more than one swap, pick one at random each time. |

@@ -426,6 +426,77 @@ describe("cut-off detection sees past inline HTML", () => {
   });
 });
 
+// Cards that print a tracker every reply, and replies that carry code.
+//
+// "Retry when a reply has no ending punctuation" is on by default now, and a
+// tracker is the shape that check was worst at: a weather box, a stat block or
+// a status line closes on a number or a tag, never on a full stop. Every reply
+// from a card like that read as cut off, so it re-rolled every reply, and the
+// replacement ended the same way. Code is the same problem one layer down: the
+// asterisks, quotes and semicolons in a snippet are not prose punctuation, and
+// counting them re-rolled a perfectly finished answer.
+describe("a reply that ends on a block, not a sentence", () => {
+  const finished: Array<[string, string]> = [
+    ["an HTML tracker at the end", 'She closed the door.\n\n<div class="wx"><b>Weather</b> Sunny, 24C</div>'],
+    ["an HTML tracker at the start", '<div class="wx"><span>Rain</span> 12C</div>\n\nHe walked in.'],
+    ["a table of stats", "<table><tr><td>Mon</td><td>Sunny</td></tr></table>"],
+    ["a self-closing tag", "Done.<br/>"],
+    ["a markdown table", "| Day | Sky |\n|---|---|\n| Mon | Sun |"],
+    ["a stat block", "**HP:** 20/20\n**Time:** 14:00"],
+    ["a stat block after a scene", "He nodded.\n\n---\nHP: 20\nGold: 5"],
+    ["a gauge of asterisks", "Mood: ***** \nHe sighed."],
+  ];
+  for (const [name, text] of finished) {
+    test(name + " is finished", () => {
+      expect(looksTruncated(text, true, {})).toBe(false);
+    });
+  }
+
+  // The tracker is not a licence to stop mid-sentence after it.
+  test("but prose cut off after a tracker is still cut off", () => {
+    expect(looksTruncated('<div class="wx">Sunny 24C</div>\n\nHe walked to the', true, {})).toBe(true);
+  });
+
+  // One colon is an ordinary sentence. A tracker never has only the one field.
+  test("and a single line with a colon is not a stat block", () => {
+    expect(looksTruncated("Weather: clear", true, {})).toBe(true);
+  });
+});
+
+describe("code in a reply is not unfinished prose", () => {
+  const finished: Array<[string, string]> = [
+    ["a lone asterisk in a snippet", "Here you go.\n\n```js\nconst a = b * 2;\nconsole.log(\"hi\");\n```"],
+    ["a semicolon ending a fence", "```js\nlet x = 1;\n```"],
+    ["a C comment", "```c\n/* set up */\nint x = 3;\n```"],
+    ["an inline span", "Use `npm i` to install."],
+    ["a JSON block", '```json\n{"temp": 24, "sky": "clear"}\n```'],
+  ];
+  for (const [name, text] of finished) {
+    test(name + " is finished", () => {
+      expect(looksTruncated(text, true, {})).toBe(false);
+    });
+  }
+
+  // The fences themselves are still counted, before what they hold is dropped.
+  test("an unclosed fence is still cut off", () => {
+    expect(looksTruncated("Here you go.\n\n```js\nconst a = 1;", true, {})).toBe(true);
+  });
+
+  test("an unclosed inline span is still cut off", () => {
+    expect(looksTruncated("Run `npm i to install.", true, {})).toBe(true);
+  });
+
+  test("and prose cut off after a code block is still cut off", () => {
+    expect(looksTruncated("```js\nlet x=1;\n```\nNow open the file and", true, {})).toBe(true);
+  });
+
+  // Emphasis has to touch the words it marks, so this is not the same as the
+  // gauge above and must keep counting.
+  test("an opened emphasis run is still cut off", () => {
+    expect(looksTruncated("*He steps back from the door", true, {})).toBe(true);
+  });
+});
+
 // The reason this check could not be on by default before. The test for an
 // ending was a list of Latin characters, so a finished reply in most of the
 // world's scripts counted as having no ending at all.

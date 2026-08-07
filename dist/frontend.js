@@ -85,7 +85,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "4.4.0";
+const VERSION = "4.4.1";
 // ---- defaults (the UI overrides these; editing here changes the fallback) ----
 const CONFIG = {
     enabled: true,
@@ -242,6 +242,17 @@ function defaultMs(key) {
     return ms + " = " + humanMs(ms);
 }
 const def = (key) => String(CONFIG[key]);
+// The labelled runs a field can name. A heading over two rows answers the
+// question the rows themselves kept raising: the note list gives every note a
+// role and a starting try of its own, so the two settings underneath it looked
+// like more of the same. They are not. They are for whichever notes are due,
+// together, and the heading is where that gets said.
+const RUNS = {
+    wholeList: {
+        title: "For the whole list",
+        note: "These two are set once and apply to every note. What each note sets for itself, its role and the try it starts on, is on its own row in the list above.",
+    },
+};
 const SCHEMA = [
     {
         title: "Basics",
@@ -613,26 +624,28 @@ const SCHEMA = [
                 hintAbove: true,
                 label: "What the notes say",
                 type: "notes",
-                hint: "Goes to the model, not to your chat. Whatever you type is sent exactly as written: nothing is added to it, nothing is removed, and nothing in it is checked. Add up to ten with the plus button. Each note carries two things of its own. Its role: system puts it alongside the instructions your setup already sends, you puts it in the same role as your own messages, and the character puts it in the same role as the replies. And the try it starts on: at 2 the first retry re-sends unchanged and that note joins from the second onward, at 1 it goes on every refusal retry. Give notes different starting tries to escalate, so a gentle note goes first and a firmer one only if that did not work. Whichever notes have come due are sent together, in order, so one can answer the one before it. An empty note is skipped.",
+                hint: "Goes to the model, not to your chat. Each note sets two things for itself, on its own row: its role, and the try it starts on. The two settings below this list are for the whole list rather than for any one note: where the block goes, and whether it is sent at all. Whatever you type is sent exactly as written: nothing is added to it, nothing is removed, and nothing in it is checked. Add up to ten with the plus button. Each note carries two things of its own. Its role: system puts it alongside the instructions your setup already sends, you puts it in the same role as your own messages, and the character puts it in the same role as the replies. And the try it starts on: at 2 the first retry re-sends unchanged and that note joins from the second onward, at 1 it goes on every refusal retry. Give notes different starting tries to escalate, so a gentle note goes first and a firmer one only if that did not work. Whichever notes have come due are sent together, in order, so one can answer the one before it. An empty note is skipped.",
             },
             {
                 key: "refusalNotePlacement",
                 needs: ["refusalNote"],
-                label: "Where the note goes",
+                run: "wholeList",
+                label: "Where the notes go",
                 type: "pick",
                 options: [
                     { value: "after", label: "After the last message" },
                     { value: "before", label: "Before the last message" },
                     { value: "start", label: "At the very start" },
                 ],
-                hint: "Where the note is inserted. After the last message puts it at the end, right before the point the reply continues from. Before the last message puts it one place earlier, so the newest line is still last. At the very start puts it ahead of everything, with the setup.",
+                hint: "Set once, for every note rather than for one of them. Whichever notes are due go in together as one block, in the order you wrote them, which is what lets one answer the one before it. After the last message puts the block at the end, right before the point the reply continues from. Before the last message puts it one place earlier, so the newest line is still last. At the very start puts it ahead of everything, with the setup. The two things each note sets for itself are its role and the try it starts on, both on its own row.",
             },
             {
                 key: "refusalNoteStrictType",
                 needs: ["refusalNote"],
-                label: "Only send it on a regenerate or a swipe",
+                run: "wholeList",
+                label: "Only send them on a regenerate or a swipe",
                 type: "bool",
-                hint: "Off by default, and best left off. Lumiverse tells the extension what kind of generation is running, and most builds call every one of them \"normal\", including a regenerate. With this on, the note is only attached when your build says \"regenerate\" or \"swipe\", so on a build that says \"normal\" the note is never sent at all. Turn it on only if your build reports the kind properly and you want the extra check. Either way the note goes out once, to the chat it was armed in, on the retry that armed it.",
+                hint: "Set once, for every note rather than for one of them: it decides whether any of them go at all. Off by default, and best left off. Lumiverse tells the extension what kind of generation is running, and most builds call every one of them \"normal\", including a regenerate. With this on, notes are only attached when your build says \"regenerate\" or \"swipe\", so on a build that says \"normal\" nothing is ever sent. Turn it on only if your build reports the kind properly and you want the extra check. Either way the notes go out once, to the chat they were armed in, on the retry that armed them.",
             },
         ],
     },
@@ -692,6 +705,37 @@ const SCHEMA = [
 // it has to look like a real tag, name and all, before anything is dropped.
 function stripMarkup(text) {
     return String(text == null ? "" : text).replace(/<\/?[a-zA-Z][^>]{0,400}>/g, "");
+}
+// A reply can stop on something that is not a sentence and still be finished.
+// Trackers are the usual case: a weather box, a stat block or a status line
+// that a card asks for at the end of every reply. None of them close on a full
+// stop, so with "Retry when a reply has no ending punctuation" on, every one of
+// them read as cut off and got re-rolled, on every reply, forever. A block
+// ending is an ending. What the no-punctuation check is for is prose that stops
+// mid-word, and none of these are that.
+//
+// `shown` still has its markup; `visible` has had the tags taken out.
+function endsOnABlock(shown, visible) {
+    // An HTML element closing the reply: a </div> around a tracker, a <br/>, the
+    // last </table> of a stat grid.
+    if (/<\/[a-zA-Z][^>]{0,400}>\s*$/.test(shown))
+        return true;
+    if (/<[a-zA-Z][^>]{0,400}\/>\s*$/.test(shown))
+        return true;
+    const lines = visible.split("\n").map((l) => l.trim()).filter((l) => l !== "");
+    if (!lines.length)
+        return false;
+    // A markdown table row.
+    if (/^\|.*\|$/.test(lines[lines.length - 1]))
+        return true;
+    // A run of label lines: "HP: 20/20", "**Weather:** clear", "Time: 14:00".
+    // Two in a row are needed rather than one, because an ordinary sentence can
+    // carry a colon and a tracker never has only the one field. That keeps a
+    // reply genuinely cut after "he said:" where it belongs.
+    const labelled = (l) => /^[*_`]{0,2}[^:\n]{1,30}[*_`]{0,2}\s*:\s*\S[^\n]{0,60}$/.test(l);
+    return (lines.length >= 2 &&
+        labelled(lines[lines.length - 1]) &&
+        labelled(lines[lines.length - 2]));
 }
 // Does the reply end on something that can end a reply?
 //
@@ -755,26 +799,46 @@ function looksTruncated(text, retryOnNoPunct, cfg) {
     // whose dialogue was genuinely cut open still came out even and was passed as
     // finished. The closing bracket of a trailing tag was also being read as end
     // punctuation, which hid the same fault from the check below.
-    const t = stripMarkup(stripThinkingAlways(raw, cfg)).replace(/\s+$/, "");
+    const shown = String(stripThinkingAlways(raw, cfg)).replace(/\s+$/, "");
+    const t = stripMarkup(shown).replace(/\s+$/, "");
     if (!t)
         return false;
     if ((t.match(/```/g) || []).length % 2 === 1)
         return true; // open code fence
     if ((t.replace(/```/g, "").match(/`/g) || []).length % 2 === 1)
         return true; // open inline code
+    // Everything below this line is about prose: dialogue left open, a sentence
+    // stopping on a comma, a word cut in half. Code is none of those, and it is
+    // full of the same characters meaning something else. One `const a = b * 2;`
+    // in a snippet counted as an opened emphasis run and re-rolled the reply. The
+    // fences and backticks themselves were counted just above, while they were
+    // still here; what they hold is not counted at all.
+    const prose = t
+        .replace(/```[\s\S]*?```/g, " ")
+        .replace(/`[^`\n]*`/g, " ")
+        .replace(/\s+$/, "");
+    // A reply that is nothing but a code block is a finished reply.
+    if (!prose)
+        return false;
     // Emphasis asterisks only. Strip markdown bullet markers ("* " at line start)
     // first, or a reply with an odd number of list bullets would read as an open
     // emphasis run and get re-rolled. Emphasis pairs (*x*, **x**) are unaffected.
-    const emphasis = t.replace(/^[ \t]*\*[ \t]+/gm, "");
+    // Asterisks standing on their own, with space on both sides, are the other
+    // thing that is not emphasis: a gauge a card prints every reply, "Mood: ***",
+    // or a row of them used as a divider. Emphasis has to touch the words it
+    // marks, so *He nods* and **bold** are left in the count where they belong.
+    const emphasis = prose
+        .replace(/^[ \t]*\*[ \t]+/gm, "")
+        .replace(/(^|\s)\*+(?=\s|$)/gm, "$1");
     if ((emphasis.match(/\*/g) || []).length % 2 === 1)
         return true; // open emphasis / RP action
-    if ((t.match(/"/g) || []).length % 2 === 1)
+    if ((prose.match(/"/g) || []).length % 2 === 1)
         return true; // open straight-quote dialogue
-    if ((t.match(/\u201C/g) || []).length !== (t.match(/\u201D/g) || []).length)
+    if ((prose.match(/\u201C/g) || []).length !== (prose.match(/\u201D/g) || []).length)
         return true; // mismatched smart quotes
-    if (/[,;]$/.test(t))
+    if (/[,;]$/.test(prose))
         return true; // cut mid-clause
-    if (retryOnNoPunct && !endsOnPunctuation(t))
+    if (retryOnNoPunct && !endsOnPunctuation(t) && !endsOnABlock(shown, t))
         return true;
     return false;
 }
@@ -5950,8 +6014,20 @@ export function setup(ctx, opts) {
             // cannot end up claiming something that is not true.
             const emitFields = (into) => {
                 if (!/find and replace/i.test(group.title)) {
-                    for (const f of group.fields)
-                        into.appendChild(addRow(buildRow(f), f));
+                    // Rows naming a run go under one heading together. Anything without
+                    // a run goes straight into the group, and closes any run above it.
+                    let open = null;
+                    for (const f of group.fields) {
+                        const key = f.run;
+                        if (!key || !RUNS[key]) {
+                            open = null;
+                            into.appendChild(addRow(buildRow(f), f));
+                            continue;
+                        }
+                        if (!open || open.key !== key)
+                            open = { key: key, el: subGroup(into, RUNS[key].title, RUNS[key].note) };
+                        open.el.appendChild(addRow(buildRow(f), f));
+                    }
                     return;
                 }
                 const held = keysForKind("swap");
@@ -8013,6 +8089,9 @@ export const __testing = {
     looksLikeRefusal,
     looksLikeRefusalError,
     looksTruncated,
+    endsOnPunctuation,
+    endsOnABlock,
+    stripMarkup,
     normalizeForMatch,
     splitPhrases,
     parseSubs,

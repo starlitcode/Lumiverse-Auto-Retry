@@ -14,6 +14,20 @@ A reply that streams real text and then gets chopped off mid-sentence is easy to
 
 Inline HTML is removed before any of this is counted. Models colour their dialogue with a raw `<span style="...">`, and the two quotes around that style value used to be counted alongside the two around the speech, so a reply whose dialogue was genuinely cut open still came out even and was passed as finished. A trailing `</span>` was also being read as end punctuation, which hid the same fault from the last check.
 
+### Code and trackers
+
+Every check above the last one is about prose: dialogue left open, a sentence stopping on a comma, an emphasis run with no partner. Code is none of those, and it is full of the same characters meaning something else, so what is inside a code fence or an inline backtick span is left out of the counting. One `const a = b * 2;` in a snippet used to read as an opened emphasis run and re-roll a finished answer. The fences and the backticks themselves are counted first, while they are still there, so a reply cut off inside a code block is still caught. A reply that is nothing but a code block is a finished reply.
+
+A row of asterisks with space on either side is not emphasis either. `Mood: ***`, printed by a card as a gauge, and a line of them used as a divider both stopped counting. Emphasis has to touch the words it marks, so `*He nods*` and `**bold**` are unaffected.
+
+The last check has an exception of its own, for cards that print a tracker every reply. A weather box, a stat grid, a status line: none of them close on a full stop, so with `retryOnNoPunct` on they all read as cut off, the retry ended the same way, and it went round until the cap stopped it. A reply that ends on a block ends on a block. Three shapes count as an ending:
+
+- a closing or self-closing HTML tag at the very end, `</div>`, `</table>`, `<br/>`
+- a markdown table row, a last line that opens and closes with `|`
+- two or more label lines in a row, `HP: 20/20` over `Time: 14:00`, with or without bold around the label
+
+Two are needed rather than one, because an ordinary sentence can carry a colon and a tracker never has only the one field, so a reply genuinely cut after "he said:" is still caught. So is prose that stops mid-sentence after a tracker: the exception is about what the reply ends on, not about what it contains.
+
 That last check reads punctuation in any script, and treats an emoji as an ending too, so a scene closing on `。`, `؟`, `!` or `👋` is left alone. What it fires on is a reply that stops mid-word. It was off by default in earlier versions because the test for an ending was a list of Latin characters, which made it wrong too often to leave on.
 
 These are kept careful so a reply that legitimately ends on `...`, an action, or a closed quote is left alone.
@@ -105,7 +119,7 @@ Two things belong to each note on its own, set on its row:
 - **Who it comes from.** Which role it is sent under. **System** puts it alongside the instructions your setup already sends. **You** puts it in the same role as your own messages. **The character** puts it in the same role as the replies. Models treat the three differently, so which one works best depends on your model and your setup.
 - **From try.** Which retry that note joins on. At 2, the first retry re-sends unchanged and the note joins from the second onward; at 1 it goes on every refusal retry. This is per note, which is what lets a list escalate: give a gentle note 2 and a firmer one 4, and the firmer one is only ever sent if the gentle one did not work. Each retry carries whichever notes have come due, in the order you wrote them.
 
-One thing belongs to the list as a whole:
+Two things belong to the list as a whole, and apply to every note in it rather than to any one of them:
 
 - **Where the notes go.** Whichever notes are going are inserted together as one block, which is what lets one answer the one before it. **After the last message** puts them at the end, right before the point the reply continues from. **Before the last message** puts them one place earlier, so the newest line is still last. **At the very start** puts them ahead of everything, with the setup.
 
@@ -117,7 +131,9 @@ What it does not do:
 - It is scoped to one chat. A note armed in one chat is never attached to a generation in another.
 - It expires. A note nothing collects is dropped after 45 seconds, and if the retry click it was armed for turns out to have started nothing, it is taken back straight away rather than waiting that out. If there is no retry button on screen to click at all, nothing is armed in the first place.
 
-**A note about "Only send it on a regenerate or a swipe."** Lumiverse tells the extension what kind of generation is running, and earlier versions required that to say "regenerate" or "swipe" before attaching the note. Most builds report every generation as "normal", including a regenerate, so on those builds the note was armed, the retry ran without it, and nothing said so. That check is now a setting of its own and it is off by default. Turn it on only if your build reports the kind properly and you want the extra check; if your notes stop arriving after you turn it on, that is why. The guarantees above do not depend on it.
+- **Only send them on a regenerate or a swipe.** Whether any note is sent at all, rather than which. Off by default, for the reason below.
+
+**A note about "Only send them on a regenerate or a swipe."** Lumiverse tells the extension what kind of generation is running, and earlier versions required that to say "regenerate" or "swipe" before attaching the note. Most builds report every generation as "normal", including a regenerate, so on those builds the note was armed, the retry ran without it, and nothing said so. That check is now a setting of its own and it is off by default. Turn it on only if your build reports the kind properly and you want the extra check; if your notes stop arriving after you turn it on, that is why. The guarantees above do not depend on it.
 
 This needs the `interceptor` permission, which is what lets an extension add to a prompt before it reaches the model. Without it granted the rest of the extension works and this one feature does nothing.
 

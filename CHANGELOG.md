@@ -8,6 +8,22 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 4.4.1
+
+_2026-08-07_
+
+### Fixed
+
+- **A card that prints a tracker no longer has every reply thrown away.** 4.4.0 turned **Retry when a reply has no ending punctuation** on by default, and a tracker is the one shape that check was worst at. A weather box, a stat block, a status line, a table: none of them end on a full stop, so the reply read as cut off mid-sentence, the retry ended the same way, and it went round until the cap stopped it. A reply that ends on a block ends on a block. Closing HTML, a markdown table row and a run of two or more label lines like `HP: 20/20` all count as an ending now. Prose that stops mid-sentence after a tracker is still caught, and a single line with a colon in it is still an ordinary sentence, since a tracker never has only the one field.
+- **Code in a reply is no longer read as unfinished writing.** The checks below the code fence count are about prose: dialogue left open, a sentence stopping on a comma, an emphasis run with no partner. A snippet is full of the same characters meaning something else, so one `const a = b * 2;` counted as an opened emphasis run and re-rolled a finished answer. Fenced blocks and inline spans are now left out of that counting. The fences and backticks themselves are still counted first, so a reply cut off inside a code block is caught exactly as before.
+- **A row of asterisks is no longer mistaken for an opened emphasis run.** `Mood: ***`, printed by a card as a gauge, or a line of them used as a divider. Emphasis has to touch the words it marks, so `*He nods*` and `**bold**` still count.
+
+### Changed
+
+- **The two note settings that are not per note now sit under a heading saying so.** The list gives every note a role and a try to start on, which made the two settings underneath it look like more of the same. They are not: where the block goes and whether it is sent at all are set once and apply to whichever notes are due. **For the whole list** now sits above them and says which is which.
+
+---
+
 ## 4.4.0
 
 _2026-08-06_

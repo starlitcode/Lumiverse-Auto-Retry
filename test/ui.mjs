@@ -638,6 +638,50 @@ console.log("\npreset split");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- the note settings that are not per note say so ----
+// The note list gives every note a role and a try to start on, which made the
+// two settings underneath it read as more of the same, and the question came
+// back twice: does this change one note or all of them. It is all of them, and
+// a heading is where that gets said. This holds that the heading is over the
+// right two rows and no others, so it cannot end up standing over a per-note
+// setting and claiming the opposite of the truth.
+console.log("\nwhole-list note settings");
+{
+  const { out, errors } = await inPanel(browser, {}, (page) =>
+    page.evaluate(async () => {
+      const frame = () =>
+        new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const modal = document.getElementById("modal");
+      for (const h of modal.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      await frame();
+      const run = () =>
+        [...modal.querySelectorAll("div")].find(
+          (d) => d.firstElementChild && d.firstElementChild.textContent === "For the whole list");
+      const box = (k) =>
+        modal.querySelector('[data-ar-row="' + k + '"]').querySelector("input[type=checkbox]");
+      box("refusalNote").click();
+      await frame();
+      const w = run();
+      const keys = w
+        ? [...w.querySelectorAll("[data-ar-row]")].map((r) => r.getAttribute("data-ar-row"))
+        : null;
+      const shownWhileOn = !!w && w.offsetParent !== null;
+      // The rows hang off the note switch, so the heading has to go with them
+      // rather than be left standing over nothing.
+      box("refusalNote").click();
+      await frame();
+      const shownWhileOff = !!w && w.offsetParent !== null;
+      return { keys, shownWhileOn, shownWhileOff };
+    }),
+  );
+  const expect = ["refusalNotePlacement", "refusalNoteStrictType"];
+  const same = (a, b) => !!a && a.length === b.length && a.every((x, i) => x === b[i]);
+  check("the heading is over exactly the two list-wide settings", same(out.keys, expect), out.keys);
+  check("it is there while notes are on", out.shownWhileOn === true, out);
+  check("and goes with its rows when they do", out.shownWhileOff === false, out);
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- the search field's clear button follows the theme ----
 // The browser draws that one itself and colours it from the page's colour
 // scheme, so on a dark page it came out white while everything around it was
@@ -3018,7 +3062,7 @@ console.log("\ndependent rows");
       // off, because answering "nothing matches that" for a setting that
       // exists would be the worse answer.
       const search = document.querySelector("input[type=search]");
-      search.value = "where the note goes";
+      search.value = "where the notes go";
       search.dispatchEvent(new Event("input", { bubbles: true }));
       await frame();
       const foundWhileOff = shown("refusalNotePlacement");
@@ -3213,7 +3257,7 @@ console.log("\nwhat a hidden row is waiting on");
       };
 
       // A row hidden by its own switch.
-      find("where the note goes");
+      find("where the notes go");
       await frame();
       const noteRow = waitingOn("refusalNotePlacement");
 
@@ -3235,7 +3279,7 @@ console.log("\nwhat a hidden row is waiting on");
       // With the switch on there is nothing to say.
       document.querySelector('[data-ar-row="refusalNote"]').querySelector("input[type=checkbox]").click();
       await frame();
-      find("where the note goes");
+      find("where the notes go");
       await frame();
       const onceOn = waitingOn("refusalNotePlacement");
 
@@ -3287,7 +3331,7 @@ console.log("\nwhat a hidden row is waiting on");
         for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
         await frame();
         const s = document.querySelector("input[type=search]");
-        s.value = "where the note goes";
+        s.value = "where the notes go";
         s.dispatchEvent(new Event("input", { bubbles: true }));
         await frame();
         const line = [...document.querySelectorAll("div")]
