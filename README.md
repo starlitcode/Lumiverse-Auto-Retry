@@ -43,7 +43,7 @@ Only **Save** keeps your changes. Closing with the X or tapping outside discards
 
 ### Just this one chat
 
-Hold the floating button, or right-click it, and pick **Turn off in this chat**. Auto Retry leaves that chat alone and carries on everywhere else. It is remembered, so it survives a reload, and the settings panel says so at the top with a button to undo it, because a chat you switched off and forgot about looks exactly like the extension having stopped working.
+In settings, under **Basics**, the **This chat** row switches Auto Retry off in the chat you are in. It leaves that chat alone and carries on everywhere else. Holding the floating button, or right-clicking it, offers the same thing if you have that button switched on. It is remembered, so it survives a reload, and the settings panel says so at the top with a button to undo it, because a chat you switched off and forgot about looks exactly like the extension having stopped working.
 
 ### Everywhere
 

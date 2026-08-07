@@ -12,7 +12,7 @@ A setting that does nothing until something else is switched on is not shown unt
 
 The master switch is all or nothing, which is the wrong shape for a scene where the model is meant to refuse, or a chat you are using to test something.
 
-Hold the floating button, or right-click it, and pick **Turn off in this chat**. That chat is left alone and every other chat carries on. Hold it again for **Turn on in this chat**.
+In the settings panel, under **Basics**, the **This chat** row has a **Turn off here** button. That chat is left alone and every other chat carries on, and the button becomes **Turn on here**. If you have the floating button switched on, holding it or right-clicking it offers the same thing.
 
 It is written down in your browser, so it survives a reload. It is not a setting: it is a list of chat ids, which would mean nothing on another account, so it is not synced and not included in an export.
 
@@ -47,6 +47,8 @@ Every section header is a proper button, so the Advanced groups open with Enter 
 One switch, **Show the on-screen panel**, puts a small panel in the corner with two tabs. Drag the header to move it, drag the bottom-right corner to resize it. Both work with a mouse and with a finger.
 
 **Log** is what the extension is doing as it happens: generations starting, retries and why, replies that came back fine, notes going out.
+
+**Stats** is what it has been doing since you opened the tab: replies that came back fine, retries fired, messages it gave up on, and a breakdown of what it retried for, with a bar for each so the shape reads at a glance. It also says how often a reply needed a retry at all, and tells you when it has paused itself after repeated failures, which is the state that otherwise looks like it having stopped working. **Clear** on this tab starts the counting again.
 
 **Prompt** is the whole prompt that went to the model. Every message in order, with its role, how large it is, and whether it came from your chat or was added around it. Tap one to read it.
 

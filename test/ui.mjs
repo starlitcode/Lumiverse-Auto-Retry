@@ -2377,6 +2377,96 @@ console.log("\nper-chat switch");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- what it has been doing ----
+// The counters behind this already existed for the debug report, which is a
+// wall of text you have to ask for and then read. On screen they answer the
+// question people actually have, which is whether it is doing anything and what
+// it keeps tripping on.
+console.log("\nstats view");
+{
+  const page = await browser.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await stage(page, '<div id=modal></div><button data-testid="regenerate">Regenerate</button>');
+  await page.addStyleTag({ content: THEME });
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  const out = await page.evaluate(async () => {
+    const handlers = {};
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const teardown = window.__setup(
+      {
+        events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
+        ui: {
+          showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+          registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }),
+        },
+      },
+      { liveLog: true, toast: false, retryDelayMs: 5, backoffFactor: 1, maxDelayMs: 5,
+        jitter: false, maxRetries: 2, stuckTimeoutMs: 0, idleTimeoutMs: 0, pauseWhenFailing: false },
+    );
+    const body = () => document.getElementById("__lvRetryLogBody");
+    const tab = (t) => [...document.querySelectorAll('[role="tab"]')].find((b) => b.textContent.trim() === t);
+
+    tab("Stats").click();
+    await wait(20);
+    const empty = body().textContent;
+
+    // A reply that came back fine, then two that failed differently.
+    handlers.GENERATION_STARTED({ chatId: "A", generationId: "g0" });
+    handlers.GENERATION_ENDED({ chatId: "A", content: "She opened the door and stepped inside." });
+    handlers.GENERATION_STARTED({ chatId: "A", generationId: "g1" });
+    handlers.GENERATION_ENDED({ chatId: "A", error: "boom" });
+    await wait(80);
+    handlers.GENERATION_STARTED({ chatId: "A", generationId: "g2" });
+    handlers.GENERATION_ENDED({ chatId: "A", content: 'He said, "wait' });
+    await wait(80);
+    const shown = body().textContent;
+    const bars = body().querySelectorAll("div[style*='width']").length;
+
+    // Clear starts the counting again rather than leaving a stale rate behind.
+    [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === "Clear").click();
+    await wait(20);
+    const afterClear = body().textContent;
+
+    teardown();
+    return { empty, shown, bars, afterClear };
+  });
+  await page.close();
+  check("it says so when nothing has happened", /Nothing has/.test(out.empty), out.empty.slice(0, 80));
+  check("a reply that came back fine is counted", /Replies that came back fine/.test(out.shown), out.shown.slice(0, 120));
+  check("and so are the retries", /Retries fired/.test(out.shown), out.shown.slice(0, 120));
+  // The useful part: not how many, but what for.
+  check("it says what it retried for", /What it retried for/i.test(out.shown), out.shown);
+  check("naming each reason", /error/.test(out.shown) && /cut off/.test(out.shown), out.shown);
+  check("with a bar for each", out.bars >= 2, out.bars);
+  check("Clear starts the counting again", /Nothing has/.test(out.afterClear), out.afterClear.slice(0, 80));
+  check("no console errors", errors.length === 0, errors);
+}
+
+// ---- the per-chat switch has to be reachable ----
+// It lived only in the floating button's hold menu, and that button is off by
+// default, so on a stock install there was no way to reach it at all.
+console.log("\nper-chat switch, in the panel");
+{
+  const { out, errors } = await inPanel(browser, {}, async (page) =>
+    page.evaluate(async () => {
+      const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const row = () => document.querySelector("[data-ar-chat-switch]");
+      const act = () => row() && row().querySelector("button");
+      const present = !!row();
+      // With no chat open there is nothing to switch, and it says so rather
+      // than offering a button that would do nothing.
+      const noChat = { disabled: act() ? act().disabled : null, text: row() ? row().textContent : "" };
+      return { present, noChat, label: act() ? act().textContent.trim() : "" };
+    }),
+  );
+  check("the switch is in the panel, not only behind the floating button", out.present, out);
+  check("and is not offered when no chat is open", out.noChat.disabled === true, out.noChat);
+  check("saying why", /Open a chat/.test(out.noChat.text), out.noChat.text.slice(0, 80));
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- the prompt viewer ----
 // Lumiverse's own Prompt Breakdown lists what a chat is built from, which is a
 // different question from what actually went to the model after every extension
@@ -2490,7 +2580,7 @@ console.log("\nprompt viewer");
   });
   await page.close();
   check("one switch opens the panel", out.opened, out);
-  check("with both views in it", out.tabs.join(",") === "Log,Prompt", out.tabs);
+  check("with all three views in it", out.tabs.join(",") === "Log,Prompt,Stats", out.tabs);
   check("and it opens on the log", out.landedOn === "true", out.landedOn);
   // The reason there is no second setting: the cost is only paid while somebody
   // is actually looking at a prompt.

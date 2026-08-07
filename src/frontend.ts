@@ -1959,13 +1959,13 @@ export function setup(ctx: Ctx, opts?: any) {
   // panel's two views is showing. Held in memory only, thrown away on teardown
   // and with the tab, the same as the log beside it.
   let lastPrompt: any = null;
-  let liveTab: "log" | "prompt" = "log";
+  let liveTab: "log" | "prompt" | "stats" = "log";
   let paintTabs: (() => void) | null = null;
   let focusTab: ((id: string) => void) | null = null;
 
   // The one place the tab changes, so what is on screen and what the backend
   // has been asked for cannot come apart.
-  function showTab(id: "log" | "prompt") {
+  function showTab(id: "log" | "prompt" | "stats") {
     liveTab = id;
     renderLiveLog();
     askForPrompts();
@@ -1979,11 +1979,137 @@ export function setup(ctx: Ctx, opts?: any) {
       try { paintTabs(); } catch (_) {}
     }
     if (liveTab === "prompt") return renderPromptView();
+    if (liveTab === "stats") return renderStatsView();
     liveLogBody.style.whiteSpace = "pre-wrap";
     liveLogBody.textContent = eventLog.length
       ? eventLog.join("\n")
       : "(nothing yet)";
     liveLogBody.scrollTop = liveLogBody.scrollHeight;
+  }
+
+  // What it has actually been doing, since the tab was opened.
+  //
+  // The counters behind this already existed for the debug report, which is a
+  // wall of text you have to ask for and then read. The same numbers on screen
+  // answer the question people actually have, which is whether it is doing
+  // anything at all and what it keeps tripping on.
+  //
+  // No graph. A handful of counts and a bar the width of a proportion says
+  // everything a chart would, without a drawing surface to maintain.
+  function renderStatsView() {
+    const body = liveLogBody;
+    if (!body) return;
+    body.replaceChildren();
+    body.style.whiteSpace = "normal";
+
+    const mins = Math.max(1, Math.round((Date.now() - stats.since) / 60000));
+    const line = (label: string, value: string, quiet?: boolean) => {
+      const row = document.createElement("div");
+      row.style.cssText =
+        "display:flex;gap:8px;align-items:baseline;padding:2px 0" +
+        (quiet ? ";color:var(--lumiverse-text-muted,rgba(255,255,255,.65))" : "");
+      const l = document.createElement("span");
+      l.textContent = label;
+      l.style.cssText = "flex:1;min-width:0";
+      const v = document.createElement("span");
+      v.textContent = value;
+      v.style.cssText = "font-weight:600;flex:none";
+      row.appendChild(l);
+      row.appendChild(v);
+      body.appendChild(row);
+      return row;
+    };
+
+    const total = stats.good + stats.retries;
+    line("Replies that came back fine", String(stats.good));
+    line("Retries fired", String(stats.retries));
+    line("Messages it gave up on", String(stats.gaveUp));
+    if (cfg.refusalNote || stats.notesSent || stats.notesSkipped) {
+      line("Refusal notes sent", String(stats.notesSent));
+      if (stats.notesSkipped)
+        line("Notes not sent", String(stats.notesSkipped), true);
+    }
+    line(
+      "Watching for",
+      mins + (mins === 1 ? " minute" : " minutes"),
+      true,
+    );
+    if (total)
+      line(
+        "One reply in",
+        stats.retries
+          ? String(Math.max(1, Math.round(total / stats.retries))) + " needed a retry"
+          : "none needed a retry",
+        true,
+      );
+
+    // Paused is a state, not a count, and it is the one that explains why
+    // nothing is happening.
+    if (cfg.pauseWhenFailing && Date.now() < pausedUntil) {
+      const left = Math.max(1, Math.round((pausedUntil - Date.now()) / 60000));
+      const note = document.createElement("div");
+      note.style.cssText =
+        "margin:6px 0 0;padding:4px 6px;border-radius:var(--lumiverse-radius-sm,5px);" +
+        "border-left:3px solid var(--lumiverse-warning,#f59e0b);" +
+        "background:var(--lumiverse-warning-015,rgba(245,158,11,.15))";
+      note.textContent =
+        "Paused after repeated failures. About " + left +
+        (left === 1 ? " minute" : " minutes") +
+        " left, or until a reply comes back fine.";
+      body.appendChild(note);
+    }
+
+    const names = Object.keys(stats.reasons).sort(
+      (a, b) => stats.reasons[b] - stats.reasons[a],
+    );
+    if (!names.length) {
+      const none = document.createElement("div");
+      none.style.cssText =
+        "margin-top:6px;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+      none.textContent = stats.good
+        ? "Nothing has needed a retry yet."
+        : "Nothing has happened yet.";
+      body.appendChild(none);
+    } else {
+      const head = document.createElement("div");
+      head.textContent = "What it retried for";
+      head.style.cssText =
+        "margin:8px 0 4px;font-size:11px;letter-spacing:.05em;text-transform:uppercase;" +
+        "color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+      body.appendChild(head);
+      const most = stats.reasons[names[0]] || 1;
+      for (const name of names) {
+        const n = stats.reasons[name];
+        const row = document.createElement("div");
+        row.style.cssText = "margin:0 0 4px";
+        const top = document.createElement("div");
+        top.style.cssText = "display:flex;gap:8px;align-items:baseline";
+        const l = document.createElement("span");
+        l.textContent = name;
+        l.style.cssText = "flex:1;min-width:0";
+        const v = document.createElement("span");
+        v.textContent = String(n);
+        v.style.cssText = "font-weight:600;flex:none";
+        top.appendChild(l);
+        top.appendChild(v);
+        // A bar the width of its share. One div, no drawing surface, and it
+        // reads at a glance in a way a column of numbers does not.
+        const track = document.createElement("div");
+        track.style.cssText =
+          "height:4px;margin-top:2px;border-radius:2px;" +
+          "background:var(--lumiverse-fill-subtle,rgba(0,0,0,.1))";
+        const fill = document.createElement("div");
+        fill.style.cssText =
+          "height:100%;border-radius:2px;width:" +
+          Math.max(4, Math.round((n / most) * 100)) + "%;" +
+          "background:var(--lumiverse-primary,rgba(147,112,219,.9))";
+        track.appendChild(fill);
+        row.appendChild(top);
+        row.appendChild(track);
+        body.appendChild(row);
+      }
+    }
+    try { ensureReadableTree(body); } catch (_) {}
   }
 
   // What actually went to the model, as the interceptor saw it: every message
@@ -2108,9 +2234,9 @@ export function setup(ctx: Ctx, opts?: any) {
     const tabs = document.createElement("div");
     tabs.setAttribute("role", "tablist");
     tabs.style.cssText = "display:flex;gap:4px;flex:1;min-width:0";
-    const ORDER: Array<"log" | "prompt"> = ["log", "prompt"];
+    const ORDER: Array<"log" | "prompt" | "stats"> = ["log", "prompt", "stats"];
     const tabBtns: Record<string, HTMLButtonElement> = {};
-    const mkTab = (id: "log" | "prompt", label: string) => {
+    const mkTab = (id: "log" | "prompt" | "stats", label: string) => {
       const b = document.createElement("button");
       b.type = "button";
       b.textContent = label;
@@ -2133,6 +2259,7 @@ export function setup(ctx: Ctx, opts?: any) {
     };
     mkTab("log", "Log");
     mkTab("prompt", "Prompt");
+    mkTab("stats", "Stats");
     // Left and right move between tabs, which is how a tab strip is expected to
     // behave for anyone driving this from a keyboard.
     tabs.addEventListener("keydown", (e: any) => {
@@ -2172,6 +2299,20 @@ export function setup(ctx: Ctx, opts?: any) {
     };
     // Copy and Clear act on whichever view is showing, so the buttons mean the
     // same thing as what is in front of them.
+    const statsAsText = () => {
+      const lines = [
+        "replies that came back fine: " + stats.good,
+        "retries fired: " + stats.retries,
+        "messages it gave up on: " + stats.gaveUp,
+        "watching for: " + Math.max(1, Math.round((Date.now() - stats.since) / 60000)) + " min",
+      ];
+      const names = Object.keys(stats.reasons).sort((a, b) => stats.reasons[b] - stats.reasons[a]);
+      if (names.length) {
+        lines.push("what it retried for:");
+        for (const n of names) lines.push("  " + n + ": " + stats.reasons[n]);
+      }
+      return lines.join("\n");
+    };
     const promptAsText = () => {
       if (!lastPrompt) return "";
       return lastPrompt.messages
@@ -2186,7 +2327,13 @@ export function setup(ctx: Ctx, opts?: any) {
     const copyBtn = tinyBtn("Copy");
     copyBtn.addEventListener("click", async () => {
       const before = copyBtn.textContent;
-      const ok = await copyText(liveTab === "prompt" ? promptAsText() : eventLog.join("\n"));
+      const ok = await copyText(
+        liveTab === "prompt"
+          ? promptAsText()
+          : liveTab === "stats"
+            ? statsAsText()
+            : eventLog.join("\n"),
+      );
       copyBtn.textContent = ok ? "Copied" : "Can't";
       setTimeout(() => {
         copyBtn.textContent = before;
@@ -2195,7 +2342,18 @@ export function setup(ctx: Ctx, opts?: any) {
     const clearBtn = tinyBtn("Clear");
     clearBtn.addEventListener("click", () => {
       if (liveTab === "prompt") lastPrompt = null;
-      else eventLog.length = 0;
+      else if (liveTab === "stats") {
+        // Counting starts again from now, so the clock resets with the counts
+        // or the rate below them would be measured against the wrong window.
+        stats.retries = 0;
+        stats.gaveUp = 0;
+        stats.good = 0;
+        stats.notesSent = 0;
+        stats.notesSkipped = 0;
+        stats.lastNoteSkip = "";
+        for (const k of Object.keys(stats.reasons)) delete stats.reasons[k];
+        stats.since = Date.now();
+      } else eventLog.length = 0;
       renderLiveLog();
     });
     head.appendChild(copyBtn);
@@ -3392,6 +3550,9 @@ export function setup(ctx: Ctx, opts?: any) {
     notesSkipped: 0,
     lastNoteSkip: "",
     reasons: {} as Record<string, number>,
+    // So a count can be read as a rate rather than as a bare number. Twelve
+    // retries in ten minutes and twelve in a whole day are different problems.
+    since: Date.now(),
   };
   // Read at the moment they are needed so a settings change takes effect without
   // a reload. Anything missing or nonsensical falls back to the default rather
@@ -5856,6 +6017,14 @@ export function setup(ctx: Ctx, opts?: any) {
           sec.appendChild(d);
         }
         emitFields(sec);
+        // The switch for the chat you are in. It lives in Basics because that
+        // is where somebody looks for a switch, and it was previously only
+        // reachable by holding the floating button, which is off by default:
+        // a feature nobody can find is not a feature. Built by hand rather than
+        // added to the form because it is not a setting. It belongs to one
+        // chat, it is kept in the browser, and it has no business being
+        // exported, imported or reset with the rest.
+        if (/basics/i.test(group.title)) sec.appendChild(buildChatSwitchRow());
       }
       scroller.appendChild(sec);
     }
@@ -6294,6 +6463,56 @@ export function setup(ctx: Ctx, opts?: any) {
     ensureReadableTree(panel, 2.6);
   }
 
+
+  // Per-chat on and off, shaped like the rows around it so it does not read as
+  // something bolted on, but holding no setting.
+  function buildChatSwitchRow(): HTMLElement {
+    const row = document.createElement("div");
+    row.setAttribute("data-ar-chat-switch", "1");
+    row.style.cssText = "display:flex;flex-direction:column;gap:5px";
+    const top = document.createElement("div");
+    top.style.cssText =
+      "display:flex;align-items:center;gap:10px;justify-content:space-between";
+    const label = document.createElement("span");
+    label.style.cssText = "flex:1;min-width:0";
+    const act = btn("", false);
+    act.style.cssText += "min-height:0;padding:5px 12px;font-size:12px;flex:none";
+    const note = document.createElement("div");
+    note.style.cssText =
+      "font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+
+    const paint = () => {
+      const known = lastChatId != null;
+      const off = chatIsOff(lastChatId);
+      label.textContent = "This chat";
+      act.textContent = off ? "Turn on here" : "Turn off here";
+      act.disabled = !known;
+      act.style.opacity = known ? "1" : "0.45";
+      act.style.cursor = known ? "pointer" : "not-allowed";
+      note.textContent = !known
+        ? "Open a chat to switch Auto Retry off in just that one. Every other chat carries on as it is."
+        : off
+          ? "Auto Retry is switched off in this chat. Every other chat carries on as it is. This is remembered, and it is kept in this browser rather than in your settings."
+          : "Switch Auto Retry off in this chat alone, for a scene where the model is meant to refuse. Every other chat carries on as it is.";
+    };
+    act.addEventListener("click", () => {
+      const off = chatIsOff(lastChatId);
+      setChatOff(lastChatId, !off);
+      paint();
+      showToast(
+        off
+          ? "Auto Retry is back on in this chat."
+          : "Auto Retry is off in this chat. Other chats are unaffected.",
+        { force: true },
+      );
+    });
+    paint();
+    top.appendChild(label);
+    top.appendChild(act);
+    row.appendChild(top);
+    row.appendChild(note);
+    return row;
+  }
 
   function buildRow(f: Field): HTMLElement {
     // bool/num wrap in <label> so the whole row toggles or focuses its control.
