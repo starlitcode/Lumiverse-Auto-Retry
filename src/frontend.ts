@@ -908,6 +908,34 @@ function endsOnABlock(shown: string, visible: string): boolean {
   );
 }
 
+// A wait, said the way a person would. Whole seconds, because tenths flicker
+// and nobody is timing anything to a tenth. Larger units appear only once
+// they have something to say: a bare count of seconds stops meaning much
+// somewhere past a minute, and the same goes for minutes past an hour.
+//
+// Hours are not hypothetical. The pause after repeated failures can be set to
+// as much as 180 minutes, so a three-hour wait counting down in minutes alone
+// would read as "179m 59s" and leave you doing the division.
+//
+// The smaller units keep their leading zero once a larger one is showing, so
+// the line does not change width as it counts and the eye has somewhere to
+// rest.
+function sayTime(ms: number): string {
+  const n = Number(ms);
+  // NaN survives every comparison below and would reach the screen as "NaNs".
+  // Nothing that calls this can produce one, which is exactly why it is worth a
+  // line here rather than a promise elsewhere.
+  if (!Number.isFinite(n)) return "0s";
+  const total = Math.max(0, Math.ceil(n / 1000));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  const pad = (n: number) => (n < 10 ? "0" + n : String(n));
+  if (h) return h + "h " + pad(m) + "m " + pad(s) + "s";
+  if (m) return m + "m " + pad(s) + "s";
+  return s + "s";
+}
+
 // Does the reply end on something that can end a reply?
 //
 // This used to be a list of Latin characters, which meant a scene closing on
@@ -3783,16 +3811,6 @@ export function setup(ctx: Ctx, opts?: any) {
   // So the state is worked out on demand instead, from the timers that are
   // actually running, and one clock repaints whoever is showing it.
 
-  // A wait, said the way a person would. Whole seconds, because tenths flicker
-  // and nobody is timing anything to a tenth; minutes once there are enough
-  // seconds for the number to stop meaning much on its own.
-  function saySeconds(ms: number): string {
-    const total = Math.max(0, Math.ceil(ms / 1000));
-    if (total < 60) return total + "s";
-    const m = Math.floor(total / 60);
-    const s = total % 60;
-    return m + "m " + (s < 10 ? "0" : "") + s + "s";
-  }
 
   // The one line that says what is happening. Read fresh every tick.
   //
@@ -3805,7 +3823,7 @@ export function setup(ctx: Ctx, opts?: any) {
       return {
         text:
           (s.retryReason ? s.retryReason + ". " : "") +
-          "Retrying in " + saySeconds(s.retryAt - Date.now()) +
+          "Retrying in " + sayTime(s.retryAt - Date.now()) +
           " (try " + s.attempts + " of " + cfg.maxRetries + ")",
         busy: true,
       };
@@ -3822,7 +3840,7 @@ export function setup(ctx: Ctx, opts?: any) {
     if (cfg.enabled === false) return { text: "Off", busy: false };
     if (chatIsOff(lastChatId)) return { text: "Off in this chat", busy: false };
     if (pausedUntil > now)
-      return { text: "Paused after repeated failures, back in " + saySeconds(pausedUntil - now), busy: false };
+      return { text: "Paused after repeated failures, back in " + sayTime(pausedUntil - now), busy: false };
     // The chat in front of you comes first. A retry running in a chat you have
     // since navigated away from is still worth saying, but not over the top of
     // what is happening here.
@@ -8298,6 +8316,7 @@ export const __testing = {
   looksTruncated,
   endsOnPunctuation,
   endsOnABlock,
+  sayTime,
   stripMarkup,
   normalizeForMatch,
   splitPhrases,

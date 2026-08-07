@@ -1414,8 +1414,10 @@ console.log("\nlive countdown");
     const statusLater = status();
     const cancelLater = document.querySelector("#__lvRetryToast button");
     const num = (s) => {
-      const m = /in (?:(\d+)m )?(\d+)s/.exec(s || "");
-      return m ? Number(m[1] || 0) * 60 + Number(m[2]) : null;
+      const m = /in (?:(\d+)h )?(?:(\d+)m )?(\d+)s/.exec(s || "");
+      return m
+        ? Number(m[1] || 0) * 3600 + Number(m[2] || 0) * 60 + Number(m[3])
+        : null;
     };
     // Cancelling has to stop the clock as well as the retry.
     cancelLater && cancelLater.click();
