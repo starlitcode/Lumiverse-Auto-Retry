@@ -2171,7 +2171,9 @@ export function setup(ctx: Ctx, opts?: any) {
     tab?: string;
   };
   let layout: Layout = {};
-  const num = (v: any): number | null => {
+  // Named for what it does rather than what it holds, since there is a "num"
+  // elsewhere in here that is a span on the screen.
+  const asNumber = (v: any): number | null => {
     const n = Number(v);
     return Number.isFinite(n) ? n : null;
   };
@@ -2183,11 +2185,17 @@ export function setup(ctx: Ctx, opts?: any) {
         // store a person can edit by hand, and half of it becoming NaN would put
         // the panel somewhere with no way back to it.
         const f = raw.float;
-        if (f && num(f.x) !== null && num(f.y) !== null)
-          layout.float = { x: num(f.x)!, y: num(f.y)! };
+        if (f && asNumber(f.x) !== null && asNumber(f.y) !== null)
+          layout.float = { x: asNumber(f.x)!, y: asNumber(f.y)! };
         const p = raw.panel;
-        if (p && num(p.x) !== null && num(p.y) !== null && num(p.w) !== null && num(p.h) !== null)
-          layout.panel = { x: num(p.x)!, y: num(p.y)!, w: num(p.w)!, h: num(p.h)! };
+        if (
+          p && asNumber(p.x) !== null && asNumber(p.y) !== null &&
+          asNumber(p.w) !== null && asNumber(p.h) !== null
+        )
+          layout.panel = {
+            x: asNumber(p.x)!, y: asNumber(p.y)!,
+            w: asNumber(p.w)!, h: asNumber(p.h)!,
+          };
         if (raw.tab === "log" || raw.tab === "prompt" || raw.tab === "stats")
           layout.tab = raw.tab;
       }
@@ -3309,6 +3317,7 @@ export function setup(ctx: Ctx, opts?: any) {
     });
     paintFloat();
     syncInputBarActions();
+    paintNow();
   }
 
   // Settings marked live are applied as they are typed. Nothing is saved by
@@ -3837,6 +3846,7 @@ export function setup(ctx: Ctx, opts?: any) {
     if (off) standDown(id, false);
     paintFloat();
     syncMasterNote();
+    paintNow();
   }
 
   // Both switches have to be on for anything to happen, and this is the one
@@ -3970,7 +3980,13 @@ export function setup(ctx: Ctx, opts?: any) {
   // What one chat is doing, or nothing if it is doing nothing worth saying.
   function chatStatus(s: any): { text: string; busy: boolean } | null {
     if (!s) return null;
-    if (s.timer && s.retryAt)
+    // Read from when the retry is due rather than from the timer that fires it.
+    // The timer is assigned after the message is built, so asking for the timer
+    // meant the first paint fell through to whatever else was true and the
+    // pop-up opened saying nothing about the wait, picking the countdown up a
+    // quarter of a second later. Both are cleared together in clearTimers, so
+    // this says exactly what the timer said and says it sooner.
+    if (s.retryAt)
       return {
         text:
           (s.retryReason ? s.retryReason + ". " : "") +
@@ -4022,11 +4038,23 @@ export function setup(ctx: Ctx, opts?: any) {
       return;
     }
     if (tick) return;
-    tick = setInterval(() => {
-      for (const f of Array.from(tickers)) {
-        try { f(); } catch (_) {}
-      }
-    }, TICK_MS);
+    tick = setInterval(runTickers, TICK_MS);
+  }
+  // A snapshot of the list, because a ticker is allowed to add or drop one:
+  // the Stats view redraws itself when a pause ends, which replaces its own.
+  function runTickers() {
+    for (const f of Array.from(tickers)) {
+      try { f(); } catch (_) {}
+    }
+  }
+  // Between ticks nothing is happening, so the clock's quarter second is fine
+  // for a number counting down on its own. It is not fine for something that
+  // just changed: a retry being scheduled, or called off, would sit there
+  // unsaid for up to a quarter of a second while the pop-up beside it already
+  // said otherwise. Anything that changes the state calls this and the two stay
+  // in step.
+  function paintNow() {
+    runTickers();
   }
   function addTicker(f: () => void) {
     tickers.add(f);
@@ -4217,6 +4245,9 @@ export function setup(ctx: Ctx, opts?: any) {
       if (announce) showToast("Auto-retry stopped.");
       log("stood down", chatId);
     }
+    // Called off is a change too, and the one people are watching for after
+    // pressing Cancel.
+    paintNow();
   }
 
   // A click can land without starting anything: a swipe control may just move
@@ -4776,6 +4807,10 @@ export function setup(ctx: Ctx, opts?: any) {
           ": the last " + runsNeeded + (runsNeeded === 1 ? " run" : " runs") + " failed.",
           { force: true },
         );
+        // Pausing is the state that most looks like the extension having
+        // stopped working, so the line saying otherwise should not be a
+        // quarter of a second behind the message announcing it.
+        paintNow();
       } else {
         showToast("Auto-retry: gave up after " + cfg.maxRetries + " tries.");
       }
@@ -4810,6 +4845,7 @@ export function setup(ctx: Ctx, opts?: any) {
       sticky: true,
     });
     startToastCountdown(s);
+    paintNow();
     s.timer = setTimeout(async () => {
       s.timer = null;
       s.retryAt = 0;

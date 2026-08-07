@@ -1400,11 +1400,18 @@ console.log("\nlive countdown");
     };
     handlers.GENERATION_STARTED({ chatId: "c", generationId: "g" });
     handlers.GENERATION_ENDED({ chatId: "c", content: "" });
-    // The retry is not scheduled the instant the reply ends, so the first
-    // reading waits for the countdown to exist rather than assuming it does.
-    for (let i = 0; i < 60 && !/Retrying in/.test(words()); i++)
+    // The retry is not scheduled the instant the reply ends, so this waits for
+    // the pop-up to appear rather than assuming it has.
+    for (let i = 0; i < 60 && !words(); i++)
       await new Promise((r) => setTimeout(r, 50));
-    const first = words();
+    // What it says the moment it opens, before any tick has had a chance to
+    // fix it up. The countdown is assembled while the timer that fires the
+    // retry is still being created, so reading the wrong one of those left the
+    // pop-up opening on a bare "Retrying" and only growing its countdown a
+    // quarter of a second later. Polling until the countdown appeared hid
+    // exactly that, so this does not poll for it.
+    const opened = words();
+    const first = opened;
     const statusFirst = status();
     // The Cancel button has to be the same element throughout. Rebuilding the
     // box on every tick would swallow a press that landed mid-rebuild.
@@ -1421,11 +1428,13 @@ console.log("\nlive countdown");
     };
     // Cancelling has to stop the clock as well as the retry.
     cancelLater && cancelLater.click();
-    await new Promise((r) => setTimeout(r, 400));
+    // Read at once, not after a wait. Cancel is the press people watch the line
+    // for, and a quarter second of it still counting down to a retry that is no
+    // longer coming is the line lying.
     const afterCancel = status();
     teardown();
     return {
-      first, later, statusFirst, statusLater, afterCancel,
+      first, opened, later, statusFirst, statusLater, afterCancel,
       firstN: num(first), laterN: num(later),
       statusFirstN: num(statusFirst), statusLaterN: num(statusLater),
       sameCancel: cancelFirst === cancelLater && !!cancelFirst,
@@ -1434,7 +1443,8 @@ console.log("\nlive countdown");
     };
   });
   await page.close();
-  check("the pop-up says how long is left", out.firstN !== null, out);
+  check("the pop-up says how long is left the moment it opens",
+    /Retrying in/.test(out.opened || "") && out.firstN !== null, out);
   check("and that number goes down on its own", out.laterN !== null && out.laterN < out.firstN, out);
   check("it counts in whole seconds", out.noTenths, out);
   check("it says why it is retrying", /empty/i.test(out.first || ""), out);
