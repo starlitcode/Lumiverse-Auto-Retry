@@ -14,14 +14,14 @@ Only **Save** keeps what you changed. Closing with the X or tapping outside disc
 
 Two options in **Basics**, and you can use either or both:
 
-- **Floating on/off button** puts a small button over the chat that toggles it in one tap. Drag it anywhere; it snaps to the nearest edge and stays where you leave it, and you can set its size. Hold it, or right-click on a computer, for a menu with **Auto Retry settings**, **Turn off in this chat**, **Move back to the corner** and **Hide this button**.
+- **Floating on/off button** puts a small button over the chat that toggles it in one tap. Drag it anywhere; it snaps to the nearest edge and stays where you leave it, and you can set its size. Hold it, or right-click on a computer, for a menu with **Auto Retry settings**, **Move back to the corner** and **Hide this button**.
 - **On/off button in the Extras menu** adds an entry next to the settings button. Its label says which state it is currently in, so you can check and change it without opening settings, and it takes up no room on screen.
 
 ## Turning it off in one chat
 
 The master switch is all or nothing, which is the wrong shape for a scene where the model is meant to refuse, or a chat you are using to test something.
 
-In the settings panel, under **Basics**, the **This chat** row has a **Turn off here** button. That chat is left alone and every other chat carries on, and the button becomes **Turn on here**. If you have the floating button switched on, holding it or right-clicking it offers the same thing.
+In the settings panel, under **Basics**, the **This chat** row has a **Turn off here** button. That chat is left alone and every other chat carries on, and the button becomes **Turn on here**. This is the only place it is: it is not in the floating button's menu, which is kept to the button's own business.
 
 It is written down in your browser, so it survives a reload. It is not a setting: it is a list of chat ids, which would mean nothing on another account, so it is not synced and not included in an export.
 

@@ -2703,7 +2703,6 @@ console.log("\nper-chat switch");
       const items = menu();
       return items;
     };
-    const pick = (re) => [...document.querySelectorAll('[role="menuitem"]')].find((b) => re.test(b.textContent)).click();
     const up = () => btn().dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
     // Clicking the host regenerate button is how a retry shows itself.
     let clicks = 0;
@@ -2711,9 +2710,29 @@ console.log("\nper-chat switch");
 
     handlers.GENERATION_STARTED({ chatId: "A", generationId: "a1" });
     await wait(10);
+    // The floating button's menu is not where this lives. It sits over the
+    // chat and is opened for the button's own business, so a per-chat switch
+    // among those entries was clutter. Checked here so it cannot drift back in
+    // without somebody meaning it.
     const menuOn = await hold();
-    pick(/off in this chat/i);
     up();
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    await wait(20);
+    // Settings, under Basics, is where it lives.
+    acts["auto-retry-settings"].cb();
+    await wait(30);
+    const chatRow = () => document.querySelector("[data-ar-chat-switch]");
+    const rowThere = !!chatRow();
+    const flip = () => {
+      const b = chatRow().querySelector("button");
+      b.click();
+      return b.textContent;
+    };
+    const saidBefore = chatRow().querySelector("button").textContent;
+    flip();
+    await wait(20);
+    const saidAfter = chatRow().querySelector("button").textContent;
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     await wait(20);
 
     const offNow = { pressed: btn().getAttribute("aria-pressed"), label: btn().getAttribute("aria-label") };
@@ -2757,11 +2776,17 @@ console.log("\nper-chat switch");
 
     teardown();
     return { menuOn, offNow, retriedWhileOff, otherChatOn, retriedElsewhere, remembered,
-      noteShown, noteText, afterBack, menuBack };
+      noteShown, noteText, afterBack, menuBack, rowThere, saidBefore, saidAfter };
   });
   await page.close();
-  check("the hold menu offers to switch this chat off",
-    out.menuOn.some((t) => /off in this chat/i.test(t)), out.menuOn);
+  check("the hold menu keeps to the button's own business",
+    !out.menuOn.some((t) => /this chat/i.test(t)), out.menuOn);
+  check("and still offers the way to the settings",
+    out.menuOn.some((t) => /settings/i.test(t)), out.menuOn);
+  check("settings carries the row that switches this chat off", out.rowThere, out);
+  check("which says what it will do before and after",
+    /off here/i.test(out.saidBefore || "") && /on here/i.test(out.saidAfter || ""),
+    { before: out.saidBefore, after: out.saidAfter });
   check("the button shows it as off once it is", out.offNow.pressed === "false", out.offNow);
   check("and says which switch is doing it", /off in this chat/i.test(out.offNow.label), out.offNow.label);
   // The point of the whole thing.
@@ -2775,8 +2800,8 @@ console.log("\nper-chat switch");
   check("and offers the way back", out.afterBack.pressed === "true", out.afterBack);
   check("which takes it out of the list", !out.afterBack.stored.includes("A"), out.afterBack.stored);
   check("and puts the line away", !out.afterBack.noteShown, out.afterBack);
-  check("the menu then offers to switch it off again",
-    out.menuBack.some((t) => /off in this chat/i.test(t)), out.menuBack);
+  check("and the menu still stays out of it",
+    !out.menuBack.some((t) => /this chat/i.test(t)), out.menuBack);
   check("no console errors", errors.length === 0, errors);
 }
 

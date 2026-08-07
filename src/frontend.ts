@@ -3161,19 +3161,15 @@ export function setup(ctx: Ctx, opts?: any) {
     const first = entry("Auto Retry settings", () => {
       openSettings();
     });
-    // The chat you are in, named by what it would do rather than by what it is.
-    if (lastChatId != null) {
-      const offHere = chatIsOff(lastChatId);
-      entry(offHere ? "Turn on in this chat" : "Turn off in this chat", () => {
-        setChatOff(lastChatId, !offHere);
-        showToast(
-          offHere
-            ? "Auto Retry is back on in this chat."
-            : "Auto Retry is off in this chat. Other chats are unaffected.",
-          { force: true },
-        );
-      });
-    }
+    // Switching off in one chat is not here. It lives in the settings panel,
+    // under Basics, on the "This chat" row. This menu opens from a button that
+    // sits over the chat, so it is worth keeping to the few things that are
+    // about the button itself and the way to the settings; a per-chat switch in
+    // among them reads as clutter every time you open it for something else.
+    //
+    // It was also never reliably here. The entry was drawn only once a chat id
+    // had been seen, and that only happens on a generation event, so on a fresh
+    // page load it was missing until the first reply came through.
     // Rebuilding the widget is what puts it back, since where it sits belongs to
     // the host and a fresh one starts at the position it is handed.
     entry("Move back to the corner", () => {
@@ -6611,13 +6607,13 @@ export function setup(ctx: Ctx, opts?: any) {
           sec.appendChild(d);
         }
         emitFields(sec);
-        // The switch for the chat you are in. It lives in Basics because that
-        // is where somebody looks for a switch, and it was previously only
-        // reachable by holding the floating button, which is off by default:
-        // a feature nobody can find is not a feature. Built by hand rather than
-        // added to the form because it is not a setting. It belongs to one
-        // chat, it is kept in the browser, and it has no business being
-        // exported, imported or reset with the rest.
+        // The switch for the chat you are in, and the only place it is. Basics
+        // is where somebody looks for a switch, and the floating button's menu
+        // is not: that button sits over the chat and its menu is opened for the
+        // button's own business, so a per-chat switch among those entries read
+        // as clutter. Built by hand rather than added to the form because it is
+        // not a setting. It belongs to one chat, it is kept in the browser, and
+        // it has no business being exported, imported or reset with the rest.
         if (/basics/i.test(group.title)) sec.appendChild(buildChatSwitchRow());
       }
       scroller.appendChild(sec);
