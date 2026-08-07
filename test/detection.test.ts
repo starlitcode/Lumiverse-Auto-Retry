@@ -554,6 +554,75 @@ describe("code and markup left open", () => {
   }
 });
 
+// A block the model invented, left open.
+//
+// Cards ask for a planning or bookkeeping block wrapped in a tag of the card's
+// own making. When a reply is cut off inside one, nothing else here notices:
+// the block's prose can end on a full stop with its quotation marks balanced,
+// so every check that reads the shape of the text says the reply finished, and
+// stripping markup deletes the one piece of evidence first.
+describe("a tag the model invented and never closed", () => {
+  const OPEN = "<story_plan>\nI. Setting\nThe pair meet at the mill. Rain is falling steadily.";
+
+  test("is cut off even though the words end on a full stop", () => {
+    expect(looksTruncated(OPEN, true, {})).toBe(true);
+  });
+
+  test("and is caught whether or not it is in the thinking tag list", () => {
+    expect(looksTruncated(OPEN, true, { refusalThinkTags: "story_plan" })).toBe(true);
+  });
+
+  test("but a closed one is finished", () => {
+    expect(looksTruncated("<story_plan>\nI. Setting\nAll set.\n</story_plan>\nHe left.", true, {})).toBe(false);
+    expect(looksTruncated("<story_plan>\nplan\n</story_plan>", true, {})).toBe(false);
+  });
+
+  test("and one of two left open is still caught", () => {
+    expect(looksTruncated("<plan>\na\n</plan>\n<plan>\nb. More here.", true, {})).toBe(true);
+    expect(looksTruncated("<plan>\na\n</plan>\n<plan>\nb\n</plan>\nDone.", true, {})).toBe(false);
+  });
+
+  // Kept narrow: alone on its line, and a name HTML does not have. Every HTML
+  // element already has a rule here, and a word in angle brackets mid-sentence
+  // is how people write an emote.
+  const fine: Array<[string, string]> = [
+    ["an emote inside a sentence", "She rolled her eyes <sigh> and walked out."],
+    ["an emote on its own line that closes", "<sigh>\nShe walked out.\n</sigh>\nDone."],
+    ["a comparison", "If x<y then he wins."],
+    ["html alone on a line", '<div class="wx">\nSunny 24C\n</div>\nShe left.'],
+    ["a bare inline tag alone on a line", "<b>\nShe smiled."],
+    ["a void element alone on a line", "Done.\n<br>"],
+    ["ordinary prose", "He walked to the door and opened it."],
+  ];
+  for (const [name, text] of fine) {
+    test(name + " does not count", () => {
+      expect(looksTruncated(text, true, {})).toBe(false);
+    });
+  }
+});
+
+// The reasoning check knew five of the eight built-in tag names and none of the
+// ones anybody had added, so a reply cut off inside a block the extension had
+// been told about read as finished. It reads the same list the stripper does.
+describe("an unclosed reasoning block, whatever it is called", () => {
+  const cut: Array<[string, string, any]> = [
+    ["think", "<think>\nworking it out. Settled.", {}],
+    ["scratchpad", "<scratchpad>\nworking it out. Done here.", {}],
+    ["analysis", "<analysis>\nweighing it up. Settled.", {}],
+    ["thoughts", "<thoughts>\nweighing it up. Settled.", {}],
+    ["a name from the settings", "<my_plan>\nstep one. Step two.", { refusalThinkTags: "my_plan" }],
+  ];
+  for (const [name, text, c] of cut) {
+    test("<" + name + "> left open is cut off", () => {
+      expect(looksTruncated(text, true, c)).toBe(true);
+    });
+  }
+
+  test("and a closed one is not", () => {
+    expect(looksTruncated("<scratchpad>\nworking it out\n</scratchpad>\nHe left.", true, {})).toBe(false);
+  });
+});
+
 // A card that renders a whole interface every reply.
 //
 // These print a chat window, a profile card, a stat panel: dozens of nested

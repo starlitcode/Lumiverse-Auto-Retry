@@ -8,6 +8,15 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 4.5.3
+
+_2026-08-07_
+
+### Fixed
+
+- **A reply cut off inside a block the card asked for is caught now.** Cards ask the model to wrap its planning in a tag of their own making, `<story_plan>` and the like. When the reply stopped partway through one, nothing noticed: the text inside can end on a full stop with its quotation marks balanced, so every check that reads the shape of the reply said it finished, and stripping the markup deleted the one piece of evidence first. A tag alone on its line, with a name HTML does not have, opened and never closed, is now read as cut off. A word in angle brackets inside a sentence is not, since that is how people write an emote.
+- **The check for an unclosed reasoning block knew the wrong list of names.** It was written out by hand rather than read from the setting, so it knew five of the eight built-in names, and none of the ones you had added under **Extra thinking tag names**. A reply cut off inside `<scratchpad>`, `<analysis>`, `<thoughts>` or any tag you had told the extension about read as finished. Both now read the same list.
+
 ## 4.5.2
 
 _2026-08-07_

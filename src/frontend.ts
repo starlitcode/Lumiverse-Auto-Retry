@@ -95,7 +95,7 @@ const STREAM_BUF_MAX = 200000;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "4.5.2";
+const VERSION = "4.5.3";
 
 // ---- defaults (the UI overrides these; editing here changes the fallback) ----
 const CONFIG = {
@@ -815,6 +815,49 @@ const HTML_CONTAINERS =
   "div|table|thead|tbody|tfoot|ul|ol|dl|pre|blockquote|details|section|article|figure|figcaption|form|fieldset";
 const HTML_CONTAINER_LIST = HTML_CONTAINERS.split("|");
 
+// Element names HTML already knows about. Everything here is dealt with by the
+// rules above and below; this list exists so the check after it can tell an
+// element from a tag somebody invented.
+const HTML_KNOWN =
+  ("html|head|body|div|span|p|a|b|i|u|s|em|strong|small|mark|sub|sup|code|pre|kbd|samp|var|" +
+   "br|hr|img|picture|source|video|audio|track|embed|object|param|iframe|canvas|svg|path|g|" +
+   "ul|ol|li|dl|dt|dd|table|thead|tbody|tfoot|tr|td|th|caption|colgroup|col|" +
+   "form|input|button|select|option|optgroup|textarea|label|fieldset|legend|datalist|output|" +
+   "h1|h2|h3|h4|h5|h6|header|footer|main|nav|section|article|aside|figure|figcaption|" +
+   "blockquote|q|cite|abbr|address|time|data|ruby|rt|rp|bdi|bdo|wbr|" +
+   "details|summary|dialog|menu|template|slot|noscript|script|style|link|meta|title|base|" +
+   "font|center|strike|big|tt|marquee|progress|meter|del|ins").split("|");
+
+// A tag a model invented, opened on a line of its own and never closed.
+//
+// Models are asked to wrap a planning or bookkeeping block in a tag of their
+// own making: <story_plan>, <plan>, <status>. When a reply is cut off inside
+// one of those, nothing else here notices. The block's own prose can end on a
+// full stop with its quotation marks balanced, so every check that reads the
+// shape of the text says the reply finished, and stripping markup deletes the
+// one piece of evidence before anything looks at it.
+//
+// Two things keep this narrow. The tag has to be alone on its line, which is
+// how these blocks are always written and is not how somebody types <sigh> in
+// the middle of a sentence. And the name has to be one HTML does not have,
+// because every HTML element already has a rule here: containers are counted,
+// inline tags are counted only when styled, and a bare <b> left open is
+// ignored on purpose.
+function customBlockLeftOpen(shown: string): boolean {
+  if (shown.indexOf("<") < 0) return false;
+  const counts: Record<string, number> = {};
+  const re = /^[ \t]*<(\/?)([a-zA-Z][\w:-]*)(?:\s[^>]*)?>[ \t]*$/gm;
+  let m: RegExpExecArray | null;
+  let seen = 0;
+  while ((m = re.exec(shown)) && seen++ < 5000) {
+    const name = m[2].toLowerCase();
+    if (HTML_KNOWN.indexOf(name) >= 0) continue;
+    counts[name] = (counts[name] || 0) + (m[1] === "/" ? -1 : 1);
+  }
+  for (const name of Object.keys(counts)) if (counts[name] > 0) return true;
+  return false;
+}
+
 // The reply with every closed container taken out of it, content and all.
 //
 // Whatever is inside a container that closed is finished writing. The model got
@@ -1007,6 +1050,25 @@ function sayTime(ms: number): string {
   return s + "s";
 }
 
+// A reasoning block opened and never closed: the reply was cut off inside the
+// model's thinking.
+//
+// The names come from the same place the stripper's do, so the built-in set and
+// whatever is in Extra thinking tag names are both covered. Written out by hand
+// here before, which meant it knew five of the eight built-in names and none of
+// the ones anybody had added, so a reply cut off inside a block the extension
+// had been told about was read as finished.
+function thinkOpenedNeverClosed(raw: string, cfg?: any): boolean {
+  const alt = thinkTagNames(cfg).join("|");
+  if (!alt) return false;
+  const opener = new RegExp("<\\|?(?:" + alt + ")\\|?\\b[^>]*>", "i");
+  if (!opener.test(raw)) return false;
+  // The closer pattern matches an opening tag too, since the slash is optional,
+  // so the first opener goes before the reply is searched for a close.
+  const closer = new RegExp("<\\|?\\/?(?:" + alt + ")\\s*\\|?>", "i");
+  return !closer.test(raw.replace(opener, ""));
+}
+
 // Does the reply end on something that can end a reply?
 //
 // This used to be a list of Latin characters, which meant a scene closing on
@@ -1052,10 +1114,7 @@ function looksTruncated(
   // An opened reasoning block with no close means the reply was cut inside the
   // model's thinking. Checked on the raw text, before anything is removed.
   if (
-    /<\|?(?:think|thinking|reasoning|reflection|thought)\|?\b[^>]*>/i.test(raw) &&
-    !/<\|?\/?(?:think|thinking|reasoning|reflection|thought)\s*\|?>/i.test(
-      raw.replace(/<\|?(?:think|thinking|reasoning|reflection|thought)\|?\b[^>]*>/i, ""),
-    )
+    thinkOpenedNeverClosed(raw, cfg)
   )
     return true;
   // The channel form has no closing tag of its own: the block ends at the next
@@ -1082,6 +1141,11 @@ function looksTruncated(
   if ((t.match(/```/g) || []).length % 2 === 1) return true; // open code fence
   if ((t.replace(/```/g, "").match(/`/g) || []).length % 2 === 1) return true; // open inline code
   if (markupLeftOpen(shown)) return true; // stopped inside a tag or a container
+  // A block the model invented and never closed, <story_plan> and the like.
+  // Checked on the raw reply as well as the stripped one: if the name is in
+  // Extra thinking tag names the block is already gone from `shown`, and the
+  // reasoning check at the top of this function is the one that catches it.
+  if (customBlockLeftOpen(shown)) return true;
 
   // Everything below this line is about prose: dialogue left open, a sentence
   // stopping on a comma, a word cut in half. Code is none of those, and neither
@@ -1447,11 +1511,20 @@ const REFUSAL_SOFT: RegExp[] = [
 // checks still see the raw output.
 const THINK_TAGS = ["think", "thinking", "thought", "thoughts", "reasoning", "reflection", "scratchpad", "analysis"];
 
+// The built-in names plus whatever is in Extra thinking tag names. One place,
+// so the stripper and the cut-off check cannot end up knowing different sets.
+function thinkTagNames(cfg?: any): string[] {
+  const extra = String((cfg && cfg.refusalThinkTags) || "")
+    .split(/\r?\n/)
+    .map((s) => s.replace(/[^\w-]/g, "").toLowerCase())
+    .filter(Boolean);
+  return THINK_TAGS.concat(extra);
+}
+
 function stripThinking(text: string, cfg?: any): string {
   let t = String(text == null ? "" : text);
   if (cfg && cfg.refusalStripThinking === false) return t;
-  const extra = String((cfg && cfg.refusalThinkTags) || "").split(/\r?\n/).map((s) => s.replace(/[^\w-]/g, "").toLowerCase()).filter(Boolean);
-  const names = THINK_TAGS.concat(extra);
+  const names = thinkTagNames(cfg);
   if (!names.length) return t;
   const alt = names.join("|");
 

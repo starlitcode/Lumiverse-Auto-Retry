@@ -43,6 +43,7 @@ Letting a reply end on a block means the last thing it managed to write can be a
 - an HTML comment with no `-->`
 - an unclosed code fence or inline backtick, which is where this started
 - more `{` than `}` outside code, which is a status block written as raw JSON stopping mid-field
+- a tag the model invented, alone on its line and never closed, `<story_plan>` and the like
 
 Elements whose end tag is optional in HTML are left out of the container count: models write `<ul><li>one<li>two</ul>` and mean it. A table that really was cut short leaves its own `<table>` open, which is counted, so nothing is lost.
 
@@ -59,6 +60,10 @@ That case matters more than it looks, because it is invisible to everything else
 comes out with balanced quotes, ends on punctuation, and would otherwise read as a finished reply with the gradient still hanging open.
 
 A `<` someone typed in a scene is not a tag, so `if x<y then` and `the value was < 5` are left alone.
+
+Cards also ask for a planning or bookkeeping block wrapped in a tag of their own making. A reply cut off inside one of those is the hardest case here, because the text inside can end on a full stop with its quotation marks balanced, so nothing about the shape of the reply says anything is wrong. Such a tag counts when it is alone on its line and its name is not one HTML has: both together, because every HTML element already has a rule above, and a word in angle brackets inside a sentence is how people write an emote.
+
+An unclosed reasoning block counts too, and it reads the same list of names as the stripper, so the built-in set and anything you add under **Extra thinking tag names** are both covered.
 
 That last check reads punctuation in any script, and treats an emoji as an ending too, so a scene closing on `。`, `؟`, `!` or `👋` is left alone. What it fires on is a reply that stops mid-word. It was off by default in earlier versions because the test for an ending was a list of Latin characters, which made it wrong too often to leave on.
 
