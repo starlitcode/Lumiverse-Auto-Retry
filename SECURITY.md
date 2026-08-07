@@ -38,7 +38,9 @@ The Copy debug info button gathers your settings, your button selectors, your br
 
 The **Copy** button on the on-screen panel is the same thing in miniature: on the Log tab it puts that whole activity log on your clipboard in one tap, fragments included, and on the Prompt tab it copies the entire prompt, which is most of your chat. It is there because selecting text by hand on a phone is awkward, and the same advice applies before you paste either anywhere.
 
-The refusal tester in the settings panel only reads the text you paste into it. It runs the check on your device and reports the verdict; it sends nothing and stores nothing.
+The list of chats you have switched Auto Retry off in is kept in your browser and nowhere else. It is chat ids and nothing more, no titles and no text, and it is not synced to your account or included in an export, since an id would mean nothing on another account anyway.
+
+The refusal tester in the settings panel only reads the text in its box. **Use my last reply** fills that box by reading the reply rendered on the page at the moment you press it, which is the same reply the extension already reads to run its checks. Nothing is kept between replies. It runs the check on your device and reports the verdict; it sends nothing and stores nothing.
 
 ## If you find a problem
 

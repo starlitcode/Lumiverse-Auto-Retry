@@ -2385,7 +2385,11 @@ export function setup(ctx: Ctx, opts?: any) {
 
   function paintFloat() {
     if (!floatEl) return;
-    const on = cfg.enabled !== false;
+    // What the button shows is whether a reply would actually be retried right
+    // now, which is both switches. Showing only the master one would leave it
+    // looking on in a chat it has been told to leave alone.
+    const on = retryingHere(lastChatId);
+    const onlyHere = cfg.enabled !== false && !on;
     const d = floatSize();
     floatEl.style.width = d + "px";
     floatEl.style.height = d + "px";
@@ -2403,9 +2407,14 @@ export function setup(ctx: Ctx, opts?: any) {
       : "var(--lumiverse-text-muted,rgba(255,255,255,.65))";
     floatEl.style.opacity = on ? "1" : "0.75";
     floatEl.innerHTML = dieSvg(!on, glyph);
-    const label = on
-      ? "Auto Retry is on, tap to turn off"
-      : "Auto Retry is off, tap to turn on";
+    // Tapping is always the master switch, whatever is showing. The per-chat
+    // one lives in the hold menu, and the label says so rather than leaving
+    // somebody to find out by tapping.
+    const label = onlyHere
+      ? "Auto Retry is on, but off in this chat. Tap to turn it off everywhere, or hold for this chat"
+      : on
+        ? "Auto Retry is on, tap to turn off"
+        : "Auto Retry is off, tap to turn on";
     floatEl.title = label;
     floatEl.setAttribute("aria-label", label);
     floatEl.setAttribute("aria-pressed", on ? "true" : "false");
@@ -2603,6 +2612,19 @@ export function setup(ctx: Ctx, opts?: any) {
     const first = entry("Auto Retry settings", () => {
       openSettings();
     });
+    // The chat you are in, named by what it would do rather than by what it is.
+    if (lastChatId != null) {
+      const offHere = chatIsOff(lastChatId);
+      entry(offHere ? "Turn on in this chat" : "Turn off in this chat", () => {
+        setChatOff(lastChatId, !offHere);
+        showToast(
+          offHere
+            ? "Auto Retry is back on in this chat."
+            : "Auto Retry is off in this chat. Other chats are unaffected.",
+          { force: true },
+        );
+      });
+    }
     // Rebuilding the widget is what puts it back, since where it sits belongs to
     // the host and a fresh one starts at the position it is handed.
     entry("Move back to the corner", () => {
@@ -3211,6 +3233,75 @@ export function setup(ctx: Ctx, opts?: any) {
       }
     }
     return n;
+  }
+
+  // ---- chats it has been told to leave alone ----
+  //
+  // The master switch is all or nothing, which is the wrong shape for the case
+  // it keeps meeting: a scene where the model is meant to refuse, or a chat
+  // being used to test something, in the middle of a day of ordinary chats.
+  // Turning the whole extension off for that means remembering to turn it back
+  // on, and forgetting looks exactly like the extension having stopped working.
+  //
+  // Kept in the browser rather than in the settings. It is a list of chat ids,
+  // which are not settings, would be meaningless on another account, and have
+  // no business in an export somebody might share.
+  const CHATS_OFF_KEY = "lv-auto-retry:chats-off:v1";
+  const CHATS_OFF_CAP = 200;
+  let chatsOff: string[] = [];
+  try {
+    if (typeof localStorage !== "undefined") {
+      const raw = JSON.parse(localStorage.getItem(CHATS_OFF_KEY) || "[]");
+      if (Array.isArray(raw)) chatsOff = raw.map(String).slice(-CHATS_OFF_CAP);
+    }
+  } catch (_) { /* no storage: nothing is off, which is the harmless way round */ }
+
+  const chatIsOff = (chatId: any): boolean =>
+    chatId != null && chatsOff.indexOf(String(chatId)) >= 0;
+
+  function setChatOff(chatId: any, off: boolean) {
+    if (chatId == null) return;
+    const id = String(chatId);
+    const at = chatsOff.indexOf(id);
+    if (off && at < 0) chatsOff.push(id);
+    else if (!off && at >= 0) chatsOff.splice(at, 1);
+    // Oldest first, so a long history of one-off exclusions cannot grow without
+    // bound in somebody's browser.
+    if (chatsOff.length > CHATS_OFF_CAP) chatsOff = chatsOff.slice(-CHATS_OFF_CAP);
+    try {
+      if (typeof localStorage !== "undefined")
+        localStorage.setItem(CHATS_OFF_KEY, JSON.stringify(chatsOff));
+    } catch (_) {}
+    // Anything already in flight for that chat goes with it.
+    if (off) standDown(id, false);
+    paintFloat();
+    syncMasterNote();
+  }
+
+  // Both switches have to be on for anything to happen, and this is the one
+  // place that says so.
+  const retryingHere = (chatId: any): boolean =>
+    cfg.enabled !== false && !chatIsOff(chatId);
+
+  // The line at the top of the panel. Two things can be stopping a retry and
+  // they need different answers, so it names which one and offers the way back
+  // from the one that has a button.
+  let masterNoteEl: any = null;
+  let masterNoteWords: any = null;
+  let masterNoteBtn: any = null;
+  function syncMasterNote() {
+    if (!masterNoteEl) return;
+    const globalOff = cfg.enabled === false;
+    const hereOff = chatIsOff(lastChatId);
+    masterNoteEl.style.display = globalOff || hereOff ? "flex" : "none";
+    if (masterNoteBtn) masterNoteBtn.style.display = hereOff ? "" : "none";
+    if (!masterNoteWords) return;
+    masterNoteWords.textContent = globalOff
+      ? hereOff
+        ? "Auto Retry is off everywhere, and this chat is switched off as well. These settings are saved and apply when you turn it back on."
+        : "Auto Retry is off. These settings are saved and apply when you turn it back on."
+      : "Auto Retry is on, but it is switched off in this chat.";
+    try { ensureReadableTree(masterNoteEl, 2.6); } catch (_) {}
   }
 
   // ---- per-chat state ----
@@ -3983,6 +4074,10 @@ export function setup(ctx: Ctx, opts?: any) {
   function scheduleRetry(chatId: string, reason: string, err?: any) {
     const s = st(chatId);
     if (!cfg.enabled || s.pending) return;
+    if (chatIsOff(chatId)) {
+      log("this chat is switched off, not retrying", chatId);
+      return;
+    }
     if (cfg.pauseWhenFailing && Date.now() < pausedUntil) {
       log("paused after repeated failures, not retrying", chatId);
       return;
@@ -4116,8 +4211,13 @@ export function setup(ctx: Ctx, opts?: any) {
       s.startWatchdog = null;
     }
     s.expectingStart = 0;
+    const switched = lastChatId !== p.chatId;
     lastChatId = p.chatId;
     lastMessageId = p.messageId;
+    if (switched) {
+      paintFloat();
+      syncMasterNote();
+    }
     log(
       "gen start",
       p.generationId,
@@ -4149,6 +4249,9 @@ export function setup(ctx: Ctx, opts?: any) {
     if (!p || typeof p.chatId === "undefined") return;
     lastChatId = p.chatId || null;
     lastMessageId = null;
+    // Both of these describe the chat you are in, so both go stale on a switch.
+    paintFloat();
+    syncMasterNote();
   }
 
   // The text a token event carries. Builds name this field differently, so the
@@ -5336,7 +5439,7 @@ export function setup(ctx: Ctx, opts?: any) {
 
       const desc = document.createElement("div");
       desc.textContent =
-        "Paste a reply and see whether it would count as a refusal, and what decided it. It uses the settings as they are in the boxes above, so you can test a change before saving it. Nothing is sent anywhere and no reply is altered.";
+        "See whether a reply would count as a refusal, and what decided it. Use my last reply fills the box from the reply on screen behind this panel, or paste one in yourself. It uses the settings as they are in the boxes above, so you can test a change before saving it. Nothing is sent anywhere and no reply is altered.";
       desc.style.cssText =
         "font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
       wrap.appendChild(desc);
@@ -5355,8 +5458,44 @@ export function setup(ctx: Ctx, opts?: any) {
       out.style.cssText =
         "font-size:12px;line-height:1.45;min-height:1em;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
 
+      // Read off the page rather than out of a copy the extension kept. The
+      // last reply is already on screen behind this panel, and reading it at
+      // the moment the button is pressed means nothing has to be held onto
+      // between replies. SECURITY.md says a reply is read to check it and no
+      // copy is kept; a convenience button is not worth making that untrue.
+      const lastRenderedReply = (): string => {
+        try {
+          if (typeof document === "undefined") return "";
+          const all = document.querySelectorAll('[data-component="MessageContent"]');
+          for (let i = all.length - 1; i >= 0; i--) {
+            const t = String((all[i] as any).innerText || all[i].textContent || "").trim();
+            if (t) return t;
+          }
+        } catch (_) {}
+        return "";
+      };
+
+      const bar = document.createElement("div");
+      bar.style.cssText = "display:flex;flex-wrap:wrap;gap:8px;align-items:center";
+      const grab = btn("Use my last reply", false);
+      grab.style.cssText += "min-height:0;padding:6px 12px;flex:none";
+      grab.addEventListener("click", () => {
+        const text = lastRenderedReply();
+        if (!text) {
+          out.textContent =
+            "Couldn't find a reply on screen to read. Open a chat with a reply in it and try again.";
+          out.style.color = "var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+          ensureReadable(out, 2.6);
+          return;
+        }
+        ta.value = text;
+        out.textContent = "Filled in from the last reply on screen. Press Check this text.";
+        out.style.color = "var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+        ensureReadable(out, 2.6);
+      });
+
       const check = btn("Check this text", false);
-      check.style.cssText += "min-height:0;padding:6px 12px;align-self:flex-start";
+      check.style.cssText += "min-height:0;padding:6px 12px;flex:none";
       check.addEventListener("click", () => {
         // A box the user is still typing in has not fired its change event yet,
         // so its edit is not in cfg. Blurring first is what makes the test
@@ -5389,7 +5528,9 @@ export function setup(ctx: Ctx, opts?: any) {
         ensureReadable(out, 2.6);
       });
 
-      wrap.appendChild(check);
+      bar.appendChild(grab);
+      bar.appendChild(check);
+      wrap.appendChild(bar);
       wrap.appendChild(out);
       return wrap;
     }
@@ -5476,12 +5617,11 @@ export function setup(ctx: Ctx, opts?: any) {
     let searchBox: any = null;
     // Same reason as searchBox: applyDeps is defined long before this element
     // is built, and a const would still be in its dead zone if it ever ran early.
-    let masterNoteEl: any = null;
+
     applyDeps = () => {
       // Ahead of the search guard: whether the master switch is off has nothing
       // to do with what is being searched for, and this must not go stale.
-      if (masterNoteEl)
-        masterNoteEl.style.display = cfg.enabled === false ? "block" : "none";
+      syncMasterNote();
       if (searchBox && String(searchBox.value || "").trim()) {
         // The rows stay where the search put them, but the line naming the
         // switch a row is waiting on does not: turning that switch on from the
@@ -6052,13 +6192,29 @@ export function setup(ctx: Ctx, opts?: any) {
     masterNote.style.cssText =
       "display:none;flex:none;margin:0 0 10px;font-size:12px;line-height:1.45;" +
       "color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
-    masterNote.textContent =
-      "Auto Retry is off. These settings are saved and apply when you turn it back on.";
+    masterNote.setAttribute("data-ar-master", "1");
+    // Filled in by syncMasterNote, which has two states to describe rather than
+    // one: the master switch being off, and this chat being one it was told to
+    // leave alone. Someone who switched a chat off and forgot has no way to
+    // tell that from the extension having broken, so the panel says which.
+    const masterWords = document.createElement("span");
+    masterWords.style.cssText = "flex:1;min-width:0";
+    const masterBack = btn("Turn it back on here", false);
+    masterBack.style.cssText += "min-height:0;padding:4px 10px;font-size:12px;flex:none";
+    masterBack.addEventListener("click", () => {
+      setChatOff(lastChatId, false);
+    });
+    masterNote.style.cssText += ";align-items:center;gap:10px";
+    masterNote.appendChild(masterWords);
+    masterNote.appendChild(masterBack);
+    masterNoteBtn = masterBack;
     // Above the search box rather than below it. This is the panel's own state
     // and it stays put, while the line under the box is about the search and
     // comes and goes, so the lasting one reads first.
     panel.appendChild(masterNote);
     masterNoteEl = masterNote;
+    masterNoteWords = masterWords;
+    syncMasterNote();
     panel.appendChild(searchWrap);
 
     panel.appendChild(scroller);

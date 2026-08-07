@@ -129,7 +129,9 @@ Do not expect to find it in **Prompt Breakdown**. The note is not a message in y
 
 At the bottom of the refusal tuning section there is a box to paste a reply into, and a **Check this text** button. It tells you whether that reply would count as a refusal and what decided it: which phrase list matched, which built-in pattern fired, or why it was passed over (too long, on your whitelist, the built-ins switched off).
 
-It runs the same check a finished reply goes through, against the values in the boxes above rather than the saved ones, so you can try a change before you press Save. Nothing is sent anywhere and no reply is edited; it only reads the text you paste in.
+**Use my last reply** fills the box from the reply on screen behind the panel, so you can check the one that actually bothered you without copying it by hand. It reads what is rendered at the moment you press it; nothing is kept between replies.
+
+It runs the same check a finished reply goes through, against the values in the boxes above rather than the saved ones, so you can try a change before you press Save. Nothing is sent anywhere and no reply is edited; it only reads the text in the box.
 
 This is the fastest way to work out a phrase list. Paste a refusal your model actually produced and see whether it is caught. Paste an in-character line that keeps getting re-rolled and it names the rule catching it, which tells you what to put in "Never treat these as a refusal."
 

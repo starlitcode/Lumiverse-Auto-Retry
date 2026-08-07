@@ -41,6 +41,12 @@ Only **Save** keeps your changes. Closing with the X or tapping outside discards
 
 ## Turning it off quickly
 
+### Just this one chat
+
+Hold the floating button, or right-click it, and pick **Turn off in this chat**. Auto Retry leaves that chat alone and carries on everywhere else. It is remembered, so it survives a reload, and the settings panel says so at the top with a button to undo it, because a chat you switched off and forgot about looks exactly like the extension having stopped working.
+
+### Everywhere
+
 Two options in Basics, and you can use either or both:
 
 - **Floating on/off button** puts a small button over the chat that toggles it in one tap. Drag it anywhere; it snaps to the nearest edge and stays where you leave it, and you can set its size. Hold it, or right-click on a computer, for a menu with **Move back to the corner** and **Hide this button**.

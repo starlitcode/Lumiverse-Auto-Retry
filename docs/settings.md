@@ -8,6 +8,16 @@ Each option's **?** shows its description in a small popover just below that opt
 
 A setting that does nothing until something else is switched on is not shown until it is. Whole sections work the same way: turning **It looks like an accidental refusal** off takes the entire **Advanced: refusal tuning** section away, heading included, because nothing under it does anything while that is off. Turning **Send a note with a refusal retry** on adds the note rows below it, and turning it off takes them away again, so the panel only lists what is actually in use. The switch itself never moves. The search box ignores this and finds a setting whichever way its switch is set, so nothing is ever hidden from you when you go looking for it by name. A row found that way says which switch it is waiting on, so changing it never looks like it did nothing.
 
+## Turning it off in one chat
+
+The master switch is all or nothing, which is the wrong shape for a scene where the model is meant to refuse, or a chat you are using to test something.
+
+Hold the floating button, or right-click it, and pick **Turn off in this chat**. That chat is left alone and every other chat carries on. Hold it again for **Turn on in this chat**.
+
+It is written down in your browser, so it survives a reload. It is not a setting: it is a list of chat ids, which would mean nothing on another account, so it is not synced and not included in an export.
+
+While you are in a chat that is switched off, the top of the settings panel says so and offers **Turn it back on here**. That line is there because a chat you switched off weeks ago and forgot about looks exactly like the extension having stopped working.
+
 ## Resetting
 
 **Reset…** at the bottom of the panel opens a picker rather than putting everything back at once. Tick the parts you want returned to their defaults; anything you leave unticked is not touched. The parts are the same ones import and export use, so the names match between the two.

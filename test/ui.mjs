@@ -2255,6 +2255,128 @@ console.log("\nrefusal note");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- switching one chat off ----
+// The master switch is all or nothing, which is the wrong shape for a scene
+// where the model is meant to refuse in the middle of a day of ordinary chats.
+// Turning the whole extension off for that means remembering to turn it back
+// on, and forgetting looks exactly like the extension having stopped working.
+console.log("\nper-chat switch");
+{
+  const page = await browser.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await stage(page, '<div id=modal></div><div id=host></div><button data-testid="regenerate">Regenerate</button>');
+  await page.addStyleTag({ content: THEME });
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  const out = await page.evaluate(async () => {
+    const host = document.getElementById("host");
+    host.style.cssText = "position:fixed;left:120px;top:120px";
+    const handlers = {};
+    const acts = {};
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const teardown = window.__setup(
+      {
+        events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
+        ui: {
+          showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+          registerInputBarAction: (o) => {
+            const a = { onClick: (cb) => { a.cb = cb; return () => {}; }, destroy: () => {} };
+            acts[o.id] = a;
+            return a;
+          },
+          createFloatWidget: () => ({ root: host, destroy: () => {}, setPosition: () => {} }),
+        },
+      },
+      { enabled: true, showFloatingToggle: true, toast: false, retryDelayMs: 10,
+        backoffFactor: 1, maxDelayMs: 10, jitter: false, maxRetries: 4,
+        stuckTimeoutMs: 0, idleTimeoutMs: 0, pauseWhenFailing: false },
+    );
+    const btn = () => host.querySelector("button");
+    const menu = () => [...document.querySelectorAll('[role="menuitem"]')].map((b) => b.textContent);
+    const hold = async () => {
+      btn().dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, clientX: 130, clientY: 130 }));
+      await wait(620);
+      const items = menu();
+      return items;
+    };
+    const pick = (re) => [...document.querySelectorAll('[role="menuitem"]')].find((b) => re.test(b.textContent)).click();
+    const up = () => btn().dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
+    // Clicking the host regenerate button is how a retry shows itself.
+    let clicks = 0;
+    document.querySelector('[data-testid="regenerate"]').addEventListener("click", () => clicks++);
+
+    handlers.GENERATION_STARTED({ chatId: "A", generationId: "a1" });
+    await wait(10);
+    const menuOn = await hold();
+    pick(/off in this chat/i);
+    up();
+    await wait(20);
+
+    const offNow = { pressed: btn().getAttribute("aria-pressed"), label: btn().getAttribute("aria-label") };
+    // A failing reply in a chat that is switched off must not be retried.
+    const before = clicks;
+    handlers.GENERATION_ENDED({ chatId: "A", error: "boom" });
+    await wait(120);
+    const retriedWhileOff = clicks > before;
+
+    // Another chat is untouched.
+    handlers.GENERATION_STARTED({ chatId: "B", generationId: "b1" });
+    await wait(10);
+    const otherChatOn = btn().getAttribute("aria-pressed");
+    const beforeB = clicks;
+    handlers.GENERATION_ENDED({ chatId: "B", error: "boom" });
+    await wait(150);
+    const retriedElsewhere = clicks > beforeB;
+
+    // It survives a reload, which is the whole reason it is written down.
+    const remembered = JSON.parse(localStorage.getItem("lv-auto-retry:chats-off:v1") || "[]");
+
+    // And the panel says which of the two switches is in the way.
+    handlers.GENERATION_STARTED({ chatId: "A", generationId: "a2" });
+    await wait(10);
+    acts["auto-retry-settings"].cb();
+    await wait(30);
+    const note = document.querySelector("[data-ar-master]");
+    const noteShown = note && getComputedStyle(note).display !== "none";
+    const noteText = note ? note.textContent : "";
+    const backBtn = note ? [...note.querySelectorAll("button")].find((b) => /back on/i.test(b.textContent)) : null;
+    if (backBtn) backBtn.click();
+    await wait(20);
+    const afterBack = {
+      pressed: btn().getAttribute("aria-pressed"),
+      stored: JSON.parse(localStorage.getItem("lv-auto-retry:chats-off:v1") || "[]"),
+      noteShown: getComputedStyle(document.querySelector("[data-ar-master]")).display !== "none",
+    };
+    const menuBack = await hold();
+    up();
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+
+    teardown();
+    return { menuOn, offNow, retriedWhileOff, otherChatOn, retriedElsewhere, remembered,
+      noteShown, noteText, afterBack, menuBack };
+  });
+  await page.close();
+  check("the hold menu offers to switch this chat off",
+    out.menuOn.some((t) => /off in this chat/i.test(t)), out.menuOn);
+  check("the button shows it as off once it is", out.offNow.pressed === "false", out.offNow);
+  check("and says which switch is doing it", /off in this chat/i.test(out.offNow.label), out.offNow.label);
+  // The point of the whole thing.
+  check("a failed reply in that chat is not retried", !out.retriedWhileOff, out);
+  check("but another chat still is", out.retriedElsewhere, out);
+  check("and the button reads as on there", out.otherChatOn === "true", out.otherChatOn);
+  check("the chat is remembered across a reload", out.remembered.includes("A"), out.remembered);
+  // Somebody who switched a chat off and forgot cannot tell that from the
+  // extension having broken, unless the panel tells them.
+  check("the panel says this chat is switched off", out.noteShown && /off in this chat/i.test(out.noteText), out.noteText);
+  check("and offers the way back", out.afterBack.pressed === "true", out.afterBack);
+  check("which takes it out of the list", !out.afterBack.stored.includes("A"), out.afterBack.stored);
+  check("and puts the line away", !out.afterBack.noteShown, out.afterBack);
+  check("the menu then offers to switch it off again",
+    out.menuBack.some((t) => /off in this chat/i.test(t)), out.menuBack);
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- the prompt viewer ----
 // Lumiverse's own Prompt Breakdown lists what a chat is built from, which is a
 // different question from what actually went to the model after every extension
@@ -3128,8 +3250,10 @@ console.log("\nmaster switch off");
   const { out, errors } = await inPanel(browser, {}, async (page) =>
     page.evaluate(async () => {
       const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-      const note = () => [...document.querySelectorAll("#modal > div, #modal div")]
-        .find((d) => /Auto Retry is off/.test(d.textContent || "") && d.children.length === 0);
+      // By its attribute, not by its shape: the line carries a span and a
+      // button now, since it also has to describe a chat that was switched off
+      // and offer the way back from that.
+      const note = () => document.querySelector("[data-ar-master]");
       const showing = () => { const n = note(); return !!n && n.style.display !== "none"; };
       const rowsUp = () => [...document.querySelectorAll("[data-ar-row]")]
         .filter((r) => r.getClientRects().length > 0).length;
