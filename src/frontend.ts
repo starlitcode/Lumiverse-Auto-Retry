@@ -235,9 +235,9 @@ const CONFIG = {
     'button[aria-label*="stop" i], button[title*="stop" i], [class*="_sendBtnStop_"]',
 
   toast: true,
-  // The on-screen panel: a log of what the extension did, and a view of the
-  // prompt that went to the model, as two tabs of one thing. Handy on mobile,
-  // where there is no console to open. Off by default.
+  // The on-screen panel: what the extension did, what went to the model, and
+  // what it has been doing overall, as three tabs of one thing. Handy on
+  // mobile, where there is no console to open. Off by default.
   //
   // One setting, not two. The prompt is only captured while its tab is actually
   // open, so there is nothing for a second switch to buy: a switch left on
@@ -752,7 +752,7 @@ const SCHEMA: Group[] = [
         key: "liveLog",
         label: "Show the on-screen panel",
         type: "bool",
-        hint: "Puts a small panel in the corner with two tabs. Log shows what the extension is doing as it happens: generations, retries and why, finishes. Prompt shows the whole prompt that went to the model, every message in order, with your notes marked where they were inserted. Useful without opening the console, especially on a phone. Drag the header to move it, drag the corner to resize, and turn this off to hide it. The prompt is only captured while its tab is open, and only ever on your device.",
+        hint: "Puts a small panel in the corner with three tabs. Log shows what the extension is doing as it happens: generations, retries and why, finishes. Prompt shows the whole prompt that went to the model, every message in order, with your notes marked where they were inserted. Stats shows what it has been doing overall and what it keeps retrying for. Useful without opening the console, especially on a phone. Drag the header to move it, drag the corner to resize, and turn this off to hide it. The prompt is only captured while its tab is open, and only ever on your device.",
       },
     ],
   },

@@ -44,7 +44,7 @@ Every section header is a proper button, so the Advanced groups open with Enter 
 
 ## The on-screen panel
 
-One switch, **Show the on-screen panel**, puts a small panel in the corner with two tabs. Drag the header to move it, drag the bottom-right corner to resize it. Both work with a mouse and with a finger.
+One switch, **Show the on-screen panel**, puts a small panel in the corner with three tabs. Drag the header to move it, drag the bottom-right corner to resize it. Both work with a mouse and with a finger.
 
 **Log** is what the extension is doing as it happens: generations starting, retries and why, replies that came back fine, notes going out.
 
