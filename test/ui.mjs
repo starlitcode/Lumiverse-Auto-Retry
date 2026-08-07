@@ -1447,6 +1447,94 @@ console.log("\nlive countdown");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- the Stats clock ----
+// "Watching for" counts up on its own, so it has to move on its own. It was
+// rounded to the nearest minute and drawn once, which meant it read "1 minute"
+// for the first ninety seconds of every session and then never changed again
+// until something else happened to redraw the view.
+console.log("\nstats clock");
+{
+  const page = await browser.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await stage(page, "<div id=modal></div>");
+  await page.addStyleTag({ content: THEME });
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  const out = await page.evaluate(async () => {
+    const realSet = window.setInterval;
+    const realClear = window.clearInterval;
+    const live = new Set();
+    window.setInterval = function (...a) { const id = realSet.apply(window, a); live.add(id); return id; };
+    window.clearInterval = function (id) { live.delete(id); return realClear.call(window, id); };
+    const teardown = window.__setup(
+      { events: { on: () => () => {} },
+        ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+              registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) } },
+      { liveLog: true, toast: false },
+    );
+    const tab = (name) =>
+      [...document.querySelectorAll('#__lvRetryLog [role="tab"], #__lvRetryLog button')]
+        .find((b) => (b.textContent || "").trim() === name);
+    const body = () => {
+      const el = document.getElementById("__lvRetryLogBody");
+      return el ? el.textContent || "" : "";
+    };
+    const watched = () => {
+      const m = /Watching for\s*((?:\d+h )?(?:\d+m )?\d+s)/.exec(body());
+      return m ? m[1] : null;
+    };
+    const stats = tab("Stats");
+    if (!stats) return { err: "no Stats tab" };
+    stats.click();
+    await new Promise((r) => setTimeout(r, 100));
+    const first = watched();
+    const onStats = live.size;
+    await new Promise((r) => setTimeout(r, 1300));
+    const later = watched();
+    // Switching away has to take its clock with it, or every tab visited in a
+    // session leaves one running against elements that are gone. All of them
+    // share one interval, so a leak does not show up as a second interval; what
+    // it would show up as is the count creeping past one. Switched back and
+    // forth enough times that a per-view interval could not hide.
+    let peak = live.size;
+    for (let i = 0; i < 5; i++) {
+      const log = tab("Log");
+      log && log.click();
+      await new Promise((r) => setTimeout(r, 60));
+      peak = Math.max(peak, live.size);
+      const back = tab("Stats");
+      back && back.click();
+      await new Promise((r) => setTimeout(r, 60));
+      peak = Math.max(peak, live.size);
+    }
+    const onLog = live.size;
+    // Back on Log for the teardown, so the count that follows is not the Stats
+    // view's alone.
+    const done = tab("Log");
+    done && done.click();
+    await new Promise((r) => setTimeout(r, 60));
+    teardown();
+    await new Promise((r) => setTimeout(r, 100));
+    const afterTeardown = live.size;
+    window.setInterval = realSet;
+    window.clearInterval = realClear;
+    const secs = (s) => {
+      const m = /(?:(\d+)h )?(?:(\d+)m )?(\d+)s/.exec(s || "");
+      return m ? Number(m[1] || 0) * 3600 + Number(m[2] || 0) * 60 + Number(m[3]) : null;
+    };
+    return { first, later, onStats, onLog, peak, afterTeardown, firstN: secs(first), laterN: secs(later) };
+  });
+  await page.close();
+  check("Stats says how long it has been watching", out.firstN !== null, out);
+  check("in seconds, not rounded to a minute", out.firstN < 60, out);
+  check("and the number climbs on its own", out.laterN !== null && out.laterN > out.firstN, out);
+  check("something is ticking while Stats is up", out.onStats >= 1, out);
+  check("switching tabs never stacks up another clock", out.peak === 1, out);
+  check("and nothing is ticking after teardown", out.afterTeardown === 0, out);
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- the clock stops when nothing is watching it ----
 // A repaint loop is cheap until it is left running in every tab someone has
 // open. It has to start when something needs it and stop by itself.

@@ -2165,8 +2165,19 @@ export function setup(ctx: Ctx, opts?: any) {
 
   const rough = (n: number) => (n < 1000 ? String(n) : Math.round(n / 100) / 10 + "k");
 
+  // The Stats view's own clock, which only the Stats view has. Dropped before
+  // anything is drawn, so switching tabs or redrawing cannot leave a second one
+  // running against elements that are no longer on the page.
+  let statsTick: (() => void) | null = null;
+  function stopStatsTick() {
+    if (!statsTick) return;
+    removeTicker(statsTick);
+    statsTick = null;
+  }
+
   function renderLiveLog() {
     if (!liveLogBody) return;
+    stopStatsTick();
     if (paintTabs) {
       try { paintTabs(); } catch (_) {}
     }
@@ -2194,7 +2205,6 @@ export function setup(ctx: Ctx, opts?: any) {
     body.replaceChildren();
     body.style.whiteSpace = "normal";
 
-    const mins = Math.max(1, Math.round((Date.now() - stats.since) / 60000));
     const line = (label: string, value: string, quiet?: boolean) => {
       const row = document.createElement("div");
       row.style.cssText =
@@ -2209,7 +2219,9 @@ export function setup(ctx: Ctx, opts?: any) {
       row.appendChild(l);
       row.appendChild(v);
       body.appendChild(row);
-      return row;
+      // The value, so a line that changes on its own can be rewritten without
+      // rebuilding the view around it.
+      return v;
     };
 
     const total = stats.good + stats.retries;
@@ -2221,11 +2233,11 @@ export function setup(ctx: Ctx, opts?: any) {
       if (stats.notesSkipped)
         line("Notes not sent", String(stats.notesSkipped), true);
     }
-    line(
-      "Watching for",
-      mins + (mins === 1 ? " minute" : " minutes"),
-      true,
-    );
+    // Counts up on its own, so it is written the same way as everything else
+    // that does: hours and minutes as they are needed, seconds throughout. A
+    // number rounded to the nearest minute sat there saying "1 minute" for the
+    // first ninety seconds of every session.
+    const watched = line("Watching for", sayTime(Date.now() - stats.since), true);
     if (total)
       line(
         "One reply in",
@@ -2237,18 +2249,19 @@ export function setup(ctx: Ctx, opts?: any) {
 
     // Paused is a state, not a count, and it is the one that explains why
     // nothing is happening.
+    let paused: HTMLElement | null = null;
+    const pausedWords = () =>
+      "Paused after repeated failures. " + sayTime(pausedUntil - Date.now()) +
+      " left, or until a reply comes back fine.";
     if (cfg.pauseWhenFailing && Date.now() < pausedUntil) {
-      const left = Math.max(1, Math.round((pausedUntil - Date.now()) / 60000));
       const note = document.createElement("div");
       note.style.cssText =
         "margin:6px 0 0;padding:4px 6px;border-radius:var(--lumiverse-radius-sm,5px);" +
         "border-left:3px solid var(--lumiverse-warning,#f59e0b);" +
         "background:var(--lumiverse-warning-015,rgba(245,158,11,.15))";
-      note.textContent =
-        "Paused after repeated failures. About " + left +
-        (left === 1 ? " minute" : " minutes") +
-        " left, or until a reply comes back fine.";
+      note.textContent = pausedWords();
       body.appendChild(note);
+      paused = note;
     }
 
     const names = Object.keys(stats.reasons).sort(
@@ -2302,6 +2315,21 @@ export function setup(ctx: Ctx, opts?: any) {
       }
     }
     try { ensureReadableTree(body); } catch (_) {}
+
+    // The two lines here that move on their own, kept moving. Only their words
+    // are rewritten: rebuilding the whole view four times a second would throw
+    // away the scroll position every tick and redraw a dozen bars that have not
+    // changed. Everything else in here only changes when something happens, and
+    // something happening already redraws the view.
+    statsTick = () => {
+      watched.textContent = sayTime(Date.now() - stats.since);
+      if (!paused) return;
+      // The pause can end while it is on screen, and a note still counting down
+      // past zero would be worse than no note.
+      if (Date.now() >= pausedUntil) renderLiveLog();
+      else paused.textContent = pausedWords();
+    };
+    addTicker(statsTick);
   }
 
   // What actually went to the model, as the interceptor saw it: every message
@@ -2496,7 +2524,7 @@ export function setup(ctx: Ctx, opts?: any) {
         "replies that came back fine: " + stats.good,
         "retries fired: " + stats.retries,
         "messages it gave up on: " + stats.gaveUp,
-        "watching for: " + Math.max(1, Math.round((Date.now() - stats.since) / 60000)) + " min",
+        "watching for: " + sayTime(Date.now() - stats.since),
       ];
       const names = Object.keys(stats.reasons).sort((a, b) => stats.reasons[b] - stats.reasons[a]);
       if (names.length) {
@@ -2747,6 +2775,7 @@ export function setup(ctx: Ctx, opts?: any) {
     if (liveLogEl && (liveLogEl as any).__stopStatus) {
       try { (liveLogEl as any).__stopStatus(); } catch (_) {}
     }
+    stopStatsTick();
     if (liveLogEl && liveLogEl.parentNode) {
       try {
         liveLogEl.parentNode.removeChild(liveLogEl);
@@ -4610,15 +4639,18 @@ export function setup(ctx: Ctx, opts?: any) {
       const runsNeeded = breakerRuns();
       if (cfg.pauseWhenFailing && failedRuns >= runsNeeded) {
         const pauseMs = breakerPauseMs();
-        const mins = Math.round(pauseMs / 60000);
         pausedUntil = Date.now() + pauseMs;
         failedRuns = 0;
-        log("paused for " + mins + " min after " + runsNeeded + " failed runs");
+        log("paused for " + sayTime(pauseMs) + " after " + runsNeeded + " failed runs");
+        // Said the same way as the countdown that follows it on the panel, and
+        // for the same reason the countdown grew hours: this pause can be set
+        // to three hours, and "180 minutes" leaves you doing the division.
+        //
         // Forced: the toast setting covers the pop-up on each retry, and going
         // quiet for minutes at a time is a state change, not a retry. A
         // user who sees nothing has no way to tell this from the thing breaking.
         showToast(
-          "Auto-retry paused for " + mins + (mins === 1 ? " minute" : " minutes") +
+          "Auto-retry paused for " + sayTime(pauseMs) +
           ": the last " + runsNeeded + (runsNeeded === 1 ? " run" : " runs") + " failed.",
           { force: true },
         );
