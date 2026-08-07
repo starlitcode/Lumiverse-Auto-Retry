@@ -85,7 +85,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "4.4.1";
+const VERSION = "4.4.2";
 // ---- defaults (the UI overrides these; editing here changes the fallback) ----
 const CONFIG = {
     enabled: true,
@@ -706,6 +706,61 @@ const SCHEMA = [
 function stripMarkup(text) {
     return String(text == null ? "" : text).replace(/<\/?[a-zA-Z][^>]{0,400}>/g, "");
 }
+// Containers whose closing tag is not optional, and which a model only ever
+// writes as a matched pair. A tracker is built out of these. The ones with an
+// optional end tag in HTML are left out on purpose (p, li, tr, td, th): models
+// write "<li>one<li>two" and mean it, and counting those would re-roll a
+// finished reply. When a table really is cut short its own <table> is left
+// open, which is in here, so nothing is lost by leaving its cells out.
+const HTML_CONTAINERS = "div|table|thead|tbody|tfoot|ul|ol|dl|pre|blockquote|details|section|article|figure|figcaption|form|fieldset";
+// Inline tags are left out for the same reason in reverse: a model colouring
+// speech with <span> and forgetting the close has written a finished reply
+// badly, not an unfinished one, and throwing that reply away costs more than
+// the miss does.
+// Markup the reply opened and never closed. This is the code equivalent of an
+// opened quote: the reply stopped inside something it had started, and what it
+// stopped inside happens to be a tag rather than a sentence.
+//
+// It also has to run before a block ending is accepted as an ending, or a
+// tracker cut off halfway through would be waved past on the strength of the
+// last closing tag it managed to write.
+function markupLeftOpen(shown) {
+    // A tag with no closing bracket can only be the last one in the reply, since
+    // any "<" with a ">" after it finished. So this looks at the tail rather than
+    // searching for one, which matters: the searching version walked to the end
+    // of the string from every "<" it found, and a reply that was 50k half-written
+    // tags took it 48 seconds. This is one scan.
+    const lastLt = shown.lastIndexOf("<");
+    if (lastLt >= 0 && shown.indexOf(">", lastLt) < 0) {
+        const tail = shown.slice(lastLt, lastLt + 400);
+        // Cut inside the tag itself: "<div class=", or "<table" with nothing after.
+        // Named tags only, and none of the one-letter ones, so "if x<y then" and
+        // "the value was <b" are left alone. A tag being written is worth catching;
+        // a comparison someone typed is not.
+        if (new RegExp("^<(?:" + HTML_CONTAINERS + "|span|img|br|hr|code|strong|input|h[1-6]|font|small|mark|summary)\\b", "i").test(tail))
+            return true;
+        // Cut inside an attribute value: <x class="wea . Any tag name here, since
+        // an attribute half-written is unambiguous on its own.
+        if (/^<[a-zA-Z][a-zA-Z0-9]{0,20}\s[^>]{0,300}?[a-zA-Z-]\s*=\s*["']/.test(tail))
+            return true;
+    }
+    // A comment with no end. The reply stopped inside it, and everything after
+    // would have been hidden anyway.
+    if (shown.lastIndexOf("<!--") > shown.lastIndexOf("-->"))
+        return true;
+    for (const name of HTML_CONTAINERS.split("|")) {
+        const opened = shown.match(new RegExp("<" + name + "\\b[^>]*>", "gi")) || [];
+        // <div /> closes itself and is not an opening on its own.
+        let open = 0;
+        for (const tag of opened)
+            if (!/\/>$/.test(tag))
+                open++;
+        const shut = (shown.match(new RegExp("</" + name + "\\s*>", "gi")) || []).length;
+        if (open > shut)
+            return true;
+    }
+    return false;
+}
 // A reply can stop on something that is not a sentence and still be finished.
 // Trackers are the usual case: a weather box, a stat block or a status line
 // that a card asks for at the end of every reply. None of them close on a full
@@ -807,6 +862,8 @@ function looksTruncated(text, retryOnNoPunct, cfg) {
         return true; // open code fence
     if ((t.replace(/```/g, "").match(/`/g) || []).length % 2 === 1)
         return true; // open inline code
+    if (markupLeftOpen(shown))
+        return true; // stopped inside a tag or a container
     // Everything below this line is about prose: dialogue left open, a sentence
     // stopping on a comma, a word cut in half. Code is none of those, and it is
     // full of the same characters meaning something else. One `const a = b * 2;`
@@ -838,6 +895,12 @@ function looksTruncated(text, retryOnNoPunct, cfg) {
         return true; // mismatched smart quotes
     if (/[,;]$/.test(prose))
         return true; // cut mid-clause
+    // A status block written as raw JSON, stopped inside itself: {"temp": 24,
+    // "sky": . Counted outside code, where a brace is nearly always half of a
+    // pair, and only in the one direction, since a stray closing brace says
+    // nothing about the reply having stopped early.
+    if ((prose.match(/\{/g) || []).length > (prose.match(/\}/g) || []).length)
+        return true;
     if (retryOnNoPunct && !endsOnPunctuation(t) && !endsOnABlock(shown, t))
         return true;
     return false;

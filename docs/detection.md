@@ -7,6 +7,7 @@ This page covers the two checks that look at the text of a finished reply. The o
 A reply that streams real text and then gets chopped off mid-sentence is easy to miss. Lumiverse does not tell an extension *why* a reply ended, so this works off the shape of the text instead. `retryOnTruncated` (on by default) treats a reply as cut off when its structure is left open. Reasoning blocks are removed before these are counted, so punctuation inside a model's thinking cannot unbalance them; a reasoning block left open with no close still counts as cut off. This does not depend on the **Ignore the thinking / reasoning** option, which applies to refusal matching only. The checks:
 
 - an unclosed code block or inline backtick
+- markup left open: a container never closed, a tag with no closing bracket, a comment with no end (see below)
 - an odd number of emphasis `*`, an open action or emphasis (bullet lists are ignored so a list doesn't look half-open)
 - an unbalanced quote, open dialogue
 - it ends on a comma or semicolon, cut mid-clause
@@ -27,6 +28,18 @@ The last check has an exception of its own, for cards that print a tracker every
 - two or more label lines in a row, `HP: 20/20` over `Time: 14:00`, with or without bold around the label
 
 Two are needed rather than one, because an ordinary sentence can carry a colon and a tracker never has only the one field, so a reply genuinely cut after "he said:" is still caught. So is prose that stops mid-sentence after a tracker: the exception is about what the reply ends on, not about what it contains.
+
+### When the code itself is cut off
+
+Letting a reply end on a block means the last thing it managed to write can be a closing tag, and a tracker that stopped early ends on one of those too. So markup left open is checked before a block ending is accepted as an ending. A reply that stopped inside something it had started is cut off whatever it stopped on, the same as an opened quote:
+
+- a container opened and never closed, `<div>`, `<table>`, `<ul>`, `<pre>`, `<blockquote>` and the like
+- a tag with no closing bracket, `<div class="wx"`, or one cut off inside an attribute, `<div class="we`
+- an HTML comment with no `-->`
+- an unclosed code fence or inline backtick, which is where this started
+- more `{` than `}` outside code, which is a status block written as raw JSON stopping mid-field
+
+Elements whose end tag is optional in HTML are left out of the container count: models write `<ul><li>one<li>two</ul>` and mean it. A table that really was cut short leaves its own `<table>` open, which is counted, so nothing is lost. Inline tags are left out from the other direction: a model colouring speech with `<span>` and forgetting the close has written a finished reply badly, not an unfinished one, and re-rolling it costs more than the miss does. A `<` someone typed in a scene is not a tag, so `if x<y then` and `the value was < 5` are left alone.
 
 That last check reads punctuation in any script, and treats an emoji as an ending too, so a scene closing on `。`, `؟`, `!` or `👋` is left alone. What it fires on is a reply that stops mid-word. It was off by default in earlier versions because the test for an ending was a list of Latin characters, which made it wrong too often to leave on.
 

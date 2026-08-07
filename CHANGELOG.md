@@ -8,6 +8,20 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 4.4.2
+
+_2026-08-07_
+
+### Fixed
+
+- **A tracker cut off halfway through is caught again.** The other side of 4.4.1. Letting a reply end on a block means the last thing it managed to write can be a closing tag, and a tracker that stopped early ends on one of those too, so `<div class="wx"><b>Weather</b>` was being passed as finished. Markup left open is now checked before a block ending is accepted: a container opened and never closed, a tag with no closing bracket, a tag cut off inside an attribute, an HTML comment with no end. A reply that stopped inside something it had started is cut off whatever it stopped on, the same as an opened quote.
+- **A status block written as raw JSON is checked too.** `{"temp": 24, "sky":` ends on a colon, which counted as an ending. Braces are counted outside code now, in the one direction that means something.
+- **Some of that could have locked the tab.** Looking for a tag with no closing bracket walked to the end of the reply from every `<` it found, so the cost was the square of the length: a reply made of 50,000 half-written tags took 48 seconds. Only the last `<` in a reply can be unclosed, so there is one scan to do, and it now does one. That reply takes 59 milliseconds. The check is held to growing with the length rather than its square from here.
+
+What has not started counting: a `<` someone typed in a scene, `if x<y`, a `<span>` left open on a reply that clearly finished, or list items written without their end tags. An inline tag left hanging is a finished reply written badly, and that is not worth throwing the reply away over.
+
+---
+
 ## 4.4.1
 
 _2026-08-07_

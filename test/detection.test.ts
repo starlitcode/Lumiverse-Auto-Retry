@@ -497,6 +497,51 @@ describe("code in a reply is not unfinished prose", () => {
   });
 });
 
+// The other half of leaving trackers alone: knowing when one was cut short.
+//
+// Letting a reply end on a block means the last thing it managed to write can
+// be a closing tag, and a tracker cut off halfway through ends on one of those
+// too. So markup left open is checked first, and a reply that stopped inside
+// something it had started is cut off whatever it stopped on. This is the code
+// equivalent of an opened quote.
+describe("code and markup left open", () => {
+  const cut: Array<[string, string]> = [
+    ["a fence with no close", "Here you go.\n\n```js\nconst a = 1;"],
+    ["an inline span with no close", "Run `npm i to install."],
+    ["a container with text after it", '<div class="wx">Sunny 24C'],
+    ["a container ending on another tag", '<div class="wx"><b>Weather</b>'],
+    ["a table cut after a cell", "<table><tr><td>Mon</td><td>Sunny</td>"],
+    ["a tag with no closing bracket", 'She left.\n\n<div class="wx"'],
+    ["a tag cut inside an attribute", 'She left.\n\n<div class="we'],
+    ["a tag cut after its name", "She left.\n\n<div"],
+    ["a comment with no end", "Done.\n<!-- tracker"],
+    ["raw JSON cut mid-field", 'Status:\n{"temp": 24, "sky":'],
+  ];
+  for (const [name, text] of cut) {
+    test(name + " is cut off", () => {
+      expect(looksTruncated(text, true, {})).toBe(true);
+    });
+  }
+
+  // What must not start counting. A "<" someone typed is not a tag, and an
+  // inline tag left open is a finished reply written badly, which is not worth
+  // throwing the reply away over.
+  const fine: Array<[string, string]> = [
+    ["a closed container", '<div class="wx">Sunny 24C</div>'],
+    ["a comparison in prose", "The value was < 5 and falling."],
+    ["a comparison with no space", "If x<y then he wins."],
+    ["a macro that survived", "{{char}} smiled at {{user}}."],
+    ["a whole JSON block", 'Status:\n{"temp": 24, "sky": "clear"}'],
+    ["a span left open on a finished reply", '<span style="color:red">She smiled.'],
+    ["list items with no end tags", "<ul><li>one<li>two</ul>"],
+  ];
+  for (const [name, text] of fine) {
+    test(name + " is finished", () => {
+      expect(looksTruncated(text, true, {})).toBe(false);
+    });
+  }
+});
+
 // The reason this check could not be on by default before. The test for an
 // ending was a list of Latin characters, so a finished reply in most of the
 // world's scripts counted as having no ending at all.

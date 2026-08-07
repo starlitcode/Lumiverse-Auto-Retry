@@ -59,6 +59,8 @@ describe("nothing hangs on a pathological reply", () => {
     ["20k reasoning openers", "<think>".repeat(20000)],
     ["5k channel blocks", "<|channel|>analysis<|message|>x".repeat(5000)],
     ["100k asterisks", "*".repeat(100000)],
+    ["50k half-written tags", "<div class=".repeat(50000)],
+    ["20k unclosed containers", "<div>".repeat(20000)],
     ["100k newlines", "a\n".repeat(50000)],
   ];
   for (const [name, text] of cases) {
@@ -93,6 +95,25 @@ describe("nothing hangs on a pathological reply", () => {
     // Four times the input. Quadratic would be about sixteen times the work;
     // the allowance is loose because these are milliseconds and a busy machine
     // is noisy, but sixteen-fold growth cannot hide inside it.
+    expect(large).toBeLessThanOrEqual(Math.max(60, small * 8));
+  });
+
+  // The same shape, one check along. Looking for a tag with no closing bracket
+  // used to walk to the end of the reply from every "<" it found, so a reply
+  // made of half-written tags cost the square of its length: 50k of them took
+  // 48 seconds, which is a locked tab on somebody's longest scene. Only the
+  // last "<" can be unclosed, so there is one scan to do and this holds it to
+  // one.
+  test("looking for an unclosed tag grows with the input too", () => {
+    const cost = (n: number) => {
+      const text = "<div class=".repeat(n);
+      const started = Date.now();
+      T.looksTruncated(text, true, {});
+      return Date.now() - started;
+    };
+    cost(2000);
+    const small = cost(10000);
+    const large = cost(40000);
     expect(large).toBeLessThanOrEqual(Math.max(60, small * 8));
   });
 });
