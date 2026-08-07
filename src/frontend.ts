@@ -95,7 +95,7 @@ const STREAM_BUF_MAX = 200000;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "4.4.2";
+const VERSION = "4.4.1";
 
 // ---- defaults (the UI overrides these; editing here changes the fallback) ----
 const CONFIG = {

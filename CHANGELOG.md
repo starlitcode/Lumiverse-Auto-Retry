@@ -8,20 +8,6 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
-## 4.4.2
-
-_2026-08-07_
-
-### Fixed
-
-- **A tracker cut off halfway through is caught again.** The other side of 4.4.1. Letting a reply end on a block means the last thing it managed to write can be a closing tag, and a tracker that stopped early ends on one of those too, so `<div class="wx"><b>Weather</b>` was being passed as finished. Markup left open is now checked before a block ending is accepted: a container opened and never closed, a tag with no closing bracket, a tag cut off inside an attribute, an HTML comment with no end. A reply that stopped inside something it had started is cut off whatever it stopped on, the same as an opened quote.
-- **A status block written as raw JSON is checked too.** `{"temp": 24, "sky":` ends on a colon, which counted as an ending. Braces are counted outside code now, in the one direction that means something.
-- **Some of that could have locked the tab.** Looking for a tag with no closing bracket walked to the end of the reply from every `<` it found, so the cost was the square of the length: a reply made of 50,000 half-written tags took 48 seconds. Only the last `<` in a reply can be unclosed, so there is one scan to do, and it now does one. That reply takes 59 milliseconds. The check is held to growing with the length rather than its square from here.
-
-What has not started counting: a `<` someone typed in a scene, `if x<y`, a `<span>` left open on a reply that clearly finished, or list items written without their end tags. An inline tag left hanging is a finished reply written badly, and that is not worth throwing the reply away over.
-
----
-
 ## 4.4.1
 
 _2026-08-07_
@@ -31,6 +17,13 @@ _2026-08-07_
 - **A card that prints a tracker no longer has every reply thrown away.** 4.4.0 turned **Retry when a reply has no ending punctuation** on by default, and a tracker is the one shape that check was worst at. A weather box, a stat block, a status line, a table: none of them end on a full stop, so the reply read as cut off mid-sentence, the retry ended the same way, and it went round until the cap stopped it. A reply that ends on a block ends on a block. Closing HTML, a markdown table row and a run of two or more label lines like `HP: 20/20` all count as an ending now. Prose that stops mid-sentence after a tracker is still caught, and a single line with a colon in it is still an ordinary sentence, since a tracker never has only the one field.
 - **Code in a reply is no longer read as unfinished writing.** The checks below the code fence count are about prose: dialogue left open, a sentence stopping on a comma, an emphasis run with no partner. A snippet is full of the same characters meaning something else, so one `const a = b * 2;` counted as an opened emphasis run and re-rolled a finished answer. Fenced blocks and inline spans are now left out of that counting. The fences and backticks themselves are still counted first, so a reply cut off inside a code block is caught exactly as before.
 - **A row of asterisks is no longer mistaken for an opened emphasis run.** `Mood: ***`, printed by a card as a gauge, or a line of them used as a divider. Emphasis has to touch the words it marks, so `*He nods*` and `**bold**` still count.
+
+### Added
+
+- **It notices when a tracker was cut off partway through.** The other half of leaving trackers alone. A reply that stopped inside something it had started is cut off whatever it stopped on, the same as one with an opened quote, so markup left open is checked before a block ending is accepted as an ending: a container opened and never closed, a tag with no closing bracket, a tag cut off inside an attribute, an HTML comment with no end. Without this, `<div class="wx"><b>Weather</b>` would read as finished on the strength of the last tag it managed to write.
+- **A status block written as raw JSON is checked too.** `{"temp": 24, "sky":` ends on a colon, and a colon is punctuation, so it read as a finished reply. Braces are counted outside code now, in the one direction that means something.
+
+What has not started counting: a `<` someone typed in a scene, `if x<y`, a `<span>` left open on a reply that clearly finished, or list items written without their end tags. Elements whose end tag is optional in HTML are left out of the container count, because models write `<ul><li>one<li>two</ul>` and mean it. An inline tag left hanging is a finished reply written badly, and that is not worth throwing the reply away over.
 
 ### Changed
 
