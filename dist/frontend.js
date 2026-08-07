@@ -1118,15 +1118,25 @@ function stripThinking(text, cfg) {
     t = t.replace(/<\|channel\|>\s*\w+\s*<\|message\|>/gi, " ");
     t = t.replace(/<\|(?:start|end|return|message|constrain)\|>/gi, " ");
     // <tag ...>...</tag> and [tag ...]...[/tag], same tag both ends, across newlines
-    t = t.replace(new RegExp("<(" + alt + ")(?:\\s[^>]*)?>[\\s\\S]*?<\\/\\1\\s*>", "gi"), " ");
-    t = t.replace(new RegExp("\\[(" + alt + ")(?:\\s[^\\]]*)?\\][\\s\\S]*?\\[\\/\\1\\s*\\]", "gi"), " ");
+    //
+    // Skipped when there is no closer anywhere in the reply. These patterns walk
+    // forward from every opener looking for the matching close, so a reply that
+    // is nothing but openers made each of them scan the whole remainder and find
+    // nothing: quadratic, and measurably so past a few thousand. One indexOf
+    // makes the hopeless case linear, and the openers are handled below anyway.
+    if (t.indexOf("</") >= 0)
+        t = t.replace(new RegExp("<(" + alt + ")(?:\\s[^>]*)?>[\\s\\S]*?<\\/\\1\\s*>", "gi"), " ");
+    if (t.indexOf("[/") >= 0)
+        t = t.replace(new RegExp("\\[(" + alt + ")(?:\\s[^\\]]*)?\\][\\s\\S]*?\\[\\/\\1\\s*\\]", "gi"), " ");
     // The pipe forms. Several models wrap their reasoning in <|think|>...<|/think|>
     // or <|think>...<think|> rather than in plain angle brackets, and neither was
     // recognised, so the whole reasoning block was read as part of the reply.
     // Both closers are accepted for either opener, since builds are not
     // consistent about which way round the pipe goes.
     const CLOSE = "<\\|?\\/?(?:" + alt + ")\\|?>";
-    t = t.replace(new RegExp("<\\|(" + alt + ")\\|?>[\\s\\S]*?" + CLOSE, "gi"), " ");
+    // Same guard, same reason: with no closer, every opener would scan to the end.
+    if (t.indexOf("|>") >= 0 || t.indexOf("</") >= 0)
+        t = t.replace(new RegExp("<\\|(" + alt + ")\\|?>[\\s\\S]*?" + CLOSE, "gi"), " ");
     // an unclosed opener running to the end (thinking cut off before the reply)
     t = t.replace(new RegExp("<\\|(?:" + alt + ")\\|?>[\\s\\S]*$", "i"), " ");
     t = t.replace(new RegExp("<(?:" + alt + ")(?:\\s[^>]*)?>[\\s\\S]*$", "i"), " ");

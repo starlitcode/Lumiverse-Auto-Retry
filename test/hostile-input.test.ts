@@ -39,11 +39,18 @@ describe("nothing throws on input that is not text", () => {
   }
 });
 
-// Each of these is shaped to make a careless pattern backtrack. The budget is
-// generous because a slow machine running the whole suite is still a pass; what
-// it is really catching is the difference between milliseconds and forever.
+// Each of these is shaped to make a careless pattern backtrack.
+//
+// A hang is caught by the per-test timeout below, not by measuring how long the
+// work took. A wall-clock assertion in here is itself a bug: the first version
+// of this file asserted under three seconds, passed on every machine it was
+// written on, and then failed on a CI runner that happened to be busy. What is
+// being tested is the difference between milliseconds and forever, and a
+// timeout says that without inventing a number that tracks machine load.
 describe("nothing hangs on a pathological reply", () => {
-  const BUDGET_MS = 3000;
+  // Long enough that only a genuine hang reaches it. The slowest of these is
+  // single-digit milliseconds when the patterns are behaving.
+  const NO_HANG_MS = 20000;
   const cases: Array<[string, string]> = [
     ["200k letters", "a".repeat(200000)],
     ["50k quotes", '"'.repeat(50000)],
@@ -55,15 +62,39 @@ describe("nothing hangs on a pathological reply", () => {
     ["100k newlines", "a\n".repeat(50000)],
   ];
   for (const [name, text] of cases) {
-    test(name, () => {
-      const started = Date.now();
-      expect(() => {
-        T.looksTruncated(text, true, {});
-        T.looksLikeRefusal(text, cfg);
-      }).not.toThrow();
-      expect(Date.now() - started).toBeLessThan(BUDGET_MS);
-    });
+    test(
+      name,
+      () => {
+        expect(() => {
+          T.looksTruncated(text, true, {});
+          T.looksLikeRefusal(text, cfg);
+        }).not.toThrow();
+      },
+      NO_HANG_MS,
+    );
   }
+
+  // The shape that made this file worth writing. Stripping reasoning walks
+  // forward from every opener looking for its closer, so a reply that is
+  // nothing but openers used to make each one scan the whole remainder: 5k
+  // openers took 96ms, 20k took 1.5s and 40k took 6s. Doubling the input has to
+  // roughly double the work, not quadruple it.
+  test("the work grows with the input, not with its square", () => {
+    const cost = (n: number) => {
+      const text = "<think>".repeat(n);
+      const started = Date.now();
+      T.looksTruncated(text, true, {});
+      T.looksLikeRefusal(text, cfg);
+      return Date.now() - started;
+    };
+    cost(2000); // warm, so the first call does not carry the whole cost
+    const small = cost(10000);
+    const large = cost(40000);
+    // Four times the input. Quadratic would be about sixteen times the work;
+    // the allowance is loose because these are milliseconds and a busy machine
+    // is noisy, but sixteen-fold growth cannot hide inside it.
+    expect(large).toBeLessThanOrEqual(Math.max(60, small * 8));
+  });
 });
 
 // SECURITY.md says a rule cannot turn into a regular expression by accident.
