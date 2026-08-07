@@ -17,7 +17,11 @@ Inline HTML is removed before any of this is counted. Models colour their dialog
 
 ### Code and trackers
 
-Every check above the last one is about prose: dialogue left open, a sentence stopping on a comma, an emphasis run with no partner. Code is none of those, and it is full of the same characters meaning something else, so what is inside a code fence or an inline backtick span is left out of the counting. One `const a = b * 2;` in a snippet used to read as an opened emphasis run and re-roll a finished answer. The fences and the backticks themselves are counted first, while they are still there, so a reply cut off inside a code block is still caught. A reply that is nothing but a code block is a finished reply.
+Every check above the last one is about prose: dialogue left open, a sentence stopping on a comma, an emphasis run with no partner. Two things are not prose and are left out of that counting.
+
+The first is code, which is full of the same characters meaning something else, so what is inside a code fence or an inline backtick span is not counted. One `const a = b * 2;` in a snippet used to read as an opened emphasis run and re-roll a finished answer. The fences and the backticks themselves are counted first, while they are still there, so a reply cut off inside a code block is still caught. A reply that is nothing but a code block is a finished reply.
+
+The second is anything inside an HTML container that closed. The model reached the closing tag, so nothing in there was cut off and none of it can say whether the reply was. Cards that render a whole interface every reply, a chat window or a profile card, put dozens of nested `div`s of text into the reply, and that text is not written like prose: a height written `6'2"` is a single unpaired quotation mark, and it flipped the count for every properly closed piece of dialogue around it. Nothing is lost by trusting a closing tag, because a reply cut off inside a widget never reaches one, which leaves the container open and is read as cut off below. Prose after a widget is still prose, so a reply that renders its card and then stops mid-sentence is still caught.
 
 A row of asterisks with space on either side is not emphasis either. `Mood: ***`, printed by a card as a gauge, and a line of them used as a divider both stopped counting. Emphasis has to touch the words it marks, so `*He nods*` and `**bold**` are unaffected.
 

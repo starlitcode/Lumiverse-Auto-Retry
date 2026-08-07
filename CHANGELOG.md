@@ -8,6 +8,16 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 4.5.2
+
+_2026-08-07_
+
+### Fixed
+
+- **A card that renders a whole interface no longer has its replies thrown away.** A chat window, a profile card, a stat panel: dozens of nested `div`s with text inside them. The checks for open dialogue and unpaired emphasis were reading that text as prose, and a height written `6'2"` is one unpaired quotation mark. That flipped the count for every properly closed piece of dialogue in the reply, so a finished reply read as having speech left open, got thrown away, and the replacement went the same way. What is inside a container that closed is finished writing, because the model reached the closing tag, so none of it is counted now. The same goes for a stray asterisk or a line ending on a comma inside a widget.
+
+Nothing is lost by trusting a closing tag, because a reply cut off inside a widget never reaches one: that leaves the container open, which is already read as cut off. Prose after a widget is still checked as prose, so a reply that renders its card and then stops mid-sentence is caught as it was.
+
 ## 4.5.1
 
 _2026-08-07_

@@ -554,6 +554,49 @@ describe("code and markup left open", () => {
   }
 });
 
+// A card that renders a whole interface every reply.
+//
+// These print a chat window, a profile card, a stat panel: dozens of nested
+// divs with text inside them. What is inside a container that closed is
+// finished writing, because the model reached the closing tag, so none of it
+// can say whether the reply was cut off. That has to be true or the prose
+// checks read a widget as prose: a height written `6'2"` is one unpaired
+// quotation mark, and it flipped the count for every properly closed piece of
+// dialogue in the reply, so a finished reply was thrown away and the next one
+// went the same way.
+describe("a widget that closed is finished, whatever is inside it", () => {
+  const CARD =
+    '<div class="card"><div style="color:#e1e1e6">31 &bull; 6\'2" &bull; 215 lbs</div></div>';
+
+  const finished: Array<[string, string]> = [
+    ["an inches mark in a stat line", CARD + "\n\nHe put the phone down."],
+    ["an odd asterisk inside it", '<div class="c">Mood: *high</div>\n\nShe left.'],
+    ["a line ending on a comma inside it", '<div class="c">a, b,</div>\n\nShe left.'],
+    ["dialogue inside it", '<div class="c">"Hi," he said.</div>\n\nDone.'],
+    ["two of them", CARD + "\n" + CARD + "\nDone."],
+  ];
+  for (const [name, text] of finished) {
+    test(name + " does not make the reply cut off", () => {
+      expect(looksTruncated(text, true, {})).toBe(false);
+    });
+  }
+
+  // Trusting a closing tag costs nothing, because a reply cut off inside a
+  // widget never reaches one.
+  const cut: Array<[string, string]> = [
+    ["stopped inside the widget", '<div class="card"><div style="color:red">31 &bull; 6\'2"'],
+    ["stopped after an inner close", '<div class="card"><div style="color:red">6\'2"</div>'],
+    ["prose after it stops mid-word", CARD + "\n\nHe put the phone"],
+    ["prose after it opens a quote", CARD + '\n\n"I never wanted'],
+    ["prose after it opens emphasis", '<div class="c">ok</div>\n\n*She steps back'],
+  ];
+  for (const [name, text] of cut) {
+    test(name + " is still cut off", () => {
+      expect(looksTruncated(text, true, {})).toBe(true);
+    });
+  }
+});
+
 // Dialogue coloured with a gradient span, above a details block: a real reply
 // from a real chat, and the format this check has to live with every message.
 // The whole thing has to pass, and every place the stream can stop inside it

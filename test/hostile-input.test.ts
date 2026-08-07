@@ -61,6 +61,10 @@ describe("nothing hangs on a pathological reply", () => {
     ["100k asterisks", "*".repeat(100000)],
     ["50k half-written tags", "<div class=".repeat(50000)],
     ["20k unclosed containers", "<div>".repeat(20000)],
+    ["20k unclosed containers and one close", "<div>".repeat(20000) + "</div>"],
+    ["10k balanced container pairs", "<div>x</div>".repeat(10000)],
+    ["10k containers nested inside each other", "<div>".repeat(10000) + "x" + "</div>".repeat(10000)],
+    ["50k closing tags with nothing opened", "</div>".repeat(50000)],
     ["100k newlines", "a\n".repeat(50000)],
   ];
   for (const [name, text] of cases) {

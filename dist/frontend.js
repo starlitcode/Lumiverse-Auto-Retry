@@ -85,7 +85,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "4.5.1";
+const VERSION = "4.5.2";
 // ---- defaults (the UI overrides these; editing here changes the fallback) ----
 const CONFIG = {
     enabled: true,
@@ -730,6 +730,78 @@ function stripMarkup(text) {
 // finished reply. When a table really is cut short its own <table> is left
 // open, which is in here, so nothing is lost by leaving its cells out.
 const HTML_CONTAINERS = "div|table|thead|tbody|tfoot|ul|ol|dl|pre|blockquote|details|section|article|figure|figcaption|form|fieldset";
+const HTML_CONTAINER_LIST = HTML_CONTAINERS.split("|");
+// The reply with every closed container taken out of it, content and all.
+//
+// Whatever is inside a container that closed is finished writing. The model got
+// to the closing tag, so nothing in there was cut off, and none of it can say
+// anything about whether the reply was. That matters because the prose checks
+// below count characters that mean something else inside a widget: a card that
+// prints `6'2"` in a stat line puts one unpaired quotation mark into the reply,
+// which flipped the count for every properly closed piece of dialogue around it
+// and re-rolled a finished reply.
+//
+// A reply cut off inside a widget leaves that widget's container open, so it is
+// not removed here and markupLeftOpen catches it. Nothing is lost by trusting a
+// closing tag.
+//
+// Scanned with indexOf rather than matched with a pattern. A pattern for a
+// balanced pair backtracks over every unclosed opener, which on a reply that is
+// nothing but half-written tags is the square of its length, and this file has
+// already been round that loop once.
+function withoutClosedContainers(shown) {
+    if (shown.indexOf("</") < 0)
+        return shown;
+    const ranges = [];
+    const open = [];
+    let i = 0;
+    // Far past any real reply. Stopping early only means less is removed, which
+    // is the behaviour this had before it existed.
+    let seen = 0;
+    while (i < shown.length && seen++ < 20000) {
+        const lt = shown.indexOf("<", i);
+        if (lt < 0)
+            break;
+        const gt = shown.indexOf(">", lt + 1);
+        if (gt < 0)
+            break; // a tag that never finished; markupLeftOpen has it
+        const tag = shown.slice(lt, gt + 1);
+        i = gt + 1;
+        const m = /^<(\/?)([a-zA-Z][a-zA-Z0-9]*)/.exec(tag);
+        if (!m)
+            continue;
+        const name = m[2].toLowerCase();
+        if (HTML_CONTAINER_LIST.indexOf(name) < 0)
+            continue;
+        if (m[1] === "/") {
+            // Back to the nearest opener of the same name, dropping anything left
+            // dangling inside it.
+            for (let k = open.length - 1; k >= 0; k--) {
+                if (open[k].name !== name)
+                    continue;
+                const from = open[k].at;
+                open.length = k;
+                // Only the outermost pair is recorded. Removing that takes everything
+                // nested inside it along too.
+                if (!open.length)
+                    ranges.push([from, gt + 1]);
+                break;
+            }
+        }
+        else if (!/\/>$/.test(tag)) {
+            open.push({ name: name, at: lt });
+        }
+    }
+    if (!ranges.length)
+        return shown;
+    let out = "";
+    let at = 0;
+    for (const r of ranges) {
+        out += shown.slice(at, r[0]) + " ";
+        at = r[1];
+    }
+    return out + shown.slice(at);
+}
 // Inline tags that only count when they carry an attribute. A bare <b> or <i>
 // left open is a finished reply written badly, and models fumble those in
 // ordinary prose often enough that counting them would re-roll good writing.
@@ -931,12 +1003,14 @@ function looksTruncated(text, retryOnNoPunct, cfg) {
     if (markupLeftOpen(shown))
         return true; // stopped inside a tag or a container
     // Everything below this line is about prose: dialogue left open, a sentence
-    // stopping on a comma, a word cut in half. Code is none of those, and it is
-    // full of the same characters meaning something else. One `const a = b * 2;`
-    // in a snippet counted as an opened emphasis run and re-rolled the reply. The
-    // fences and backticks themselves were counted just above, while they were
-    // still here; what they hold is not counted at all.
-    const prose = t
+    // stopping on a comma, a word cut in half. Code is none of those, and neither
+    // is the inside of a widget that closed, and both are full of the same
+    // characters meaning something else. One `const a = b * 2;` in a snippet
+    // counted as an opened emphasis run, and one `6'2"` in a stat line counted as
+    // an opened quotation mark, and each re-rolled a finished reply. The fences,
+    // the backticks and the tags themselves were all counted just above, while
+    // they were still here; what they hold is not counted at all.
+    const prose = stripMarkup(withoutClosedContainers(shown))
         .replace(/```[\s\S]*?```/g, " ")
         .replace(/`[^`\n]*`/g, " ")
         .replace(/\s+$/, "");
