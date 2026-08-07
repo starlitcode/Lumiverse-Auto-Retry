@@ -87,7 +87,7 @@ The same options live in the CONFIG block at the top of `src/frontend.ts` and `d
 | showFloatingToggle | false | Put a small draggable on/off button over the chat. |
 | floatingToggleSize | 44 | How wide that floating button is, in pixels (28-96). Shown only while `showFloatingToggle` is on. |
 | showExtrasToggle | false | Add an on/off entry to the chat input's Extras menu. Its label says which state it is in. |
-| maxRetries | 4 | Hard cap per message. Nothing retries past this. |
+| maxRetries | 4 | Hard cap per message. Nothing retries past this. The lowest is 1: to stop it retrying, switch it off rather than setting this to 0. |
 | pauseWhenFailing | true | Pause auto-retry after several whole runs give up in a row. Cleared by the next reply that comes back fine. |
 | breakerRuns | 3 | How many failed runs in a row trigger the pause. A run is one message that used up all its tries. Shown only while `pauseWhenFailing` is on. |
 | breakerPauseMins | 5 | How long the pause lasts, in minutes. A reply that comes back fine ends it early. Shown only while `pauseWhenFailing` is on. |

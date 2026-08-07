@@ -309,9 +309,15 @@ const SCHEMA = [
                 label: "Most tries per message",
                 type: "num",
                 int: true,
-                min: 0,
+                // One, not zero. Zero meant the give-up check passed on the first
+                // failure, so nothing was ever retried: a retry extension sitting there
+                // reporting itself as on and doing nothing, with no line anywhere
+                // saying why. There are two proper ways to stop it, the master switch
+                // and the per-chat switch, and both say so on screen. A number box is
+                // not a third one.
+                min: 1,
                 max: 50,
-                hint: "How many times it retries one message before giving up. 3 to 5 suits most people.",
+                hint: "How many times it retries one message before giving up. 3 to 5 suits most people. The lowest is 1, since 0 would leave the extension on and never retrying; to stop it retrying, switch it off instead, either everywhere or in this chat.",
             },
             {
                 key: "pauseWhenFailing",
@@ -4838,8 +4844,11 @@ export function setup(ctx, opts) {
         if (s.attempts >= cfg.maxRetries) {
             log("gave up", chatId, reason);
             s.attempts = 0;
-            // A try limit of zero means no retry was ever made, so there is no failed
-            // run to count and nothing worth announcing.
+            // Belt and braces. The lowest the box allows is 1, and a saved 0 from
+            // before that is clamped on load, so this cannot fire from the panel. It
+            // stays because nothing here should assume a number it did not clamp
+            // itself: at zero no retry was ever made, so there is no failed run to
+            // count and nothing worth announcing.
             if (cfg.maxRetries <= 0)
                 return;
             stats.gaveUp += 1;

@@ -160,3 +160,44 @@ describe("settings saved before a switch existed keep working", () => {
     expect(body).toContain("confirmButtonsCustom: true");
   });
 });
+
+// A number box is not an off switch.
+//
+// Several of these settings would stop the extension doing its job if they
+// could reach zero, and doing it that way is silent: the master switch and the
+// per-chat switch both put a line on screen saying they are the reason, and a
+// number quietly set to zero says nothing at all. The extension would sit there
+// lit up and watching, and never retry anything.
+describe("a setting cannot be used as a hidden off switch", () => {
+  const fields = () => {
+    const out: Array<{ key: string; min: string | null }> = [];
+    // Each field is the run between one "key:" and the next.
+    for (const block of SRC.split(/\n\s*\{\s*\n(?=\s*key:)/)) {
+      const k = /^\s*key:\s*"([A-Za-z0-9_]+)"/.exec(block);
+      if (!k) continue;
+      const head = block.split("\n},")[0];
+      if (!/\n\s*type:\s*"num"/.test(head)) continue;
+      const m = /\n\s*min:\s*(-?\d+)/.exec(head);
+      out.push({ key: k[1], min: m ? m[1] : null });
+    }
+    return out;
+  };
+
+  test("there are number settings, so this is checking something", () => {
+    expect(fields().length).toBeGreaterThanOrEqual(8);
+  });
+
+  test("the retry limit cannot be set to none", () => {
+    const f = fields().find((x) => x.key === "maxRetries");
+    expect(f).toBeTruthy();
+    expect(f!.min).toBe("1");
+  });
+
+  // A timeout of zero is a real setting: it means "do not watch for this", and
+  // the panel says as much. A retry limit of zero is not the same thing, since
+  // there is no other way to read it than the extension being off.
+  test("every number setting says what its floor is", () => {
+    const missing = fields().filter((f) => f.min === null).map((f) => f.key);
+    expect(missing).toEqual([]);
+  });
+});
