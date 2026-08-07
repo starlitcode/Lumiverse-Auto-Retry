@@ -28,7 +28,9 @@ It reads a reply only to run its checks on the one that just arrived, and it doe
 
 ## What it keeps
 
-Your settings and your word-swap presets are saved twice over: once in your browser's local storage, and once in Lumiverse's own per-user storage so they follow your account between devices. That is the only thing written anywhere.
+Your settings and your word-swap presets are saved twice over: once in your browser's local storage, and once in Lumiverse's own per-user storage so they follow your account between devices. That is the only thing that reaches your account.
+
+Two more things are written, and both stay in this browser. Where you left the on-screen panel and the floating button, which is two positions, a size and which tab was open, so an update does not put them back in the corner. And the list of chats you have switched Auto Retry off in, which is chat ids and nothing more: no titles and no text. Neither is synced and neither is included in an export, since a position on one screen and an id on one account mean nothing on another. That is everything written anywhere.
 
 Separately it keeps the last twenty lines of what it did, and a few counters for the session: replies that came back fine, retries fired, and what they fired for. That is all in memory, so the Copy debug info button has something to report. Both die with the tab. Neither is written to disk and neither leaves your device.
 
@@ -39,8 +41,6 @@ The on-screen panel's **Prompt** tab is the one part that holds more than that, 
 The Copy debug info button gathers your settings, your button selectors, your browser string, the session counters, and that recent activity log. The activity log records what the extension saw, so it can contain short fragments of a reply. Read what you copied before pasting it somewhere public, and untick any section you would rather keep to yourself. The tick boxes are there for exactly that.
 
 The **Copy** button on the on-screen panel is the same thing in miniature: on the Log tab it puts that whole activity log on your clipboard in one tap, fragments included, and on the Prompt tab it copies the entire prompt, which is most of your chat. It is there because selecting text by hand on a phone is awkward, and the same advice applies before you paste either anywhere.
-
-The list of chats you have switched Auto Retry off in is kept in your browser and nowhere else. It is chat ids and nothing more, no titles and no text, and it is not synced to your account or included in an export, since an id would mean nothing on another account anyway.
 
 The refusal tester in the settings panel only reads the text in its box. **Use my last reply** fills that box by reading the reply rendered on the page at the moment you press it, which is the same reply the extension already reads to run its checks. Nothing is kept between replies. It runs the check on your device and reports the verdict; it sends nothing and stores nothing.
 

@@ -1447,6 +1447,114 @@ console.log("\nlive countdown");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- the panel is where you left it ----
+// Updating the extension reloads it, and the panel used to come back in the
+// default corner at the default size every time. Dragging it clear of your
+// chat and sizing it to what you want to read is work, and having to redo it
+// on every update is what makes a panel not worth opening.
+console.log("\nlayout is remembered");
+{
+  const page = await browser.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await stage(page, "<div id=modal></div>");
+  await page.addStyleTag({ content: THEME });
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  const out = await page.evaluate(async () => {
+    const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const host = {
+      events: { on: () => () => {} },
+      ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+            registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) },
+    };
+    localStorage.removeItem("lv-auto-retry:layout:v1");
+    let teardown = window.__setup(host, { liveLog: true, toast: false });
+    const panel = () => document.getElementById("__lvRetryLog");
+    const box = () => {
+      const r = panel().getBoundingClientRect();
+      return { x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height) };
+    };
+    const opened = box();
+    // Drag the header, the way a person moves it.
+    const head = panel().firstElementChild;
+    const send = (type, x, y) =>
+      head.dispatchEvent(new PointerEvent(type, { bubbles: true, clientX: x, clientY: y, pointerId: 1 }));
+    send("pointerdown", opened.x + 40, opened.y + 8);
+    await frame();
+    send("pointermove", opened.x + 40 - 120, opened.y + 8 - 90);
+    await frame();
+    send("pointerup", opened.x + 40 - 120, opened.y + 8 - 90);
+    await frame();
+    const dragged = box();
+    // Resize by the corner grip.
+    const grip = panel().lastElementChild;
+    const g = (type, x, y) =>
+      grip.dispatchEvent(new PointerEvent(type, { bubbles: true, clientX: x, clientY: y, pointerId: 2 }));
+    g("pointerdown", dragged.x + dragged.w, dragged.y + dragged.h);
+    await frame();
+    g("pointermove", dragged.x + dragged.w + 60, dragged.y + dragged.h + 40);
+    await frame();
+    g("pointerup", dragged.x + dragged.w + 60, dragged.y + dragged.h + 40);
+    await frame();
+    const resized = box();
+    // The Stats tab, so the tab it reopens on is checked too.
+    const stats = [...panel().querySelectorAll('[role="tab"]')]
+      .find((b) => (b.textContent || "").trim() === "Stats");
+    stats && stats.click();
+    await frame();
+    const saved = JSON.parse(localStorage.getItem("lv-auto-retry:layout:v1") || "{}");
+
+    // Torn down and set up again, which is what an update looks like.
+    teardown();
+    await frame();
+    teardown = window.__setup(host, { liveTab: undefined, liveLog: true, toast: false });
+    await frame();
+    const reopened = box();
+    const onTab = (() => {
+      const b = [...panel().querySelectorAll('[role="tab"]')]
+        .find((x) => x.getAttribute("aria-selected") === "true");
+      return b ? (b.textContent || "").trim() : null;
+    })();
+    teardown();
+
+    // A layout saved on a big window must not strand the panel off a small one.
+    localStorage.setItem("lv-auto-retry:layout:v1", JSON.stringify({
+      panel: { x: 99999, y: 99999, w: 99999, h: 99999 },
+    }));
+    teardown = window.__setup(host, { liveLog: true, toast: false });
+    await frame();
+    const clamped = box();
+    teardown();
+    // Nonsense in the store must not put it somewhere with no way back.
+    localStorage.setItem("lv-auto-retry:layout:v1", '{"panel":{"x":"left","y":null,"w":[],"h":{}}}');
+    teardown = window.__setup(host, { liveLog: true, toast: false });
+    await frame();
+    const junk = box();
+    teardown();
+    localStorage.removeItem("lv-auto-retry:layout:v1");
+    return { opened, dragged, resized, reopened, clamped, junk, saved, onTab };
+  });
+  await page.close();
+  const near = (a, b, slack = 4) => Math.abs(a - b) <= slack;
+  check("dragging moves it", out.dragged.x < out.opened.x && out.dragged.y < out.opened.y, out);
+  check("the grip resizes it", out.resized.w > out.dragged.w && out.resized.h > out.dragged.h, out);
+  check("where it ended up is written down", !!out.saved.panel, out.saved);
+  check("and which tab was open with it", out.saved.tab === "stats", out.saved);
+  check("it comes back in the same place",
+    near(out.reopened.x, out.resized.x) && near(out.reopened.y, out.resized.y), out);
+  check("at the same size",
+    near(out.reopened.w, out.resized.w) && near(out.reopened.h, out.resized.h), out);
+  check("and on the same tab", out.onTab === "Stats", out);
+  check("a layout too big for the screen is pulled back onto it",
+    out.clamped.x >= 0 && out.clamped.y >= 0 &&
+    out.clamped.x + out.clamped.w <= 2000 && out.clamped.h <= 2000, out);
+  check("and its header stays reachable", out.clamped.y >= 0 && out.clamped.y < 400, out);
+  check("nonsense in the store is ignored rather than applied",
+    out.junk.w >= 200 && out.junk.h >= 120 && out.junk.x >= 0 && out.junk.y >= 0, out);
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- the Stats clock ----
 // "Watching for" counts up on its own, so it has to move on its own. It was
 // rounded to the nearest minute and drawn once, which meant it read "1 minute"

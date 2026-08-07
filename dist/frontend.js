@@ -85,7 +85,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "4.4.1";
+const VERSION = "4.5.0";
 // ---- defaults (the UI overrides these; editing here changes the fallback) ----
 const CONFIG = {
     enabled: true,
@@ -2118,13 +2118,60 @@ export function setup(ctx, opts) {
     // panel's two views is showing. Held in memory only, thrown away on teardown
     // and with the tab, the same as the log beside it.
     let lastPrompt = null;
-    let liveTab = "log";
+    // ---- where things were left ----
+    //
+    // The floating button and the on-screen panel both went back to their default
+    // corner on every reload, which means on every update. Dragging the panel
+    // somewhere it does not cover your chat, and sizing it to what you want to
+    // read, is work, and having to redo it each time is the sort of thing that
+    // makes a panel not worth opening.
+    //
+    // Kept in the browser rather than in the settings, for the same reason the
+    // list of switched-off chats is: a position is a property of the screen you
+    // are sitting at, not of your account. Carrying it to a phone would put the
+    // panel somewhere a phone has no room for, and it has no business in an
+    // export somebody might share.
+    const LAYOUT_KEY = "lv-auto-retry:layout:v1";
+    let layout = {};
+    const num = (v) => {
+        const n = Number(v);
+        return Number.isFinite(n) ? n : null;
+    };
+    try {
+        if (typeof localStorage !== "undefined") {
+            const raw = JSON.parse(localStorage.getItem(LAYOUT_KEY) || "{}");
+            if (raw && typeof raw === "object") {
+                // Read a field at a time rather than trusting the shape. This is the one
+                // store a person can edit by hand, and half of it becoming NaN would put
+                // the panel somewhere with no way back to it.
+                const f = raw.float;
+                if (f && num(f.x) !== null && num(f.y) !== null)
+                    layout.float = { x: num(f.x), y: num(f.y) };
+                const p = raw.panel;
+                if (p && num(p.x) !== null && num(p.y) !== null && num(p.w) !== null && num(p.h) !== null)
+                    layout.panel = { x: num(p.x), y: num(p.y), w: num(p.w), h: num(p.h) };
+                if (raw.tab === "log" || raw.tab === "prompt" || raw.tab === "stats")
+                    layout.tab = raw.tab;
+            }
+        }
+    }
+    catch (_) { /* no storage, or nonsense in it: the defaults are fine */ }
+    function saveLayout() {
+        try {
+            if (typeof localStorage !== "undefined")
+                localStorage.setItem(LAYOUT_KEY, JSON.stringify(layout));
+        }
+        catch (_) { /* storage full or blocked: the position is not worth an error */ }
+    }
+    let liveTab = layout.tab || "log";
     let paintTabs = null;
     let focusTab = null;
     // The one place the tab changes, so what is on screen and what the backend
     // has been asked for cannot come apart.
     function showTab(id) {
         liveTab = id;
+        layout.tab = id;
+        saveLayout();
         renderLiveLog();
         askForPrompts();
     }
@@ -2663,6 +2710,7 @@ export function setup(ctx, opts) {
                 el.style.top = oy + my + "px";
                 mx = 0;
                 my = 0;
+                rememberPanel();
             }
         };
         head.addEventListener("pointerdown", onDown);
@@ -2724,6 +2772,7 @@ export function setup(ctx, opts) {
                     grip.releasePointerCapture(e.pointerId);
                 }
                 catch (_) { }
+                rememberPanel();
             }
         };
         grip.addEventListener("pointerdown", rzDown);
@@ -2736,10 +2785,46 @@ export function setup(ctx, opts) {
         catch (_) {
             return;
         }
+        // Put back where it was left, if it was left anywhere. Clamped against the
+        // screen it is opening on rather than the one it was saved from: a panel
+        // sized for a desktop window, restored on a phone, would otherwise open
+        // mostly off the edge with its header out of reach, and the header is the
+        // only way to drag it back.
+        if (layout.panel) {
+            const w = Math.max(200, Math.min(layout.panel.w, vpW() - 16));
+            const h = Math.max(120, Math.min(layout.panel.h, vpH() - 16));
+            el.style.width = w + "px";
+            el.style.height = h + "px";
+            el.style.left = Math.round(Math.max(8, Math.min(layout.panel.x, vpW() - w - 8))) + "px";
+            el.style.top = Math.round(Math.max(8, Math.min(layout.panel.y, vpH() - h - 8))) + "px";
+            el.style.right = "auto";
+            el.style.bottom = "auto";
+        }
         liveLogEl = el;
         liveLogBody = bodyEl;
         renderLiveLog();
         ensureReadableTree(el);
+    }
+    // Called when a drag or a resize finishes. Reads the panel off the screen
+    // rather than tracking it, so it cannot drift from where the panel actually
+    // is.
+    function rememberPanel() {
+        const el = liveLogEl;
+        if (!el || !el.getBoundingClientRect)
+            return;
+        try {
+            const r = el.getBoundingClientRect();
+            if (!r.width || !r.height)
+                return;
+            layout.panel = {
+                x: Math.round(r.left),
+                y: Math.round(r.top),
+                w: Math.round(r.width),
+                h: Math.round(r.height),
+            };
+            saveLayout();
+        }
+        catch (_) { }
     }
     function hideLiveLog() {
         // Off the clock before it leaves the page. A repaint of a panel that is no
@@ -2823,10 +2908,19 @@ export function setup(ctx, opts) {
         // on some themes they land close enough together to read as an empty circle.
         ensureReadable(floatEl);
     }
+    // The delayed read after a drag. Held out here so hideFloat can drop it: it
+    // would otherwise fire against a widget that has gone and write its last
+    // position over a newer one.
+    let floatSettle = null;
     function showFloat(at) {
         if (floatWidget || typeof document === "undefined")
             return;
         const d = floatSize();
+        // Nothing asked for means a fresh start, which is where it was left last
+        // time if it was ever moved. An explicit position wins, since that is the
+        // caller carrying it across a rebuild.
+        if (!at && layout.float)
+            at = layout.float;
         // Bottom right, clear of the input bar, matching where other extensions put
         // theirs. The host remembers wherever the user drags it after that.
         const home = { x: Math.max(16, vpW() - 72), y: Math.max(16, vpH() - 160) };
@@ -2924,6 +3018,24 @@ export function setup(ctx, opts) {
         });
         el.addEventListener("pointerup", dropPress);
         el.addEventListener("pointercancel", dropPress);
+        // The host does the dragging and does not report where it finished, so the
+        // only way to know is to look. Read after a delay rather than straight away
+        // because the button snaps to the nearest edge once it is let go, and the
+        // position wanted is the one it settles on, not the one your finger left.
+        const rememberFloat = () => {
+            floatSettle = setTimeout(() => {
+                floatSettle = null;
+                const at = floatPos();
+                if (!at)
+                    return;
+                if (layout.float && layout.float.x === at.x && layout.float.y === at.y)
+                    return;
+                layout.float = at;
+                saveLayout();
+            }, 400);
+        };
+        el.addEventListener("pointerup", rememberFloat);
+        el.addEventListener("pointercancel", rememberFloat);
         el.addEventListener("pointerleave", dropPress);
         el.addEventListener("click", () => {
             // The hold already acted. Toggling here as well would undo it in the same
@@ -3035,6 +3147,11 @@ export function setup(ctx, opts) {
         // Rebuilding the widget is what puts it back, since where it sits belongs to
         // the host and a fresh one starts at the position it is handed.
         entry("Move back to the corner", () => {
+            // Forgetting where it was is the whole point of this entry. Without it,
+            // the position it was just asked to leave behind would be restored the
+            // moment the button is built again.
+            delete layout.float;
+            saveLayout();
             hideFloat();
             showFloat();
         });
@@ -3086,6 +3203,10 @@ export function setup(ctx, opts) {
     }
     function hideFloat() {
         hideFloatMenu();
+        if (floatSettle) {
+            clearTimeout(floatSettle);
+            floatSettle = null;
+        }
         // Take back what we put in before handing the widget over. Destroying it is
         // the host's job and normally takes the button with it, but if that throws
         // or does nothing the button would sit there with no code behind it, still

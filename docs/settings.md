@@ -55,6 +55,10 @@ Every section header is a proper button, so the Advanced groups open with Enter 
 
 One switch, **Show the on-screen panel**, puts a small panel in the corner with three tabs. Drag the header to move it, drag the bottom-right corner to resize it. Both work with a mouse and with a finger.
 
+Where you leave it is remembered, along with its size and which tab was open, so an update does not put it back in the corner. The floating button is the same. Both are checked against the screen they open on, so a layout saved on a desktop window cannot strand the panel off the edge of a phone. **Move back to the corner**, in the floating button's menu, forgets its saved spot rather than restoring it.
+
+This is kept in your browser rather than in your settings, like the list of chats you have switched Auto Retry off in. A position belongs to the screen you are sitting at, so it does not follow you between devices and it is not included in an export.
+
 Under the tabs is a line saying what is happening this second, with a dot beside it that lights up while something is going on. It sits above all three tabs because the answer is the same whichever one you are reading, and because none of them answered it: the Log says what already happened and the Stats say what has happened overall. It counts down a pending retry in hours, minutes and seconds as each is needed (`47s`, `5m 03s`, `1h 05m 03s`), names what the retry is for and which try it is, says when a reply is arriving and roughly how much of it has landed, says when the model is thinking, and says when it has paused itself after repeated failures. When nothing is happening it says so. A retry running in a chat you have since moved away from is still reported, marked as being in another chat.
 
 The line and the pop-up read from the same place, so they never disagree. Both stop the moment the panel is closed, so nothing is being redrawn for a panel nobody is looking at.
