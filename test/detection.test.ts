@@ -517,6 +517,13 @@ describe("code and markup left open", () => {
     ["a comment with no end", "Done.\n<!-- tracker"],
     ["raw JSON cut mid-field", 'Status:\n{"temp": 24, "sky":'],
     ["a styled span left open", '<span style="color:red">"Wait... hold on,"'],
+    ["a one-colour span left open", '<span style="color:#7FB3D5">"Wait... hold on,"'],
+    ["a span with more css than colour", '<span style="color:red;font-style:italic">"Wait... hold on,"'],
+    ["a font tag left open", '<font color="#7FB3D5">"Wait... hold on,"'],
+    ["a span styled by class left open", '<span class="speech">"Wait... hold on,"'],
+    ["single quotes around the style", "<span style='color:red'>\"Wait... hold on,\""],
+    ["shouted tag and attribute names", '<SPAN STYLE="color:red">"Wait... hold on,"'],
+    ["one of two spans left open", '<span style="color:red">"Hi,"</span> and <span style="color:blue">"bye."'],
   ];
   for (const [name, text] of cut) {
     test(name + " is cut off", () => {
@@ -534,6 +541,10 @@ describe("code and markup left open", () => {
     ["a macro that survived", "{{char}} smiled at {{user}}."],
     ["a whole JSON block", 'Status:\n{"temp": 24, "sky": "clear"}'],
     ["a bare inline tag left open", "<b>She smiled."],
+    ["a bare span left open", '<span>"Wait... hold on,"'],
+    ["a one-colour span that closes", '<span style="color:#7FB3D5">"Wait... hold on,"</span> she said.'],
+    ["a font tag that closes", '<font color="red">"Wait... hold on,"</font> she said.'],
+    ["two spans that both close", '<span style="color:red">"Hi,"</span> and <span style="color:blue">"bye."</span>'],
     ["list items with no end tags", "<ul><li>one<li>two</ul>"],
   ];
   for (const [name, text] of fine) {

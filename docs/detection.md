@@ -34,7 +34,7 @@ Two are needed rather than one, because an ordinary sentence can carry a colon a
 Letting a reply end on a block means the last thing it managed to write can be a closing tag, and a tracker that stopped early ends on one of those too. So markup left open is checked before a block ending is accepted as an ending. A reply that stopped inside something it had started is cut off whatever it stopped on, the same as an opened quote:
 
 - a container opened and never closed, `<div>`, `<table>`, `<ul>`, `<pre>`, `<blockquote>`, `<details>` and the like
-- a `<span style="...">` opened and never closed, which is how cards colour dialogue
+- an inline tag carrying an attribute and never closed, `<span style="...">`, `<font color="...">`, `<span class="...">`, which is how cards colour dialogue
 - a tag with no closing bracket, `<div class="wx"`, or one cut off inside an attribute, `<div class="we`
 - an HTML comment with no `-->`
 - an unclosed code fence or inline backtick, which is where this started
@@ -42,7 +42,11 @@ Letting a reply end on a block means the last thing it managed to write can be a
 
 Elements whose end tag is optional in HTML are left out of the container count: models write `<ul><li>one<li>two</ul>` and mean it. A table that really was cut short leaves its own `<table>` open, which is counted, so nothing is lost.
 
-An inline tag counts only when it carries an attribute. A bare `<b>` or `<i>` left open is a finished reply written badly, and models fumble those in ordinary prose often enough that counting them would throw away good writing. A `<span style="...">` is not that: it is there because a card asked for coloured speech, and a card that asks for it gets the closing tag every time, so a missing one means the reply stopped. That case matters more than it looks, because it is invisible to everything else here. Speech closes its own quotation marks, so:
+An inline tag counts only when it carries an attribute. A bare `<b>` or `<i>` left open is a finished reply written badly, and models fumble those in ordinary prose often enough that counting them would throw away good writing. A `<span style="...">` is not that: it is there because a card asked for coloured speech, and a card that asks for it gets the closing tag every time, so a missing one means the reply stopped.
+
+What counts is the attribute, not what is in it. A gradient, a single colour, a colour plus other styling, a `<font color="...">`, a `<span class="...">`, single or double quotes, upper case or lower: all of them count, and a reply with several spans is checked on how many were opened against how many were closed, so one left hanging among others that closed is still caught.
+
+That case matters more than it looks, because it is invisible to everything else here. Speech closes its own quotation marks, so:
 
 ```
 <span style="background: linear-gradient(...);">"Wait... hold on,"
