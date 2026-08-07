@@ -376,7 +376,7 @@ const SCHEMA: Group[] = [
         key: "toast",
         label: "Show a pop-up on each retry",
         type: "bool",
-        hint: "A small message telling you it is retrying, with a Cancel button to stop it.",
+        hint: "A small message telling you it is retrying, with a Cancel button to stop it. It counts the wait down as it goes, and says what the retry is for and which try it is, so a long wait looks like a wait rather than like nothing happening.",
       },
     ],
   },
@@ -2522,11 +2522,44 @@ export function setup(ctx: Ctx, opts?: any) {
     });
     head.appendChild(copyBtn);
     head.appendChild(clearBtn);
+    // A line saying what is happening this second, above all three tabs
+    // because the answer is the same whichever one you are reading. The Log
+    // tells you what already happened and the Stats tell you what has happened
+    // overall; neither answers "is it doing something right now", which is the
+    // question anyone opening this panel actually has.
+    const statusEl = document.createElement("div");
+    statusEl.id = "__lvRetryStatus";
+    statusEl.setAttribute("aria-live", "polite");
+    statusEl.style.cssText =
+      "flex:none;display:flex;align-items:center;gap:7px;padding:5px 9px;" +
+      "border-bottom:1px solid var(--lumiverse-border,rgba(255,255,255,.18));" +
+      "color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+    const dot = document.createElement("span");
+    dot.style.cssText = "flex:none;width:7px;height:7px;border-radius:50%";
+    const words = document.createElement("span");
+    words.style.cssText = "flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap";
+    statusEl.appendChild(dot);
+    statusEl.appendChild(words);
+    // Repainted by the shared clock rather than by whatever happened to change,
+    // because most of what this says is a number going down on its own with no
+    // event behind it.
+    const paintStatus = () => {
+      const st = liveStatus();
+      if (words.textContent !== st.text) words.textContent = st.text;
+      dot.style.background = st.busy
+        ? "var(--lumiverse-primary,rgba(147,112,219,.9))"
+        : "var(--lumiverse-text-muted,rgba(255,255,255,.45))";
+    };
+    paintStatus();
+    addTicker(paintStatus);
+    (el as any).__stopStatus = () => removeTicker(paintStatus);
+
     const bodyEl = document.createElement("div");
     bodyEl.id = "__lvRetryLogBody";
     bodyEl.style.cssText =
       "flex:1;padding:7px 9px;overflow:auto;white-space:pre-wrap;line-height:1.4;font-family:var(--lumiverse-font-mono,ui-monospace,monospace) !important";
     el.appendChild(head);
+    el.appendChild(statusEl);
     el.appendChild(bodyEl);
     // Drag by the header. Pointer events cover mouse and touch; the header
     // captures the pointer so a fast drag outside it still tracks, and the panel
@@ -2680,6 +2713,12 @@ export function setup(ctx: Ctx, opts?: any) {
     ensureReadableTree(el);
   }
   function hideLiveLog() {
+    // Off the clock before it leaves the page. A repaint of a panel that is no
+    // longer on screen is work nobody sees, and it would hold the interval open
+    // for as long as the tab lives.
+    if (liveLogEl && (liveLogEl as any).__stopStatus) {
+      try { (liveLogEl as any).__stopStatus(); } catch (_) {}
+    }
     if (liveLogEl && liveLogEl.parentNode) {
       try {
         liveLogEl.parentNode.removeChild(liveLogEl);
@@ -3688,6 +3727,9 @@ export function setup(ctx: Ctx, opts?: any) {
       startTimer: null,
       idleTimer: null,
       timer: null,
+      retryAt: 0, // when the pending retry fires, for the live countdown
+      retryReason: "",
+      live: false, // a reply is in the air right now
       sawReasoning: false,
       sawContent: false,
       buf: "", // streamed reply text, used when the end event carries no content
@@ -3729,6 +3771,103 @@ export function setup(ctx: Ctx, opts?: any) {
     // retries in ten minutes and twelve in a whole day are different problems.
     since: Date.now(),
   };
+  // ---- what it is doing, right now ----
+  //
+  // Everything that says what the extension is up to used to be written once,
+  // at the moment it happened, and then sat there going stale. The retry
+  // message was the worst of it: it said "in 47.3s" and kept saying that for
+  // the next forty-seven seconds, so the one number anyone actually watches was
+  // the one number that never moved. Waits are up to a minute on the current
+  // defaults, which made a frozen countdown look like a frozen extension.
+  //
+  // So the state is worked out on demand instead, from the timers that are
+  // actually running, and one clock repaints whoever is showing it.
+
+  // A wait, said the way a person would. Whole seconds, because tenths flicker
+  // and nobody is timing anything to a tenth; minutes once there are enough
+  // seconds for the number to stop meaning much on its own.
+  function saySeconds(ms: number): string {
+    const total = Math.max(0, Math.ceil(ms / 1000));
+    if (total < 60) return total + "s";
+    const m = Math.floor(total / 60);
+    const s = total % 60;
+    return m + "m " + (s < 10 ? "0" : "") + s + "s";
+  }
+
+  // The one line that says what is happening. Read fresh every tick.
+  //
+  // Ordered by what would stop a retry from happening, most final first, so the
+  // line never says it is waiting to retry in a chat where it would not.
+  // What one chat is doing, or nothing if it is doing nothing worth saying.
+  function chatStatus(s: any): { text: string; busy: boolean } | null {
+    if (!s) return null;
+    if (s.timer && s.retryAt)
+      return {
+        text:
+          (s.retryReason ? s.retryReason + ". " : "") +
+          "Retrying in " + saySeconds(s.retryAt - Date.now()) +
+          " (try " + s.attempts + " of " + cfg.maxRetries + ")",
+        busy: true,
+      };
+    if (s.expectingStart) return { text: "Waiting for the retry to start", busy: true };
+    if (s.live && s.sawContent)
+      return { text: "Reply arriving, " + rough(String(s.buf || "").length) + " characters", busy: true };
+    if (s.live && s.sawReasoning) return { text: "Model is thinking", busy: true };
+    if (s.live) return { text: "Waiting for the reply to start", busy: true };
+    return null;
+  }
+
+  function liveStatus(): { text: string; busy: boolean } {
+    const now = Date.now();
+    if (cfg.enabled === false) return { text: "Off", busy: false };
+    if (chatIsOff(lastChatId)) return { text: "Off in this chat", busy: false };
+    if (pausedUntil > now)
+      return { text: "Paused after repeated failures, back in " + saySeconds(pausedUntil - now), busy: false };
+    // The chat in front of you comes first. A retry running in a chat you have
+    // since navigated away from is still worth saying, but not over the top of
+    // what is happening here.
+    if (lastChatId != null) {
+      const here = chatStatus(chats.get(lastChatId));
+      if (here) return here;
+    }
+    for (const [id, s] of chats) {
+      if (id === lastChatId) continue;
+      const other = chatStatus(s);
+      if (other) return { text: other.text + ", in another chat", busy: true };
+    }
+    return { text: "Watching. Nothing to do", busy: false };
+  }
+
+  // One clock for everything that shows a live figure, rather than one per
+  // thing. It runs only while something is on screen to repaint and stops on
+  // its own the moment nothing is, so an idle tab is not ticking for nobody.
+  const TICK_MS = 250;
+  let tick: any = null;
+  const tickers = new Set<() => void>();
+  function retick() {
+    if (!tickers.size) {
+      if (tick) {
+        clearInterval(tick);
+        tick = null;
+      }
+      return;
+    }
+    if (tick) return;
+    tick = setInterval(() => {
+      for (const f of Array.from(tickers)) {
+        try { f(); } catch (_) {}
+      }
+    }, TICK_MS);
+  }
+  function addTicker(f: () => void) {
+    tickers.add(f);
+    retick();
+  }
+  function removeTicker(f: () => void) {
+    tickers.delete(f);
+    retick();
+  }
+
   // Read at the moment they are needed so a settings change takes effect without
   // a reload. Anything missing or nonsensical falls back to the default rather
   // than switching the feature off by accident.
@@ -3754,6 +3893,10 @@ export function setup(ctx: Ctx, opts?: any) {
       clearTimeout(s.timer);
       s.timer = null;
     }
+    // Cleared with the timer it belongs to, or the status line would go on
+    // counting down to a retry that was called off.
+    s.retryAt = 0;
+    s.retryReason = "";
     if (s.startWatchdog) {
       clearTimeout(s.startWatchdog);
       s.startWatchdog = null;
@@ -4485,20 +4628,19 @@ export function setup(ctx: Ctx, opts?: any) {
         (rl ? ", rate-limited" : "") +
         ")",
     );
-    showToast(
-      "Retrying " +
-        s.attempts +
-        "/" +
-        cfg.maxRetries +
-        " (" +
-        reason +
-        ") in " +
-        (delay / 1000).toFixed(1) +
-        "s",
-      { cancel: () => standDown(chatId, true), sticky: true },
-    );
+    // What the countdown reads from. Set before the message goes up, so the
+    // first repaint has something to say rather than a blank second.
+    s.retryAt = Date.now() + delay;
+    s.retryReason = rl ? "Rate limited" : reason.charAt(0).toUpperCase() + reason.slice(1);
+    const opening = chatStatus(s);
+    showToast(opening ? opening.text : "Retrying", {
+      cancel: () => standDown(chatId, true),
+      sticky: true,
+    });
+    startToastCountdown(s);
     s.timer = setTimeout(async () => {
       s.timer = null;
+      s.retryAt = 0;
       s.pending = false;
       s.selfTriggered = true;
       // Before the click, and awaited, so the note is in place by the time the
@@ -4581,6 +4723,11 @@ export function setup(ctx: Ctx, opts?: any) {
     } // fresh, user-initiated generation
     s.selfTriggered = false;
     s.genId = p.generationId;
+    // Whether a reply is in the air, as opposed to which one was last seen.
+    // genId is never cleared, because the ids of generations already dealt with
+    // are wanted afterwards, so it cannot answer this and the status line read
+    // "waiting for the reply to start" long after one had finished.
+    s.live = true;
     clearConfirmWatch(); // a reply is running, so no dialog is in the way
     s.sawReasoning = false;
     s.sawContent = false;
@@ -4649,6 +4796,7 @@ export function setup(ctx: Ctx, opts?: any) {
     const s = st(p.chatId);
     lastChatId = p.chatId;
     lastMessageId = p.messageId;
+    s.live = false;
     if (s.ignored.has(p.generationId)) return; // aborted gen's trailing event, retry already scheduled
     clearTimers(s);
     if (Date.now() < s.suppressUntil) {
@@ -5226,6 +5374,7 @@ export function setup(ctx: Ctx, opts?: any) {
     return t;
   }
   function hideToast() {
+    stopToastCountdown();
     const t: any =
       typeof document !== "undefined" &&
       document.getElementById("__lvRetryToast");
@@ -5234,6 +5383,44 @@ export function setup(ctx: Ctx, opts?: any) {
       t.style.opacity = "0";
       t.style.pointerEvents = "none";
     }
+  }
+  // Rewrites what the toast says, leaving the box and its Cancel button where
+  // they are. Does nothing if the toast has since been replaced or hidden, so a
+  // countdown that outlives its own message cannot write over the next one.
+  function setToastText(msg: string) {
+    const t: any =
+      typeof document !== "undefined" && document.getElementById("__lvRetryToast");
+    if (!t || !t.__words || t.style.opacity !== "1") return;
+    t.__words.textContent = msg;
+  }
+  // The countdown behind a sticky retry message. One at a time: a second retry
+  // replaces the first message, so it replaces the clock with it.
+  let toastTick: (() => void) | null = null;
+  function stopToastCountdown() {
+    if (!toastTick) return;
+    removeTicker(toastTick);
+    toastTick = null;
+  }
+  // Tied to the chat that raised the message rather than to whichever chat is
+  // on screen. They are usually the same one, and when they are not, a message
+  // about this chat counting down another chat's wait would be worse than no
+  // countdown at all.
+  function startToastCountdown(s: any) {
+    stopToastCountdown();
+    // Nothing to repaint when the message is switched off, and a clock ticking
+    // for something nobody can see is just work.
+    if (!cfg.toast) return;
+    toastTick = () => {
+      const st = chatStatus(s);
+      // Once it is no longer counting down to anything, the words are somebody
+      // else's to write.
+      if (!st) {
+        stopToastCountdown();
+        return;
+      }
+      setToastText(st.text);
+    };
+    addTicker(toastTick);
   }
   function showToast(
     msg: string,
@@ -5251,6 +5438,11 @@ export function setup(ctx: Ctx, opts?: any) {
       span.textContent = msg;
       span.style.cssText = "flex:1";
       t.appendChild(span);
+      // Kept so a countdown can rewrite the words without rebuilding the box.
+      // Rebuilding would replace the Cancel button four times a second, which
+      // loses a press that lands mid-rebuild and drops keyboard focus on every
+      // tick.
+      t.__words = span;
       if (opts && opts.cancel) {
         const c = document.createElement("button");
         c.textContent = "Cancel";
@@ -8069,6 +8261,12 @@ export function setup(ctx: Ctx, opts?: any) {
     focusTab = null;
     hideLiveLog();
     hideFloat();
+    // Every live figure stops with the extension. hideLiveLog and hideToast
+    // each drop their own, and this is the backstop: one interval left running
+    // after teardown would keep a dead closure alive for the life of the tab.
+    stopToastCountdown();
+    tickers.clear();
+    retick();
     chats.forEach(clearTimers);
     chats.clear();
     eventLog.length = 0;

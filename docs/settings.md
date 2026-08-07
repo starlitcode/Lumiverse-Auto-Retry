@@ -55,6 +55,10 @@ Every section header is a proper button, so the Advanced groups open with Enter 
 
 One switch, **Show the on-screen panel**, puts a small panel in the corner with three tabs. Drag the header to move it, drag the bottom-right corner to resize it. Both work with a mouse and with a finger.
 
+Under the tabs is a line saying what is happening this second, with a dot beside it that lights up while something is going on. It sits above all three tabs because the answer is the same whichever one you are reading, and because none of them answered it: the Log says what already happened and the Stats say what has happened overall. It counts down a pending retry, names what the retry is for and which try it is, says when a reply is arriving and roughly how much of it has landed, says when the model is thinking, and says when it has paused itself after repeated failures. When nothing is happening it says so. A retry running in a chat you have since moved away from is still reported, marked as being in another chat.
+
+The line and the pop-up read from the same place, so they never disagree. Both stop the moment the panel is closed, so nothing is being redrawn for a panel nobody is looking at.
+
 **Log** is what the extension is doing as it happens: generations starting, retries and why, replies that came back fine, notes going out.
 
 **Stats** is what it has been doing since you opened the tab: replies that came back fine, retries fired, messages it gave up on, and a breakdown of what it retried for, with a bar for each so the shape reads at a glance. It also says how often a reply needed a retry at all, and tells you when it has paused itself after repeated failures, which is the state that otherwise looks like it having stopped working. **Clear** on this tab starts the counting again.
@@ -127,7 +131,7 @@ The same options live in the CONFIG block at the top of `src/frontend.ts` and `d
 | confirmButtonsCustom | false | Read the box below. Off, only the built-in dialog button list is used, and the box is not shown. |
 | confirmButtonLabels | (blank) | Extra dialog button labels it may press when a dialog appears after a retry, one per line. Tried before the built-in list, which is used as well. Shown and read only while `confirmButtonsCustom` is on. |
 | stopSelector | (see file) | Host stop button, used to abort a stalled reply. |
-| toast | true | Show the little retry pop-up with its Cancel button. |
+| toast | true | Show the little retry pop-up with its Cancel button. It counts the wait down in real time and names what the retry is for and which try it is. |
 | liveLog | false | Show the on-screen panel. Two tabs: Log for what the extension is doing, Prompt for what went to the model. |
 
 The two watchdog waits (`stuckTimeoutMs`, `idleTimeoutMs`) are long, and the defaults assume a slow model rather than a fast one. A watchdog that fires early on a model that is slow but healthy is worse than one that fires late: it throws away a reply that was still arriving, and the replacement comes from the same slow model, so it fires again on that one too. If your provider is fast and you want quicker recovery, lower them.

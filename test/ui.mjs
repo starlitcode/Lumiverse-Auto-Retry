@@ -1364,6 +1364,129 @@ console.log("\nfloat button menu");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- the countdown actually counts ----
+// It used to say "in 47.3s" once and keep saying it for the next forty-seven
+// seconds, so the one number anyone watches was the one that never moved. On
+// the current defaults a wait can be a minute, which made a frozen number look
+// like a frozen extension.
+console.log("\nlive countdown");
+{
+  const page = await browser.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await stage(page, '<div id=modal></div><button data-testid="regenerate">Regenerate</button>');
+  await page.addStyleTag({ content: THEME });
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  const out = await page.evaluate(async () => {
+    const handlers = {};
+    const teardown = window.__setup(
+      { events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
+        ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+              registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) } },
+      // Long enough that the countdown has somewhere to go, short enough that
+      // this check is not itself a wait.
+      { toast: true, liveLog: true, retryDelayMs: 6000, backoffFactor: 1, maxDelayMs: 6000,
+        jitter: false, maxRetries: 3, stuckTimeoutMs: 0, idleTimeoutMs: 0, pauseWhenFailing: false },
+    );
+    const words = () => {
+      const t = document.getElementById("__lvRetryToast");
+      const s = t && t.querySelector("span");
+      return s ? s.textContent : "";
+    };
+    const status = () => {
+      const el = document.getElementById("__lvRetryStatus");
+      return el ? (el.textContent || "").trim() : "(no status line)";
+    };
+    handlers.GENERATION_STARTED({ chatId: "c", generationId: "g" });
+    handlers.GENERATION_ENDED({ chatId: "c", content: "" });
+    // The retry is not scheduled the instant the reply ends, so the first
+    // reading waits for the countdown to exist rather than assuming it does.
+    for (let i = 0; i < 60 && !/Retrying in/.test(words()); i++)
+      await new Promise((r) => setTimeout(r, 50));
+    const first = words();
+    const statusFirst = status();
+    // The Cancel button has to be the same element throughout. Rebuilding the
+    // box on every tick would swallow a press that landed mid-rebuild.
+    const cancelFirst = document.querySelector("#__lvRetryToast button");
+    await new Promise((r) => setTimeout(r, 1400));
+    const later = words();
+    const statusLater = status();
+    const cancelLater = document.querySelector("#__lvRetryToast button");
+    const num = (s) => {
+      const m = /in (?:(\d+)m )?(\d+)s/.exec(s || "");
+      return m ? Number(m[1] || 0) * 60 + Number(m[2]) : null;
+    };
+    // Cancelling has to stop the clock as well as the retry.
+    cancelLater && cancelLater.click();
+    await new Promise((r) => setTimeout(r, 400));
+    const afterCancel = status();
+    teardown();
+    return {
+      first, later, statusFirst, statusLater, afterCancel,
+      firstN: num(first), laterN: num(later),
+      statusFirstN: num(statusFirst), statusLaterN: num(statusLater),
+      sameCancel: cancelFirst === cancelLater && !!cancelFirst,
+      // No tenths: a number twitching four times a second is noise, not news.
+      noTenths: !/\d\.\ds/.test(first || "") && !/\d\.\ds/.test(later || ""),
+    };
+  });
+  await page.close();
+  check("the pop-up says how long is left", out.firstN !== null, out);
+  check("and that number goes down on its own", out.laterN !== null && out.laterN < out.firstN, out);
+  check("it counts in whole seconds", out.noTenths, out);
+  check("it says why it is retrying", /empty/i.test(out.first || ""), out);
+  check("and which try this is", /try 1 of 3/.test(out.first || ""), out);
+  check("the Cancel button survives the ticking", out.sameCancel, out);
+  check("the panel carries the same countdown", out.statusFirstN !== null, out);
+  check("and it moves too", out.statusLaterN !== null && out.statusLaterN < out.statusFirstN, out);
+  check("cancelling stops it counting", !/Retrying in/.test(out.afterCancel || ""), out);
+  check("and the panel says it has nothing to do", /nothing to do/i.test(out.afterCancel || ""), out);
+  check("no console errors", errors.length === 0, errors);
+}
+
+// ---- the clock stops when nothing is watching it ----
+// A repaint loop is cheap until it is left running in every tab someone has
+// open. It has to start when something needs it and stop by itself.
+console.log("\nthe clock stops");
+{
+  const page = await browser.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await stage(page, "<div id=modal></div>");
+  await page.addStyleTag({ content: THEME });
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  const out = await page.evaluate(async () => {
+    // Counts the intervals the extension holds, by watching what it asks for.
+    const realSet = window.setInterval;
+    const realClear = window.clearInterval;
+    const live = new Set();
+    window.setInterval = function (...a) { const id = realSet.apply(window, a); live.add(id); return id; };
+    window.clearInterval = function (id) { live.delete(id); return realClear.call(window, id); };
+    const teardown = window.__setup(
+      { events: { on: () => () => {} },
+        ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+              registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) } },
+      { liveLog: true, toast: false },
+    );
+    await new Promise((r) => setTimeout(r, 120));
+    const whileOpen = live.size;
+    const hadPanel = !!document.getElementById("__lvRetryStatus");
+    teardown();
+    await new Promise((r) => setTimeout(r, 120));
+    const afterTeardown = live.size;
+    window.setInterval = realSet;
+    window.clearInterval = realClear;
+    return { whileOpen, afterTeardown, hadPanel };
+  });
+  await page.close();
+  check("the panel is up with its status line", out.hadPanel === true, out);
+  check("something is ticking while it is", out.whileOpen >= 1, out);
+  check("and nothing is ticking after teardown", out.afterTeardown === 0, out);
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- browser-drawn controls follow the theme ----
 // An unchecked checkbox is painted by the browser, which picks its colours from
 // the page's colour scheme rather than from the theme. Left unset it assumes
