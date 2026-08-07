@@ -128,4 +128,35 @@ describe("a row that hangs off a switch", () => {
       expect(d && d.needs).toEqual(["refusalNote"]);
     }
   });
+
+  test("the extra dialog labels hang off their own switch", () => {
+    const d = deps.find((x) => x.key === "confirmButtonLabels");
+    expect(d && d.needs).toEqual(["confirmButtonsCustom"]);
+  });
+});
+
+// A row hidden by a switch has to be a row the code ignores while that switch
+// is off. If the panel hides a box whose contents are still being used, it is
+// showing one thing and doing another, and nothing on screen says so. This is
+// the promise the "needs" comment in the schema makes, held down for the one
+// case where the value is read outside the panel.
+describe("a switch that hides a box also stops it being read", () => {
+  test("the extra dialog labels are not read while their switch is off", () => {
+    const fn = SRC.slice(SRC.indexOf("function userConfirmLabels"));
+    const body = fn.slice(0, fn.indexOf("\n  }"));
+    expect(body).toContain("confirmButtonsCustom");
+    expect(body).toContain("return []");
+  });
+});
+
+// Turning a setting that was always read into one behind a switch means anyone
+// who had it set would find it quietly stopped working. The switch is off by
+// default, so it has to be turned on for them when their old value is there.
+describe("settings saved before a switch existed keep working", () => {
+  test("labels with no switch saved turn the switch on", () => {
+    const fn = SRC.slice(SRC.indexOf("function coerceSaved"));
+    const body = fn.slice(0, fn.indexOf("\n  }\n"));
+    expect(body).toContain("parsed.confirmButtonsCustom == null");
+    expect(body).toContain("confirmButtonsCustom: true");
+  });
 });

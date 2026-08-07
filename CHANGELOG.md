@@ -29,6 +29,7 @@ What has not started counting: a `<` someone typed in a scene, `if x<y`, a bare 
 
 ### Changed
 
+- **Extra dialog buttons is behind a switch now, and off.** Its own description said "almost nobody needs this", and it sat in the panel anyway, one more box to wonder about. **My dialog's button says something else** reveals it. The built-in list, which knows Skip, Regenerate, Confirm, Proceed, Submit and OK, is used either way, so nothing about retrying changes. The switch genuinely gates the box rather than only hiding it: a hidden box whose contents were still being pressed would be the panel saying one thing and doing another. If you already had wording typed in there, the switch was turned on for you, so nothing you set has stopped working.
 - **The two note settings that are not per note now sit under a heading saying so.** The list gives every note a role and a try to start on, which made the two settings underneath it look like more of the same. They are not: where the block goes and whether it is sent at all are set once and apply to whichever notes are due. **For the whole list** now sits above them and says which is which.
 
 ---

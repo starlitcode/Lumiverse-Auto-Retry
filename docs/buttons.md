@@ -33,7 +33,11 @@ You don't need to change either setting. Keep Regeneration Feedback on if you us
 
 ## Extra dialog buttons it may press
 
-Only needed if the Regeneration Feedback box stays on screen when a retry opens it, which means Auto Retry didn't recognize its button. It already knows `Skip`, `Regenerate`, `Confirm`, `Proceed`, `Submit` and `OK`. If yours says something else, for example in another language, add that wording here.
+This is behind a switch, **My dialog's button says something else**, and off by default. The built-in list covers Lumiverse's Regeneration Feedback and every build seen so far, so almost nobody needs the box, and an option nobody needs is worth keeping out of the panel. The built-in list is used either way.
+
+Turn it on only if the Regeneration Feedback box stays on screen when a retry opens it, which means Auto Retry didn't recognize its button. It already knows `Skip`, `Regenerate`, `Confirm`, `Proceed`, `Submit` and `OK`. If yours says something else, for example in another language, add that wording here.
+
+The switch genuinely gates the box: while it is off, whatever is in there is not read. Turning it off is a way to park your wording without deleting it, and turning it back on picks it up again. If you already had labels typed before the switch existed, it was switched on for you, so nothing you set has stopped working.
 
 Type the button's text exactly as it appears, one per line. **Expand** opens a bigger editor if the box is too small:
 

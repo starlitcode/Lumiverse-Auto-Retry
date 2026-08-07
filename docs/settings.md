@@ -124,7 +124,8 @@ The same options live in the CONFIG block at the top of `src/frontend.ts` and `d
 | swapWaitSecs | 85 | How long to wait for that, in seconds (1-300). A refinement pass is a whole generation, so how long it takes depends on the model, the prompt and how much it has to read. Each edit restarts the clock. Shown only while `swapWaitForEdits` is on. |
 | regenerateSelector | (see file) | Host button. See below. |
 | swipeNextSelector | (see file) | Backup button if your build retries by swiping. |
-| confirmButtonLabels | (blank) | Extra dialog button labels it may press when a dialog appears after a retry, one per line. Blank uses the built-in list. |
+| confirmButtonsCustom | false | Read the box below. Off, only the built-in dialog button list is used, and the box is not shown. |
+| confirmButtonLabels | (blank) | Extra dialog button labels it may press when a dialog appears after a retry, one per line. Tried before the built-in list, which is used as well. Shown and read only while `confirmButtonsCustom` is on. |
 | stopSelector | (see file) | Host stop button, used to abort a stalled reply. |
 | toast | true | Show the little retry pop-up with its Cancel button. |
 | liveLog | false | Show the on-screen panel. Two tabs: Log for what the extension is doing, Prompt for what went to the model. |

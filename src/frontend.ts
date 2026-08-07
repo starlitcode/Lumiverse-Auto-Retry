@@ -226,6 +226,10 @@ const CONFIG = {
     '[aria-label="Next swipe"], [data-action="swipe-right"], [data-testid="swipe-right"], ' +
     'button[aria-label*="next swipe" i], button[aria-label*="swipe right" i], ' +
     'button[aria-label*="reroll" i], button[title*="swipe" i]',
+  // Whether the box below is read at all. Off, the built-in list is used and
+  // nothing else, which is what almost everyone wants, and the box stays out of
+  // the panel rather than sitting there as one more thing to wonder about.
+  confirmButtonsCustom: false,
   // extra button labels Auto Retry may press on a dialog that appears after it
   // clicks retry. One per line. Blank means the built-in list only.
   confirmButtonLabels: "",
@@ -748,10 +752,17 @@ const SCHEMA: Group[] = [
         hint: "A backup it clicks if your setup retries by swiping to a new reply instead.",
       },
       {
+        key: "confirmButtonsCustom",
+        label: "My dialog's button says something else",
+        type: "bool",
+        hint: "Leave this off unless a retry opens a dialog that Auto Retry does not get past. It already knows Skip, Regenerate, Confirm, Proceed, Submit and OK, which covers Lumiverse's Regeneration Feedback and every build seen so far, and that list is used whether this is on or off. Turning it on adds a box for the wording your build uses instead. It is a switch rather than just an empty box because almost nobody needs it, and an option nobody needs is worth keeping out of the way.",
+      },
+      {
         key: "confirmButtonLabels",
+        needs: ["confirmButtonsCustom"],
         label: "Extra dialog buttons it may press",
         type: "text",
-        hint: "Almost nobody needs this. If you use Lumiverse's Regeneration Feedback, a retry opens that box and Auto Retry presses Skip to carry on. Use this box if your button says something else, so it gets pressed too. Type the button's text exactly as it appears, one per line. Capitals are ignored. It already knows Skip, Regenerate, Confirm, Proceed, Submit and OK, and anything you add is tried first.",
+        hint: "Type the button's text exactly as it appears, one per line. Capitals are ignored. Anything you add here is tried before the built-in list, which is still used as well. Nothing here is read while the switch above is off.",
       },
       {
         key: "stopSelector",
@@ -3127,6 +3138,16 @@ export function setup(ctx: Ctx, opts?: any) {
           refusalNotes: [{ text: text, role: String(parsed.refusalNoteRole || "system") }],
         });
     }
+    // The extra dialog labels used to be a box on its own, always read. Now a
+    // switch decides whether it is read, and the switch is off by default, so
+    // anyone who had labels typed would have found them quietly stopped
+    // working. Labels present and no switch saved means they came from before
+    // the switch existed, and they keep working.
+    if (
+      parsed.confirmButtonsCustom == null &&
+      String(parsed.confirmButtonLabels || "").trim()
+    )
+      parsed = Object.assign({}, parsed, { confirmButtonsCustom: true });
     for (const g of SCHEMA)
       for (const f of g.fields) {
         if (!(f.key in parsed)) continue;
@@ -3296,6 +3317,7 @@ export function setup(ctx: Ctx, opts?: any) {
         "regenerateSelector",
         "swipeNextSelector",
         "stopSelector",
+        "confirmButtonsCustom",
         "confirmButtonLabels",
       ],
     },
@@ -4000,7 +4022,13 @@ export function setup(ctx: Ctx, opts?: any) {
 
   // Labels the user added, lower-cased and trimmed. Read fresh each time so a
   // settings change takes effect without a reload.
+  //
+  // The switch above the box genuinely gates it. A row hidden by a switch has
+  // to be a row the code ignores, or the panel is showing one thing and doing
+  // another: text left in a hidden box would go on being pressed with nothing
+  // on screen to say so.
   function userConfirmLabels(): string[] {
+    if (!cfg.confirmButtonsCustom) return [];
     return String(cfg.confirmButtonLabels || "")
       .split(/[\r\n]+/)
       .map((x) => x.trim().toLowerCase())

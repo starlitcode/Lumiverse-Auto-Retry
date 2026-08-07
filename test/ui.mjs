@@ -43,6 +43,34 @@ if (!existsSync(bundle)) {
 }
 const SOURCE = readFileSync(bundle, "utf8") + "\nwindow.__setup = setup;\n";
 
+// The setting whose description is longest, out of the ones that are on screen
+// without turning something on first. Worked out from the schema rather than
+// written down, because a name written down here goes stale the moment that
+// setting is reworded or moved behind a switch, and it fails as a broken
+// popover rather than as a stale test.
+function longestHintKey() {
+  let best = null;
+  let len = -1;
+  // Each field is a { ... } run between "key:" markers, so the description and
+  // the flags that disqualify it are read out of the same block.
+  const blocks = readFileSync(bundle, "utf8").split(/\n\s*\{\s*\n(?=\s*key:)/);
+  for (const b of blocks) {
+    const k = /^\s*key:\s*"([A-Za-z0-9_]+)"/.exec(b);
+    if (!k) continue;
+    // Behind a switch, so not on screen by default; or opens above on purpose.
+    if (/\n\s*needs:\s*\[/.test(b.split("\n},")[0])) continue;
+    if (/\n\s*hintAbove:\s*true/.test(b.split("\n},")[0])) continue;
+    const h = /\n\s*hint:\s*"((?:[^"\\]|\\.)*)"/.exec(b.split("\n},")[0]);
+    if (!h) continue;
+    if (h[1].length > len) {
+      len = h[1].length;
+      best = k[1];
+    }
+  }
+  if (!best) throw new Error("no hint found in the schema to measure");
+  return best;
+}
+
 // Lumiverse's stock theme variables. A custom theme overrides these, which is
 // exactly why the contrast check below exists.
 const THEME = `:root{
@@ -2800,11 +2828,19 @@ console.log("\nhint placement");
   // A short viewport with a scrolling panel, so a row can be pushed low enough
   // that its description will not fit underneath.
   const PANEL = "#modal{position:fixed;inset:12px;overflow:auto;background:rgb(24,20,34);padding:10px;box-sizing:border-box}";
+  // Shared by the checks below: they all want the longest description there is.
+  const want = longestHintKey();
   // The long one, on a viewport too short to fit it under the row.
   {
-    // A long description on a row of ordinary height. The note list is no
-    // longer the one to use here: it opens above on purpose now.
-    const want = "confirmButtonLabels";
+    // A long description on a row of ordinary height. Which row that is used to
+    // be written in here by name, and it went stale twice: once when the row
+    // moved behind a switch and stopped being on screen at all, and once when
+    // its description was shortened and no longer overflowed. What this is
+    // about is the longest description, whichever setting carries it, so it is
+    // worked out from the schema rather than written down. Rows that need a
+    // switch are skipped because they are not on screen by default, and the
+    // note list because it opens above on purpose, which is the one case this
+    // is not testing.
     const { out, errors } = await inPanel(
       browser, { css: PANEL, viewport: { width: 393, height: 460 }, settings: { refusalNote: true } },
       async (page) => page.evaluate(async (want) => {
@@ -2838,6 +2874,7 @@ console.log("\nhint placement");
         modal.dispatchEvent(new Event("scroll", { bubbles: true }));
         await frame();
         res.closedByPanelScroll = !document.querySelector('[role="tooltip"]');
+        res.measured = want;
         return res;
       }, want),
     );
@@ -2858,11 +2895,11 @@ console.log("\nhint placement");
     const { out, errors } = await inPanel(
       browser, { css: PANEL + "body{zoom:1.4}", viewport: { width: 500, height: 520 },
                  settings: { refusalNote: true } },
-      async (page) => page.evaluate(async () => {
+      async (page) => page.evaluate(async (want) => {
         const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
         for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
         await frame();
-        const row = document.querySelector('[data-ar-row="confirmButtonLabels"]');
+        const row = document.querySelector('[data-ar-row="' + want + '"]');
         // Mid screen on purpose. Jammed against the bottom there is barely any
         // room to cap to, so a cap in the wrong units is too small to notice;
         // with room to spare the same mistake overshoots by half the screen.
@@ -2880,7 +2917,7 @@ console.log("\nhint placement");
           rowBottom: Math.round(rr.bottom), tipTop: Math.round(tr.top),
           tipBottom: Math.round(tr.bottom), vh: innerHeight,
         };
-      }),
+      }, want),
     );
     check("a zoomed host still opens it below the row", out.below, out);
     check("and caps it against the room on the screen, not its own units",
