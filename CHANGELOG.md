@@ -8,6 +8,19 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 4.5.4
+
+_2026-08-07_
+
+### Changed
+
+- **The dot beside the status line has three states instead of two.** Dim and flat when Auto Retry is off or paused. Lit, and still, when it is on with nothing to do. Pulsing while something is actually happening: a retry counting down, a reply arriving, the model thinking. Movement means movement rather than decoration, so glancing at the corner answers the question without reading the line. It is opacity and a glow only, and the movement is dropped for anyone whose system asks for less of it, keeping the glow, which is the part carrying the meaning.
+
+### Fixed
+
+- **The panel said the model was thinking after a reply was stopped.** The flag behind that line was only cleared when a generation ended, and stopping one does not always end it, so the line sat there claiming work was happening until the next reply started. Stopping clears it now, on the host's own stop event and on the plain click of your Stop button, which is the case with no event at all. A token arriving puts it back, so a reply that really is still streaming corrects the line by itself.
+- **A reply starting, ending, or a chat being switched took up to a quarter of a second to show.** Those are changes of state rather than a number ticking down, so they repaint at once, the same as a retry being scheduled or called off already did.
+
 ## 4.5.3
 
 _2026-08-07_

@@ -1565,6 +1565,96 @@ console.log("\nlayout is remembered");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- the status line after a stop, and what the dot is doing ----
+// Pressing Stop left the line saying the model was thinking, forever. The flag
+// behind it was only ever cleared when a generation ended, and a stop does not
+// always end one.
+console.log("\nstatus after a stop");
+{
+  const page = await browser.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await stage(page, '<div id=modal></div><button data-testid="regenerate">Regenerate</button><button data-testid="stop">Stop</button>');
+  await page.addStyleTag({ content: THEME });
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  const out = await page.evaluate(async () => {
+    const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const handlers = {};
+    const teardown = window.__setup(
+      { events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
+        ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+              registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) } },
+      { liveLog: true, toast: false, stuckTimeoutMs: 0, idleTimeoutMs: 0, pauseWhenFailing: false },
+    );
+    const line = () => (document.getElementById("__lvRetryStatus").textContent || "").trim();
+    const dot = () => document.querySelector("#__lvRetryStatus [data-ar-state]");
+    const state = () => { const d = dot(); return d ? d.getAttribute("data-ar-state") : null; };
+    const anim = () => { const d = dot(); return d ? getComputedStyle(d).animationName : null; };
+    const glow = () => { const d = dot(); return d ? getComputedStyle(d).boxShadow : null; };
+
+    await frame();
+    const idleLine = line(), idleState = state(), idleAnim = anim(), idleGlow = glow();
+
+    // A reply starts and the model starts thinking.
+    handlers.GENERATION_STARTED({ chatId: "c", generationId: "g" });
+    handlers.STREAM_TOKEN_RECEIVED && handlers.STREAM_TOKEN_RECEIVED({ chatId: "c", type: "reasoning", text: "hm" });
+    await frame();
+    const thinkingLine = line(), busyState = state(), busyAnim = anim();
+
+    // The user presses Stop. The host's own event is what normally arrives.
+    handlers.GENERATION_STOPPED && handlers.GENERATION_STOPPED({ chatId: "c", generationId: "g" });
+    await frame();
+    const afterStop = line(), afterStopState = state();
+
+    // And again with no host event at all, only the click on the Stop button,
+    // which is the case the backup exists for.
+    handlers.GENERATION_STARTED({ chatId: "c2", generationId: "g2" });
+    handlers.STREAM_TOKEN_RECEIVED && handlers.STREAM_TOKEN_RECEIVED({ chatId: "c2", type: "reasoning", text: "hm" });
+    await frame();
+    const thinkingAgain = line();
+    document.querySelector('[data-testid="stop"]').click();
+    await frame();
+    const afterClick = line(), afterClickState = state();
+
+    // Switched off entirely: dim, no glow, no pulse.
+    handlers.GENERATION_STARTED({ chatId: "c3", generationId: "g3" });
+    await frame();
+    const offBefore = state();
+    teardown();
+    const t2 = window.__setup(
+      { events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
+        ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+              registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) } },
+      { liveLog: true, toast: false, enabled: false },
+    );
+    await frame();
+    const offState = state(), offAnim = anim(), offGlow = glow();
+    t2();
+    const styleGone = !document.getElementById("__lvRetryStatusStyle");
+    return { idleLine, idleState, idleAnim, idleGlow, thinkingLine, busyState, busyAnim,
+             afterStop, afterStopState, thinkingAgain, afterClick, afterClickState,
+             offBefore, offState, offAnim, offGlow, styleGone };
+  });
+  await page.close();
+  check("with nothing happening it says so", /nothing to do/i.test(out.idleLine), out);
+  check("a reply in flight is reported", /thinking|arriving|waiting/i.test(out.thinkingLine), out);
+  check("the host's stop event clears it", !/thinking/i.test(out.afterStop), out);
+  check("and it goes back to having nothing to do", /nothing to do/i.test(out.afterStop), out);
+  check("a stop with no host event clears it too", !/thinking/i.test(out.afterClick), out);
+  check("and that one settles as well", /nothing to do/i.test(out.afterClick), out.afterClick);
+  // The dot: dim and flat when off, lit when on, pulsing only while working.
+  check("the dot is lit but still with nothing to do",
+    out.idleState === "idle" && out.idleAnim === "none" && out.idleGlow !== "none", out);
+  check("and pulses while something is happening",
+    out.busyState === "busy" && out.busyAnim === "lvRetryPulse", out);
+  check("it stops pulsing once the work does", out.afterStopState === "idle", out);
+  check("switched off it is dim, flat and unlit",
+    out.offState === "off" && out.offAnim === "none" && out.offGlow === "none", out);
+  check("and its stylesheet goes on teardown", out.styleGone, out);
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- the Stats clock ----
 // "Watching for" counts up on its own, so it has to move on its own. It was
 // rounded to the nearest minute and drawn once, which meant it read "1 minute"

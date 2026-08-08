@@ -95,7 +95,7 @@ const STREAM_BUF_MAX = 200000;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "4.5.3";
+const VERSION = "4.5.4";
 
 // ---- defaults (the UI overrides these; editing here changes the fallback) ----
 const CONFIG = {
@@ -2798,6 +2798,7 @@ export function setup(ctx: Ctx, opts?: any) {
       "color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
     const dot = document.createElement("span");
     dot.style.cssText = "flex:none;width:7px;height:7px;border-radius:50%";
+    ensureStatusStyle();
     const words = document.createElement("span");
     words.style.cssText = "flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap";
     statusEl.appendChild(dot);
@@ -2808,9 +2809,20 @@ export function setup(ctx: Ctx, opts?: any) {
     const paintStatus = () => {
       const st = liveStatus();
       if (words.textContent !== st.text) words.textContent = st.text;
-      dot.style.background = st.busy
-        ? "var(--lumiverse-primary,rgba(147,112,219,.9))"
-        : "var(--lumiverse-text-muted,rgba(255,255,255,.45))";
+      // Off is dim and flat. On with nothing to do glows. Something actually
+      // happening pulses, so movement means movement rather than decoration.
+      if (dot.getAttribute("data-ar-state") !== st.state) {
+        dot.setAttribute("data-ar-state", st.state);
+        dot.style.background =
+          st.state === "off"
+            ? "var(--lumiverse-text-muted,rgba(255,255,255,.45))"
+            : "var(--lumiverse-primary,rgba(147,112,219,.9))";
+        dot.style.boxShadow =
+          st.state === "off"
+            ? "none"
+            : "0 0 6px 1px var(--lumiverse-primary-020,rgba(147,112,219,.45))";
+        dot.style.animation = st.state === "busy" ? "lvRetryPulse 1.6s ease-in-out infinite" : "none";
+      }
     };
     paintStatus();
     addTicker(paintStatus);
@@ -4144,25 +4156,28 @@ export function setup(ctx: Ctx, opts?: any) {
     return null;
   }
 
-  function liveStatus(): { text: string; busy: boolean } {
+  function liveStatus(): { text: string; busy: boolean; state: "off" | "idle" | "busy" } {
     const now = Date.now();
-    if (cfg.enabled === false) return { text: "Off", busy: false };
-    if (chatIsOff(lastChatId)) return { text: "Off in this chat", busy: false };
+    // Three states, not two. Off is not the same as on with nothing to do, and
+    // the dot says which without anyone having to read the line.
+    const off = (text: string) => ({ text: text, busy: false, state: "off" as const });
+    if (cfg.enabled === false) return off("Off");
+    if (chatIsOff(lastChatId)) return off("Off in this chat");
     if (pausedUntil > now)
-      return { text: "Paused after repeated failures, back in " + sayTime(pausedUntil - now), busy: false };
+      return off("Paused after repeated failures, back in " + sayTime(pausedUntil - now));
     // The chat in front of you comes first. A retry running in a chat you have
     // since navigated away from is still worth saying, but not over the top of
     // what is happening here.
     if (lastChatId != null) {
       const here = chatStatus(chats.get(lastChatId));
-      if (here) return here;
+      if (here) return { text: here.text, busy: true, state: "busy" };
     }
     for (const [id, s] of chats) {
       if (id === lastChatId) continue;
       const other = chatStatus(s);
-      if (other) return { text: other.text + ", in another chat", busy: true };
+      if (other) return { text: other.text + ", in another chat", busy: true, state: "busy" };
     }
-    return { text: "Watching. Nothing to do", busy: false };
+    return { text: "Watching. Nothing to do", busy: false, state: "idle" };
   }
 
   // One clock for everything that shows a live figure, rather than one per
@@ -4379,6 +4394,12 @@ export function setup(ctx: Ctx, opts?: any) {
     clearConfirmWatch();
     clearTimers(s);
     s.attempts = 0;
+    // Nothing is in the air once we have stood down. Without this the status
+    // line went on saying the model was thinking after a reply was stopped,
+    // because the flag was only ever cleared when a generation ended and a stop
+    // does not always end one. A chunk arriving puts it back, so a reply that
+    // really is still streaming corrects this by itself.
+    s.live = false;
     s.suppressUntil = Date.now() + STAND_DOWN_MS;
     if (hadPending) {
       hideToast();
@@ -4582,6 +4603,27 @@ export function setup(ctx: Ctx, opts?: any) {
   // all, so there is nothing there to restyle and nothing to break.
   const SEARCH_X =
     "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M19 6.4 17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z'/%3E%3C/svg%3E\")";
+  // The one animation in the extension. Everything else here paints instantly,
+  // and the reason this earns its place is that it is the only thing on screen
+  // saying work is happening rather than saying what happened. Opacity and a
+  // shadow only, so it composites without laying out anything, and it is off
+  // for anyone whose system asks for less movement: the glow stays, which is
+  // what carries the meaning, and only the movement goes.
+  let statusStyleEl: any = null;
+  function ensureStatusStyle() {
+    if (statusStyleEl || typeof document === "undefined") return;
+    try {
+      const el = document.createElement("style");
+      el.id = "__lvRetryStatusStyle";
+      el.textContent =
+        "@keyframes lvRetryPulse{0%,100%{opacity:1}50%{opacity:.45}}" +
+        "@media (prefers-reduced-motion:reduce){" +
+        "#__lvRetryStatus [data-ar-state]{animation:none !important}}";
+      (document.head || document.documentElement).appendChild(el);
+      statusStyleEl = el;
+    } catch (_) {}
+  }
+
   let panelStyleEl: any = null;
   function ensurePanelStyle() {
     if (panelStyleEl || typeof document === "undefined") return;
@@ -5081,6 +5123,10 @@ export function setup(ctx: Ctx, opts?: any) {
     // are wanted afterwards, so it cannot answer this and the status line read
     // "waiting for the reply to start" long after one had finished.
     s.live = true;
+    // A reply starting is a change, so the line says so at once rather than up
+    // to a quarter of a second later. The character count inside one is not a
+    // change of state, so tokens are left to the clock.
+    paintNow();
     clearConfirmWatch(); // a reply is running, so no dialog is in the way
     s.sawReasoning = false;
     s.sawContent = false;
@@ -5101,9 +5147,12 @@ export function setup(ctx: Ctx, opts?: any) {
     if (!p || typeof p.chatId === "undefined") return;
     lastChatId = p.chatId || null;
     lastMessageId = null;
-    // Both of these describe the chat you are in, so both go stale on a switch.
+    // All three describe the chat you are in, so all three go stale on a switch.
+    // The line most of all: walking into a chat you had switched off should say
+    // so straight away, not on the next tick.
     paintFloat();
     syncMasterNote();
+    paintNow();
   }
 
   // The text a token event carries. Builds name this field differently, so the
@@ -5118,6 +5167,9 @@ export function setup(ctx: Ctx, opts?: any) {
   function onToken(p: any) {
     if (!p || !p.chatId) return;
     const s = st(p.chatId);
+    // Text arriving is the only proof that beats every guess: if anything above
+    // decided this reply was over and it was not, this puts it right.
+    s.live = true;
     // Matched by shape, not an exact string, so a build that labels these
     // "reasoning_content" or "thinking" is not counted as visible reply text.
     if (/reason|think/i.test(String((p && p.type) || ""))) s.sawReasoning = true;
@@ -5150,6 +5202,7 @@ export function setup(ctx: Ctx, opts?: any) {
     lastChatId = p.chatId;
     lastMessageId = p.messageId;
     s.live = false;
+    paintNow();
     if (s.ignored.has(p.generationId)) return; // aborted gen's trailing event, retry already scheduled
     clearTimers(s);
     if (Date.now() < s.suppressUntil) {
@@ -5481,8 +5534,12 @@ export function setup(ctx: Ctx, opts?: any) {
           : null;
       if (!tgt) return;
       chats.forEach((s: any, id: string) => {
+        // The reply on screen is being halted, whether or not a retry was
+        // waiting behind it, so nothing is in the air in any of these.
+        s.live = false;
         if (s.pending || s.timer || s.attempts > 0) standDown(id, true);
       });
+      paintNow();
     } catch (_) {}
   }
 
@@ -8587,6 +8644,12 @@ export function setup(ctx: Ctx, opts?: any) {
         panelStyleEl.remove();
       } catch (_) {}
       panelStyleEl = null;
+    }
+    if (statusStyleEl) {
+      try {
+        statusStyleEl.remove();
+      } catch (_) {}
+      statusStyleEl = null;
     }
     offs.forEach((o: any) => {
       try {
