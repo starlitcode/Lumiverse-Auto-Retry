@@ -1790,6 +1790,73 @@ console.log("\ncopy takes everything");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- the panel on a phone ----
+// The panel is most useful on a phone, where there is no console to open, and
+// that is also where there is least room. The status line is one line, so the
+// question is whether the part that matters survives the width.
+console.log("\nphone panel");
+{
+  for (const [name, w, h] of [["phone", 360, 640], ["small phone", 320, 568], ["desktop", 1280, 800]]) {
+    const page = await browser.newPage();
+    const errors = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    await page.setViewportSize({ width: w, height: h });
+    await stage(page, "<div id=modal></div><button data-testid=\"regenerate\">Regenerate</button>");
+    await page.addStyleTag({ content: THEME });
+    await page.addScriptTag({ content: SOURCE, type: "module" });
+    await page.waitForFunction(() => !!window.__setup);
+    const out = await page.evaluate(async () => {
+      const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const handlers = {};
+      const teardown = window.__setup(
+        { events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
+          ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+                registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) } },
+        { liveLog: true, toast: false, retryDelayMs: 90000, backoffFactor: 1, maxDelayMs: 90000,
+          jitter: false, maxRetries: 5, stuckTimeoutMs: 0, idleTimeoutMs: 0, pauseWhenFailing: false },
+      );
+      // The longest thing the line ever says.
+      handlers.GENERATION_STARTED({ chatId: "c", generationId: "g" });
+      handlers.GENERATION_ENDED({ chatId: "c", content: "" });
+      for (let i = 0; i < 40; i++) {
+        await new Promise((r) => setTimeout(r, 50));
+        if (/Retrying in/.test(document.getElementById("__lvRetryStatus").textContent || "")) break;
+      }
+      const panel = document.getElementById("__lvRetryLog");
+      const status = document.getElementById("__lvRetryStatus");
+      const words = status.querySelector("span:last-child");
+      const pr = panel.getBoundingClientRect();
+      const res = {
+        text: (words.textContent || "").trim(),
+        // Nothing may hang off the side of the screen, and the panel has to fit.
+        onScreen: pr.left >= -1 && pr.right <= innerWidth + 1 && pr.bottom <= innerHeight + 1,
+        panelW: Math.round(pr.width),
+        // How much of the line is readable rather than cut off by the ellipsis.
+        shownRatio: words.clientWidth / Math.max(1, words.scrollWidth),
+        // The dot must not be squeezed away by the text beside it.
+        dotW: Math.round(status.querySelector("span").getBoundingClientRect().width),
+        // Tabs and buttons still reachable, not overflowing their row.
+        headFits: (() => {
+          const head = panel.firstElementChild.getBoundingClientRect();
+          return [...panel.firstElementChild.querySelectorAll("button")]
+            .every((b) => b.getBoundingClientRect().right <= head.right + 1);
+        })(),
+        // A finger-sized target for the tabs.
+        tabH: Math.round(panel.querySelector('[role="tab"]').getBoundingClientRect().height),
+      };
+      teardown();
+      return res;
+    });
+    await page.close();
+    check(name + ": the panel is fully on screen", out.onScreen, out);
+    check(name + ": the status line says what it is waiting for", /Retrying in/.test(out.text), out);
+    check(name + ": the header's buttons stay inside it", out.headFits, out);
+    check(name + ": the dot keeps its size", out.dotW >= 6, out);
+    check(name + ": no console errors", errors.length === 0, errors);
+    if (w < 400) check(name + ": most of the line is readable", out.shownRatio > 0.75, out);
+  }
+}
+
 // ---- the Stats clock ----
 // "Watching for" counts up on its own, so it has to move on its own. It was
 // rounded to the nearest minute and drawn once, which meant it read "1 minute"

@@ -634,7 +634,7 @@ const SCHEMA = [
                 hintAbove: true,
                 label: "What the notes say",
                 type: "notes",
-                hint: "Goes to the model, not to your chat. Each note sets two things for itself, on its own row: its role, and the try it starts on. The two settings below this list are for the whole list rather than for any one note: where the block goes, and whether it is sent at all. Whatever you type is sent exactly as written: nothing is added to it, nothing is removed, and nothing in it is checked. Add up to ten with the plus button. Each note carries two things of its own. Its role: system puts it alongside the instructions your setup already sends, you puts it in the same role as your own messages, and the character puts it in the same role as the replies. And the try it starts on: at 2 the first retry re-sends unchanged and that note joins from the second onward, at 1 it goes on every refusal retry. Give notes different starting tries to escalate, so a gentle note goes first and a firmer one only if that did not work. Whichever notes have come due are sent together, in order, so one can answer the one before it. An empty note is skipped.",
+                hint: "Goes to the model, not into your chat, and exactly as written: nothing is added, removed or checked. Up to ten, and empty ones are skipped. Each note carries its own role and its own starting try. Role puts it with the instructions your setup already sends (system), your own messages (you), or the replies (the character). A starting try of 2 lets the first retry re-send unchanged and joins that note from the second onward; 1 puts it on every refusal retry, so different numbers let a list escalate. Whichever are due go together, in the order you wrote them, so one can answer another.",
             },
             {
                 key: "refusalNotePlacement",
@@ -647,7 +647,7 @@ const SCHEMA = [
                     { value: "before", label: "Before the last message" },
                     { value: "start", label: "At the very start" },
                 ],
-                hint: "Set once, for every note rather than for one of them. Whichever notes are due go in together as one block, in the order you wrote them, which is what lets one answer the one before it. After the last message puts the block at the end, right before the point the reply continues from. Before the last message puts it one place earlier, so the newest line is still last. At the very start puts it ahead of everything, with the setup. The two things each note sets for itself are its role and the try it starts on, both on its own row.",
+                hint: "Whichever notes are due go in together as one block. After the last message puts it at the end, right before the point the reply continues from. Before the last message puts it one place earlier, so the newest line is still last. At the very start puts it ahead of everything, with the setup.",
             },
             {
                 key: "refusalNoteStrictType",
@@ -655,7 +655,7 @@ const SCHEMA = [
                 run: "wholeList",
                 label: "Only send them on a regenerate or a swipe",
                 type: "bool",
-                hint: "Set once, for every note rather than for one of them: it decides whether any of them go at all. Off by default, and best left off. Lumiverse tells the extension what kind of generation is running, and most builds call every one of them \"normal\", including a regenerate. With this on, notes are only attached when your build says \"regenerate\" or \"swipe\", so on a build that says \"normal\" nothing is ever sent. Turn it on only if your build reports the kind properly and you want the extra check. Either way the notes go out once, to the chat they were armed in, on the retry that armed them.",
+                hint: "Off by default, and best left off. Lumiverse says what kind of generation is running, and most builds call every one of them \"normal\", including a regenerate, so turning this on stops notes going out at all. Turn it on only if your build reports the kind properly and you want the extra check. Either way a note goes out once, to the chat it was armed in, on the retry that armed it.",
             },
         ],
     },

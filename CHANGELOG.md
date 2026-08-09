@@ -12,6 +12,10 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 _2026-08-07_
 
+### Changed
+
+- **The description on What the notes say was nearly five times the length of a normal one, and said half of itself twice.** It explained that each note carries its own role and starting try, then explained it again a few sentences later, and it also described the two settings underneath the list, which now sit under a **For the whole list** heading that says so on its own. The heading went in a few versions back and the words it replaced were never taken out. The descriptions on **Where the notes go** and **Only send them on a regenerate or a swipe** both opened with the same redundant sentence and have lost it too.
+
 ### Fixed
 
 - **Copy now takes everything the tab is showing.** It was leaving things out, and the things it left out were the ones you would be copying the tab to report. On **Stats**: the refusal note counts, how often a reply needed a retry, the notice that it had paused itself, and the line saying nothing had needed a retry yet. On **Prompt**: the summary of how many messages and how large, the line saying how many notes went and where they landed, and the marking on the messages that carried them, so a copied prompt now says which message was a note instead of leaving you to guess. On **Log**, an empty log copied nothing at all rather than what it says on screen.
