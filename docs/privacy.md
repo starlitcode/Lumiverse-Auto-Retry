@@ -46,6 +46,19 @@ The **Copy** button on the on-screen panel is the same thing in miniature, and i
 
 The refusal tester in the settings panel only reads the text in its box. **Use my last reply** fills that box by reading the reply rendered on the page at the moment you press it, which is the same reply the extension already reads to run its checks. Nothing is kept between replies. It runs the check on your device and reports the verdict; it sends nothing and stores nothing.
 
+## Checking any of this yourself
+
+The files Lumiverse actually loads are the two named in `spindle.json`, `dist/frontend.js` and `dist/backend.js`. They are committed as readable code: not minified, not obfuscated, not bundled. What you read is what runs, which is also why the extension installs without a build step. If you are auditing this extension, or pointing a scanner at it, those two files are the whole of what ships.
+
+Everything else in the repo exists for working on it, and none of it reaches your browser:
+
+- `src/` is the TypeScript those two files are built from. A scanner that only parses JavaScript cannot read it and will say so. The shipped `dist/` files are plain JavaScript and parse normally.
+- `test/` runs only when a contributor types `bun run check`. It is not part of the install and adds nothing to its size.
+- `setup.sh` prepares a development machine. Nothing runs it at install time and nothing in the extension calls it.
+- `.github/workflows/` runs the checks on pull requests. Its actions are pinned to commit hashes rather than to movable tags, and the checkout step keeps no credentials in the build environment.
+
+Those checks rebuild `dist/` from `src/` on every pull request and fail if the result differs from what is committed, so the readable files you are auditing cannot quietly drift from the source they claim to come from.
+
 ---
 
 [Back to the README](../README.md)

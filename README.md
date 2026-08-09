@@ -44,8 +44,8 @@ To switch it off for one chat, or everywhere, see [Turning it off](docs/settings
 - [The on-screen panel](docs/settings.md#the-on-screen-panel) - the log, the prompt viewer and the stats
 - [Import and export](docs/import-export.md) - moving your setup between devices
 - [Reporting a bug](docs/troubleshooting.md)
-- [Privacy](docs/privacy.md) - what the extension can and can't reach, what it keeps, and how to check
-- [Security policy](SECURITY.md) - reporting a security problem, and what to read if you are auditing it
+- [Privacy](docs/privacy.md) - what the extension can and can't reach, what it keeps, and how to check any of it
+- [Security policy](SECURITY.md) - how to report a security problem
 - [Working on the extension](docs/development.md) - the build, the tests, and what GitHub runs
 - [Changelog](CHANGELOG.md) - what changed in every version
 

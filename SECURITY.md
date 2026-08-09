@@ -1,44 +1,36 @@
 # Security policy
 
-## Reporting a problem
+How to report a security problem in Auto Retry. For what the extension touches and keeps, read [Privacy](docs/privacy.md) instead.
 
-If you have found something in Auto Retry that could put someone's account, chats or machine at risk, tell me and I will look at it.
+## Where to send it
 
-**Message me on Discord as `.moonsight.` in the Lumiverse server.** That is the better route for anything you would rather not describe in public, since a GitHub issue is visible to everyone the moment you open it.
+**Something sensitive, or anything you can see being abused: message me on Discord.** I am `.moonsight.` in the Lumiverse server. Send it there first and give me a chance to reply before it goes anywhere public.
 
-If it is not sensitive, or you would rather have it written down in the open, [open an issue](https://github.com/starlitcode/Lumiverse-Auto-Retry/issues).
+**Anything else: [open an issue](https://github.com/starlitcode/Lumiverse-Auto-Retry/issues).** Ordinary bugs, odd behaviour, and anything you are happy to have read by everyone belong there.
 
-Useful things to include, as far as you have them:
+If you are not sure which it is, use Discord. It is easy to make a private report public and impossible the other way round.
 
-- what you saw, and what you expected instead
-- the steps that produce it, or the reply or setting that triggers it
-- your Lumiverse build and browser, and the Auto Retry version from the top of the settings panel
-- anything **Copy debug info** gives you, with the tick boxes used to leave out whatever you would rather not share
+## Include
 
-Please do not post a working exploit in a public issue before I have had a chance to reply.
+- What you saw, and what you expected instead.
+- The steps that produce it, or the reply or setting that triggers it.
+- Your Lumiverse build, your browser, and the Auto Retry version from the top of the settings panel.
+- Whatever **Copy debug info** gives you. Use its tick boxes to leave out anything you would rather not share, and read it before you send it.
 
-## What happens next
+## Do not
 
-I maintain this on my own in my spare time, so I cannot promise a fix by any particular date. I will read what you send, and I will tell you whether I think it is a real problem and what I intend to do about it. If it is, the fix goes out as a new version with the changelog saying what it was.
+- **Do not post a working exploit in public** before I have replied.
+- **Do not include your API keys, passwords or session tokens.** I never need them, and nothing in a real report requires one.
+- **Do not paste chat text you would not want read.** A debug report can carry short fragments of a reply, and the Copy button on the panel's Prompt tab copies most of a chat. Both are yours to trim first.
+- **Do not test against other people.** Anything you report should be something you reproduced in your own Lumiverse.
 
-Only the latest version is supported. There is no back-porting: updating is the fix.
+## What to expect
 
-## Reviewing it yourself
+I will read it and reply with whether I think it is a real problem and what I intend to do.
 
-The files Lumiverse actually loads are the two named in `spindle.json`, `dist/frontend.js` and `dist/backend.js`. They are committed to the repo as readable code. They are not minified, obfuscated, or bundled, so what you read is what runs, and it is why the extension installs without a build step. **If you are auditing this extension, or pointing a scanner at it, those two files are the whole of what ships.**
+I maintain this alone in my spare time, so I cannot promise a fix by any particular date. If it is real, the fix ships as a new version and the changelog says what it was.
 
-Everything else in the repo is there for working on it, and none of it reaches your browser:
-
-- `src/` is the TypeScript the two `dist/` files are built from. An automated scanner that only parses JavaScript cannot read these, and will say so; the shipped `dist/` files are plain JavaScript and parse normally.
-- `test/` runs only when a contributor types `bun run check`. It is not part of the install and adds nothing to its size.
-- `setup.sh` prepares a development machine. It is not run by anything at install time and nothing in the extension calls it.
-- `.github/workflows/` runs the checks on pull requests. Its actions are pinned to commit hashes rather than to movable tags, and the checkout step keeps no credentials in the build environment.
-
-CI rebuilds `dist/` from `src/` on every pull request and fails if the result differs from what is committed, so the readable files you are auditing cannot quietly drift from the source they claim to come from.
-
-## What it can reach
-
-What the extension touches, what it keeps, and what it has no way to get at is a longer answer and lives in [Privacy](docs/privacy.md).
+Only the latest version is supported. Nothing is back-ported: updating is the fix.
 
 ---
 
