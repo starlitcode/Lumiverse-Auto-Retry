@@ -44,7 +44,8 @@ To switch it off for one chat, or everywhere, see [Turning it off](docs/settings
 - [The on-screen panel](docs/settings.md#the-on-screen-panel) - the log, the prompt viewer and the stats
 - [Import and export](docs/import-export.md) - moving your setup between devices
 - [Reporting a bug](docs/troubleshooting.md)
-- [Security and permissions](SECURITY.md) - what the extension can and can't reach, and how to check
+- [Privacy](docs/privacy.md) - what the extension can and can't reach, what it keeps, and how to check
+- [Security policy](SECURITY.md) - reporting a security problem, and what to read if you are auditing it
 - [Working on the extension](docs/development.md) - the build, the tests, and what GitHub runs
 - [Changelog](CHANGELOG.md) - what changed in every version
 
@@ -54,7 +55,7 @@ Auto Retry listens to Lumiverse's own generation events. When a reply fails, com
 
 Find and replace works separately, since editing a saved reply is a backend job. A small backend module watches for finished replies and, when swaps are on, edits the saved message through Lumiverse's Chat Mutation API. That edit is treated as an edit rather than a new reply, so it cannot set itself off in a loop.
 
-It makes no external network calls. [Security](SECURITY.md) has the detail, including the four permissions it declares and what still works without each of them.
+It makes no external network calls. [Privacy](docs/privacy.md) has the detail, including the four permissions it declares and what still works without each of them.
 
 ## Credits
 
