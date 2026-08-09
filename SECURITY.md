@@ -40,7 +40,7 @@ The on-screen panel's **Prompt** tab is the one part that holds more than that, 
 
 The Copy debug info button gathers your settings, your button selectors, your browser string, the session counters, and that recent activity log. The activity log records what the extension saw, so it can contain short fragments of a reply. Read what you copied before pasting it somewhere public, and untick any section you would rather keep to yourself. The tick boxes are there for exactly that.
 
-The **Copy** button on the on-screen panel is the same thing in miniature: on the Log tab it puts that whole activity log on your clipboard in one tap, fragments included, and on the Prompt tab it copies the entire prompt, which is most of your chat. It is there because selecting text by hand on a phone is awkward, and the same advice applies before you paste either anywhere.
+The **Copy** button on the on-screen panel is the same thing in miniature, and it takes everything the tab is showing. On the Log tab that is the whole activity log in one tap, fragments included, and on the Prompt tab the entire prompt, which is most of your chat. The Stats tab is the safe one: counters and the names of what it retried for, no text from any reply. It is there because selecting text by hand on a phone is awkward, and the same advice applies before you paste either anywhere.
 
 The refusal tester in the settings panel only reads the text in its box. **Use my last reply** fills that box by reading the reply rendered on the page at the moment you press it, which is the same reply the extension already reads to run its checks. Nothing is kept between replies. It runs the check on your device and reports the verdict; it sends nothing and stores nothing.
 

@@ -1655,6 +1655,141 @@ console.log("\nstatus after a stop");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- Copy takes the whole tab ----
+// Both text builders are written out separately from the views they describe,
+// so they drift: the Stats copy was missing the note counts, the retry rate,
+// the paused notice and the "nothing has needed a retry yet" line, and the
+// Prompt copy was missing the summary, where the notes landed, and the marking
+// on the messages that carried them. Rather than trust the two to stay in step,
+// this reads what is on screen and asks whether the clipboard has it.
+console.log("\ncopy takes everything");
+{
+  const page = await browser.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await stage(page, "<div id=modal></div>");
+  await page.addStyleTag({ content: THEME });
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  const out = await page.evaluate(async () => {
+    const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    let clip = "";
+    // The clipboard is not available to a headless page, so the write is caught
+    // here instead. What matters is the text handed over, not who took it.
+    try {
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: { writeText: async (t) => { clip = t; } },
+      });
+    } catch (_) {}
+    document.execCommand = () => { return true; };
+
+    const handlers = {};
+    const backend = [];
+    const teardown = window.__setup(
+      { events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
+        sendToBackend: (m) => backend.push(m),
+        onBackendMessage: (fn) => { window.__fromBackend = fn; return () => {}; },
+        ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+              registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) } },
+      { liveLog: true, toast: false, refusalNote: true, pauseWhenFailing: false,
+        retryDelayMs: 10, backoffFactor: 1, maxDelayMs: 10, jitter: false, maxRetries: 3,
+        stuckTimeoutMs: 0, idleTimeoutMs: 0 },
+    );
+    const panel = () => document.getElementById("__lvRetryLog");
+    const body = () => document.getElementById("__lvRetryLogBody");
+    const tab = (name) =>
+      [...document.querySelectorAll('#__lvRetryLog [role="tab"], #__lvRetryLog button')]
+        .find((b) => (b.textContent || "").trim() === name);
+    // Matched on either label: pressing it relabels it to "Copied" for a
+    // moment, so a second search for "Copy" found nothing.
+    const copy = () =>
+      [...document.querySelectorAll("#__lvRetryLog button")]
+        .find((b) => /^Cop(y|ied)$/.test((b.textContent || "").trim()));
+
+    // Give it something to report: a failure, a retry, a finish.
+    handlers.GENERATION_STARTED({ chatId: "c", generationId: "g1" });
+    handlers.GENERATION_ENDED({ chatId: "c", content: "" });
+    await new Promise((r) => setTimeout(r, 120));
+    handlers.GENERATION_STARTED({ chatId: "c", generationId: "g2" });
+    handlers.GENERATION_ENDED({ chatId: "c", content: "A finished reply." });
+    await frame();
+
+    // Every line the body is showing, so the copy can be held against it.
+    const shownLines = () =>
+      (body().innerText || body().textContent || "")
+        .split("\n").map((x) => x.trim()).filter((x) => x.length > 2);
+
+    const grab = async (name) => {
+      if (!tab(name))
+        return { shown: ["(tab missing)"], clip: "", missing: ["(tab missing)"],
+                 err: "no " + name + " tab; panel=" + !!panel() +
+                      " buttons=" + [...document.querySelectorAll("#__lvRetryLog button")]
+                        .map((b) => (b.textContent || "").trim()).join(",") };
+      tab(name).click();
+      await frame();
+      const shown = shownLines();
+      clip = "";
+      if (!copy())
+        return { shown: shown, clip: "", missing: shown,
+                 err: "no Copy button; buttons=" +
+                      [...document.querySelectorAll("#__lvRetryLog button")]
+                        .map((b) => JSON.stringify((b.textContent || "").trim())).join(",") };
+      copy().click();
+      await new Promise((r) => setTimeout(r, 60));
+      // Compared without case, because a heading is upper-cased by a style rule
+      // rather than in the text, and that is presentation, not content.
+      const flat = clip.toLowerCase();
+      return { shown, clip, missing: shown.filter((l) => flat.indexOf(l.toLowerCase()) < 0) };
+    };
+
+    const log = await grab("Log");
+    const stats = await grab("Stats");
+
+    // A prompt, so the Prompt tab has something to show. It arrives the way the
+    // backend sends one.
+    tab("Prompt").click();
+    await frame();
+    if (window.__fromBackend)
+      window.__fromBackend({
+        type: "prompt_snapshot",
+        total: 3,
+        notes: 1,
+        dropped: 0,
+        messages: [
+          { role: "system", history: true, chars: 12, content: "You are here." },
+          { role: "user", history: false, chars: 9, note: true, content: "A note." },
+          { role: "user", history: true, chars: 6, content: "Hello." },
+        ],
+      });
+    await frame();
+    const prompt = await grab("Prompt");
+    teardown();
+    return { log, stats, prompt };
+  });
+  await page.close();
+  const report = (r) => ({ err: r.err, missing: r.missing, shown: r.shown.length, clip: (r.clip || "").slice(0, 300) });
+  check("the Log tab had something to show", out.log.shown.length > 0, report(out.log));
+  check("and Copy took all of it", out.log.missing.length === 0, report(out.log));
+  check("the Stats tab had something to show", out.stats.shown.length > 3, report(out.stats));
+  check("and Copy took all of it", out.stats.missing.length === 0, report(out.stats));
+  check("the Prompt tab had something to show", out.prompt.shown.length > 3, report(out.prompt));
+  // The Prompt view draws the same facts as compact chrome, "chat · 12" where
+  // the copy writes "(chat) 12 chars", so this asks for the facts rather than
+  // for the same words. Every message's text has to be there, whole.
+  const p = out.prompt.clip || "";
+  check("Copy carries the prompt summary", /3 messages,.*characters,.*tokens/i.test(p), report(out.prompt));
+  check("and says where the notes landed", /1 Auto Retry note went with this one, at position 2 of 3/.test(p), report(out.prompt));
+  check("and marks the message that carried one", /\(Auto Retry note\)/.test(p), report(out.prompt));
+  check("and every message's role and origin", /1 system \(chat\)/.test(p) && /3 user \(chat\)/.test(p), report(out.prompt));
+  check("and every message's text",
+    ["You are here.", "A note.", "Hello."].every((t) => p.indexOf(t) >= 0), report(out.prompt));
+  // The one the old Stats builder left out entirely.
+  check("Copy carries the retry breakdown",
+    /What it retried for/i.test(out.stats.clip) && /needed a retry/i.test(out.stats.clip), report(out.stats));
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- the Stats clock ----
 // "Watching for" counts up on its own, so it has to move on its own. It was
 // rounded to the nearest minute and drawn once, which meant it read "1 minute"

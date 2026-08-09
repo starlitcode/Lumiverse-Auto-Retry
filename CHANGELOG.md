@@ -8,6 +8,15 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 4.5.5
+
+_2026-08-07_
+
+### Fixed
+
+- **Copy now takes everything the tab is showing.** It was leaving things out, and the things it left out were the ones you would be copying the tab to report. On **Stats**: the refusal note counts, how often a reply needed a retry, the notice that it had paused itself, and the line saying nothing had needed a retry yet. On **Prompt**: the summary of how many messages and how large, the line saying how many notes went and where they landed, and the marking on the messages that carried them, so a copied prompt now says which message was a note instead of leaving you to guess. On **Log**, an empty log copied nothing at all rather than what it says on screen.
+- The two text builders are written separately from the views they describe, which is how they drifted in the first place. A check now reads what is on screen and asks whether the clipboard has it, so a line added to a view and forgotten here fails by name.
+
 ## 4.5.4
 
 _2026-08-07_

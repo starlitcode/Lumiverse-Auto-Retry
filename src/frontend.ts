@@ -95,7 +95,7 @@ const STREAM_BUF_MAX = 200000;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "4.5.4";
+const VERSION = "4.5.5";
 
 // ---- defaults (the UI overrides these; editing here changes the fallback) ----
 const CONFIG = {
@@ -2725,30 +2725,77 @@ export function setup(ctx: Ctx, opts?: any) {
     };
     // Copy and Clear act on whichever view is showing, so the buttons mean the
     // same thing as what is in front of them.
+    // Copy takes everything the tab is showing, in the order it is shown.
+    // Anything on screen and missing from here is the button quietly lying
+    // about what it did, and the counts left out were the ones somebody would
+    // be copying the tab to report.
     const statsAsText = () => {
       const lines = [
-        "replies that came back fine: " + stats.good,
-        "retries fired: " + stats.retries,
-        "messages it gave up on: " + stats.gaveUp,
-        "watching for: " + sayTime(Date.now() - stats.since),
+        "Replies that came back fine: " + stats.good,
+        "Retries fired: " + stats.retries,
+        "Messages it gave up on: " + stats.gaveUp,
       ];
+      if (cfg.refusalNote || stats.notesSent || stats.notesSkipped) {
+        lines.push("Refusal notes sent: " + stats.notesSent);
+        if (stats.notesSkipped) lines.push("Notes not sent: " + stats.notesSkipped);
+      }
+      lines.push("Watching for: " + sayTime(Date.now() - stats.since));
+      const total = stats.good + stats.retries;
+      if (total)
+        lines.push(
+          "One reply in: " +
+            (stats.retries
+              ? String(Math.max(1, Math.round(total / stats.retries))) + " needed a retry"
+              : "none needed a retry"),
+        );
+      if (cfg.pauseWhenFailing && Date.now() < pausedUntil)
+        lines.push(
+          "Paused after repeated failures. " + sayTime(pausedUntil - Date.now()) +
+            " left, or until a reply comes back fine.",
+        );
       const names = Object.keys(stats.reasons).sort((a, b) => stats.reasons[b] - stats.reasons[a]);
-      if (names.length) {
-        lines.push("what it retried for:");
+      if (!names.length) {
+        lines.push(stats.good ? "Nothing has needed a retry yet." : "Nothing has happened yet.");
+      } else {
+        lines.push("");
+        lines.push("What it retried for");
         for (const n of names) lines.push("  " + n + ": " + stats.reasons[n]);
       }
       return lines.join("\n");
     };
     const promptAsText = () => {
-      if (!lastPrompt) return "";
-      return lastPrompt.messages
-        .map(
-          (m: any, i: number) =>
-            "--- " + (i + 1) + " " + (m.role || "?") + " " +
-            (m.history ? "(chat)" : "(added)") + " " + (m.chars || 0) + " chars ---\n" +
-            String(m.content || ""),
-        )
-        .join("\n\n");
+      if (!lastPrompt) return "(no prompt seen yet; send a reply)";
+      const chars = lastPrompt.messages.reduce((n: number, m: any) => n + (m.chars || 0), 0);
+      const lines = [
+        lastPrompt.total + (lastPrompt.total === 1 ? " message, " : " messages, ") +
+          rough(chars) + " characters, roughly " + rough(Math.round(chars / 4)) + " tokens" +
+          (lastPrompt.dropped ? " (" + lastPrompt.dropped + " not shown)" : ""),
+      ];
+      if (lastPrompt.notes) {
+        const at = lastPrompt.messages.findIndex((m: any) => m && m.note);
+        lines.push(
+          lastPrompt.notes +
+            (lastPrompt.notes === 1
+              ? " Auto Retry note went with this one"
+              : " Auto Retry notes went with this one") +
+            (at >= 0 ? ", at position " + (at + 1) + " of " + lastPrompt.total : "") +
+            ". Marked below.",
+        );
+      }
+      // The marking is the point of this view, so it survives being copied
+      // rather than being something you had to be looking at the screen for.
+      for (let i = 0; i < lastPrompt.messages.length; i++) {
+        const m = lastPrompt.messages[i];
+        lines.push("");
+        lines.push(
+          "--- " + (i + 1) + " " + (m.role || "?") + " " +
+            (m.history ? "(chat)" : "(added)") +
+            (m.note ? " (Auto Retry note)" : "") + " " +
+            (m.chars || 0) + " chars ---",
+        );
+        lines.push(String(m.content || ""));
+      }
+      return lines.join("\n");
     };
     const copyBtn = tinyBtn("Copy");
     copyBtn.addEventListener("click", async () => {
@@ -2758,7 +2805,9 @@ export function setup(ctx: Ctx, opts?: any) {
           ? promptAsText()
           : liveTab === "stats"
             ? statsAsText()
-            : eventLog.join("\n"),
+            : eventLog.length
+              ? eventLog.join("\n")
+              : "(nothing yet)",
       );
       copyBtn.textContent = ok ? "Copied" : "Can't";
       setTimeout(() => {

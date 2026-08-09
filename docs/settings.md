@@ -73,7 +73,7 @@ Your **refusal notes are marked** in that list, in the accent colour, and opened
 
 This is what actually went, after your setup, your world info, your persona and every extension have had their turn at it. That is a different question from the one Lumiverse's own **Prompt Breakdown** answers, which is what your chat is built from.
 
-**Copy** and **Clear** act on whichever tab you are looking at.
+**Copy** and **Clear** act on whichever tab you are looking at. Copy takes everything that tab is showing, in the order it is shown: the whole log, every counter and the retry breakdown, or the whole prompt with its summary, where your notes landed, and which message carried one.
 
 Switching tabs works by tapping, and from a keyboard with the left and right arrows.
 
