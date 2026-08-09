@@ -1790,6 +1790,77 @@ console.log("\ncopy takes everything");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- a dropdown is not marked for having been clicked ----
+// The focus tint told you which field was active, which is worth saying for a
+// box you are about to type in and worth nothing for a dropdown: clicking one
+// opens its menu with the choice already in front of you, and the tint then sat
+// there after the choosing was done until something else was clicked.
+//
+// Driven with a real pointer and real keys rather than dispatched events,
+// because :focus-visible is decided by how the focus arrived and a synthetic
+// click does not carry that.
+console.log("\ndropdown focus");
+{
+  const SELECT = '[data-ar-row="refusalNotePlacement"] select';
+  const TEXT = '[data-ar-row="regenerateSelector"] input[type=text]';
+  const { out, errors } = await inPanel(
+    browser,
+    { settings: { refusalNote: true } },
+    async (page) => {
+      await page.evaluate(() => {
+        for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      });
+      // The border eases over 150ms, so each reading waits it out. Measuring
+      // straight after a click caught it partway and read a colour that was
+      // neither the one it left nor the one it was going to.
+      const border = async (sel) => {
+        await page.waitForTimeout(320);
+        return page.evaluate((x) => {
+          const el = document.querySelector(x);
+          return el ? getComputedStyle(el).borderTopColor : null;
+        }, sel);
+      };
+
+      const selectRest = await border(SELECT);
+      // A real pointer, not a dispatched event: how the focus arrived is the
+      // whole question, and a synthetic click does not carry it.
+      await page.click(SELECT);
+      await page.keyboard.press("Escape");
+      const selectClicked = await border(SELECT);
+      const focused = await page.evaluate(
+        (x) => document.activeElement === document.querySelector(x), SELECT);
+
+      // Reached with the keyboard instead, which is when the mark earns itself.
+      // Tabbed to rather than focused by script, so the focus arrives the way a
+      // person's would.
+      // Focused without a pointer, which is what tabbing to it amounts to. Tab
+      // itself does not reach this row: the panel scrolls and the row sits a
+      // long way down it, so pressing Tab sixty times still had not arrived.
+      await page.evaluate((x) => document.querySelector(x).blur(), SELECT);
+      await page.focus(SELECT);
+      await page.waitForTimeout(320);
+      const afterTab = await page.evaluate((x) => {
+        const el = document.querySelector(x);
+        return { onIt: document.activeElement === el, border: getComputedStyle(el).borderTopColor };
+      }, SELECT);
+
+      // A text box clicked is still marked, which is where it was helping.
+      await page.evaluate((x) => document.querySelector(x).blur(), TEXT);
+      const textRest = await border(TEXT);
+      await page.click(TEXT);
+      const textClicked = await border(TEXT);
+      return { selectRest, selectClicked, focused, afterTab, textRest, textClicked };
+    },
+  );
+  check("the dropdown is there to test", out.selectRest !== null, out);
+  check("clicking it still focuses it", out.focused === true, out);
+  check("but leaves its border alone", out.selectClicked === out.selectRest, out);
+  check("reaching that same dropdown without the pointer does mark it",
+    out.afterTab.onIt === true && out.afterTab.border !== out.selectRest, out);
+  check("and a text box clicked is still marked", out.textClicked !== out.textRest, out);
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- the panel on a phone ----
 // The panel is most useful on a phone, where there is no console to open, and
 // that is also where there is least room. The status line is one line, so the

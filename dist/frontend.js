@@ -85,7 +85,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "4.5.5";
+const VERSION = "4.5.6";
 // ---- defaults (the UI overrides these; editing here changes the fallback) ----
 const CONFIG = {
     enabled: true,
@@ -7838,10 +7838,30 @@ export function setup(ctx, opts) {
                 "transition:border-color var(--lumiverse-transition-fast,150ms ease)";
         ensureReadable(input);
         // On focus, tint the border so the active field is clear. No glow ring.
+        //
+        // Except on a dropdown opened by pointer. Clicking one puts its menu on
+        // screen with the choice already in front of you, so the mark says nothing
+        // you cannot see, and it then stayed on the row after the choosing was done
+        // until something else was clicked. Tabbing to one is the opposite case:
+        // there is no menu and nothing else saying where you are, so it is marked.
+        //
+        // Worked out from the pointer rather than asked of :focus-visible, which
+        // does not answer this question: a browser counts a dropdown as worth
+        // marking on a click, because you can type a letter to jump through its
+        // options. That is true and it is not what is being asked here.
+        let byPointer = false;
+        input.addEventListener("pointerdown", () => {
+            byPointer = true;
+        });
         input.addEventListener("focus", () => {
-            input.style.borderColor = "var(--lumiverse-primary,rgba(147,112,219,.9))";
+            const dropdown = String(input.tagName || "").toUpperCase() === "SELECT";
+            const skip = dropdown && byPointer;
+            byPointer = false;
+            if (!skip)
+                input.style.borderColor = "var(--lumiverse-primary,rgba(147,112,219,.9))";
         });
         input.addEventListener("blur", () => {
+            byPointer = false;
             input.style.borderColor = "var(--lumiverse-border,rgba(255,255,255,.16))";
         });
     }

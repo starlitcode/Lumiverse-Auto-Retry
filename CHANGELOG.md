@@ -8,6 +8,14 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 4.5.6
+
+_2026-08-07_
+
+### Changed
+
+- **A dropdown is no longer left marked for having been clicked.** Clicking one used to tint its border to say it had the focus, and the tint stayed on the row after the choosing was done, until something else was clicked. It says nothing you cannot already see, since clicking a dropdown puts its menu on screen with the choice in front of you. Reaching one from the keyboard still marks it, because there is no menu then and nothing else saying where you are, and a text box is still marked either way, which is where the mark was doing its job.
+
 ## 4.5.5
 
 _2026-08-07_
