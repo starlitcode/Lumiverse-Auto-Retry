@@ -46,7 +46,6 @@ To switch it off for one chat, or everywhere, see [Turning it off](docs/settings
 - [Reporting a bug](docs/troubleshooting.md)
 - [Privacy](docs/privacy.md) - what the extension can and can't reach, what it keeps, and how to check any of it
 - [Security policy](SECURITY.md) - how to report a security problem
-- [Working on the extension](docs/development.md) - the build, the tests, and what GitHub runs
 - [Changelog](CHANGELOG.md) - what changed in every version
 
 ## How it works
@@ -56,6 +55,18 @@ Auto Retry listens to Lumiverse's own generation events. When a reply fails, com
 Find and replace works separately, since editing a saved reply is a backend job. A small backend module watches for finished replies and, when swaps are on, edits the saved message through Lumiverse's Chat Mutation API. That edit is treated as an edit rather than a new reply, so it cannot set itself off in a loop.
 
 It makes no external network calls. [Privacy](docs/privacy.md) has the detail, including the four permissions it declares and what still works without each of them.
+
+## Working on it
+
+`src/` is the TypeScript, `dist/` is what Lumiverse loads, and `dist/` is committed so the extension installs without a build step. That means the two can drift, and a change made in `src/` alone would review as correct and ship doing nothing, so:
+
+```
+bun run build     # regenerate dist/ from src/
+bun run check     # types and tests
+bun run test:ui   # panel checks in a browser, needs Playwright
+```
+
+Run `bun run check` before committing, and commit `dist/` with `src/`. CI runs both tiers on every pull request, rebuilds `dist/` and fails if it differs from what you committed. Playwright is not a dependency, since it pulls a few hundred megabytes of browsers: `bun add -d playwright && bunx playwright install chromium`. Without it `test:ui` says so and exits cleanly on your machine, and counts as a failure on CI.
 
 ## Credits
 
