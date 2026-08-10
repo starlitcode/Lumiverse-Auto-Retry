@@ -8,6 +8,15 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 4.5.7
+
+_2026-08-10_
+
+### Fixed
+
+- **The retry pop-up could stay on screen with a Cancel button that did nothing.** It exists to count one wait down and it never removes itself, so it has to be taken away when the wait ends. It was stopping only once the chat had nothing left to say, and a retry that fired successfully has plenty to say: the reply it just started. So the box stayed up describing that reply, then the next one, with a Cancel button for a retry that was long finished. It now goes the moment the wait it was counting is over.
+- **Cancel and Stop always clear it now.** Standing down hid the pop-up only when a retry was still pending, and after one had already fired there is nothing pending, so pressing Cancel or Stop left the box exactly where it was. Pressing Stop more than once hit the same thing. The pop-up carries the Cancel button, so it is hidden whenever anything stands down, whatever was or was not in flight.
+
 ## 4.5.6
 
 _2026-08-07_

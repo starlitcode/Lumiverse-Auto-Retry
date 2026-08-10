@@ -1861,6 +1861,94 @@ console.log("\ndropdown focus");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- the retry pop-up goes away when the retry does ----
+// It is sticky, so nothing removes it on its own, and it carries the Cancel
+// button. Two ways it got stuck: it stopped counting only once the chat had
+// nothing to say at all, and a retry that fired successfully has plenty to say,
+// so the box stayed up narrating the reply that followed. And standing down
+// hid it only when something was still pending, which after a successful retry
+// is nothing, so pressing Cancel left it exactly where it was.
+console.log("\npop-up goes away");
+{
+  const page = await browser.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await stage(page, '<div id=modal></div><button data-testid="regenerate">Regenerate</button>');
+  await page.addStyleTag({ content: THEME });
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  const out = await page.evaluate(async () => {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const handlers = {};
+    const teardown = window.__setup(
+      { events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
+        ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+              registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) } },
+      { toast: true, retryDelayMs: 400, backoffFactor: 1, maxDelayMs: 400, jitter: false,
+        maxRetries: 3, stuckTimeoutMs: 0, idleTimeoutMs: 0, pauseWhenFailing: false },
+    );
+    const box = () => document.getElementById("__lvRetryToast");
+    const up = () => { const t = box(); return !!t && t.style.opacity === "1"; };
+    const says = () => { const t = box(); const sp = t && t.querySelector("span"); return sp ? sp.textContent : ""; };
+    const cancel = () => [...(box() ? box().querySelectorAll("button") : [])]
+      .find((b) => (b.textContent || "").trim() === "Cancel");
+
+    // A failure, so a retry is scheduled and the pop-up appears.
+    handlers.GENERATION_STARTED({ chatId: "c", generationId: "g1" });
+    handlers.GENERATION_ENDED({ chatId: "c", content: "" });
+    for (let i = 0; i < 40 && !/Retrying in/.test(says()); i++) await wait(50);
+    const whileWaiting = { up: up(), text: says() };
+
+    // The retry fires and a reply starts. This is where it used to stay up and
+    // start describing the new generation instead of leaving.
+    await wait(700);
+    handlers.GENERATION_STARTED({ chatId: "c", generationId: "g2" });
+    await wait(400);
+    const afterRetryStarted = { up: up(), text: says() };
+
+    // A second round, cancelled by hand from the pop-up itself.
+    handlers.GENERATION_ENDED({ chatId: "c", content: "" });
+    for (let i = 0; i < 40 && !/Retrying in/.test(says()); i++) await wait(50);
+    const secondUp = up();
+    const c = cancel();
+    const hadCancel = !!c;
+    if (c) c.click();
+    await wait(120);
+    // Cancel replaces the countdown with a short confirmation, which is not
+    // sticky and clears itself. Both halves matter: the countdown has to be
+    // gone at once, and what replaces it must not be another thing that stays.
+    const afterCancel = { up: up(), text: says(), cancelGone: !cancel() };
+    await wait(3600);
+    const laterStillUp = up();
+
+    // And the case from the report: cancel again with nothing pending, which is
+    // what pressing Stop repeatedly amounts to.
+    handlers.GENERATION_STARTED({ chatId: "c", generationId: "g3" });
+    handlers.GENERATION_ENDED({ chatId: "c", content: "" });
+    for (let i = 0; i < 40 && !/Retrying in/.test(says()); i++) await wait(50);
+    handlers.GENERATION_STOPPED && handlers.GENERATION_STOPPED({ chatId: "c", generationId: "g3" });
+    await wait(120);
+    handlers.GENERATION_STOPPED && handlers.GENERATION_STOPPED({ chatId: "c", generationId: "g3" });
+    await wait(120);
+    const afterTwoStops = { up: up(), text: says() };
+    teardown();
+    return { whileWaiting, afterRetryStarted, secondUp, hadCancel, afterCancel, laterStillUp, afterTwoStops };
+  });
+  await page.close();
+  check("the pop-up counts the wait down", out.whileWaiting.up && /Retrying in/.test(out.whileWaiting.text), out);
+  check("and goes once the retry has fired", out.afterRetryStarted.up === false, out);
+  check("it does not stay to describe the reply that followed",
+    !/Waiting for the reply|Model is thinking|Reply arriving/.test(out.afterRetryStarted.text), out);
+  check("it comes back for the next wait", out.secondUp === true, out);
+  check("its Cancel button is there", out.hadCancel === true, out);
+  check("pressing Cancel takes the countdown away",
+    !/Retrying in/.test(out.afterCancel.text) && out.afterCancel.cancelGone === true, out);
+  check("and says so briefly instead", /stopped/i.test(out.afterCancel.text), out);
+  check("and that confirmation clears itself", out.laterStillUp === false, out);
+  check("stopping twice does not leave one behind", out.afterTwoStops.up === false, out);
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- the panel on a phone ----
 // The panel is most useful on a phone, where there is no console to open, and
 // that is also where there is least room. The status line is one line, so the

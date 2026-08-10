@@ -85,7 +85,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "4.5.6";
+const VERSION = "4.5.7";
 // ---- defaults (the UI overrides these; editing here changes the fallback) ----
 const CONFIG = {
     enabled: true,
@@ -4491,8 +4491,13 @@ export function setup(ctx, opts) {
         // really is still streaming corrects this by itself.
         s.live = false;
         s.suppressUntil = Date.now() + STAND_DOWN_MS;
+        // Unconditionally, not only when something was pending. The pop-up carries
+        // the Cancel button that leads here, so it staying on screen after Cancel
+        // was pressed is the one outcome it must never have, and that is exactly
+        // what happened once the retry had already fired: nothing was pending any
+        // more, so the box was left where it was and Cancel looked broken.
+        hideToast();
         if (hadPending) {
-            hideToast();
             // The retry this note was armed for is off, so the note goes with it.
             disarmRefusalNote(chatId);
             if (announce)
@@ -5963,14 +5968,19 @@ export function setup(ctx, opts) {
         if (!cfg.toast)
             return;
         toastTick = () => {
-            const st = chatStatus(s);
-            // Once it is no longer counting down to anything, the words are somebody
-            // else's to write.
-            if (!st) {
-                stopToastCountdown();
+            // This message exists to count one wait down, and it is sticky, so
+            // nothing takes it away on its own. When the wait ends it has to go.
+            // Before this it stopped only once the chat had nothing to say at all,
+            // and a retry that fired successfully does have something to say: the
+            // reply it started. So the box stayed up narrating that reply, and then
+            // the next one, with a Cancel button for a retry that was long over.
+            if (!s.retryAt || Date.now() >= s.retryAt) {
+                hideToast();
                 return;
             }
-            setToastText(st.text);
+            const st = chatStatus(s);
+            if (st)
+                setToastText(st.text);
         };
         addTicker(toastTick);
     }
