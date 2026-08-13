@@ -137,3 +137,45 @@ describe("the sections of the settings panel", () => {
     );
   });
 });
+
+// A field can ask to apply as it is edited rather than waiting for Save. That
+// was wired up for number boxes only, so a dropdown asking for it was accepted
+// by the schema and then quietly did nothing. Both honour it now, and this
+// fails if a third kind of field asks for something no handler acts on.
+describe("applying a setting as it is edited", () => {
+  const HONOURED = ["num", "pick"];
+
+  function liveFields(): Array<{ key: string; type: string }> {
+    const out: Array<{ key: string; type: string }> = [];
+    for (const row of SCHEMA.split(/^ {6}\{$/m).slice(1)) {
+      if (!/^ {8}live: true,$/m.test(row)) continue;
+      const key = row.match(/^ {8}key: "([A-Za-z0-9_]+)",$/m);
+      const type = row.match(/^ {8}type: "([a-z]+)",$/m);
+      out.push({ key: key ? key[1] : "?", type: type ? type[1] : "?" });
+    }
+    return out;
+  }
+
+  test("only the kinds of field that act on it ask for it", () => {
+    const live = liveFields();
+    expect(live.length).toBeGreaterThan(0);
+    const wrong = live.filter((f) => HONOURED.indexOf(f.type) < 0);
+    expect(wrong).toEqual([]);
+  });
+
+  test("and both of those kinds really do act on it", () => {
+    // The check above is worth nothing if a handler stops calling onLiveEdit,
+    // so the two call sites are named here as well.
+    const calls = [...SRC.matchAll(/onLiveEdit\(String\(f\.key\)\)/g)].length;
+    expect(calls).toBeGreaterThanOrEqual(3);
+    expect(SRC).toContain("if (f.live) onLiveEdit(String(f.key));");
+  });
+
+  test("every key it acts on is one that asks for it", () => {
+    const body = SRC.slice(SRC.indexOf("function onLiveEdit"), SRC.indexOf("function syncLiveLog"));
+    const handled = [...body.matchAll(/key === "([A-Za-z0-9_]+)"/g)].map((m) => m[1]);
+    expect(handled.length).toBeGreaterThan(0);
+    const asking = liveFields().map((f) => f.key);
+    for (const k of handled) expect(asking).toContain(k);
+  });
+});

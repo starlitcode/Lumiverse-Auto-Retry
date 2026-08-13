@@ -61,11 +61,17 @@ Every section header is a proper button, so the Advanced groups open with Enter 
 
 ## The on-screen panel
 
-One switch, **Show the on-screen panel**, puts a small panel in the corner with three tabs. Drag the header to move it, drag the bottom-right corner to resize it. Both work with a mouse and with a finger.
+One switch, **Show the on-screen panel**, turns it on. It has three tabs, and **Where that panel goes** decides where it appears. Both choices are the same panel with the same tabs; only the frame around it differs.
+
+**Floating over the chat** is the original: a small box in the corner. Drag the header to move it, drag the bottom-right corner to resize it. Both work with a mouse and with a finger.
 
 Where you leave it is remembered, along with its size and which tab was open, so an update does not put it back in the corner. The floating button is the same. Both are checked against the screen they open on, so a layout saved on a desktop window cannot strand the panel off the edge of a phone. **Move back to the corner**, in the floating button's menu, forgets its saved spot rather than restoring it.
 
 This is kept in your browser rather than in your settings, like the list of chats you have switched Auto Retry off in. A position belongs to the screen you are sitting at, so it does not follow you between devices and it is not included in an export.
+
+**In the sidebar drawer** puts it in Lumiverse's own drawer instead, next to the app's own tabs. Lumiverse places it, sizes it and themes it, so there is nothing to drag and nothing to remember, and it cannot cover the reply you are reading. It is listed in the **Ctrl+K** palette as **Auto Retry**, which is the quickest way to open it. While a retry is running the tab carries a dot, so you can tell something is happening without opening the drawer.
+
+Changing this moves the panel as you pick, before you save, so you can see which you prefer. Closing the settings without saving puts it back where it was. If your Lumiverse build has no drawer for extensions to add to, asking for the sidebar gets you the floating panel and a line in the Log saying why.
 
 Under the tabs is a line saying what is happening this second, with a dot beside it. The dot is dim and flat when Auto Retry is off or paused, lit and still when it is on with nothing to do, and pulsing while something is actually happening, so a glance at the corner answers the question without reading the line. The pulse is dropped if your system asks for less movement; the glow stays. It sits above all three tabs because the answer is the same whichever one you are reading, and because none of them answered it: the Log says what already happened and the Stats say what has happened overall. It counts down a pending retry in hours, minutes and seconds as each is needed (`47s`, `5m 03s`, `1h 05m 03s`), names what the retry is for and which try it is, says when a reply is arriving and roughly how much of it has landed, says when the model is thinking, and says when it has paused itself after repeated failures. When nothing is happening it says so. A retry running in a chat you have since moved away from is still reported, marked as being in another chat.
 

@@ -95,7 +95,7 @@ const STREAM_BUF_MAX = 200000;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "4.5.8";
+const VERSION = "4.6.0";
 
 // ---- defaults (the UI overrides these; editing here changes the fallback) ----
 const CONFIG = {
@@ -247,6 +247,11 @@ const CONFIG = {
   // open, so there is nothing for a second switch to buy: a switch left on
   // would go on paying for itself in every chat long after somebody looked once.
   liveLog: false,
+  // Where that panel lives. "float" is the one it has always had, a small box
+  // over the chat that you drag where you want it. "drawer" hands it to
+  // Lumiverse's own sidebar, which places it, themes it, and lists it in the
+  // Ctrl+K palette, and where it cannot cover the reply you are reading.
+  panelHome: "float",
 };
 
 // A hint that quotes a default reads it from the block above rather than
@@ -400,7 +405,19 @@ const SCHEMA: Group[] = [
         key: "liveLog",
         label: "Show the on-screen panel",
         type: "bool",
-        hint: "Puts a small panel in the corner with three tabs. Log shows what the extension is doing as it happens: generations, retries and why, finishes. Prompt shows the whole prompt that went to the model, every message in order, with your notes marked where they were inserted. Stats shows what it has been doing overall and what it keeps retrying for. Useful without opening the console, especially on a phone. Drag the header to move it, drag the corner to resize, and turn this off to hide it. The prompt is only captured while its tab is open, and only ever on your device.",
+        hint: "A panel with three tabs. Log shows what the extension is doing as it happens: generations, retries and why, finishes. Prompt shows the whole prompt that went to the model, every message in order, with your notes marked where they were inserted. Stats shows what it has been doing overall and what it keeps retrying for. Useful without opening the console, especially on a phone. The prompt is only captured while its tab is open, and only ever on your device.",
+      },
+      {
+        key: "panelHome",
+        needs: ["liveLog"],
+        label: "Where that panel goes",
+        type: "pick",
+        live: true,
+        options: [
+          { value: "float", label: "Floating over the chat" },
+          { value: "drawer", label: "In the sidebar drawer" },
+        ],
+        hint: "Floating puts a small box in the corner that you drag by its header and resize by its corner, and where you leave it is remembered. In the sidebar puts it in Lumiverse's own drawer instead, alongside the app's own tabs, where it is listed in the Ctrl+K palette and cannot cover the reply you are reading, and the sidebar decides its size. The tab shows a dot while a retry is running so you can see it without opening the drawer. If your Lumiverse build has no drawer for extensions, this falls back to floating and says so in the log.",
       },
     ],
   },
@@ -2650,18 +2667,28 @@ export function setup(ctx: Ctx, opts?: any) {
     });
     try { ensureReadableTree(body); } catch (_) {}
   }
-  function showLiveLog() {
-    if (liveLogEl || typeof document === "undefined") return;
-    const el = document.createElement("div");
-    // Named, like the other surfaces the extension owns. Without an id the
-    // word-swap pass over the page had no way to tell this panel from the chat,
-    // so a rule could rewrite its own log text underneath it.
-    el.id = "__lvRetryLog";
-    el.style.cssText =
-      "position:fixed;right:8px;bottom:8px;z-index:" + Z_LIVE_LOG + ";width:min(340px,92vw);height:min(300px,50vh);min-width:200px;min-height:120px;max-width:96vw;max-height:85vh;display:flex;flex-direction:column;background-color:var(--lumiverse-card-bg-solid,rgb(24,20,34));background-image:linear-gradient(var(--lumiverse-bg-elevated,rgba(35,30,48,.9)),var(--lumiverse-bg-elevated,rgba(35,30,48,.9)));border:1px solid var(--lumiverse-border,rgba(255,255,255,.14));border-radius:var(--lumiverse-radius-md,10px);box-shadow:var(--lumiverse-shadow-md,0 8px 24px rgba(0,0,0,.4));font-family:var(--lumiverse-font-family,system-ui);font-size:13px;color:var(--lumiverse-text,#e9e4f0);overflow:hidden";
+  // Everything the panel is made of that does not depend on where the panel
+  // lives: the tab strip, Copy and Clear, the status line, and the body the
+  // three views render into. Built here once so the floating panel and the
+  // drawer tab are the same panel in two places rather than two panels that
+  // have to be kept in step by hand.
+  //
+  // The caller owns the frame around these and decides what else they do: the
+  // floating panel drags by the header it is handed, the drawer tab does not,
+  // because the host places that one.
+  function buildPanelParts(draggable: boolean): {
+    head: HTMLElement;
+    statusEl: HTMLElement;
+    bodyEl: HTMLElement;
+    stopStatus: () => void;
+  } {
     const head = document.createElement("div");
     head.style.cssText =
-      "display:flex;align-items:center;gap:8px;padding:7px 9px;border-bottom:1px solid var(--lumiverse-border,rgba(255,255,255,.12));font-weight:600;cursor:move;user-select:none;touch-action:none";
+      "display:flex;align-items:center;gap:8px;padding:7px 9px;border-bottom:1px solid var(--lumiverse-border,rgba(255,255,255,.12));font-weight:600;user-select:none;" +
+      // The move cursor and the pointer-event opt-out are the drag handle's,
+      // and the drawer's header is not one: the host places that panel, so a
+      // header offering to be dragged there would be a lie.
+      (draggable ? "cursor:move;touch-action:none" : "");
     // Two views, one panel. The log says what the extension did; the prompt
     // view says what went to the model. They answer different questions and
     // both are wanted in the same place.
@@ -2883,14 +2910,34 @@ export function setup(ctx: Ctx, opts?: any) {
     };
     paintStatus();
     addTicker(paintStatus);
-    (el as any).__stopStatus = () => removeTicker(paintStatus);
 
     const bodyEl = document.createElement("div");
     bodyEl.id = "__lvRetryLogBody";
     bodyEl.style.cssText =
       "flex:1;padding:7px 9px;overflow:auto;white-space:pre-wrap;line-height:1.4;font-family:var(--lumiverse-font-mono,ui-monospace,monospace) !important";
+    return {
+      head: head,
+      statusEl: statusEl,
+      bodyEl: bodyEl,
+      stopStatus: () => removeTicker(paintStatus),
+    };
+  }
+
+  function showLiveLog() {
+    if (liveLogEl || typeof document === "undefined") return;
+    const el = document.createElement("div");
+    // Named, like the other surfaces the extension owns. Without an id the
+    // word-swap pass over the page had no way to tell this panel from the chat,
+    // so a rule could rewrite its own log text underneath it.
+    el.id = "__lvRetryLog";
+    el.style.cssText =
+      "position:fixed;right:8px;bottom:8px;z-index:" + Z_LIVE_LOG + ";width:min(340px,92vw);height:min(300px,50vh);min-width:200px;min-height:120px;max-width:96vw;max-height:85vh;display:flex;flex-direction:column;background-color:var(--lumiverse-card-bg-solid,rgb(24,20,34));background-image:linear-gradient(var(--lumiverse-bg-elevated,rgba(35,30,48,.9)),var(--lumiverse-bg-elevated,rgba(35,30,48,.9)));border:1px solid var(--lumiverse-border,rgba(255,255,255,.14));border-radius:var(--lumiverse-radius-md,10px);box-shadow:var(--lumiverse-shadow-md,0 8px 24px rgba(0,0,0,.4));font-family:var(--lumiverse-font-family,system-ui);font-size:13px;color:var(--lumiverse-text,#e9e4f0);overflow:hidden";
+    const parts = buildPanelParts(true);
+    const head = parts.head;
+    const bodyEl = parts.bodyEl;
+    (el as any).__stopStatus = parts.stopStatus;
     el.appendChild(head);
-    el.appendChild(statusEl);
+    el.appendChild(parts.statusEl);
     el.appendChild(bodyEl);
     // Drag by the header. Pointer events cover mouse and touch; the header
     // captures the pointer so a fast drag outside it still tracks, and the panel
@@ -3097,6 +3144,88 @@ export function setup(ctx: Ctx, opts?: any) {
     paintTabs = null;
     focusTab = null;
     // The panel is gone, so nothing is watching a prompt any more.
+    askForPrompts();
+  }
+
+  // The same panel, in the sidebar drawer instead of over the chat. This one
+  // is free: registerDrawerTab needs no permission, and the host gives it a
+  // place, a theme, a Ctrl+K entry built from the title and keywords below,
+  // and teardown when the extension is disabled. What it does not give is a
+  // position of its own, which is the point: nothing to drag, nothing to
+  // remember, and it never covers the reply you are reading.
+  let drawerTab: any = null;
+  let drawerStop: (() => void) | null = null;
+  let drawerBadge: string | null = null;
+  let paintBadge: (() => void) | null = null;
+  // Returns whether the panel is now in the drawer. False means the host has
+  // no drawer to put it in, and the caller falls back to the floating panel
+  // rather than leaving the switch on with nothing on screen.
+  function showDrawerPanel(): boolean {
+    if (drawerTab) return true;
+    if (!ctx || !ctx.ui || typeof (ctx as any).ui.registerDrawerTab !== "function") {
+      log("host has no drawer tab API; keeping the panel over the chat");
+      return false;
+    }
+    try {
+      drawerTab = (ctx as any).ui.registerDrawerTab({
+        id: "auto-retry-panel",
+        title: "Auto Retry",
+        shortName: "Retry",
+        description: "What Auto Retry is doing: its log, the prompt that went out, and the totals",
+        keywords: ["auto retry", "retry", "log", "prompt", "stats", "regenerate"],
+        iconSvg: dieSvg(false),
+      });
+      const root = drawerTab && drawerTab.root;
+      if (!root) throw new Error("drawer tab gave no root");
+      root.style.cssText =
+        "display:flex;flex-direction:column;height:100%;min-height:0;" +
+        "font-family:var(--lumiverse-font-family,system-ui);font-size:13px;color:var(--lumiverse-text,#e9e4f0)";
+      const parts = buildPanelParts(false);
+      root.appendChild(parts.head);
+      root.appendChild(parts.statusEl);
+      root.appendChild(parts.bodyEl);
+      drawerStop = parts.stopStatus;
+      liveLogBody = parts.bodyEl;
+      // A badge on the tab, so the drawer does not have to be open to see that
+      // something is happening. Written only when it changes: the shared clock
+      // runs four times a second and the host should not hear from us that
+      // often to be told the same thing.
+      paintBadge = () => {
+        const st = liveStatus();
+        const want = st.state === "busy" ? "\u2022" : null;
+        if (want === drawerBadge) return;
+        drawerBadge = want;
+        try { drawerTab && drawerTab.setBadge && drawerTab.setBadge(want); } catch (_) {}
+      };
+      paintBadge();
+      addTicker(paintBadge);
+      renderLiveLog();
+      ensureReadableTree(root);
+      return true;
+    } catch (e) {
+      log("could not open the drawer tab; keeping the panel over the chat", e);
+      hideDrawerPanel();
+      return false;
+    }
+  }
+  function hideDrawerPanel() {
+    if (paintBadge) {
+      removeTicker(paintBadge);
+      paintBadge = null;
+    }
+    drawerBadge = null;
+    if (drawerStop) {
+      try { drawerStop(); } catch (_) {}
+      drawerStop = null;
+    }
+    stopStatsTick();
+    if (drawerTab) {
+      try { drawerTab.destroy(); } catch (_) {}
+      drawerTab = null;
+    }
+    liveLogBody = null;
+    paintTabs = null;
+    focusTab = null;
     askForPrompts();
   }
   // A small round button that floats over the chat and turns the extension on or
@@ -3537,12 +3666,29 @@ export function setup(ctx: Ctx, opts?: any) {
   function onLiveEdit(key: string) {
     try {
       if (key === "floatingToggleSize") syncFloat();
+      // Reading "in the sidebar drawer" off a dropdown tells you nothing about
+      // whether you want it there. Moving as you pick does, and closing the
+      // panel without saving moves it back with everything else.
+      if (key === "panelHome") syncLiveLog();
     } catch (_) {}
   }
 
+  // One panel, in one of two places. Whichever it is not in is taken down
+  // first, so switching between them can never leave two on screen sharing one
+  // body element, with the views rendering into whichever was built last.
   function syncLiveLog() {
-    if (cfg.liveLog) showLiveLog();
-    else hideLiveLog();
+    if (!cfg.liveLog) {
+      hideLiveLog();
+      hideDrawerPanel();
+    } else if (cfg.panelHome === "drawer") {
+      hideLiveLog();
+      // A host with no drawer to put it in gets the floating panel, rather
+      // than the switch being on with nothing to show for it.
+      if (!showDrawerPanel()) showLiveLog();
+    } else {
+      hideDrawerPanel();
+      showLiveLog();
+    }
     renderLiveLog();
     askForPrompts();
   }
@@ -3552,7 +3698,7 @@ export function setup(ctx: Ctx, opts?: any) {
   // the moment the view does.
   let promptsAsked = false;
   function askForPrompts() {
-    const want = !!(cfg.liveLog && liveLogEl && liveTab === "prompt");
+    const want = !!(cfg.liveLog && (liveLogEl || drawerTab) && liveTab === "prompt");
     if (want === promptsAsked) return;
     promptsAsked = want;
     try {
@@ -3759,7 +3905,7 @@ export function setup(ctx: Ctx, opts?: any) {
         "confirmButtonLabels",
       ],
     },
-    { id: "notifications", label: "On-screen", keys: ["toast", "liveLog"] },
+    { id: "notifications", label: "On-screen", keys: ["toast", "liveLog", "panelHome"] },
     // Special entry: carried outside cfg. buildExport and the import handler
     // treat it as the saved word-swap presets, not settings keys.
     { id: "presets", label: "Word swap presets", keys: [] },
@@ -7659,6 +7805,10 @@ export function setup(ctx: Ctx, opts?: any) {
       sel.style.maxWidth = "60%";
       sel.addEventListener("change", () => {
         cfg[f.key] = coerce("pick", sel.value, (CONFIG as any)[f.key], f);
+        // Honoured here as well as on a number box. It was only ever wired up
+        // for numbers, so a dropdown asking to apply as it is picked was
+        // accepted by the schema and then quietly did nothing.
+        if (f.live) onLiveEdit(String(f.key));
       });
       fieldSetters[f.key] = (v: any) => {
         sel.value = coerce("pick", v, (CONFIG as any)[f.key], f);
@@ -8761,6 +8911,7 @@ export function setup(ctx: Ctx, opts?: any) {
     paintTabs = null;
     focusTab = null;
     hideLiveLog();
+    hideDrawerPanel();
     hideFloat();
     // Every live figure stops with the extension. hideLiveLog and hideToast
     // each drop their own, and this is the backstop: one interval left running

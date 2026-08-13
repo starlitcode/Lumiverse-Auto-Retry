@@ -8,6 +8,24 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 4.6.0
+
+_2026-08-13_
+
+### Added
+
+- **The on-screen panel can live in Lumiverse's sidebar drawer.** A new row under the panel switch, **Where that panel goes**, offers **Floating over the chat**, which is what it has always been, or **In the sidebar drawer**. It is the same panel with the same three tabs either way. In the drawer, Lumiverse places it, sizes it and themes it, so there is nothing to drag and nothing to remember, and it cannot cover the reply you are reading. It is listed in the **Ctrl+K** palette as **Auto Retry**, and its tab carries a dot while a retry is running so you can tell something is happening without opening the drawer. Floating is still the default, so an update does not move your panel.
+- **Changing where it goes moves it as you pick**, before you save, so you can see which you prefer rather than reading the two names and guessing. Closing the settings without saving puts it back, the same as every other setting.
+
+### Fixed
+
+- **A dropdown that asked to apply as it was picked did nothing.** Applying an edit immediately rather than on Save was wired up for number boxes only, so a dropdown asking for it was accepted and then quietly ignored. Both kinds honour it now. Nothing shipped was affected, since no dropdown asked for it until this release.
+
+### Notes
+
+- Asking for the sidebar on a Lumiverse build with no drawer for extensions gets you the floating panel and a line in the Log saying why, rather than a switch that is on with nothing on screen.
+- The sidebar drawer needs no permission. The extension still declares the same four, and `ui_panels` is still only for the optional floating on/off button.
+
 ## 4.5.8
 
 _2026-08-13_

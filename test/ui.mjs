@@ -127,6 +127,23 @@ async function inPanel(browser, { css = "", viewport, touch = false, settings = 
             window.__acts[o.id] = a;
             return a;
           },
+          // Stands in for the host's sidebar. It hands back a root to render
+          // into and records the badge, which is all the extension asks of it.
+          registerDrawerTab: (o) => {
+            const root = document.createElement("div");
+            root.id = "drawer-" + o.id;
+            document.body.appendChild(root);
+            const t = {
+              opts: o,
+              root,
+              badges: [],
+              setBadge: (v) => t.badges.push(v),
+              activate: () => { t.activated = true; },
+              destroy: () => { t.destroyed = true; root.remove(); },
+            };
+            window.__drawer = t;
+            return t;
+          },
         },
       },
       over || {},
@@ -637,6 +654,107 @@ console.log("\nwhat is on screen straight away");
     out.openHeadings.length === 3 && out.shutHeadings.length === 5,
     out,
   );
+  check("no console errors", errors.length === 0, errors);
+}
+
+// ---- the panel in the sidebar drawer ----
+// The same panel in the host's own sidebar rather than a box over the chat.
+// It is the same panel, not a second one: one body element, so whichever home
+// it is not in has to be gone before the other is built, or the three views
+// would render into whichever was made last.
+console.log("\nthe panel in the drawer");
+{
+  const { out, errors } = await inPanel(
+    browser,
+    { settings: { liveLog: true, panelHome: "drawer" } },
+    (page) =>
+      page.evaluate(async () => {
+        const frame = () =>
+          new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        const t = window.__drawer;
+        const root = t && t.root;
+        const tabNames = () =>
+          [...root.querySelectorAll('[role="tab"]')].map((b) => b.textContent);
+        const inDrawer = {
+          registered: !!t,
+          id: t && t.opts.id,
+          named: !!(t && t.opts.title && t.opts.shortName),
+          findable: !!(t && t.opts.description && (t.opts.keywords || []).length),
+          hasIcon: !!(t && /<svg/.test(t.opts.iconSvg || "")),
+          tabs: tabNames(),
+          hasStatus: !!root.querySelector("#__lvRetryStatus"),
+          hasBody: !!root.querySelector("#__lvRetryLogBody"),
+          // The header is not a drag handle here: the sidebar places it.
+          draggableHeader: /cursor:\s*move/.test(root.innerHTML),
+          floatingToo: !!document.getElementById("__lvRetryLog"),
+        };
+        // Switching home takes the other one down before building this one.
+        const set = (v) => {
+          const sel = [...document.querySelectorAll("select")].find((s) =>
+            [...s.options].some((o) => o.value === "drawer"),
+          );
+          sel.value = v;
+          sel.dispatchEvent(new Event("change", { bubbles: true }));
+        };
+        set("float");
+        await frame();
+        const afterFloat = {
+          floating: !!document.getElementById("__lvRetryLog"),
+          drawerGone: !!(t && t.destroyed),
+          bodies: document.querySelectorAll("#__lvRetryLogBody").length,
+        };
+        set("drawer");
+        await frame();
+        const back = {
+          drawer: !!(window.__drawer && !window.__drawer.destroyed),
+          floatingGone: !document.getElementById("__lvRetryLog"),
+          bodies: document.querySelectorAll("#__lvRetryLogBody").length,
+        };
+        return { inDrawer, afterFloat, back };
+      }),
+  );
+  check("it registers a drawer tab", out.inDrawer.registered && out.inDrawer.id === "auto-retry-panel", out.inDrawer);
+  check("with a name, and words to find it by in the palette",
+    out.inDrawer.named && out.inDrawer.findable && out.inDrawer.hasIcon, out.inDrawer);
+  check("the three tabs are in it",
+    JSON.stringify(out.inDrawer.tabs) === JSON.stringify(["Log", "Prompt", "Stats"]), out.inDrawer);
+  check("with the status line and the body", out.inDrawer.hasStatus && out.inDrawer.hasBody, out.inDrawer);
+  check("its header does not offer to be dragged", out.inDrawer.draggableHeader === false, out.inDrawer);
+  check("and nothing is floating over the chat as well", out.inDrawer.floatingToo === false, out.inDrawer);
+  check("switching to floating takes the drawer tab down",
+    out.afterFloat.floating && out.afterFloat.drawerGone && out.afterFloat.bodies === 1, out.afterFloat);
+  check("and switching back takes the floating one down",
+    out.back.drawer && out.back.floatingGone && out.back.bodies === 1, out.back);
+  check("no console errors", errors.length === 0, errors);
+}
+
+// ---- a host with no drawer keeps the floating panel ----
+console.log("\nno drawer to put it in");
+{
+  const page = await browser.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await stage(page, "<div id=modal></div>");
+  await page.addStyleTag({ content: THEME });
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  const out = await page.evaluate(async () => {
+    // No registerDrawerTab on this host at all, which is the older build.
+    window.__setup(
+      { events: { on: () => () => {} },
+        ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+              registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) } },
+      { liveLog: true, panelHome: "drawer" },
+    );
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    return {
+      floating: !!document.getElementById("__lvRetryLog"),
+      bodies: document.querySelectorAll("#__lvRetryLogBody").length,
+    };
+  });
+  await page.close();
+  check("asking for the drawer on a host without one still shows the panel",
+    out.floating && out.bodies === 1, out);
   check("no console errors", errors.length === 0, errors);
 }
 
