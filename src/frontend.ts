@@ -332,8 +332,12 @@ interface Group {
   needs?: string[];
   // Starts shut, with a caret to open it. Said here rather than worked out
   // from the title starting with "Advanced", which is what it used to be:
-  // the two were the same thing by accident, so a section could not be one
-  // without being the other, and renaming a heading changed how it behaved.
+  // the two were the same thing by accident, so a section could not start shut
+  // without calling itself advanced, and renaming a heading changed how it
+  // behaved. Most of them were not advanced anyway. Backing up your settings
+  // and building a bug report are things anyone might do; they are down there
+  // because nobody needs them to use the extension, which is a different
+  // claim, and the caret is the one making it.
   collapsed?: boolean;
   // Something built by hand that belongs under this heading, after its rows.
   // Named here for the same reason: these used to be picked out by matching
@@ -594,7 +598,7 @@ const SCHEMA: Group[] = [
     ],
   },
   {
-    title: "Advanced: refusal tuning (beta)",
+    title: "Refusal tuning (beta)",
     collapsed: true,
     extra: "refusalTester",
     // Every setting under here feeds looksLikeRefusal, and all three places
@@ -702,7 +706,7 @@ const SCHEMA: Group[] = [
     ],
   },
   {
-    title: "Advanced: find and replace (beta)",
+    title: "Find and replace (beta)",
     collapsed: true,
     splitByPreset: true,
     extra: "swapPresets",
@@ -776,7 +780,7 @@ const SCHEMA: Group[] = [
     ],
   },
   {
-    title: "Advanced: buttons it clicks",
+    title: "Buttons it clicks",
     collapsed: true,
     desc: "It retries by clicking your own on-screen buttons, so you only need this if retries aren't happening. The quickest fix is Pick it for me: press it, then click the real button. Otherwise paste a CSS selector and press Test until it says match found, with that button on screen. The stop button only appears while a reply is generating. The README covers fallback lists and selector syntax.",
     fields: [
@@ -7116,11 +7120,11 @@ export function setup(ctx: Ctx, opts?: any) {
     {
       const sec = document.createElement("div");
       sec.style.cssText = "display:flex;flex-direction:column;gap:10px";
-      const { header: h, caret } = sectionHeader("Advanced: debug info", true);
+      const { header: h, caret } = sectionHeader("Debug info", true);
       sec.appendChild(h);
       const handle: SectionHandle = {
         sec: sec,
-        title: "Advanced: debug info",
+        title: "Debug info",
         keywords: "advanced debug info bug report copy diagnostics activity log version",
         setOpen: null,
       };
@@ -7199,19 +7203,19 @@ export function setup(ctx: Ctx, opts?: any) {
       body.appendChild(copyBtn);
       body.appendChild(dStatus);
       sec.appendChild(body);
-      handle.setOpen = makeCollapsible(h, body, caret, "Advanced: debug info");
+      handle.setOpen = makeCollapsible(h, body, caret, "Debug info");
       scroller.appendChild(sec);
     }
 
-    // import / export section (collapsible, same look as the Advanced groups)
+    // import / export section (collapsible, same as the schema's own)
     {
       const sec = document.createElement("div");
       sec.style.cssText = "display:flex;flex-direction:column;gap:10px";
-      const { header: h, caret } = sectionHeader("Advanced: import / export", true);
+      const { header: h, caret } = sectionHeader("Import / export", true);
       sec.appendChild(h);
       const handle: SectionHandle = {
         sec: sec,
-        title: "Advanced: import / export",
+        title: "Import / export",
         keywords: "advanced import export backup file share transfer settings presets json",
         setOpen: null,
       };
@@ -7344,7 +7348,7 @@ export function setup(ctx: Ctx, opts?: any) {
       body.appendChild(status);
 
       sec.appendChild(body);
-      handle.setOpen = makeCollapsible(h, body, caret, "Advanced: import / export");
+      handle.setOpen = makeCollapsible(h, body, caret, "Import / export");
       scroller.appendChild(sec);
     }
 

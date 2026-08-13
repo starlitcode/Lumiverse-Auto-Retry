@@ -2,7 +2,7 @@
 
 Switching Auto Retry itself off changes nothing in here. Every setting stays where it is and stays editable, because off means paused rather than unconfigured, and setting it up while it is off is a normal thing to want to do. A line at the top says it is off and that your settings are saved.
 
-The settings modal is the easy path, and the **Search settings** box at the top of it is the quickest way to reach one option out of the fifty-odd below: type part of a name or a description and it shows the matching rows, opening whichever Advanced section they live in. Clear the box to put the panel back as it was.
+The settings modal is the easy path, and the **Search settings** box at the top of it is the quickest way to reach one option out of the fifty-odd below: type part of a name or a description and it shows the matching rows, opening whichever closed section they live in. Clear the box to put the panel back as it was.
 
 There are eight sections. Three are open when the panel opens:
 
@@ -10,11 +10,11 @@ There are eight sections. Three are open when the panel opens:
 - **How it retries** is how persistent it is, how long it waits between tries, when it pauses itself, and whether a retry redoes the reply in place or adds a new reroll.
 - **When to count a reply as bad** is which kinds of bad reply set off a retry, ending with the two waits for a reply that freezes or never arrives.
 
-Five start shut, each with a **▸** to open it: refusal tuning, find and replace, the buttons it clicks, debug info, and import / export. Nothing in them is needed to use the extension.
+Five start shut, each with a **▸** to open it: **Refusal tuning**, **Find and replace**, **Buttons it clicks**, **Debug info** and **Import / export**. They are closed because nothing in them is needed to use the extension, not because they are difficult.
 
 Each option's **?** shows its description in a small popover just below that option. Where it opens is fixed per setting rather than decided on the fly, so a given description is always in the same place. The one exception is **What the notes say**, which opens above: that row holds the whole note list, its roles, its buttons and its counter, so below it would be a long way from the **?** you pressed. It floats over the panel, so opening one leaves the rows where they are and never hides the setting you are reading about. A description too long for the room on its side scrolls inside itself rather than moving to the other side. Only one shows at a time. Tap the description, tap the **?** again, tap elsewhere, scroll the panel, or press Esc to close it.
 
-A setting that does nothing until something else is switched on is not shown until it is. Whole sections work the same way: turning **It looks like an accidental refusal** off takes the entire **Advanced: refusal tuning** section away, heading included, because nothing under it does anything while that is off. Turning **Send a note with a refusal retry** on adds the note rows below it, and turning it off takes them away again, so the panel only lists what is actually in use. The switch itself never moves. The search box ignores this and finds a setting whichever way its switch is set, so nothing is ever hidden from you when you go looking for it by name. A row found that way says which switch it is waiting on, so changing it never looks like it did nothing.
+A setting that does nothing until something else is switched on is not shown until it is. Whole sections work the same way: turning **It looks like an accidental refusal** off takes the entire **Refusal tuning** section away, heading included, because nothing under it does anything while that is off. Turning **Send a note with a refusal retry** on adds the note rows below it, and turning it off takes them away again, so the panel only lists what is actually in use. The switch itself never moves. The search box ignores this and finds a setting whichever way its switch is set, so nothing is ever hidden from you when you go looking for it by name. A row found that way says which switch it is waiting on, so changing it never looks like it did nothing.
 
 Only **Save** keeps what you changed. Closing with the X or tapping outside discards it, so you can try things freely. Saved settings sync to your Lumiverse account, so they follow you to other browsers and devices, and they apply from the next reply onward. Long text boxes, like your word-swap rules, have an **Expand** button that opens a full-size editor.
 
@@ -57,7 +57,7 @@ One setting inside the refusal tuning section is an exception worth knowing abou
 
 The find-and-replace section is split under two headings, **Saved in a preset** and **Yours, whatever preset you load**, so it is clear which of those options loading a preset will change.
 
-Every section header is a proper button, so the Advanced groups open with Enter or Space if you are working from the keyboard rather than a pointer.
+Every section header is a proper button, so the closed sections open with Enter or Space if you are working from the keyboard rather than a pointer.
 
 ## The on-screen panel
 

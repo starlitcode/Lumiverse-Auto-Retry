@@ -1,10 +1,10 @@
 // How the settings panel is divided up. A section's heading, whether it starts
 // shut, and anything hand-built underneath it used to be one thing: the panel
-// worked out all three by matching the title text, so "Advanced" in a heading
-// was what made a section collapse, and a rename could silently stop the
-// refusal tester or the preset bar from being built at all. They are separate
-// fields now, which is safer but lets the two drift apart instead. These read
-// the schema and check they still agree.
+// worked out all three by matching the title text, so the word "Advanced" in a
+// heading was what made a section collapse, and a rename could silently stop
+// the refusal tester or the preset bar from being built at all. They are
+// separate fields now, which is safer but lets them drift apart instead. These
+// read the schema and check they still agree.
 import { expect, test, describe } from "bun:test";
 import { readFileSync } from "node:fs";
 
@@ -53,20 +53,29 @@ describe("the sections of the settings panel", () => {
     expect(lonely).toEqual([]);
   });
 
-  test('"Advanced" in a heading and starting shut are still the same set', () => {
-    // Not because one causes the other any more, but because a section that
-    // reads as advanced and opens anyway, or one that reads as basic and has
-    // to be opened before it can be read, is a surprise either way.
-    const advanced = secs.filter((s) => /^Advanced\b/.test(s.title)).map((s) => s.title);
+  test("the sections that start shut are named, not guessed at", () => {
+    // These used to be worked out from the title starting with "Advanced",
+    // which was wrong twice over: it made the name decide the behaviour, and
+    // most of them are not advanced. Saving your settings to a file and
+    // building a bug report are ordinary things. They start shut because
+    // nothing in them is needed to use the extension, which is a different
+    // claim, and the caret is the one making it. Listed here so adding a
+    // section to that set is a decision someone made on purpose.
     const shut = secs.filter((s) => /\n\s*collapsed: true,/.test(s.body)).map((s) => s.title);
-    expect(shut).toEqual(advanced);
+    expect(shut).toEqual([
+      "Refusal tuning (beta)",
+      "Find and replace (beta)",
+      "Buttons it clicks",
+    ]);
+    // And nothing calls itself advanced any more, in a heading or out of one.
+    for (const sec of secs) expect(sec.title).not.toMatch(/advanced/i);
   });
 
   test("the switch you reach for first is in the first section", () => {
     // Basics holds the master switch and every way of reaching or watching it.
-    // The on-screen panel used to sit under an Advanced heading of its own,
-    // which meant opening a collapsed section to find a switch that is not
-    // advanced and that people are told to turn on when reporting a bug.
+    // The on-screen panel used to have a closed section to itself, so turning
+    // it on meant opening one to find a switch people are told to reach for
+    // the moment they want to report a bug.
     expect(secs[0].title).toBe("Basics");
     for (const key of ["enabled", "toast", "liveLog"]) expect(secs[0].fields).toContain(key);
   });

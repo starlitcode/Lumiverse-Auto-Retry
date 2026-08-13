@@ -1,6 +1,6 @@
 # Import and export
 
-You can save your settings to a file and load them back later. In the settings modal, open **Advanced: import / export**. Tick the parts you want, then either **Export to file** to save them as a small `.json` file, or **Import from file** to load one. Your settings and your word swap presets already follow your Lumiverse account across browsers on their own, so this is mainly for keeping a backup, sharing a setup with someone else, or copying between accounts. Tick **Word swap presets** to include your saved presets in the file.
+You can save your settings to a file and load them back later. In the settings modal, open **Import / export**. Tick the parts you want, then either **Export to file** to save them as a small `.json` file, or **Import from file** to load one. Your settings and your word swap presets already follow your Lumiverse account across browsers on their own, so this is mainly for keeping a backup, sharing a setup with someone else, or copying between accounts. Tick **Word swap presets** to include your saved presets in the file.
 
 Imported settings fill in the fields for review and need a **Save** to stick. Imported presets are different: they are saved as soon as they come in, with same-named presets replaced and new ones added.
 

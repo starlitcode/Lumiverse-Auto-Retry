@@ -500,7 +500,7 @@ const SCHEMA = [
         ],
     },
     {
-        title: "Advanced: refusal tuning (beta)",
+        title: "Refusal tuning (beta)",
         collapsed: true,
         extra: "refusalTester",
         // Every setting under here feeds looksLikeRefusal, and all three places
@@ -608,7 +608,7 @@ const SCHEMA = [
         ],
     },
     {
-        title: "Advanced: find and replace (beta)",
+        title: "Find and replace (beta)",
         collapsed: true,
         splitByPreset: true,
         extra: "swapPresets",
@@ -682,7 +682,7 @@ const SCHEMA = [
         ],
     },
     {
-        title: "Advanced: buttons it clicks",
+        title: "Buttons it clicks",
         collapsed: true,
         desc: "It retries by clicking your own on-screen buttons, so you only need this if retries aren't happening. The quickest fix is Pick it for me: press it, then click the real button. Otherwise paste a CSS selector and press Test until it says match found, with that button on screen. The stop button only appears while a reply is generating. The README covers fallback lists and selector syntax.",
         fields: [
@@ -7156,11 +7156,11 @@ export function setup(ctx, opts) {
         {
             const sec = document.createElement("div");
             sec.style.cssText = "display:flex;flex-direction:column;gap:10px";
-            const { header: h, caret } = sectionHeader("Advanced: debug info", true);
+            const { header: h, caret } = sectionHeader("Debug info", true);
             sec.appendChild(h);
             const handle = {
                 sec: sec,
-                title: "Advanced: debug info",
+                title: "Debug info",
                 keywords: "advanced debug info bug report copy diagnostics activity log version",
                 setOpen: null,
             };
@@ -7228,18 +7228,18 @@ export function setup(ctx, opts) {
             body.appendChild(copyBtn);
             body.appendChild(dStatus);
             sec.appendChild(body);
-            handle.setOpen = makeCollapsible(h, body, caret, "Advanced: debug info");
+            handle.setOpen = makeCollapsible(h, body, caret, "Debug info");
             scroller.appendChild(sec);
         }
-        // import / export section (collapsible, same look as the Advanced groups)
+        // import / export section (collapsible, same as the schema's own)
         {
             const sec = document.createElement("div");
             sec.style.cssText = "display:flex;flex-direction:column;gap:10px";
-            const { header: h, caret } = sectionHeader("Advanced: import / export", true);
+            const { header: h, caret } = sectionHeader("Import / export", true);
             sec.appendChild(h);
             const handle = {
                 sec: sec,
-                title: "Advanced: import / export",
+                title: "Import / export",
                 keywords: "advanced import export backup file share transfer settings presets json",
                 setOpen: null,
             };
@@ -7364,7 +7364,7 @@ export function setup(ctx, opts) {
             body.appendChild(fileInput);
             body.appendChild(status);
             sec.appendChild(body);
-            handle.setOpen = makeCollapsible(h, body, caret, "Advanced: import / export");
+            handle.setOpen = makeCollapsible(h, body, caret, "Import / export");
             scroller.appendChild(sec);
         }
         // ---- the search box ----

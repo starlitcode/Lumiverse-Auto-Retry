@@ -129,7 +129,7 @@ An opened reasoning block with nothing closing it means the reply was cut off in
 
 ## Tuning it
 
-Everything sits under **Advanced: refusal tuning** in the settings, so the basic on/off toggle stays clean for people who just want it on:
+Everything sits under **Refusal tuning** in the settings, so the basic on/off toggle stays clean for people who just want it on:
 
 - **Use the built-in phrase list** (on by default). This only controls the built-in list. Your own phrases below are always used either way. On, the built-in list is used together with your own phrases. Off, only your own phrases are used.
 - **Also catch the model breaking off** (on by default). The fourth tier described above. Only shown while the built-in list is on, since it is part of it.

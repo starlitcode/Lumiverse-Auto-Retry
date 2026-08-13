@@ -1,6 +1,6 @@
 # Reporting a bug
 
-The main tool is **Advanced: debug info** in the settings modal. Tick the parts you want (your settings, button match status, browser and screen, session totals and recent activity), press **Build preview**, then edit the text to remove anything private before you copy. It copies a short plain-text snapshot you can paste into a bug report, no developer tools needed. Nothing leaves your device until you paste it somewhere.
+The main tool is **Debug info** in the settings modal. Tick the parts you want (your settings, button match status, browser and screen, session totals and recent activity), press **Build preview**, then edit the text to remove anything private before you copy. It copies a short plain-text snapshot you can paste into a bug report, no developer tools needed. Nothing leaves your device until you paste it somewhere.
 
 The settings it reports come straight from the option list, so every setting is always in it. There is no second list to fall out of date and quietly leave something out.
 
