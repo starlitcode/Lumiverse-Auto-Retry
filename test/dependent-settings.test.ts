@@ -37,7 +37,11 @@ function defaults(): Record<string, string> {
 // A whole section can hang off a switch the same way a row can.
 function sectionDependencies(): Array<{ title: string; needs: string[] }> {
   const out: Array<{ title: string; needs: string[] }> = [];
-  const re = /title:\s*"([^"]+)",\s*\n(?:\s*\/\/[^\n]*\n)*\s*needs:\s*\[([^\]]*)\]/g;
+  // A group may carry other flags of its own between the title and needs
+  // (whether it starts collapsed, what extra it builds), and comment lines
+  // between any of them, so both are skipped over rather than assumed absent.
+  const re =
+    /title:\s*"([^"]+)",\s*\n(?:\s*(?:\/\/[^\n]*|[a-zA-Z]+:\s*(?:true|false|"[^"]*"),)\s*\n)*\s*needs:\s*\[([^\]]*)\]/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(SRC))) {
     out.push({

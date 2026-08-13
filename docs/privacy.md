@@ -24,7 +24,7 @@ Behind those it uses five Lumiverse APIs and nothing else: reading the messages 
 
 Your API keys, passwords, and account details are not available to it. Lumiverse does not hand those to extensions, and there is no code in Auto Retry that goes looking, which you can confirm by searching the source for `apikey`, `secret` or `credential` and finding nothing.
 
-It reads a reply only to run its checks on the one that just arrived, and it does not keep a copy. The streamed text it holds while a reply is in flight is thrown away the moment that reply finishes.
+It reads a reply only to run its checks on the one that just arrived, and it does not keep a copy. While a reply is streaming it does hold the text arriving so far, because some Lumiverse builds do not put the finished reply on the event that says it ended, and then what streamed is the only thing there is to check. That copy is dropped the moment the reply ends, and the moment you stop one partway.
 
 ## What it keeps
 

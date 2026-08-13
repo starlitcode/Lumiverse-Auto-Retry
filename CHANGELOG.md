@@ -8,6 +8,21 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 4.5.8
+
+_2026-08-13_
+
+### Changed
+
+- **The settings panel is down to eight sections from eleven, and opens on three.** Two of them were a heading over a single row, which is a heading that says nothing the row does not already say. **How it redoes a reply** was one switch and now sits at the end of **How it retries**, the section it was next to. **Watch for frozen replies** was two waits and now sits at the end of **When to count a reply as bad**, under a **Replies that freeze** heading, because a reply that never finished is a bad reply too. Nothing was renamed except **How hard it tries**, which is **How it retries** now that it also says which button a retry presses.
+- **The on-screen panel switch is in Basics.** It had an **Advanced: on-screen log** heading to itself, shut by default, so turning on the panel meant opening a collapsed Advanced section first. It is not advanced, and it is the first thing you are asked to turn on when reporting a bug. It is in Basics with the master switch and the other three ways of seeing what the extension is doing.
+- **Refusal tuning sits directly under the check it tunes.** It was below find and replace, two sections away from **It looks like an accidental refusal**, which is the switch that makes it do anything at all.
+
+### Fixed
+
+- **A stray end-of-reply event could re-roll a reply based on the one before it.** While a reply streams, the extension keeps the text arriving so far, because some Lumiverse builds do not put the finished reply on the event that says it ended, and then what streamed is the only thing there is to check. That copy was cleared when the *next* reply started rather than when the one it belonged to finished, so an end event arriving on its own was judged on the previous reply's text and could fire a retry for a cut-off that had already been dealt with. It is dropped when the reply ends now, and when you stop one partway.
+- **The Cancel button on the retry pop-up takes the pop-up away itself.** It used to leave that entirely to the action behind it, so any case where that action did not get there left the box on screen with a button that looked broken, which is what 4.5.7 fixed one instance of. The box now goes first and the action runs after, so no future case can put it back.
+
 ## 4.5.7
 
 _2026-08-10_

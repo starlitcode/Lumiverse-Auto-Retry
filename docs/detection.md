@@ -174,7 +174,7 @@ What it does not do:
 
 This needs the `interceptor` permission, which is what lets an extension add to a prompt before it reaches the model. Without it granted the rest of the extension works and this one feature does nothing.
 
-**Where to check that it went.** Turn on the on-screen log (**Advanced: on-screen log**) and it writes a line saying the note was sent and how many went with it, on the retry it went with. That is the reliable answer.
+**Where to check that it went.** Turn on the on-screen panel (**Basics**, **Show the on-screen panel**) and it writes a line saying the note was sent and how many went with it, on the retry it went with. That is the reliable answer.
 
 Do not expect to find it in **Prompt Breakdown**. The note is not a message in your chat: it is added to the prompt for one generation and thrown away, and the breakdown lists the things your chat is built from. The extension does label the note for the breakdown, so it may show up depending on your Lumiverse build, but it not being there does not mean the note was not sent. The log line is what tells you.
 

@@ -2,7 +2,15 @@
 
 Switching Auto Retry itself off changes nothing in here. Every setting stays where it is and stays editable, because off means paused rather than unconfigured, and setting it up while it is off is a normal thing to want to do. A line at the top says it is off and that your settings are saved.
 
-The settings modal is the easy path, and the **Search settings** box at the top of it is the quickest way to reach one option out of the forty-odd below: type part of a name or a description and it shows the matching rows, opening whichever Advanced section they live in. Clear the box to put the panel back as it was.
+The settings modal is the easy path, and the **Search settings** box at the top of it is the quickest way to reach one option out of the fifty-odd below: type part of a name or a description and it shows the matching rows, opening whichever Advanced section they live in. Clear the box to put the panel back as it was.
+
+There are eight sections. Three are open when the panel opens:
+
+- **Basics** is the master switch and every way of reaching or watching it: the floating button, the Extras entry, the retry pop-up, the on-screen panel, and the switch for the chat you are in.
+- **How it retries** is how persistent it is, how long it waits between tries, when it pauses itself, and whether a retry redoes the reply in place or adds a new reroll.
+- **When to count a reply as bad** is which kinds of bad reply set off a retry, ending with the two waits for a reply that freezes or never arrives.
+
+Five start shut, each with a **▸** to open it: refusal tuning, find and replace, the buttons it clicks, debug info, and import / export. Nothing in them is needed to use the extension.
 
 Each option's **?** shows its description in a small popover just below that option. Where it opens is fixed per setting rather than decided on the fly, so a given description is always in the same place. The one exception is **What the notes say**, which opens above: that row holds the whole note list, its roles, its buttons and its counter, so below it would be a long way from the **?** you pressed. It floats over the panel, so opening one leaves the rows where they are and never hides the setting you are reading about. A description too long for the room on its side scrolls inside itself rather than moving to the other side. Only one shows at a time. Tap the description, tap the **?** again, tap elsewhere, scroll the panel, or press Esc to close it.
 

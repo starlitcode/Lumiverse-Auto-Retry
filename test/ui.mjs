@@ -587,13 +587,56 @@ console.log("\nkeyboard and search");
       };
     }),
   );
-  check("every section header is focusable", out.focusable && out.sections >= 6, out.sections);
+  // Five sections start shut: refusal tuning, find and replace, buttons,
+  // debug info and import / export. The count is asserted exactly, so a
+  // section that quietly stops being collapsible is caught here.
+  check("every section header is focusable", out.focusable && out.sections === 5, out.sections);
   check("Enter opens a section", out.afterEnter.exp === "true" && out.afterEnter.vis === 1, out.afterEnter);
   check("Space closes it", out.afterSpace.exp === "false" && out.afterSpace.vis === 0, out.afterSpace);
   check("search filters", out.filtered.hit === 1 && out.filtered.miss === 0, out.filtered);
   check("clearing restores every row", out.cleared.hit === 1 && out.cleared.miss === 1, out.cleared);
   check("the search field is always visible", out.searchAlwaysVisible);
   check("the panel uses the height it is given", out.panelHeight > 500, out.panelHeight);
+  check("no console errors", errors.length === 0, errors);
+}
+
+// ---- what is reachable without opening anything ----
+// The panel used to open on five headings, two of them over a single row, and
+// the switch for the on-screen panel sat behind a collapsed "Advanced" heading
+// of its own. Everything checked here has to be readable the moment the panel
+// opens, with nothing clicked.
+console.log("\nwhat is on screen straight away");
+{
+  const { out, errors } = await inPanel(browser, {}, (page) =>
+    page.evaluate(async () => {
+      const modal = document.getElementById("modal");
+      const shown = (t) =>
+        [...modal.querySelectorAll("div,span,label")].some(
+          (e) => (e.textContent || "").trim() === t && e.offsetParent !== null,
+        );
+      const heads = [...modal.querySelectorAll('[role="button"][aria-expanded]')];
+      // Open sections are the ones with no caret to press.
+      const open = [...modal.querySelectorAll("div")]
+        .filter((d) => /^(Basics|How it retries|When to count a reply as bad)$/.test((d.textContent || "").trim()))
+        .filter((d) => d.offsetParent !== null && !d.getAttribute("role"));
+      return {
+        panelSwitch: shown("Show the on-screen panel"),
+        rerollSwitch: shown("Retry by adding a new reroll"),
+        frozenRun: shown("Replies that freeze"),
+        frozenRow: shown("Give up on a reply that froze (ms)"),
+        openHeadings: open.map((d) => (d.textContent || "").trim()).sort(),
+        shutHeadings: heads.map((h) => (h.textContent || "").trim()).sort(),
+      };
+    }),
+  );
+  check("the on-screen panel switch needs no digging", out.panelSwitch, out);
+  check("and neither does the reroll choice", out.rerollSwitch, out);
+  check("the frozen-reply rows are under their own heading", out.frozenRun && out.frozenRow, out);
+  check(
+    "three headings are open and five are shut",
+    out.openHeadings.length === 3 && out.shutHeadings.length === 5,
+    out,
+  );
   check("no console errors", errors.length === 0, errors);
 }
 
@@ -1913,6 +1956,10 @@ console.log("\npop-up goes away");
     const c = cancel();
     const hadCancel = !!c;
     if (c) c.click();
+    // Read with nothing awaited. The button takes the box away itself before it
+    // runs whatever it was given to do, so the countdown cannot survive the
+    // click even for a frame, whatever that action does or fails to do.
+    const instantly = { countdownGone: !/Retrying in/.test(says()) };
     await wait(120);
     // Cancel replaces the countdown with a short confirmation, which is not
     // sticky and clears itself. Both halves matter: the countdown has to be
@@ -1932,7 +1979,7 @@ console.log("\npop-up goes away");
     await wait(120);
     const afterTwoStops = { up: up(), text: says() };
     teardown();
-    return { whileWaiting, afterRetryStarted, secondUp, hadCancel, afterCancel, laterStillUp, afterTwoStops };
+    return { whileWaiting, afterRetryStarted, secondUp, hadCancel, instantly, afterCancel, laterStillUp, afterTwoStops };
   });
   await page.close();
   check("the pop-up counts the wait down", out.whileWaiting.up && /Retrying in/.test(out.whileWaiting.text), out);
@@ -1941,11 +1988,74 @@ console.log("\npop-up goes away");
     !/Waiting for the reply|Model is thinking|Reply arriving/.test(out.afterRetryStarted.text), out);
   check("it comes back for the next wait", out.secondUp === true, out);
   check("its Cancel button is there", out.hadCancel === true, out);
+  check("Cancel takes the box away before it does anything else",
+    out.instantly.countdownGone === true, out);
   check("pressing Cancel takes the countdown away",
     !/Retrying in/.test(out.afterCancel.text) && out.afterCancel.cancelGone === true, out);
   check("and says so briefly instead", /stopped/i.test(out.afterCancel.text), out);
   check("and that confirmation clears itself", out.laterStillUp === false, out);
   check("stopping twice does not leave one behind", out.afterTwoStops.up === false, out);
+  check("no console errors", errors.length === 0, errors);
+}
+
+// ---- the reply it checks when the end event carries no text ----
+// Not every build puts the finished text on the end event. When it is missing,
+// what actually streamed stands in for it, so the checks still have something
+// real to read. That copy is held only while the reply is in flight: it is
+// dropped the moment the reply ends, rather than surviving until the next one
+// starts, so a stray end event cannot be judged on the reply before it.
+console.log("\nwhat streamed stands in for the reply");
+{
+  const page = await browser.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await stage(page, '<div id=modal></div><button data-testid="regenerate">Regenerate</button>');
+  await page.addStyleTag({ content: THEME });
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  const out = await page.evaluate(async () => {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const handlers = {};
+    let clicks = 0;
+    document.querySelector('[data-testid="regenerate"]')
+      .addEventListener("click", () => { clicks++; });
+    const teardown = window.__setup(
+      { events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
+        ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+              registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) } },
+      { toast: false, retryDelayMs: 60, backoffFactor: 1, maxDelayMs: 60, jitter: false,
+        maxRetries: 3, stuckTimeoutMs: 0, idleTimeoutMs: 0, pauseWhenFailing: false },
+    );
+    // Stream a reply that stops mid-sentence, and end it with no content field.
+    const stream = async (chatId, id, text) => {
+      handlers.GENERATION_STARTED({ chatId, generationId: id });
+      handlers.STREAM_TOKEN_RECEIVED({ chatId, generationId: id, token: text });
+      handlers.GENERATION_ENDED({ chatId, generationId: id, messageId: "m" + id });
+      await wait(260);
+    };
+    const from = clicks;
+    await stream("a", "1", "She reached for the door and then");
+    const cutOff = clicks - from;
+
+    // The same again with a finished one, which should be left alone.
+    const before2 = clicks;
+    await stream("b", "2", "She reached for the door and stepped through.");
+    const finished = clicks - before2;
+
+    // And an end event with nothing before it, on the chat that streamed the
+    // cut-off reply. Its text is long gone, so there is nothing to judge and
+    // nothing should fire.
+    const before3 = clicks;
+    handlers.GENERATION_ENDED({ chatId: "a", generationId: "3", messageId: "m3" });
+    await wait(260);
+    const stray = clicks - before3;
+    teardown();
+    return { cutOff, finished, stray };
+  });
+  await page.close();
+  check("a cut-off reply is caught from what streamed", out.cutOff === 1, out);
+  check("a finished one is left alone", out.finished === 0, out);
+  check("and a stray end event is not judged on the reply before it", out.stray === 0, out);
   check("no console errors", errors.length === 0, errors);
 }
 
@@ -2328,8 +2438,11 @@ console.log("\npreset controls");
     page.evaluate(async () => {
       for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
       await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-      const sel = document.querySelector("select");
       const by = (t) => [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === t);
+      // The preset dropdown sits in the same row as its Load button. Taken
+      // that way rather than as the first select on the page, which is only
+      // the preset one for as long as no section above it holds a dropdown.
+      const sel = by("Load").parentElement.querySelector("select");
       const names = ["Load", "Update selected", "Delete", "Rename selected"];
       const state = () => names.map((n) => { const b = by(n); return { n, off: !!(b && b.disabled) }; });
 

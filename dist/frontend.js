@@ -85,7 +85,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "4.5.7";
+const VERSION = "4.5.8";
 // ---- defaults (the UI overrides these; editing here changes the fallback) ----
 const CONFIG = {
     enabled: true,
@@ -256,11 +256,15 @@ const RUNS = {
         title: "For the whole list",
         note: "These two are set once and apply to every note. What each note sets for itself, its role and the try it starts on, is on its own row in the list above.",
     },
+    frozen: {
+        title: "Replies that freeze",
+        note: "The rows above are about a reply that arrived and was no good. These two are about one that never finished. Both are waits in milliseconds, and both lean long so a slow connection is not read as a freeze. Lower them for quicker retries on a fast provider, or set either to 0 to switch that one off.",
+    },
 };
 const SCHEMA = [
     {
         title: "Basics",
-        desc: "The main switch, and whether it tells you when it retries.",
+        desc: "The main switch, the ways to reach it, and what it shows you while it works.",
         fields: [
             {
                 key: "enabled",
@@ -298,11 +302,17 @@ const SCHEMA = [
                 type: "bool",
                 hint: "A small message telling you it is retrying, with a Cancel button to stop it. It counts the wait down as it goes, and says what the retry is for and which try it is, so a long wait looks like a wait rather than like nothing happening.",
             },
+            {
+                key: "liveLog",
+                label: "Show the on-screen panel",
+                type: "bool",
+                hint: "Puts a small panel in the corner with three tabs. Log shows what the extension is doing as it happens: generations, retries and why, finishes. Prompt shows the whole prompt that went to the model, every message in order, with your notes marked where they were inserted. Stats shows what it has been doing overall and what it keeps retrying for. Useful without opening the console, especially on a phone. Drag the header to move it, drag the corner to resize, and turn this off to hide it. The prompt is only captured while its tab is open, and only ever on your device.",
+            },
         ],
     },
     {
-        title: "How hard it tries",
-        desc: "How persistent it is, and how long it waits between tries.",
+        title: "How it retries",
+        desc: "How persistent it is, how long it waits between tries, and which button it presses.",
         fields: [
             {
                 key: "maxRetries",
@@ -386,12 +396,6 @@ const SCHEMA = [
                 type: "bool",
                 hint: "Nudges each wait by a random amount so retries don't all hit the server at the same instant. Best left on.",
             },
-        ],
-    },
-    {
-        title: "How it redoes a reply",
-        desc: "Choose whether a retry replaces the reply or adds a new reroll beside it.",
-        fields: [
             {
                 key: "retryByNewReroll",
                 label: "Retry by adding a new reroll",
@@ -401,32 +405,8 @@ const SCHEMA = [
         ],
     },
     {
-        title: "Watch for frozen replies",
-        desc: "Notices when a reply freezes or never arrives, and retries. Defaults lean long so a slow connection isn't mistaken for a freeze; lower them for quicker retries on a fast provider.",
-        fields: [
-            {
-                key: "stuckTimeoutMs",
-                label: "Give up waiting for it to start (ms)",
-                type: "num",
-                int: true,
-                min: 0,
-                max: 600000,
-                hint: "If a reply begins but no words appear in this long, treat it as stuck and retry. The default is " + defaultMs("stuckTimeoutMs") + ", which is long enough for a local model to load and for a long prompt to be read before the first word arrives. Set to 0 to switch off.",
-            },
-            {
-                key: "idleTimeoutMs",
-                label: "Give up on a reply that froze (ms)",
-                type: "num",
-                int: true,
-                min: 0,
-                max: 600000,
-                hint: "If words were appearing and then stop for this long, treat it as frozen and retry. The default is " + defaultMs("idleTimeoutMs") + ". A reasoning model goes quiet between blocks and a slow one can take a while between words, so shorter than this re-rolls replies that were still coming. Set to 0 to switch off.",
-            },
-        ],
-    },
-    {
         title: "When to count a reply as bad",
-        desc: "Pick which kinds of bad reply should trigger a retry.",
+        desc: "Pick which kinds of bad reply should set off a retry, including a reply that freezes or never arrives.",
         fields: [
             {
                 key: "retryOnError",
@@ -480,81 +460,32 @@ const SCHEMA = [
                 type: "bool",
                 hint: "Retry when the model breaks character to decline (says it's an AI, or that it can't help or continue). It retries the same request unchanged, capped by your Most tries setting, so a refusal the model means will survive the tries and stop. Reads only the final reply, never the thinking, and stays narrow so an in-character \"I can't do that\" is left alone.",
             },
-        ],
-    },
-    {
-        title: "Advanced: find and replace (beta)",
-        desc: "Swaps words in a reply after it arrives and saves the change, so the swap sticks and the model reads it on later turns. It never changes what the model generated, only the text afterward. Needs the chat editing permission. Off by default.",
-        fields: [
             {
-                key: "replaceEnabled",
-                label: "Swap words in replies",
-                type: "bool",
-                hint: "When on, applies your swaps below to each new reply and edits the saved message. If nothing here matches, the reply is left untouched.",
-            },
-            {
-                key: "replaceRules",
-                label: "Word swaps (old => new)",
-                type: "text",
-                hint: 'Rules are "old => new", one per line. The left side can be a single word, a phrase, or a whole sentence, and commas inside it are fine. A single word matches whole words only (so cat won\'t touch category), while a phrase or sentence matches exactly as you type it. Leave the right side empty to delete it. Put the same left side on more than one line (like sky => blue on one line and sky => aqua on another) to give it options for the random toggle below. All rules are applied in a single pass, so a rule never acts on what another rule just wrote: cat => dog and dog => wolf turns cats into dogs and dogs into wolves, and hot => cold with cold => hot swaps the two rather than making everything one of them. Where two rules could match the same spot, the longer left side wins.',
-            },
-            {
-                key: "replaceRandom",
-                label: "Pick randomly when a word has more than one swap",
-                type: "bool",
-                hint: "Off by default. When the same word is listed on more than one line (like sky => blue on one line and sky => aqua on another), each time it appears one of its options is picked at random. Off, it always uses the first one you listed.",
-            },
-            {
-                key: "replaceCaseSensitive",
-                label: "Match case exactly",
-                type: "bool",
-                hint: "Off by default. When off, a swap matches any case and keeps the original capitalization. Turn on to swap only when the case matches your rule exactly, so sky and Sky can have different swaps.",
-            },
-            {
-                key: "showReplaceButton",
-                label: "Show a \"swap words now\" button",
-                type: "bool",
-                hint: "Off by default. Adds a button to the chat input's Extras menu that applies your word swaps on demand to the latest reply, so you can swap without leaving the automatic swap on. Only assistant replies are swapped, never your own messages, and the same reply won't be swapped twice. Needs your swap rules set up.",
-            },
-            {
-                key: "showSwapAllButton",
-                label: "Show a swap-whole-chat button",
-                type: "bool",
-                hint: "Off by default. Adds a button to the input's Extras menu that applies your rules once to every generated reply in the chat you're viewing. The greeting is never touched.",
-            },
-            {
-                key: "allowReSwap",
-                needs: ["showReplaceButton", "showSwapAllButton"],
-                label: "Allow swapping a reply again",
-                type: "bool",
-                hint: "Off by default. Normally a reply is swapped at most once per session, so swaps don't stack. Turn this on to let the button swap a reply again even if it was already swapped, for example after you change your rules. This can apply your rules on top of an earlier swap.",
-            },
-            {
-                key: "confirmBeforeEdit",
-                label: "Ask before editing a reply",
-                type: "bool",
-                hint: "Off by default. When on, every word swap (automatic or from the button) asks you to confirm before it changes a reply, and you can cancel. This can get frequent if you use automatic swapping, but nothing is edited without your OK. Needs your Lumiverse to support confirm dialogs.",
-            },
-            {
-                key: "swapWaitForEdits",
-                label: "Wait for other extensions to finish",
-                type: "bool",
-                hint: "Off by default. Turn this on if another extension also rewrites replies, like Hone with auto-refine on. Normally a swap is applied the moment a reply lands, and the other extension's rewrite then arrives on top and undoes it. With this on, the swap waits for the reply to stop changing and then applies to whatever the text has become, so both survive. If a later edit undoes a swap anyway, it is applied again, up to three times per reply. Leave it off if nothing else edits your replies: it only adds a delay.",
-            },
-            {
-                key: "swapWaitSecs",
-                needs: ["swapWaitForEdits"],
-                label: "How long to wait (seconds)",
+                key: "stuckTimeoutMs",
+                run: "frozen",
+                label: "Give up waiting for it to start (ms)",
                 type: "num",
                 int: true,
-                min: 1,
-                max: 300,
-                hint: "How long to give another extension to make its edit before swapping anyway. Each edit restarts the clock and the swap follows shortly after the last one, so this is only the full wait when nothing else edits at all. The default of " + def("swapWaitSecs") + " covers a refinement pass on most models: that pass is a whole generation, so how long it takes depends on the model, the prompt and how much it has to read. Raise it if your swaps still get overwritten, lower it if you are only waiting on something quick.",
+                min: 0,
+                max: 600000,
+                hint: "If a reply begins but no words appear in this long, treat it as stuck and retry. The default is " + defaultMs("stuckTimeoutMs") + ", which is long enough for a local model to load and for a long prompt to be read before the first word arrives. Set to 0 to switch off.",
+            },
+            {
+                key: "idleTimeoutMs",
+                run: "frozen",
+                label: "Give up on a reply that froze (ms)",
+                type: "num",
+                int: true,
+                min: 0,
+                max: 600000,
+                hint: "If words were appearing and then stop for this long, treat it as frozen and retry. The default is " + defaultMs("idleTimeoutMs") + ". A reasoning model goes quiet between blocks and a slow one can take a while between words, so shorter than this re-rolls replies that were still coming. Set to 0 to switch off.",
             },
         ],
     },
     {
         title: "Advanced: refusal tuning (beta)",
+        collapsed: true,
+        extra: "refusalTester",
         // Every setting under here feeds looksLikeRefusal, and all three places
         // that call it sit behind retryOnRefusal, so with that off the section is
         // inert. One exception: refusalThinkTags is still read by the empty and
@@ -660,7 +591,82 @@ const SCHEMA = [
         ],
     },
     {
+        title: "Advanced: find and replace (beta)",
+        collapsed: true,
+        splitByPreset: true,
+        extra: "swapPresets",
+        desc: "Swaps words in a reply after it arrives and saves the change, so the swap sticks and the model reads it on later turns. It never changes what the model generated, only the text afterward. Needs the chat editing permission. Off by default.",
+        fields: [
+            {
+                key: "replaceEnabled",
+                label: "Swap words in replies",
+                type: "bool",
+                hint: "When on, applies your swaps below to each new reply and edits the saved message. If nothing here matches, the reply is left untouched.",
+            },
+            {
+                key: "replaceRules",
+                label: "Word swaps (old => new)",
+                type: "text",
+                hint: 'Rules are "old => new", one per line. The left side can be a single word, a phrase, or a whole sentence, and commas inside it are fine. A single word matches whole words only (so cat won\'t touch category), while a phrase or sentence matches exactly as you type it. Leave the right side empty to delete it. Put the same left side on more than one line (like sky => blue on one line and sky => aqua on another) to give it options for the random toggle below. All rules are applied in a single pass, so a rule never acts on what another rule just wrote: cat => dog and dog => wolf turns cats into dogs and dogs into wolves, and hot => cold with cold => hot swaps the two rather than making everything one of them. Where two rules could match the same spot, the longer left side wins.',
+            },
+            {
+                key: "replaceRandom",
+                label: "Pick randomly when a word has more than one swap",
+                type: "bool",
+                hint: "Off by default. When the same word is listed on more than one line (like sky => blue on one line and sky => aqua on another), each time it appears one of its options is picked at random. Off, it always uses the first one you listed.",
+            },
+            {
+                key: "replaceCaseSensitive",
+                label: "Match case exactly",
+                type: "bool",
+                hint: "Off by default. When off, a swap matches any case and keeps the original capitalization. Turn on to swap only when the case matches your rule exactly, so sky and Sky can have different swaps.",
+            },
+            {
+                key: "showReplaceButton",
+                label: "Show a \"swap words now\" button",
+                type: "bool",
+                hint: "Off by default. Adds a button to the chat input's Extras menu that applies your word swaps on demand to the latest reply, so you can swap without leaving the automatic swap on. Only assistant replies are swapped, never your own messages, and the same reply won't be swapped twice. Needs your swap rules set up.",
+            },
+            {
+                key: "showSwapAllButton",
+                label: "Show a swap-whole-chat button",
+                type: "bool",
+                hint: "Off by default. Adds a button to the input's Extras menu that applies your rules once to every generated reply in the chat you're viewing. The greeting is never touched.",
+            },
+            {
+                key: "allowReSwap",
+                needs: ["showReplaceButton", "showSwapAllButton"],
+                label: "Allow swapping a reply again",
+                type: "bool",
+                hint: "Off by default. Normally a reply is swapped at most once per session, so swaps don't stack. Turn this on to let the button swap a reply again even if it was already swapped, for example after you change your rules. This can apply your rules on top of an earlier swap.",
+            },
+            {
+                key: "confirmBeforeEdit",
+                label: "Ask before editing a reply",
+                type: "bool",
+                hint: "Off by default. When on, every word swap (automatic or from the button) asks you to confirm before it changes a reply, and you can cancel. This can get frequent if you use automatic swapping, but nothing is edited without your OK. Needs your Lumiverse to support confirm dialogs.",
+            },
+            {
+                key: "swapWaitForEdits",
+                label: "Wait for other extensions to finish",
+                type: "bool",
+                hint: "Off by default. Turn this on if another extension also rewrites replies, like Hone with auto-refine on. Normally a swap is applied the moment a reply lands, and the other extension's rewrite then arrives on top and undoes it. With this on, the swap waits for the reply to stop changing and then applies to whatever the text has become, so both survive. If a later edit undoes a swap anyway, it is applied again, up to three times per reply. Leave it off if nothing else edits your replies: it only adds a delay.",
+            },
+            {
+                key: "swapWaitSecs",
+                needs: ["swapWaitForEdits"],
+                label: "How long to wait (seconds)",
+                type: "num",
+                int: true,
+                min: 1,
+                max: 300,
+                hint: "How long to give another extension to make its edit before swapping anyway. Each edit restarts the clock and the swap follows shortly after the last one, so this is only the full wait when nothing else edits at all. The default of " + def("swapWaitSecs") + " covers a refinement pass on most models: that pass is a whole generation, so how long it takes depends on the model, the prompt and how much it has to read. Raise it if your swaps still get overwritten, lower it if you are only waiting on something quick.",
+            },
+        ],
+    },
+    {
         title: "Advanced: buttons it clicks",
+        collapsed: true,
         desc: "It retries by clicking your own on-screen buttons, so you only need this if retries aren't happening. The quickest fix is Pick it for me: press it, then click the real button. Otherwise paste a CSS selector and press Test until it says match found, with that button on screen. The stop button only appears while a reply is generating. The README covers fallback lists and selector syntax.",
         fields: [
             {
@@ -696,18 +702,6 @@ const SCHEMA = [
                 type: "text",
                 selector: true,
                 hint: "The stop button, so it can halt a frozen reply before retrying.",
-            },
-        ],
-    },
-    {
-        title: "Advanced: on-screen log",
-        desc: "A live panel that shows what the extension is doing, for debugging.",
-        fields: [
-            {
-                key: "liveLog",
-                label: "Show the on-screen panel",
-                type: "bool",
-                hint: "Puts a small panel in the corner with three tabs. Log shows what the extension is doing as it happens: generations, retries and why, finishes. Prompt shows the whole prompt that went to the model, every message in order, with your notes marked where they were inserted. Stats shows what it has been doing overall and what it keeps retrying for. Useful without opening the console, especially on a phone. Drag the header to move it, drag the corner to resize, and turn this off to hide it. The prompt is only captured while its tab is open, and only ever on your device.",
             },
         ],
     },
@@ -4490,6 +4484,9 @@ export function setup(ctx, opts) {
         // does not always end one. A chunk arriving puts it back, so a reply that
         // really is still streaming corrects this by itself.
         s.live = false;
+        // A stopped reply does not end, so nothing else would drop the half of it
+        // that streamed. It has no use once the retry is off.
+        s.buf = "";
         s.suppressUntil = Date.now() + STAND_DOWN_MS;
         // Unconditionally, not only when something was pending. The pop-up carries
         // the Cancel button that leads here, so it staying on screen after Cancel
@@ -5312,6 +5309,14 @@ export function setup(ctx, opts) {
         lastChatId = p.chatId;
         lastMessageId = p.messageId;
         s.live = false;
+        // The streamed copy has done its job the moment the reply ends, so it is
+        // taken now and the chat's own copy dropped. It used to be dropped only
+        // when the next reply started, which meant the text of a finished reply
+        // stayed in memory for as long as you left the chat alone, and the text of
+        // a stopped one stayed until you sent something else. Nothing below reads
+        // s.buf, so taking it here loses nothing.
+        const streamed = String(s.buf || "");
+        s.buf = "";
         paintNow();
         if (s.ignored.has(p.generationId))
             return; // aborted gen's trailing event, retry already scheduled
@@ -5344,7 +5349,7 @@ export function setup(ctx, opts) {
         // missing, what actually streamed stands in for it, so a good reply is not
         // read as empty and every check below still has real text to work with.
         const hasContentField = typeof p.content === "string";
-        const content = (hasContentField ? p.content : s.buf || "").trim();
+        const content = (hasContentField ? p.content : streamed).trim();
         // Empty only when the payload says so, or when nothing streamed either. A
         // missing field plus tokens that carried no readable text is not a verdict,
         // so it is left alone rather than re-rolled on a guess.
@@ -6013,6 +6018,15 @@ export function setup(ctx, opts) {
                         "border:1px solid var(--lumiverse-border,rgba(255,255,255,.28));" +
                         "background:var(--lumiverse-fill-subtle,rgba(0,0,0,.1));color:var(--lumiverse-text,#fff)";
                 c.addEventListener("click", () => {
+                    // The box goes first, then the action runs. Every cancel action
+                    // already takes the box away as part of what it does, so this
+                    // changes nothing when they work. It is here for when one does not:
+                    // pressing Cancel and watching the box sit there is the one outcome
+                    // this button must never have, and a missed case anywhere in a
+                    // cancel action used to produce exactly that. Hiding first also
+                    // leaves an action free to put its own message up afterwards, which
+                    // the button picker does.
+                    hideToast();
                     try {
                         opts.cancel && opts.cancel();
                     }
@@ -6515,21 +6529,9 @@ export function setup(ctx, opts) {
         function buildRefusalTester() {
             const wrap = document.createElement("div");
             wrap.style.cssText = "display:flex;flex-direction:column;gap:8px";
-            const rule = document.createElement("div");
-            rule.style.cssText =
-                "height:1px;background:var(--lumiverse-border,rgba(255,255,255,.08));margin:4px 0 2px";
-            wrap.appendChild(rule);
-            const title = document.createElement("div");
-            title.textContent = "Try it on a reply";
-            title.style.cssText =
-                "font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
-            wrap.appendChild(title);
-            const desc = document.createElement("div");
-            desc.textContent =
-                "See whether a reply would count as a refusal, and what decided it. Use my last reply fills the box from the reply on screen behind this panel, or paste one in yourself. It uses the settings as they are in the boxes above, so you can test a change before saving it. Nothing is sent anywhere and no reply is altered.";
-            desc.style.cssText =
-                "font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
-            wrap.appendChild(desc);
+            wrap.appendChild(hairline());
+            wrap.appendChild(runHeading("Try it on a reply"));
+            wrap.appendChild(sectionDesc("See whether a reply would count as a refusal, and what decided it. Use my last reply fills the box from the reply on screen behind this panel, or paste one in yourself. It uses the settings as they are in the boxes above, so you can test a change before saving it. Nothing is sent anywhere and no reply is altered.", false));
             const ta = document.createElement("textarea");
             ta.rows = 3;
             ta.placeholder = "Paste a reply here";
@@ -6718,6 +6720,57 @@ export function setup(ctx, opts) {
             paintDepNotes(false);
         };
         const searchText = (...parts) => parts.map((p) => String(p == null ? "" : p)).join(" ").toLowerCase();
+        // The three pieces every section is made of. Each of these was written out
+        // once per section, so the same heading was styled in three places and the
+        // two hand-built sections at the bottom had drifted a little from the ones
+        // built from the schema. One copy each, and they cannot drift again.
+        const MUTED = "var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+        const HEADING_CSS = "font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:" + MUTED;
+        function sectionHeader(title, collapsible) {
+            const header = document.createElement("div");
+            header.style.cssText =
+                "font-size:11px;letter-spacing:.07em;text-transform:uppercase;font-family:var(--lumiverse-font-family,system-ui);color:" +
+                    MUTED;
+            const caret = document.createElement("span");
+            if (!collapsible) {
+                header.textContent = title;
+                return { header: header, caret: caret };
+            }
+            header.style.cursor = "pointer";
+            header.style.userSelect = "none";
+            header.style.display = "flex";
+            header.style.alignItems = "center";
+            header.style.gap = "6px";
+            caret.textContent = CARET_SHUT;
+            caret.style.cssText = "font-size:9px";
+            const label = document.createElement("span");
+            label.textContent = title;
+            header.appendChild(caret);
+            header.appendChild(label);
+            return { header: header, caret: caret };
+        }
+        // The line under a heading. Pulled up by a few pixels only when it sits
+        // directly under an open section's heading; inside a collapsed section's
+        // body the gap is already right.
+        function sectionDesc(text, tight) {
+            const d = document.createElement("div");
+            d.textContent = text;
+            d.style.cssText =
+                "font-size:12px;line-height:1.45;color:" + MUTED + (tight ? ";margin-top:-4px" : "");
+            return d;
+        }
+        function runHeading(text) {
+            const h2 = document.createElement("div");
+            h2.textContent = text;
+            h2.style.cssText = HEADING_CSS;
+            return h2;
+        }
+        function hairline() {
+            const r = document.createElement("div");
+            r.style.cssText =
+                "height:1px;background:var(--lumiverse-border,rgba(255,255,255,.08));margin:4px 0 2px";
+            return r;
+        }
         // Every collapsible header goes through here. They were plain elements with
         // a click handler, which left all five collapsed sections unreachable
         // without a pointer: no tab stop, and nothing telling a screen reader that
@@ -6794,16 +6847,8 @@ export function setup(ctx, opts) {
             const subGroup = (into, title, note) => {
                 const wrap = document.createElement("div");
                 wrap.style.cssText = "display:flex;flex-direction:column;gap:10px";
-                const h2 = document.createElement("div");
-                h2.textContent = title;
-                h2.style.cssText =
-                    "font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
-                wrap.appendChild(h2);
-                const n = document.createElement("div");
-                n.textContent = note;
-                n.style.cssText =
-                    "font-size:12px;line-height:1.45;margin-top:-4px;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
-                wrap.appendChild(n);
+                wrap.appendChild(runHeading(title));
+                wrap.appendChild(sectionDesc(note, true));
                 into.appendChild(wrap);
                 subRuns.push(wrap);
                 return wrap;
@@ -6814,7 +6859,7 @@ export function setup(ctx, opts) {
             // definition rather than written out a second time, so the headings
             // cannot end up claiming something that is not true.
             const emitFields = (into) => {
-                if (!/find and replace/i.test(group.title)) {
+                if (!group.splitByPreset) {
                     // Rows naming a run go under one heading together. Anything without
                     // a run goes straight into the group, and closes any run above it.
                     let open = null;
@@ -6848,74 +6893,33 @@ export function setup(ctx, opts) {
                     if (!isHeld(f))
                         b.appendChild(addRow(buildRow(f), f));
             };
-            // Groups titled "Advanced..." collapse by default so the basic options
-            // aren't buried under them. Tap the header to reveal.
-            const advanced = /^advanced\b/i.test(group.title);
-            const h = document.createElement("div");
-            h.style.cssText =
-                "font-size:11px;letter-spacing:.07em;text-transform:uppercase;font-family:var(--lumiverse-font-family,system-ui);color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
-            if (advanced) {
-                h.style.cursor = "pointer";
-                h.style.userSelect = "none";
-                h.style.display = "flex";
-                h.style.alignItems = "center";
-                h.style.gap = "6px";
-                const caret = document.createElement("span");
-                caret.textContent = CARET_SHUT;
-                caret.style.cssText = "font-size:9px";
-                const label = document.createElement("span");
-                label.textContent = group.title;
-                h.appendChild(caret);
-                h.appendChild(label);
-                sec.appendChild(h);
+            if (group.collapsed) {
+                const { header, caret } = sectionHeader(group.title, true);
+                sec.appendChild(header);
                 const body = document.createElement("div");
                 body.style.cssText = "display:none;flex-direction:column;gap:10px";
-                if (group.desc) {
-                    const d = document.createElement("div");
-                    d.textContent = group.desc;
-                    d.style.cssText =
-                        "font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
-                    body.appendChild(d);
-                }
+                if (group.desc)
+                    body.appendChild(sectionDesc(group.desc, false));
                 emitFields(body);
                 // The refusal tuning options are all guesswork without a way to try
                 // them, so the section carries its own tester.
-                if (/refusal tuning/i.test(group.title)) {
+                if (group.extra === "refusalTester")
                     body.appendChild(buildRefusalTester());
-                }
                 // Word swap presets sit at the end of the group, since they save and
                 // switch the settings above.
-                if (/find and replace/i.test(group.title)) {
-                    const rule = document.createElement("div");
-                    rule.style.cssText =
-                        "height:1px;background:var(--lumiverse-border,rgba(255,255,255,.08));margin:4px 0 2px";
-                    body.appendChild(rule);
-                    const pl = document.createElement("div");
-                    pl.textContent = "Presets";
-                    pl.style.cssText =
-                        "font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
-                    body.appendChild(pl);
-                    const pd = document.createElement("div");
-                    pd.textContent =
-                        "Save your current word swaps as a named setup and switch between them. Applying takes effect right away. Saved to your account, so they follow you to other devices.";
-                    pd.style.cssText =
-                        "font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
-                    body.appendChild(pd);
+                if (group.extra === "swapPresets") {
+                    body.appendChild(hairline());
+                    body.appendChild(runHeading("Presets"));
+                    body.appendChild(sectionDesc("Save your current word swaps as a named setup and switch between them. Applying takes effect right away. Saved to your account, so they follow you to other devices.", false));
                     body.appendChild(buildPresetBar("swap"));
                 }
                 sec.appendChild(body);
-                handle.setOpen = makeCollapsible(h, body, caret, group.title);
+                handle.setOpen = makeCollapsible(header, body, caret, group.title);
             }
             else {
-                h.textContent = group.title;
-                sec.appendChild(h);
-                if (group.desc) {
-                    const d = document.createElement("div");
-                    d.textContent = group.desc;
-                    d.style.cssText =
-                        "font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65));margin-top:-4px";
-                    sec.appendChild(d);
-                }
+                sec.appendChild(sectionHeader(group.title, false).header);
+                if (group.desc)
+                    sec.appendChild(sectionDesc(group.desc, true));
                 emitFields(sec);
                 // The switch for the chat you are in, and the only place it is. Basics
                 // is where somebody looks for a switch, and the floating button's menu
@@ -6924,7 +6928,7 @@ export function setup(ctx, opts) {
                 // as clutter. Built by hand rather than added to the form because it is
                 // not a setting. It belongs to one chat, it is kept in the browser, and
                 // it has no business being exported, imported or reset with the rest.
-                if (/basics/i.test(group.title))
+                if (group.title === "Basics")
                     sec.appendChild(buildChatSwitchRow());
             }
             scroller.appendChild(sec);
@@ -6933,16 +6937,7 @@ export function setup(ctx, opts) {
         {
             const sec = document.createElement("div");
             sec.style.cssText = "display:flex;flex-direction:column;gap:10px";
-            const h = document.createElement("div");
-            h.style.cssText =
-                "font-size:11px;letter-spacing:.07em;text-transform:uppercase;font-family:var(--lumiverse-font-family,system-ui);color:var(--lumiverse-text-muted,rgba(255,255,255,.65));cursor:pointer;user-select:none;display:flex;align-items:center;gap:6px";
-            const caret = document.createElement("span");
-            caret.textContent = CARET_SHUT;
-            caret.style.cssText = "font-size:9px";
-            const label = document.createElement("span");
-            label.textContent = "Advanced: debug info";
-            h.appendChild(caret);
-            h.appendChild(label);
+            const { header: h, caret } = sectionHeader("Advanced: debug info", true);
             sec.appendChild(h);
             const handle = {
                 sec: sec,
@@ -6953,12 +6948,7 @@ export function setup(ctx, opts) {
             panelSections.push(handle);
             const body = document.createElement("div");
             body.style.cssText = "display:none;flex-direction:column;gap:10px";
-            const desc = document.createElement("div");
-            desc.textContent =
-                "A snapshot for your own debugging or a bug report. Tick the parts to include, build a preview, edit out anything you would rather not share, then copy. Nothing leaves your device until you paste it somewhere.";
-            desc.style.cssText =
-                "font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
-            body.appendChild(desc);
+            body.appendChild(sectionDesc("A snapshot for your own debugging or a bug report. Tick the parts to include, build a preview, edit out anything you would rather not share, then copy. Nothing leaves your device until you paste it somewhere.", false));
             const sections = [
                 { id: "settings", label: "Your settings" },
                 { id: "buttons", label: "Button match status" },
@@ -7026,16 +7016,7 @@ export function setup(ctx, opts) {
         {
             const sec = document.createElement("div");
             sec.style.cssText = "display:flex;flex-direction:column;gap:10px";
-            const h = document.createElement("div");
-            h.style.cssText =
-                "font-size:11px;letter-spacing:.07em;text-transform:uppercase;font-family:var(--lumiverse-font-family,system-ui);color:var(--lumiverse-text-muted,rgba(255,255,255,.65));cursor:pointer;user-select:none;display:flex;align-items:center;gap:6px";
-            const caret = document.createElement("span");
-            caret.textContent = CARET_SHUT;
-            caret.style.cssText = "font-size:9px";
-            const label = document.createElement("span");
-            label.textContent = "Advanced: import / export";
-            h.appendChild(caret);
-            h.appendChild(label);
+            const { header: h, caret } = sectionHeader("Advanced: import / export", true);
             sec.appendChild(h);
             const handle = {
                 sec: sec,
@@ -7046,12 +7027,7 @@ export function setup(ctx, opts) {
             panelSections.push(handle);
             const body = document.createElement("div");
             body.style.cssText = "display:none;flex-direction:column;gap:10px";
-            const desc = document.createElement("div");
-            desc.textContent =
-                "Save settings to a file or load them from one. Tick the parts to include, then Export or Import. An import fills in the settings above without saving, so you can review first: press Save to keep it, or close to discard.";
-            desc.style.cssText =
-                "font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
-            body.appendChild(desc);
+            body.appendChild(sectionDesc("Save settings to a file or load them from one. Tick the parts to include, then Export or Import. An import fills in the settings above without saving, so you can review first: press Save to keep it, or close to discard.", false));
             const checks = [];
             const checkWrap = document.createElement("div");
             checkWrap.style.cssText = "display:flex;flex-direction:column;gap:6px";
