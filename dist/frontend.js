@@ -2636,6 +2636,11 @@ export function setup(ctx, opts) {
     function buildPanelParts(draggable) {
         const head = document.createElement("div");
         head.style.cssText =
+            // One row, not a wrapping one. Measured rather than assumed: the tabs,
+            // Copy and Clear need 195px between them, and that does not move with the
+            // host's text size because everything in here sets its own in pixels. The
+            // floating panel cannot be resized below 200, so the row always fits, and
+            // a wrap that never happens is a rule that reads as if it might.
             "display:flex;align-items:center;gap:8px;padding:7px 9px;border-bottom:1px solid var(--lumiverse-border,rgba(255,255,255,.12));font-weight:600;user-select:none;" +
                 // The move cursor and the pointer-event opt-out are the drag handle's,
                 // and the drawer's header is not one: the host places that panel, so a

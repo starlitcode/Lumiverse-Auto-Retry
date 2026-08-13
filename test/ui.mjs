@@ -728,6 +728,168 @@ console.log("\nthe panel in the drawer");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- the floating panel squeezed to its minimum ----
+// It shares its header with the drawer panel, and it can be dragged down to
+// 200 wide by its corner grip, which is narrower than any test had it. The
+// header's tabs, Copy and Clear need 195px between them, so 200 is the whole
+// margin there is: anything added to that row breaks it here first.
+console.log("\nthe floating panel at its narrowest");
+{
+  const page = await browser.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  page.on("console", (m) => { if (m.type() === "error") errors.push("console: " + m.text()); });
+  await page.setViewportSize({ width: 360, height: 640 });
+  await stage(page, "<div id=modal></div>");
+  await page.addStyleTag({ content: THEME });
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  const out = await page.evaluate(async () => {
+    const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const teardown = window.__setup(
+      { events: { on: () => () => {} },
+        ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+              registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) } },
+      { liveLog: true, toast: false },
+    );
+    const panel = document.getElementById("__lvRetryLog");
+    // What the resize grip is allowed to take it down to.
+    panel.style.width = "200px";
+    panel.style.height = "120px";
+    await frame();
+    const head = panel.firstElementChild;
+    const hr = head.getBoundingClientRect();
+    const res = {
+      headFits: [...head.querySelectorAll("button")].every(
+        (b) => b.getBoundingClientRect().right <= hr.right + 1 &&
+               b.getBoundingClientRect().left >= hr.left - 1),
+      noSideScroll: head.scrollWidth <= head.clientWidth + 1 &&
+                    panel.scrollWidth <= panel.clientWidth + 1,
+      tabH: Math.round(head.querySelector('[role="tab"]').getBoundingClientRect().height),
+      onScreen: (() => { const r = panel.getBoundingClientRect();
+        return r.left >= -1 && r.right <= innerWidth + 1; })(),
+    };
+    teardown();
+    return res;
+  });
+  await page.close();
+  check("at 200 wide the header still holds its tabs and buttons", out.headFits, out);
+  check("and nothing has to be scrolled sideways", out.noSideScroll, out);
+  check("the tabs stay a finger-sized target", out.tabH >= 30, out);
+  check("and it is still on screen", out.onScreen, out);
+  check("no console errors", errors.length === 0, errors);
+}
+
+// ---- the drawer panel at the widths a drawer actually is ----
+// The host owns this frame, so the panel has to survive whatever it is given:
+// a narrow sidebar on a desktop, the whole screen on a phone, and a drawer
+// that sizes itself to its content rather than filling a height.
+console.log("\nthe drawer panel on phone and desktop");
+{
+  for (const [name, vw, vh, drawerW, bounded, hostCss] of [
+    // 200px is the narrowest the floating panel can be dragged to, so it is
+    // the narrowest the header is held to in either home.
+    ["narrow sidebar", 1280, 800, 200, true],
+    ["desktop sidebar", 1280, 800, 380, true],
+    ["phone, full width", 360, 640, 360, true],
+    ["small phone", 320, 568, 320, true],
+    ["a drawer sized by its content", 1280, 800, 320, false],
+    // A phone drawer with the host's text turned up. Nothing in the panel
+    // should move: it sets its own sizes in pixels rather than inheriting, so
+    // this passing is the evidence for that rather than a formality.
+    ["phone, larger text", 360, 640, 360, true, "font-size:19px"],
+  ]) {
+    const page = await browser.newPage();
+    const errors = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    page.on("console", (m) => { if (m.type() === "error") errors.push("console: " + m.text()); });
+    await page.setViewportSize({ width: vw, height: vh });
+    await stage(page, "<div id=modal></div>");
+    await page.addStyleTag({ content: THEME });
+    await page.addScriptTag({ content: SOURCE, type: "module" });
+    await page.waitForFunction(() => !!window.__setup);
+    const out = await page.evaluate(async ([w, bounded, hostCss]) => {
+      const frame = () =>
+        new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      // A stand-in for the host's drawer: a fixed sidebar of the given width,
+      // either filling the height or sized by what is put in it.
+      const host = document.createElement("div");
+      host.id = "fake-drawer";
+      host.style.cssText =
+        "position:fixed;right:0;top:0;width:" + w + "px;overflow:hidden;" +
+        (bounded ? "bottom:0;" : "height:auto;") + (hostCss || "");
+      document.body.appendChild(host);
+      const handlers = {};
+      const teardown = window.__setup(
+        { events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
+          ui: {
+            showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+            registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }),
+            registerDrawerTab: () => {
+              const root = document.createElement("div");
+              host.appendChild(root);
+              return { root, setBadge: () => {}, activate: () => {}, destroy: () => root.remove() };
+            },
+          } },
+        { liveLog: true, panelHome: "drawer", toast: false, retryDelayMs: 90000,
+          backoffFactor: 1, maxDelayMs: 90000, jitter: false, maxRetries: 5,
+          stuckTimeoutMs: 0, idleTimeoutMs: 0, pauseWhenFailing: false },
+      );
+      // Give the status line the longest thing it ever says, and the log
+      // enough in it to need scrolling.
+      handlers.GENERATION_STARTED({ chatId: "c", generationId: "g" });
+      handlers.GENERATION_ENDED({ chatId: "c", content: "" });
+      for (let i = 0; i < 40; i++) {
+        await new Promise((r) => setTimeout(r, 50));
+        if (/Retrying in/.test(document.getElementById("__lvRetryStatus").textContent || "")) break;
+      }
+      await frame();
+      const status = document.getElementById("__lvRetryStatus");
+      const body = document.getElementById("__lvRetryLogBody");
+      const head = status.previousElementSibling;
+      const hr = head.getBoundingClientRect();
+      const hostR = host.getBoundingClientRect();
+      const res = {
+        text: (status.querySelector("span:last-child").textContent || "").trim(),
+        dotW: Math.round(status.querySelector("span").getBoundingClientRect().width),
+        // Nothing may stick out of the drawer sideways, and the drawer itself
+        // must not have been pushed wider than the host made it.
+        hostW: Math.round(hostR.width),
+        overflowsSideways: [head, status, body].some((e) => {
+          const r = e.getBoundingClientRect();
+          return r.left < hostR.left - 1 || r.right > hostR.right + 1;
+        }),
+        // Every control in the header, tabs included, inside the header's box.
+        headFits: [...head.querySelectorAll("button")].every(
+          (b) => b.getBoundingClientRect().right <= hr.right + 1 &&
+                 b.getBoundingClientRect().left >= hr.left - 1,
+        ),
+        // No sideways scrolling anywhere: not the header, not the drawer.
+        noSideScroll: head.scrollWidth <= head.clientWidth + 1 &&
+                      host.scrollWidth <= host.clientWidth + 1,
+        tabH: Math.round(head.querySelector('[role="tab"]').getBoundingClientRect().height),
+        // The log scrolls inside itself rather than growing the drawer, which
+        // only means anything when the drawer has a height to be bounded by.
+        bodyScrolls: getComputedStyle(body).overflow === "auto",
+        bodyBottomInside: body.getBoundingClientRect().bottom <= hostR.bottom + 1,
+      };
+      teardown();
+      host.remove();
+      return res;
+    }, [drawerW, bounded, hostCss]);
+    await page.close();
+    check(name + ": it fills the width it was given, no more", out.hostW === drawerW && !out.overflowsSideways, out);
+    check(name + ": the header's tabs and buttons stay inside it", out.headFits, out);
+    check(name + ": nothing has to be scrolled sideways to reach", out.noSideScroll, out);
+    check(name + ": the tabs stay a finger-sized target", out.tabH >= 30, out);
+    check(name + ": the status line still says what it is waiting for", /Retrying in/.test(out.text), out);
+    check(name + ": the dot keeps its size", out.dotW >= 6, out);
+    check(name + ": the log scrolls inside the panel", out.bodyScrolls, out);
+    if (bounded) check(name + ": and does not run past the drawer", out.bodyBottomInside, out);
+    check(name + ": no console errors", errors.length === 0, errors);
+  }
+}
+
 // ---- a host with no drawer keeps the floating panel ----
 console.log("\nno drawer to put it in");
 {

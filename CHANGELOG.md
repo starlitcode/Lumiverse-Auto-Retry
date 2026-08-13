@@ -33,6 +33,7 @@ _2026-08-13_
 
 - Asking for the sidebar on a Lumiverse build with no drawer for extensions gets you the floating panel and a line in the Log saying why, rather than a switch that is on with nothing on screen.
 - The sidebar drawer needs no permission. The extension still declares the same four, and `ui_panels` is still only for the optional floating on/off button.
+- The panel is checked at the widths a drawer actually is, on a phone and on a desktop, in a drawer that fills its height and one that sizes itself to what is in it. Its header needs 200px, which is also the narrowest the floating panel can be dragged to, so both homes hold at the tightest width either can reach.
 
 ## 4.5.7
 
