@@ -2102,6 +2102,8 @@ export function setup(ctx, opts) {
     let replaceActionOff = null;
     let replaceAllAction = null;
     let replaceAllActionOff = null;
+    let openPanelAction = null;
+    let openPanelActionOff = null;
     let toggleAction = null;
     let toggleActionOff = null;
     // Manual "swap words now": an optional Extras-menu button that applies the word
@@ -2242,6 +2244,46 @@ export function setup(ctx, opts) {
                 catch (_) { }
                 replaceAllAction = null;
                 replaceAllActionOff = null;
+            }
+            // A way into the drawer that needs no keyboard and nothing else turned
+            // on. The palette is Ctrl+K, which is not a thing on a phone, and the
+            // floating button's menu is only there if you have turned that button
+            // on, which is off by default. Extras is where you already went to open
+            // these settings, so on a phone it is the route that is actually there.
+            // It appears only while the panel is set to live in the drawer and the
+            // host gave us a tab to bring forward: with the panel floating it is
+            // already on screen, and an entry that opens what you can see is noise
+            // in a menu somebody opened for something else.
+            const wantOpen = !!(cfg.liveLog &&
+                cfg.panelHome === "drawer" &&
+                drawerTab &&
+                typeof drawerTab.activate === "function");
+            if (wantOpen && canReg && !openPanelAction) {
+                openPanelAction = ctx.ui.registerInputBarAction({
+                    id: "auto-retry-open-panel",
+                    label: "Open the Auto Retry panel",
+                    iconSvg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="15" y1="3" x2="15" y2="21"/></svg>',
+                });
+                openPanelActionOff = openPanelAction.onClick(() => {
+                    try {
+                        drawerTab && drawerTab.activate();
+                    }
+                    catch (e) {
+                        log("could not open the drawer tab", e);
+                    }
+                });
+            }
+            else if ((!wantOpen || !canReg) && openPanelAction) {
+                try {
+                    openPanelActionOff && openPanelActionOff();
+                }
+                catch (_) { }
+                try {
+                    openPanelAction.destroy();
+                }
+                catch (_) { }
+                openPanelAction = null;
+                openPanelActionOff = null;
             }
         }
         catch (_) { }
@@ -3717,6 +3759,10 @@ export function setup(ctx, opts) {
         }
         renderLiveLog();
         askForPrompts();
+        // The Extras entry that opens the drawer exists only while there is a
+        // drawer tab to open, so it is re-read here rather than only when a
+        // setting changes: this is the one place that registers and drops one.
+        syncInputBarActions();
     }
     // The backend captures a prompt only while somebody is looking at one. Told
     // on every change of tab, open and close, and on teardown, so the cost stops
@@ -7866,6 +7912,34 @@ export function setup(ctx, opts) {
             };
             top.appendChild(sel);
             row.appendChild(top);
+            // Picking "in the sidebar drawer" moves the panel somewhere you then
+            // have to find, and where the drawer opens from belongs to Lumiverse and
+            // is not the same in every build. So the row that moves it offers to
+            // open it, right there, the moment it has somewhere to open.
+            if (f.key === "panelHome") {
+                const open = btn("Open it", false);
+                open.style.cssText += "min-height:0;padding:6px 12px;flex:none;align-self:flex-start";
+                const syncOpen = () => {
+                    const can = !!(cfg.panelHome === "drawer" &&
+                        drawerTab &&
+                        typeof drawerTab.activate === "function");
+                    open.style.display = can ? "" : "none";
+                };
+                open.addEventListener("click", () => {
+                    try {
+                        drawerTab && drawerTab.activate();
+                    }
+                    catch (e) {
+                        log("could not open the drawer tab", e);
+                    }
+                });
+                sel.addEventListener("change", () => {
+                    // After onLiveEdit above, which is what registers the tab.
+                    setTimeout(syncOpen, 0);
+                });
+                syncOpen();
+                row.appendChild(open);
+            }
         }
         else if (f.type === "num") {
             const input = document.createElement("input");
@@ -8975,6 +9049,13 @@ export function setup(ctx, opts) {
     }
     catch (_) { } try {
         replaceAllAction && replaceAllAction.destroy();
+    }
+    catch (_) { } });
+    disposers.push(() => { try {
+        openPanelActionOff && openPanelActionOff();
+    }
+    catch (_) { } try {
+        openPanelAction && openPanelAction.destroy();
     }
     catch (_) { } });
     disposers.push(() => { try {

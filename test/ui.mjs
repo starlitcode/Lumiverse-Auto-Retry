@@ -912,6 +912,90 @@ console.log("\nthe panel is still live after a re-sync");
   }
 }
 
+// ---- routes into the drawer that work without a keyboard ----
+// Ctrl+K is not a thing on a phone, and the floating button is off by
+// default, so on Android the palette and that button's menu are both routes
+// that may not be there. These two always are: the Extras popover, which is
+// where the settings are opened from anyway, and a button on the row that
+// moves the panel in the first place.
+console.log("\nreaching the drawer without a keyboard");
+{
+  for (const [home, wanted] of [["drawer", true], ["float", false]]) {
+    const page = await browser.newPage();
+    const errors = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    page.on("console", (m) => { if (m.type() === "error") errors.push("console: " + m.text()); });
+    await stage(page, "<div id=modal></div>");
+    await page.addStyleTag({ content: THEME });
+    await page.addScriptTag({ content: SOURCE, type: "module" });
+    await page.waitForFunction(() => !!window.__setup);
+    const out = await page.evaluate(async (home) => {
+      const frame = () =>
+        new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const acts = {};
+      let activated = 0;
+      const teardown = window.__setup(
+        { events: { on: () => () => {} },
+          ui: {
+            showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+            registerInputBarAction: (o) => {
+              const a = { id: o.id, label: o.label,
+                          onClick: (cb) => { a.cb = cb; return () => {}; },
+                          destroy: () => { delete acts[o.id]; } };
+              acts[o.id] = a;
+              return a;
+            },
+            registerDrawerTab: () => {
+              const root = document.createElement("div");
+              document.body.appendChild(root);
+              return { root, setBadge: () => {}, activate: () => { activated++; },
+                       destroy: () => root.remove() };
+            },
+          } },
+        // No floating button, which is the default, so that route is absent.
+        { liveLog: true, panelHome: home, showFloatingToggle: false, toast: false },
+      );
+      const extras = () => Object.keys(acts);
+      const openId = "auto-retry-open-panel";
+      const offered = extras().indexOf(openId) >= 0;
+      if (offered) { acts[openId].cb(); await frame(); }
+      const fromExtras = activated;
+
+      // And the button on the row itself, in the settings panel.
+      acts["auto-retry-settings"].cb();
+      await frame();
+      const modal = document.getElementById("modal");
+      const openBtn = [...modal.querySelectorAll("button")]
+        .find((b) => b.textContent.trim() === "Open it");
+      const btnShown = !!openBtn && openBtn.style.display !== "none";
+      if (btnShown) { openBtn.click(); await frame(); }
+      const res = {
+        extras: extras(),
+        offered,
+        fromExtras,
+        btnExists: !!openBtn,
+        btnShown,
+        activated,
+      };
+      teardown();
+      return res;
+    }, home);
+    await page.close();
+    const n = home === "drawer" ? "in the drawer" : "floating";
+    check(n + ": the settings entry is always in Extras",
+      out.extras.indexOf("auto-retry-settings") >= 0, out);
+    check(n + ": the open entry is " + (wanted ? "in Extras too" : "not in Extras"),
+      out.offered === wanted, out);
+    check(n + ': the row carries an "Open it" button that is ' + (wanted ? "shown" : "hidden"),
+      out.btnShown === wanted, out);
+    if (wanted) {
+      check(n + ": the Extras entry brings the tab forward", out.fromExtras === 1, out);
+      check(n + ": and so does the button on the row", out.activated === 2, out);
+    }
+    check(n + ": no console errors", errors.length === 0, errors);
+  }
+}
+
 // ---- a way into the drawer from the floating button ----
 // The drawer is somewhere the panel can be on and still not be in front of
 // you, and where that sidebar opens from is the host's business, not something
