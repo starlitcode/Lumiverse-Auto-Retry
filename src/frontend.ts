@@ -3132,14 +3132,22 @@ export function setup(ctx: Ctx, opts?: any) {
     } catch (_) {}
   }
   function hideLiveLog() {
+    // Nothing to take down, so nothing is touched. This guard is the whole
+    // point of the function being callable at any time: the three handles
+    // below are shared with the drawer, and a sync runs both teardowns to be
+    // sure the home it is not using is gone. Without this, taking down the
+    // home that was already empty reached over and nulled the handles the
+    // other one was still using, and the panel stayed on screen with its tabs,
+    // its body and its repaint function all pointing at nothing.
+    if (!liveLogEl) return;
     // Off the clock before it leaves the page. A repaint of a panel that is no
     // longer on screen is work nobody sees, and it would hold the interval open
     // for as long as the tab lives.
-    if (liveLogEl && (liveLogEl as any).__stopStatus) {
+    if ((liveLogEl as any).__stopStatus) {
       try { (liveLogEl as any).__stopStatus(); } catch (_) {}
     }
     stopStatsTick();
-    if (liveLogEl && liveLogEl.parentNode) {
+    if (liveLogEl.parentNode) {
       try {
         liveLogEl.parentNode.removeChild(liveLogEl);
       } catch (_) {}
@@ -3214,6 +3222,10 @@ export function setup(ctx: Ctx, opts?: any) {
     }
   }
   function hideDrawerPanel() {
+    // Same guard, same reason: see hideLiveLog. Nothing registered means
+    // nothing of ours is on screen here, and the handles below belong to
+    // whichever home is.
+    if (!drawerTab) return;
     if (paintBadge) {
       removeTicker(paintBadge);
       paintBadge = null;
@@ -3510,6 +3522,21 @@ export function setup(ctx: Ctx, opts?: any) {
     const first = entry("Auto Retry settings", () => {
       openSettings();
     });
+    // Only when the panel is in the drawer, and only when the host gave us a
+    // way to bring it forward. The floating panel needs no entry: it is already
+    // on screen, and this button is sitting next to it. The drawer is the case
+    // where the panel is on but out of sight behind a sidebar somebody has to
+    // find first, so this is the way in that does not depend on knowing where
+    // the drawer lives.
+    if (drawerTab && typeof drawerTab.activate === "function") {
+      entry("Open the Auto Retry panel", () => {
+        try {
+          drawerTab.activate();
+        } catch (e) {
+          log("could not open the drawer tab", e);
+        }
+      });
+    }
     // Switching off in one chat is not here. It lives in the settings panel,
     // under Basics, on the "This chat" row. This menu opens from a button that
     // sits over the chat, so it is worth keeping to the few things that are

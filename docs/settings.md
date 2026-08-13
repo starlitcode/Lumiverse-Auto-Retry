@@ -22,7 +22,7 @@ Only **Save** keeps what you changed. Closing with the X or tapping outside disc
 
 Two options in **Basics**, and you can use either or both:
 
-- **Floating on/off button** puts a small button over the chat that toggles it in one tap. Drag it anywhere; it snaps to the nearest edge and stays where you leave it, and you can set its size. Hold it, or right-click on a computer, for a menu with **Auto Retry settings**, **Move back to the corner** and **Hide this button**.
+- **Floating on/off button** puts a small button over the chat that toggles it in one tap. Drag it anywhere; it snaps to the nearest edge and stays where you leave it, and you can set its size. Hold it, or right-click on a computer, for a menu with **Auto Retry settings**, **Move back to the corner** and **Hide this button**. When the on-screen panel is set to live in the sidebar drawer, **Open the Auto Retry panel** is in there too.
 - **On/off button in the Extras menu** adds an entry next to the settings button. Its label says which state it is currently in, so you can check and change it without opening settings, and it takes up no room on screen.
 
 ## Turning it off in one chat
@@ -72,6 +72,8 @@ This is kept in your browser rather than in your settings, like the list of chat
 **In the sidebar drawer** puts it in Lumiverse's own drawer instead, next to the app's own tabs. Lumiverse places it, sizes it and themes it, so there is nothing to drag and nothing to remember, and it cannot cover the reply you are reading. It is listed in the **Ctrl+K** palette as **Auto Retry**, which is the quickest way to open it. While a retry is running the tab carries a dot, so you can tell something is happening without opening the drawer.
 
 Changing this moves the panel as you pick, before you save, so you can see which you prefer. Closing the settings without saving puts it back where it was. If your Lumiverse build has no drawer for extensions to add to, asking for the sidebar gets you the floating panel and a line in the Log saying why.
+
+While the panel is in the drawer, the floating button's menu gains **Open the Auto Retry panel**, which brings the tab to the front. Where the drawer opens from is Lumiverse's own business and differs between builds, so that entry, and **Ctrl+K**, are the two ways in that do not depend on finding it. The entry is not there when the panel is floating, since it would only be pointing at something already on screen.
 
 Under the tabs is a line saying what is happening this second, with a dot beside it. The dot is dim and flat when Auto Retry is off or paused, lit and still when it is on with nothing to do, and pulsing while something is actually happening, so a glance at the corner answers the question without reading the line. The pulse is dropped if your system asks for less movement; the glow stays. It sits above all three tabs because the answer is the same whichever one you are reading, and because none of them answered it: the Log says what already happened and the Stats say what has happened overall. It counts down a pending retry in hours, minutes and seconds as each is needed (`47s`, `5m 03s`, `1h 05m 03s`), names what the retry is for and which try it is, says when a reply is arriving and roughly how much of it has landed, says when the model is thinking, and says when it has paused itself after repeated failures. When nothing is happening it says so. A retry running in a chat you have since moved away from is still reported, marked as being in another chat.
 

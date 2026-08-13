@@ -728,6 +728,268 @@ console.log("\nthe panel in the drawer");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- the panel survives everything that re-syncs it ----
+// Putting the panel in two possible homes gave each of them a teardown, and
+// both were run on every sync: the one being kept was told to take itself
+// down, then declined to rebuild because it was already up. It stayed on
+// screen with its tab strip, its body handle and its repaint function all
+// nulled, so the tabs stopped switching and Copy and Clear did nothing. Saving
+// the settings, closing them, loading a preset and switching chat all sync.
+console.log("\nthe panel survives a re-sync");
+{
+  for (const home of ["float", "drawer"]) {
+    const { out, errors } = await inPanel(
+      browser,
+      { settings: { liveLog: true, panelHome: home } },
+      (page) =>
+        page.evaluate(async (home) => {
+          const frame = () =>
+            new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+          const panel = () =>
+            home === "drawer" ? window.__drawer.root : document.getElementById("__lvRetryLog");
+          const tab = (name) =>
+            [...panel().querySelectorAll('[role="tab"]')].find((b) => b.textContent === name);
+          const selected = () =>
+            (panel().querySelector('[role="tab"][aria-selected="true"]') || {}).textContent;
+          const bodyText = () =>
+            (panel().querySelector("#__lvRetryLogBody").textContent || "").trim();
+          const press = (label) =>
+            [...panel().querySelectorAll("button")]
+              .find((b) => new RegExp("^" + label, "i").test(b.textContent.trim()));
+
+          // Working before the sync, so a failure after it is the sync's doing.
+          tab("Stats").click();
+          await frame();
+          const before = { on: selected(), body: bodyText().slice(0, 40) };
+
+          // Save is one of the five things that re-sync the panel.
+          [...document.getElementById("modal").querySelectorAll("button")]
+            .find((b) => b.textContent.trim() === "Save").click();
+          await frame();
+
+          tab("Log").click();
+          await frame();
+          const afterLog = { on: selected(), body: bodyText().slice(0, 40) };
+          tab("Prompt").click();
+          await frame();
+          const afterPrompt = { on: selected(), body: bodyText().slice(0, 40) };
+
+          // Copy reads whatever the tab is showing, and says so on the button.
+          // Both routes are watched: this origin is not secure, so there is no
+          // navigator.clipboard here and it takes the execCommand fallback,
+          // which copies whatever is selected in the textarea it just made.
+          let copied = null;
+          try {
+            if (navigator.clipboard)
+              navigator.clipboard.writeText = (t) => { copied = t; return Promise.resolve(); };
+          } catch (_) {}
+          document.execCommand = (cmd) => {
+            if (cmd === "copy") copied = (document.activeElement || {}).value ?? null;
+            return true;
+          };
+          tab("Stats").click();
+          await frame();
+          press("Cop").click();
+          await new Promise((r) => setTimeout(r, 60));
+          const copyOut = { text: copied, label: press("Cop").textContent.trim() };
+
+          // Clear acts on the tab in front of it, and the view redraws after.
+          tab("Log").click();
+          await frame();
+          const logBefore = bodyText();
+          press("Clear").click();
+          await frame();
+          const logAfter = bodyText();
+
+          return {
+            before, afterLog, afterPrompt, copyOut,
+            cleared: logBefore !== logAfter || /nothing|no activity/i.test(logAfter),
+            stillUp: !!panel() && !!panel().querySelector("#__lvRetryLogBody"),
+            onlyOne: document.querySelectorAll("#__lvRetryLogBody").length,
+          };
+        }, home),
+    );
+    const n = home === "drawer" ? "in the drawer" : "floating";
+    check(n + ": it is still on screen after a save", out.stillUp && out.onlyOne === 1, out);
+    check(n + ": the tabs still switch", out.afterLog.on === "Log" && out.afterPrompt.on === "Prompt", out);
+    check(n + ": and the body follows the tab",
+      out.afterLog.body !== out.afterPrompt.body, out);
+    check(n + ": Copy still takes what the tab is showing",
+      !!out.copyOut.text && /Replies that came back fine/.test(out.copyOut.text), out.copyOut);
+    check(n + ": and says it copied", /copied/i.test(out.copyOut.label), out.copyOut);
+    check(n + ": Clear still empties the log", out.cleared, out);
+    check(n + ": no console errors", errors.length === 0, errors);
+  }
+}
+
+// ---- and it is still live after a re-sync ----
+// The tabs switching again is not the whole of it: the Log appends as things
+// happen and the status line counts down, and both go through the same handles
+// the sync used to null. This fires real generations after the sync rather
+// than reading the panel as it was left.
+console.log("\nthe panel is still live after a re-sync");
+{
+  for (const home of ["float", "drawer"]) {
+    const page = await browser.newPage();
+    const errors = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    page.on("console", (m) => { if (m.type() === "error") errors.push("console: " + m.text()); });
+    await stage(page, '<div id=modal></div><button data-testid="regenerate">Regenerate</button>');
+    await page.addStyleTag({ content: THEME });
+    await page.addScriptTag({ content: SOURCE, type: "module" });
+    await page.waitForFunction(() => !!window.__setup);
+    const out = await page.evaluate(async (home) => {
+      const frame = () =>
+        new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const handlers = {};
+      const acts = {};
+      let drawer = null;
+      const teardown = window.__setup(
+        { events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
+          ui: {
+            showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+            registerInputBarAction: (o) => {
+              const a = { onClick: (cb) => { a.cb = cb; return () => {}; }, destroy: () => {} };
+              acts[o.id] = a;
+              return a;
+            },
+            registerDrawerTab: () => {
+              const root = document.createElement("div");
+              document.body.appendChild(root);
+              drawer = { root, badges: [], setBadge: (v) => drawer.badges.push(v),
+                         activate: () => {}, destroy: () => root.remove() };
+              return drawer;
+            },
+          } },
+        { liveLog: true, panelHome: home, toast: false, retryDelayMs: 90000,
+          backoffFactor: 1, maxDelayMs: 90000, jitter: false, maxRetries: 5,
+          stuckTimeoutMs: 0, idleTimeoutMs: 0, pauseWhenFailing: false },
+      );
+      const body = () => document.getElementById("__lvRetryLogBody");
+      const status = () => document.getElementById("__lvRetryStatus");
+
+      // The sync that used to kill it: open the settings and close them again.
+      acts["auto-retry-settings"].cb();
+      await frame();
+      [...document.getElementById("modal").querySelectorAll("button")]
+        .find((b) => b.textContent.trim() === "Save").click();
+      await frame();
+
+      const logBefore = (body().textContent || "").length;
+      handlers.GENERATION_STARTED({ chatId: "c", generationId: "g1" });
+      await frame();
+      const grewOnStart = (body().textContent || "").length > logBefore;
+
+      handlers.GENERATION_ENDED({ chatId: "c", content: "" });
+      let counted = false;
+      for (let i = 0; i < 40; i++) {
+        await new Promise((r) => setTimeout(r, 50));
+        if (/Retrying in/.test(status().textContent || "")) { counted = true; break; }
+      }
+      const firstRead = (status().textContent || "").trim();
+      // The countdown has to keep moving, not just say a number once.
+      await new Promise((r) => setTimeout(r, 1200));
+      const secondRead = (status().textContent || "").trim();
+      const res = {
+        grewOnStart,
+        counted,
+        ticking: firstRead !== secondRead,
+        firstRead,
+        secondRead,
+        badges: drawer ? drawer.badges.filter(Boolean).length : null,
+      };
+      teardown();
+      return res;
+    }, home);
+    await page.close();
+    const n = home === "drawer" ? "in the drawer" : "floating";
+    check(n + ": the log still appends as things happen", out.grewOnStart, out);
+    check(n + ": the status line still reports a pending retry", out.counted, out);
+    check(n + ": and the countdown keeps moving", out.ticking, out);
+    if (home === "drawer")
+      check(n + ": the tab badge is still being set", out.badges > 0, out);
+    check(n + ": no console errors", errors.length === 0, errors);
+  }
+}
+
+// ---- a way into the drawer from the floating button ----
+// The drawer is somewhere the panel can be on and still not be in front of
+// you, and where that sidebar opens from is the host's business, not something
+// this extension can point at. The floating button's hold menu is a way in
+// that does not depend on knowing. It is offered only when there is a drawer
+// tab to bring forward, so the floating panel does not get an entry that
+// would just say "look at the thing you are already looking at".
+console.log("\ninto the drawer from the button");
+{
+  for (const [home, wanted] of [["drawer", true], ["float", false]]) {
+    const page = await browser.newPage();
+    const errors = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    page.on("console", (m) => { if (m.type() === "error") errors.push("console: " + m.text()); });
+    await stage(page, "<div id=modal></div><div id=host></div>");
+    await page.addStyleTag({ content: THEME });
+    await page.addScriptTag({ content: SOURCE, type: "module" });
+    await page.waitForFunction(() => !!window.__setup);
+    const out = await page.evaluate(async (home) => {
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      const host = document.getElementById("host");
+      let activated = 0;
+      const teardown = window.__setup(
+        { events: { on: () => () => {} },
+          ui: {
+            showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+            registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }),
+            registerDrawerTab: () => {
+              const root = document.createElement("div");
+              document.body.appendChild(root);
+              return { root, setBadge: () => {}, activate: () => { activated++; },
+                       destroy: () => root.remove() };
+            },
+            createFloatWidget: () => ({ root: host, destroy: () => {}, setPosition: () => {} }),
+          } },
+        { liveLog: true, panelHome: home, showFloatingToggle: true,
+          floatingToggleSize: 44, toast: false },
+      );
+      const btn = () => host.querySelector("button");
+      const menu = () => document.querySelector('[role="menu"]');
+      const entries = () =>
+        [...document.querySelectorAll('[role="menuitem"]')].map((b) => b.textContent);
+      // A hold on the button is what opens the menu.
+      btn().dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, clientX: 130, clientY: 130 }));
+      await wait(620);
+      const items = entries();
+      const label = items.find((t) => /open the auto retry panel/i.test(t));
+      if (label) {
+        [...document.querySelectorAll('[role="menuitem"]')]
+          .find((b) => /open the auto retry panel/i.test(b.textContent)).click();
+        await wait(30);
+      }
+      const res = {
+        items,
+        offered: !!label,
+        activated,
+        menuShut: !menu(),
+        // The settings entry stays first, so the new one did not displace what
+        // this menu is mostly opened for.
+        firstIsSettings: /auto retry settings/i.test(items[0] || ""),
+      };
+      btn().dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
+      teardown();
+      return res;
+    }, home);
+    await page.close();
+    const n = home === "drawer" ? "in the drawer" : "floating";
+    check(n + ": the menu opens on a hold", out.items.length >= 3, out);
+    check(n + ": settings is still the first entry", out.firstIsSettings, out);
+    check(n + ": the entry is " + (wanted ? "offered" : "not offered"), out.offered === wanted, out);
+    if (wanted) {
+      check(n + ": pressing it brings the tab forward", out.activated === 1, out);
+      check(n + ": and shuts the menu behind it", out.menuShut, out);
+    }
+    check(n + ": no console errors", errors.length === 0, errors);
+  }
+}
+
 // ---- the floating panel squeezed to its minimum ----
 // It shares its header with the drawer panel, and it can be dragged down to
 // 200 wide by its corner grip, which is narrower than any test had it. The

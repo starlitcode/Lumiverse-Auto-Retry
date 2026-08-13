@@ -16,6 +16,7 @@ _2026-08-13_
 
 - **The on-screen panel can live in Lumiverse's sidebar drawer.** A new row under the panel switch, **Where that panel goes**, offers **Floating over the chat**, which is what it has always been, or **In the sidebar drawer**. It is the same panel with the same three tabs either way. In the drawer, Lumiverse places it, sizes it and themes it, so there is nothing to drag and nothing to remember, and it cannot cover the reply you are reading. It is listed in the **Ctrl+K** palette as **Auto Retry**, and its tab carries a dot while a retry is running so you can tell something is happening without opening the drawer. Floating is still the default, so an update does not move your panel.
 - **Changing where it goes moves it as you pick**, before you save, so you can see which you prefer rather than reading the two names and guessing. Closing the settings without saving puts it back, the same as every other setting.
+- **A way into the drawer that does not depend on finding it.** While the panel lives there, the floating button's hold menu gains **Open the Auto Retry panel**, which brings the tab to the front. Where the drawer opens from is Lumiverse's own business and differs between builds, so that entry and **Ctrl+K** are the two routes in that always work. It is not offered while the panel is floating, since it would only point at something already on screen.
 
 ### Changed
 
@@ -27,7 +28,6 @@ _2026-08-13_
 
 - **A stray end-of-reply event could re-roll a reply based on the one before it.** While a reply streams, the extension keeps the text arriving so far, because some Lumiverse builds do not put the finished reply on the event that says it ended, and then what streamed is the only thing there is to check. That copy was cleared when the *next* reply started rather than when the one it belonged to finished, so an end event arriving on its own was judged on the previous reply's text and could fire a retry for a cut-off that had already been dealt with. It is dropped when the reply ends now, and when you stop one partway.
 - **The Cancel button on the retry pop-up takes the pop-up away itself.** It used to leave that entirely to the action behind it, so any case where that action did not get there left the box on screen with a button that looked broken, which is what 4.5.7 fixed one instance of. The box now goes first and the action runs after, so no future case can put it back.
-- **A dropdown that asked to apply as it was picked did nothing.** Applying an edit immediately rather than on Save was wired up for number boxes only, so a dropdown asking for it was accepted and then quietly ignored. Both kinds honour it now. Nothing released was affected, since no dropdown asked for it until this version.
 
 ### Notes
 
