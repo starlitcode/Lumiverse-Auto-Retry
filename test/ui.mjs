@@ -912,13 +912,12 @@ console.log("\nthe panel is still live after a re-sync");
   }
 }
 
-// ---- routes into the drawer that work without a keyboard ----
-// Ctrl+K is not a thing on a phone, and the floating button is off by
-// default, so on Android the palette and that button's menu are both routes
-// that may not be there. These two always are: the Extras popover, which is
-// where the settings are opened from anyway, and a button on the row that
-// moves the panel in the first place.
-console.log("\nreaching the drawer without a keyboard");
+// ---- the way into the drawer ----
+// One route, and it has to be the one that is there on a phone: Ctrl+K needs
+// a keyboard and the floating button is off by default, so neither can be it.
+// Extras is a tap away on any device and is where the settings are opened
+// from anyway. Checked with the floating button off, which is the default.
+console.log("\nthe way into the drawer");
 {
   for (const [home, wanted] of [["drawer", true], ["float", false]]) {
     const page = await browser.newPage();
@@ -961,22 +960,7 @@ console.log("\nreaching the drawer without a keyboard");
       if (offered) { acts[openId].cb(); await frame(); }
       const fromExtras = activated;
 
-      // And the button on the row itself, in the settings panel.
-      acts["auto-retry-settings"].cb();
-      await frame();
-      const modal = document.getElementById("modal");
-      const openBtn = [...modal.querySelectorAll("button")]
-        .find((b) => b.textContent.trim() === "Open it");
-      const btnShown = !!openBtn && openBtn.style.display !== "none";
-      if (btnShown) { openBtn.click(); await frame(); }
-      const res = {
-        extras: extras(),
-        offered,
-        fromExtras,
-        btnExists: !!openBtn,
-        btnShown,
-        activated,
-      };
+      const res = { extras: extras(), offered, fromExtras };
       teardown();
       return res;
     }, home);
@@ -986,90 +970,10 @@ console.log("\nreaching the drawer without a keyboard");
       out.extras.indexOf("auto-retry-settings") >= 0, out);
     check(n + ": the open entry is " + (wanted ? "in Extras too" : "not in Extras"),
       out.offered === wanted, out);
-    check(n + ': the row carries an "Open it" button that is ' + (wanted ? "shown" : "hidden"),
-      out.btnShown === wanted, out);
-    if (wanted) {
-      check(n + ": the Extras entry brings the tab forward", out.fromExtras === 1, out);
-      check(n + ": and so does the button on the row", out.activated === 2, out);
-    }
-    check(n + ": no console errors", errors.length === 0, errors);
-  }
-}
-
-// ---- a way into the drawer from the floating button ----
-// The drawer is somewhere the panel can be on and still not be in front of
-// you, and where that sidebar opens from is the host's business, not something
-// this extension can point at. The floating button's hold menu is a way in
-// that does not depend on knowing. It is offered only when there is a drawer
-// tab to bring forward, so the floating panel does not get an entry that
-// would just say "look at the thing you are already looking at".
-console.log("\ninto the drawer from the button");
-{
-  for (const [home, wanted] of [["drawer", true], ["float", false]]) {
-    const page = await browser.newPage();
-    const errors = [];
-    page.on("pageerror", (e) => errors.push(e.message));
-    page.on("console", (m) => { if (m.type() === "error") errors.push("console: " + m.text()); });
-    await stage(page, "<div id=modal></div><div id=host></div>");
-    await page.addStyleTag({ content: THEME });
-    await page.addScriptTag({ content: SOURCE, type: "module" });
-    await page.waitForFunction(() => !!window.__setup);
-    const out = await page.evaluate(async (home) => {
-      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-      const host = document.getElementById("host");
-      let activated = 0;
-      const teardown = window.__setup(
-        { events: { on: () => () => {} },
-          ui: {
-            showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
-            registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }),
-            registerDrawerTab: () => {
-              const root = document.createElement("div");
-              document.body.appendChild(root);
-              return { root, setBadge: () => {}, activate: () => { activated++; },
-                       destroy: () => root.remove() };
-            },
-            createFloatWidget: () => ({ root: host, destroy: () => {}, setPosition: () => {} }),
-          } },
-        { liveLog: true, panelHome: home, showFloatingToggle: true,
-          floatingToggleSize: 44, toast: false },
-      );
-      const btn = () => host.querySelector("button");
-      const menu = () => document.querySelector('[role="menu"]');
-      const entries = () =>
-        [...document.querySelectorAll('[role="menuitem"]')].map((b) => b.textContent);
-      // A hold on the button is what opens the menu.
-      btn().dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, clientX: 130, clientY: 130 }));
-      await wait(620);
-      const items = entries();
-      const label = items.find((t) => /open the auto retry panel/i.test(t));
-      if (label) {
-        [...document.querySelectorAll('[role="menuitem"]')]
-          .find((b) => /open the auto retry panel/i.test(b.textContent)).click();
-        await wait(30);
-      }
-      const res = {
-        items,
-        offered: !!label,
-        activated,
-        menuShut: !menu(),
-        // The settings entry stays first, so the new one did not displace what
-        // this menu is mostly opened for.
-        firstIsSettings: /auto retry settings/i.test(items[0] || ""),
-      };
-      btn().dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
-      teardown();
-      return res;
-    }, home);
-    await page.close();
-    const n = home === "drawer" ? "in the drawer" : "floating";
-    check(n + ": the menu opens on a hold", out.items.length >= 3, out);
-    check(n + ": settings is still the first entry", out.firstIsSettings, out);
-    check(n + ": the entry is " + (wanted ? "offered" : "not offered"), out.offered === wanted, out);
-    if (wanted) {
-      check(n + ": pressing it brings the tab forward", out.activated === 1, out);
-      check(n + ": and shuts the menu behind it", out.menuShut, out);
-    }
+    if (wanted) check(n + ": and it brings the tab forward", out.fromExtras === 1, out);
+    // Exactly one way in, so a second never creeps back alongside it.
+    check(n + ": and it is the only entry that opens the panel",
+      out.extras.filter((id) => /open/.test(id)).length === (wanted ? 1 : 0), out);
     check(n + ": no console errors", errors.length === 0, errors);
   }
 }

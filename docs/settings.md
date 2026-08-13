@@ -69,17 +69,11 @@ Where you leave it is remembered, along with its size and which tab was open, so
 
 This is kept in your browser rather than in your settings, like the list of chats you have switched Auto Retry off in. A position belongs to the screen you are sitting at, so it does not follow you between devices and it is not included in an export.
 
-**In the sidebar drawer** puts it in Lumiverse's own drawer instead, next to the app's own tabs. Lumiverse places it, sizes it and themes it, so there is nothing to drag and nothing to remember, and it cannot cover the reply you are reading. It is listed in the **Ctrl+K** palette as **Auto Retry**, which is the quickest way to open it. While a retry is running the tab carries a dot, so you can tell something is happening without opening the drawer.
+**In the sidebar drawer** puts it in Lumiverse's own drawer instead, next to the app's own tabs. Lumiverse places, sizes and themes it, so there is nothing to drag and nothing to remember, and it cannot cover the reply you are reading. While a retry is running the tab carries a dot, so you can see something is happening without opening it.
 
-Changing this moves the panel as you pick, before you save, so you can see which you prefer. Closing the settings without saving puts it back where it was. If your Lumiverse build has no drawer for extensions to add to, asking for the sidebar gets you the floating panel and a line in the Log saying why.
+Changing this moves the panel as you pick, before you save. Closing the settings without saving puts it back. If your Lumiverse build has no drawer for extensions, asking for the sidebar gets you the floating panel and a line in the Log saying why.
 
-Where the drawer opens from belongs to Lumiverse and is not the same in every build, and **Ctrl+K** is no use on a phone, so while the panel is in the drawer there are three ways in that do not depend on finding it yourself:
-
-- **Open the Auto Retry panel** in the chat input's **Extras** popover, next to the settings entry. This is the one to use on a phone: it is always there, it needs no keyboard, and nothing else has to be switched on for it.
-- **Open it**, on the **Where that panel goes** row itself, so you can move the panel and see it in the same breath.
-- **Open the Auto Retry panel** in the floating button's hold menu, if you have that button switched on.
-
-None of the three is offered while the panel is floating, since it would only be pointing at something already on screen.
+To open it: **Extras → Open the Auto Retry panel**, next to the settings entry. On a computer **Ctrl+K** and typing `Auto Retry` does the same. Neither is offered while the panel is floating, where it is already on screen.
 
 Under the tabs is a line saying what is happening this second, with a dot beside it. The dot is dim and flat when Auto Retry is off or paused, lit and still when it is on with nothing to do, and pulsing while something is actually happening, so a glance at the corner answers the question without reading the line. The pulse is dropped if your system asks for less movement; the glow stays. It sits above all three tabs because the answer is the same whichever one you are reading, and because none of them answered it: the Log says what already happened and the Stats say what has happened overall. It counts down a pending retry in hours, minutes and seconds as each is needed (`47s`, `5m 03s`, `1h 05m 03s`), names what the retry is for and which try it is, says when a reply is arriving and roughly how much of it has landed, says when the model is thinking, and says when it has paused itself after repeated failures. When nothing is happening it says so. A retry running in a chat you have since moved away from is still reported, marked as being in another chat.
 

@@ -417,7 +417,7 @@ const SCHEMA: Group[] = [
           { value: "float", label: "Floating over the chat" },
           { value: "drawer", label: "In the sidebar drawer" },
         ],
-        hint: "Floating puts a small box in the corner that you drag by its header and resize by its corner, and where you leave it is remembered. In the sidebar puts it in Lumiverse's own drawer instead, alongside the app's own tabs, where it is listed in the Ctrl+K palette and cannot cover the reply you are reading, and the sidebar decides its size. The tab shows a dot while a retry is running so you can see it without opening the drawer. If your Lumiverse build has no drawer for extensions, this falls back to floating and says so in the log.",
+        hint: "Floating is a small box in the corner: drag its header to move it, its corner to resize, and where you leave it is remembered. In the sidebar hands it to Lumiverse's own drawer, which sizes and places it, so it never covers the reply you are reading. Open it from Extras, or with Ctrl+K on a computer. Its tab shows a dot while a retry is running. A build with no drawer falls back to floating and says so in the log.",
       },
     ],
   },
@@ -2287,15 +2287,15 @@ export function setup(ctx: Ctx, opts?: any) {
         replaceAllAction = null;
         replaceAllActionOff = null;
       }
-      // A way into the drawer that needs no keyboard and nothing else turned
-      // on. The palette is Ctrl+K, which is not a thing on a phone, and the
-      // floating button's menu is only there if you have turned that button
-      // on, which is off by default. Extras is where you already went to open
-      // these settings, so on a phone it is the route that is actually there.
-      // It appears only while the panel is set to live in the drawer and the
-      // host gave us a tab to bring forward: with the panel floating it is
-      // already on screen, and an entry that opens what you can see is noise
-      // in a menu somebody opened for something else.
+      // The one way in, and the only one worth writing: Extras is a tap away on
+      // a phone and on a desktop alike, and it is where the settings are opened
+      // from anyway. Registering the tab already puts it in the Ctrl+K palette
+      // for free, which covers a keyboard without any code here.
+      //
+      // Only while the panel is set to live in the drawer and the host gave us
+      // a tab to bring forward. With the panel floating it is already on
+      // screen, and an entry that opens what you can see is noise in a menu
+      // somebody opened for something else.
       const wantOpen = !!(
         cfg.liveLog &&
         cfg.panelHome === "drawer" &&
@@ -3558,21 +3558,6 @@ export function setup(ctx: Ctx, opts?: any) {
     const first = entry("Auto Retry settings", () => {
       openSettings();
     });
-    // Only when the panel is in the drawer, and only when the host gave us a
-    // way to bring it forward. The floating panel needs no entry: it is already
-    // on screen, and this button is sitting next to it. The drawer is the case
-    // where the panel is on but out of sight behind a sidebar somebody has to
-    // find first, so this is the way in that does not depend on knowing where
-    // the drawer lives.
-    if (drawerTab && typeof drawerTab.activate === "function") {
-      entry("Open the Auto Retry panel", () => {
-        try {
-          drawerTab.activate();
-        } catch (e) {
-          log("could not open the drawer tab", e);
-        }
-      });
-    }
     // Switching off in one chat is not here. It lives in the settings panel,
     // under Basics, on the "This chat" row. This menu opens from a button that
     // sits over the chat, so it is worth keeping to the few things that are
@@ -7887,35 +7872,6 @@ export function setup(ctx: Ctx, opts?: any) {
       };
       top.appendChild(sel);
       row.appendChild(top);
-      // Picking "in the sidebar drawer" moves the panel somewhere you then
-      // have to find, and where the drawer opens from belongs to Lumiverse and
-      // is not the same in every build. So the row that moves it offers to
-      // open it, right there, the moment it has somewhere to open.
-      if (f.key === "panelHome") {
-        const open = btn("Open it", false);
-        open.style.cssText += "min-height:0;padding:6px 12px;flex:none;align-self:flex-start";
-        const syncOpen = () => {
-          const can = !!(
-            cfg.panelHome === "drawer" &&
-            drawerTab &&
-            typeof drawerTab.activate === "function"
-          );
-          open.style.display = can ? "" : "none";
-        };
-        open.addEventListener("click", () => {
-          try {
-            drawerTab && drawerTab.activate();
-          } catch (e) {
-            log("could not open the drawer tab", e);
-          }
-        });
-        sel.addEventListener("change", () => {
-          // After onLiveEdit above, which is what registers the tab.
-          setTimeout(syncOpen, 0);
-        });
-        syncOpen();
-        row.appendChild(open);
-      }
     } else if (f.type === "num") {
       const input = document.createElement("input");
       input.type = "number";

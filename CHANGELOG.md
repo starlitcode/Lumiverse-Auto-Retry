@@ -14,9 +14,8 @@ _2026-08-13_
 
 ### Added
 
-- **The on-screen panel can live in Lumiverse's sidebar drawer.** A new row under the panel switch, **Where that panel goes**, offers **Floating over the chat**, which is what it has always been, or **In the sidebar drawer**. It is the same panel with the same three tabs either way. In the drawer, Lumiverse places it, sizes it and themes it, so there is nothing to drag and nothing to remember, and it cannot cover the reply you are reading. It is listed in the **Ctrl+K** palette as **Auto Retry**, and its tab carries a dot while a retry is running so you can tell something is happening without opening the drawer. Floating is still the default, so an update does not move your panel.
-- **Changing where it goes moves it as you pick**, before you save, so you can see which you prefer rather than reading the two names and guessing. Closing the settings without saving puts it back, the same as every other setting.
-- **Three ways into the drawer that do not depend on finding it.** Where the drawer opens from belongs to Lumiverse and is not the same in every build, and the **Ctrl+K** palette is no use on a phone. So while the panel lives there, **Open the Auto Retry panel** is in the chat input's **Extras** popover next to the settings entry, which is the one that works on a phone: always present, no keyboard, nothing else to switch on. **Open it** sits on the **Where that panel goes** row, so you can move the panel and see it in one go. And the floating button's hold menu carries the same entry, for anyone who has that button on. None of the three is offered while the panel is floating, since it would only point at something already on screen.
+- **The on-screen panel can live in Lumiverse's sidebar drawer.** A new row under the panel switch, **Where that panel goes**, offers **Floating over the chat**, which is what it has always been, or **In the sidebar drawer**. Same panel, same three tabs, either way. In the drawer, Lumiverse places, sizes and themes it, so there is nothing to drag and nothing to remember, and it cannot cover the reply you are reading. Its tab carries a dot while a retry is running, so you can see something is happening without opening it. Floating is still the default, so an update does not move your panel.
+- **Open the Auto Retry panel**, in the chat input's **Extras** popover next to the settings entry, while the panel lives in the drawer. Where the drawer opens from belongs to Lumiverse and is not the same in every build, and **Ctrl+K** is no use on a phone, so Extras is the way in: one tap, any device, nothing else to switch on. It is not offered while the panel is floating, where it is already on screen.
 
 ### Changed
 
@@ -31,9 +30,7 @@ _2026-08-13_
 
 ### Notes
 
-- Asking for the sidebar on a Lumiverse build with no drawer for extensions gets you the floating panel and a line in the Log saying why, rather than a switch that is on with nothing on screen.
-- The sidebar drawer needs no permission. The extension still declares the same four, and `ui_panels` is still only for the optional floating on/off button.
-- The panel is checked at the widths a drawer actually is, on a phone and on a desktop, in a drawer that fills its height and one that sizes itself to what is in it. Its header needs 200px, which is also the narrowest the floating panel can be dragged to, so both homes hold at the tightest width either can reach.
+- The drawer needs no permission. The extension still declares the same four. On a build with no drawer for extensions, asking for the sidebar gets you the floating panel and a line in the Log saying why.
 
 ## 4.5.7
 
