@@ -2563,9 +2563,22 @@ export function setup(ctx, opts) {
         // The same again, by chat. What it retried for says which fault keeps
         // happening; this says where. One card whose replies keep needing a retry
         // does not show up in a total across every chat.
-        const chatNamesSeen = Object.keys(stats.byChat).sort((a, b) => stats.byChat[b] - stats.byChat[a]);
-        if (chatNamesSeen.length > 1) {
-            body.appendChild(barBlock("Which chats it retried in", stats.byChat, chatNamesSeen));
+        const chatIds = Object.keys(stats.byChat).sort((a, b) => stats.byChat[b] - stats.byChat[a]);
+        if (chatIds.length > 1) {
+            // Labelled now rather than when counted, so a name that arrived late
+            // still covers every retry in that chat.
+            const labelled = {};
+            const order = [];
+            for (const id of chatIds) {
+                const name = chatNames.get(id);
+                let label = name ? "With " + name : "Chat " + id.slice(0, 8);
+                // Two chats with the same card would otherwise land on one row.
+                if (labelled[label] != null)
+                    label += " (" + id.slice(0, 4) + ")";
+                labelled[label] = stats.byChat[id];
+                order.push(label);
+            }
+            body.appendChild(barBlock("Which chats it retried in", labelled, order));
         }
         try {
             ensureReadableTree(body);
@@ -4486,9 +4499,9 @@ export function setup(ctx, opts) {
         notesSkipped: 0,
         lastNoteSkip: "",
         reasons: {},
-        // Retries per chat, named by who it is with where that is known. A card
-        // whose replies keep needing a retry is the thing this answers, and a
-        // count across every chat cannot show it.
+        // Retries per chat id. A card whose replies keep needing a retry is the
+        // thing this answers, and a count across every chat cannot show it. Ids
+        // rather than names, because a name can arrive later than the first retry.
         byChat: {},
         // So a count can be read as a rate rather than as a bare number. Twelve
         // retries in ten minutes and twelve in a whole day are different problems.
@@ -5422,10 +5435,11 @@ export function setup(ctx, opts) {
         s.attempts += 1;
         stats.retries += 1;
         stats.reasons[reason] = (stats.reasons[reason] || 0) + 1;
-        // Named where the host will name it, and by id otherwise, so the tally is
-        // still useful without the permissions that resolve a name.
-        const whose = chatNames.get(String(chatId)) || "chat " + String(chatId).slice(0, 8);
-        stats.byChat[whose] = (stats.byChat[whose] || 0) + 1;
+        // Keyed by the id, not by the name. The name can arrive after the first
+        // retry in a chat, and keying by it would file the same chat under two
+        // headings: a short id for the retries before the answer came back, and a
+        // name for the ones after. The label is worked out when the tally is drawn.
+        stats.byChat[String(chatId)] = (stats.byChat[String(chatId)] || 0) + 1;
         const rl = isRateLimit(err);
         const delay = computeDelay(s.attempts, rl);
         clearTimers(s);
@@ -5580,8 +5594,10 @@ export function setup(ctx, opts) {
                     off && off();
                 }
                 catch (_) { }
-                if (msg.chatId && msg.character) {
-                    chatNames.set(String(msg.chatId), String(msg.character));
+                if (msg.chatId) {
+                    // An empty answer is still an answer, and caching it stops the same
+                    // question going out again every time you switch back to that chat.
+                    chatNames.set(String(msg.chatId), msg.character ? String(msg.character) : "");
                     if (chatSwitchPaint) {
                         try {
                             chatSwitchPaint();

@@ -4082,6 +4082,76 @@ console.log("\nthe quick toggle syncs");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- one chat is one row, however late its name arrives ----
+// The tally was keyed by the name at the moment a retry was counted, so a
+// retry before the name came back was filed under a short id and later ones
+// under the name: one chat, two rows, neither of them the real total.
+console.log("\nretries are tallied per chat, not per label");
+{
+  const page = await browser.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  page.on("console", (m) => { if (m.type() === "error") errors.push("console: " + m.text()); });
+  await stage(page, '<div id=modal></div><button data-testid="regenerate">Regenerate</button>');
+  await page.addStyleTag({ content: THEME });
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  const out = await page.evaluate(async () => {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const handlers = {};
+    // The extension registers a handler per request, so keeping only the last
+    // one silently drops the reply the test is trying to deliver.
+    const backendCbs = [];
+    const asked = [];
+    const teardown = window.__setup(
+      { events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
+        sendToBackend: (m) => { if (m && m.type === "get_active_chat") asked.push(m); },
+        onBackendMessage: (cb) => { backendCbs.push(cb); return () => {}; },
+        ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+              registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) } },
+      { liveLog: true, toast: false, retryDelayMs: 50, backoffFactor: 1, maxDelayMs: 50,
+        jitter: false, maxRetries: 5, stuckTimeoutMs: 0, idleTimeoutMs: 0, pauseWhenFailing: false },
+    );
+    // A retry happens before any name has come back.
+    handlers.GENERATION_STARTED({ chatId: "c1", generationId: "g1" });
+    handlers.GENERATION_ENDED({ chatId: "c1", content: "" });
+    await wait(250);
+
+    // The name arrives afterwards, answering the question asked when the chat
+    // was first seen.
+    const q = asked.find((m) => m.chatId === "c1") || asked[asked.length - 1];
+    if (q) for (const cb of backendCbs)
+      cb({ type: "active_chat", requestId: q.requestId, chatId: "c1", character: "The Librarian" });
+    await wait(60);
+
+    // And a second retry in the same chat, now that the name is known.
+    handlers.GENERATION_STARTED({ chatId: "c1", generationId: "g2" });
+    handlers.GENERATION_ENDED({ chatId: "c1", content: "" });
+    await wait(250);
+
+    // A retry somewhere else, so the block is drawn at all.
+    handlers.GENERATION_STARTED({ chatId: "c2", generationId: "g3" });
+    handlers.GENERATION_ENDED({ chatId: "c2", content: "" });
+    await wait(250);
+
+    [...document.querySelectorAll('[role="tab"]')].find((b) => b.textContent === "Stats").click();
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const body = document.getElementById("__lvRetryLogBody");
+    const text = (body && body.textContent) || "";
+    const rows = [...(body ? body.querySelectorAll("span") : [])]
+      .map((e) => (e.textContent || "").trim())
+      .filter((t) => /^With |^Chat /.test(t));
+    teardown();
+    return { text: text.slice(0, 400), rows, named: /With The Librarian/.test(text) };
+  });
+  await page.close();
+  check("the named chat appears once, not split by when its name arrived",
+    out.rows.filter((r) => /Librarian/.test(r)).length === 1, out.rows);
+  check("and it is named rather than shown as an id", out.named, out.rows);
+  check("the unnamed chat still gets a row", out.rows.some((r) => /^Chat /.test(r)), out.rows);
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- the per-chat switch knows which chat you are in ----
 // It was reachable only once a chat id had been seen, and the only events
 // carrying one were a chat change and a generation. Load the page sitting in a
