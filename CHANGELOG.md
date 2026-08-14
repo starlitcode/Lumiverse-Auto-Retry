@@ -14,14 +14,14 @@ _2026-08-13_
 
 ### Added
 
-- **It can now ask Lumiverse which chat you are in, under a new `chats` permission.** This is what fixes **Turn off here** sitting greyed out in a chat you were already in, which happened after updating the extension because nothing re-renders and so nothing announced where you were. Read [Privacy](docs/privacy.md) before granting it: Lumiverse bundles reading, creating and deleting chats into one permission, and there is no narrower one to ask for. Auto Retry uses a single call from it, the one that answers which chat is open. It never creates, deletes or alters a chat. Refuse it and everything still works, with the switch waiting to be told as before.
+- **It can now ask Lumiverse which chat you are in, under a new `chats` permission.** This is what fixes **Turn off here** sitting greyed out in a chat you were already in, which happened after updating the extension because nothing re-renders and so nothing announced where you were. Auto Retry uses a single call from it, the one that answers which chat is open. It never creates, deletes or alters a chat. Refuse it and everything still works, with the switch waiting to be told as before. [Privacy](docs/privacy.md) covers what this permission reaches.
 
 ### Changed
 
 - **The panel says who a chat is with.** The **This chat** row reads "This chat, with *name*" and the Stats tab breaks retries down by chat as well as by cause, so a card whose replies keep needing a retry is visible instead of buried in a total. This needs the new `characters` permission alongside `chats`; without it the row reads "This chat" as before and the breakdown falls back to a short chat id. A group chat is named by its primary card.
 - **The Prompt tab counts tokens rather than estimating them.** It said "roughly N tokens", worked out as characters divided by four. Where Lumiverse will do the counting it now shows the real figure and drops the "roughly". This needs no permission, and the estimate is still what you see on a build or model that will not answer. The count arrives just after the view does, so nothing waits on it.
 - **Accidental-refusal retrying is no longer marked beta.** It has been on by default for a long time while carrying a label that says to be careful with it, which are two opposite claims. The detection has not changed; the label was undersold. Find and replace keeps its beta label, because that one is off by default, edits your saved messages, cannot be undone and needs a privileged permission.
-- **The per-chat switch says what it is actually waiting for.** When it does not yet know which chat you are in, it said "open a chat", which is confusing advice to read while you are in one. It now says it is waiting to catch the chat, and what will tell it. Nothing else changed: it still cannot ask Lumiverse which chat is open, because the permission for that also grants creating and deleting chats.
+- **The per-chat switch says what it is actually waiting for.** When it does not yet know which chat you are in, it said "open a chat", which is confusing advice to read while you are in one. It now says it is waiting to catch the chat, and what will tell it. That wording is what you see when the `chats` permission above is refused or not yet approved, since asking outright is the other half of this fix.
 
 ### Fixed
 

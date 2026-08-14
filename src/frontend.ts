@@ -7747,9 +7747,9 @@ export function setup(ctx: Ctx, opts?: any) {
       act.style.cursor = known ? "pointer" : "not-allowed";
       note.textContent = !known
         // Not "open a chat", which is what this used to say and is wrong when
-        // you already have. Lumiverse does not offer a way to ask which chat is
-        // open without the chats permission, which also grants creating and
-        // deleting them, so this waits to be told instead. Anything happening
+        // you already have. This is the state with the chats permission refused
+        // or not yet approved, since with it granted the question above answers
+        // itself a moment after the panel opens. Without it, anything happening
         // in a chat tells it. A reply arriving does, and so does sending a
         // message or switching away and back. Updating the extension while
         // sitting in a chat is the case that leaves it waiting, because nothing
