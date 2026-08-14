@@ -575,6 +575,18 @@ spindle.onFrontendMessage(async (payload: any, userId?: string) => {
     if (payload.type === 'load_settings') {
       let settings: any = null;
       try { settings = await readUserJson(SETTINGS_FILE, userId); } catch (__) { settings = null; }
+      // Adopted here, not just handed back. This runs on every page load and it
+      // is the only path that arrives with a userId, so it is the one that can
+      // resolve per-user storage. The startup read above cannot: it has no user
+      // to read for, and says so. Without this the swap state stayed at its
+      // defaults until the panel was opened and Save pressed, so automatic
+      // swapping did nothing while the manual buttons worked, because those
+      // only ask whether there are rules and never look at the switch.
+      //
+      // On a multi-account install this is still one rule set for the whole
+      // process, which it always was. What changes is which user sets it: it
+      // was whoever saved first, and it is now whoever loaded or saved last.
+      if (settings && typeof settings === 'object') applyReplaceFromSettings(settings);
       replyTo(userId, { type: 'loaded_settings', requestId: payload.requestId, settings: settings });
       return;
     }

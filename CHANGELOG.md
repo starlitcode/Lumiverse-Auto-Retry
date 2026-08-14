@@ -8,6 +8,14 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 4.6.3
+
+_2026-08-13_
+
+### Fixed
+
+- **Word swaps did nothing on their own until you opened the settings and pressed Save.** The manual buttons worked the whole time, which is what made it look like automatic swapping was broken rather than switched off. Your settings live per user, so the check the backend runs when it starts has nobody to read them for and finds nothing. The panel asking for your settings when the page loads is the one moment they arrive with a user attached, and that path handed them to the panel without ever telling the swap engine about them. It applies them now, so swapping is ready as soon as a chat is. The manual buttons never noticed because they only ask whether you have any rules, and never look at whether swapping is on.
+
 ## 4.6.2
 
 _2026-08-13_

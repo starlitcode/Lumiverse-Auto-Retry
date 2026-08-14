@@ -24,16 +24,23 @@ const BACKEND = readFileSync(
 type Msg = { id: string; role: string; content: string; swipes?: string[]; swipe_id?: number };
 
 interface Harness {
-  onFrontend: (payload: any) => Promise<void>;
+  onFrontend: (payload: any, userId?: string) => Promise<void>;
   onGenerationEnded: (payload: any) => Promise<void>;
   toFrontend: any[];
   messages: Msg[];
   settings: (over?: any) => any;
+  stored: Map<string, string>;
 }
 
-// Boot a fresh copy of the backend with its own storage and chat.
-function boot(messages: Msg[]): Harness {
-  const store = new Map<string, string>();
+// Boot a fresh copy of the backend with its own storage and chat. Pass a store
+// from an earlier boot to stand in for a restart: the settings are on disk from
+// a previous session and nothing has been saved through this instance.
+function boot(
+  messages: Msg[],
+  carried?: Map<string, string>,
+  perUser?: Map<string, string>,
+): Harness {
+  const store = carried || new Map<string, string>();
   const toFrontend: any[] = [];
   let frontendHandler: any = null;
   const events: Record<string, any> = {};
@@ -48,6 +55,22 @@ function boot(messages: Msg[]): Harness {
         store.set(f, v);
       },
     },
+    userStorage: perUser
+      ? {
+          getJson: async (f: string, o?: any) => {
+            // No userId means the startup read, which on a real install has no
+            // user to resolve and so finds nothing. That is the whole point.
+            const who = o && o.userId;
+            if (!who) return o && "fallback" in o ? o.fallback : null;
+            const v = perUser.get(who + ":" + f);
+            return v === undefined ? (o && "fallback" in o ? o.fallback : null) : JSON.parse(v);
+          },
+          setJson: async (f: string, v: any, o?: any) => {
+            const who = (o && o.userId) || "anon";
+            perUser.set(who + ":" + f, JSON.stringify(v));
+          },
+        }
+      : undefined,
     onFrontendMessage: (fn: any) => {
       frontendHandler = fn;
     },
@@ -72,8 +95,9 @@ function boot(messages: Msg[]): Harness {
   new Function("spindle", BACKEND)(spindle);
 
   return {
-    onFrontend: (p: any) => frontendHandler(p),
+    onFrontend: (p: any, userId?: string) => frontendHandler(p, userId),
     onGenerationEnded: (p: any) => events["GENERATION_ENDED"](p),
+    stored: store,
     toFrontend,
     messages,
     settings: (over?: any) =>
@@ -397,6 +421,48 @@ describe("settings survive a restart", () => {
     await h.onFrontend({ type: "load_settings", requestId: "r1" });
     const m = h.toFrontend.find((x) => x.type === "loaded_settings");
     expect(m.settings.replaceRules).toBe("cat => dog");
+  });
+
+  // The panel loads settings on every page load and saves them only when Save
+  // is pressed. So loading is the path that has to leave the swap engine ready,
+  // or automatic swapping does nothing on a fresh session while the manual
+  // buttons work, because those only ask whether rules exist and never look at
+  // the switch. That difference is exactly what the fault looked like.
+  test("loading settings is enough to make automatic swapping work", async () => {
+    // A real install keeps settings per user, so the backend's startup read has
+    // no user to read for and comes back with nothing. The only path that
+    // arrives with a user is the panel asking for its settings on page load, so
+    // that is the one that has to leave the swap engine ready. Until it did,
+    // automatic swapping sat at its defaults on every fresh session while the
+    // manual buttons worked, because those only ask whether rules exist and
+    // never look at the switch. That gap is what the fault looked like.
+    const users = new Map<string, string>();
+    const first = boot(chatWith("x"), undefined, users);
+    await first.onFrontend(
+      { type: "save_settings", settings: first.settings({ replaceRules: "cat => dog", replaceEnabled: true }) },
+      "u1",
+    );
+
+    const msgs = chatWith("A cat sat by the fire.");
+    const fresh = boot(msgs, undefined, users);
+    await fresh.onFrontend({ type: "load_settings", requestId: "r1" }, "u1");
+    await fresh.onGenerationEnded({ chatId: "c1", messageId: "a1", content: msgs[2].content });
+    expect(msgs[2].content).toBe("A dog sat by the fire.");
+  });
+
+  test("and a load does not switch swapping on when it is off", async () => {
+    const users = new Map<string, string>();
+    const first = boot(chatWith("x"), undefined, users);
+    await first.onFrontend(
+      { type: "save_settings", settings: first.settings({ replaceRules: "cat => dog", replaceEnabled: false }) },
+      "u1",
+    );
+
+    const msgs = chatWith("A cat sat by the fire.");
+    const fresh = boot(msgs, undefined, users);
+    await fresh.onFrontend({ type: "load_settings", requestId: "r1" }, "u1");
+    await fresh.onGenerationEnded({ chatId: "c1", messageId: "a1", content: msgs[2].content });
+    expect(msgs[2].content).toBe("A cat sat by the fire.");
   });
 
   test("word swap presets round-trip through account storage", async () => {
