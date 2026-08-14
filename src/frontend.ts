@@ -95,7 +95,7 @@ const STREAM_BUF_MAX = 200000;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "4.6.1";
+const VERSION = "4.6.2";
 
 // ---- defaults (the UI overrides these; editing here changes the fallback) ----
 const CONFIG = {
@@ -3444,14 +3444,35 @@ export function setup(ctx: Ctx, opts?: any) {
       if (Math.abs(e.clientX - pressFrom.x) > 8 || Math.abs(e.clientY - pressFrom.y) > 8)
         dropPress();
     };
+    // Stopped, not just prevented. preventDefault suppresses the browser's own
+    // menu and nothing else, so the event went on bubbling to the host, which
+    // opened Lumiverse's widget menu underneath ours: two menus, one on top of
+    // the other, the lower one clearing when something dismissed it. Capture
+    // phase so the host's own listener never runs, and stopImmediatePropagation
+    // because the host may have more than one on the same element.
+    //
+    // Only this event is swallowed. Pointer events still reach the host
+    // untouched, which is what drags the button and snaps it to an edge.
+    const onMenu = (e: any) => {
+      try {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+      } catch (_) {}
+      dropPress();
+      showFloatMenu();
+    };
     // Android raises this on a long press too, so it can arrive alongside the
     // timer above. showFloatMenu closes any open menu first, so a second call
     // reopens rather than stacking.
-    el.addEventListener("contextmenu", (e: any) => {
-      try { e.preventDefault(); } catch (_) {}
-      dropPress();
-      showFloatMenu();
-    });
+    el.addEventListener("contextmenu", onMenu, true);
+    // The host owns the element our button sits in, and that is where its own
+    // menu is wired, so a press that lands on the padding around the button
+    // reaches the host without ever touching ours.
+    const widgetRoot = floatWidget && floatWidget.root;
+    if (widgetRoot && widgetRoot !== el) {
+      widgetRoot.addEventListener("contextmenu", onMenu, true);
+    }
     el.addEventListener("pointerup", dropPress);
     el.addEventListener("pointercancel", dropPress);
     // The host does the dragging and does not report where it finished, so the

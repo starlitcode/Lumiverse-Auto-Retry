@@ -8,6 +8,14 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 4.6.2
+
+_2026-08-13_
+
+### Fixed
+
+- **Lumiverse's own menu opened underneath the floating button's.** Holding or right-clicking the button showed its menu with the app's default one behind it, which then cleared on its own a moment later. The press was being told not to draw the browser's menu, which is a different thing from being stopped, so it carried on up to Lumiverse and opened that one too. It is now stopped at the button, before anything else can act on it. Dragging is untouched, since only the menu press is swallowed and every other kind still reaches the app.
+
 ## 4.6.1
 
 _2026-08-13_

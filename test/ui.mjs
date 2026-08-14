@@ -3966,6 +3966,78 @@ console.log("\nstats view");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- the host's own widget menu does not open under ours ----
+// preventDefault stops the browser drawing its menu and nothing else, so the
+// event kept bubbling to the host, which opened Lumiverse's widget menu
+// underneath ours. Both were up at once, the lower one clearing when something
+// dismissed it. The event has to be stopped, not just prevented.
+console.log("\ntwo menus, one press");
+{
+  const page = await browser.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  page.on("console", (m) => { if (m.type() === "error") errors.push("console: " + m.text()); });
+  await stage(page, "<div id=modal></div><div id=host></div>");
+  await page.addStyleTag({ content: THEME });
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  const out = await page.evaluate(async () => {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const host = document.getElementById("host");
+    // The host wires its own menu on the widget root it handed us, which is
+    // exactly where a real Lumiverse build puts it.
+    let hostMenus = 0;
+    host.addEventListener("contextmenu", () => { hostMenus++; });
+    let rootMenus = 0;
+    const teardown = window.__setup(
+      { events: { on: () => () => {} },
+        ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+              registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }),
+              createFloatWidget: () => ({ root: host, destroy: () => {}, setPosition: () => {} }) } },
+      { showFloatingToggle: true, floatingToggleSize: 44, toast: false },
+    );
+    // A late listener on the document, standing in for anything the host has
+    // further up the tree.
+    document.addEventListener("contextmenu", () => { rootMenus++; });
+
+    const btn = host.querySelector("button");
+    const menu = () => document.querySelector('[role="menu"]');
+
+    // Right-click, which is the desktop path.
+    btn.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 40, clientY: 40 }));
+    await wait(40);
+    const afterRightClick = { ours: !!menu(), hostSaw: hostMenus, docSaw: rootMenus };
+
+    // Escape shuts ours, then the same again on the padding around the button,
+    // which is the host's own element rather than anything we created.
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    await wait(20);
+    host.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 40, clientY: 40 }));
+    await wait(40);
+    const afterRootPress = { ours: !!menu(), hostSaw: hostMenus, docSaw: rootMenus };
+
+    // A plain tap must still reach the host, or dragging would stop working.
+    let pointerSeen = 0;
+    host.addEventListener("pointerdown", () => { pointerSeen++; });
+    btn.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, clientX: 40, clientY: 40 }));
+    btn.dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
+    await wait(20);
+    const res = { afterRightClick, afterRootPress, pointerSeen };
+    teardown();
+    return res;
+  });
+  await page.close();
+  check("our menu opens on a right-click", out.afterRightClick.ours, out);
+  check("and the host never sees the event",
+    out.afterRightClick.hostSaw === 0 && out.afterRightClick.docSaw === 0, out);
+  check("a press on the host's own padding is ours too", out.afterRootPress.ours, out);
+  check("and that one does not reach the host either",
+    out.afterRootPress.hostSaw === 0 && out.afterRootPress.docSaw === 0, out);
+  check("pointer events still reach the host, so dragging survives",
+    out.pointerSeen > 0, out);
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- the per-chat switch knows which chat you are in ----
 // It was reachable only once a chat id had been seen, and the only events
 // carrying one were a chat change and a generation. Load the page sitting in a
