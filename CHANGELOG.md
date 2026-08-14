@@ -8,16 +8,9 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
-## 4.6.3
+## 4.7.0
 
 _2026-08-13_
-
-### Fixed
-
-- **Word swaps did nothing on their own until you opened the settings and pressed Save.** The manual buttons worked the whole time, which is what made it look like automatic swapping was broken rather than switched off. Your settings live per user, so the check the backend runs when it starts has nobody to read them for and finds nothing. The panel asking for your settings when the page loads is the one moment they arrive with a user attached, and that path handed them to the panel without ever telling the swap engine about them. It applies them now, so swapping is ready as soon as a chat is.
-- **Word swaps ignored the master switch.** Switching Auto Retry off stopped it retrying and left word swapping rewriting your replies, because the backend that does the swapping had never been told that switch exists. Its own on/off is the swap one. Off now means off for both.
-- **Word swaps ignored the per-chat switch too.** A chat you had switched off carried on having its replies rewritten. The list of chats you have switched off is kept in your browser rather than in your settings, so the backend could not see it and had to be told; it is now sent when it changes and when the page loads.
-- **Flipping the switch from the floating button or the Extras entry did not sync.** Saving the settings panel writes to your account, and those two controls flip the same switch and did not, so the setting people change most often stayed in whichever browser they changed it in. It also never reached the backend, which is the second half of why swapping carried on after switching the extension off.
 
 ### Added
 
@@ -27,6 +20,13 @@ _2026-08-13_
 
 - **Accidental-refusal retrying is no longer marked beta.** It has been on by default for a long time while carrying a label that says to be careful with it, which are two opposite claims. The detection has not changed; the label was undersold. Find and replace keeps its beta label, because that one is off by default, edits your saved messages, cannot be undone and needs a privileged permission.
 - **The per-chat switch says what it is actually waiting for.** When it does not yet know which chat you are in, it said "open a chat", which is confusing advice to read while you are in one. It now says it is waiting to catch the chat, and what will tell it. Nothing else changed: it still cannot ask Lumiverse which chat is open, because the permission for that also grants creating and deleting chats.
+
+### Fixed
+
+- **Word swaps did nothing on their own until you opened the settings and pressed Save.** The manual buttons worked the whole time, which is what made it look like automatic swapping was broken rather than switched off. Your settings live per user, so the check the backend runs when it starts has nobody to read them for and finds nothing. The panel asking for your settings when the page loads is the one moment they arrive with a user attached, and that path handed them to the panel without ever telling the swap engine about them. It applies them now, so swapping is ready as soon as a chat is.
+- **Word swaps ignored the master switch.** Switching Auto Retry off stopped it retrying and left word swapping rewriting your replies, because the backend that does the swapping had never been told that switch exists. Its own on/off is the swap one. Off now means off for both.
+- **Word swaps ignored the per-chat switch too.** A chat you had switched off carried on having its replies rewritten. The list of chats you have switched off is kept in your browser rather than in your settings, so the backend could not see it and had to be told; it is now sent when it changes and when the page loads.
+- **Flipping the switch from the floating button or the Extras entry did not sync.** Saving the settings panel writes to your account, and those two controls flip the same switch and did not, so the setting people change most often stayed in whichever browser they changed it in. It also never reached the backend, which is the second half of why swapping carried on after switching the extension off.
 
 ### Removed
 
