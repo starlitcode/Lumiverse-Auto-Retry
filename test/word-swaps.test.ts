@@ -40,6 +40,7 @@ function boot(
   carried?: Map<string, string>,
   perUser?: Map<string, string>,
   chats?: any,
+  characters?: any,
 ): Harness {
   const store = carried || new Map<string, string>();
   const toFrontend: any[] = [];
@@ -82,6 +83,7 @@ function boot(
       events[name] = fn;
     },
     chats: chats,
+    characters: characters,
     chat: {
       getMessages: async () => messages,
       updateMessage: async (_chatId: string, id: string, patch: any) => {
@@ -546,6 +548,51 @@ describe("settings survive a restart", () => {
     await h.onFrontend({ type: "get_active_chat", requestId: "r2" }, "u1");
     const m = h.toFrontend.find((x) => x.type === "active_chat");
     expect(m.chatId).toBe("c9");
+    expect(m.character).toBe(null);
+  });
+
+  test("and names who the chat is with when both permissions are there", async () => {
+    const h = boot(
+      chatWith("x"),
+      undefined,
+      undefined,
+      { getActive: async () => ({ id: "c9", character_id: "ch1" }) },
+      { get: async (id: string) => (id === "ch1" ? { id: "ch1", name: "The Librarian" } : null) },
+    );
+    await h.onFrontend({ type: "get_active_chat", requestId: "r4" }, "u1");
+    const m = h.toFrontend.find((x) => x.type === "active_chat");
+    expect(m.chatId).toBe("c9");
+    expect(m.character).toBe("The Librarian");
+  });
+
+  test("a chat with no card is answered without a name, not skipped", async () => {
+    const h = boot(chatWith("x"), undefined, undefined, { getActive: async () => ({ id: "c9" }) },
+      { get: async () => { throw new Error("should not be called"); } });
+    await h.onFrontend({ type: "get_active_chat", requestId: "r5" }, "u1");
+    const m = h.toFrontend.find((x) => x.type === "active_chat");
+    expect(m.chatId).toBe("c9");
+    expect(m.character).toBe(null);
+  });
+
+  test("no characters permission still answers with the chat", async () => {
+    const h = boot(chatWith("x"), undefined, undefined,
+      { getActive: async () => ({ id: "c9", character_id: "ch1" }) },
+      { get: async () => { throw new Error("PERMISSION_DENIED: characters"); } });
+    await h.onFrontend({ type: "get_active_chat", requestId: "r6" }, "u1");
+    const m = h.toFrontend.find((x) => x.type === "active_chat");
+    expect(m.chatId).toBe("c9");
+    expect(m.character).toBe(null);
+  });
+
+  test("a named chat can be asked about by id, not just the active one", async () => {
+    const h = boot(chatWith("x"), undefined, undefined,
+      { get: async (id: string) => ({ id: id, character_id: "ch2" }),
+        getActive: async () => { throw new Error("should not be called"); } },
+      { get: async () => ({ name: "Someone Else" }) });
+    await h.onFrontend({ type: "get_active_chat", requestId: "r7", chatId: "c4" }, "u1");
+    const m = h.toFrontend.find((x) => x.type === "active_chat");
+    expect(m.chatId).toBe("c4");
+    expect(m.character).toBe("Someone Else");
   });
 
   test("a chats API that throws is answered, not left hanging", async () => {

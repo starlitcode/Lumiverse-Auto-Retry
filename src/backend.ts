@@ -170,6 +170,22 @@ const VIEW_MAX_MESSAGES = 200;
 const VIEW_MAX_CHARS_PER_MESSAGE = 4000;
 const VIEW_MAX_CHARS_TOTAL = 300000;
 
+// The tokeniser the host actually uses, when it will tell us. The panel's own
+// figure is characters divided by four, which is a serviceable guess and wrong
+// by enough to matter on a long chat. Needs no permission. Answers null on any
+// build or model where it does not resolve, and the panel says "roughly" again.
+async function countTokens(text: string, context: any, userId?: string): Promise<number | null> {
+  try {
+    if (!text || !spindle.tokens || typeof spindle.tokens.countText !== 'function') return null;
+    const model = context && (context.model || context.modelId);
+    const res = await spindle.tokens.countText(text, { model: model, userId: userId });
+    const n = res && Number(res.total_tokens);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  } catch (_) {
+    return null;
+  }
+}
+
 function snapshotPrompt(messages: any[], context: any, userId?: string, noteAt?: { from: number; count: number }): void {
   if (!watchingPrompt(userId) || !Array.isArray(messages)) return;
   try {
@@ -202,10 +218,12 @@ function snapshotPrompt(messages: any[], context: any, userId?: string, noteAt?:
         noteIndex: isNote ? i - noteAt!.from + 1 : 0,
       });
     }
+    const at = Date.now();
+    const chatId = context && context.chatId ? String(context.chatId) : '';
     replyTo(userId, {
       type: 'prompt_snapshot',
-      at: Date.now(),
-      chatId: context && context.chatId ? String(context.chatId) : '',
+      at: at,
+      chatId: chatId,
       generationType: String((context && context.generationType) || ''),
       messages: out,
       total: messages.length,
@@ -213,6 +231,15 @@ function snapshotPrompt(messages: any[], context: any, userId?: string, noteAt?:
       clipped: clipped,
       notes: noteAt ? noteAt.count : 0,
     });
+    // Counted from the whole prompt rather than the clipped copy above, and
+    // sent as a second message so a slow tokeniser never delays the view. The
+    // panel shows its own estimate until this lands, and replaces it if it does.
+    countTokens(messages.map((m: any) => String((m && m.content) || '')).join('\n'), context, userId)
+      .then((tokens) => {
+        if (tokens == null) return;
+        replyTo(userId, { type: 'prompt_tokens', at: at, chatId: chatId, tokens: tokens });
+      })
+      .catch(() => {});
   } catch (_) { /* a viewer must never cost anyone their generation */ }
 }
 
@@ -586,14 +613,32 @@ spindle.onFrontendMessage(async (payload: any, userId?: string) => {
     // Answers null rather than failing when the permission is not granted, so
     // the panel falls back to waiting to be told, exactly as it did before.
     if (payload.type === 'get_active_chat') {
-      let chatId: string | null = null;
+      let chatId: string | null = payload.chatId ? String(payload.chatId) : null;
+      let character: string | null = null;
       try {
-        if (spindle.chats && typeof spindle.chats.getActive === 'function') {
-          const active = await spindle.chats.getActive(userId);
-          chatId = (active && active.id) || null;
+        let chat: any = null;
+        if (chatId && spindle.chats && typeof spindle.chats.get === 'function') {
+          chat = await spindle.chats.get(chatId, userId);
+        } else if (spindle.chats && typeof spindle.chats.getActive === 'function') {
+          chat = await spindle.chats.getActive(userId);
+          chatId = (chat && chat.id) || null;
         }
-      } catch (_) { chatId = null; }
-      replyTo(userId, { type: 'active_chat', requestId: payload.requestId, chatId: chatId });
+        // A chat can hold several cards, with character_id naming the one it
+        // belongs to. The primary is the useful answer here: the panel wants a
+        // word for which chat this is, not a cast list.
+        const cardId = chat && chat.character_id;
+        if (cardId && spindle.characters && typeof spindle.characters.get === 'function') {
+          const card = await spindle.characters.get(cardId, userId);
+          const name = card && card.name;
+          character = name ? String(name) : null;
+        }
+      } catch (_) { /* no chats or characters permission: answer with what we have */ }
+      replyTo(userId, {
+        type: 'active_chat',
+        requestId: payload.requestId,
+        chatId: chatId,
+        character: character,
+      });
       return;
     }
     if (payload.type === 'set_chats_off') {

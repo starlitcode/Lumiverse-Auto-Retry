@@ -10,6 +10,7 @@
     "generation",
     "chat_mutation",
     "chats",
+    "characters",
     "ui_panels",
     "interceptor"
   ],

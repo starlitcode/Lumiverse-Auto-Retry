@@ -2382,6 +2382,14 @@ export function setup(ctx, opts) {
     let liveTab = layout.tab || "log";
     let paintTabs = null;
     let focusTab = null;
+    // Who each chat is with, once the backend has resolved it. A name is worth
+    // more than an id on a row that asks you to switch something off: "this chat"
+    // is right but says nothing, and on a phone you may not have the header in
+    // view. Empty until the chats and characters permissions are both granted.
+    const chatNames = new Map();
+    // The host's own token count for the last prompt, when it will give one. The
+    // panel falls back to its own estimate, which is characters over four.
+    let lastPromptTokens = 0;
     // The "This chat" row's own repaint, while the settings panel is open.
     let chatSwitchPaint = null;
     // The one place the tab changes, so what is on screen and what the backend
@@ -2394,6 +2402,12 @@ export function setup(ctx, opts) {
         askForPrompts();
     }
     const rough = (n) => (n < 1000 ? String(n) : Math.round(n / 100) / 10 + "k");
+    // The host's own count when it gave one, and the old estimate otherwise. Said
+    // in words rather than left for the reader to guess which they are looking at,
+    // because a count and a guess are different things to act on.
+    const sayTokens = (chars) => lastPromptTokens
+        ? rough(lastPromptTokens) + " tokens"
+        : "roughly " + rough(Math.round(chars / 4)) + " tokens";
     // The Stats view's own clock, which only the Stats view has. Dropped before
     // anything is drawn, so switching tabs or redrawing cannot leave a second one
     // running against elements that are no longer on the page.
@@ -2501,15 +2515,21 @@ export function setup(ctx, opts) {
             body.appendChild(none);
         }
         else {
+            body.appendChild(barBlock("What it retried for", stats.reasons, names));
+        }
+        // One labelled block of bars. Written once because there are two of them
+        // now and they must not drift apart.
+        function barBlock(title, counts, order) {
+            const wrap = document.createElement("div");
             const head = document.createElement("div");
-            head.textContent = "What it retried for";
+            head.textContent = title;
             head.style.cssText =
                 "margin:8px 0 4px;font-size:11px;letter-spacing:.05em;text-transform:uppercase;" +
                     "color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
-            body.appendChild(head);
-            const most = stats.reasons[names[0]] || 1;
-            for (const name of names) {
-                const n = stats.reasons[name];
+            wrap.appendChild(head);
+            const most = counts[order[0]] || 1;
+            for (const name of order) {
+                const n = counts[name];
                 const row = document.createElement("div");
                 row.style.cssText = "margin:0 0 4px";
                 const top = document.createElement("div");
@@ -2536,8 +2556,16 @@ export function setup(ctx, opts) {
                 track.appendChild(fill);
                 row.appendChild(top);
                 row.appendChild(track);
-                body.appendChild(row);
+                wrap.appendChild(row);
             }
+            return wrap;
+        }
+        // The same again, by chat. What it retried for says which fault keeps
+        // happening; this says where. One card whose replies keep needing a retry
+        // does not show up in a total across every chat.
+        const chatNamesSeen = Object.keys(stats.byChat).sort((a, b) => stats.byChat[b] - stats.byChat[a]);
+        if (chatNamesSeen.length > 1) {
+            body.appendChild(barBlock("Which chats it retried in", stats.byChat, chatNamesSeen));
         }
         try {
             ensureReadableTree(body);
@@ -2581,7 +2609,7 @@ export function setup(ctx, opts) {
             "margin-bottom:6px;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
         sum.textContent =
             lastPrompt.total + (lastPrompt.total === 1 ? " message, " : " messages, ") +
-                rough(chars) + " characters, roughly " + rough(Math.round(chars / 4)) + " tokens" +
+                rough(chars) + " characters, " + sayTokens(chars) +
                 (lastPrompt.dropped
                     ? " (" + lastPrompt.dropped + " not listed below, all of them sent)"
                     : "");
@@ -2822,7 +2850,7 @@ export function setup(ctx, opts) {
             const chars = lastPrompt.messages.reduce((n, m) => n + (m.chars || 0), 0);
             const lines = [
                 lastPrompt.total + (lastPrompt.total === 1 ? " message, " : " messages, ") +
-                    rough(chars) + " characters, roughly " + rough(Math.round(chars / 4)) + " tokens" +
+                    rough(chars) + " characters, " + sayTokens(chars) +
                     (lastPrompt.dropped
                         ? " (" + lastPrompt.dropped + " not listed below, all of them sent)"
                         : ""),
@@ -4458,6 +4486,10 @@ export function setup(ctx, opts) {
         notesSkipped: 0,
         lastNoteSkip: "",
         reasons: {},
+        // Retries per chat, named by who it is with where that is known. A card
+        // whose replies keep needing a retry is the thing this answers, and a
+        // count across every chat cannot show it.
+        byChat: {},
         // So a count can be read as a rate rather than as a bare number. Twelve
         // retries in ten minutes and twelve in a whole day are different problems.
         since: Date.now(),
@@ -5390,6 +5422,10 @@ export function setup(ctx, opts) {
         s.attempts += 1;
         stats.retries += 1;
         stats.reasons[reason] = (stats.reasons[reason] || 0) + 1;
+        // Named where the host will name it, and by id otherwise, so the tally is
+        // still useful without the permissions that resolve a name.
+        const whose = chatNames.get(String(chatId)) || "chat " + String(chatId).slice(0, 8);
+        stats.byChat[whose] = (stats.byChat[whose] || 0) + 1;
         const rl = isRateLimit(err);
         const delay = computeDelay(s.attempts, rl);
         clearTimers(s);
@@ -5530,7 +5566,7 @@ export function setup(ctx, opts) {
     // greyed out after an update: nothing re-renders, so nothing announces where
     // you are. This asks outright. Answers null without the chats permission, in
     // which case nothing changes and the old waiting behaviour stands.
-    function askActiveChat() {
+    function askActiveChat(forChat) {
         try {
             if (!ctx || typeof ctx.sendToBackend !== "function")
                 return;
@@ -5544,10 +5580,19 @@ export function setup(ctx, opts) {
                     off && off();
                 }
                 catch (_) { }
+                if (msg.chatId && msg.character) {
+                    chatNames.set(String(msg.chatId), String(msg.character));
+                    if (chatSwitchPaint) {
+                        try {
+                            chatSwitchPaint();
+                        }
+                        catch (_) { }
+                    }
+                }
                 if (msg.chatId)
                     noteChat(msg.chatId);
             });
-            ctx.sendToBackend({ type: "get_active_chat", requestId: reqId });
+            ctx.sendToBackend({ type: "get_active_chat", requestId: reqId, chatId: forChat || null });
         }
         catch (_) { }
     }
@@ -5556,6 +5601,11 @@ export function setup(ctx, opts) {
         if (next == null || next === lastChatId)
             return;
         lastChatId = next;
+        // A chat learned from an event arrives as an id and nothing else, so this
+        // is the moment to find out whose it is. Asked once per chat: the answer
+        // does not change while you are in it.
+        if (!chatNames.has(String(next)))
+            askActiveChat(String(next));
         // Anything that describes the chat you are in is now out of date.
         if (chatSwitchPaint) {
             try {
@@ -7673,7 +7723,11 @@ export function setup(ctx, opts) {
         const paint = () => {
             const known = lastChatId != null;
             const off = chatIsOff(lastChatId);
-            label.textContent = "This chat";
+            const who = known ? chatNames.get(String(lastChatId)) : "";
+            // Named when the host will say who this chat is with, because "this chat"
+            // is correct and tells you nothing, and the header naming it may not be
+            // in view on a phone. A group chat is named by its primary card.
+            label.textContent = who ? "This chat, with " + who : "This chat";
             act.textContent = off ? "Turn on here" : "Turn off here";
             act.disabled = !known;
             act.style.opacity = known ? "1" : "0.45";
@@ -9057,6 +9111,22 @@ export function setup(ctx, opts) {
                     }
                     if (msg.type === "prompt_snapshot") {
                         lastPrompt = msg;
+                        // The count for the previous prompt does not describe this one, and
+                        // the follow-up carrying the new one may never arrive.
+                        lastPromptTokens = 0;
+                        if (liveTab === "prompt")
+                            renderLiveLog();
+                        return;
+                    }
+                    // Sent after the snapshot rather than with it, so counting never holds
+                    // the view up. Ignored when it belongs to a prompt already replaced.
+                    if (msg.type === "prompt_tokens") {
+                        if (!lastPrompt || (msg.at && lastPrompt.at && msg.at !== lastPrompt.at))
+                            return;
+                        const n = Number(msg.tokens);
+                        if (!Number.isFinite(n) || n <= 0)
+                            return;
+                        lastPromptTokens = n;
                         if (liveTab === "prompt")
                             renderLiveLog();
                         return;
