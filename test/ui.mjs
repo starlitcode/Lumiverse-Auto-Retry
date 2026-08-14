@@ -4031,6 +4031,57 @@ console.log("\ntwo menus, one press");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- the quick toggle syncs like every other change ----
+// Saving the panel sends the settings to the account and to the backend. The
+// floating button and the Extras entry flip the same switch and did neither, so
+// the setting people change most often, from the controls built for changing
+// it, stayed in one browser. Word swapping reads that switch from the backend,
+// so it also never heard the extension had been switched off.
+console.log("\nthe quick toggle syncs");
+{
+  const page = await browser.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  page.on("console", (m) => { if (m.type() === "error") errors.push("console: " + m.text()); });
+  await stage(page, "<div id=modal></div><div id=host></div>");
+  await page.addStyleTag({ content: THEME });
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  const out = await page.evaluate(async () => {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const host = document.getElementById("host");
+    const sent = [];
+    const teardown = window.__setup(
+      { events: { on: () => () => {} },
+        sendToBackend: (m) => sent.push(m),
+        ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+              registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }),
+              createFloatWidget: () => ({ root: host, destroy: () => {}, setPosition: () => {} }) } },
+      { enabled: true, showFloatingToggle: true, floatingToggleSize: 44, toast: false },
+    );
+    const saves = () => sent.filter((m) => m && m.type === "save_settings");
+    const before = saves().length;
+    host.querySelector("button").click();
+    await wait(40);
+    const after = saves();
+    const res = {
+      sentOne: after.length > before,
+      // And it carries the new value, not the old one.
+      value: after.length ? after[after.length - 1].settings.enabled : null,
+      // The off list goes over at startup, or a reload forgets it until the
+      // switch is next touched.
+      toldChatsOff: sent.some((m) => m && m.type === "set_chats_off"),
+    };
+    teardown();
+    return res;
+  });
+  await page.close();
+  check("flipping it from the button saves to the account", out.sentOne, out);
+  check("and sends the value it was flipped to", out.value === false, out);
+  check("the off list reaches the backend on startup", out.toldChatsOff, out);
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- the per-chat switch knows which chat you are in ----
 // It was reachable only once a chat id had been seen, and the only events
 // carrying one were a chat change and a generation. Load the page sitting in a

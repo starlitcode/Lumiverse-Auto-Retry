@@ -35,6 +35,8 @@ These last two settle different questions and don't overlap. The longest-left-si
 
 Editing a saved reply needs the `chat_mutation` permission (see Permissions below). If nothing in your rules matches a reply, that reply is left untouched.
 
+Swapping follows the extension's own switches. With Auto Retry switched off, or switched off in the chat you are in, nothing is swapped automatically there. The two buttons are the exception: pressing one is you asking for a swap then and there, so they act whatever the switches say.
+
 ## A swap is permanent
 
 There is no undo. A swap rewrites the saved reply, and the wording it replaced is not kept anywhere, so the only way back is to edit the reply yourself in Lumiverse. Rules cannot simply be run backwards either: two of them can map onto the same word, a random rule has no single answer, and a rule that deletes a word leaves nothing to match.

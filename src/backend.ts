@@ -127,6 +127,11 @@ function replyTo(userId: string | undefined, msg: any): void {
 // consulted when the user asks for it, through strictType below.
 interface RefusalNote { chatId: string; notes: Array<{ text: string; role: string }>; placement: string; at: number; strictType: boolean; }
 let refusalNote: RefusalNote | null = null;
+// The extension's master switch, and the chats it has been switched off in.
+// Both belong to the frontend, and both have to reach here because swapping
+// runs on this side and would otherwise ignore them.
+let masterOn = true;
+let chatsOff: Set<string> = new Set();
 // Long enough to cover prompt assembly on a busy server, short enough that a
 // note whose click died is expired rather than sitting around. The frontend
 // disarms on a dead click well inside this.
@@ -393,6 +398,11 @@ function rebuild(): void {
 
 // Pull the find-and-replace fields out of a full settings object.
 function applyReplaceFromSettings(s: any) {
+  // The extension's own master switch, not the swap one. Its description says
+  // "turn it off and it does nothing", and rewriting somebody's saved replies
+  // while it is off is emphatically something. Absent means on, so a settings
+  // object from before this was read does not switch swapping off by surprise.
+  masterOn = s.enabled !== false;
   enabled = !!s.replaceEnabled;
   random = !!s.replaceRandom;
   caseSensitive = !!s.replaceCaseSensitive;
@@ -590,6 +600,11 @@ spindle.onFrontendMessage(async (payload: any, userId?: string) => {
       replyTo(userId, { type: 'loaded_settings', requestId: payload.requestId, settings: settings });
       return;
     }
+    if (payload.type === 'set_chats_off') {
+      const list = Array.isArray(payload.chats) ? payload.chats : [];
+      chatsOff = new Set(list.slice(0, 500).map((c: any) => String(c)));
+      return;
+    }
     if (payload.type === 'set_prompt_capture') {
       const k = watcherKey(userId);
       if (payload.on) promptWatchers.add(k);
@@ -702,8 +717,10 @@ spindle.onFrontendMessage(async (payload: any, userId?: string) => {
 // once the reply has stopped being edited by anything else.
 spindle.on('GENERATION_ENDED', async (p: any) => {
   try {
-    if (!enabled || !groups.length) return;
+    if (!masterOn || !enabled || !groups.length) return;
     if (!p || p.error || !p.chatId) return;
+    // Left alone means left alone, including by this.
+    if (chatsOff.has(String(p.chatId))) return;
     const chatId = p.chatId;
     let messageId = p.messageId;
     if (!messageId) {

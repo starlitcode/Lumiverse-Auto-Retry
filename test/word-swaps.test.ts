@@ -465,6 +465,70 @@ describe("settings survive a restart", () => {
     expect(msgs[2].content).toBe("A cat sat by the fire.");
   });
 
+  test("the master switch stops automatic swapping", async () => {
+    // "Turn it off and it does nothing" is what that switch promises, and
+    // rewriting saved replies while it is off is something. The backend had
+    // never been told this switch existed: its own "enabled" is the swap one.
+    const msgs = chatWith("A cat sat by the fire.");
+    const h = boot(msgs);
+    await h.onFrontend({
+      type: "save_settings",
+      settings: h.settings({ replaceRules: "cat => dog", replaceEnabled: true, enabled: false }),
+    });
+    await h.onGenerationEnded({ chatId: "c1", messageId: "a1", content: msgs[2].content });
+    expect(msgs[2].content).toBe("A cat sat by the fire.");
+  });
+
+  test("and settings from before it was read still swap", async () => {
+    // Absent means on, so an older saved object does not switch swapping off.
+    const msgs = chatWith("A cat sat by the fire.");
+    const h = boot(msgs);
+    const s = h.settings({ replaceRules: "cat => dog", replaceEnabled: true });
+    delete s.enabled;
+    await h.onFrontend({ type: "save_settings", settings: s });
+    await h.onGenerationEnded({ chatId: "c1", messageId: "a1", content: msgs[2].content });
+    expect(msgs[2].content).toBe("A dog sat by the fire.");
+  });
+
+  test("a chat switched off is left alone by swapping too", async () => {
+    // The off list is browser-local and is not part of the settings, so the
+    // backend can only know about it by being told.
+    const msgs = chatWith("A cat sat by the fire.");
+    const h = boot(msgs);
+    await h.onFrontend({
+      type: "save_settings",
+      settings: h.settings({ replaceRules: "cat => dog", replaceEnabled: true }),
+    });
+    await h.onFrontend({ type: "set_chats_off", chats: ["c1"] });
+    await h.onGenerationEnded({ chatId: "c1", messageId: "a1", content: msgs[2].content });
+    expect(msgs[2].content).toBe("A cat sat by the fire.");
+  });
+
+  test("and switching it back on resumes swapping there", async () => {
+    const msgs = chatWith("A cat sat by the fire.");
+    const h = boot(msgs);
+    await h.onFrontend({
+      type: "save_settings",
+      settings: h.settings({ replaceRules: "cat => dog", replaceEnabled: true }),
+    });
+    await h.onFrontend({ type: "set_chats_off", chats: ["c1"] });
+    await h.onFrontend({ type: "set_chats_off", chats: [] });
+    await h.onGenerationEnded({ chatId: "c1", messageId: "a1", content: msgs[2].content });
+    expect(msgs[2].content).toBe("A dog sat by the fire.");
+  });
+
+  test("another chat is unaffected by one being switched off", async () => {
+    const msgs = chatWith("A cat sat by the fire.");
+    const h = boot(msgs);
+    await h.onFrontend({
+      type: "save_settings",
+      settings: h.settings({ replaceRules: "cat => dog", replaceEnabled: true }),
+    });
+    await h.onFrontend({ type: "set_chats_off", chats: ["other"] });
+    await h.onGenerationEnded({ chatId: "c1", messageId: "a1", content: msgs[2].content });
+    expect(msgs[2].content).toBe("A dog sat by the fire.");
+  });
+
   test("word swap presets round-trip through account storage", async () => {
     const h = boot(chatWith("x"));
     const presets = { swap: [{ name: "Softer", values: { replaceRules: "very => " } }] };

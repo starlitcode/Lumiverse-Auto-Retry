@@ -8,6 +8,20 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 4.6.4
+
+_2026-08-13_
+
+### Fixed
+
+- **Word swaps ignored the master switch.** Switching Auto Retry off stopped it retrying and left word swapping rewriting your replies, because the backend that does the swapping had never been told that switch exists. Its own on/off is the swap one. Off now means off for both.
+- **Word swaps ignored the per-chat switch too.** A chat you had switched off carried on having its replies rewritten. The list of chats you have switched off is kept in your browser rather than in your settings, so the backend could not see it and had to be told; it is now sent when it changes and when the page loads.
+- **Flipping the switch from the floating button or the Extras entry did not sync.** Saving the settings panel writes to your account, and those two controls flip the same switch and did not, so the setting people change most often stayed in whichever browser they changed it in. It also never reached the backend, which is the second half of why swapping carried on after switching the extension off.
+
+### Notes
+
+- The two manual swap buttons are unchanged and still work whatever the switches say. Pressing one is asking for a swap there and then, which is different from swapping happening on its own.
+
 ## 4.6.3
 
 _2026-08-13_

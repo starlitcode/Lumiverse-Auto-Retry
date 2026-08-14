@@ -95,7 +95,7 @@ const STREAM_BUF_MAX = 200000;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "4.6.3";
+const VERSION = "4.6.4";
 
 // ---- defaults (the UI overrides these; editing here changes the fallback) ----
 const CONFIG = {
@@ -3729,6 +3729,11 @@ export function setup(ctx: Ctx, opts?: any) {
   function toggleEnabled() {
     cfg.enabled = cfg.enabled === false;
     saveSaved();
+    // The panel's Save does this and the quick toggle did not, so the one
+    // setting people flip most often, from the control built for flipping it,
+    // was the one that stayed in this browser. It also never reached the
+    // backend, which is what word swapping reads to know the extension is off.
+    saveToAccount();
     // The settings panel can be open while this is flipped from somewhere else.
     // Its own checkbox and the "Auto Retry is off" line are brought into line,
     // and so is the baseline the panel restores on dismiss, or closing the panel
@@ -4279,6 +4284,17 @@ export function setup(ctx: Ctx, opts?: any) {
   const chatIsOff = (chatId: any): boolean =>
     chatId != null && chatsOff.indexOf(String(chatId)) >= 0;
 
+  // The off list lives in this browser and is not a setting, so it is not in
+  // what gets saved to the account and the backend cannot read it. Word swaps
+  // run on the backend, so without this a chat you switched off carried on
+  // having its replies rewritten, which is not what "left alone" means.
+  function tellBackendChatsOff() {
+    try {
+      if (ctx && typeof (ctx as any).sendToBackend === "function")
+        (ctx as any).sendToBackend({ type: "set_chats_off", chats: chatsOff.slice() });
+    } catch (_) {}
+  }
+
   function setChatOff(chatId: any, off: boolean) {
     if (chatId == null) return;
     const id = String(chatId);
@@ -4292,6 +4308,7 @@ export function setup(ctx: Ctx, opts?: any) {
       if (typeof localStorage !== "undefined")
         localStorage.setItem(CHATS_OFF_KEY, JSON.stringify(chatsOff));
     } catch (_) {}
+    tellBackendChatsOff();
     // Anything already in flight for that chat goes with it.
     if (off) standDown(id, false);
     paintFloat();
@@ -8904,6 +8921,7 @@ export function setup(ctx: Ctx, opts?: any) {
   }
   syncLiveLog();
   syncFloat();
+  tellBackendChatsOff();
   loadFromAccount();
   loadPresetsFromAccount();
   syncInputBarActions();

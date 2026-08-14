@@ -29,7 +29,7 @@ Two options in **Basics**, and you can use either or both:
 
 The master switch is all or nothing, which is the wrong shape for a scene where the model is meant to refuse, or a chat you are using to test something.
 
-In the settings panel, under **Basics**, the **This chat** row has a **Turn off here** button. That chat is left alone and every other chat carries on, and the button becomes **Turn on here**. This is the only place it is: it is not in the floating button's menu, which is kept to the button's own business.
+In the settings panel, under **Basics**, the **This chat** row has a **Turn off here** button. That chat is left alone and every other chat carries on, and the button becomes **Turn on here**. Left alone covers word swaps too: nothing is swapped automatically in a chat you have switched off. This is the only place it is: it is not in the floating button's menu, which is kept to the button's own business.
 
 It is written down in your browser, so it survives a reload. It is not a setting: it is a list of chat ids, which would mean nothing on another account, so it is not synced and not included in an export.
 
