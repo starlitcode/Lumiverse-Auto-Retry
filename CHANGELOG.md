@@ -8,6 +8,14 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 4.6.1
+
+_2026-08-13_
+
+### Fixed
+
+- **"Turn off here" stayed greyed out in a chat you were already sitting in.** The row needs to know which chat you are in, and it only ever learned that from a chat change or from a reply being generated. Open Lumiverse straight into a chat, or reload the page there, and neither has happened, so the button sat disabled saying to open a chat while you were in one. Leaving and coming back fixed it, which is not something anyone should have to work out. It now also learns the chat from a message being drawn on screen, which is what actually happens when a chat opens, so the row is ready as soon as you can see the conversation. If the settings panel is already open when it finds out, the row updates in place.
+
 ## 4.6.0
 
 _2026-08-13_

@@ -3966,6 +3966,87 @@ console.log("\nstats view");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- the per-chat switch knows which chat you are in ----
+// It was reachable only once a chat id had been seen, and the only events
+// carrying one were a chat change and a generation. Load the page sitting in a
+// chat and neither has happened, so the button stayed greyed out until the user
+// left the chat and came back, or sent a message. A message rendering is what
+// actually happens when a chat opens, and it carries the id.
+console.log("\nthe per-chat switch finds the chat");
+{
+  const page = await browser.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  page.on("console", (m) => { if (m.type() === "error") errors.push("console: " + m.text()); });
+  await stage(page, "<div id=modal></div>");
+  await page.addStyleTag({ content: THEME });
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  const out = await page.evaluate(async () => {
+    const frame = () =>
+      new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const handlers = {};
+    const acts = {};
+    const teardown = window.__setup(
+      { events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
+        ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+              registerInputBarAction: (o) => {
+                const a = { onClick: (cb) => { a.cb = cb; return () => {}; }, destroy: () => {} };
+                acts[o.id] = a; return a; } } },
+      { toast: false },
+    );
+    const row = () => document.querySelector("[data-ar-chat-switch]");
+    const act = () => row() && row().querySelector("button");
+    const state = () => ({
+      disabled: act() ? !!act().disabled : null,
+      label: act() ? act().textContent.trim() : "",
+      note: row() ? (row().textContent || "") : "",
+    });
+
+    // The panel is opened having seen nothing at all, which is a fresh load.
+    acts["auto-retry-settings"].cb();
+    await frame();
+    const cold = state();
+
+    // A message renders, which is what happens when a chat is simply open.
+    // No CHAT_CHANGED, no generation: this is the case that used to stay grey.
+    handlers.CHARACTER_MESSAGE_RENDERED &&
+      handlers.CHARACTER_MESSAGE_RENDERED({ chatId: "chat-a", messageId: "m1" });
+    await frame();
+    const afterRender = state();
+
+    // And it still works: switching off names this chat, not another.
+    if (act() && !act().disabled) act().click();
+    await frame();
+    const afterClick = state();
+
+    // Moving to another chat resets the row rather than carrying the state over.
+    handlers.CHAT_CHANGED && handlers.CHAT_CHANGED({ chatId: "chat-b" });
+    await frame();
+    const otherChat = state();
+
+    // Back to the home screen, where there is no chat to switch.
+    handlers.CHAT_SWITCHED && handlers.CHAT_SWITCHED({ chatId: null });
+    await frame();
+    const noChat = state();
+
+    teardown();
+    return { cold, afterRender, afterClick, otherChat, noChat };
+  });
+  await page.close();
+  check("with nothing seen yet it says to open a chat",
+    out.cold.disabled === true && /open a chat/i.test(out.cold.note), out.cold);
+  check("a rendered message is enough to wake it up",
+    out.afterRender.disabled === false && /turn off here/i.test(out.afterRender.label), out.afterRender);
+  check("and it still switches that chat off",
+    /turn on here/i.test(out.afterClick.label), out.afterClick);
+  check("another chat starts from on again",
+    out.otherChat.disabled === false && /turn off here/i.test(out.otherChat.label), out.otherChat);
+  check("and the home screen has nothing to switch",
+    out.noChat.disabled === true, out.noChat);
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- the per-chat switch has to be reachable ----
 // It lived only in the floating button's hold menu, and that button is off by
 // default, so on a stock install there was no way to reach it at all.

@@ -85,7 +85,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "4.6.0";
+const VERSION = "4.6.1";
 // ---- defaults (the UI overrides these; editing here changes the fallback) ----
 const CONFIG = {
     enabled: true,
@@ -2382,6 +2382,8 @@ export function setup(ctx, opts) {
     let liveTab = layout.tab || "log";
     let paintTabs = null;
     let focusTab = null;
+    // The "This chat" row's own repaint, while the settings panel is open.
+    let chatSwitchPaint = null;
     // The one place the tab changes, so what is on screen and what the backend
     // has been asked for cannot come apart.
     function showTab(id) {
@@ -5469,14 +5471,46 @@ export function setup(ctx, opts) {
     // The manual swap buttons need a chat id, and generation events were the only
     // thing setting one, so opening an older chat and pressing swap reported that
     // there was no reply to swap until something had been generated in it.
+    // Every event that carries a chat id goes through here, not just the ones
+    // that announce a change. The per-chat switch was reachable only once a chat
+    // id had been seen, and the only events that carried one were a chat change
+    // and a generation. So on a fresh page load, sitting in a chat, there was
+    // nothing to switch: the row stayed greyed out until the user left the chat
+    // and came back, or sent a message. Neither is a thing anyone should have to
+    // work out. A message rendering is what actually happens when a chat opens,
+    // and it carries the id, so it is enough on its own.
+    function noteChat(id) {
+        const next = id == null ? null : id;
+        if (next == null || next === lastChatId)
+            return;
+        lastChatId = next;
+        // Anything that describes the chat you are in is now out of date.
+        if (chatSwitchPaint) {
+            try {
+                chatSwitchPaint();
+            }
+            catch (_) { }
+        }
+        paintFloat();
+        syncMasterNote();
+        paintNow();
+    }
     function onChatSwitched(p) {
         if (!p || typeof p.chatId === "undefined")
             return;
+        // Set directly rather than through noteChat, because this is the one event
+        // that can also mean "no chat any more", which noteChat ignores on purpose.
         lastChatId = p.chatId || null;
         lastMessageId = null;
-        // All three describe the chat you are in, so all three go stale on a switch.
-        // The line most of all: walking into a chat you had switched off should say
-        // so straight away, not on the next tick.
+        // All of these describe the chat you are in, so all of them go stale on a
+        // switch. The line most of all: walking into a chat you had switched off
+        // should say so straight away, not on the next tick.
+        if (chatSwitchPaint) {
+            try {
+                chatSwitchPaint();
+            }
+            catch (_) { }
+        }
         paintFloat();
         syncMasterNote();
         paintNow();
@@ -6483,6 +6517,7 @@ export function setup(ctx, opts) {
         hideHint();
         root.innerHTML = "";
         fieldSetters = {};
+        chatSwitchPaint = null;
         // The rows the old one closed over have just been thrown away with the
         // panel, so it is put back to doing nothing until the new one assigns it.
         applyDeps = () => { };
@@ -7586,6 +7621,9 @@ export function setup(ctx, opts) {
                 : "Auto Retry is off in this chat. Other chats are unaffected.", { force: true });
         });
         paint();
+        // Held so the row can be repainted from outside. It is built once when the
+        // panel opens, and the chat it describes can be learned a moment later.
+        chatSwitchPaint = paint;
         top.appendChild(label);
         top.appendChild(act);
         row.appendChild(top);
@@ -8896,6 +8934,12 @@ export function setup(ctx, opts) {
             ctx.events.on("GENERATION_STOPPED", safe("GENERATION_STOPPED", onStop)),
             ctx.events.on("CHAT_CHANGED", safe("CHAT_CHANGED", onChatSwitched)),
             ctx.events.on("CHAT_SWITCHED", safe("CHAT_SWITCHED", onChatSwitched)),
+            // Free events, and the ones that fire when a chat is simply opened rather
+            // than switched to. Their handlers do one thing: record which chat this
+            // is, so the per-chat switch has something to act on straight away.
+            ctx.events.on("CHARACTER_MESSAGE_RENDERED", safe("CHARACTER_MESSAGE_RENDERED", (p) => noteChat(p && p.chatId))),
+            ctx.events.on("USER_MESSAGE_RENDERED", safe("USER_MESSAGE_RENDERED", (p) => noteChat(p && p.chatId))),
+            ctx.events.on("MESSAGE_SENT", safe("MESSAGE_SENT", (p) => noteChat(p && p.chatId))),
         ];
     }
     catch (e) {
