@@ -35,7 +35,6 @@ declare const spindle: any;
 declare function setTimeout(fn: () => void, ms: number): any;
 declare function clearTimeout(handle: any): void;
 
-const RULES_FILE = 'replace-rules.json';
 const SETTINGS_FILE = 'settings.json';
 // Word-swap presets. These lived only in the browser's local storage, so a
 // user's settings followed them to a new device and their presets silently did
@@ -539,36 +538,17 @@ const readEdit = (p: any) => {
 try { spindle.on('MESSAGE_EDITED', readEdit); } catch (_) {}
 try { spindle.on('SWIPE_EDITED', readEdit); } catch (_) {}
 
-// An older version kept the text of every reply it had swapped, so that swap
-// could be put back. That feature is gone, and leaving a file full of reply text
-// behind after removing the thing that needed it would be keeping the user's
-// writing for no reason. Upgrading from such a version empties it once; on a
-// fresh install there is nothing there and this does nothing.
-const LEGACY_UNDO_FILE = 'last-swap-undo.json';
-(async () => {
-  try {
-    const raw = await spindle.storage.read(LEGACY_UNDO_FILE);
-    if (raw && String(raw).length > 2) await spindle.storage.write(LEGACY_UNDO_FILE, '{}');
-  } catch (_) { /* nothing to clear */ }
-})();
-
-// Load persisted settings on startup. No userId is available here, so this only
-// resolves on a user-scoped install, where userStorage infers the owner. On an
-// operator-scoped install the rule state below is set by whichever user's panel
-// saves first, which is a limitation of holding one rule set per process.
+// Load persisted settings on startup. There is no userId here, so this only
+// resolves on a user-scoped install where userStorage can infer the owner.
+// Everywhere else it finds nothing and the state stays at its defaults until a
+// panel loads or saves, which is why load_settings applies what it reads rather
+// than only handing it back. One rule set per process either way, so on a
+// multi-account install it belongs to whoever loaded or saved last.
 (async () => {
   try {
     const s = await readUserJson(SETTINGS_FILE);
-    if (s && typeof s === 'object') { applyReplaceFromSettings(s); return; }
+    if (s && typeof s === 'object') applyReplaceFromSettings(s);
   } catch (_) { /* no account settings yet */ }
-  try {
-    const parsed = JSON.parse(await spindle.storage.read(RULES_FILE));
-    enabled = !!parsed.enabled;
-    random = !!parsed.random;
-    caseSensitive = !!parsed.caseSensitive;
-    rulesText = String(parsed.rulesText == null ? '' : parsed.rulesText);
-    rebuild();
-  } catch (_) { /* no saved rules yet */ }
 })();
 
 // Settings bridge with the UI: save the whole settings object to per-user
@@ -696,16 +676,6 @@ spindle.onFrontendMessage(async (payload: any, userId?: string) => {
         }
       } catch (_) { ok = false; }
       replyTo(userId, { type: 'replace_now_result', requestId: payload.requestId, ok: ok, hasRules: groups.length > 0, found: found, changed: changed, skipped: skipped, pairs: pairs, edits: edits });
-      return;
-    }
-    if (payload.type === 'set_replace_rules') {
-      // Legacy path for an older cached frontend that still sends rules alone.
-      enabled = !!payload.enabled;
-      random = !!payload.random;
-      caseSensitive = !!payload.caseSensitive;
-      rulesText = String(payload.rulesText == null ? '' : payload.rulesText);
-      rebuild();
-      await spindle.storage.write(RULES_FILE, JSON.stringify({ enabled: enabled, random: random, caseSensitive: caseSensitive, rulesText: rulesText }));
       return;
     }
   } catch (_) {

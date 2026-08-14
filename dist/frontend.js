@@ -2605,7 +2605,7 @@ export function setup(ctx, opts) {
                     ". Marked below.";
             body.appendChild(where);
         }
-        lastPrompt.messages.forEach((m, i) => {
+        lastPrompt.messages.forEach((m) => {
             const row = document.createElement("details");
             row.style.cssText =
                 "margin:0 0 4px;border:1px solid " +

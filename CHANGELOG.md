@@ -19,6 +19,10 @@ _2026-08-13_
 - **Word swaps ignored the per-chat switch too.** A chat you had switched off carried on having its replies rewritten. The list of chats you have switched off is kept in your browser rather than in your settings, so the backend could not see it and had to be told; it is now sent when it changes and when the page loads.
 - **Flipping the switch from the floating button or the Extras entry did not sync.** Saving the settings panel writes to your account, and those two controls flip the same switch and did not, so the setting people change most often stayed in whichever browser they changed it in. It also never reached the backend, which is the second half of why swapping carried on after switching the extension off.
 
+### Removed
+
+- **Dead code, all of it.** A backend handler for a message the panel has never sent in the extension's history, the storage file only that handler wrote, and the startup read that looked for it. A one-time clear of another file nothing has ever written. None of it did anything; it just looked like it did.
+
 ### Notes
 
 - The two manual swap buttons are unchanged and still work whatever the switches say. Pressing one is asking for a swap there and then, which is different from swapping happening on its own.
