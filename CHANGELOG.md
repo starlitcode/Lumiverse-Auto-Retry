@@ -8,6 +8,18 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 4.6.3
+
+_2026-08-13_
+
+### Changed
+
+- **The Prompt tab says plainly that only the view is shortened.** A long message was marked "(cut for display)", which reads as though the prompt had been cut before it went out. It now says how much more was sent and that only what you are looking at is capped, so there is no way to read it as the model having been given less. Copying the tab says the same: the header for a message claims its real length, and until now the text under it could be shorter with nothing saying so.
+
+### Removed
+
+- **"Move back to the corner" is gone from the floating button's menu.** The button's saved position is checked against the screen every time it is drawn and it snaps to the nearest edge, so it cannot end up somewhere you can't reach, which is what that entry was for. Dragging it back is fewer taps than opening a menu. The menu is two entries now.
+
 ## 4.6.2
 
 _2026-08-13_

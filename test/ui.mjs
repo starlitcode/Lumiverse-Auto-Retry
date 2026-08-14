@@ -1842,14 +1842,6 @@ console.log("\nfloat button menu");
       previewPx: dot ? dot.style.width : null,
     };
 
-    // "Move back to the corner" rebuilds the widget.
-    const widgetsBefore = widgets;
-    down(btn(), 130, 130); await wait(620);
-    [...document.querySelectorAll('[role="menuitem"]')].find((b) => /corner/i.test(b.textContent)).click();
-    await wait(30);
-    const rebuilt = widgets > widgetsBefore;
-    up(btn());
-
     // How a menu item shows focus, and where the menu sits in the stack. Read
     // while the button still exists, since the next step removes it.
     down(btn(), 130, 130); await wait(620);
@@ -1873,13 +1865,15 @@ console.log("\nfloat button menu");
     down(document.body, 1, 1);
     teardown();
     const left = { menu: !!menu(), items: items().length };
-    return { wasOn, afterTap, openedByHold, entries, afterHold, onScreen, afterEsc, afterDrag, rebuilt, resize, gone, left, focus, menuZ };
+    return { wasOn, afterTap, openedByHold, entries, afterHold, onScreen, afterEsc, afterDrag, resize, gone, left, focus, menuZ };
   });
   await page.close();
   check("a quick tap still toggles", out.afterTap.pressed !== out.wasOn, out.afterTap);
   check("and opens no menu", !out.afterTap.menu);
   check("a hold opens the menu", out.openedByHold);
-  check("with all three entries", out.entries.length === 3, out.entries);
+  check("with its two entries", out.entries.length === 2, out.entries);
+  check("and neither of them offers to move it, since dragging does that",
+    !out.entries.some((t) => /corner|move/i.test(t)), out.entries);
   // The thing someone holding this button is most likely to be after, so it is
   // the one their thumb lands on first.
   check("settings is the first of them", /settings/i.test(out.entries[0]), out.entries);
@@ -1887,7 +1881,6 @@ console.log("\nfloat button menu");
   check("the menu lands on screen", out.onScreen);
   check("Esc closes it", !out.afterEsc);
   check("dragging is not a hold", !out.afterDrag);
-  check("moving it back rebuilds the widget", out.rebuilt);
   check("resizing rebuilds it too", out.resize.rebuilt, out.resize);
   check("at the new size", out.resize.size === 72, out.resize);
   // The whole point: the rebuild is handed where the button already was, not
@@ -4221,8 +4214,12 @@ console.log("\nprompt viewer");
           return /note/i.test(label) ? "note" : /chat/.test(label) ? "chat" : "added";
         })
       : [];
-    // A message shown in part has to say so rather than looking complete.
-    const saysClipped = /cut for display/.test(shown);
+    // A message shown in part has to say so, and has to say which end the cut
+    // happened at. "(cut for display)" read as if the prompt itself had been
+    // shortened, so the wording now names the model as having had it whole.
+    const saysClipped = /more characters were sent to the model/.test(shown);
+    const blamesTheView = /only this view is shortened/i.test(shown);
+    const doesNotSoundLikeTheModelMissedIt = !/cut for display/i.test(shown);
 
     // Where the note went is the question this view is opened for.
     const noteLine = /Auto Retry note/.test(shown);
@@ -4249,7 +4246,7 @@ console.log("\nprompt viewer");
     teardown();
     const gone = !panel();
     const askedOnTeardown = sent.filter((m) => m.type === "set_prompt_capture").map((m) => m.on);
-    return { opened, tabs, landedOn, beforeAny, shown, rows, marks, saysClipped, afterLogTab,
+    return { opened, tabs, landedOn, beforeAny, shown, rows, marks, saysClipped, blamesTheView, doesNotSoundLikeTheModelMissedIt, afterLogTab,
       gone, askedBefore, askedAfter, askedOnLeave, askedOnTeardown, noteLine, notePlace,
       noteOpen, tabFocus: tabs0, afterArrow, tabH: Math.round(tabBox.height) };
   });
@@ -4272,6 +4269,8 @@ console.log("\nprompt viewer");
   check("marking what came from the chat, what was added, and what is ours",
     out.marks.join(",") === "added,chat,note,chat", out.marks);
   check("a message shown in part says so", out.saysClipped, out.shown.slice(-120));
+  check("and says the model was sent the whole thing", out.blamesTheView, out);
+  check("and no longer reads as the prompt being cut", out.doesNotSoundLikeTheModelMissedIt, out);
   // What the panel is for, in the user's words: knowing how and where a note
   // was inserted.
   check("a note is named rather than being one more added row", out.noteLine, out.shown.slice(0, 200));

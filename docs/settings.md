@@ -22,7 +22,7 @@ Only **Save** keeps what you changed. Closing with the X or tapping outside disc
 
 Two options in **Basics**, and you can use either or both:
 
-- **Floating on/off button** puts a small button over the chat that toggles it in one tap. Drag it anywhere; it snaps to the nearest edge and stays where you leave it, and you can set its size. Hold it, or right-click on a computer, for a menu with **Auto Retry settings**, **Move back to the corner** and **Hide this button**. When the on-screen panel is set to live in the sidebar drawer, **Open the Auto Retry panel** is in there too.
+- **Floating on/off button** puts a small button over the chat that toggles it in one tap. Drag it anywhere; it snaps to the nearest edge and stays where you leave it, and you can set its size. Hold it, or right-click on a computer, for a menu with **Auto Retry settings** and **Hide this button**. When the on-screen panel is set to live in the sidebar drawer, **Open the Auto Retry panel** is in there too.
 - **On/off button in the Extras menu** adds an entry next to the settings button. Its label says which state it is currently in, so you can check and change it without opening settings, and it takes up no room on screen.
 
 ## Turning it off in one chat
@@ -65,7 +65,7 @@ One switch, **Show the on-screen panel**, turns it on. It has three tabs, and **
 
 **Floating over the chat** is the original: a small box in the corner. Drag the header to move it, drag the bottom-right corner to resize it. Both work with a mouse and with a finger.
 
-Where you leave it is remembered, along with its size and which tab was open, so an update does not put it back in the corner. The floating button is the same. Both are checked against the screen they open on, so a layout saved on a desktop window cannot strand the panel off the edge of a phone. **Move back to the corner**, in the floating button's menu, forgets its saved spot rather than restoring it.
+Where you leave it is remembered, along with its size and which tab was open, so an update does not put it back in the corner. The floating button is the same. Both are checked against the screen they open on, so a layout saved on a desktop window cannot strand the panel off the edge of a phone. Nothing offers to move the button back to its corner, because dragging it there is fewer taps and the check above already stops it stranding itself.
 
 This is kept in your browser rather than in your settings, like the list of chats you have switched Auto Retry off in. A position belongs to the screen you are sitting at, so it does not follow you between devices and it is not included in an export.
 

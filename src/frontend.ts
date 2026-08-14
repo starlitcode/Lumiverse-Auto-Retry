@@ -95,7 +95,7 @@ const STREAM_BUF_MAX = 200000;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "4.6.2";
+const VERSION = "4.6.3";
 
 // ---- defaults (the UI overrides these; editing here changes the fallback) ----
 const CONFIG = {
@@ -2625,7 +2625,9 @@ export function setup(ctx: Ctx, opts?: any) {
     sum.textContent =
       lastPrompt.total + (lastPrompt.total === 1 ? " message, " : " messages, ") +
       rough(chars) + " characters, roughly " + rough(Math.round(chars / 4)) + " tokens" +
-      (lastPrompt.dropped ? " (" + lastPrompt.dropped + " not shown)" : "");
+      (lastPrompt.dropped
+        ? " (" + lastPrompt.dropped + " not listed below, all of them sent)"
+        : "");
     body.appendChild(sum);
 
     // Where the notes landed, said in words as well as marked in the list. It
@@ -2695,9 +2697,17 @@ export function setup(ctx: Ctx, opts?: any) {
       head.appendChild(where);
       head.appendChild(peek);
       const full = document.createElement("div");
+      // Says which end the cut happened at. "(cut for display)" was ambiguous
+      // enough to read as the prompt itself having been shortened, which would
+      // be alarming and is not what happens: the model was sent the message
+      // whole, and only the copy this panel was handed is capped.
+      const shown = String(m.content || "");
+      const missing = Math.max(0, (m.chars || 0) - shown.length);
       full.textContent =
-        String(m.content || "") +
-        ((m.chars || 0) > String(m.content || "").length ? "\n\n(cut for display)" : "");
+        shown +
+        (missing
+          ? "\n\n(" + rough(missing) + " more characters were sent to the model. Only this view is shortened.)"
+          : "");
       full.style.cssText =
         "margin-top:4px;white-space:pre-wrap;line-height:1.4;" +
         "font-family:var(--lumiverse-font-mono,ui-monospace,monospace)";
@@ -2851,7 +2861,9 @@ export function setup(ctx: Ctx, opts?: any) {
       const lines = [
         lastPrompt.total + (lastPrompt.total === 1 ? " message, " : " messages, ") +
           rough(chars) + " characters, roughly " + rough(Math.round(chars / 4)) + " tokens" +
-          (lastPrompt.dropped ? " (" + lastPrompt.dropped + " not shown)" : ""),
+          (lastPrompt.dropped
+            ? " (" + lastPrompt.dropped + " not listed below, all of them sent)"
+            : ""),
       ];
       if (lastPrompt.notes) {
         const at = lastPrompt.messages.findIndex((m: any) => m && m.note);
@@ -2875,7 +2887,13 @@ export function setup(ctx: Ctx, opts?: any) {
             (m.note ? " (Auto Retry note)" : "") + " " +
             (m.chars || 0) + " chars ---",
         );
-        lines.push(String(m.content || ""));
+        const body = String(m.content || "");
+        lines.push(body);
+        // The header above says how many characters this message really is, and
+        // the text under it can be shorter, so without this the copy quietly
+        // disagrees with itself and reads as if the prompt were truncated.
+        const gone = Math.max(0, (m.chars || 0) - body.length);
+        if (gone) lines.push("(" + gone + " more characters were sent to the model, not shown here)");
       }
       return lines.join("\n");
     };
@@ -3596,15 +3614,6 @@ export function setup(ctx: Ctx, opts?: any) {
     // page load it was missing until the first reply came through.
     // Rebuilding the widget is what puts it back, since where it sits belongs to
     // the host and a fresh one starts at the position it is handed.
-    entry("Move back to the corner", () => {
-      // Forgetting where it was is the whole point of this entry. Without it,
-      // the position it was just asked to leave behind would be restored the
-      // moment the button is built again.
-      delete layout.float;
-      saveLayout();
-      hideFloat();
-      showFloat();
-    });
     entry("Hide this button", () => {
       cfg.showFloatingToggle = false;
       saveSaved();
