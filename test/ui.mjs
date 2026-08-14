@@ -4150,8 +4150,10 @@ console.log("\nthe per-chat switch finds the chat");
     return { cold, afterRender, afterClick, otherChat, noChat };
   });
   await page.close();
-  check("with nothing seen yet it says to open a chat",
-    out.cold.disabled === true && /open a chat/i.test(out.cold.note), out.cold);
+  check("with nothing seen yet it says it is waiting, not that you should open a chat",
+    out.cold.disabled === true &&
+      /waiting to catch which chat/i.test(out.cold.note) &&
+      !/open a chat/i.test(out.cold.note), out.cold);
   check("a rendered message is enough to wake it up",
     out.afterRender.disabled === false && /turn off here/i.test(out.afterRender.label), out.afterRender);
   check("and it still switches that chat off",
@@ -4182,7 +4184,10 @@ console.log("\nper-chat switch, in the panel");
   );
   check("the switch is in the panel, not only behind the floating button", out.present, out);
   check("and is not offered when no chat is open", out.noChat.disabled === true, out.noChat);
-  check("saying why", /Open a chat/.test(out.noChat.text), out.noChat.text.slice(0, 80));
+  check("saying it is waiting, rather than telling you to do what you have done",
+    /waiting to catch which chat/i.test(out.noChat.text) &&
+      !/open a chat/i.test(out.noChat.text),
+    out.noChat.text.slice(0, 90));
   check("no console errors", errors.length === 0, errors);
 }
 

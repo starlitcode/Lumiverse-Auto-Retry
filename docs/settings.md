@@ -31,6 +31,8 @@ The master switch is all or nothing, which is the wrong shape for a scene where 
 
 In the settings panel, under **Basics**, the **This chat** row has a **Turn off here** button. That chat is left alone and every other chat carries on, and the button becomes **Turn on here**. Left alone covers word swaps too: nothing is swapped automatically in a chat you have switched off. This is the only place it is: it is not in the floating button's menu, which is kept to the button's own business.
 
+If the button is greyed out while you are in a chat, it has not been told which chat that is yet. It cannot ask Lumiverse directly without a permission that also grants creating and deleting chats, which is not worth it for one id, so it waits to be told: a reply arriving, a message sent, or switching away and back all do it. The case where you will see this is updating the extension without leaving the chat, since nothing re-renders and so nothing announces where you are.
+
 It is written down in your browser, so it survives a reload. It is not a setting: it is a list of chat ids, which would mean nothing on another account, so it is not synced and not included in an export.
 
 While you are in a chat that is switched off, the top of the settings panel says so and offers **Turn it back on here**. That line is there because a chat you switched off weeks ago and forgot about looks exactly like the extension having stopped working.

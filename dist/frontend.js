@@ -7653,7 +7653,15 @@ export function setup(ctx, opts) {
             act.style.opacity = known ? "1" : "0.45";
             act.style.cursor = known ? "pointer" : "not-allowed";
             note.textContent = !known
-                ? "Open a chat to switch Auto Retry off in just that one. Every other chat carries on as it is."
+                // Not "open a chat", which is what this used to say and is wrong when
+                // you already have. Lumiverse does not offer a way to ask which chat is
+                // open without the chats permission, which also grants creating and
+                // deleting them, so this waits to be told instead. Anything happening
+                // in a chat tells it. A reply arriving does, and so does sending a
+                // message or switching away and back. Updating the extension while
+                // sitting in a chat is the case that leaves it waiting, because nothing
+                // re-renders and so nothing announces which chat you are in.
+                ? "Waiting to catch which chat this is. Send a message, or switch away and back, and this is ready. Every other chat carries on as it is."
                 : off
                     ? "Auto Retry is switched off in this chat. Every other chat carries on as it is. This is remembered, and it is kept in this browser rather than in your settings."
                     : "Switch Auto Retry off in this chat alone, for a scene where the model is meant to refuse. Every other chat carries on as it is.";
