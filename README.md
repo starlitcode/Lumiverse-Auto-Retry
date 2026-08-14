@@ -10,7 +10,7 @@ It watches each reply and re-fires when:
 - the reply comes back empty, including one that "thinks" but never writes anything
 - the reply is cut off mid-sentence (see [Cut-off detection](docs/detection.md#cut-off-detection))
 - the reply is an accidental out-of-character refusal, or the model breaks off mid-scene
-  (see [Accidental-refusal detection](docs/detection.md#accidental-refusal-detection-beta))
+  (see [Accidental-refusal detection](docs/detection.md#accidental-refusal-detection))
 - the stream stalls mid-reply, tokens stop arriving for a while
 - a reply never starts or never finishes
 - (optional, off by default) the reply is very short
@@ -54,7 +54,7 @@ Auto Retry listens to Lumiverse's own generation events. When a reply fails, com
 
 Find and replace works separately, since editing a saved reply is a backend job. A small backend module watches for finished replies and, when swaps are on, edits the saved message through Lumiverse's Chat Mutation API. That edit is treated as an edit rather than a new reply, so it cannot set itself off in a loop.
 
-It makes no external network calls. [Privacy](docs/privacy.md) has the detail, including the four permissions it declares and what still works without each of them.
+It makes no external network calls. [Privacy](docs/privacy.md) has the detail, including the five permissions it declares, what still works without each of them, and why `chats` grants more than the extension uses.
 
 Auditing it, or pointing a scanner at it? The two files Lumiverse loads are `dist/frontend.js` and `dist/backend.js`, named in `spindle.json`. They are committed as plain readable JavaScript, not minified or bundled. Everything else in the repo is for working on it: `src/` is the TypeScript they are built from, which a JavaScript-only parser cannot read and will report as unparseable.
 

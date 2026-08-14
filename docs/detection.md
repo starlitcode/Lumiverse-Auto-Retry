@@ -69,7 +69,7 @@ That last check reads punctuation in any script, and treats an emoji as an endin
 
 These are kept careful so a reply that legitimately ends on `...`, an action, or a closed quote is left alone.
 
-## Accidental-refusal detection (beta)
+## Accidental-refusal detection
 
 Models sometimes break character and refuse a request that a re-run would answer normally: a false positive in a safety filter, or an inconsistent moderation call. Because these models are stochastic, sending the same request again often produces a normal reply. `retryOnRefusal` (on by default) treats that like any other recoverable failure and re-fires.
 

@@ -39,6 +39,7 @@ function boot(
   messages: Msg[],
   carried?: Map<string, string>,
   perUser?: Map<string, string>,
+  chats?: any,
 ): Harness {
   const store = carried || new Map<string, string>();
   const toFrontend: any[] = [];
@@ -80,6 +81,7 @@ function boot(
     on: (name: string, fn: any) => {
       events[name] = fn;
     },
+    chats: chats,
     chat: {
       getMessages: async () => messages,
       updateMessage: async (_chatId: string, id: string, patch: any) => {
@@ -527,6 +529,33 @@ describe("settings survive a restart", () => {
     await h.onFrontend({ type: "set_chats_off", chats: ["other"] });
     await h.onGenerationEnded({ chatId: "c1", messageId: "a1", content: msgs[2].content });
     expect(msgs[2].content).toBe("A dog sat by the fire.");
+  });
+
+  test("the panel can ask which chat is open", async () => {
+    const h = boot(chatWith("x"));
+    await h.onFrontend({ type: "get_active_chat", requestId: "r1" }, "u1");
+    const m = h.toFrontend.find((x) => x.type === "active_chat");
+    expect(m.requestId).toBe("r1");
+    // The stub host has no chats API, which is what a build without the
+    // permission looks like: answered, with nothing, rather than left hanging.
+    expect(m.chatId).toBe(null);
+  });
+
+  test("and gets the id when the host offers one", async () => {
+    const h = boot(chatWith("x"), undefined, undefined, { getActive: async () => ({ id: "c9" }) });
+    await h.onFrontend({ type: "get_active_chat", requestId: "r2" }, "u1");
+    const m = h.toFrontend.find((x) => x.type === "active_chat");
+    expect(m.chatId).toBe("c9");
+  });
+
+  test("a chats API that throws is answered, not left hanging", async () => {
+    const h = boot(chatWith("x"), undefined, undefined, {
+      getActive: async () => { throw new Error("permission denied"); },
+    });
+    await h.onFrontend({ type: "get_active_chat", requestId: "r3" }, "u1");
+    const m = h.toFrontend.find((x) => x.type === "active_chat");
+    expect(m).toBeTruthy();
+    expect(m.chatId).toBe(null);
   });
 
   test("word swap presets round-trip through account storage", async () => {

@@ -8,6 +8,8 @@ How to report a security problem in Auto Retry. For what the extension touches a
 
 **Anything else: [open an issue](https://github.com/starlitcode/Lumiverse-Auto-Retry/issues).** Ordinary bugs, odd behaviour, and anything you are happy to have read by everyone belong there.
 
+**A permission being used for more than [Privacy](docs/privacy.md) says: Discord.** That page states exactly what each permission is for and what the extension does not do with it. If you find it doing something that page does not describe, that is a security report, not a bug report, whether or not it looks harmful.
+
 Not sure which? Use Discord. If it turns out to be nothing sensitive, you can open an issue afterwards and nothing is lost. If you open an issue first and it was sensitive, deleting it does not undo anything: GitHub has already emailed it to everyone watching the repo, and search engines may have it.
 
 ## Include

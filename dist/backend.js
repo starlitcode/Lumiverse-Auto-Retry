@@ -606,6 +606,25 @@ spindle.onFrontendMessage(async (payload, userId) => {
             replyTo(userId, { type: 'loaded_settings', requestId: payload.requestId, settings: settings });
             return;
         }
+        // Which chat the user is looking at. The frontend cannot ask for this
+        // itself: chats is a backend permission, and there is no frontend event
+        // that reports the current chat without something happening in it first.
+        // Answers null rather than failing when the permission is not granted, so
+        // the panel falls back to waiting to be told, exactly as it did before.
+        if (payload.type === 'get_active_chat') {
+            let chatId = null;
+            try {
+                if (spindle.chats && typeof spindle.chats.getActive === 'function') {
+                    const active = await spindle.chats.getActive(userId);
+                    chatId = (active && active.id) || null;
+                }
+            }
+            catch (_) {
+                chatId = null;
+            }
+            replyTo(userId, { type: 'active_chat', requestId: payload.requestId, chatId: chatId });
+            return;
+        }
         if (payload.type === 'set_chats_off') {
             const list = Array.isArray(payload.chats) ? payload.chats : [];
             chatsOff = new Set(list.slice(0, 500).map((c) => String(c)));

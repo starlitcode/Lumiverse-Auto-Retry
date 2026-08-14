@@ -9,6 +9,7 @@
   "permissions": [
     "generation",
     "chat_mutation",
+    "chats",
     "ui_panels",
     "interceptor"
   ],

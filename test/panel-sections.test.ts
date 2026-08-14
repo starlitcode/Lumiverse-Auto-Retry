@@ -63,7 +63,7 @@ describe("the sections of the settings panel", () => {
     // section to that set is a decision someone made on purpose.
     const shut = secs.filter((s) => /\n\s*collapsed: true,/.test(s.body)).map((s) => s.title);
     expect(shut).toEqual([
-      "Refusal tuning (beta)",
+      "Refusal tuning",
       "Find and replace (beta)",
       "Buttons it clicks",
     ]);

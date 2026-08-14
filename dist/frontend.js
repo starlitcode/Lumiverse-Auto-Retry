@@ -473,7 +473,7 @@ const SCHEMA = [
             },
             {
                 key: "retryOnRefusal",
-                label: "It looks like an accidental refusal (beta)",
+                label: "It looks like an accidental refusal",
                 type: "bool",
                 hint: "Retry when the model breaks character to decline (says it's an AI, or that it can't help or continue). It retries the same request unchanged, capped by your Most tries setting, so a refusal the model means will survive the tries and stop. Reads only the final reply, never the thinking, and stays narrow so an in-character \"I can't do that\" is left alone.",
             },
@@ -500,7 +500,7 @@ const SCHEMA = [
         ],
     },
     {
-        title: "Refusal tuning (beta)",
+        title: "Refusal tuning",
         collapsed: true,
         extra: "refusalTester",
         // Every setting under here feeds looksLikeRefusal, and all three places
@@ -5525,6 +5525,32 @@ export function setup(ctx, opts) {
     // and came back, or sent a message. Neither is a thing anyone should have to
     // work out. A message rendering is what actually happens when a chat opens,
     // and it carries the id, so it is enough on its own.
+    // Ask the backend which chat is open. Everything else that sets the chat id
+    // waits for something to happen in the chat, which leaves the per-chat switch
+    // greyed out after an update: nothing re-renders, so nothing announces where
+    // you are. This asks outright. Answers null without the chats permission, in
+    // which case nothing changes and the old waiting behaviour stands.
+    function askActiveChat() {
+        try {
+            if (!ctx || typeof ctx.sendToBackend !== "function")
+                return;
+            if (typeof ctx.onBackendMessage !== "function")
+                return;
+            const reqId = "ar-chat-" + Date.now() + "-" + Math.random().toString(36).slice(2);
+            const off = ctx.onBackendMessage((msg) => {
+                if (!msg || msg.type !== "active_chat" || msg.requestId !== reqId)
+                    return;
+                try {
+                    off && off();
+                }
+                catch (_) { }
+                if (msg.chatId)
+                    noteChat(msg.chatId);
+            });
+            ctx.sendToBackend({ type: "get_active_chat", requestId: reqId });
+        }
+        catch (_) { }
+    }
     function noteChat(id) {
         const next = id == null ? null : id;
         if (next == null || next === lastChatId)
@@ -7678,6 +7704,10 @@ export function setup(ctx, opts) {
         // Held so the row can be repainted from outside. It is built once when the
         // panel opens, and the chat it describes can be learned a moment later.
         chatSwitchPaint = paint;
+        // Opening the panel is the moment somebody wants to use this row, so it is
+        // worth asking again rather than leaving it waiting for a reply to arrive.
+        if (lastChatId == null)
+            askActiveChat();
         top.appendChild(label);
         top.appendChild(act);
         row.appendChild(top);
@@ -9002,6 +9032,7 @@ export function setup(ctx, opts) {
     syncLiveLog();
     syncFloat();
     tellBackendChatsOff();
+    askActiveChat();
     loadFromAccount();
     loadPresetsFromAccount();
     syncInputBarActions();

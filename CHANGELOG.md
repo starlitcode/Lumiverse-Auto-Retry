@@ -19,8 +19,13 @@ _2026-08-13_
 - **Word swaps ignored the per-chat switch too.** A chat you had switched off carried on having its replies rewritten. The list of chats you have switched off is kept in your browser rather than in your settings, so the backend could not see it and had to be told; it is now sent when it changes and when the page loads.
 - **Flipping the switch from the floating button or the Extras entry did not sync.** Saving the settings panel writes to your account, and those two controls flip the same switch and did not, so the setting people change most often stayed in whichever browser they changed it in. It also never reached the backend, which is the second half of why swapping carried on after switching the extension off.
 
+### Added
+
+- **It can now ask Lumiverse which chat you are in, under a new `chats` permission.** This is what fixes **Turn off here** sitting greyed out in a chat you were already in, which happened after updating the extension because nothing re-renders and so nothing announced where you were. Read [Privacy](docs/privacy.md) before granting it: Lumiverse bundles reading, creating and deleting chats into one permission, and there is no narrower one to ask for. Auto Retry uses a single call from it, the one that answers which chat is open. It never creates, deletes or alters a chat. Refuse it and everything still works, with the switch waiting to be told as before.
+
 ### Changed
 
+- **Accidental-refusal retrying is no longer marked beta.** It has been on by default for a long time while carrying a label that says to be careful with it, which are two opposite claims. The detection has not changed; the label was undersold. Find and replace keeps its beta label, because that one is off by default, edits your saved messages, cannot be undone and needs a privileged permission.
 - **The per-chat switch says what it is actually waiting for.** When it does not yet know which chat you are in, it said "open a chat", which is confusing advice to read while you are in one. It now says it is waiting to catch the chat, and what will tell it. Nothing else changed: it still cannot ask Lumiverse which chat is open, because the permission for that also grants creating and deleting chats.
 
 ### Removed
