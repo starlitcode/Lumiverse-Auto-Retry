@@ -5580,6 +5580,11 @@ export function setup(ctx, opts) {
     // greyed out after an update: nothing re-renders, so nothing announces where
     // you are. This asks outright. Answers null without the chats permission, in
     // which case nothing changes and the old waiting behaviour stands.
+    // Handlers waiting on an answer that may never come. Held so teardown can
+    // drop them, and so one is never left listening for a reply to a question
+    // asked minutes ago.
+    const chatAsks = new Set();
+    const CHAT_ASK_MS = 8000;
     function askActiveChat(forChat) {
         try {
             if (!ctx || typeof ctx.sendToBackend !== "function")
@@ -5587,27 +5592,47 @@ export function setup(ctx, opts) {
             if (typeof ctx.onBackendMessage !== "function")
                 return;
             const reqId = "ar-chat-" + Date.now() + "-" + Math.random().toString(36).slice(2);
-            const off = ctx.onBackendMessage((msg) => {
-                if (!msg || msg.type !== "active_chat" || msg.requestId !== reqId)
+            let done = false;
+            let timer = null;
+            let off = null;
+            // One way out, however this ends. Without it a host that never answers
+            // left a listener behind on every chat switch, and teardown left them all
+            // registered, which is a leak that only shows on a long session.
+            const finish = () => {
+                if (done)
                     return;
+                done = true;
+                clearTimeout(timer);
                 try {
                     off && off();
                 }
                 catch (_) { }
-                if (msg.chatId) {
-                    // An empty answer is still an answer, and caching it stops the same
-                    // question going out again every time you switch back to that chat.
-                    chatNames.set(String(msg.chatId), msg.character ? String(msg.character) : "");
-                    if (chatSwitchPaint) {
-                        try {
-                            chatSwitchPaint();
-                        }
-                        catch (_) { }
+                chatAsks.delete(finish);
+            };
+            off = ctx.onBackendMessage((msg) => {
+                if (!msg || msg.type !== "active_chat" || msg.requestId !== reqId)
+                    return;
+                finish();
+                if (!msg.chatId)
+                    return;
+                // An empty answer is still an answer, and caching it stops the same
+                // question going out again every time you switch back to that chat.
+                chatNames.set(String(msg.chatId), msg.character ? String(msg.character) : "");
+                if (chatSwitchPaint) {
+                    try {
+                        chatSwitchPaint();
                     }
+                    catch (_) { }
                 }
-                if (msg.chatId)
+                // Only the question that asked "which chat is open" may answer that.
+                // A reply about a named chat is just its name arriving, and acting on
+                // it would drag the panel back to a chat the user has since left, since
+                // an answer can land after they have moved on.
+                if (!forChat)
                     noteChat(msg.chatId);
             });
+            chatAsks.add(finish);
+            timer = setTimeout(finish, CHAT_ASK_MS);
             ctx.sendToBackend({ type: "get_active_chat", requestId: reqId, chatId: forChat || null });
         }
         catch (_) { }
@@ -9308,6 +9333,12 @@ export function setup(ctx, opts) {
         lastPrompt = null;
         paintTabs = null;
         focusTab = null;
+        for (const drop of Array.from(chatAsks)) {
+            try {
+                drop();
+            }
+            catch (_) { }
+        }
         hideLiveLog();
         hideDrawerPanel();
         hideFloat();

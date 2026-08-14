@@ -4235,6 +4235,109 @@ console.log("\nthe per-chat switch finds the chat");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- an answer that lands after you have moved on ----
+// Asking which chat is open and asking who a named chat is with are the same
+// question over the bridge, told apart by what was asked for. Acting on both
+// as if they said "you are here" walked the panel back into a chat the user had
+// already left, and the answer to a question nobody answers has to stop
+// listening at some point or every switch leaves a handler behind.
+console.log("\na late answer cannot drag you back");
+{
+  const page = await browser.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  page.on("console", (m) => { if (m.type() === "error") errors.push("console: " + m.text()); });
+  await stage(page, "<div id=modal></div>");
+  await page.addStyleTag({ content: THEME });
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  const out = await page.evaluate(async () => {
+    const frame = () =>
+      new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const handlers = {};
+    const acts = {};
+    const asked = [];
+    // Live listeners, counted rather than collected: one that never drops off
+    // is the whole point of this block.
+    let live = [];
+    const teardown = window.__setup(
+      { events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
+        sendToBackend: (m) => { if (m && m.type === "get_active_chat") asked.push(m); },
+        onBackendMessage: (cb) => {
+          live.push(cb);
+          return () => { live = live.filter((x) => x !== cb); };
+        },
+        ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+              registerInputBarAction: (o) => {
+                const a = { onClick: (cb) => { a.cb = cb; return () => {}; }, destroy: () => {} };
+                acts[o.id] = a; return a; } } },
+      { toast: false },
+    );
+    const answer = (m) => { for (const cb of live.slice()) cb(m); };
+    const forChat = (id) => asked.find((m) => m.chatId === id);
+    const label = () => {
+      const row = document.querySelector("[data-ar-chat-switch]");
+      const span = row && row.querySelector("span");
+      return span ? (span.textContent || "").trim() : "";
+    };
+
+    acts["auto-retry-settings"].cb();
+    await frame();
+
+    // In one chat, then away to another before the first answer comes back.
+    handlers.CHARACTER_MESSAGE_RENDERED({ chatId: "chat-a", messageId: "m1" });
+    await frame();
+    handlers.CHARACTER_MESSAGE_RENDERED({ chatId: "chat-b", messageId: "m2" });
+    await frame();
+
+    // The answer about the chat left behind arrives now.
+    const qa = forChat("chat-a");
+    answer({ type: "active_chat", requestId: qa && qa.requestId, chatId: "chat-a", character: "The Archivist" });
+    await frame();
+    const afterLate = label();
+
+    // And the answer about the chat actually open names it.
+    const qb = forChat("chat-b");
+    answer({ type: "active_chat", requestId: qb && qb.requestId, chatId: "chat-b", character: "The Cartographer" });
+    await frame();
+    const afterOwn = label();
+
+    // Handlers do not pile up: five switches, five answers, back where it
+    // started. The baseline is whatever the extension keeps registered for the
+    // life of the session, which this is not trying to count.
+    const base = live.length;
+    for (const id of ["c1", "c2", "c3", "c4", "c5"])
+      handlers.CHARACTER_MESSAGE_RENDERED({ chatId: id, messageId: id });
+    await frame();
+    const waiting = live.length;
+    for (const id of ["c1", "c2", "c3", "c4", "c5"]) {
+      const q = forChat(id);
+      answer({ type: "active_chat", requestId: q && q.requestId, chatId: id, character: null });
+    }
+    await frame();
+    const settled = live.length;
+
+    // A question nobody ever answers, left outstanding on the way out.
+    handlers.CHARACTER_MESSAGE_RENDERED({ chatId: "c9", messageId: "c9" });
+    await frame();
+    const pending = live.length;
+    teardown();
+    await frame();
+    return { afterLate, afterOwn, base, waiting, settled, pending, after: live.length,
+      askedFor: asked.map((m) => m.chatId) };
+  });
+  await page.close();
+  check("an answer about the chat you left does not become where you are",
+    out.afterLate === "This chat", out);
+  check("and the answer about the chat you are in still names it",
+    out.afterOwn === "This chat, with The Cartographer", out);
+  check("each switch asks once", out.waiting === out.base + 5, out);
+  check("and each answer takes its handler away", out.settled === out.base, out);
+  check("an outstanding question was really left open", out.pending === out.base + 1, out);
+  check("teardown drops every handler, answered or not", out.after === 0, out);
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- the per-chat switch has to be reachable ----
 // It lived only in the floating button's hold menu, and that button is off by
 // default, so on a stock install there was no way to reach it at all.
