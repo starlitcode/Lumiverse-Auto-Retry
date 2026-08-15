@@ -1658,8 +1658,6 @@ const CRISIS_RESOURCE = [
     /\b(?:licensed|qualified|trained) (?:therapist|counsel\w+|professional|volunteer)s?\b/i,
     /\b(?:seek|get) (?:professional|immediate|medical) (?:help|support|attention)\b/i,
     /\breach out to (?:a|your) (?:professional|therapist|doctor|counsel\w+|crisis)\b/i,
-    /\b(?:please|consider) (?:seek\w*|contact\w*|talk\w*|speak\w*|reach\w*)\b[^.?!\n]{0,40}?\b(?:mental health (?:professional|specialist)|crisis (?:hotline|helpline|line|counsel\w+|service|support)|professional help)\b/i,
-    /\bplease (?:seek|get) (?:immediate|urgent|professional|emergency) (?:help|support|medical attention)\b/i,
     /\bplease reach out (?:for (?:help|support)|to someone)\b/i,
     /\b(?:talk|speak|reach out|tell|stay) (?:to |with )?someone (?:you trust|close to you)\b/i,
     /\bgo to the nearest emergency (?:department|room)\b/i,
@@ -1829,15 +1827,26 @@ function refusalVerdict(text, cfg) {
     // it. Held to the length limit it would almost never be looked at, and the
     // limit would look like it was working.
     if (cfg && cfg.refusalCatchCrisis === true && cfg.refusalUseBuiltins !== false) {
+        // A hit is a span of the reply, not a pattern that matched. Several of
+        // these describe the same sentence from different angles, and one sentence
+        // counted twice agrees with itself, which is the one thing asking for two
+        // signals exists to prevent. A span overlapping one already counted is the
+        // same signal said again, so it is skipped. The address list is read first,
+        // so where an address and a comfort pattern cover the same words, it is the
+        // address that stands.
         const hits = [];
         const gather = (list) => {
             for (const re of list) {
                 const m = norm.match(re);
-                if (!m)
+                if (!m || typeof m.index !== "number")
                     continue;
-                if (typeof m.index === "number" && isQuoted(m.index, m[0].length))
+                if (isQuoted(m.index, m[0].length))
                     continue;
-                hits.push(m[0]);
+                const at = m.index;
+                const to = at + m[0].length;
+                if (hits.some((h) => at < h.to && h.at < to))
+                    continue;
+                hits.push({ at: at, to: to, text: m[0] });
             }
         };
         gather(CRISIS_ADDRESS);
@@ -1854,9 +1863,9 @@ function refusalVerdict(text, cfg) {
                 refusal: true,
                 crisis: true,
                 reason: 'it steps out of the scene to offer support: "' +
-                    hits[0] +
+                    hits[0].text +
                     '" and "' +
-                    hits[1] +
+                    hits[1].text +
                     '"',
             };
     }

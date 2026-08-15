@@ -840,7 +840,9 @@ describe("the flat no", () => {
     "No. I'm not going to write a scene like that.",
     "No, I won't continue this roleplay.",
     "No. I can't generate that content.",
-    "No — I will not write a story depicting that.",
+    // The dash is written as an escape so a search of the repository for one
+    // finds nothing. It is the character the pattern has to handle, not prose.
+    "No \u2014 I will not write a story depicting that.",
     "I'm not going to write a scene involving those characters.",
   ];
   for (const text of flat) {
@@ -1157,6 +1159,27 @@ describe("the model leaving the scene to offer support", () => {
     expect(refusalVerdict(lead, on).crisis).toBeUndefined();
     const missed = services.filter((x) => refusalVerdict(lead + x, on).crisis !== true);
     expect(missed).toEqual([]);
+  });
+
+  // Several patterns describe the same sentence from different angles, and for
+  // a while two of them were the same pattern in two lists. Either way one
+  // sentence counted as two signals and agreed with itself, which is exactly
+  // what asking for two is meant to rule out. A span already counted is not
+  // counted again.
+  test("one sentence cannot be both of the two signals", () => {
+    const singles = [
+      "Please contact a mental health professional.",
+      "Please seek professional help.",
+      "Consider talking to a crisis counselor.",
+      "Call the National Suicide Prevention Lifeline.",
+      "There is help available.",
+      // And the same sentence sitting inside a scene, which is where it costs
+      // somebody real writing.
+      "She told him to please seek professional help, and he laughed at her.",
+    ];
+    for (const text of singles) expect(refusalVerdict(text, on).crisis).toBeUndefined();
+    // Each of them is one signal short, not zero: a second one tips it over.
+    expect(refusalVerdict("Here are some resources. Please seek professional help.", on).crisis).toBe(true);
   });
 
   test("one signal is never enough on its own", () => {
