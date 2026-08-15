@@ -101,7 +101,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "4.10.0";
+const VERSION = "4.11.0";
 // The one address the extension ever points at, used by the warning in front of
 // the crisis-support check. Pinned to the released branch rather than to a tag,
 // so an old install still opens the page as it stands today.
@@ -2396,26 +2396,36 @@ function ensureReadableTree(root, min) {
 // Long enough that a normal tap never reaches it, short enough that holding
 // the button does not feel broken.
 const HOLD_MS = 500;
-// The extension's mark: a die caught mid-tumble. Lumiverse calls a fresh
-// attempt a reroll, so this says what the extension does rather than reusing
-// the refresh arrow every other extension already draws. Strokes are
-// currentColor so the mark follows the theme, and so fixContrast can repaint it
-// by setting colour on the element around it.
-const DIE_BODY = '<g transform="rotate(14 12 12)">' +
-    '<rect x="4" y="4" width="16" height="16" rx="5"/>' +
-    '<circle cx="8.8" cy="8.8" r="1.6" fill="currentColor" stroke="none"/>' +
-    '<circle cx="15.2" cy="15.2" r="1.6" fill="currentColor" stroke="none"/>' +
-    "</g>";
-const DIE_SLASH = '<line x1="4" y1="20" x2="20" y2="4"/>';
+// The extension's mark: a reply, with the retry arrow sweeping over it.
+//
+// It was a tumbling die, because Lumiverse calls a fresh attempt a reroll. A
+// die on its own says dice, though, and dice say tabletop, which is not what
+// this is. What the extension actually acts on is a reply: it reads one,
+// decides it failed, and asks for another. So the reply is the shape, and the
+// arrow is what is being done to it.
+//
+// The arrow is drawn a little thinner than the bubble so the two read apart at
+// the size the Extras menu draws them, which is 16 pixels and the size that
+// decides whether any of this works. Nothing reaches the edge of the 24 box
+// once its stroke is on: an arrowhead clipped by the viewBox reads as a shorter
+// arrow rather than as a mistake, which is how it survives review.
+//
+// Strokes are currentColor so the mark follows the theme, and so fixContrast
+// can repaint it by setting colour on the element around it.
+const MARK_BODY = '<path stroke-width="1.6" d="M 2.74 7.48 A 10.3 10.3 0 0 1 21.8 8.82"/>' +
+    '<polyline stroke-width="1.6" points="19.69 7.19 21.8 8.82 22.54 6.26"/>' +
+    '<rect stroke-width="2" x="6" y="8.3" width="12" height="8.6" rx="2.8"/>' +
+    '<path stroke-width="2" d="M 8.6 16.9 L 7.9 19.6 L 11.6 16.9"/>';
+const MARK_SLASH = '<line stroke-width="2" x1="3.5" y1="20.5" x2="20.5" y2="3.5"/>';
 // size is passed only for the float widget, which owns its own element. The
 // Extras menu sizes the icon it is handed.
-function dieSvg(off, size) {
+function markSvg(off, size) {
     return ('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"' +
         ' stroke-linecap="round" stroke-linejoin="round"' +
         (size ? ' width="' + size + '" height="' + size + '"' : "") +
         ">" +
-        DIE_BODY +
-        (off ? DIE_SLASH : "") +
+        MARK_BODY +
+        (off ? MARK_SLASH : "") +
         "</svg>");
 }
 export function setup(ctx, opts) {
@@ -2539,8 +2549,8 @@ export function setup(ctx, opts) {
     // The Extras-menu on/off entry. Its label and icon carry the current state,
     // and the host offers no way to relabel an action once it is registered, so a
     // state change registers it again rather than editing it in place.
-    const TOGGLE_ICON_ON = dieSvg(false);
-    const TOGGLE_ICON_OFF = dieSvg(true);
+    const TOGGLE_ICON_ON = markSvg(false);
+    const TOGGLE_ICON_OFF = markSvg(true);
     // The state the registered entry was last labelled for, so it is only rebuilt
     // when the label would actually change.
     let toggleActionState = null;
@@ -3638,7 +3648,7 @@ export function setup(ctx, opts) {
                 shortName: "Retry",
                 description: "What Auto Retry is doing: its log, the prompt that went out, and the totals",
                 keywords: ["auto retry", "retry", "log", "prompt", "stats", "regenerate"],
-                iconSvg: dieSvg(false),
+                iconSvg: markSvg(false),
             });
             const root = drawerTab && drawerTab.root;
             if (!root)
@@ -3752,7 +3762,7 @@ export function setup(ctx, opts) {
             ? "var(--lumiverse-primary-text,rgba(186,135,255,.95))"
             : "var(--lumiverse-text-muted,rgba(255,255,255,.65))";
         floatEl.style.opacity = on ? "1" : "0.75";
-        floatEl.innerHTML = dieSvg(!on, glyph);
+        floatEl.innerHTML = markSvg(!on, glyph);
         // Tapping is always the master switch, whatever is showing. The per-chat
         // one lives in the hold menu, and the label says so rather than leaving
         // somebody to find out by tapping.
@@ -9617,7 +9627,7 @@ export function setup(ctx, opts) {
             const action = ctx.ui.registerInputBarAction({
                 id: "auto-retry-settings",
                 label: "Auto Retry settings",
-                iconSvg: dieSvg(false),
+                iconSvg: markSvg(false),
             });
             disposers.push(action.onClick(() => openSettings()));
             disposers.push(() => {
