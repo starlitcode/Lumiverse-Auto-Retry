@@ -118,8 +118,8 @@ It covers a reply that does not decline anything and does not break off either. 
 
 It takes two agreeing signals to count, drawn from two groups:
 
-- **The model addressing you rather than your character.** "What you've shared is deeply concerning", "if you are struggling with", "I want you to know that you are not alone", "you deserve support", "please reach out to a professional". This register belongs to a form letter. A character comforting another character does not use it.
-- **The furniture that comes with one.** A crisis line by name or by number, a helpline, a mental health professional, emergency services, a trusted adult.
+- **The model addressing you rather than your character.** "What you've shared is deeply concerning", "if you or someone you know is in immediate danger", "here are some resources that may be able to help", "you are not alone, and there are people who care about you", "you deserve support", "please reach out to one of these resources". The line that announces the list belongs here too, and it is the most reliable tell in the whole message: a reply carrying a list of services always introduces it, and nothing in a scene introduces one. So does the sign-off underneath the list, "please take care of yourself", and the sentence where the model says out loud that it is stepping out of the roleplay.
+- **The furniture that comes with one.** A crisis line by name or by number, a helpline, a national hotline however it is abbreviated, a mental health professional, emergency services, a trusted adult, someone you trust.
 
 At least one of the two has to come from the first group, so a scene where somebody mentions a helpline is left alone, and so is a single warm line with nothing agreeing with it. The quotation rule applies as it does everywhere else, which is what keeps a therapist in the scene from reading as the model.
 

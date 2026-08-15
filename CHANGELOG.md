@@ -16,6 +16,7 @@ _2026-08-15_
 
 - **It can retry a reply where the model stops the scene to offer you real-world support.** Some replies do not decline anything and do not break off either: they stop being the story and become a message to the person at the keyboard, saying that what you have written is concerning, that you are not alone, and that you should talk to a professional, usually with a list of services under it. In a scene about something heavy that is normally the model reading your fiction as a report about your life, and it takes the scene away at the worst moment. **Also catch it stopping to offer support**, under Refusal tuning, throws that reply away and asks for another. It is off unless you turn it on, and ticking it opens a warning that has to be answered before it goes on, because this is the one check in the extension that decides whether a particular message reaches you. Read [Safety](docs/safety.md) before switching it on.
 - **The warning links straight to the safety page.** Telling somebody to go and read something, in a box they have to answer to get out of, works out to telling them not to bother, so it is a link and it opens in its own tab. It is the only address the extension points at, and drawing it fetches nothing.
+- **More of the shapes that message arrives in.** The line that introduces the list of services, which is the most reliable tell there is. "If you or someone you know is in immediate danger", where the earlier pattern only knew the sentence with you as the subject throughout. Being pointed at the list rather than at a person. National hotlines however the model abbreviates them. And "someone you trust".
 - **A safety page in the docs.** Who this extension is built for, what the check above does and what it cannot know, what is worth noticing in yourself when a scene stops doing you any good, and how to switch the whole thing off or uninstall it. Linked from the README.
 
 ### Changed
@@ -23,6 +24,10 @@ _2026-08-15_
 - **The doubled refusal is caught: "I cannot and will not engage with content that ...".** Every pattern in the list expected the verb straight after "I can't", so putting "and will not" between them hid the most emphatic refusal a model writes. A meta object is still required, so a character saying "I cannot and will not marry him" is left alone.
 - **So is the flat no.** Some models do not soften it at all: the reply opens with "No." and then says what it will not write. Nothing in the list saw those, because every pattern in it starts at "I". It only counts at the very start of a reply and still needs an object no character has, so "No. I can't tell you that story" is left alone and "No. I won't write a scene like that" is not.
 - **Retries caused by the support check are counted under their own name** on the Stats tab, apart from ordinary refusals, so switching it on comes with a way to see how often it is firing rather than a guess.
+
+### Fixed
+
+- **The commonest line in a support message never matched.** "You are not alone, and there are people who care about you" was written into the list, and the pattern behind it asked for a word boundary straight after the comma. A comma followed by a space is not one, so the wording with the comma, which is how it is nearly always written, was the one form that slipped through, while the same sentence without the comma matched.
 
 ### Notes
 

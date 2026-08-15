@@ -1491,17 +1491,37 @@ const CRISIS_ADDRESS = [
     /\bif you(?:'re| are) (?:struggling|in crisis|in distress|going through)\b[^.?!\n]{0,60}?(?:[:,]|$)/i,
     /\bif you(?:'re| are) (?:having|experiencing) (?:thoughts of|suicidal)\b/i,
     /\bif you(?:'re| are) (?:thinking about|considering) (?:suicide|self-?harm|hurting yourself|ending your life)\b/i,
-    /\bif you(?:'re| are) in (?:immediate )?danger\b/i,
+    // "If you or someone you know is in immediate danger" is the commonest form
+    // of this line and the one an earlier version missed, because it only knew
+    // the sentence where "you" is the subject all the way through.
+    /\bif (?:you|someone|anyone)\b[^.?!\n]{0,40}?\b(?:is|are) in (?:immediate |any )?danger\b/i,
+    /\bif you(?:'re| are) in (?:immediate |any )?danger\b/i,
+    // The line that introduces the list. It is the single most reliable tell
+    // there is, because a reply carrying a list of services always announces it
+    // and nothing in a scene announces one.
+    /\bhere (?:are|is) (?:some |a few |a list of |the )?(?:resources|helplines|hotlines|numbers|places|people|support options)\b/i,
+    /\bresources that (?:may|might|can) (?:be able to )?help\b/i,
+    /\bsorry to hear (?:that )?you(?:'re| are) expressing\b/i,
     // The reassurance formula, in the full form the boilerplate uses. The bare
     // "you are not alone" is left out: that is a line a character says.
+    //
+    // The separator is written as a class rather than as alternatives followed by
+    // \b. It was, and a comma followed by a space is not a word boundary, so the
+    // commonest wording of the commonest line in the whole message went unmatched
+    // while the version without the comma matched fine.
     /\bI want you to know (?:that )?you(?:'re| are) not alone\b/i,
-    /\byou(?:'re| are) not alone(?:,| and| in this)\b[^.?!\n]{0,40}?\b(?:help|support|people|reach out)\b/i,
+    /\bplease (?:know|remember) (?:that )?you(?:'re| are) not alone\b/i,
+    /\byou(?:'re| are) not alone[,\s]+(?:and |in this)?[^.?!\n]{0,40}?\b(?:help|support|people|reach out|care about you)\b/i,
+    /\bthere are people who (?:care about you|want to help|can help|will listen)\b/i,
     /\byou deserve (?:support|help|care|safety|to be safe)\b/i,
     /\bsupport is available\b/i,
     /\bhelp is available\b/i,
     /\b(?:these|those|your) feelings are (?:valid|real)\b/i,
     /\bis a valid response to (?:trauma|what)\b/i,
     /\bplease (?:reach out|talk|speak) to (?:someone|a professional|a trusted|your doctor)\b/i,
+    // Being pointed at the list rather than at a person, which is how the reply
+    // closes once it has printed one.
+    /\b(?:reach out to|contact|call) (?:one of )?(?:these|the above|any of these) (?:resources|services|numbers|lines|organi[sz]ations)\b/i,
     /\byour (?:safety|wellbeing|well-being) (?:is|comes) (?:important|first|what matters)\b/i,
     /\bI care about (?:you|your (?:safety|wellbeing|well-being))\b/i,
     /\byou (?:do not|don'?t) have to (?:go through|face|carry|do) (?:this|it|that) alone\b/i,
@@ -1531,7 +1551,12 @@ const CRISIS_RESOURCE = [
     // below cover every real use of it.
     /\b(?:samaritans|befrienders|crisis text line|shout 85258|trevor project|trans lifeline|childline|papyrus|beyond ?blue|kids help(?: phone| line)|samhsa|rainn|hopeline|talk suicide|crisis services canada)\b/i,
     /\b(?:988|crisis|suicide prevention) lifeline\b/i,
-    /\bnational (?:suicide prevention|domestic violence|eating disorders?|sexual assault|helpline)\b/i,
+    // Named services vary by country and by how the model abbreviates them, so
+    // this reads the shape rather than trying to list them: a "national
+    // something hotline", however the middle is written.
+    /\bnational\b[^.?!\n]{0,30}?\b(?:hotline|helpline|lifeline|crisis line)\b/i,
+    /\bnational (?:suicide prevention|domestic violence|eating disorders?|sexual assault)\b/i,
+    /\bsomeone you trust\b/i,
     // The numbers, including the ones outside the US. Whole words, so a year or a
     // page count cannot stand in for a hotline.
     /\b(?:13 11 14|1737|116123|0800 58 58 58|1-?800-?656-?4673|0800 543 354)\b/,

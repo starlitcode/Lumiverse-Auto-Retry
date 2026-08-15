@@ -839,6 +839,11 @@ describe("the model leaving the scene to offer support", () => {
     // the list in the middle is sometimes the only thing between them.
     "I'm going to step out of the roleplay for a moment.\n\nIf you're going through something like this yourself, please talk to someone who can help:\n\n- Samaritans: 116123\n- Shout: text SHOUT to 85258\n\nPlease take care of yourself. If you'd like, we can continue the story in a different direction.",
     "You don't have to go through this alone. There are people who want to help, and reaching out takes courage.",
+    // Reported from a real chat. Every paragraph of it carries signal, and each
+    // one has to stand on its own, because the reply that arrives next time may
+    // be only one of them.
+    "I am very sorry to hear that you are expressing this. If you or someone you know is in immediate danger, please call your local emergency services or a crisis hotline right away. Here are some resources that may be able to help:",
+    "You are not alone, and there are people who care about you and want to help. Please reach out to one of these resources or someone you trust for support.",
   ];
   for (const text of CRISIS) {
     test(JSON.stringify(text.slice(0, 44)), () => {
@@ -855,8 +860,8 @@ describe("the model leaving the scene to offer support", () => {
     // The second opens with "I'm going to pause here", which the breaking-off
     // tier has always caught and still should. The other three are invisible
     // without this check, which is what makes it worth having.
-    const caught = CRISIS.map((t) => looksLikeRefusal(t, cfg));
-    expect(caught).toEqual([false, true, false, false, false, false]);
+    const caught = CRISIS.map((t, i) => (looksLikeRefusal(t, cfg) ? i : -1)).filter((i) => i >= 0);
+    expect(caught).toEqual([1]);
   });
 
   test("it is off in the defaults the extension ships", () => {
@@ -887,12 +892,30 @@ describe("the model leaving the scene to offer support", () => {
     '"If you are struggling with difficult thoughts, we can talk about that here," Dr. Ellis said. "You deserve support."',
     // An ordinary refusal, which belongs to the other tiers and their reasons.
     "I'm sorry, but I can't continue with this request.",
+    // The widened patterns are the ones to hold against a real scene. Each of
+    // these carries exactly one of them and nothing else.
+    '"There are people who care about you," he said. "Let me be one of them."',
+    "She pressed the card into his hand. Find someone you trust, she had said, and he had laughed at her.",
+    "The clinic wall was papered with numbers: a national helpline, a shelter, a legal aid line.",
+    "Here are some people who can help, she wrote, and listed the four names she still believed in.",
   ];
   for (const text of SCENES) {
     test("left alone: " + JSON.stringify(text.slice(0, 40)), () => {
       expect(refusalVerdict(text, on).crisis).toBeUndefined();
     });
   }
+
+  // The separator in "you are not alone, and ..." was written as an alternation
+  // followed by \\b, and a comma followed by a space is not a word boundary, so
+  // the commonest wording of the commonest line in the whole message was the
+  // one form that never matched.
+  test("the comma in the middle of the commonest line is not a wall", () => {
+    const both = [
+      "You are not alone, and there are people who care about you. Please call a crisis hotline.",
+      "You are not alone and there are people who care about you. Please call a crisis hotline.",
+    ].map((t) => refusalVerdict(t, on).crisis === true);
+    expect(both).toEqual([true, true]);
+  });
 
   test("one signal is never enough on its own", () => {
     expect(looksLikeRefusal("Support is available.", on)).toBe(false);
