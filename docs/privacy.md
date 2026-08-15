@@ -14,15 +14,53 @@ It also never treats text as code. There is no `eval` and no `new Function` anyw
 
 It asks Lumiverse for six permissions. Lumiverse sorts permissions into two tiers: some are granted the moment you install, and some are privileged and do nothing at all until an admin approves them. Four of these six are privileged, so on a shared instance they may sit inactive until someone with admin turns them on.
 
-`chat_mutation` is granted on install. It lets the extension read the text of a reply, which is how it decides whether that reply failed, and rewrite a reply, which is how the word-swap feature saves a change. Rewriting is the part worth thinking twice about, which is why word swaps are off by default and marked beta, but the permission itself is not one an admin has to approve. `generation` is privileged and is declared so the extension can follow the generation lifecycle, the events that tell it a reply started, streamed, or ended. Without it the extension cannot see replies happening at all, so this is the one it genuinely cannot work without. `ui_panels` is what Lumiverse requires before an extension may put a floating widget or a docked edge panel on screen, and it is used for the optional on/off button and the on-screen panel when that panel floats over the chat. It grants screen space, not access to your data. Put the panel in the sidebar drawer instead and it needs no permission at all: drawer tabs are open to every extension. `chats` is privileged, and is the one to read carefully because it grants more than the extension uses: Lumiverse bundles reading, creating and deleting chat sessions into a single permission, and there is no narrower one to ask for. Auto Retry uses exactly one call from it, the one that answers which chat you are currently looking at. It never creates a chat, never deletes one, and never changes a chat's settings or title. If that is more than you want to grant, refuse it: everything else works, and the only thing you lose is the **Turn off here** button knowing which chat you are in before something happens in that chat. `characters` is privileged and is only ever used to turn the card id a chat carries into a name, so the panel can say who a chat is with rather than showing you an id. It reads one card at a time, the one belonging to the chat you are in, and it never creates, edits or deletes a card. Refuse it and the panel says "This chat" as it always did. `interceptor` is privileged and lets an extension add to a prompt on its way to the model. It is used by one feature, "Send a note with a refusal retry", which is off by default.
+**`chat_mutation`**, granted on install, so no admin is involved. It lets the extension read the text of a reply, which is how it decides whether that reply failed, and rewrite a reply, which is how the word-swap feature saves a change. Rewriting is the part worth thinking twice about, which is why word swaps are off by default and marked beta.
+
+Refuse it and the retry side works exactly as it should. Only find and replace does nothing.
+
+**`generation`**, privileged. Declared so the extension can follow the generation lifecycle, the events that tell it a reply started, streamed, or ended. Without it the extension cannot see replies happening at all, so this is the one it genuinely cannot work without.
+
+**`ui_panels`**, privileged. What Lumiverse requires before an extension may put a floating widget or a docked edge panel on screen. It is used for the optional on/off button, and for the on-screen panel when that panel floats over the chat. It grants screen space, not access to your data, and putting the panel in the sidebar drawer instead needs no permission at all: drawer tabs are open to every extension.
+
+Refuse it and everything works. There is no floating button.
+
+**`chats`**, privileged, and the one to read carefully, because it grants more than the extension uses. Lumiverse bundles reading, creating and deleting chat sessions into a single permission and there is no narrower one to ask for. Auto Retry uses exactly one call from it, the one that answers which chat you are currently looking at. It never creates a chat, never deletes one, and never changes a chat's settings or title.
+
+Refuse it and everything works. The **Turn off here** button waits to be told which chat you are in rather than asking, which is how it behaved before this permission existed.
+
+**`characters`**, privileged. Only ever used to turn the card id a chat carries into a name, so the panel can say who a chat is with rather than showing you an id. It reads one card at a time, the one belonging to the chat you are in, and it never creates, edits or deletes a card.
+
+Refuse it and everything works. No chat is named, and the panel says "This chat" as it always did.
+
+**`interceptor`**, privileged. Lets an extension add to a prompt on its way to the model. It is used by one feature, "Send a note with a refusal retry", which is off by default.
+
+Refuse it and everything works. The refusal note is not sent.
+
+None of the six is required for the extension to start, which is why each of them above says what you still have if you refuse it. The four privileged ones may need an admin to approve them before they do anything.
+
+Behind those it uses eight Lumiverse APIs and nothing else, and everything the extension does is built out of these:
+
+- reading the messages in a chat
+- updating a message
+- asking which chat is currently open
+- reading the name off one character card
+- counting the tokens in a prompt
+- reading its own settings
+- writing its own settings
+- registering the interceptor above
+
+### The note sent with a refusal retry
 
 That note is the only thing in the extension that changes what the model is asked, so it is worth being precise about. It carries the text you typed and nothing else: your prompt is not read, nothing is copied out of it, and nothing is stored. Nothing is written to your chat. Because it is never a message in your chat, it will not necessarily appear in Prompt Breakdown, which lists what your chat is built from; the extension labels it for that panel, but whether it shows depends on your Lumiverse build. To see for yourself what went out and when, turn on the on-screen panel, which writes a line naming the note on the retry that carried it.
 
-It is put in place the moment before the extension clicks your retry button, and four things keep it to that one generation. It belongs to the chat it was put in place for and is never attached to a generation in another. It is used once and cleared, whether it was used or not. It expires after 45 seconds. And when the retry click it was armed for turns out to have started nothing, it is taken straight back rather than left waiting; if there is no retry button on screen to click at all, nothing is armed in the first place. Lumiverse also reports what kind of generation is running, and you can require that to say "regenerate" or "swipe" as a fifth check, under **Only send them on a regenerate or a swipe**. It is off by default because most builds report every generation as "normal", including a regenerate, so leaving it on stopped the note from ever being sent.
+It is put in place the moment before the extension clicks your retry button, and four things keep it to that one generation:
 
-None of the six is required for the extension to start, and the four privileged ones may need an admin to approve them before they do anything. Without `chat_mutation` the retry side works exactly as it should and only find-and-replace does nothing. Without `ui_panels` everything works and there is no floating button. Without `chats` everything works and the per-chat switch waits to be told which chat you are in rather than asking. Without `characters` everything works and no chat is named. Without `interceptor` everything works and the refusal note is not sent.
+- It belongs to the chat it was put in place for, and is never attached to a generation in another.
+- It is used once and cleared, whether it was used or not.
+- It expires after 45 seconds.
+- When the retry click it was armed for turns out to have started nothing, it is taken straight back rather than left waiting. If there is no retry button on screen to click at all, nothing is armed in the first place.
 
-Behind those it uses eight Lumiverse APIs and nothing else: reading the messages in a chat, updating a message, asking which chat is currently open, reading the name off one character card, counting the tokens in a prompt, reading and writing its own settings, and registering the interceptor above. Everything the extension does is built out of those eight.
+Lumiverse also reports what kind of generation is running, and you can require that to say "regenerate" or "swipe" as a fifth check, under **Only send them on a regenerate or a swipe**. It is off by default because most builds report every generation as "normal", including a regenerate, so leaving it on stopped the note from ever being sent.
 
 ## This page can change
 
