@@ -1,8 +1,4 @@
-![Auto Retry](https://www.udrop.com/file/P3YI/1786804106721_70c590845aa0b6f2a596b2244aabce3f_2_3_art.png)
-
-<!-- The banner is hosted elsewhere rather than committed here. If that host
-     ever goes away the image goes with it, so the safer version is to commit
-     the file and point this line at it instead. -->
+![Auto Retry](docs/banner.webp)
 
 # Auto Retry (Lumiverse Spindle extension)
 

@@ -107,6 +107,7 @@ Everything else in the repo exists for working on it, and none of it reaches you
 - `src/` is the TypeScript those two files are built from. A scanner that only parses JavaScript cannot read it and will say so. The shipped `dist/` files are plain JavaScript and parse normally.
 - `test/` runs only when a contributor types `bun run check`. It is not part of the install and adds nothing to its size.
 - `setup.sh` prepares a development machine. Nothing runs it at install time and nothing in the extension calls it.
+- `docs/` is these pages, and the banner the README shows. None of it is code.
 - `.github/workflows/` runs the checks on pull requests. Its actions are pinned to commit hashes rather than to movable tags, and the checkout step keeps no credentials in the build environment.
 
 Those checks rebuild `dist/` from `src/` on every pull request and fail if the result differs from what is committed, so the readable files you are auditing cannot quietly drift from the source they claim to come from.
