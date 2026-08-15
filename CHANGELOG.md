@@ -32,6 +32,7 @@ _2026-08-15_
 
 ### Fixed
 
+- **A refusal standing between two pieces of speech on one line was read as dialogue.** The quotation rule looked for the nearest mark behind the match and any mark ahead of it, which is the right answer on a line carrying one piece of speech and the wrong one on a line carrying two: `"Go on," he said. I can't help with that. "Please," she said.` found the closing mark of the first speech behind it and the opening mark of the second ahead of it, and left the refusal alone. It counts the marks between the start of the line and the match now, and an odd number is what puts the match inside a quotation.
 - **A note written rather than spoken read as the model breaking off.** The breaking-off check ignores a match with a dialogue tag behind it, because that is speech with the quotation marks left off, and the list of tags it knew had no writing verbs in it. "Let me know how you'd like to proceed, she wrote at the bottom of the letter" was thrown away as a result. A dozen more attributions are recognised now.
 - **The commonest line in a support message never matched.** "You are not alone, and there are people who care about you" was written into the list, and the pattern behind it asked for a word boundary straight after the comma. A comma followed by a space is not one, so the wording with the comma, which is how it is nearly always written, was the one form that slipped through, while the same sentence without the comma matched.
 

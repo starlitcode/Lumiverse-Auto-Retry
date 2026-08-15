@@ -1757,32 +1757,36 @@ function stripThinking(text, cfg) {
 function stripThinkingAlways(text, cfg) {
     return stripThinking(text, { refusalThinkTags: cfg && cfg.refusalThinkTags });
 }
-// True when the span at [start,end) sits inside a pair of quotation marks.
-// Used only for the "I am an AI" patterns: a character in a story can say that
-// line, and when they do it is dialogue, not the model stepping out of the
-// scene. Straight and curly quotes both count.
-function spanIsQuoted(text, start, end) {
+// True when the match at `start` sits inside a pair of quotation marks, which
+// makes it a character speaking rather than the model stepping out of the
+// scene. Straight and curly quotes both count, and an apostrophe is not a
+// quotation mark, so contractions are not involved.
+//
+// Counted by parity: how many quotation marks stand between the start of the
+// line and the match. An odd number means one was opened and not yet closed, so
+// the match is inside it. An even number means every quotation before it on
+// that line has been closed and the match is outside them all.
+//
+// It used to look for the nearest mark behind the match and then any mark ahead
+// of it, which is the same answer on a line with one piece of speech and the
+// wrong answer on a line with two. A refusal standing between them, as in
+// `"Go on," he said. I can't help with that. "Please," she said.`, found the
+// closing mark of the first speech behind it and the opening mark of the second
+// ahead of it, and was read as dialogue while being nothing of the kind.
+//
+// A line break ends every quotation, because a reply is checked as it was
+// written and dialogue does not run across a paragraph break unclosed.
+function spanIsQuoted(text, start) {
     const QUOTES = "\"\u201c\u201d\u00ab\u00bb";
-    let open = -1;
+    let marks = 0;
     for (let i = start - 1; i >= 0; i--) {
         const c = text[i];
         if (c === "\n")
-            break; // a line break ends any quotation for our purposes
-        if (QUOTES.indexOf(c) >= 0) {
-            open = i;
             break;
-        }
-    }
-    if (open < 0)
-        return false;
-    for (let i = end; i < text.length; i++) {
-        const c = text[i];
-        if (c === "\n")
-            return false;
         if (QUOTES.indexOf(c) >= 0)
-            return true;
+            marks++;
     }
-    return false;
+    return marks % 2 === 1;
 }
 function refusalVerdict(text, cfg) {
     const raw = stripThinking(String(text == null ? "" : text), cfg).trim();
@@ -1809,7 +1813,7 @@ function refusalVerdict(text, cfg) {
     // wrong span, so in that case the check is skipped rather than guessed at.
     const canLocate = lower.length === norm.length;
     const quotesOff = !!(cfg && cfg.refusalIgnoreQuoted === false);
-    const isQuoted = (start, len) => !quotesOff && start >= 0 && spanIsQuoted(norm, start, start + len);
+    const isQuoted = (start, _len) => !quotesOff && start >= 0 && spanIsQuoted(norm, start);
     // Whitelist wins: anything the user parked here is never a refusal. Asked
     // before anything else, including the crisis tier, so a phrase parked here
     // is honoured whatever the reply's length or which tier would have matched.

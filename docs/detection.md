@@ -92,6 +92,8 @@ Curly and straight apostrophes are treated the same, and only replies short enou
 
 A line inside quotation marks is a character speaking, so it is not counted as the model refusing. `"I can't help with that," the innkeeper muttered` is dialogue and is left alone; the same sentence with no quotes around it is a refusal and is retried.
 
+What counts as inside is worked out by counting the quotation marks between the start of the line and the match. An odd number means one was opened and not closed, so the match is inside it; an even number means every quotation before it on that line has been closed and the match is outside them all. A line break ends every quotation, so a refusal in its own paragraph is never read as speech from the paragraph above it. An apostrophe is not a quotation mark, so contractions play no part.
+
 This applies to the built-in lists only. Phrases you add under **Your own refusal phrases** are counted wherever they appear, quoted or not, because you put them there on purpose.
 
 Turn it off with **Ignore refusals inside quotation marks** if your model puts its own refusals in quotes. Almost none do.

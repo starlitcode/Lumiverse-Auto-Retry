@@ -170,6 +170,47 @@ describe("refusal detection catches the model breaking off", () => {
   });
 });
 
+// How the quotation rule decides, rather than what it decides. It counts the
+// marks between the start of the line and the match: an odd number means one
+// was opened and not closed, so the match is inside it.
+//
+// It used to look for the nearest mark behind the match and any mark ahead of
+// it, which gives the same answer on a line carrying one piece of speech and
+// the wrong answer on a line carrying two. The refusal between them found the
+// closing mark of the first and the opening mark of the second and was read as
+// dialogue.
+describe("what the quotation rule counts as inside", () => {
+  const inside = [
+    ['plain dialogue', '"I can\'t help with that," the innkeeper said.'],
+    ['curly marks', '\u201cI can\u2019t help with that,\u201d the innkeeper said.'],
+    ['the second speech on a line', '"Evening," she said. "I can\'t help with that."'],
+    ['dialogue in its own paragraph', 'He set down the cup.\n\n"I can\'t help with that," he said.'],
+  ];
+  for (const [name, text] of inside) {
+    test("left alone: " + name, () => expect(looksLikeRefusal(text, cfg)).toBe(false));
+  }
+
+  const outside = [
+    ['no marks at all', "I can't help with that."],
+    ['after a closed speech', '"Evening," she said. I can\'t help with that.'],
+    ['between two speeches on one line', '"Go on," he said. I can\'t help with that. "Please," she said.'],
+    ['between two speeches on their own lines', '"Go on," he said.\nI can\'t help with that.\n"Please," she said.'],
+    ['after an action', "*He shakes his head.* I can't help with that."],
+    ['with a speech underneath it', '"Go on," he said.\n\nI can\'t help with that.'],
+    ['with a speech after it', 'I can\'t help with that. "Please," she said.'],
+  ];
+  for (const [name, text] of outside) {
+    test("caught: " + name, () => expect(looksLikeRefusal(text, cfg)).toBe(true));
+  }
+
+  test("an apostrophe is not a quotation mark", () => {
+    // Every case above is full of contractions, so this is only worth stating
+    // once: if apostrophes counted, the parity would flip on nearly every line
+    // and the rule would be noise.
+    expect(looksLikeRefusal("I can't help with that. It isn't happening.", cfg)).toBe(true);
+  });
+});
+
 // A refusal inside quotation marks is a character speaking. Before this, the
 // exemption covered only the "I am an AI" patterns, so every other built-in
 // threw away dialogue that happened to share its wording.
