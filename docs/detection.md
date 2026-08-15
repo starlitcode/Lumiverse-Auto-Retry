@@ -98,6 +98,12 @@ This applies to the built-in lists only. Phrases you add under **Your own refusa
 
 Turn it off with **Ignore refusals inside quotation marks** if your model puts its own refusals in quotes. Almost none do.
 
+Switching it off reaches the phrase list and the patterns, and nothing else. Three things are outside it:
+
+- **Your own phrases**, which are counted wherever they appear either way, because you put them there on purpose.
+- **The dialogue tag.** `I'm going to stop now, he said` is speech with the marks left off, and that rule is about the attribution rather than about quotation marks. No model writes "he said" after its own refusal.
+- **[Stopping to offer support](#stopping-to-offer-support)**, which ignores quoted lines whatever this switch says. No model wraps that message in quotation marks, since it is addressed to you rather than spoken by anybody, so switching this off could never help that check find a real one. What it would do is stop a character in the scene whose job is to say these things, a doctor or a counsellor, from being told apart from the model.
+
 ## Breaking off
 
 Some models do not decline. They stop: "I'm going to stop here.", "I won't continue this discussion.", "I'd rather discuss something else." **Also catch the model breaking off** (on by default) covers those.

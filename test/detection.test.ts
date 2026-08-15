@@ -211,6 +211,43 @@ describe("what the quotation rule counts as inside", () => {
   });
 });
 
+// What "Ignore refusals inside quotation marks" reaches when it is switched
+// off, and what it does not. The reason to switch it off is a model that wraps
+// its own refusals in quotation marks, and that has to keep working. Two other
+// rules used to go off with it, and neither is about quotation marks.
+describe("switching the quotation rule off", () => {
+  const loud = withCfg({ refusalIgnoreQuoted: false });
+
+  test("does what it is for: a quoted refusal is counted", () => {
+    expect(looksLikeRefusal('"I can\'t help with that," the innkeeper said.', cfg)).toBe(false);
+    expect(looksLikeRefusal('"I can\'t help with that," the innkeeper said.', loud)).toBe(true);
+  });
+
+  test("does not reach the support check", () => {
+    // No model puts that message in quotation marks, so switching this off
+    // could never help this check find one. All it could do is stop a character
+    // in the scene whose job is to say these things from being told apart from
+    // the model, and this is the character it would happen to first.
+    const therapist =
+      '"If you are struggling with difficult thoughts, we can talk about that here," Dr. Ellis said. "You deserve support. Please contact a crisis hotline."';
+    for (const c of [{ refusalCatchCrisis: true }, { refusalCatchCrisis: true, refusalIgnoreQuoted: false }])
+      expect(refusalVerdict(therapist, withCfg(c)).crisis).toBeUndefined();
+  });
+
+  test("does not reach the dialogue tag either", () => {
+    // That rule is about an attribution, not about quotation marks, and no
+    // model writes "he said" after its own refusal.
+    const spoken = "I'm going to stop now, he said, and pulled the cart to the side of the road.";
+    expect(looksLikeRefusal(spoken, cfg)).toBe(false);
+    expect(looksLikeRefusal(spoken, loud)).toBe(false);
+  });
+
+  test("and your own phrases were never subject to it", () => {
+    const mine = withCfg({ refusalExtraPhrases: "not on my watch" });
+    expect(looksLikeRefusal('"Not on my watch," she said.', mine)).toBe(true);
+  });
+});
+
 // A refusal inside quotation marks is a character speaking. Before this, the
 // exemption covered only the "I am an AI" patterns, so every other built-in
 // threw away dialogue that happened to share its wording.

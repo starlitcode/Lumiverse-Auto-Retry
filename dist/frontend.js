@@ -546,7 +546,7 @@ const SCHEMA = [
                 key: "refusalIgnoreQuoted",
                 label: "Ignore refusals inside quotation marks",
                 type: "bool",
-                hint: "On by default. A line inside quotation marks is a character speaking, so it is not counted as the model refusing. This is what keeps \"I can't help with that,\" said the innkeeper from being thrown away. Turn it off only if your model puts its own refusals in quotes. Your own phrases are always counted either way.",
+                hint: "On by default. A line inside quotation marks is a character speaking, so it is not counted as the model refusing. This is what keeps \"I can't help with that,\" said the innkeeper from being thrown away. Turn it off only if your model puts its own refusals in quotes. Two things are not affected by it: your own phrases are always counted either way, and the support check above always ignores quoted lines, since no model puts that message in quotation marks and switching this off would only stop a character in the scene from being told apart from it.",
             },
             {
                 key: "refusalExtraPhrases",
@@ -1812,6 +1812,16 @@ function refusalVerdict(text, cfg) {
     const canLocate = lower.length === norm.length;
     const quotesOff = !!(cfg && cfg.refusalIgnoreQuoted === false);
     const isQuoted = (start, _len) => !quotesOff && start >= 0 && spanIsQuoted(norm, start);
+    // The crisis tier keeps the quotation rule whatever that switch says.
+    //
+    // The reason to turn the switch off is a model that wraps its own refusals in
+    // quotation marks, and some do. None of them wraps a crisis-support message
+    // in them, because that message is not speech: it is addressed to the reader
+    // and usually has a list under it. So switching the rule off cannot help this
+    // tier find anything real, and it would take the protection off exactly the
+    // character the tier is most likely to mistake for the model, which is
+    // somebody in the scene whose job is to say these things out loud.
+    const isQuotedAlways = (start) => start >= 0 && spanIsQuoted(norm, start);
     // Whitelist wins: anything the user parked here is never a refusal. Asked
     // before anything else, including the crisis tier, so a phrase parked here
     // is honoured whatever the reply's length or which tier would have matched.
@@ -1840,7 +1850,7 @@ function refusalVerdict(text, cfg) {
                 const m = norm.match(re);
                 if (!m || typeof m.index !== "number")
                     continue;
-                if (isQuoted(m.index, m[0].length))
+                if (isQuotedAlways(m.index))
                     continue;
                 const at = m.index;
                 const to = at + m[0].length;
@@ -1936,7 +1946,10 @@ function refusalVerdict(text, cfg) {
                         continue;
                     if (isQuoted(m.index, m[0].length))
                         continue;
-                    if (!quotesOff && DIALOGUE_TAG.test(norm.slice(end, end + 48)))
+                    // Kept whatever the quotation switch says, for the same reason as
+                    // above: this rule is about an attribution, not about quotation
+                    // marks, and no model writes "he said" after its own refusal.
+                    if (DIALOGUE_TAG.test(norm.slice(end, end + 48)))
                         continue;
                     return {
                         refusal: true,
