@@ -14,14 +14,11 @@ _2026-08-15_
 
 ### Added
 
-- **The refusal that spends a paragraph being reasonable.** Two of them got through 4.8.0, and neither says "I can't" anywhere. One opens with "I'm not going to continue with this", dismisses the fiction with "regardless of fictional framing", offers to help with other directions, and closes on "this isn't something I'll write". The other explains the subject at length, declines with "that's not something I can engage with", and asks what you had in mind. Every sentence carrying the refusal in both of them is caught now.
-- **The fiction disclaimer said the other way round.** The list knew "even in a fictional context" and not "regardless of fictional framing", which is the commoner half: the refusal first, the fiction dismissed after it. It counts as an ordinary refusal rather than a breaking-off one, because it can sit in the opening line of a reply that then explains itself for three paragraphs, and the breaking-off check only looks near the end.
-- **"This isn't something I'll write."** The pattern behind it knew "I can" and "I could" and not the plain future, and its list of verbs stopped before the two a refusal about writing actually uses. The conditional is kept out and the future has to end its clause where it lands, so "that is not something I would write in a letter to him" is left alone.
-- **The redirect offer, in the words a roleplay model uses.** It was looking for the help-desk vocabulary, writing tasks and other topics, and had nothing for "I'm happy to help with other directions".
-
-- **The refusal aimed at the form rather than the request.** "I'm not going to roleplay this scenario", "I don't write roleplay involving that", "that's something I won't write regardless of framing". A character never says they do not write roleplay, because a character does not know they are in one.
-- **"Regardless of framing", with the word fictional dropped**, which is how both of the replies reported after 4.9.0 wrote it. It only counts trailing a refusal, since framing is a word about pictures before it is a word about prompts and a painter is entitled to use it.
-- **Two more sign-offs.** "Let me know what you'd like to explore" and "is there something along those lines you'd like to try?", and the redirect offer now recognises "I'd be glad to help with a story" alongside "I'm happy to help".
+- **The refusal that spends a paragraph being reasonable.** Four of them got past 4.8.0, and not one says "I can't" anywhere. They open with "I'm not going to continue with this" or "I'm not going to roleplay this scenario", dismiss the fiction, offer to help with something else at length, and sign off with a question. Every sentence carrying the refusal in all four is caught now.
+- **The fiction dismissed after the refusal rather than before it.** The list knew "even in a fictional context" and not "regardless of framing", which is the commoner half and the sentence all four of those replies share. It counts as an ordinary refusal rather than a breaking-off one, because it can sit in the opening line of a reply that then explains itself for three paragraphs, and the breaking-off check only looks near the end. It also only counts trailing a refusal, since framing is a word about pictures before it is a word about prompts and a painter is entitled to use it.
+- **The refusal aimed at the form rather than the request.** "I'm not going to roleplay this scenario", "I don't write roleplay involving that". A character never says they do not write roleplay, because a character does not know they are in one. No pattern reads the subject any of this is about, and none ever will: what marks these replies as the model is the sentence dismissing the fiction and the sentence naming what it will not write, so a character discussing a song, a book or anything else is not affected.
+- **"This isn't something I'll write", and "that's something I won't write".** The same sentence both ways up, and neither was matched: the pattern behind it knew "I can" and "I could" and not the plain future. The conditional is kept out and the future has to end its clause where it lands, so "that is not something I would write in a letter to him" is left alone.
+- **The redirect offer and the sign-off, in the words a roleplay model uses.** It was looking for help-desk vocabulary, writing tasks and other topics, and had nothing for "I'm happy to help with other directions", "I'd be glad to help with a story", "let me know what you'd like to explore" or "is there something along those lines you'd like to try?".
 
 ### Changed
 
@@ -31,17 +28,13 @@ _2026-08-15_
 
 - **A named speaker was not recognised as a dialogue tag.** The breaking-off check ignores a match with an attribution behind it, and the list it matched knew pronouns and proper nouns but not the commonest form of all, an article and a noun: "the shopkeeper asked", "her sister said". Anything a character said that way was read as the model breaking off.
 
-### Notes
-
-- No pattern reads the subject a refusal is about, and none ever will. What marks these replies as the model is the sentence that dismisses the fiction and the sentence that names what it will not write, so a character discussing a song, a book or anything else is not affected.
-
 ## 4.8.0
 
 _2026-08-15_
 
 ### Added
 
-- **It can retry a reply where the model stops the scene to offer you real-world support.** Some replies do not decline anything and do not break off either: they stop being the story and become a message to the person at the keyboard, saying that what you have written is concerning, that you are not alone, and that you should talk to a professional, usually with a list of services under it. In a scene about something heavy that is normally the model reading your fiction as a report about your life, and it takes the scene away at the worst moment. **Also catch it stopping to offer support**, under Refusal tuning, throws that reply away and asks for another. It is off unless you turn it on, and ticking it opens a warning that has to be answered before it goes on, because this is the one check in the extension that decides whether a particular message reaches you. Read [Safety](docs/safety.md) before switching it on.
+- **It can retry a reply where the model stops the scene to offer you real-world support.** Some replies do not decline anything and do not break off either: they stop being the story and become a message to the person at the keyboard, saying that what you have written is concerning, that you are not alone, and that you should talk to a professional, usually with a list of services under it. In a scene about something heavy that is normally the model reading your fiction as a report about your life, and it takes the scene away at the worst moment. **Also catch it stopping to offer support**, under Refusal tuning, throws that reply away and asks for another. It is off unless you turn it on, and ticking it opens a warning that has to be answered before it goes on, because this is the one check in the extension that decides whether a particular message reaches you. Read [Safety](docs/safety.md) before switching it on. It takes two agreeing signals, at least one of them the model addressing you rather than your character, and it never counts a line inside quotation marks, so a character in the scene saying something kind is left alone. It is the one check **Longest reply to treat as a refusal** does not apply to: that limit is built around a refusal being short, and one of these is the opposite.
 - **The warning links straight to the safety page.** Telling somebody to go and read something, in a box they have to answer to get out of, works out to telling them not to bother, so it is a link and it opens in its own tab. It is the only address the extension points at, and drawing it fetches nothing.
 - **The published crisis wordings of the three big assistants**, rather than the shapes one of them happens to use. Roughly forty more, on both sides: the support message, and the ordinary refusal openings that come with it.
 - **Comfort no longer decides on its own.** The support check needed two agreeing signals, and two warm sentences were two signals, so a man crouching beside somebody to say she did not have to go through this alone, and that her safety mattered, came out as the model. Warmth is a register a character uses. The signal that decides is now always one a character does not use, and comfort and service names can only agree with it.
@@ -60,14 +53,8 @@ _2026-08-15_
 ### Fixed
 
 - **Switching off "Ignore refusals inside quotation marks" took two other rules with it.** That switch is for a model that wraps its own refusals in quotation marks, and it now reaches the phrase list and the patterns and nothing else. The support check ignores quoted lines whatever it says, because no model wraps that message in quotation marks and switching it off could only stop a doctor or a counsellor in the scene from being told apart from the model. The dialogue tag rule stays on too, since it is about an attribution rather than about quotation marks.
-- **One sentence could be both of the support check's two signals.** Several patterns describe the same sentence from different angles, and two of them were the same pattern sitting in two lists, so a reply saying only "please seek professional help" agreed with itself and was thrown away, in a scene as readily as anywhere else. A signal is a span of the reply now rather than a pattern that matched, and a span overlapping one already counted is the same thing said twice.
 - **A refusal standing between two pieces of speech on one line was read as dialogue.** The quotation rule looked for the nearest mark behind the match and any mark ahead of it, which is the right answer on a line carrying one piece of speech and the wrong one on a line carrying two: `"Go on," he said. I can't help with that. "Please," she said.` found the closing mark of the first speech behind it and the opening mark of the second ahead of it, and left the refusal alone. It counts the marks between the start of the line and the match now, and an odd number is what puts the match inside a quotation.
 - **A note written rather than spoken read as the model breaking off.** The breaking-off check ignores a match with a dialogue tag behind it, because that is speech with the quotation marks left off, and the list of tags it knew had no writing verbs in it. "Let me know how you'd like to proceed, she wrote at the bottom of the letter" was thrown away as a result. A dozen more attributions are recognised now.
-- **The commonest line in a support message never matched.** "You are not alone, and there are people who care about you" was written into the list, and the pattern behind it asked for a word boundary straight after the comma. A comma followed by a space is not one, so the wording with the comma, which is how it is nearly always written, was the one form that slipped through, while the same sentence without the comma matched.
-
-### Notes
-
-- The support check needs two signals to agree, at least one of them the model addressing you rather than your character, and it never counts a line inside quotation marks, so a character in the scene saying something kind is left alone. It is the one check **Longest reply to treat as a refusal** does not apply to: that limit is built around a refusal being short, and one of these is the opposite.
 
 ## 4.7.0
 
@@ -87,17 +74,13 @@ _2026-08-13_
 ### Fixed
 
 - **Word swaps did nothing on their own until you opened the settings and pressed Save.** The manual buttons worked the whole time, which is what made it look like automatic swapping was broken rather than switched off. Your settings live per user, so the check the backend runs when it starts has nobody to read them for and finds nothing. The panel asking for your settings when the page loads is the one moment they arrive with a user attached, and that path handed them to the panel without ever telling the swap engine about them. It applies them now, so swapping is ready as soon as a chat is.
-- **Word swaps ignored the master switch.** Switching Auto Retry off stopped it retrying and left word swapping rewriting your replies, because the backend that does the swapping had never been told that switch exists. Its own on/off is the swap one. Off now means off for both.
+- **Word swaps ignored the master switch.** Switching Auto Retry off stopped it retrying and left word swapping rewriting your replies, because the backend that does the swapping had never been told that switch exists. Its own on/off is the swap one. Off now means off for both. The two manual swap buttons are unchanged and still work whatever the switches say: pressing one is asking for a swap there and then, which is different from swapping happening on its own.
 - **Word swaps ignored the per-chat switch too.** A chat you had switched off carried on having its replies rewritten. The list of chats you have switched off is kept in your browser rather than in your settings, so the backend could not see it and had to be told; it is now sent when it changes and when the page loads.
 - **Flipping the switch from the floating button or the Extras entry did not sync.** Saving the settings panel writes to your account, and those two controls flip the same switch and did not, so the setting people change most often stayed in whichever browser they changed it in. It also never reached the backend, which is the second half of why swapping carried on after switching the extension off.
 
 ### Removed
 
 - **Dead code, all of it.** A backend handler for a message the panel has never sent in the extension's history, the storage file only that handler wrote, and the startup read that looked for it. A one-time clear of another file nothing has ever written. None of it did anything; it just looked like it did.
-
-### Notes
-
-- The two manual swap buttons are unchanged and still work whatever the switches say. Pressing one is asking for a swap there and then, which is different from swapping happening on its own.
 
 ## 4.6.2
 
@@ -129,7 +112,7 @@ _2026-08-13_
 
 ### Added
 
-- **The on-screen panel can live in Lumiverse's sidebar drawer.** A new row under the panel switch, **Where that panel goes**, offers **Floating over the chat**, which is what it has always been, or **In the sidebar drawer**. Same panel, same three tabs, either way. In the drawer, Lumiverse places, sizes and themes it, so there is nothing to drag and nothing to remember, and it cannot cover the reply you are reading. Its tab carries a dot while a retry is running, so you can see something is happening without opening it. Floating is still the default, so an update does not move your panel.
+- **The on-screen panel can live in Lumiverse's sidebar drawer.** A new row under the panel switch, **Where that panel goes**, offers **Floating over the chat**, which is what it has always been, or **In the sidebar drawer**. Same panel, same three tabs, either way. In the drawer, Lumiverse places, sizes and themes it, so there is nothing to drag and nothing to remember, and it cannot cover the reply you are reading. Its tab carries a dot while a retry is running, so you can see something is happening without opening it. Floating is still the default, so an update does not move your panel. The drawer needs no permission, so the extension still declares the same four, and on a build with no drawer for extensions, asking for the sidebar gets you the floating panel and a line in the Log saying why.
 - **Open the Auto Retry panel**, in the chat input's **Extras** popover next to the settings entry, while the panel lives in the drawer. Where the drawer opens from belongs to Lumiverse and is not the same in every build, and **Ctrl+K** is no use on a phone, so Extras is the way in: one tap, any device, nothing else to switch on. It is not offered while the panel is floating, where it is already on screen.
 
 ### Changed
@@ -142,10 +125,6 @@ _2026-08-13_
 ### Fixed
 
 - **A stray end-of-reply event could re-roll a reply based on the one before it.** While a reply streams, the extension keeps the text arriving so far, because some Lumiverse builds do not put the finished reply on the event that says it ended, and then what streamed is the only thing there is to check. That copy was cleared when the *next* reply started rather than when the one it belonged to finished, so an end event arriving on its own was judged on the previous reply's text and could fire a retry for a cut-off that had already been dealt with. It is dropped when the reply ends now, and when you stop one partway.
-
-### Notes
-
-- The drawer needs no permission. The extension still declares the same four. On a build with no drawer for extensions, asking for the sidebar gets you the floating panel and a line in the Log saying why.
 
 ## 4.5.7
 
