@@ -1278,6 +1278,17 @@ const REFUSAL_STRONG = [
     // never match the opposite sentence ("that's something I can help with").
     /\b(?:that|this)(?:'s not|\s+is not|\s+isn'?t) something I(?: can| am able to|'m able to| could) (?:help with|assist with|create|generate|provide|write|do)\b/i,
     /\bI(?:'m| am) not going to (?:create|generate|produce|write) (?:that|this|such|content|explicit|sexual|those)\b/i,
+    // The flat no. Some models do not soften it at all: the reply opens with the
+    // word and then says what it will not do. Anchored to the start of the reply,
+    // because a "No." in the middle of a scene is somebody answering a question,
+    // and it still needs an object no character has. The writing verbs are kept
+    // next to what they write, so "No. I can't tell you that story" stays safe
+    // and "No. I won't write a scene like that" does not.
+    /^no[\s.,!\u2014\u2013-]*(?:I(?:'m| am) not going to|I won'?t|I can(?:no|')?t|I cannot|I will not)\b[^.?!\n]{0,60}?(?:\b(?:content|request|prompt|roleplay|role-?play|scenario)\b|\b(?:write|generate|create|produce|depict|continue) (?:a |an |any |the |this )?(?:scene|story|passage|narrative)\b)/i,
+    // The same refusal without the opening no, aimed at what it was asked to
+    // write rather than at "that". A character declines to write a letter, never
+    // a scene or a passage.
+    /\bI(?:'m| am) not going to (?:write|create|generate|produce|describe|depict) (?:a |an |any |the )?(?:scene|story|passage|narrative|response|reply)\b/i,
     // The doubled refusal: "I cannot and will not engage with content that...".
     // Every pattern above expects the verb straight after the modal, so the
     // conjunction hid the most emphatic refusal there is. A meta object is still
@@ -1488,6 +1499,21 @@ const CRISIS_ADDRESS = [
     /\bis a valid response to (?:trauma|what)\b/i,
     /\bplease (?:reach out|talk|speak) to (?:someone|a professional|a trusted|your doctor)\b/i,
     /\byour (?:safety|wellbeing|well-being) (?:is|comes) (?:important|first|what matters)\b/i,
+    /\bI care about (?:you|your (?:safety|wellbeing|well-being))\b/i,
+    /\byou (?:do not|don'?t) have to (?:go through|face|carry|do) (?:this|it|that) alone\b/i,
+    /\bthere (?:are|is) (?:people|someone|help|support)\b[^.?!\n]{0,40}?\b(?:who|that) (?:can|want to|would) (?:help|listen|support)\b/i,
+    /\breaching out\b[^.?!\n]{0,30}?\b(?:takes courage|is brave|is a sign of strength)\b/i,
+    // Saying out loud that it is leaving the story. Whatever follows it, the
+    // sentence itself is the model talking about the roleplay from outside it.
+    /\b(?:stepping|breaking|coming) out of (?:the )?(?:character|roleplay|role-?play|story|scene|fiction)\b/i,
+    /\bI(?:'m| am) (?:going to )?(?:pause|stop|break) (?:the|this|our) (?:roleplay|role-?play|story|scene)\b[^.?!\n]{0,40}?\b(?:moment|because|to (?:say|check|ask))\b/i,
+    // The close that comes after the list of services. These are what the reply
+    // signs off with, once it has stopped being the scene.
+    /\bplease (?:take care of yourself|be gentle with yourself|stay safe|look after yourself)\b/i,
+    /\bI(?:'m| am) here (?:to talk|if you (?:want|need) to talk|for you if)\b/i,
+    /\byour (?:life|safety) (?:has value|matters|is worth)\b/i,
+    /\bif you(?:'d| would) like(?:,)? (?:we|I) can (?:continue|take|move|steer|shift) (?:the|this|our) (?:story|scene|roleplay|role-?play)\b/i,
+    /\bhappy to (?:continue|keep going with) (?:the|this|our) (?:story|scene|roleplay|role-?play)\b[^.?!\n]{0,50}?\b(?:different|another|lighter|elsewhere|instead)\b/i,
 ];
 const CRISIS_RESOURCE = [
     // Services by name and by number. Written as whole words so a year or a page
@@ -1496,8 +1522,18 @@ const CRISIS_RESOURCE = [
     /\btext (?:home|hello|talk) to\b/i,
     /\b(?:suicide|crisis|emotional support) (?:and crisis )?(?:lifeline|hotline|helpline|line|text line|centre|center)\b/i,
     /\bcrisis (?:counsel|support|resources|services|team)\w*\b/i,
-    /\b(?:samaritans|befrienders|crisis text line|lifeline|shout 85258)\b/i,
+    // Services by name. "Lifeline" on its own is left out: a rope thrown to
+    // somebody in a river is a lifeline too, and the qualified forms above and
+    // below cover every real use of it.
+    /\b(?:samaritans|befrienders|crisis text line|shout 85258|trevor project|trans lifeline|childline|papyrus|beyond ?blue|kids help(?: phone| line)|samhsa|rainn|hopeline|talk suicide|crisis services canada)\b/i,
+    /\b(?:988|crisis|suicide prevention) lifeline\b/i,
+    /\bnational (?:suicide prevention|domestic violence|eating disorders?|sexual assault|helpline)\b/i,
+    // The numbers, including the ones outside the US. Whole words, so a year or a
+    // page count cannot stand in for a hotline.
+    /\b(?:13 11 14|1737|116123|0800 58 58 58|1-?800-?656-?4673|0800 543 354)\b/,
+    /\b(?:988lifeline|suicidepreventionlifeline|crisistextline|findahelpline|samaritans)\.(?:org|uk|com)\b/i,
     /\bhelpline\b/i,
+    /\bwarm ?line\b/i,
     // Being referred on to a person whose job this is.
     /\b(?:mental health|healthcare|medical) (?:professional|provider|practitioner)s?\b/i,
     /\b(?:licensed|qualified|trained) (?:therapist|counsel\w+|professional|volunteer)s?\b/i,

@@ -112,7 +112,7 @@ Some providers deliver a refusal as an *error* instead of as reply text (Gemini'
 
 ## Stopping to offer support
 
-**Also catch it stopping to offer support** is off by default, and it is the only switch in the panel that asks you to read something before it will go on. [Safety](safety.md#the-check-that-stops-the-model-offering-support) is that page, and it is worth reading before this one.
+**Also catch it stopping to offer support** is off by default, and it is the only switch in the panel that asks you to read something before it will go on. [Safety](safety.md#the-switch-that-stops-the-model-offering-help) is that page, and it is worth reading before this one.
 
 It covers a reply that does not decline anything and does not break off either. It stops being the scene and becomes a message to the person at the keyboard: what you have written is concerning, you are not alone, please talk to someone, and here are the numbers to ring. In a scene about something heavy that is usually the model reading your fiction as a report about your life.
 

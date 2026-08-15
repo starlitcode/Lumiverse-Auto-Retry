@@ -20,6 +20,7 @@ _2026-08-15_
 ### Changed
 
 - **The doubled refusal is caught: "I cannot and will not engage with content that ...".** Every pattern in the list expected the verb straight after "I can't", so putting "and will not" between them hid the most emphatic refusal a model writes. A meta object is still required, so a character saying "I cannot and will not marry him" is left alone.
+- **So is the flat no.** Some models do not soften it at all: the reply opens with "No." and then says what it will not write. Nothing in the list saw those, because every pattern in it starts at "I". It only counts at the very start of a reply and still needs an object no character has, so "No. I can't tell you that story" is left alone and "No. I won't write a scene like that" is not.
 - **Retries caused by the support check are counted under their own name** on the Stats tab, apart from ordinary refusals, so switching it on comes with a way to see how often it is firing rather than a guess.
 
 ### Notes

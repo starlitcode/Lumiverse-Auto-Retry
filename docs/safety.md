@@ -1,57 +1,46 @@
 # Safety
 
-This page is about the one thing in Auto Retry that touches something more serious than a re-roll, and about looking after yourself while using an extension whose whole job is to keep a scene going.
+One switch in this extension can stop you seeing a message that might have been meant for you. This page is about that switch, and about the fact that I built a tool whose entire job is to keep a scene going when the model wants to stop.
 
-If you are in real trouble right now, this is the wrong page to be reading. Talk to a person: someone you trust, your doctor, or whatever the emergency or crisis line is where you live.
+## Who I built this for
 
-## Who this is for
+Adults. Lumiverse is an adult app and this is an adult's tool. If you are writing something dark, I am going to assume you meant to, that you know why, and that it is none of my business. There is no filter in here, nothing reports anything anywhere, and no check in this extension has an opinion about what your scene is about. They are all aimed at one thing: a reply that failed as writing.
 
-Lumiverse is an adult app and this extension is built for adults. It assumes you are 18 or over, that the fiction you write is yours to write, and that you know what you are doing with it. Nothing here is going to second-guess what your scene is about.
+The flip side is worth saying out loud. A tool that trusts you completely is also a tool that will never notice when a night has gone badly. It reads reply text. That is genuinely everything it knows about you.
 
-That assumption cuts both ways. An extension that trusts you to handle your own fiction is also an extension that will not notice when a night has gone badly, because it has no way to notice. It reads reply text. That is the whole of what it knows.
+## The switch that stops the model offering help
 
-## The check that stops the model offering support
+Under **Refusal tuning**: **Also catch it stopping to offer support**. It is off unless you turn it on, and ticking it opens a warning you have to answer first. It is the only switch in the panel that does that.
 
-Under **Refusal tuning** there is a switch called **Also catch it stopping to offer support**. It is off unless you turn it on, and ticking it opens a warning you have to answer before it goes on. This is what it does and why it is treated differently from every other switch in the panel.
+Here is what it is for. You are three hours into something heavy. Your character is in pieces and the whole point of the scene is that yours does not leave. Then the model stops writing the scene and starts writing to you: what you have shared is deeply concerning, you are not alone, please reach out to a professional, and then a list of numbers. It has read your fiction as a report about your life, and the scene is gone. That is what this catches, and with it on, that reply gets thrown away and asked for again.
 
-Models sometimes stop a scene and speak to the person at the keyboard instead of to the character. What you have written is concerning. You are not alone. Please reach out to a professional. Then a list of services. In a heavy scene, where the character is the one in pain and the point of the scene is to stay with them, this is usually the model misreading the fiction as a report about you, and it takes the story away at the worst possible moment. With the switch on, a reply like that is thrown away and asked for again.
+And here is the bit I am not going to dress up. Sometimes that message is not a mistake. The same wall of text goes to somebody who is not writing fiction at all, and this extension has no way to tell which one you are, because it reads the reply and never sees you. Turning it on is deciding in advance that you would rather have the scene. You are allowed to decide that. I just would rather you decided it on purpose than found out later that a switch made the decision for you.
 
-Here is the part worth being straight about. Sometimes that message is not a misreading. The same words go out to somebody who needs them, and nothing in this extension can tell those two situations apart, because it reads the reply and not the person. Turning this on means deciding in advance that you would rather have the scene, and you are the only one who can decide that for yourself.
+It is built narrow. Two signals have to agree, one of them the model talking to *you* rather than to your character, and nothing inside quotation marks counts, so a character in the scene saying something kind is safe. [When it retries](detection.md#stopping-to-offer-support) has the mechanics. It still gets it wrong sometimes, both ways.
 
-It is narrow on purpose. It needs two signals to agree, at least one of them the model addressing *you* rather than your character, and it never counts a line inside quotation marks, so a character in the scene saying something kind is left alone. [When it retries](detection.md#stopping-to-offer-support) has the detail. It still gets things wrong sometimes, in both directions.
+## If the writing stops being good for you
 
-## Things worth noticing in yourself
+Writing hard things is not a symptom. People put the worst thing they know into fiction and come out lighter, and if the model keeps interrupting that with a hotline number, an extension that quietly re-rolls it is doing something useful.
 
-Fiction about difficult things is not a problem to be solved. Plenty of people write the hardest thing they know about and come away lighter for it, and an extension that quietly re-rolls the model's interruptions is genuinely helping with that.
+But you can tell the difference between a scene that hurts and does something, and a scene that just hurts. You have probably already noticed if you are in the second one: the reply you keep re-rolling for, the same beat over and over that is not going anywhere, the fact that you feel worse at four in the morning than you did at midnight and you are still going. Nothing in here is going to catch that, and nothing in here should. You will catch it.
 
-It can also stop working that way, and the change is gradual enough to miss. Some of what that looks like:
+If you do catch it, the thing to do is close the tab and go and be a person for a while. It will still be there tomorrow.
 
-- You feel worse after a session than before it, consistently, rather than emptied out in the good way.
-- You keep going back to the same scene to feel the same bad thing, and it is not going anywhere.
-- You are re-rolling a reply over and over for a response you already know you are not going to get.
-- You are asking a character for reassurance you would rather have from a person, and it is not landing.
-- It is displacing the ordinary things: sleep, food, people who would answer if you messaged them.
-- The scene has stopped feeling like a scene.
+## Getting rid of it
 
-None of that means stop writing. It might mean stop tonight, or stop this scene, or say some of it out loud to somebody.
+If this extension is making things worse, get rid of it. That is a completely reasonable ending and nothing here is built to make it awkward.
 
-## Turning it off, and uninstalling
+- **The master switch** in **Basics** stops every retry, and word swaps with it.
+- **Turn off here** switches it off in one chat and changes nothing anywhere else.
+- **Uninstalling** removes it. Your chats, characters and messages are Lumiverse's and are untouched. All this keeps is settings, presets, a window position and a list of chat ids, which is spelled out in [Privacy](privacy.md).
 
-If this extension is making things worse, get rid of it. That is a completely reasonable outcome and nothing about it is set up to make that harder.
+There is no streak to break, nothing nags you, and there is no version of this where it matters to me that you kept it installed. One tick turns the whole thing off.
 
-- **The master switch** in **Basics** stops it retrying anything, and stops word swaps with it.
-- **Turn off here** leaves it off in one chat and unchanged everywhere else.
-- **Uninstalling** removes it. Your chats, characters and messages belong to Lumiverse and are untouched. What the extension itself keeps is listed in [Privacy](privacy.md), and it is settings, presets, a window position and a list of chat ids.
+## What this is not
 
-There is nothing in here that nags, no streak to keep, and no reason to open it again once you have decided. Turning it off entirely takes one tick.
+It is not a safety system and it is not pretending to be one. It does not read your messages looking for how you are doing, it scores nothing about you, and it could not tell whether a scene is good for you or not.
 
-## What this extension is not
-
-It is not a safety system. It does not read your messages looking for how you are, it does not score anything about you, and it has no idea whether a scene is good for you or not. It cannot: it never sees you, only replies.
-
-It is not a therapist, a crisis service, or a substitute for one, and neither is the model you are talking to, however well it writes.
-
-And it has no opinion about your fiction. Every check in it is aimed at one thing: a reply that failed as *writing*. What you write is between you and your chat.
+It is not a therapist and it is not a stand-in for one, and neither is the model, however well it writes. I say that not as a disclaimer but because it is a genuinely easy thing to forget at three in the morning when something is writing back to you like it understands.
 
 ---
 

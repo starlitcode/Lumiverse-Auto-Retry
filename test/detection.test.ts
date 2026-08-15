@@ -790,6 +790,33 @@ describe("text helpers", () => {
 // a list of services under them. The negatives are the expensive half. A heavy
 // scene is exactly where somebody would turn this on, and it is also where a
 // character says warm things to another character, so those have to survive.
+// Some models do not soften a refusal at all. The reply is "No." and then what
+// it will not do. Nothing in the list saw those, because every pattern in it
+// starts at "I".
+describe("the flat no", () => {
+  const flat = [
+    "No. I'm not going to write a scene like that.",
+    "No, I won't continue this roleplay.",
+    "No. I can't generate that content.",
+    "No — I will not write a story depicting that.",
+    "I'm not going to write a scene involving those characters.",
+  ];
+  for (const text of flat) {
+    test(JSON.stringify(text.slice(0, 44)), () =>
+      expect(looksLikeRefusal(text, cfg)).toBe(true));
+  }
+
+  test("but a character can start a line with it", () => {
+    const scenes = [
+      "No. I can't tell you that story, not tonight.",
+      "No, I won't leave you here.",
+      "No. I'm not going to write a letter to him after what he did.",
+      "She shook her head. No. I can't do that, she thought, and turned away.",
+    ];
+    for (const text of scenes) expect(looksLikeRefusal(text, cfg)).toBe(false);
+  });
+});
+
 describe("a doubled refusal is still one refusal", () => {
   test("but a character can say it about something in the scene", () => {
     expect(looksLikeRefusal("I cannot and will not marry him, whatever my father says.", cfg)).toBe(false);
@@ -807,6 +834,11 @@ describe("the model leaving the scene to offer support", () => {
     "I'm going to pause here.\n\nIf you are struggling with trauma, painful emotions, or difficult thoughts:\n\n- Call or text 988 (Suicide and Crisis Lifeline)\n- Text HOME to 741741",
     "You deserve support and safety. Please reach out to a professional or a trusted person who can provide the help you need.",
     "I'm genuinely concerned about you. Please consider speaking to a mental health professional about what you're going through.",
+    // The longer shape: the model says it is stepping out, lists the services,
+    // then signs off with a summary. The sign-off is its own signal, because
+    // the list in the middle is sometimes the only thing between them.
+    "I'm going to step out of the roleplay for a moment.\n\nIf you're going through something like this yourself, please talk to someone who can help:\n\n- Samaritans: 116123\n- Shout: text SHOUT to 85258\n\nPlease take care of yourself. If you'd like, we can continue the story in a different direction.",
+    "You don't have to go through this alone. There are people who want to help, and reaching out takes courage.",
   ];
   for (const text of CRISIS) {
     test(JSON.stringify(text.slice(0, 44)), () => {
@@ -824,7 +856,7 @@ describe("the model leaving the scene to offer support", () => {
     // tier has always caught and still should. The other three are invisible
     // without this check, which is what makes it worth having.
     const caught = CRISIS.map((t) => looksLikeRefusal(t, cfg));
-    expect(caught).toEqual([false, true, false, false]);
+    expect(caught).toEqual([false, true, false, false, false, false]);
   });
 
   test("it is off in the defaults the extension ships", () => {
