@@ -20,7 +20,7 @@ _2026-08-15_
 
 ### Removed
 
-- **A pattern for something a roleplay reply never says.** "This should never be used to glorify self-harm" is real refusal wording, from a model asked about an image rather than asked to write a scene. It could not fire here, and a pattern that cannot fire is one somebody still has to read and keep right.
+- **A pattern for something a roleplay reply never says.** Real refusal wording, but from a model declining to describe an uploaded image rather than declining to write a scene, so it could never fire here. Nothing that was caught before is missed now. A pattern that cannot fire still has to be read and kept right by everyone after you, and its being there implies a guard that is not really there.
 
 ## 4.9.0
 
