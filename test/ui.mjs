@@ -1317,6 +1317,14 @@ console.log("\nthe crisis check asks first");
       const wording = notice() ? (notice().textContent || "") : "";
       const whileAsking = box().checked;
 
+      // Telling somebody to go and read a page, inside a box they have to
+      // answer to get out of, is telling them not to bother. It is a link.
+      const a = notice().querySelector("a");
+      const link = a
+        ? { href: a.getAttribute("href"), target: a.getAttribute("target"),
+            rel: a.getAttribute("rel"), text: (a.textContent || "").trim() }
+        : null;
+
       press("Leave it off");
       await frame();
       const afterNo = { open: !!notice(), checked: box().checked };
@@ -1340,7 +1348,7 @@ console.log("\nthe crisis check asks first");
       box().click();
       await frame();
       const afterOff = { open: !!notice(), checked: box().checked };
-      return { found, startsOff, asked, whileAsking, wording, afterNo, afterEscape, afterYes, afterOff };
+      return { found, startsOff, asked, whileAsking, wording, link, afterNo, afterEscape, afterYes, afterOff };
     }),
   );
   check("the switch is in the panel", out.found === true, out);
@@ -1349,6 +1357,10 @@ console.log("\nthe crisis check asks first");
   check("the box stays off while the question is open", out.whileAsking === false, out);
   check("the warning says the extension cannot tell the two cases apart",
     /no idea how you are/i.test(out.wording) && /safety page/i.test(out.wording), out.wording.slice(0, 300));
+  check("the safety page is a link, not an instruction to go and find it",
+    !!out.link && /\/docs\/safety\.md$/.test(out.link.href) && out.link.text === "the safety page", out.link);
+  check("and it opens away from the chat, without handing the new tab a way back",
+    !!out.link && out.link.target === "_blank" && /noopener/.test(out.link.rel || ""), out.link);
   check("answering no leaves it off", out.afterNo.open === false && out.afterNo.checked === false, out.afterNo);
   check("Escape leaves it off too", out.afterEscape.open === false && out.afterEscape.checked === false, out.afterEscape);
   check("only yes turns it on", out.afterYes.open === false && out.afterYes.checked === true, out.afterYes);

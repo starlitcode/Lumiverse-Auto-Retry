@@ -6,6 +6,8 @@ Extensions run inside the app, so it is fair to want to know what one can reach 
 
 Auto Retry has no networking in it at all. It never opens a connection, never contacts a server of mine or anyone else's, and has no analytics. Everything it does happens inside your copy of Lumiverse, using events the app already gives it. If you would rather confirm that than take my word for it, searching the two source files for `fetch(`, `XMLHttpRequest`, `WebSocket`, `sendBeacon` or `EventSource` turns up nothing, and those are the only ways a browser extension can send anything out.
 
+There is one link in it, in the warning that stands in front of the crisis-support check, and it points at the safety page in this repository. Drawing it fetches nothing. If you tap it your browser opens GitHub in a new tab, which is your browser going somewhere, not the extension sending anything, and if you never tap it nothing happens at all.
+
 It also never treats text as code. There is no `eval` and no `new Function` anywhere, so nothing in a reply, a character card, or your own settings can be run. Word swaps come closest to acting on what you typed, and they are plain text replacements: your rules are escaped before they are matched, so a rule cannot turn into a regular expression by accident, let alone anything worse.
 
 ## What it can reach, and why it needs to

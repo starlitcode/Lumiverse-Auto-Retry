@@ -104,6 +104,12 @@ const STREAM_BUF_MAX = 200000;
 // report, so a bug report always says which version it came from.
 const VERSION = "4.8.0";
 
+// The one address the extension ever points at, used by the warning in front of
+// the crisis-support check. Pinned to the released branch rather than to a tag,
+// so an old install still opens the page as it stands today.
+const SAFETY_URL =
+  "https://github.com/starlitcode/Lumiverse-Auto-Retry/blob/stable/docs/safety.md";
+
 // ---- defaults (the UI overrides these; editing here changes the fallback) ----
 const CONFIG = {
   enabled: true,
@@ -9028,10 +9034,33 @@ export function setup(ctx: Ctx, opts?: any) {
       "This throws away a reply where the model stops the story to speak to you about your safety, and asks for another one in its place. In a heavy scene that is usually the model misreading the fiction, and you get your scene back.",
       "Sometimes it is not misreading. The same message goes out to somebody who needs it, and nothing here can tell those two apart. It reads the reply. It has no idea how you are.",
       "So the thing to keep hold of: if a scene is making you feel worse rather than more, that is worth listening to, and this switch is built to remove the one message that would have said so out loud.",
-      "It changes nothing else, it stays off unless you turn it on, and you can switch it off again whenever you like. There is more about this, and about looking after yourself while using this extension, on the safety page in the docs.",
+      "It changes nothing else, it stays off unless you turn it on, and you can switch it off again whenever you like.",
     ]) {
       const p = document.createElement("div");
       p.textContent = para;
+      body.appendChild(p);
+    }
+    // The last line carries the only link the extension has. Telling somebody
+    // to go and read a page, in a box they cannot leave without answering,
+    // works out to telling them not to bother: the repository is not open in
+    // front of them and the file is four clicks in. Nothing is fetched by
+    // drawing this. It opens a tab if it is tapped, and not otherwise.
+    {
+      const p = document.createElement("div");
+      p.appendChild(
+        document.createTextNode(
+          "There is more about this, and about looking after yourself while using this extension, on ",
+        ),
+      );
+      const a = document.createElement("a");
+      a.href = SAFETY_URL;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      a.textContent = "the safety page";
+      a.style.cssText =
+        "color:var(--lumiverse-primary,rgba(147,112,219,.9));text-decoration:underline";
+      p.appendChild(a);
+      p.appendChild(document.createTextNode("."));
       body.appendChild(p);
     }
     const row = document.createElement("div");

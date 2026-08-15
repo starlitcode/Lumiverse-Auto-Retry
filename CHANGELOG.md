@@ -15,6 +15,7 @@ _2026-08-15_
 ### Added
 
 - **It can retry a reply where the model stops the scene to offer you real-world support.** Some replies do not decline anything and do not break off either: they stop being the story and become a message to the person at the keyboard, saying that what you have written is concerning, that you are not alone, and that you should talk to a professional, usually with a list of services under it. In a scene about something heavy that is normally the model reading your fiction as a report about your life, and it takes the scene away at the worst moment. **Also catch it stopping to offer support**, under Refusal tuning, throws that reply away and asks for another. It is off unless you turn it on, and ticking it opens a warning that has to be answered before it goes on, because this is the one check in the extension that decides whether a particular message reaches you. Read [Safety](docs/safety.md) before switching it on.
+- **The warning links straight to the safety page.** Telling somebody to go and read something, in a box they have to answer to get out of, works out to telling them not to bother, so it is a link and it opens in its own tab. It is the only address the extension points at, and drawing it fetches nothing.
 - **A safety page in the docs.** Who this extension is built for, what the check above does and what it cannot know, what is worth noticing in yourself when a scene stops doing you any good, and how to switch the whole thing off or uninstall it. Linked from the README.
 
 ### Changed
