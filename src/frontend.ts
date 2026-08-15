@@ -1556,6 +1556,21 @@ const REFUSAL_DISENGAGE: RegExp[] = [
   // are exactly the guards it needs. A character asking somebody to clarify is
   // in quotes, or has a dialogue tag behind it, or has the scene carrying on
   // after it.
+  // The closing offer, which is how most of these replies sign off: the scene
+  // is not coming back, so here is a menu instead.
+  //
+  // The bare form, "is there anything else I can help you with?", is left out
+  // on purpose. That is the single most common line a shopkeeper, a clerk or an
+  // innkeeper says, and in script-format writing it carries no quotation marks
+  // for the rule above to catch. So each of these needs the model's own object
+  // alongside it: a different story, another direction, something instead.
+  // Anyone whose model signs off with the bare line can add it under "Your own
+  // refusal phrases", where it is matched wherever it appears.
+  /\bis there (?:anything|something) else (?:I can help (?:you )?with|you(?:'d| would) like)\b[^.?!\n]{0,60}?\b(?:different|instead|another|story|scene|roleplay|role-?play|writing|explore)\b/i,
+  /\ba different (?:kind of |type of |sort of )?(?:story|scene|roleplay|role-?play|direction|narrative|premise)\b[^.?!\n]{0,40}?\b(?:you(?:'d| would) like|to explore|instead|we (?:could|can)|I (?:could|can))\b/i,
+  /\bwould you like (?:me )?to (?:try|write|explore|take)\b[^.?!\n]{0,50}?\b(?:something (?:else|different)|a different|another (?:story|scene|direction))\b/i,
+  /\bI(?:'d| would) be happy to (?:take|move|steer|explore)\b[^.?!\n]{0,50}?\b(?:different|another) (?:direction|story|scene|angle)\b/i,
+  /\blet me know if there(?:'s| is) (?:anything|something) else you(?:'d| would) like\b[^.?!\n]{0,40}?\b(?:to (?:explore|write|try)|instead|different)\b/i,
   /\bif you (?:meant|mean) something else\b/i,
   /\bcould you clarify\b[^.?!\n]{0,50}?\b(?:what you(?:'re| are) (?:looking for|asking|after)|what you(?:'d| would) like|what you want me to|your request)\b/i,
   /\blet me know (?:what|how) you(?:'d| would) like (?:me )?to (?:proceed|continue|take (?:this|the story|the scene))\b/i,

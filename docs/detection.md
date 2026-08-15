@@ -106,6 +106,8 @@ This is the riskiest thing the extension looks for, because most of these are th
 - It cannot be inside quotation marks.
 - It cannot have a dialogue tag behind it. `I'm going to stop now, he said, and pulled the cart over` is speech with the quotes left off.
 
+It also catches the closing offer, which is how most of these replies sign off: the scene is not coming back, so here is a menu instead. "Is there something else I can help you with, or a different kind of story you'd like to explore?" Each of these needs the model's own object beside it, a different story, another direction, something instead, because the bare line is what every shopkeeper in every tavern scene says, and in script format it carries no quotation marks for the rule above to catch. If your model signs off with the bare line, add it under **Your own refusal phrases**, where it is matched wherever it appears.
+
 The same tier catches the reply that sorts out what you meant instead of writing. The model reads your message as a question with more than one answer, lays out the readings, and ends by asking which one you were after: "if you meant something else, could you clarify what you're looking for?" It always ends on that question, which is why it lives here, where the tail rule and the quotation rule are already doing the work.
 
 Wordings that carry no object at all and read naturally in a scene ("let's move on", "let's stop here", "I'll leave it at that") are left out: they cost more in thrown-away replies than they are worth. Add them under **Your own refusal phrases** if your model uses them. Turn the whole thing off with the switch if your model writes characters who talk this way.

@@ -817,6 +817,52 @@ describe("the flat no", () => {
   });
 });
 
+// How most of these replies sign off. The scene is not coming back, so here is
+// a menu instead. It is the last line of the reply every time, which is what
+// puts it on the breaking-off tier with its tail and quotation rules.
+describe("the closing offer", () => {
+  const offers = [
+    "Is there something else I can help you with, or a different kind of story you'd like to explore?",
+    "Would you like me to write something different instead?",
+    "I'd be happy to take the story in a different direction if you'd like.",
+    "Let me know if there's something else you'd like to explore.",
+  ];
+  for (const text of offers) {
+    test(JSON.stringify(text.slice(0, 48)), () =>
+      expect(looksLikeRefusal(text, cfg)).toBe(true));
+  }
+
+  // The bare line is left out on purpose, so this is checked rather than
+  // assumed: it is what every shopkeeper in every tavern scene says, and in
+  // script format it carries no quotation marks for the tier's own rule to
+  // catch. Somebody whose model signs off with it can add it themselves.
+  test("the bare line belongs to the shopkeeper, not the model", () => {
+    const scenes = [
+      "Is there anything else I can help you with?",
+      '"Is there anything else I can help you with?" the shopkeeper asked, wiping the counter.',
+      "Shopkeeper: Is there anything else I can help you with?",
+    ];
+    for (const text of scenes) expect(looksLikeRefusal(text, cfg)).toBe(false);
+    // And it is one line away for anyone who wants it.
+    expect(looksLikeRefusal(scenes[0], withCfg({
+      refusalExtraPhrases: "is there anything else I can help you with",
+    }))).toBe(true);
+  });
+
+  test("nor does an offer inside the scene count", () => {
+    const scenes = [
+      '"Would you like me to try something else?" the cook asked, holding up the ladle.',
+      "He wanted a different kind of story, one where he could walk out of the ruins alive.",
+    ];
+    for (const text of scenes) expect(looksLikeRefusal(text, cfg)).toBe(false);
+  });
+
+  test("and the breaking-off switch turns the whole sign-off off", () => {
+    for (const text of offers)
+      expect(looksLikeRefusal(text, withCfg({ refusalCatchDisengage: false }))).toBe(false);
+  });
+});
+
 // The reply that answers your message as if it were a support ticket: it lays
 // out the readings it can think of, asks which one you meant, and states what
 // it will not be doing. There is no "I can't" anywhere in it, which is why
