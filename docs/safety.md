@@ -36,7 +36,10 @@ If none of this describes how you use the extension, then it does not, and there
 
 - **The master switch**, under **Basics**, stops every retry, and word swaps with it.
 - **Turn off here** switches it off in one chat and leaves every other chat as it was.
-- **Uninstalling** removes it. Your chats, characters and messages belong to Lumiverse and are not touched. What this keeps is settings, presets, a window position and a list of chat ids, all of which is itemised in [Privacy](privacy.md).
+- **Reset**, at the bottom of the settings panel, puts every setting back to what it shipped with. Tick every part, tick **Delete saved word swap presets** underneath, and nothing you configured survives. The presets go immediately and permanently; the settings are filled in behind the box and kept when you press **Save**. [All settings](settings.md#resetting) covers it in full.
+- **Uninstalling** removes the extension. Your chats, characters and messages belong to Lumiverse and are not touched by any of this.
+
+Two small things live in your browser rather than in your settings, and a reset does not reach them: where you left the panel on screen, and the list of chats you switched it off in. Clearing this site's storage in your browser clears those. [Privacy](privacy.md) itemises everything it writes, everywhere.
 
 There is no streak to maintain and nothing that nags. I gain nothing from your keeping it installed. If it is making things worse, remove it; that is a legitimate outcome and nothing here is built to make it difficult.
 
@@ -45,6 +48,18 @@ There is no streak to maintain and nothing that nags. I gain nothing from your k
 It is not a safety system. It does not read your messages to assess how you are, it does not score anything about you, and there is no mechanism in it by which it could tell whether a scene is doing you any good.
 
 It is not a therapist, and neither is the model, however well it writes. That is not a legal disclaimer. It is worth stating because it is an easy thing to forget at three in the morning, when something is replying to you as though it understands.
+
+## If you are using this for something other than the writing
+
+I do not know what that would look like for you and I am not going to guess at it. What I can do is say some true things about the tool, because I built it and I know how little is behind it.
+
+Nothing a model wrote about you is a finding. It has no memory of you between chats, nothing at stake in what happens to you, and no opinion that persists from one reply to the next. It produced text that fitted the shape of the conversation in front of it. That is the whole of what occurred, and it is equally true of the replies that were kind and the ones that were not.
+
+If you kept a reply because it agreed with the worst thing you believe about yourself, that reply is not a second opinion. It came out of the same process as the nineteen you discarded. Nothing becomes true because you found a version of it that said so.
+
+Writing something down is also not the same as wanting it. Fiction is where a great many people put what they cannot say anywhere else, and that is a legitimate use of it.
+
+I cannot do anything from here. This page is the one part of the extension where I get to write to a person instead of to a settings panel, so, plainly: I hope you are alright. If you are not, I hope the person you tell is not a language model.
 
 ---
 

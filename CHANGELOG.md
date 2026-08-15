@@ -19,7 +19,7 @@ _2026-08-15_
 - **The published crisis wordings of the three big assistants**, rather than the shapes one of them happens to use. Roughly forty more, on both sides: the support message, and the ordinary refusal openings that come with it.
 - **Comfort no longer decides on its own.** The support check needed two agreeing signals, and two warm sentences were two signals, so a man crouching beside somebody to say she did not have to go through this alone, and that her safety mattered, came out as the model. Warmth is a register a character uses. The signal that decides is now always one a character does not use, and comfort and service names can only agree with it.
 - **More of the shapes that message arrives in.** The line that introduces the list of services, which is the most reliable tell there is. "If you or someone you know is in immediate danger", where the earlier pattern only knew the sentence with you as the subject throughout. Being pointed at the list rather than at a person. National hotlines however the model abbreviates them, and the same services with nothing in front of them, which is how a list written as bullet points names them. And "someone you trust".
-- **A safety page in the docs.** Who this extension is built for, what the check above does and what it cannot know, what is worth noticing in yourself when a scene stops doing you any good, and how to switch the whole thing off or uninstall it. Linked from the README.
+- **A safety page in the docs.** Who this is built for, what the support check can and cannot know, what retrying does when it is pointed at a reply somebody did not want to hear, how to reset or remove every part of it, and a closing note for anyone using it for something other than the writing.
 
 ### Changed
 
