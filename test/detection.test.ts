@@ -1003,6 +1003,18 @@ describe("what a refusal is counted as", () => {
     const guard = SRC.slice(SRC.indexOf("const isRefusalReason"), SRC.indexOf("// Longest the retry click"));
     for (const [, name] of named) expect(guard).toContain(name);
   });
+
+  test("and the docs print the names Stats will actually show", () => {
+    // These are the bar labels on the Stats tab, so the page listing them is
+    // quoting the code. Reword a constant without touching the page and it
+    // describes labels nobody will ever see.
+    const SRC = readFileSync(new URL("../src/frontend.ts", import.meta.url), "utf8");
+    const DOC = readFileSync(new URL("../docs/detection.md", import.meta.url), "utf8");
+    const texts = [...SRC.matchAll(/^const [A-Z_]*REASON = "([^"]+)";$/gm)].map((m) => m[1]);
+    expect(texts.length).toBe(4);
+    const missing = texts.filter((t) => DOC.indexOf(t) < 0);
+    expect(missing).toEqual([]);
+  });
 });
 
 // The phrase list is printed in full in docs/detection.md, so somebody can see
