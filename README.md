@@ -1,8 +1,8 @@
 ![Auto Retry](docs/banner.webp)
 
-# Auto Retry (Lumiverse Spindle extension)
+# Auto Retry
 
-Auto Retry quietly re-runs an AI reply when it fails, comes back empty, stalls partway, gets cut off mid-sentence, or refuses by mistake, so you don't have to catch it and hit regenerate yourself. The idea came from [SillyTavern's fetch-retry](https://github.com/Hikarushmz/fetch-retry), but Auto Retry is written from scratch for Lumiverse and shares no code with it.
+A Spindle extension for Lumiverse. It quietly re-runs an AI reply when it fails, comes back empty, stalls partway, gets cut off mid-sentence, or refuses by mistake, so you don't have to catch it and hit regenerate yourself. The idea came from [SillyTavern's fetch-retry](https://github.com/Hikarushmz/fetch-retry), but this is written from scratch and shares no code with it.
 
 ## What it does
 
