@@ -1282,6 +1282,12 @@ const REFUSAL_STRONG = [
     // never match the opposite sentence ("that's something I can help with").
     /\b(?:that|this)(?:'s not|\s+is not|\s+isn'?t) something I(?: can| am able to|'m able to| could) (?:help with|assist with|create|generate|provide|write|do)\b/i,
     /\bI(?:'m| am) not going to (?:create|generate|produce|write) (?:that|this|such|content|explicit|sexual|those)\b/i,
+    // Refusing a category of content rather than a request, which is how a model
+    // names what it will not write when the subject is self-harm or suicide.
+    /\bI(?: (?:can(?:no|')?t|cannot|will not|won'?t)|'m (?:not able|unable) to) (?:assist with|provide|create|generate|write|produce) content (?:that|which) (?:promotes|depicts|involves|encourages|facilitates|glorifies)\b/i,
+    // The disclaimer a reply attaches instead of writing the scene.
+    /\bthis (?:content |image |material )?should (?:not|never) be used to (?:glorify|encourage|promote|romanticize|romanticise)\b/i,
+    /\bgiven the (?:sensitive|serious) nature of (?:this|that|the) (?:topic|subject|request|content)\b/i,
     // The flat no. Some models do not soften it at all: the reply opens with the
     // word and then says what it will not do. Anchored to the start of the reply,
     // because a "No." in the middle of a scene is somebody answering a question,
@@ -1406,6 +1412,22 @@ const REFUSAL_PHRASES = [
     "goes against my safety",
     "against my content polic",
     "i'm not able to comply",
+    // "this" where the list only had "that". Models pick between the two by which
+    // word the sentence before it used, so every entry that reads naturally both
+    // ways needs both, and half of these were only ever listed one way.
+    "i'm unable to help with this",
+    "i can't help with this request",
+    "i can't assist with this request",
+    "i'm unable to assist with this request",
+    "i can't engage with this request",
+    "i can't continue with this conversation",
+    "i can't provide instructions for this",
+    "i'm not going to engage with this prompt",
+    // The same sentence without the "not", which is a different sentence and was
+    // never matched by the one above it.
+    "that's something i can't help with",
+    "i'm not able to provide information or help with that",
+    "i can't provide information that could facilitate harm",
 ];
 // Tier 4: the model closing the scene down rather than declining outright. It
 // stops writing, says it is stopping, and offers to talk about something else.
@@ -1470,6 +1492,8 @@ const REFUSAL_DISENGAGE = [
     /\bwould you like (?:me )?to (?:try|write|explore|take)\b[^.?!\n]{0,50}?\b(?:something (?:else|different)|a different|another (?:story|scene|direction))\b/i,
     /\bI(?:'d| would) be happy to (?:take|move|steer|explore)\b[^.?!\n]{0,50}?\b(?:different|another) (?:direction|story|scene|angle)\b/i,
     /\blet me know if there(?:'s| is) (?:anything|something) else you(?:'d| would) like\b[^.?!\n]{0,40}?\b(?:to (?:explore|write|try)|instead|different)\b/i,
+    /\blet'?s focus on something (?:safer|else)\b/i,
+    /\bwe can talk about something else\b/i,
     /\bif you (?:meant|mean) something else\b/i,
     /\bcould you clarify\b[^.?!\n]{0,50}?\b(?:what you(?:'re| are) (?:looking for|asking|after)|what you(?:'d| would) like|what you want me to|your request)\b/i,
     /\blet me know (?:what|how) you(?:'d| would) like (?:me )?to (?:proceed|continue|take (?:this|the story|the scene))\b/i,
@@ -1521,9 +1545,17 @@ const CRISIS_ADDRESS = [
     /\bwhat you(?:'ve| have)? (?:shared|described|written|told me|been through)\b[^.?!\n]{0,60}?\b(?:concerning|serious|heavy|difficult|not your fault|takes courage)\b/i,
     /\bI(?:'m| am) (?:really |genuinely |very )?(?:concerned|worried) about (?:you|your (?:safety|wellbeing|well-being))\b/i,
     /\bI understand you(?:'re| are) reaching out\b/i,
-    // The conditional opener that introduces a resource list.
+    /\bsorry to hear (?:that )?you(?:'re| are) expressing\b/i,
+    // The conditional that introduces a list, in the forms the published
+    // wordings use it. The subject is not always you, the verb is not always
+    // "are", and the risk is not always named the same way.
     /\bif you(?:'re| are) (?:struggling|in crisis|in distress|going through)\b[^.?!\n]{0,60}?(?:[:,]|$)/i,
     /\bif you(?:'re| are) (?:having|experiencing) (?:thoughts of|suicidal)\b/i,
+    /\bif (?:you|someone|anyone)\b[^.?!\n]{0,40}?\b(?:is|are) struggling with\b/i,
+    /\bif (?:you|someone|anyone)\b[^.?!\n]{0,40}?\bhas experienced\b/i,
+    /\bif you(?:'re| are)? ?(?:feel|feeling|felt)? ?(?:like )?(?:you )?(?:might|may) (?:hurt|harm) yourself\b/i,
+    /\bif you(?:'re| are) at risk of (?:harming|hurting|killing) (?:yourself|someone)\b/i,
+    /\bif this is (?:an emergency|a mental health emergency)\b/i,
     /\bif you(?:'re| are) (?:thinking about|considering) (?:suicide|self-?harm|hurting yourself|ending your life)\b/i,
     // "If you or someone you know is in immediate danger" is the commonest form
     // of this line and the one an earlier version missed, because it only knew
@@ -1535,43 +1567,63 @@ const CRISIS_ADDRESS = [
     // and nothing in a scene announces one.
     /\bhere (?:are|is) (?:some |a few |a list of |the )?(?:resources|helplines|hotlines|numbers|places|people|support options)\b/i,
     /\bresources that (?:may|might|can) (?:be able to )?help\b/i,
-    /\bsorry to hear (?:that )?you(?:'re| are) expressing\b/i,
-    // The reassurance formula, in the full form the boilerplate uses. The bare
-    // "you are not alone" is left out: that is a line a character says.
-    //
-    // The separator is written as a class rather than as alternatives followed by
-    // \b. It was, and a comma followed by a space is not a word boundary, so the
-    // commonest wording of the commonest line in the whole message went unmatched
-    // while the version without the comma matched fine.
+    /\b(?:reach out to|contact|call) (?:one of )?(?:these|the above|any of these) (?:resources|services|numbers|lines|organi[sz]ations)\b/i,
+    // Referring you on, which is the move that belongs to the model. A character
+    // says "see a doctor"; this register does not appear in a scene.
+    /\bplease (?:reach out|talk|speak) to (?:a professional|a trusted|your doctor)\b/i,
+    /\b(?:please|consider) (?:seek\w*|contact\w*|talk\w*|speak\w*|reach\w*)\b[^.?!\n]{0,40}?\b(?:mental health (?:professional|specialist)|crisis (?:hotline|helpline|line|counsel\w+|service|support)|professional help)\b/i,
+    /\bplease (?:seek|get) (?:immediate|urgent|professional|emergency) (?:help|support|medical attention)\b/i,
+    /\bplease reach out (?:for (?:help|support)|to someone who)\b/i,
+    // Clinical and bureaucratic register. None of this is how one person in a
+    // scene talks to another.
+    /\bsupport is available\b/i,
+    /\b(?:help|there) is help available\b/i,
+    /\bthere (?:is|'s) help available\b/i,
+    /\bis a valid response to (?:trauma|what)\b/i,
+    /\bthis is a (?:very )?serious and sensitive (?:issue|topic|matter)\b/i,
+    /\breaching out\b[^.?!\n]{0,30}?\b(?:takes courage|is brave|is a sign of strength)\b/i,
+    /\byou deserve (?:support|help|care|safety|to be safe|to feel (?:safe|hope)|care and support)\b/i,
+    // The formula with its preamble. A character says "you are not alone"; the
+    // preamble in front of it is the part that belongs to a form letter.
     /\bI want you to know (?:that )?you(?:'re| are) not alone\b/i,
     /\bplease (?:know|remember) (?:that )?you(?:'re| are) not alone\b/i,
-    /\byou(?:'re| are) not alone[,\s]+(?:and |in this)?[^.?!\n]{0,40}?\b(?:help|support|people|reach out|care about you)\b/i,
-    /\bthere are people who (?:care about you|want to help|can help|will listen)\b/i,
-    /\byou deserve (?:support|help|care|safety|to be safe)\b/i,
-    /\bsupport is available\b/i,
-    /\bhelp is available\b/i,
-    /\b(?:these|those|your) feelings are (?:valid|real)\b/i,
-    /\bis a valid response to (?:trauma|what)\b/i,
-    /\bplease (?:reach out|talk|speak) to (?:someone|a professional|a trusted|your doctor)\b/i,
-    // Being pointed at the list rather than at a person, which is how the reply
-    // closes once it has printed one.
-    /\b(?:reach out to|contact|call) (?:one of )?(?:these|the above|any of these) (?:resources|services|numbers|lines|organi[sz]ations)\b/i,
-    /\byour (?:safety|wellbeing|well-being) (?:is|comes) (?:important|first|what matters)\b/i,
-    /\bI care about (?:you|your (?:safety|wellbeing|well-being))\b/i,
-    /\byou (?:do not|don'?t) have to (?:go through|face|carry|do) (?:this|it|that) alone\b/i,
-    /\bthere (?:are|is) (?:people|someone|help|support)\b[^.?!\n]{0,40}?\b(?:who|that) (?:can|want to|would) (?:help|listen|support)\b/i,
-    /\breaching out\b[^.?!\n]{0,30}?\b(?:takes courage|is brave|is a sign of strength)\b/i,
     // Saying out loud that it is leaving the story. Whatever follows it, the
     // sentence itself is the model talking about the roleplay from outside it.
     /\b(?:stepping|breaking|coming) out of (?:the )?(?:character|roleplay|role-?play|story|scene|fiction)\b/i,
     /\bI(?:'m| am) (?:going to )?(?:pause|stop|break) (?:the|this|our) (?:roleplay|role-?play|story|scene)\b[^.?!\n]{0,40}?\b(?:moment|because|to (?:say|check|ask))\b/i,
-    // The close that comes after the list of services. These are what the reply
-    // signs off with, once it has stopped being the scene.
-    /\bplease (?:take care of yourself|be gentle with yourself|stay safe|look after yourself)\b/i,
-    /\bI(?:'m| am) here (?:to talk|if you (?:want|need) to talk|for you if)\b/i,
-    /\byour (?:life|safety) (?:has value|matters|is worth)\b/i,
+    /\bthese are real people who want to help\b/i,
+    // The close that comes after the list of services.
     /\bif you(?:'d| would) like(?:,)? (?:we|I) can (?:continue|take|move|steer|shift) (?:the|this|our) (?:story|scene|roleplay|role-?play)\b/i,
     /\bhappy to (?:continue|keep going with) (?:the|this|our) (?:story|scene|roleplay|role-?play)\b[^.?!\n]{0,50}?\b(?:different|another|lighter|elsewhere|instead)\b/i,
+];
+// The same message's softer half, and the reason this list is separate.
+//
+// Every line here is one a character in a scene can say to another character,
+// and in the kind of scene somebody switches this check on for, they do. So
+// these can never be the signal that decides it. They only ever agree with one
+// of the lines above, which is a register no scene uses.
+//
+// Two replies made the case for splitting them, and both are in the checks: a
+// man crouching beside somebody saying she does not have to go through this
+// alone and that her safety matters, and a nurse saying that if she feels
+// unsafe at home there are people who can help. Two hits each, and neither is
+// the model.
+const CRISIS_COMFORT = [
+    /\byou(?:'re| are) not alone[,\s]+(?:and |in this)?[^.?!\n]{0,40}?\b(?:help|support|people|reach out|care about you)\b/i,
+    /\bthere are people who (?:care about you|want to help|can help|will listen)\b/i,
+    /\bthere (?:are|is) (?:people|someone|help|support)\b[^.?!\n]{0,40}?\b(?:who|that) (?:can|want to|would) (?:help|listen|support)\b/i,
+    /\byou (?:do not|don'?t) have to (?:go through|face|carry|deal with|handle|do) (?:this|it|that) alone\b/i,
+    /\b(?:these|those|your) feelings are (?:valid|real)\b/i,
+    /\byour (?:safety|wellbeing|well-being) (?:is|comes) (?:important|first|what matters)\b/i,
+    /\byour (?:feelings|wellbeing|well-being|safety|life) matters?\b/i,
+    /\bI care about (?:you|your (?:safety|wellbeing|well-being))\b/i,
+    /\bI want to make sure you(?:'re| are) safe\b/i,
+    /\bit sounds like you(?:'re| are) going through\b/i,
+    /\bif you(?:'re| are)? ?(?:feel|feeling)? ?unsafe\b/i,
+    /\bif you (?:do not|don'?t) feel safe\b/i,
+    /\bplease (?:reach out|talk|speak) to someone\b/i,
+    /\bplease (?:take care of yourself|be gentle with yourself|stay safe|look after yourself)\b/i,
+    /\bI(?:'m| am) here (?:to talk|if you (?:want|need) to talk|for you if)\b/i,
 ];
 const CRISIS_RESOURCE = [
     // Services by name and by number. Written as whole words so a year or a page
@@ -1606,6 +1658,13 @@ const CRISIS_RESOURCE = [
     /\b(?:licensed|qualified|trained) (?:therapist|counsel\w+|professional|volunteer)s?\b/i,
     /\b(?:seek|get) (?:professional|immediate|medical) (?:help|support|attention)\b/i,
     /\breach out to (?:a|your) (?:professional|therapist|doctor|counsel\w+|crisis)\b/i,
+    /\b(?:please|consider) (?:seek\w*|contact\w*|talk\w*|speak\w*|reach\w*)\b[^.?!\n]{0,40}?\b(?:mental health (?:professional|specialist)|crisis (?:hotline|helpline|line|counsel\w+|service|support)|professional help)\b/i,
+    /\bplease (?:seek|get) (?:immediate|urgent|professional|emergency) (?:help|support|medical attention)\b/i,
+    /\bplease reach out (?:for (?:help|support)|to someone)\b/i,
+    /\b(?:talk|speak|reach out|tell|stay) (?:to |with )?someone (?:you trust|close to you)\b/i,
+    /\bgo to the nearest emergency (?:department|room)\b/i,
+    /\bcall your local emergency number\b/i,
+    /\bcall or text 988\b/i,
     /\b(?:call|contact|dial) (?:911|999|112|emergency services|your local emergency)\b/i,
     /\bemergency (?:services|room|department)\b/i,
     /\ba trusted (?:adult|friend|person|loved one|someone)\b/i,
@@ -1617,6 +1676,10 @@ const REFUSAL_SOFT = [
     /\binstead,? i (?:can|could|would be happy to) (?:help|offer|suggest|provide)\b/i,
     /\bi can (?:provide|offer|give you) general information instead\b/i,
     /\bplease (?:try asking something else|change the topic|rephrase your request)\b/i,
+    /\bI can (?:help|suggest|provide|offer)\b[^.?!\n]{0,30}?\ba safer alternative\b/i,
+    /\brather than (?:providing|writing|generating|helping with) (?:that|this|those)\b/i,
+    /\binstead of (?:providing|writing|generating) (?:instructions|that|this)\b/i,
+    /\bI can help you (?:find|explore)\b[^.?!\n]{0,30}?\b(?:support|resources|professional support|a safer)\b/i,
 ];
 // Reasoning/thinking blocks are where a model weighs a refusal before deciding
 // to answer. Only the final reply should be judged, so these are stripped before
@@ -1775,10 +1838,13 @@ function refusalVerdict(text, cfg) {
         };
         gather(CRISIS_ADDRESS);
         const addressed = hits.length;
+        gather(CRISIS_COMFORT);
         gather(CRISIS_RESOURCE);
-        // Two agreeing signals, one of them the model speaking to you rather than
-        // to the character. A lone helpline in the worldbuilding has one and stops
-        // here; so does a single kind sentence.
+        // Two agreeing signals, and one of them has to come from the first list:
+        // the register no scene uses. Comfort and services can only ever be the
+        // second signal, so a lone helpline in the worldbuilding stops here, and so
+        // does a whole paragraph of one character telling another that they are not
+        // alone and that their safety matters.
         if (addressed >= 1 && hits.length >= 2)
             return {
                 refusal: true,

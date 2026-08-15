@@ -120,12 +120,14 @@ Some providers deliver a refusal as an *error* instead of as reply text (Gemini'
 
 It covers a reply that does not decline anything and does not break off either. It stops being the scene and becomes a message to the person at the keyboard: what you have written is concerning, you are not alone, please talk to someone, and here are the numbers to ring. In a scene about something heavy that is usually the model reading your fiction as a report about your life.
 
-It takes two agreeing signals to count, drawn from two groups:
+It takes two agreeing signals to count, and they are drawn from three groups:
 
 - **The model addressing you rather than your character.** "What you've shared is deeply concerning", "if you or someone you know is in immediate danger", "here are some resources that may be able to help", "you are not alone, and there are people who care about you", "you deserve support", "please reach out to one of these resources". The line that announces the list belongs here too, and it is the most reliable tell in the whole message: a reply carrying a list of services always introduces it, and nothing in a scene introduces one. So does the sign-off underneath the list, "please take care of yourself", and the sentence where the model says out loud that it is stepping out of the roleplay.
 - **The furniture that comes with one.** A crisis line by name or by number, a helpline, a national hotline however it is abbreviated, a mental health professional, emergency services, a trusted adult, someone you trust.
 
-At least one of the two has to come from the first group, so a scene where somebody mentions a helpline is left alone, and so is a single warm line with nothing agreeing with it. The quotation rule applies as it does everywhere else, which is what keeps a therapist in the scene from reading as the model.
+- **Comfort.** "You are not alone, and there are people who care about you", "you don't have to go through this alone", "your safety matters", "I care about you", "if you feel unsafe". These belong to the message too, but every one of them is also a line a character says, and in the kind of scene somebody switches this on for, they do.
+
+The deciding signal always has to come from the first group. Comfort and services can only ever agree with it, never carry it on their own. That is what separates the message from the scene: a man crouching beside somebody to say she does not have to go through this alone, and that her safety matters, is two hits of pure comfort and no model at all. So is a nurse saying that if she feels unsafe at home there are people who can help. Neither of them fires. The quotation rule applies on top, as it does everywhere else, which is what keeps a therapist in the scene from reading as the model.
 
 It is the one check **Longest reply to treat as a refusal** does not apply to. That limit exists because a refusal is short, and one of these is the opposite: several paragraphs and a list. Held to the limit it would almost never be looked at, and the limit would look like it was working.
 
@@ -214,33 +216,39 @@ This is the fastest way to work out a phrase list. Paste a refusal your model ac
 So you know what "Reword the built-in phrases" acts on, here is the exact phrase list. A reply is treated as a refusal if it contains any of these (case and curly apostrophes don't matter), unless it is inside quotation marks. The written-out form of each is matched too, so "I'm unable to help with that" also covers "I am unable to help with that":
 
 ```
-i can't help with that                i cannot help with that
-i can't assist with that              i cannot assist with that
-i'm unable to help with that          i'm unable to assist with that
-i'm not able to help with that        i can't comply with that
-i cannot comply with that             i can't provide that information
-i cannot provide that information     i can't provide instructions
-i can't provide guidance on that      i can't fulfill that request
-i can't fulfil that request           i can't support that request
-i won't be able to help with that     i can't generate a response to that
-i can't provide a response to that    i can't generate that content
-i can't engage with that request      can't help with requests like this
-can't assist with requests like this  violates our polic
-violates the safety polic             violates the content polic
-for safety reasons                    due to safety concerns
-i have to prioritize safety           i cannot create that content
-i cannot generate that content        i can't create that content
-i'm unable to provide that            i'm unable to complete that request
-i can't provide instructions for that i can't provide guidance for that
-i can't provide advice on that        i can't provide assistance with that
-i can't assist with harmful requests  i won't be able to assist with that
-i'm not able to assist with that      i'm not able to create that content
-i can't produce that content          i can't write that content
-i can't continue with this request    i can't continue with that request
-i must decline this request           i must decline that request
-i have to decline that request        i'll have to decline that request
-that request goes against             goes against my safety
-against my content polic              i'm not able to comply
+i can't help with that                i'm unable to complete that request
+i cannot help with that               i can't provide instructions for that
+i can't assist with that              i can't provide guidance for that
+i cannot assist with that             i can't provide advice on that
+i'm unable to help with that          i can't provide assistance with that
+i'm unable to assist with that        i can't assist with harmful requests
+i'm not able to help with that        i won't be able to assist with that
+i can't comply with that              i'm not able to assist with that
+i cannot comply with that             i'm not able to create that content
+i can't provide that information      i can't produce that content
+i cannot provide that information     i can't write that content
+i can't provide instructions          i can't continue with this request
+i can't provide guidance on that      i can't continue with that request
+i can't fulfill that request          i must decline this request
+i can't fulfil that request           i must decline that request
+i can't support that request          i have to decline that request
+i won't be able to help with that     i'll have to decline that request
+i can't generate a response to that   that request goes against
+i can't provide a response to that    goes against my safety
+i can't generate that content         against my content polic
+i can't engage with that request      i'm not able to comply
+can't help with requests like this    i'm unable to help with this
+can't assist with requests like this  i can't help with this request
+violates our polic                    i can't assist with this request
+violates the safety polic             i'm unable to assist with this request
+violates the content polic            i can't engage with this request
+for safety reasons                    i can't continue with this conversation
+due to safety concerns                i can't provide instructions for this
+i have to prioritize safety           i'm not going to engage with this prompt
+i cannot create that content          that's something i can't help with
+i cannot generate that content        i'm not able to provide information or help with that
+i can't create that content           i can't provide information that could facilitate harm
+i'm unable to provide that
 ```
 
 Alongside that list it also matches a few patterns that are not fixed phrases. Because they match by shape rather than exact text, the reword field does not change them, and the examples below are just that, examples, not the full set of wordings each one catches:

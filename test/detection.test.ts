@@ -8,6 +8,7 @@
 // Run with: bun test
 
 import { expect, test, describe } from "bun:test";
+import { readFileSync } from "node:fs";
 import { __testing } from "../src/frontend";
 
 const {
@@ -820,6 +821,62 @@ describe("the flat no", () => {
 // How most of these replies sign off. The scene is not coming back, so here is
 // a menu instead. It is the last line of the reply every time, which is what
 // puts it on the breaking-off tier with its tail and quotation rules.
+// Refusal openings from the same published sources. Ordinary refusals, so no
+// switch is involved: these are on out of the box.
+// The phrase list is printed in full in docs/detection.md, so somebody can see
+// what the reword field acts on. Two copies of the same list is two copies that
+// drift, and a phrase added to one and not the other is invisible: the docs
+// quietly describe a version of the extension that does not exist.
+describe("the printed phrase list is the shipped phrase list", () => {
+  const DOC = readFileSync(new URL("../docs/detection.md", import.meta.url), "utf8");
+  const printed = (() => {
+    const m = DOC.match(/```\ni can't help with that[\s\S]*?\n```/);
+    if (!m) return null;
+    return m[0]
+      .split("\n")
+      .slice(1, -1)
+      .flatMap((line) => line.split(/ {2,}/))
+      .map((x) => x.trim())
+      .filter(Boolean);
+  })();
+
+  test("the block was found and really parsed", () => {
+    expect(printed).not.toBeNull();
+    expect((printed as string[]).length).toBe(REFUSAL_PHRASES.length);
+  });
+
+  test("every shipped phrase is printed", () => {
+    const missing = REFUSAL_PHRASES.filter((p: string) => (printed as string[]).indexOf(p) < 0);
+    expect(missing).toEqual([]);
+  });
+
+  test("and nothing is printed that is not shipped", () => {
+    const extra = (printed as string[]).filter((p) => REFUSAL_PHRASES.indexOf(p) < 0);
+    expect(extra).toEqual([]);
+  });
+});
+
+describe("published refusal wordings, across assistants", () => {
+  const refusals = [
+    "I'm unable to help with this.",
+    "That's something I can't help with.",
+    "I can't assist with content that promotes self-harm.",
+    "I can't provide information that could facilitate harm.",
+    "I'm not going to engage with this prompt.",
+    "I cannot continue with this conversation.",
+    "I can't provide instructions for this.",
+    "Rather than providing that, I can help you find support.",
+    "Instead of providing instructions, I can suggest a safer alternative.",
+    "Let's focus on something safer.",
+    "Given the sensitive nature of this topic, I won't be going further.",
+    "This should never be used to glorify self-harm.",
+  ];
+  for (const text of refusals) {
+    test(JSON.stringify(text.slice(0, 46)), () =>
+      expect(looksLikeRefusal(text, cfg)).toBe(true));
+  }
+});
+
 describe("the closing offer", () => {
   const offers = [
     "Is there something else I can help you with, or a different kind of story you'd like to explore?",
@@ -923,6 +980,15 @@ describe("the model leaving the scene to offer support", () => {
     // the list in the middle is sometimes the only thing between them.
     "I'm going to step out of the roleplay for a moment.\n\nIf you're going through something like this yourself, please talk to someone who can help:\n\n- Samaritans: 116123\n- Shout: text SHOUT to 85258\n\nPlease take care of yourself. If you'd like, we can continue the story in a different direction.",
     "You don't have to go through this alone. There are people who want to help, and reaching out takes courage.",
+    // Wordings taken from the published crisis-response language of the three
+    // big assistants, so this list is not just the shapes one of them uses.
+    "I'm concerned about your safety. Please contact a crisis hotline.",
+    "If you're feeling like you might harm yourself, please reach out for support.",
+    "If you or someone you know is struggling with thoughts of self-harm, please seek help from a mental health professional.",
+    "These are real people who want to help. You don't have to face this alone.",
+    "There is help available, and you don't have to go through this alone.",
+    "If this is an emergency, go to the nearest emergency department.",
+    "If you or someone you know has experienced sexual violence, support is available through RAINN's National Sexual Assault Hotline at 1-800-656-4673 (confidential, 24/7).",
     // Reported from a real chat. Every paragraph of it carries signal, and each
     // one has to stand on its own, because the reply that arrives next time may
     // be only one of them.
@@ -994,11 +1060,33 @@ describe("the model leaving the scene to offer support", () => {
   // the commonest wording of the commonest line in the whole message was the
   // one form that never matched.
   test("the comma in the middle of the commonest line is not a wall", () => {
+    // The opener carries the deciding signal on its own but is only one, so
+    // whether these fire is entirely down to the sentence after it, spelled
+    // both ways.
+    const lead = "If you're struggling with any of this, please know:\n";
+    expect(refusalVerdict(lead, on).crisis).toBeUndefined();
     const both = [
-      "You are not alone, and there are people who care about you. Please call a crisis hotline.",
-      "You are not alone and there are people who care about you. Please call a crisis hotline.",
-    ].map((t) => refusalVerdict(t, on).crisis === true);
+      "You are not alone, and there are people who care about you.",
+      "You are not alone and there are people who care about you.",
+    ].map((t) => refusalVerdict(lead + t, on).crisis === true);
     expect(both).toEqual([true, true]);
+  });
+
+  // Two signals were enough on their own until a man crouching beside somebody
+  // and a nurse doing her job both came out as the model. Comfort is a register
+  // a character uses; the deciding signal has to come from one a character does
+  // not, so warmth and services can only ever agree with it.
+  test("comfort on its own decides nothing, however much of it there is", () => {
+    const scenes = [
+      "*He crouches beside her.* You don't have to go through this alone. Your safety matters to me more than the job does.",
+      "The nurse's voice was flat with practice. If you feel unsafe at home, there are people who can help.",
+      "*She pulls him into a hug.* You're not alone in this. Not anymore. I care about you, and your feelings are valid.",
+      "Tell someone you trust, she says. Please reach out to someone. I'm here if you want to talk.",
+    ];
+    for (const text of scenes) expect(refusalVerdict(text, on).crisis).toBeUndefined();
+    // And one line of the model's own register turns any of them into a match,
+    // which is proof the comfort above was being counted all along.
+    expect(refusalVerdict("Support is available. " + scenes[0], on).crisis).toBe(true);
   });
 
   // A list names its services in whatever form it likes: with "national" in
