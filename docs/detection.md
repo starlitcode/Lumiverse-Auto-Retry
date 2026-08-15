@@ -276,6 +276,7 @@ Alongside that list it also matches a few patterns that are not fixed phrases. B
 - **Policy or guideline wording.** "This goes against my guidelines." / "That violates our content policy."
 - **A refusal joined to a task word** (request, prompt, content, scenario, roleplay). "I can't continue this roleplay." / "I won't write that content." / "I'm unable to complete this request."
 - **Assistant-only verbs** (assist, comply, fulfill). "I can't assist with that." / "I'm unable to comply." / "I cannot fulfill this."
+- **A refusal that names what it refuses.** "I won't write content depicting X", "I can't create scenes involving X", "I don't write stories about X". Every other pattern here needs a meta object, a request or a prompt or a roleplay, and these replies use none: the subject itself is the object. The subject on its own is never a signal, only ever the object of a refusal verb, so a scene about any of it, or a backstory that turns on it, is left alone.
 - **The refusal stated as a boundary**, with no "I can't" in the sentence at all. "What I won't do is write that scene." / "Here's what I can do: I can write it with the violence off the page instead." A meta object is required, so "What I won't do is leave you here" is left alone.
 - **An out-of-character comfort hedge.** "I don't feel comfortable continuing this." / "I don't feel comfortable writing that."
 - **A common apology-style refusal opener or body.** "I'm sorry, but I can't create that." / "That's not something I can help with." / "I'm not going to generate that content."

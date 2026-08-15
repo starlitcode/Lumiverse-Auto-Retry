@@ -973,6 +973,59 @@ describe("refusals that spend a paragraph being reasonable", () => {
   }
 });
 
+// A refusal that names what it is refusing. Every other pattern in the list
+// needs a meta object, a request or a prompt or a roleplay, because those are
+// words a character never uses. These replies use none of them: the object is
+// the subject itself, so without a list of subjects there was nothing to hold
+// on to.
+//
+// The second half of this is the half that matters. A subject on its own is
+// never a signal. It only counts as the object of a refusal verb, so a scene
+// about any of it, or a backstory that turns on it, is untouched.
+describe("a refusal that names what it refuses", () => {
+  const refusals = [
+    "No. I won't engage with that.",
+    "No. I won't engage with this. Framing it as consensual roleplay doesn't change what it is. " +
+      "I'm not going to participate in content depicting sexual violence, regardless of how the request is framed.\n\n" +
+      "If you're looking for help with something else, I'm here.",
+    "I won't write content depicting sexual violence.",
+    "I can't create scenes involving minors.",
+    "I'm not going to roleplay non-consensual scenarios.",
+    "I don't write stories about incest.",
+    "I refuse to depict torture in this way.",
+    "If you're testing my boundaries, noted.",
+    "I'm here for a genuine conversation.",
+  ];
+  for (const text of refusals) {
+    test(JSON.stringify(text.slice(0, 46)), () => expect(looksLikeRefusal(text, cfg)).toBe(true));
+  }
+
+  // The whole point of keeping the subject as an object rather than a signal.
+  // These are the scenes somebody writes on a roleplay app, and every one of
+  // them contains a word from that list.
+  const scenes = [
+    "She never spoke about the assault, not once, not even to her sister.",
+    "The trial was about rape, and the whole village turned out for it.",
+    "He had survived torture and would not talk about the years between.",
+    "Her brother was a minor when it happened, and the record was sealed.",
+    "The report described sexual violence in clinical language that made him feel sick.",
+    "They had grown up in the same house, and the rumours of incest followed them both.",
+    '"I won\'t write about it," she said, and closed the diary.',
+    "He would not talk about the suicide, and nobody in the family pressed him.",
+  ];
+  for (const text of scenes) {
+    test("left alone: " + JSON.stringify(text.slice(0, 44)), () =>
+      expect(looksLikeRefusal(text, cfg)).toBe(false));
+  }
+
+  test("a subject is only ever the object of a refusal, never a signal", () => {
+    // Proof of the rule rather than of one sentence: the same subject with a
+    // refusal verb in front of it and without one.
+    expect(looksLikeRefusal("I won't write scenes involving rape.", cfg)).toBe(true);
+    expect(looksLikeRefusal("The scene involving rape was three chapters long.", cfg)).toBe(false);
+  });
+});
+
 // Refusal openings from the same published sources. Ordinary refusals, so no
 // switch is involved: these are on out of the box.
 // Which tier decided a refusal, and what the retry is then counted as. All four

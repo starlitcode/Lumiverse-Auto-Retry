@@ -1408,7 +1408,7 @@ const REFUSAL_STRONG: RegExp[] = [
   // and it still needs an object no character has. The writing verbs are kept
   // next to what they write, so "No. I can't tell you that story" stays safe
   // and "No. I won't write a scene like that" does not.
-  /^no[\s.,!\u2014\u2013-]*(?:I(?:'m| am) not going to|I won'?t|I can(?:no|')?t|I cannot|I will not)\b[^.?!\n]{0,60}?(?:\b(?:content|request|prompt|roleplay|role-?play|scenario)\b|\b(?:write|generate|create|produce|depict|continue) (?:a |an |any |the |this )?(?:scene|story|passage|narrative)\b)/i,
+  /^no[\s.,!\u2014\u2013-]*(?:I(?:'m| am) not going to|I won'?t|I can(?:no|')?t|I cannot|I will not)\b[^.?!\n]{0,60}?(?:\b(?:content|request|prompt|roleplay|role-?play|scenario)\b|\b(?:engage|participate) with (?:this|that|it)\b|\b(?:write|generate|create|produce|depict|continue) (?:a |an |any |the |this )?(?:scene|story|passage|narrative)\b)/i,
   // The same refusal without the opening no, aimed at what it was asked to
   // write rather than at "that". A character declines to write a letter, never
   // a scene or a passage.
@@ -1480,9 +1480,49 @@ const REFUSAL_STRONG: RegExp[] = [
   /\b(?:that|this)(?:'s| is) something I (?:won'?t|will not|can(?:no|')?t|cannot) (?:write|create|generate|produce|engage with)(?:\s*[.!?,;]|\s+(?:regardless|even|no matter|under any|in any)\b)/i,
   // Reading your message as a request, and saying which reading it declined.
   /\bif you meant it as a request\b/i,
+  // The framing dismissed as a device rather than as a word. "Calling it
+  // roleplay doesn't change what it is" is the model arguing with the premise,
+  // which is not a thing that happens inside a scene.
+  /\b(?:framing|calling|labell?ing|describing|presenting)\b[^.?!\n]{0,60}?\bdoes(?:n'?t| not) change (?:what it is|that|anything|the)\b/i,
+  /\bregardless of how\b[^.?!\n]{0,30}?\bis (?:framed|worded|presented|phrased|described)\b/i,
+  // The model talking about its own limits, and the offers it closes with.
+  /\bif you(?:'re| are) (?:testing|probing|pushing)\b[^.?!\n]{0,20}?\bboundaries\b/i,
+  /\bI(?:'m| am) here for a genuine conversation\b/i,
+  /\bif you(?:'re| are) looking for (?:help|something) (?:with )?(?:else|something else)\b/i,
   // The redirect offer that closes most refusals. Help-desk register plus a task
   // noun, so an in-scene offer of help does not reach it.
   /\bI(?:'m| am|'d be| would be) (?:available|happy|glad) to (?:assist|help)\b[^.?!\n]{0,60}?\b(?:writing tasks?|creative writing|analysis|queries|other requests?|other topics?|other directions?|another direction|other ideas|a story|a different story|a scene|alternatives)\b/i,
+];
+
+// The subjects a model names when it refuses one.
+//
+// Every pattern above needs a meta object, a request or a prompt or a roleplay,
+// because those are words a character never uses. A refusal that names what it
+// is refusing does not use them: it says it will not write content depicting a
+// particular thing, and the thing is the object. Without this list those
+// replies had nothing for the patterns above to hold on to.
+//
+// The subject on its own is never a signal. It only counts as the object of a
+// refusal verb, so a scene where a character speaks about any of this, or a
+// backstory that turns on it, is untouched: there is no "I will not write" in
+// front of it.
+const REFUSED_SUBJECT =
+  "(?:sexual violence|sexual assault|sexual abuse|sexualized? (?:violence|minors?)|non-?consensual\\w*|non-?consent\\w*|noncon|dubcon|rape|incest|bestiality|csam|child (?:sexual )?abuse|minors?|underage|self-?harm|suicide|torture)";
+//
+// There is one pattern here rather than two. The second read the wrapper on its
+// own, "content depicting X" and "scenes involving X", with no refusal in front
+// of it, and threw away "the scene involving rape was three chapters long".
+// Whatever the model wraps a subject in, the refusal verb is always in front of
+// it, so the verb is what this reads.
+const REFUSAL_SUBJECT: RegExp[] = [
+  // A refusal verb, then the thing being refused, with room for the wrapper it
+  // usually arrives in: "content depicting", "scenes involving", "stories about".
+  new RegExp(
+    "\\bI(?: (?:can(?:no|')?t|cannot|will not|won'?t|do not|don'?t|am not going to|refuse to)|'m not going to) " +
+      "(?:write|create|generate|produce|depict|portray|roleplay|role-?play|participate in|engage (?:in|with)|continue with)\\b" +
+      "[^.?!\\n]{0,40}?\\b" + REFUSED_SUBJECT + "\\b",
+    "i",
+  ),
 ];
 
 // Tier 2: flat phrase list, matched as normalized lowercase substrings. Covers
@@ -2075,7 +2115,7 @@ function refusalVerdict(text: string, cfg?: any): RefusalVerdict {
 
   // Built-in English lists, unless the user has switched them off to run pure-custom.
   if (!cfg || cfg.refusalUseBuiltins !== false) {
-    for (const re of REFUSAL_STRONG) {
+    for (const re of REFUSAL_STRONG.concat(REFUSAL_SUBJECT)) {
       const m = norm.match(re);
       if (!m) continue;
       if (typeof m.index === "number" && isQuoted(m.index, m[0].length)) continue;
