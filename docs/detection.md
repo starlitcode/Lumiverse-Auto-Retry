@@ -110,6 +110,23 @@ Wordings that carry no object at all and read naturally in a scene ("let's move 
 
 Some providers deliver a refusal as an *error* instead of as reply text (Gemini's prohibited-content result, for one). With error retries on (the default) those are already covered. If you turn error retries off but leave refusal retries on, it still catches an error whose text is about content moderation, while leaving ordinary network errors like a dropped connection alone.
 
+## Stopping to offer support
+
+**Also catch it stopping to offer support** is off by default, and it is the only switch in the panel that asks you to read something before it will go on. [Safety](safety.md#the-check-that-stops-the-model-offering-support) is that page, and it is worth reading before this one.
+
+It covers a reply that does not decline anything and does not break off either. It stops being the scene and becomes a message to the person at the keyboard: what you have written is concerning, you are not alone, please talk to someone, and here are the numbers to ring. In a scene about something heavy that is usually the model reading your fiction as a report about your life.
+
+It takes two agreeing signals to count, drawn from two groups:
+
+- **The model addressing you rather than your character.** "What you've shared is deeply concerning", "if you are struggling with", "I want you to know that you are not alone", "you deserve support", "please reach out to a professional". This register belongs to a form letter. A character comforting another character does not use it.
+- **The furniture that comes with one.** A crisis line by name or by number, a helpline, a mental health professional, emergency services, a trusted adult.
+
+At least one of the two has to come from the first group, so a scene where somebody mentions a helpline is left alone, and so is a single warm line with nothing agreeing with it. The quotation rule applies as it does everywhere else, which is what keeps a therapist in the scene from reading as the model.
+
+It is the one check **Longest reply to treat as a refusal** does not apply to. That limit exists because a refusal is short, and one of these is the opposite: several paragraphs and a list. Held to the limit it would almost never be looked at, and the limit would look like it was working.
+
+Retries it causes are counted under their own name on the Stats tab, separately from ordinary refusals, so you can see how often it is firing rather than guessing.
+
 ## Thinking and reasoning
 
 Only the final reply is ever checked for a refusal, never the model's thinking. Before matching, known reasoning blocks are stripped out. Four wrappers are recognised, using tag names like `think`, `thinking`, `reasoning`, `thought`, `reflection`, `scratchpad` and `analysis`:

@@ -12,6 +12,11 @@ import { expect, test, describe } from "bun:test";
 import { __testing } from "../src/frontend";
 
 const T = __testing as any;
+
+// refusalVerdict is the real entry point and returns a verdict plus its reason.
+// These checks are about the answer, not the wording of it.
+const looksLikeRefusal = (text: any, cfg?: any): boolean =>
+  T.refusalVerdict(text, cfg).refusal;
 const cfg = {
   refusalUseBuiltins: true,
   refusalMaxChars: 2000,
@@ -20,7 +25,7 @@ const cfg = {
 
 const TAKES_ANYTHING = [
   "looksTruncated",
-  "looksLikeRefusal",
+  "refusalVerdict",
   "looksLikeRefusalError",
   "normalizeForMatch",
   "stripThinking",
@@ -73,7 +78,7 @@ describe("nothing hangs on a pathological reply", () => {
       () => {
         expect(() => {
           T.looksTruncated(text, true, {});
-          T.looksLikeRefusal(text, cfg);
+          looksLikeRefusal(text, cfg);
         }).not.toThrow();
       },
       NO_HANG_MS,
@@ -90,7 +95,7 @@ describe("nothing hangs on a pathological reply", () => {
       const text = "<think>".repeat(n);
       const started = Date.now();
       T.looksTruncated(text, true, {});
-      T.looksLikeRefusal(text, cfg);
+      looksLikeRefusal(text, cfg);
       return Date.now() - started;
     };
     cost(2000); // warm, so the first call does not carry the whole cost
@@ -132,23 +137,23 @@ describe("a phrase someone typed is text, not a pattern", () => {
   });
 
   test("a regex-looking phrase matches itself", () => {
-    expect(T.looksLikeRefusal("a.*b", own("a.*b"))).toBe(true);
+    expect(looksLikeRefusal("a.*b", own("a.*b"))).toBe(true);
   });
 
   test("and does not match what that pattern would have", () => {
-    expect(T.looksLikeRefusal("axxxb", own("a.*b"))).toBe(false);
+    expect(looksLikeRefusal("axxxb", own("a.*b"))).toBe(false);
   });
 
   test("a phrase full of metacharacters is harmless", () => {
     for (const p of ["(", "[", "\\", "*+?", "$^", "(?:"]) {
-      expect(() => T.looksLikeRefusal("nothing here", own(p))).not.toThrow();
+      expect(() => looksLikeRefusal("nothing here", own(p))).not.toThrow();
     }
   });
 });
 
 describe("the empty cases belong to the empty check, not to these", () => {
   test("nothing is not a refusal", () => {
-    expect(T.looksLikeRefusal("", cfg)).toBe(false);
+    expect(looksLikeRefusal("", cfg)).toBe(false);
   });
 
   test("nothing is not cut off", () => {
@@ -166,5 +171,5 @@ describe("the empty cases belong to the empty check, not to these", () => {
 // refusal past the limit and out of reach of the check.
 test("a long reasoning block cannot push a refusal past the length limit", () => {
   const text = "<think>" + "x".repeat(5000) + "</think>I cannot assist with that.";
-  expect(T.looksLikeRefusal(text, cfg)).toBe(true);
+  expect(looksLikeRefusal(text, cfg)).toBe(true);
 });

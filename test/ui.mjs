@@ -1283,6 +1283,79 @@ console.log("\nwhole-list note settings");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- the one switch that is asked about before it is allowed on ----
+// Every other tick in this panel changes how a reply is judged. This one
+// decides whether a particular message reaches the person reading it, so it
+// stands behind a warning, and the warning is worth nothing if the tick can
+// slip past it: the box has to stay off through the question, through a no,
+// through Escape, and through the panel being shut on it.
+console.log("\nthe crisis check asks first");
+{
+  const { out, errors } = await inPanel(browser, {}, (page) =>
+    page.evaluate(async () => {
+      const frame = () =>
+        new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const modal = document.getElementById("modal");
+      for (const h of modal.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      await frame();
+      const box = () =>
+        modal.querySelector('[data-ar-row="refusalCatchCrisis"] input[type=checkbox]');
+      const notice = () => document.querySelector("#__lvRetryCrisisNotice");
+      const press = (label) => {
+        const b = [...notice().querySelectorAll("button")].find(
+          (x) => (x.textContent || "").trim() === label);
+        b.click();
+      };
+      const found = !!box();
+      const startsOff = box() ? box().checked === false : null;
+
+      // Ticking it opens the question and leaves the box alone until it is
+      // answered, so the panel never shows it on while the answer is pending.
+      box().click();
+      await frame();
+      const asked = !!notice();
+      const wording = notice() ? (notice().textContent || "") : "";
+      const whileAsking = box().checked;
+
+      press("Leave it off");
+      await frame();
+      const afterNo = { open: !!notice(), checked: box().checked };
+
+      // Escape is a no as well, since the answer that changes nothing is the
+      // safe one to give by accident.
+      box().click();
+      await frame();
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      await frame();
+      const afterEscape = { open: !!notice(), checked: box().checked };
+
+      box().click();
+      await frame();
+      press("I understand, turn it on");
+      await frame();
+      const afterYes = { open: !!notice(), checked: box().checked };
+
+      // And off again without being asked anything, because switching a thing
+      // off is never the risky direction.
+      box().click();
+      await frame();
+      const afterOff = { open: !!notice(), checked: box().checked };
+      return { found, startsOff, asked, whileAsking, wording, afterNo, afterEscape, afterYes, afterOff };
+    }),
+  );
+  check("the switch is in the panel", out.found === true, out);
+  check("and it ships off", out.startsOff === true, out);
+  check("ticking it asks first", out.asked === true, out);
+  check("the box stays off while the question is open", out.whileAsking === false, out);
+  check("the warning says the extension cannot tell the two cases apart",
+    /no idea how you are/i.test(out.wording) && /safety page/i.test(out.wording), out.wording.slice(0, 300));
+  check("answering no leaves it off", out.afterNo.open === false && out.afterNo.checked === false, out.afterNo);
+  check("Escape leaves it off too", out.afterEscape.open === false && out.afterEscape.checked === false, out.afterEscape);
+  check("only yes turns it on", out.afterYes.open === false && out.afterYes.checked === true, out.afterYes);
+  check("and switching it off again asks nothing", out.afterOff.open === false && out.afterOff.checked === false, out.afterOff);
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- the search field's clear button follows the theme ----
 // The browser draws that one itself and colours it from the page's colour
 // scheme, so on a dark page it came out white while everything around it was

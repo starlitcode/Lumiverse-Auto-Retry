@@ -8,6 +8,24 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 4.8.0
+
+_2026-08-15_
+
+### Added
+
+- **It can retry a reply where the model stops the scene to offer you real-world support.** Some replies do not decline anything and do not break off either: they stop being the story and become a message to the person at the keyboard, saying that what you have written is concerning, that you are not alone, and that you should talk to a professional, usually with a list of services under it. In a scene about something heavy that is normally the model reading your fiction as a report about your life, and it takes the scene away at the worst moment. **Also catch it stopping to offer support**, under Refusal tuning, throws that reply away and asks for another. It is off unless you turn it on, and ticking it opens a warning that has to be answered before it goes on, because this is the one check in the extension that decides whether a particular message reaches you. Read [Safety](docs/safety.md) before switching it on.
+- **A safety page in the docs.** Who this extension is built for, what the check above does and what it cannot know, what is worth noticing in yourself when a scene stops doing you any good, and how to switch the whole thing off or uninstall it. Linked from the README.
+
+### Changed
+
+- **The doubled refusal is caught: "I cannot and will not engage with content that ...".** Every pattern in the list expected the verb straight after "I can't", so putting "and will not" between them hid the most emphatic refusal a model writes. A meta object is still required, so a character saying "I cannot and will not marry him" is left alone.
+- **Retries caused by the support check are counted under their own name** on the Stats tab, apart from ordinary refusals, so switching it on comes with a way to see how often it is firing rather than a guess.
+
+### Notes
+
+- The support check needs two signals to agree, at least one of them the model addressing you rather than your character, and it never counts a line inside quotation marks, so a character in the scene saying something kind is left alone. It is the one check **Longest reply to treat as a refusal** does not apply to: that limit is built around a refusal being short, and one of these is the opposite.
+
 ## 4.7.0
 
 _2026-08-13_

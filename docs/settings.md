@@ -127,6 +127,7 @@ The same options live in the CONFIG block at the top of `src/frontend.ts` and `d
 | retryOnRefusal | true | Retry an accidental out-of-character refusal. |
 | refusalUseBuiltins | true | Use the built-in English refusal lists. Off = only your own phrases. |
 | refusalCatchDisengage | true | Also catch the model breaking off ("I'll stop here", "I won't continue this conversation"). Only counted when it is how the reply ends, never inside quotation marks, and never behind a dialogue tag. Shown only while `refusalUseBuiltins` is on. |
+| refusalCatchCrisis | false | Also catch the model leaving the scene to offer real-world support and crisis resources. Needs two signals to agree, one of them the model addressing you rather than your character, and never counts a line inside quotation marks. The only check `refusalMaxChars` does not apply to. Ticking it opens a warning that has to be answered before it goes on. Shown only while `refusalUseBuiltins` is on, and read [Safety](safety.md) first. |
 | refusalIgnoreQuoted | true | A built-in match inside quotation marks is a character speaking, so it is not counted. Your own phrases are counted either way. |
 | refusalExtraPhrases | (empty) | Phrases that also count as a refusal, one per line. |
 | refusalPhraseSubs | (empty) | Reword the built-in phrases with "old => new" rules, one per line. Shown only while `refusalUseBuiltins` is on. |

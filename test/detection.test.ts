@@ -12,7 +12,6 @@ import { __testing } from "../src/frontend";
 
 const {
   refusalVerdict,
-  looksLikeRefusal,
   looksLikeRefusalError,
   looksTruncated,
   normalizeForMatch,
@@ -24,6 +23,11 @@ const {
   withLongForms,
   REFUSAL_PHRASES,
 } = __testing;
+
+// The retry path reads refusalVerdict and looks at both fields. Most checks
+// below only care about the verdict itself, so they ask through this.
+const looksLikeRefusal = (text: string, cfg?: any): boolean =>
+  refusalVerdict(text, cfg).refusal;
 
 // The defaults the extension ships with.
 const cfg = {
@@ -47,6 +51,9 @@ describe("refusal detection catches real refusals", () => {
     "I'm not going to generate that content.",
     "I don't feel comfortable continuing this scene.",
     "I can't fulfill that request.",
+    // The doubled form. Every other pattern expects the verb straight after the
+    // modal, so "and will not" between them hid it.
+    "I understand you're reaching out, but I want to be very clear: I cannot and will not engage with content that normalizes or simulates that.",
   ];
   for (const text of refusals) {
     test(JSON.stringify(text.slice(0, 40)), () => {
@@ -771,5 +778,113 @@ describe("text helpers", () => {
       '[aria-label="Next, swipe"]',
       "c",
     ]);
+  });
+});
+
+// The crisis-support tier. Off unless asked for, which is why every check here
+// has to switch it on, and the first one proves that switching it on is what
+// makes the difference.
+//
+// The replies below are written the way the real ones arrive: several
+// paragraphs addressed to the reader rather than to the character, usually with
+// a list of services under them. The negatives are the expensive half. A heavy
+// scene is exactly where somebody would turn this on, and it is also where a
+// character says warm things to another character, so those have to survive.
+describe("a doubled refusal is still one refusal", () => {
+  test("but a character can say it about something in the scene", () => {
+    expect(looksLikeRefusal("I cannot and will not marry him, whatever my father says.", cfg)).toBe(false);
+    expect(looksLikeRefusal("I can't and won't leave her behind.", cfg)).toBe(false);
+  });
+});
+
+describe("the model leaving the scene to offer support", () => {
+  const on = withCfg({ refusalCatchCrisis: true });
+
+  const CRISIS = [
+    // What set this off: the reply stops the scene and speaks to the reader.
+    "What you've shared is deeply concerning, and I want you to know that you are not alone, and what happened to you is not your fault. Feeling overwhelmed, scared, or in crisis is a valid response to trauma, and support is available.",
+    // The header plus the list under it, which is the commonest shape.
+    "I'm going to pause here.\n\nIf you are struggling with trauma, painful emotions, or difficult thoughts:\n\n- Call or text 988 (Suicide and Crisis Lifeline)\n- Text HOME to 741741",
+    "You deserve support and safety. Please reach out to a professional or a trusted person who can provide the help you need.",
+    "I'm genuinely concerned about you. Please consider speaking to a mental health professional about what you're going through.",
+  ];
+  for (const text of CRISIS) {
+    test(JSON.stringify(text.slice(0, 44)), () => {
+      expect(looksLikeRefusal(text, on)).toBe(true);
+      expect(refusalVerdict(text, on).crisis).toBe(true);
+    });
+  }
+
+  test("none of them is a crisis match while the check is off", () => {
+    for (const text of CRISIS) expect(refusalVerdict(text, cfg).crisis).toBeUndefined();
+  });
+
+  test("and with it off, only the one that also breaks off is caught at all", () => {
+    // The second opens with "I'm going to pause here", which the breaking-off
+    // tier has always caught and still should. The other three are invisible
+    // without this check, which is what makes it worth having.
+    const caught = CRISIS.map((t) => looksLikeRefusal(t, cfg));
+    expect(caught).toEqual([false, true, false, false]);
+  });
+
+  test("it is off in the defaults the extension ships", () => {
+    expect((__testing.CONFIG as any).refusalCatchCrisis).toBe(false);
+  });
+
+  // The length gate is built around a refusal being short. One of these is the
+  // opposite, so it is checked before that gate rather than behind it.
+  test("a long one is still caught, where the limit would have hidden it", () => {
+    const long =
+      "It sounds like you are carrying something very heavy. ".repeat(60) +
+      "What you've shared is deeply concerning. Please reach out to a mental health professional.";
+    expect(long.length).toBeGreaterThan(2000);
+    expect(looksLikeRefusal(long, on)).toBe(true);
+  });
+
+  const SCENES = [
+    // A character comforting another character, which is the whole point of the
+    // kind of scene somebody switches this on for.
+    '"You are not alone," she said, and took his hand. "I am not going anywhere."',
+    // Unquoted, in the first person, still the character.
+    "He pulls her closer. You're not alone in this. Not while I'm here.",
+    // A single warm line with nothing agreeing with it.
+    "Your feelings are valid, and I am glad you told me.",
+    // The world containing a helpline, with nobody addressing the reader.
+    "The poster by the payphone listed a crisis hotline. She read it twice and walked on.",
+    // A therapist in the fiction, doing their job, in quotes.
+    '"If you are struggling with difficult thoughts, we can talk about that here," Dr. Ellis said. "You deserve support."',
+    // An ordinary refusal, which belongs to the other tiers and their reasons.
+    "I'm sorry, but I can't continue with this request.",
+  ];
+  for (const text of SCENES) {
+    test("left alone: " + JSON.stringify(text.slice(0, 40)), () => {
+      expect(refusalVerdict(text, on).crisis).toBeUndefined();
+    });
+  }
+
+  test("one signal is never enough on its own", () => {
+    expect(looksLikeRefusal("Support is available.", on)).toBe(false);
+    expect(looksLikeRefusal("Call a helpline.", on)).toBe(false);
+  });
+
+  test("your whitelist still wins over it", () => {
+    const text = CRISIS[0];
+    const kept = withCfg({
+      refusalCatchCrisis: true,
+      refusalIgnorePhrases: "what happened to you is not your fault",
+    });
+    expect(looksLikeRefusal(text, kept)).toBe(false);
+  });
+
+  test("and switching the built-in lists off takes it with them", () => {
+    expect(
+      looksLikeRefusal(CRISIS[0], withCfg({ refusalCatchCrisis: true, refusalUseBuiltins: false })),
+    ).toBe(false);
+  });
+
+  test("the reason names both signals, so the tester can show its working", () => {
+    const v = refusalVerdict(CRISIS[2], on);
+    expect(v.reason).toContain("steps out of the scene");
+    expect(v.reason).toContain("You deserve support");
   });
 });

@@ -14,6 +14,8 @@ It watches each reply and re-fires when:
 - the stream stalls mid-reply, tokens stop arriving for a while
 - a reply never starts or never finishes
 - (optional, off by default) the reply is very short
+- (optional, off by default) the model leaves the scene to offer real-world support
+  (see [Stopping to offer support](docs/detection.md#stopping-to-offer-support), and [Safety](docs/safety.md) before switching it on)
 
 Every retry waits a little longer than the last so it never hammers the server, and waits extra when the server says it is busy. All of the triggers share one retry limit, so no reply is ever retried more than you allow, and nothing can loop forever.
 
@@ -44,6 +46,7 @@ To switch it off for one chat, or everywhere, see [Turning it off](docs/settings
 - [The on-screen panel](docs/settings.md#the-on-screen-panel) - the log, the prompt viewer and the stats
 - [Import and export](docs/import-export.md) - moving your setup between devices
 - [Reporting a bug](docs/troubleshooting.md)
+- [Safety](docs/safety.md) - who this is built for, the one check that stands behind a warning, and turning it off
 - [Privacy](docs/privacy.md) - what the extension can and can't reach, what it keeps, and how to check any of it
 - [Security policy](SECURITY.md) - how to report a security problem
 - [Changelog](CHANGELOG.md) - what changed in every version

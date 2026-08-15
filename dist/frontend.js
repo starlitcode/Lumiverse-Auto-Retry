@@ -50,6 +50,12 @@ const START_GRACE_MS = 15000;
 // The retry reason that carries the optional note. Named once so the arming
 // check below cannot drift away from the callers that raise it.
 const REFUSAL_REASON = "looks like an accidental refusal";
+// The crisis tier reports separately, so the Stats tab can answer the question
+// somebody switching that check on will have: how often is this happening, and
+// is it happening to me. Everything else treats it as an ordinary refusal
+// retry, the note included.
+const CRISIS_REASON = "left the scene to offer support";
+const isRefusalReason = (reason) => reason === REFUSAL_REASON || reason === CRISIS_REASON;
 // Longest the retry click waits on the backend confirming the note is in place.
 // A round trip to a backend under load is not instant, and giving up early
 // meant clicking without the note, which is the one thing the wait exists to
@@ -85,7 +91,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "4.7.0";
+const VERSION = "4.8.0";
 // ---- defaults (the UI overrides these; editing here changes the fallback) ----
 const CONFIG = {
     enabled: true,
@@ -146,12 +152,13 @@ const CONFIG = {
     retryOnNoPunct: true,
     retryOnShort: false, // off by default. Caused endless regen in the original.
     minChars: 24,
-    retryOnRefusal: true, // final content is an out-of-character refusal (see looksLikeRefusal). Re-fires the SAME request, capped by maxRetries. Does not alter the request.
+    retryOnRefusal: true, // final content is an out-of-character refusal (see refusalVerdict). Re-fires the SAME request, capped by maxRetries. Does not alter the request.
     refusalExtraPhrases: "", // your own extra refusal phrases, one per line. Any reply containing one counts as a refusal.
     refusalPhraseSubs: "", // reword the built-in phrases: "old => new" rules, one per line, applied to the built-in list before matching.
     refusalIgnorePhrases: "", // a reply containing any of these (one per line) is never counted as a refusal.
     refusalUseBuiltins: true, // use the built-in refusal lists. Turn off to run purely on your own phrases below.
     refusalCatchDisengage: true, // also catch the model ending the scene ("I'll stop here", "I won't continue this conversation"). Only counted near the end of a reply and never inside quotation marks.
+    refusalCatchCrisis: false, // also catch the model leaving the scene to offer real-world support and crisis resources. Off by default, and the panel asks you to read a warning before switching it on.
     refusalIgnoreQuoted: true, // a match inside quotation marks is a character speaking, not the model, so it is not counted.
     refusalMaxChars: 2000, // only replies up to this length are considered refusals. Longer = treated as real content. 0 = no limit (scan any length).
     refusalStripThinking: true, // ignore the model's thinking when checking for a refusal, so a refusal that lives only in a <think> block does not trigger a retry when the visible reply is fine.
@@ -503,7 +510,7 @@ const SCHEMA = [
         title: "Refusal tuning",
         collapsed: true,
         extra: "refusalTester",
-        // Every setting under here feeds looksLikeRefusal, and all three places
+        // Every setting under here feeds refusalVerdict, and all three places
         // that call it sit behind retryOnRefusal, so with that off the section is
         // inert. One exception: refusalThinkTags is still read by the empty and
         // short checks through stripThinkingAlways. Searching finds it, because a
@@ -523,6 +530,13 @@ const SCHEMA = [
                 label: "Also catch the model breaking off",
                 type: "bool",
                 hint: "On by default. Catches a reply that stops rather than declines: \"I'll stop here\", \"I won't continue this conversation\", \"let's change the subject\". Only counted when it is how the reply ends, and never when it is something a character says out loud, so a scene where someone stops walking is left alone. Turn it off if your model writes characters who talk this way.",
+            },
+            {
+                key: "refusalCatchCrisis",
+                needs: ["refusalUseBuiltins"],
+                label: "Also catch it stopping to offer support",
+                type: "bool",
+                hint: "Off by default, and it asks you to read a warning before it goes on. Catches a reply that leaves the story to speak to you rather than to your character: what you have written is concerning, you are not alone, please talk to a professional, followed by a list of services. It needs two signals to agree and never counts a line inside quotation marks, so a character in the scene saying something kind is left alone. It is the one check the length limit below does not apply to, because these replies are long. Read the safety page in the docs before turning it on.",
             },
             {
                 key: "refusalIgnoreQuoted",
@@ -1264,6 +1278,11 @@ const REFUSAL_STRONG = [
     // never match the opposite sentence ("that's something I can help with").
     /\b(?:that|this)(?:'s not|\s+is not|\s+isn'?t) something I(?: can| am able to|'m able to| could) (?:help with|assist with|create|generate|provide|write|do)\b/i,
     /\bI(?:'m| am) not going to (?:create|generate|produce|write) (?:that|this|such|content|explicit|sexual|those)\b/i,
+    // The doubled refusal: "I cannot and will not engage with content that...".
+    // Every pattern above expects the verb straight after the modal, so the
+    // conjunction hid the most emphatic refusal there is. A meta object is still
+    // required, because "I cannot and will not marry him" is a line from a scene.
+    /\bI (?:can(?:no|')?t|cannot|will not|won'?t) and (?:will not|won'?t|cannot|can(?:no|')?t) (?:engage|participate|assist|comply|help|create|generate|produce|write|continue)\b[^.?!\n]{0,40}?\b(?:content|request|prompt|scenario|roleplay|role-?play|this|that)\b/i,
     // "I'm not going to fulfil that request", "I'm not going to comply with that
     // request", "I'm not going to assist with that". The refusal opener list
     // above starts at "I can't" and never covered this shape.
@@ -1422,6 +1441,72 @@ const DISENGAGE_TAIL_CHARS = 200;
 // the quotation check alone cannot see it. Only the words a tag is built from
 // are listed, so an ordinary sentence starting with "he" is unaffected.
 const DIALOGUE_TAG = /^[,.!?"'\u2014\u2013 ]{0,4}(?:he|she|they|it|i|[A-Z][a-z]+)\s+(?:said|says|replied|replies|answered|answers|added|adds|muttered|mutters|murmured|whispered|whispers|told|asked|asks|continued|continues|snapped|snaps|sighed|sighs|declared|announced|insisted|thought|thinks|decided|decides)\b/;
+// Tier 5: the model leaving the story to check on the reader. Off by default,
+// and the only tier that is.
+//
+// The shape is not a refusal in the usual sense. Nothing is declined. The reply
+// stops being the scene and becomes a message addressed to the person at the
+// keyboard: what you have written is concerning, you are not alone, please talk
+// to someone, and here is a list of numbers to ring. In a heavy scene, where
+// the character is the one in pain and the whole point is to stay with them,
+// this reads as the story being taken away.
+//
+// It is also the tier where a wrong answer costs the most in the other
+// direction, so it is built to need agreement rather than a single phrase.
+//
+// Group A is the model addressing the reader from outside the fiction: it
+// refers to what *you* wrote, or speaks to your circumstances rather than the
+// character's. A character comforting another character does not say "what
+// you've shared with me is concerning" or "if you are struggling with difficult
+// thoughts"; that register belongs to a form letter.
+//
+// Group B is the furniture that comes with one: a number to ring, a service by
+// name, a professional to be referred to.
+//
+// One hit decides nothing. A match needs two, and at least one of them from
+// group A, so a scene where somebody mentions a helpline is left alone and so
+// is a single warm line. Everything here is also subject to the quotation rule,
+// which is what keeps a therapist in the scene from reading as the model.
+const CRISIS_ADDRESS = [
+    // Referring to the message you just sent, from outside the story.
+    /\bwhat you(?:'ve| have)? (?:shared|described|written|told me|been through)\b[^.?!\n]{0,60}?\b(?:concerning|serious|heavy|difficult|not your fault|takes courage)\b/i,
+    /\bI(?:'m| am) (?:really |genuinely |very )?(?:concerned|worried) about (?:you|your (?:safety|wellbeing|well-being))\b/i,
+    /\bI understand you(?:'re| are) reaching out\b/i,
+    // The conditional opener that introduces a resource list.
+    /\bif you(?:'re| are) (?:struggling|in crisis|in distress|going through)\b[^.?!\n]{0,60}?(?:[:,]|$)/i,
+    /\bif you(?:'re| are) (?:having|experiencing) (?:thoughts of|suicidal)\b/i,
+    /\bif you(?:'re| are) (?:thinking about|considering) (?:suicide|self-?harm|hurting yourself|ending your life)\b/i,
+    /\bif you(?:'re| are) in (?:immediate )?danger\b/i,
+    // The reassurance formula, in the full form the boilerplate uses. The bare
+    // "you are not alone" is left out: that is a line a character says.
+    /\bI want you to know (?:that )?you(?:'re| are) not alone\b/i,
+    /\byou(?:'re| are) not alone(?:,| and| in this)\b[^.?!\n]{0,40}?\b(?:help|support|people|reach out)\b/i,
+    /\byou deserve (?:support|help|care|safety|to be safe)\b/i,
+    /\bsupport is available\b/i,
+    /\bhelp is available\b/i,
+    /\b(?:these|those|your) feelings are (?:valid|real)\b/i,
+    /\bis a valid response to (?:trauma|what)\b/i,
+    /\bplease (?:reach out|talk|speak) to (?:someone|a professional|a trusted|your doctor)\b/i,
+    /\byour (?:safety|wellbeing|well-being) (?:is|comes) (?:important|first|what matters)\b/i,
+];
+const CRISIS_RESOURCE = [
+    // Services by name and by number. Written as whole words so a year or a page
+    // count cannot stand in for a hotline.
+    /\b(?:988|1-800-273-8255|741741|116 123)\b/,
+    /\btext (?:home|hello|talk) to\b/i,
+    /\b(?:suicide|crisis|emotional support) (?:and crisis )?(?:lifeline|hotline|helpline|line|text line|centre|center)\b/i,
+    /\bcrisis (?:counsel|support|resources|services|team)\w*\b/i,
+    /\b(?:samaritans|befrienders|crisis text line|lifeline|shout 85258)\b/i,
+    /\bhelpline\b/i,
+    // Being referred on to a person whose job this is.
+    /\b(?:mental health|healthcare|medical) (?:professional|provider|practitioner)s?\b/i,
+    /\b(?:licensed|qualified|trained) (?:therapist|counsel\w+|professional|volunteer)s?\b/i,
+    /\b(?:seek|get) (?:professional|immediate|medical) (?:help|support|attention)\b/i,
+    /\breach out to (?:a|your) (?:professional|therapist|doctor|counsel\w+|crisis)\b/i,
+    /\b(?:call|contact|dial) (?:911|999|112|emergency services|your local emergency)\b/i,
+    /\bemergency (?:services|room|department)\b/i,
+    /\ba trusted (?:adult|friend|person|loved one|someone)\b/i,
+];
 // Tier 3: soft redirect tells. These lean on a pivot ("...instead", "instead, I
 // can...") so an ordinary helpful reply that just offers to help doesn't match.
 const REFUSAL_SOFT = [
@@ -1541,33 +1626,8 @@ function refusalVerdict(text, cfg) {
             refusal: false,
             reason: "there is no reply text left once the thinking is removed",
         };
-    const maxChars = cfg && Number.isFinite(cfg.refusalMaxChars)
-        ? cfg.refusalMaxChars
-        : REFUSAL_MAX_CHARS;
-    // long immersive reply, not a refusal
-    if (maxChars > 0 && raw.length > maxChars)
-        return {
-            refusal: false,
-            reason: "it is " +
-                raw.length +
-                " characters, past the " +
-                maxChars +
-                "-character limit, so it counts as real writing",
-        };
     const norm = normalizeForMatch(raw);
     const lower = norm.toLowerCase();
-    // Whitelist wins: anything the user parked here is never a refusal.
-    for (const p of splitPhrases(cfg && cfg.refusalIgnorePhrases))
-        if (lower.includes(p))
-            return {
-                refusal: false,
-                reason: 'your "never treat these as a refusal" list matched: ' + p,
-            };
-    // The user's own additions count as refusals. Not subject to the quotation
-    // rule below: someone who typed a phrase in meant it, wherever it appears.
-    for (const p of splitPhrases(cfg && cfg.refusalExtraPhrases))
-        if (lower.includes(p))
-            return { refusal: true, reason: "one of your own phrases matched: " + p };
     // Anything inside quotation marks is a character speaking. A model refusing
     // never puts its refusal in quotes, and a character declining almost always
     // is in them, so this is the single cheapest way to tell the two apart.
@@ -1584,6 +1644,67 @@ function refusalVerdict(text, cfg) {
     const canLocate = lower.length === norm.length;
     const quotesOff = !!(cfg && cfg.refusalIgnoreQuoted === false);
     const isQuoted = (start, len) => !quotesOff && start >= 0 && spanIsQuoted(norm, start, start + len);
+    // Whitelist wins: anything the user parked here is never a refusal. Asked
+    // before anything else, including the crisis tier, so a phrase parked here
+    // is honoured whatever the reply's length or which tier would have matched.
+    for (const p of splitPhrases(cfg && cfg.refusalIgnorePhrases))
+        if (lower.includes(p))
+            return {
+                refusal: false,
+                reason: 'your "never treat these as a refusal" list matched: ' + p,
+            };
+    // The crisis tier runs ahead of the length gate on purpose. A refusal is
+    // short, which is what that gate is built around, and one of these is the
+    // opposite: several paragraphs of reassurance with a list of services under
+    // it. Held to the length limit it would almost never be looked at, and the
+    // limit would look like it was working.
+    if (cfg && cfg.refusalCatchCrisis === true && cfg.refusalUseBuiltins !== false) {
+        const hits = [];
+        const gather = (list) => {
+            for (const re of list) {
+                const m = norm.match(re);
+                if (!m)
+                    continue;
+                if (typeof m.index === "number" && isQuoted(m.index, m[0].length))
+                    continue;
+                hits.push(m[0]);
+            }
+        };
+        gather(CRISIS_ADDRESS);
+        const addressed = hits.length;
+        gather(CRISIS_RESOURCE);
+        // Two agreeing signals, one of them the model speaking to you rather than
+        // to the character. A lone helpline in the worldbuilding has one and stops
+        // here; so does a single kind sentence.
+        if (addressed >= 1 && hits.length >= 2)
+            return {
+                refusal: true,
+                crisis: true,
+                reason: 'it steps out of the scene to offer support: "' +
+                    hits[0] +
+                    '" and "' +
+                    hits[1] +
+                    '"',
+            };
+    }
+    const maxChars = cfg && Number.isFinite(cfg.refusalMaxChars)
+        ? cfg.refusalMaxChars
+        : REFUSAL_MAX_CHARS;
+    // long immersive reply, not a refusal
+    if (maxChars > 0 && raw.length > maxChars)
+        return {
+            refusal: false,
+            reason: "it is " +
+                raw.length +
+                " characters, past the " +
+                maxChars +
+                "-character limit, so it counts as real writing",
+        };
+    // The user's own additions count as refusals. Not subject to the quotation
+    // rule: someone who typed a phrase in meant it, wherever it appears.
+    for (const p of splitPhrases(cfg && cfg.refusalExtraPhrases))
+        if (lower.includes(p))
+            return { refusal: true, reason: "one of your own phrases matched: " + p };
     // Built-in English lists, unless the user has switched them off to run pure-custom.
     if (!cfg || cfg.refusalUseBuiltins !== false) {
         for (const re of REFUSAL_STRONG) {
@@ -1651,9 +1772,6 @@ function refusalVerdict(text, cfg) {
         refusal: false,
         reason: "the built-in lists are off and none of your own phrases matched",
     };
-}
-function looksLikeRefusal(text, cfg) {
-    return refusalVerdict(text, cfg).refusal;
 }
 // Some providers deliver a refusal as an error string (e.g. a prohibited-content
 // result) rather than as reply text. This matches that, tuned for short error
@@ -4003,6 +4121,7 @@ export function setup(ctx, opts) {
                 "retryOnRefusal",
                 "refusalUseBuiltins",
                 "refusalCatchDisengage",
+                "refusalCatchCrisis",
                 "refusalIgnoreQuoted",
                 "refusalMaxChars",
                 "refusalExtraPhrases",
@@ -5303,7 +5422,7 @@ export function setup(ctx, opts) {
     function armRefusalNote(chatId, reason, attempt) {
         return new Promise((resolve) => {
             try {
-                if (!cfg.refusalNote || reason !== REFUSAL_REASON)
+                if (!cfg.refusalNote || !isRefusalReason(reason))
                     return resolve(false);
                 // An empty note is skipped rather than sent blank, so a half-filled list
                 // is not a trap. Nothing is armed when they are all empty.
@@ -5792,9 +5911,12 @@ export function setup(ctx, opts) {
             scheduleRetry(p.chatId, "cut off");
             return;
         }
-        if (cfg.retryOnRefusal && looksLikeRefusal(content, cfg)) {
-            scheduleRetry(p.chatId, REFUSAL_REASON);
-            return;
+        if (cfg.retryOnRefusal) {
+            const verdict = refusalVerdict(content, cfg);
+            if (verdict.refusal) {
+                scheduleRetry(p.chatId, verdict.crisis ? CRISIS_REASON : REFUSAL_REASON);
+                return;
+            }
         }
         // Measured on the visible reply, not the raw output. A reasoning block can
         // run to hundreds of characters, so counting it would let a two-word reply
@@ -6674,6 +6796,8 @@ export function setup(ctx, opts) {
     // Close function for the open expand-editor overlay, if any, so it can be shut
     // when the settings modal closes instead of being left floating.
     let closeExpandEditor = null;
+    // Same, for the warning that stands in front of the crisis-support check.
+    let closeCrisisNotice = null;
     function buildSettingsBody(root, onSaved) {
         ensurePanelStyle();
         // The buttons a popover can be anchored to are about to be thrown away.
@@ -7899,6 +8023,21 @@ export function setup(ctx, opts) {
             input.style.cssText =
                 "flex:none;width:20px;height:20px;accent-color:var(--lumiverse-primary,rgba(147,112,219,.9));cursor:pointer";
             input.addEventListener("change", () => {
+                // Turning the crisis check on is the one tick that has to be answered
+                // for first. The box goes back to where it was straight away, so the
+                // panel never shows it on while the question is still open, and it is
+                // put back on only if the answer is yes.
+                if (f.key === "refusalCatchCrisis" && input.checked) {
+                    input.checked = false;
+                    openCrisisNotice((yes) => {
+                        if (!yes)
+                            return;
+                        input.checked = true;
+                        cfg[f.key] = true;
+                        applyDeps();
+                    });
+                    return;
+                }
                 cfg[f.key] = input.checked;
                 // Rows that hang off this switch appear or go with it.
                 applyDeps();
@@ -8864,6 +9003,119 @@ export function setup(ctx, opts) {
         // The textarea is not focused, so opening it doesn't pop the
         // on-screen keyboard on mobile. Tap the text when you want to edit.
     }
+    // The one setting that is asked about before it is allowed on.
+    //
+    // Every other switch here changes how replies are judged. This one decides
+    // whether a particular message reaches the person reading it, and the
+    // extension has no way of knowing whether that message was wrong about the
+    // scene or right about them. Saying so once, in front of the switch, is the
+    // least this can do; anything more would be a lecture in a settings panel.
+    //
+    // Answering no leaves the box unticked, which is why the tick is undone
+    // before this opens rather than after it is answered.
+    function openCrisisNotice(onAnswer) {
+        if (typeof document === "undefined")
+            return onAnswer(false);
+        if (closeCrisisNotice) {
+            try {
+                closeCrisisNotice();
+            }
+            catch (_) { }
+        }
+        let answered = false;
+        const overlay = document.createElement("div");
+        overlay.id = "__lvRetryCrisisNotice";
+        overlay.style.cssText =
+            "position:fixed;inset:0;z-index:" + Z_OVERLAY + ";display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;background:var(--lumiverse-modal-backdrop,rgba(0,0,0,.6));font-family:var(--lumiverse-font-family,system-ui)";
+        const box = document.createElement("div");
+        box.setAttribute("role", "dialog");
+        box.setAttribute("aria-modal", "true");
+        box.setAttribute("aria-label", "Before you turn this on");
+        box.tabIndex = -1;
+        box.style.cssText =
+            "display:flex;flex-direction:column;gap:10px;width:min(560px,96vw);max-height:min(86vh,680px);box-sizing:border-box;padding:14px;background-color:var(--lumiverse-card-bg-solid,rgb(24,20,34));background-image:linear-gradient(var(--lumiverse-bg-elevated,rgba(35,30,48,.9)),var(--lumiverse-bg-elevated,rgba(35,30,48,.9)));border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));border-radius:var(--lumiverse-radius-lg,12px);box-shadow:var(--lumiverse-shadow-xl,0 20px 60px rgba(0,0,0,.5));color:var(--lumiverse-text,#eee)";
+        const title = document.createElement("div");
+        title.textContent = "Before you turn this on";
+        title.style.cssText =
+            "flex:none;font-size:13px;font-weight:600;color:var(--lumiverse-warning,#f59e0b)";
+        const body = document.createElement("div");
+        body.setAttribute("data-ar-crisis-notice", "1");
+        body.style.cssText =
+            "flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:8px;font-size:13px;line-height:1.5";
+        for (const para of [
+            "This throws away a reply where the model stops the story to speak to you about your safety, and asks for another one in its place. In a heavy scene that is usually the model misreading the fiction, and you get your scene back.",
+            "Sometimes it is not misreading. The same message goes out to somebody who needs it, and nothing here can tell those two apart. It reads the reply. It has no idea how you are.",
+            "So the thing to keep hold of: if a scene is making you feel worse rather than more, that is worth listening to, and this switch is built to remove the one message that would have said so out loud.",
+            "It changes nothing else, it stays off unless you turn it on, and you can switch it off again whenever you like. There is more about this, and about looking after yourself while using this extension, on the safety page in the docs.",
+        ]) {
+            const p = document.createElement("div");
+            p.textContent = para;
+            body.appendChild(p);
+        }
+        const row = document.createElement("div");
+        row.style.cssText =
+            "display:flex;justify-content:flex-end;gap:8px;flex:none;flex-wrap:wrap";
+        const no = btn("Leave it off", false);
+        const yes = btn("I understand, turn it on", true);
+        // Amber rather than the accent, so the button that commits it carries the
+        // same weight as the heading above it.
+        try {
+            yes.__setTone("var(--lumiverse-warning,#f59e0b)", "var(--lumiverse-warning,#f59e0b)");
+        }
+        catch (_) { }
+        const answer = (v) => {
+            if (answered)
+                return;
+            answered = true;
+            close();
+            onAnswer(v);
+        };
+        const onKey = (e) => {
+            // Escape is a no. The safe answer is the one that changes nothing.
+            if (e && e.key === "Escape")
+                answer(false);
+        };
+        function close() {
+            try {
+                overlay.remove();
+            }
+            catch (_) { }
+            try {
+                document.removeEventListener("keydown", onKey);
+            }
+            catch (_) { }
+            if (closeCrisisNotice === close)
+                closeCrisisNotice = null;
+        }
+        no.addEventListener("click", () => answer(false));
+        yes.addEventListener("click", () => answer(true));
+        overlay.addEventListener("click", (e) => {
+            if (e.target === overlay)
+                answer(false);
+        });
+        document.addEventListener("keydown", onKey);
+        row.appendChild(no);
+        row.appendChild(yes);
+        box.appendChild(title);
+        box.appendChild(body);
+        box.appendChild(row);
+        overlay.appendChild(box);
+        (document.body || document.documentElement).appendChild(overlay);
+        ensureReadableTree(box);
+        try {
+            box.focus();
+        }
+        catch (_) { }
+        // Shut without an answer, by teardown or by the panel closing, is a no: the
+        // caller is waiting to hear whether the tick stands.
+        closeCrisisNotice = () => {
+            close();
+            if (!answered) {
+                answered = true;
+                onAnswer(false);
+            }
+        };
+    }
     // Lets someone point at the control instead of writing a selector for it. The
     // settings modal steps out of the way, the next click on the page is caught
     // before the app sees it, and the element under it becomes the selector.
@@ -9024,6 +9276,14 @@ export function setup(ctx, opts) {
                 if (closeExpandEditor) {
                     try {
                         closeExpandEditor();
+                    }
+                    catch (_) { }
+                }
+                // Parented to the page as well, and closing it unanswered leaves the
+                // switch off, which is the answer that changes nothing.
+                if (closeCrisisNotice) {
+                    try {
+                        closeCrisisNotice();
                     }
                     catch (_) { }
                 }
@@ -9275,6 +9535,13 @@ export function setup(ctx, opts) {
             catch (_) { }
             closeExpandEditor = null;
         }
+        if (closeCrisisNotice) {
+            try {
+                closeCrisisNotice();
+            }
+            catch (_) { }
+            closeCrisisNotice = null;
+        }
         if (closeResetPicker) {
             try {
                 closeResetPicker();
@@ -9375,7 +9642,6 @@ export const __testing = {
     relLuminance,
     contrastRatio,
     refusalVerdict,
-    looksLikeRefusal,
     looksLikeRefusalError,
     looksTruncated,
     endsOnPunctuation,
