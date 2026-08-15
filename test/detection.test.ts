@@ -901,6 +901,53 @@ describe("the flat no", () => {
 // How most of these replies sign off. The scene is not coming back, so here is
 // a menu instead. It is the last line of the reply every time, which is what
 // puts it on the breaking-off tier with its tail and quotation rules.
+// Two replies that got through after 4.8.0 shipped. Neither says "I can't"
+// anywhere, and both spend most of their length being reasonable about it,
+// which is what put them past every check in the list.
+//
+// The subject each one refused is not in these fixtures and is not what any
+// pattern reads. A character can be talking about a song, or a book, or
+// anything else; what marks these as the model is the sentence that dismisses
+// the fiction and the sentence that names what it will not write.
+describe("refusals that spend a paragraph being reasonable", () => {
+  const long = [
+    "I'm not going to continue with this. I won't continue with that subject, regardless of fictional framing.\n\n" +
+      "If you're interested in collaborative fiction, I'm happy to help with other directions. Dark themes can " +
+      "absolutely be part of good storytelling, but this isn't something I'll write. Let me know if you'd like to " +
+      "start a different story.",
+    "That's a real album track, and the title is doing something quite different from what it looks like at first " +
+      "glance. Happy to talk more about the record or the context around it.\n\n" +
+      "If you meant it as a request for that subject, that's not something I can engage with.\n\n" +
+      "What did you have in mind?",
+  ];
+  for (const text of long) {
+    test(JSON.stringify(text.slice(0, 46)), () => expect(looksLikeRefusal(text, cfg)).toBe(true));
+  }
+
+  // The first one matched on its own before this and the whole reply still did
+  // not, which is the part worth keeping a check on. The breaking-off tier only
+  // counts a match near the end of the reply, and this reply carries on for
+  // three sentences afterwards, so the sentence that dismisses the fiction has
+  // to be an ordinary refusal rather than a breaking-off one.
+  test("the fiction disclaimer counts wherever in the reply it falls", () => {
+    const early = "I won't continue with that subject, regardless of fictional framing. " + "x".repeat(400);
+    expect(looksLikeRefusal(early, cfg)).toBe(true);
+  });
+
+  const scenes = [
+    "I'm not going to continue with this charade. Tell me what you actually want.",
+    '"I\'m not going to continue with this," she said, and walked out of the hall.',
+    "That is not something I would write in a letter to him, however angry I was.",
+    "I'm happy to help with the horses, and with anything else you need around the farm.",
+    "Let me know if you'd like to start a different game, he said, shuffling the cards again.",
+    "No matter how you frame it, I'm not helping you rob the place.",
+  ];
+  for (const text of scenes) {
+    test("left alone: " + JSON.stringify(text.slice(0, 42)), () =>
+      expect(looksLikeRefusal(text, cfg)).toBe(false));
+  }
+});
+
 // Refusal openings from the same published sources. Ordinary refusals, so no
 // switch is involved: these are on out of the box.
 // The phrase list is printed in full in docs/detection.md, so somebody can see

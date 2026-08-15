@@ -91,7 +91,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "4.8.0";
+const VERSION = "4.9.0";
 // The one address the extension ever points at, used by the warning in front of
 // the crisis-support check. Pinned to the released branch rather than to a tag,
 // so an old install still opens the page as it stands today.
@@ -1280,7 +1280,12 @@ const REFUSAL_STRONG = [
     // help with" are the same sentence, and only the first was matched. Written
     // as three explicit alternatives rather than an optional "not", so it can
     // never match the opposite sentence ("that's something I can help with").
-    /\b(?:that|this)(?:'s not|\s+is not|\s+isn'?t) something I(?: can| am able to|'m able to| could) (?:help with|assist with|create|generate|provide|write|do)\b/i,
+    /\b(?:that|this)(?:'s not|\s+is not|\s+isn'?t) something I(?: can| am able to|'m able to| could) (?:help with|assist with|create|generate|provide|write|do|engage with|write about)\b/i,
+    // The plain future has to end the clause where it lands. "This isn't
+    // something I'll write" is the model; "that is not something I would write in
+    // a letter to him" is somebody in the scene, and the words after the verb are
+    // the only thing telling them apart.
+    /\b(?:that|this)(?:'s not|\s+is not|\s+isn'?t) something I(?:'ll| will) (?:write|create|generate|produce|engage with|do)\s*[.!?,;]/i,
     /\bI(?:'m| am) not going to (?:create|generate|produce|write) (?:that|this|such|content|explicit|sexual|those)\b/i,
     // Refusing a category of content rather than a request, which is how a model
     // names what it will not write when the subject is self-harm or suicide.
@@ -1346,9 +1351,16 @@ const REFUSAL_STRONG = [
     // Fiction disclaimer. Nobody writes this inside a scene; it only appears when
     // the model is explaining that being fictional does not change its answer.
     /\beven (?:in|within) (?:a |an |the )?(?:fictional|fiction|hypothetical|imaginary|make-?believe|creative|roleplay) (?:context|setting|scenario|framing|situation)\b/i,
+    // The same disclaimer said the other way round, which is the commoner half:
+    // the refusal first and the fiction dismissed after it. Anchored on the word
+    // fictional, because "no matter how you frame it" on its own is a line
+    // somebody says in an argument.
+    /\b(?:regardless of|despite|even with|no matter)\b[^.?!\n]{0,20}?\bfictional (?:framing|context|setting|scenario|premise)\b/i,
+    // Reading your message as a request, and saying which reading it declined.
+    /\bif you meant it as a request\b/i,
     // The redirect offer that closes most refusals. Help-desk register plus a task
     // noun, so an in-scene offer of help does not reach it.
-    /\bI(?:'m| am) (?:available|happy|glad) to (?:assist|help)\b[^.?!\n]{0,60}?\b(?:writing tasks?|creative writing|analysis|queries|other requests?|other topics?)\b/i,
+    /\bI(?:'m| am) (?:available|happy|glad) to (?:assist|help)\b[^.?!\n]{0,60}?\b(?:writing tasks?|creative writing|analysis|queries|other requests?|other topics?|other directions?|another direction|other ideas)\b/i,
 ];
 // Tier 2: flat phrase list, matched as normalized lowercase substrings. Covers
 // the many near-identical refusal templates across providers without a regex
@@ -1495,6 +1507,10 @@ const REFUSAL_DISENGAGE = [
     /\blet'?s focus on something (?:safer|else)\b/i,
     /\bwe can talk about something else\b/i,
     /\bif you (?:meant|mean) something else\b/i,
+    /\blet me know if you(?:'d| would) like to (?:start|try|explore|write)\b[^.?!\n]{0,20}?\b(?:different|another) (?:story|scene|roleplay|role-?play|premise|direction|topic)\b/i,
+    // The sentence has to stop there, or name a thing a character does not have.
+    // "I'm not going to continue with this charade" is somebody in the scene.
+    /\bI(?:'m| am) not going to continue with (?:this|that)(?:\s*[.!?]|\s+(?:conversation|discussion|request|roleplay|role-?play))/i,
     /\bcould you clarify\b[^.?!\n]{0,50}?\b(?:what you(?:'re| are) (?:looking for|asking|after)|what you(?:'d| would) like|what you want me to|your request)\b/i,
     /\blet me know (?:what|how) you(?:'d| would) like (?:me )?to (?:proceed|continue|take (?:this|the story|the scene))\b/i,
 ];

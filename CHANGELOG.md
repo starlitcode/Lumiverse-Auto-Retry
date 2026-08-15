@@ -8,6 +8,21 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 4.9.0
+
+_2026-08-15_
+
+### Added
+
+- **The refusal that spends a paragraph being reasonable.** Two of them got through 4.8.0, and neither says "I can't" anywhere. One opens with "I'm not going to continue with this", dismisses the fiction with "regardless of fictional framing", offers to help with other directions, and closes on "this isn't something I'll write". The other explains the subject at length, declines with "that's not something I can engage with", and asks what you had in mind. Every sentence carrying the refusal in both of them is caught now.
+- **The fiction disclaimer said the other way round.** The list knew "even in a fictional context" and not "regardless of fictional framing", which is the commoner half: the refusal first, the fiction dismissed after it. It counts as an ordinary refusal rather than a breaking-off one, because it can sit in the opening line of a reply that then explains itself for three paragraphs, and the breaking-off check only looks near the end.
+- **"This isn't something I'll write."** The pattern behind it knew "I can" and "I could" and not the plain future, and its list of verbs stopped before the two a refusal about writing actually uses. The conditional is kept out and the future has to end its clause where it lands, so "that is not something I would write in a letter to him" is left alone.
+- **The redirect offer, in the words a roleplay model uses.** It was looking for the help-desk vocabulary, writing tasks and other topics, and had nothing for "I'm happy to help with other directions".
+
+### Notes
+
+- No pattern reads the subject a refusal is about, and none ever will. What marks these replies as the model is the sentence that dismisses the fiction and the sentence that names what it will not write, so a character discussing a song, a book or anything else is not affected.
+
 ## 4.8.0
 
 _2026-08-15_
