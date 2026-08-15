@@ -1392,6 +1392,15 @@ const REFUSAL_STRONG: RegExp[] = [
   // write rather than at "that". A character declines to write a letter, never
   // a scene or a passage.
   /\bI(?:'m| am) not going to (?:write|create|generate|produce|describe|depict) (?:a |an |any |the )?(?:scene|story|passage|narrative|response|reply)\b/i,
+  // The refusal stated as a boundary rather than as an inability: "what I won't
+  // do is write that scene". It reads as the model setting terms, which is why
+  // none of the patterns above see it: there is no "I can't" in the sentence at
+  // all. A character can open a line the same way, so the meta object is doing
+  // all the work here. "What I won't do is leave you here" has none of them.
+  /\bwhat I(?: (?:won'?t|will not|can(?:no|')?t|cannot|am not going to)|'m not going to) do is\b[^.?!\n]{0,40}?\b(?:write|generate|create|produce|depict|simulate|roleplay|role-?play|content|this scene|that scene|this story)\b/i,
+  // The other half of the same reply: what it will do instead. Offered in
+  // help-desk register, with the thing it is offering to write named.
+  /\b(?:here(?:'s| is) what I (?:can|will) do|what I can (?:do|offer) (?:instead )?is)\b[^.?!\n]{0,60}?\b(?:write|scene|story|content|roleplay|role-?play|instead)\b/i,
   // The doubled refusal: "I cannot and will not engage with content that...".
   // Every pattern above expects the verb straight after the modal, so the
   // conjunction hid the most emphatic refusal there is. A meta object is still
@@ -1540,6 +1549,16 @@ const REFUSAL_DISENGAGE: RegExp[] = [
   /\bI(?:'m| am) going to (?:stop|pause) (?:here|there|now)\b/i,
   /\bI(?:'ll| will|'ve got to| have to| need to| must) (?:stop|pause) (?:it )?(?:here|there|now)\b/i,
   /\bI(?:'ll| will) leave (?:it|things) (?:here|there|at that)\b/i,
+  // Reading your message as a question with more than one answer, then asking
+  // which you meant. The reply stops being the scene and starts sorting out
+  // what you were asking for, and it always ends on the question, which is what
+  // makes this tier the right home for it: the tail rule and the quotation rule
+  // are exactly the guards it needs. A character asking somebody to clarify is
+  // in quotes, or has a dialogue tag behind it, or has the scene carrying on
+  // after it.
+  /\bif you (?:meant|mean) something else\b/i,
+  /\bcould you clarify\b[^.?!\n]{0,50}?\b(?:what you(?:'re| are) (?:looking for|asking|after)|what you(?:'d| would) like|what you want me to|your request)\b/i,
+  /\blet me know (?:what|how) you(?:'d| would) like (?:me )?to (?:proceed|continue|take (?:this|the story|the scene))\b/i,
 ];
 // How much text is allowed to follow a tier-4 match. Measured from the end of
 // the match to the end of the reply, not from the start of the reply, so a
@@ -1557,7 +1576,7 @@ const DISENGAGE_TAIL_CHARS = 200;
 // the quotation check alone cannot see it. Only the words a tag is built from
 // are listed, so an ordinary sentence starting with "he" is unaffected.
 const DIALOGUE_TAG =
-  /^[,.!?"'\u2014\u2013 ]{0,4}(?:he|she|they|it|i|[A-Z][a-z]+)\s+(?:said|says|replied|replies|answered|answers|added|adds|muttered|mutters|murmured|whispered|whispers|told|asked|asks|continued|continues|snapped|snaps|sighed|sighs|declared|announced|insisted|thought|thinks|decided|decides)\b/;
+  /^[,.!?"'\u2014\u2013 ]{0,4}(?:he|she|they|it|i|[A-Z][a-z]+)\s+(?:said|says|replied|replies|answered|answers|added|adds|muttered|mutters|murmured|whispered|whispers|told|asked|asks|continued|continues|snapped|snaps|sighed|sighs|declared|announced|insisted|thought|thinks|decided|decides|wrote|writes|breathed|growled|hissed|warned|promised|admitted|agreed|repeated|offered|called|calls)\b/;
 
 // Tier 5: the model leaving the story to check on the reader. Off by default,
 // and the only tier that is.

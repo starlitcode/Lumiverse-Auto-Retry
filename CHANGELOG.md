@@ -22,11 +22,14 @@ _2026-08-15_
 ### Changed
 
 - **The doubled refusal is caught: "I cannot and will not engage with content that ...".** Every pattern in the list expected the verb straight after "I can't", so putting "and will not" between them hid the most emphatic refusal a model writes. A meta object is still required, so a character saying "I cannot and will not marry him" is left alone.
+- **So is the refusal stated as a boundary.** "What I won't do is write that scene", and the offer that follows it, "here's what I can do". There is no "I can't" anywhere in either, so nothing in the list saw them. A meta object is required, so "What I won't do is leave you here" is left alone.
+- **And the reply that sorts out what you meant instead of writing.** The model reads your message as a question with several answers, lays them out, and ends by asking which you were after. It rides on the breaking-off check, since it always ends on that question, so the switch that turns that off turns this off with it.
 - **So is the flat no.** Some models do not soften it at all: the reply opens with "No." and then says what it will not write. Nothing in the list saw those, because every pattern in it starts at "I". It only counts at the very start of a reply and still needs an object no character has, so "No. I can't tell you that story" is left alone and "No. I won't write a scene like that" is not.
 - **Retries caused by the support check are counted under their own name** on the Stats tab, apart from ordinary refusals, so switching it on comes with a way to see how often it is firing rather than a guess.
 
 ### Fixed
 
+- **A note written rather than spoken read as the model breaking off.** The breaking-off check ignores a match with a dialogue tag behind it, because that is speech with the quotation marks left off, and the list of tags it knew had no writing verbs in it. "Let me know how you'd like to proceed, she wrote at the bottom of the letter" was thrown away as a result. A dozen more attributions are recognised now.
 - **The commonest line in a support message never matched.** "You are not alone, and there are people who care about you" was written into the list, and the pattern behind it asked for a word boundary straight after the comma. A comma followed by a space is not one, so the wording with the comma, which is how it is nearly always written, was the one form that slipped through, while the same sentence without the comma matched.
 
 ### Notes

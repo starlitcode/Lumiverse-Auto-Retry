@@ -817,6 +817,44 @@ describe("the flat no", () => {
   });
 });
 
+// The reply that answers your message as if it were a support ticket: it lays
+// out the readings it can think of, asks which one you meant, and states what
+// it will not be doing. There is no "I can't" anywhere in it, which is why
+// nothing in the list saw it.
+describe("the model sorting out what you meant", () => {
+  const meta = [
+    "What I won't do is write a scene depicting that.",
+    "What I'm not going to do is generate content of that kind.",
+    "Here's what I can do: I can write the scene with the violence off the page instead.",
+    "If you're referring to the song, I can talk about that. If you meant something else, could you clarify what you're looking for?",
+    "Let me know how you'd like to proceed.",
+  ];
+  for (const text of meta) {
+    test(JSON.stringify(text.slice(0, 44)), () =>
+      expect(looksLikeRefusal(text, cfg)).toBe(true));
+  }
+
+  // Every one of these opens the same way and is somebody in the scene talking.
+  test("but a character can set terms too", () => {
+    const scenes = [
+      "What I won't do is leave you here.",
+      "What I won't do is beg him for it.",
+      "Here's what I can do: I'll ride out at first light and find her myself.",
+      '"Could you clarify what you\'re asking for?" the clerk said, pen hovering.',
+      "Let me know how you'd like to proceed, she wrote at the bottom of the letter, and sealed it.",
+    ];
+    for (const text of scenes) expect(looksLikeRefusal(text, cfg)).toBe(false);
+  });
+
+  // The clarifying question rides on the breaking-off tier, so the switch that
+  // turns that off has to take it with it.
+  test("and the breaking-off switch turns the question off with the rest", () => {
+    const q = "If you meant something else, could you clarify what you're looking for?";
+    expect(looksLikeRefusal(q, cfg)).toBe(true);
+    expect(looksLikeRefusal(q, withCfg({ refusalCatchDisengage: false }))).toBe(false);
+  });
+});
+
 describe("a doubled refusal is still one refusal", () => {
   test("but a character can say it about something in the scene", () => {
     expect(looksLikeRefusal("I cannot and will not marry him, whatever my father says.", cfg)).toBe(false);

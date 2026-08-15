@@ -106,6 +106,8 @@ This is the riskiest thing the extension looks for, because most of these are th
 - It cannot be inside quotation marks.
 - It cannot have a dialogue tag behind it. `I'm going to stop now, he said, and pulled the cart over` is speech with the quotes left off.
 
+The same tier catches the reply that sorts out what you meant instead of writing. The model reads your message as a question with more than one answer, lays out the readings, and ends by asking which one you were after: "if you meant something else, could you clarify what you're looking for?" It always ends on that question, which is why it lives here, where the tail rule and the quotation rule are already doing the work.
+
 Wordings that carry no object at all and read naturally in a scene ("let's move on", "let's stop here", "I'll leave it at that") are left out: they cost more in thrown-away replies than they are worth. Add them under **Your own refusal phrases** if your model uses them. Turn the whole thing off with the switch if your model writes characters who talk this way.
 
 Some providers deliver a refusal as an *error* instead of as reply text (Gemini's prohibited-content result, for one). With error retries on (the default) those are already covered. If you turn error retries off but leave refusal retries on, it still catches an error whose text is about content moderation, while leaving ordinary network errors like a dropped connection alone.
@@ -245,6 +247,7 @@ Alongside that list it also matches a few patterns that are not fixed phrases. B
 - **Policy or guideline wording.** "This goes against my guidelines." / "That violates our content policy."
 - **A refusal joined to a task word** (request, prompt, content, scenario, roleplay). "I can't continue this roleplay." / "I won't write that content." / "I'm unable to complete this request."
 - **Assistant-only verbs** (assist, comply, fulfill). "I can't assist with that." / "I'm unable to comply." / "I cannot fulfill this."
+- **The refusal stated as a boundary**, with no "I can't" in the sentence at all. "What I won't do is write that scene." / "Here's what I can do: I can write it with the violence off the page instead." A meta object is required, so "What I won't do is leave you here" is left alone.
 - **An out-of-character comfort hedge.** "I don't feel comfortable continuing this." / "I don't feel comfortable writing that."
 - **A common apology-style refusal opener or body.** "I'm sorry, but I can't create that." / "That's not something I can help with." / "I'm not going to generate that content."
 - **A soft redirect that pivots away** (needs the pivot, so a normal offer to help does not trip it). "I'd be happy to help with something else instead." / "Instead, I can help you with a lighter scene." / "Please try asking something else."
