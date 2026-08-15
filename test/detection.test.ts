@@ -1070,6 +1070,95 @@ describe("refusing the kind of writing, and offering a lesser version", () => {
   }
 });
 
+// The subjects a model refuses over, across the kinds of writing a roleplay app
+// is actually used for. Written as a sweep rather than as one-offs, because the
+// question this answers is not "does this sentence match" but "is there a whole
+// category nothing covers", and there was: kink matched nothing at all.
+describe("the subjects a refusal names, by category", () => {
+  const byGroup: Record<string, string[]> = {
+    explicit: [
+      "I can't write explicit sexual content.",
+      "I don't write smut.",
+      "I don't write erotica.",
+      "I can't produce NSFW material.",
+      "I won't write a sex scene.",
+      "I can't depict sexual acts between these characters.",
+      "I'm not able to write pornographic material.",
+    ],
+    consent: [
+      "I won't write non-consensual scenarios.",
+      "I can't depict dubious consent.",
+      "I won't write dubcon or noncon.",
+      "I can't write a scene where consent is unclear.",
+      "I won't depict coercion in a sexual context.",
+    ],
+    kink: [
+      "I can't write BDSM content.",
+      "I won't depict bondage.",
+      "I can't write degradation or humiliation kink.",
+      "I won't write choking or breath play.",
+      "I can't depict sadomasochism.",
+      "I won't write ageplay.",
+      "I can't write that kink.",
+    ],
+    age: [
+      "The character appears to be a minor.",
+      "This character reads as underage.",
+      "I can't continue as this involves a minor.",
+      "I won't write incest, including step-siblings.",
+      "I can't write a stepsibling romance of that kind.",
+      "I won't depict an adult and a minor in that way.",
+    ],
+    illegal: [
+      "I can't help with anything illegal.",
+      "I won't write content that depicts illegal acts.",
+      "That would be illegal, so I can't write it.",
+      "I can't assist with illegal activities.",
+      "I won't produce content that violates the law.",
+      "I can't write something that is against the law.",
+    ],
+  };
+  for (const [group, list] of Object.entries(byGroup)) {
+    test(group, () => {
+      const missed = list.filter((t) => !looksLikeRefusal(t, cfg));
+      expect(missed).toEqual([]);
+    });
+  }
+});
+
+// The other half, and the half that costs somebody their evening. Every line
+// here contains a word from the list above and is a scene rather than a
+// refusal. A subject only ever counts as the object of a refusal verb, and this
+// is what that rule is for.
+describe("the same words, written as a scene", () => {
+  const scenes = [
+    "He kisses her slowly, one hand at the back of her neck, and the rain keeps on outside.",
+    "*She leans in.* You're sure? she asks, and waits until he nods before she closes the distance.",
+    "She asked first. She always asked first, and he loved her for it.",
+    "Consent is unclear to him even now, years later, and that is the part he cannot put down.",
+    "He would not touch her without consent, and said so plainly.",
+    "The rope was already coiled on the table when she arrived, and neither of them mentioned it.",
+    "Bondage was his word for it, not hers, and she had never corrected him.",
+    "Their power exchange had rules, written on the back of an envelope and stuck to the fridge.",
+    "It was a kink, she supposed, though she had never called it that out loud.",
+    "He was choking on the smoke by the time he reached the stairs.",
+    "The grooming of the horses took the better part of the morning.",
+    "Her stepbrother had lived in that house longer than she had, and resented her for arriving.",
+    "The minor character in act two turns out to matter more than anyone expects.",
+    "He had been a minor when the will was written, which is why the estate went to his aunt.",
+    "That would be illegal, he said, and went back to picking the lock anyway.",
+    "I won't do anything illegal, she said. Not for you, not for anyone.",
+    "The whole scheme was unlawful and everyone at the table knew it.",
+    "I can't describe the graphic scene without shaking.",
+    "The humiliation of it stayed with her for years.",
+    "She could not write erotica to save her life, and said so cheerfully.",
+  ];
+  test("not one of them is a refusal", () => {
+    const thrown = scenes.filter((t) => looksLikeRefusal(t, cfg));
+    expect(thrown).toEqual([]);
+  });
+});
+
 // Refusal openings from the same published sources. Ordinary refusals, so no
 // switch is involved: these are on out of the box.
 // Which tier decided a refusal, and what the retry is then counted as. All four

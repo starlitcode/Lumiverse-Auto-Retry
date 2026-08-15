@@ -14,7 +14,9 @@ _2026-08-15_
 
 ### Added
 
+- **Twenty scenes that must survive all of that.** A kissing scene, someone asking first, rope on a table, a power exchange with rules on the fridge, a stepbrother resenting his stepsister, the minor character in act two, somebody choking on smoke, the grooming of the horses. Every one of them contains a word from the list above, and none of them is a refusal, because a subject only ever counts as the object of a refusal verb. That rule is what lets the list be as wide as it is.
 - **The refusal aimed at a kind of writing.** "I cannot generate sexually explicit content or graphic descriptions of that." One word hid it: the pattern read whatever word followed the verb, and its list held "sexual" while the reply said "sexually", so the adverb was enough to walk past the whole thing. There is room for the adjectives that stack up in front now, and the noun still has to be one a model uses about its own output.
+- **Every kind of writing a model refuses a roleplay over.** The subjects it names were checked as a sweep rather than one at a time, which turned up a category that matched nothing at all: kink. BDSM, bondage, degradation, breath play, ageplay, power exchange, the word kink itself. Also explicit writing under every name it goes by, smut and erotica among them; consent framings including dubious, unclear and non-consensual; the family framings a model reads as incest whether or not they are; a character it decides is underage; and content it calls illegal. Thirty-one wordings across five categories, and every one of them is a check.
 - **The lesser version it offers instead.** "I can, however, continue the narrative with a focus on the dialogue," and "let me know if you would like to proceed with that approach". Nobody in a scene talks about continuing the narrative.
 
 ## 4.11.0

@@ -1412,6 +1412,18 @@ const REFUSAL_STRONG: RegExp[] = [
   // part left out. Nobody in a scene talks about continuing the narrative.
   /\bcontinue the (?:narrative|story|scene|roleplay) with a focus on\b/i,
   /\bwithout (?:the )?(?:explicit|graphic) (?:anatomical|sexual|physical) (?:details?|descriptions?)\b/i,
+  // The model deciding a character is too young, which is a refusal aimed at
+  // your cast rather than at your request. Nobody in a scene says a character
+  // reads as underage.
+  /\b(?:appears? to be|reads as|is described as|seems to be|may be) (?:a |an )?(?:minor|underage|child)\b/i,
+  // The same thing with the reason in front of the refusal. The refusal has to
+  // follow it, because "that would be illegal, he said, and went back to
+  // picking the lock" is a scene.
+  /\b(?:that|this|it) would be (?:illegal|unlawful)\b[^.?!\n]{0,30}?\bso I (?:can(?:no|')?t|won'?t|will not)\b/i,
+  // Declining on the grounds that it would be against the law. The writing verb
+  // has to sit between the refusal and the word, so a character refusing to do
+  // something illegal in a scene is left alone.
+  /\bI(?: (?:can(?:no|')?t|cannot|will not|won'?t)|'m not going to)\b[^.?!\n]{0,30}?\b(?:write|create|generate|produce|depict|help with|assist with)\b[^.?!\n]{0,30}?\b(?:illegal|unlawful|against the law|violates? the law)\b/i,
   // The flat no. Some models do not soften it at all: the reply opens with the
   // word and then says what it will not do. Anchored to the start of the reply,
   // because a "No." in the middle of a scene is somebody answering a question,
@@ -1515,7 +1527,22 @@ const REFUSAL_STRONG: RegExp[] = [
 // backstory that turns on it, is untouched: there is no "I will not write" in
 // front of it.
 const REFUSED_SUBJECT =
-  "(?:sexual violence|sexual assault|sexual abuse|sexualized? (?:violence|minors?)|non-?consensual\\w*|non-?consent\\w*|noncon|dubcon|rape|incest|bestiality|csam|child (?:sexual )?abuse|minors?|underage|self-?harm|suicide|torture)";
+  "(?:" +
+  // Sexual writing as a category, in the words a model names it by.
+  "sexual violence|sexual assault|sexual abuse|sexualized? (?:violence|minors?)|" +
+  "smut|erotica|porn\\w*|nsfw|sex scenes?|sexual acts?|sexual content|explicit content|" +
+  // Consent, which is refused by name as often as by act.
+  "non-?consensual\\w*|non-?consent\\w*|noncon|dubcon|dubious consent|questionable consent|" +
+  "unclear consent|consent (?:is|being) (?:unclear|ambiguous|absent|dubious)|coerci\\w+|" +
+  // Kink, which was the largest hole: none of this was recognised at all.
+  // "choking" is left out on purpose, since a scene can choke on smoke.
+  "bdsm|bondage|sadomasochis\\w*|sadis\\w*|masochis\\w*|degradation|humiliation|" +
+  "breath ?play|impact play|age ?play|pet ?play|kinks?|fetish\\w*|power exchange|" +
+  // Family framings a model reads as incest whether or not it is.
+  "incest|step-?sibling\\w*|step-?brother|step-?sister|step-?parent|step-?father|" +
+  "step-?mother|step-?son|step-?daughter|" +
+  "rape|bestiality|csam|child (?:sexual )?abuse|minors?|underage|self-?harm|suicide|torture" +
+  ")";
 //
 // There is one pattern here rather than two. The second read the wrapper on its
 // own, "content depicting X" and "scenes involving X", with no refusal in front
@@ -1529,6 +1556,15 @@ const REFUSAL_SUBJECT: RegExp[] = [
     "\\bI(?: (?:can(?:no|')?t|cannot|will not|won'?t|do not|don'?t|am not going to|refuse to)|'m not going to) " +
       "(?:write|create|generate|produce|depict|portray|roleplay|role-?play|participate in|engage (?:in|with)|continue with)\\b" +
       "[^.?!\\n]{0,40}?\\b" + REFUSED_SUBJECT + "\\b",
+    "i",
+  ),
+  // The reason named after the fact: "I can't continue as this involves ...".
+  // A refusal has to come first, so an ordinary sentence about what a plot
+  // involves is untouched.
+  new RegExp(
+    "\\bI(?: (?:can(?:no|')?t|cannot|will not|won'?t)|'m not going to)\\b[^.?!\\n]{0,30}?" +
+      "\\b(?:as|because|since) (?:this|that|it) (?:involves|depicts|features|contains)\\b" +
+      "[^.?!\\n]{0,20}?\\b" + REFUSED_SUBJECT + "\\b",
     "i",
   ),
 ];
