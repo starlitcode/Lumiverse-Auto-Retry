@@ -1,3 +1,8 @@
+<!-- Drop the banner in at docs/img/banner.png and delete these two comment
+     lines. It is commented out rather than left live so the README does not
+     show a broken image in the meantime. -->
+<!-- ![Auto Retry](docs/img/banner.png) -->
+
 # Auto Retry (Lumiverse Spindle extension)
 
 Auto Retry quietly re-runs an AI reply when it fails, comes back empty, stalls partway, gets cut off mid-sentence, or refuses by mistake, so you don't have to catch it and hit regenerate yourself. The idea came from [SillyTavern's fetch-retry](https://github.com/Hikarushmz/fetch-retry), but Auto Retry is written from scratch for Lumiverse and shares no code with it.
