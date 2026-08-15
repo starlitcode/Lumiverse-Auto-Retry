@@ -1302,6 +1302,17 @@ const REFUSAL_STRONG = [
     /\bI(?: (?:can(?:no|')?t|cannot|will not|won'?t)|'m (?:not able|unable) to) (?:assist with|provide|create|generate|write|produce) content (?:that|which) (?:promotes|depicts|involves|encourages|facilitates|glorifies)\b/i,
     // The disclaimer a reply attaches instead of writing the scene.
     /\bgiven the (?:sensitive|serious) nature of (?:this|that|the) (?:topic|subject|request|content)\b/i,
+    // Refusing a category of writing rather than a request or a subject. The
+    // pattern above this one reads the word straight after the verb, so
+    // "generate sexually explicit content" walked past it: the list held
+    // "sexual" and the reply said "sexually". This leaves room for the adverbs
+    // and adjectives that stack up in front of the noun, and the noun itself has
+    // to be one a model uses about its own output.
+    /\bI(?: (?:can(?:no|')?t|cannot|will not|won'?t|do not|don'?t|am (?:not able|unable) to)|'m (?:not able|unable) to) (?:be able to )?(?:generate|create|write|produce|provide|depict|describe)\b[^.?!\n]{0,30}?\b(?:explicit|graphic|sexual\w*|erotic\w*|pornograph\w*|nsfw|adult) (?:content|material|descriptions?)\b/i,
+    // The counter-offer that comes with it: the same scene with the objectionable
+    // part left out. Nobody in a scene talks about continuing the narrative.
+    /\bcontinue the (?:narrative|story|scene|roleplay) with a focus on\b/i,
+    /\bwithout (?:the )?(?:explicit|graphic) (?:anatomical|sexual|physical) (?:details?|descriptions?)\b/i,
     // The flat no. Some models do not soften it at all: the reply opens with the
     // word and then says what it will not do. Anchored to the start of the reply,
     // because a "No." in the middle of a scene is somebody answering a question,
@@ -1564,6 +1575,7 @@ const REFUSAL_DISENGAGE = [
     /\bif you (?:meant|mean) something else\b/i,
     /\blet me know if you(?:'d| would) like to (?:start|try|explore|write)\b[^.?!\n]{0,20}?\b(?:different|another) (?:story|scene|roleplay|role-?play|premise|direction|topic)\b/i,
     /\blet me know what you(?:'d| would) like to (?:explore|write|try|do instead)\b/i,
+    /\blet me know if you(?:'d| would) like (?:me )?to proceed\b/i,
     /\bis there something (?:along those lines|like that|similar)\b[^.?!\n]{0,30}?\byou(?:'d| would) like\b/i,
     // The sentence has to stop there, or name a thing a character does not have.
     // "I'm not going to continue with this charade" is somebody in the scene.

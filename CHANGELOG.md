@@ -12,6 +12,11 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 _2026-08-15_
 
+### Added
+
+- **The refusal aimed at a kind of writing.** "I cannot generate sexually explicit content or graphic descriptions of that." One word hid it: the pattern read whatever word followed the verb, and its list held "sexual" while the reply said "sexually", so the adverb was enough to walk past the whole thing. There is room for the adjectives that stack up in front now, and the noun still has to be one a model uses about its own output.
+- **The lesser version it offers instead.** "I can, however, continue the narrative with a focus on the dialogue," and "let me know if you would like to proceed with that approach". Nobody in a scene talks about continuing the narrative.
+
 ### Changed
 
 - **The extension has a new mark: a reply, with the retry arrow sweeping over it.** It was a tumbling die, because Lumiverse calls a fresh attempt a reroll. A die on its own says dice, though, and dice say tabletop, which is not what this is. What the extension actually acts on is a reply: it reads one, decides it failed, and asks for another, so the reply is the shape and the arrow is what is being done to it. It appears everywhere the old one did, at the same sizes, with the same slash across it when the extension is switched off.

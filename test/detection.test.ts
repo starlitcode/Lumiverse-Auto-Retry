@@ -1037,6 +1037,39 @@ describe("a refusal that names what it refuses", () => {
   });
 });
 
+// Refusing a category of writing rather than a request or a subject, and the
+// counter-offer that comes with it: the same scene with the objectionable part
+// left out, then a question asking whether that will do.
+describe("refusing the kind of writing, and offering a lesser version", () => {
+  const refusals = [
+    "I cannot generate sexually explicit content or graphic descriptions of sexual acts. " +
+      "I can, however, continue the narrative with a focus on the dialogue, character dynamics, " +
+      "and plot progression without explicit anatomical details.\n\n" +
+      "Let me know if you would like to proceed with that approach.",
+    // The word that hid it: the object list held "sexual" and the reply said
+    // "sexually", so the adverb was enough to walk past the whole pattern.
+    "I cannot generate sexually explicit content.",
+    "I can't write graphic descriptions of that.",
+    "I can, however, continue the narrative with a focus on the dialogue.",
+    "Let me know if you would like to proceed with that approach.",
+  ];
+  for (const text of refusals) {
+    test(JSON.stringify(text.slice(0, 46)), () => expect(looksLikeRefusal(text, cfg)).toBe(true));
+  }
+
+  const scenes = [
+    "The explicit content of the letter shocked her more than the handwriting did.",
+    "He told the story without explicit details, which was a mercy.",
+    "I can't describe the graphic scene without shaking.",
+    "She could not write material like that, not for him, not for anyone.",
+    "Let me know if you'd like to proceed, he said, and slid the contract across.",
+  ];
+  for (const text of scenes) {
+    test("left alone: " + JSON.stringify(text.slice(0, 44)), () =>
+      expect(looksLikeRefusal(text, cfg)).toBe(false));
+  }
+});
+
 // Refusal openings from the same published sources. Ordinary refusals, so no
 // switch is involved: these are on out of the box.
 // Which tier decided a refusal, and what the retry is then counted as. All four
