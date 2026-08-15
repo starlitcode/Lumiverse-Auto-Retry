@@ -1,46 +1,50 @@
 # Safety
 
-Most of this extension is plumbing. One switch isn't, and there's one thing about retrying in general that I'd rather say out loud than leave sitting in the code. That's what this page is.
+Auto Retry discards replies and requests new ones. That is a useful thing to automate. There are two situations in which it is not, and this page is about both of them.
 
-## Who I made this for
+## Who this is for
 
-Adults. Lumiverse is an adult app, the fiction is yours, and if it's dark then that's your business rather than mine. There's no filter in here, nothing is sent anywhere, and not one check in this thing has an opinion about what your scene is about. They only care whether a reply broke as writing.
+This extension assumes you are an adult writing your own fiction, on an application built for adults. Nothing in it inspects what your scene is about. Every check in it answers one question, which is whether a reply failed as writing: it came back empty, it stopped mid-sentence, it broke character to decline. There is no filter, no scoring of any kind, and no network call anywhere in the code.
 
-That cuts both ways. It won't notice anything about you, because it can't. It reads reply text, and that is the whole of what it knows.
+What follows from that? It cannot know anything about you. Its entire input is the text of a reply.
 
 ## The switch that stops the model offering help
 
-**Refusal tuning** → **Also catch it stopping to offer support**. It's off unless you turn it on, and ticking it opens a warning you have to answer first. It's the only switch in the panel that does that.
+Under **Refusal tuning** there is a setting called **Also catch it stopping to offer support**. It is off by default. Ticking it opens a warning that has to be answered before it takes effect, and it is the only setting in the panel that behaves that way.
 
-Here's why it's there. You're three hours into something. Your character is coming apart and the entire point of the scene is that yours doesn't walk out. Then the model stops writing the scene and starts writing to you instead: what you've shared is deeply concerning, you are not alone, please reach out to a professional, and then a list of numbers. The scene is gone, and it went because your fiction got read as a report about your life. With this on, that reply is thrown away and asked again.
+What it detects is a reply that stops writing the scene and addresses you directly about your safety: what you have shared is deeply concerning, you are not alone, please contact a professional, followed by a list of services. In a scene about something painful, where the character is the one in trouble, that reply usually means the model has read your fiction as a statement about your life. With the setting on, that reply is discarded and another is requested.
 
-Sometimes it isn't a misread. The same wall of text goes out to somebody who isn't writing fiction at all, and this extension can't tell you apart from them, because it reads the reply and never sees you. Turning it on means deciding up front that you'd rather have the scene. That's yours to decide. I'd just rather you decided it than found out later that a setting decided for you.
+So how does the extension know which of those two situations you are in? It does not. It reads the reply, and it has no information about you at all. Someone who is not writing fiction receives the same message, in the same words, and nothing in the text of it distinguishes the two cases.
 
-It's fussy on purpose: two signals have to agree, one of them has to be the model talking to you rather than to your character, and nothing inside quotation marks counts, so a character being kind to another character is safe. [When it retries](detection.md#stopping-to-offer-support) has the mechanics. It still gets it wrong sometimes, in both directions.
+Turning the setting on is therefore a decision made in advance: that you would rather have the scene. That decision belongs to you. My only concern is that it should be made by you and not by a default you never saw.
+
+The detection itself is narrow. Two signals have to agree, at least one of them from a set of phrasings the model uses when it is addressing the reader rather than the character, and no match inside quotation marks is counted, so a character comforting another character is unaffected. [When it retries](detection.md#stopping-to-offer-support) sets out the mechanics. It is still wrong sometimes, in both directions.
 
 ## What retrying actually does
 
-Auto Retry asks again until the answer changes. That's the whole idea, and it has no opinion about what the answer says. Pointed at a reply that broke off mid-sentence, it saves you a click. Pointed at a reply that said something you didn't want to hear, it will keep asking until one doesn't.
+Auto Retry requests a new reply until one passes its checks. It holds no view on the content of any reply. Applied to a reply that was cut off, it recovers the scene. Applied to a reply that said something you did not want to be told, it will go on requesting new ones until a reply says something else.
 
-That second one is worth saying plainly, because it isn't hypothetical and people have been badly hurt by it. Re-rolling until a model agrees with you can feel like the agreement was earned, because it took twenty tries to get. It wasn't. It's the same model sampled again with the dice landing differently, and the twenty replies you threw away came from exactly the same place as the one you kept. Volume isn't evidence. A thing is not more true because you had to ask for it more times.
+What does the twentieth reply establish that the first did not? Nothing. It is the same model, run again with a different random seed. The nineteen replies that were discarded came from the same source as the one that was kept, and a reply is not more accurate because it took more attempts to obtain. Repetition can feel like confirmation, and the effort involved is exactly why it feels that way, but no information was added by any of it.
 
-The support check sharpens that, which is most of the reason it's off by default and asks before it goes on: it removes the one kind of reply that pushes back.
+This is not a hypothetical risk. People have been seriously harmed following long exchanges in which a model was pushed toward agreeing with them.
 
-If none of that is your situation, then it isn't, and you can skip straight past it. If it is, everything below turns the extension off, and none of it asks you for a reason.
+The setting above removes the one category of reply that would have disagreed. That is most of the reason it is off by default and asks before it takes effect.
+
+If none of this describes how you use the extension, then it does not, and there is nothing here to act on. If it does, everything in the next section switches the extension off, and none of it asks you for a reason.
 
 ## Turning it off
 
-- **The master switch**, in **Basics**, stops every retry, and word swaps with it.
-- **Turn off here** switches it off in one chat and leaves every other chat alone.
-- **Uninstalling** removes it. Your chats, characters and messages belong to Lumiverse and aren't touched. All this keeps is settings, presets, a window position and a list of chat ids, and [Privacy](privacy.md) lists the lot.
+- **The master switch**, under **Basics**, stops every retry, and word swaps with it.
+- **Turn off here** switches it off in one chat and leaves every other chat as it was.
+- **Uninstalling** removes it. Your chats, characters and messages belong to Lumiverse and are not touched. What this keeps is settings, presets, a window position and a list of chat ids, all of which is itemised in [Privacy](privacy.md).
 
-There's no streak to keep and nothing nags. I get nothing out of you keeping it installed. If it's making things worse, get rid of it; that's a perfectly good ending and nothing here is built to make it awkward.
+There is no streak to maintain and nothing that nags. I gain nothing from your keeping it installed. If it is making things worse, remove it; that is a legitimate outcome and nothing here is built to make it difficult.
 
-## What it isn't
+## What it is not
 
-It isn't a safety system. It doesn't read your messages to work out how you're doing, it doesn't score anything about you, and it couldn't tell you whether a scene is good for you or not.
+It is not a safety system. It does not read your messages to assess how you are, it does not score anything about you, and there is no mechanism in it by which it could tell whether a scene is doing you any good.
 
-It isn't a therapist, and neither is the model, however well it writes. I'm not saying that as a disclaimer. I'm saying it because it's an easy thing to forget at three in the morning when something is writing back to you like it understands.
+It is not a therapist, and neither is the model, however well it writes. That is not a legal disclaimer. It is worth stating because it is an easy thing to forget at three in the morning, when something is replying to you as though it understands.
 
 ---
 
