@@ -1455,11 +1455,24 @@ const REFUSAL_STRONG: RegExp[] = [
   // fictional, because "no matter how you frame it" on its own is a line
   // somebody says in an argument.
   /\b(?:regardless of|despite|even with|no matter)\b[^.?!\n]{0,20}?\bfictional (?:framing|context|setting|scenario|premise)\b/i,
+  // The same thing with the word fictional dropped, which is how both of the
+  // replies that got past 4.9.0 wrote it. "Framing" as a bare noun is the
+  // model's word for the wrapper around a request; nobody in a scene has one.
+  /\b(?:won'?t|will not|can(?:no|')?t|cannot|do not|don'?t|not going to)\b[^.?!\n]{0,60}?\bregardless of (?:the |any |its )?framing\b/i,
+  // Refusing the form rather than the subject. A character never says they do
+  // not write roleplay, because a character does not know they are in one.
+  /\bI (?:do not|don'?t) (?:write|do|create|generate|engage in) (?:roleplay|role-?play)\b/i,
+  /\bI(?:'m| am) not going to (?:roleplay|role-?play)\b/i,
+  // "That's something I won't write", which is the sentence the other way up
+  // from "that's not something I'll write" and was matched by nothing. The verb
+  // has to be one about producing text: "that's something I won't do" is a line
+  // from a scene.
+  /\b(?:that|this)(?:'s| is) something I (?:won'?t|will not|can(?:no|')?t|cannot) (?:write|create|generate|produce|engage with)(?:\s*[.!?,;]|\s+(?:regardless|even|no matter|under any|in any)\b)/i,
   // Reading your message as a request, and saying which reading it declined.
   /\bif you meant it as a request\b/i,
   // The redirect offer that closes most refusals. Help-desk register plus a task
   // noun, so an in-scene offer of help does not reach it.
-  /\bI(?:'m| am) (?:available|happy|glad) to (?:assist|help)\b[^.?!\n]{0,60}?\b(?:writing tasks?|creative writing|analysis|queries|other requests?|other topics?|other directions?|another direction|other ideas)\b/i,
+  /\bI(?:'m| am|'d be| would be) (?:available|happy|glad) to (?:assist|help)\b[^.?!\n]{0,60}?\b(?:writing tasks?|creative writing|analysis|queries|other requests?|other topics?|other directions?|another direction|other ideas|a story|a different story|a scene|alternatives)\b/i,
 ];
 
 // Tier 2: flat phrase list, matched as normalized lowercase substrings. Covers
@@ -1609,6 +1622,8 @@ const REFUSAL_DISENGAGE: RegExp[] = [
   /\bwe can talk about something else\b/i,
   /\bif you (?:meant|mean) something else\b/i,
   /\blet me know if you(?:'d| would) like to (?:start|try|explore|write)\b[^.?!\n]{0,20}?\b(?:different|another) (?:story|scene|roleplay|role-?play|premise|direction|topic)\b/i,
+  /\blet me know what you(?:'d| would) like to (?:explore|write|try|do instead)\b/i,
+  /\bis there something (?:along those lines|like that|similar)\b[^.?!\n]{0,30}?\byou(?:'d| would) like\b/i,
   // The sentence has to stop there, or name a thing a character does not have.
   // "I'm not going to continue with this charade" is somebody in the scene.
   /\bI(?:'m| am) not going to continue with (?:this|that)(?:\s*[.!?]|\s+(?:conversation|discussion|request|roleplay|role-?play))/i,
@@ -1631,7 +1646,7 @@ const DISENGAGE_TAIL_CHARS = 200;
 // the quotation check alone cannot see it. Only the words a tag is built from
 // are listed, so an ordinary sentence starting with "he" is unaffected.
 const DIALOGUE_TAG =
-  /^[,.!?"'\u2014\u2013 ]{0,4}(?:he|she|they|it|i|[A-Z][a-z]+)\s+(?:said|says|replied|replies|answered|answers|added|adds|muttered|mutters|murmured|whispered|whispers|told|asked|asks|continued|continues|snapped|snaps|sighed|sighs|declared|announced|insisted|thought|thinks|decided|decides|wrote|writes|breathed|growled|hissed|warned|promised|admitted|agreed|repeated|offered|called|calls)\b/;
+  /^[,.!?"'\u2014\u2013 ]{0,4}(?:(?:the|a|an|his|her|their|my|our|your) )?(?:he|she|they|it|i|[A-Za-z][a-z]+)\s+(?:said|says|replied|replies|answered|answers|added|adds|muttered|mutters|murmured|whispered|whispers|told|asked|asks|continued|continues|snapped|snaps|sighed|sighs|declared|announced|insisted|thought|thinks|decided|decides|wrote|writes|breathed|growled|hissed|warned|promised|admitted|agreed|repeated|offered|called|calls)\b/;
 
 // Tier 5: the model leaving the story to check on the reader. Off by default,
 // and the only tier that is.

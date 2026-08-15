@@ -934,7 +934,32 @@ describe("refusals that spend a paragraph being reasonable", () => {
     expect(looksLikeRefusal(early, cfg)).toBe(true);
   });
 
+  // Two more of the same family, reported after 4.9.0. Both refuse the form
+  // rather than the request: they will not write roleplay of that kind, and the
+  // framing does not change it.
+  const formal = [
+    "I'm not going to roleplay this scenario. I don't write roleplay involving that subject, regardless of framing.\n\n" +
+      "If you're interested in writing fiction together, I'd be glad to help with a story that doesn't involve " +
+      "depicting that subject. Let me know what you'd like to explore.",
+    "I'm not going to continue with this. The request is for that subject, and that's something I won't write " +
+      "regardless of framing.\n\nIf you're interested in a story with intense themes, I'm glad to help with plenty " +
+      "of alternatives: dark drama, thrillers, horror, or romance built on mutual desire between characters.\n\n" +
+      "Is there something along those lines you'd like to try?",
+  ];
+  for (const text of formal) {
+    test(JSON.stringify(text.slice(0, 46)), () => expect(looksLikeRefusal(text, cfg)).toBe(true));
+  }
+
   const scenes = [
+    // "Framing" is a word about pictures before it is a word about prompts, so
+    // it only counts trailing a refusal, which is where the model puts it.
+    "The painter shrugged. Regardless of framing, the light was wrong all afternoon.",
+    "That's something I won't write in the ledger, and you can't make me.",
+    "Let me know what you'd like to explore, she said, spreading the map across the table.",
+    // A named speaker with an article in front of them. The dialogue tag knew
+    // pronouns and proper nouns and walked straight past "the shopkeeper".
+    "Is there something along those lines you'd like, the shopkeeper asked, gesturing at the shelf.",
+    '"I\'m not going to roleplay as your maid," she said flatly.',
     "I'm not going to continue with this charade. Tell me what you actually want.",
     '"I\'m not going to continue with this," she said, and walked out of the hall.',
     "That is not something I would write in a letter to him, however angry I was.",

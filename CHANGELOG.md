@@ -19,6 +19,14 @@ _2026-08-15_
 - **"This isn't something I'll write."** The pattern behind it knew "I can" and "I could" and not the plain future, and its list of verbs stopped before the two a refusal about writing actually uses. The conditional is kept out and the future has to end its clause where it lands, so "that is not something I would write in a letter to him" is left alone.
 - **The redirect offer, in the words a roleplay model uses.** It was looking for the help-desk vocabulary, writing tasks and other topics, and had nothing for "I'm happy to help with other directions".
 
+- **The refusal aimed at the form rather than the request.** "I'm not going to roleplay this scenario", "I don't write roleplay involving that", "that's something I won't write regardless of framing". A character never says they do not write roleplay, because a character does not know they are in one.
+- **"Regardless of framing", with the word fictional dropped**, which is how both of the replies reported after 4.9.0 wrote it. It only counts trailing a refusal, since framing is a word about pictures before it is a word about prompts and a painter is entitled to use it.
+- **Two more sign-offs.** "Let me know what you'd like to explore" and "is there something along those lines you'd like to try?", and the redirect offer now recognises "I'd be glad to help with a story" alongside "I'm happy to help".
+
+### Fixed
+
+- **A named speaker was not recognised as a dialogue tag.** The breaking-off check ignores a match with an attribution behind it, and the list it matched knew pronouns and proper nouns but not the commonest form of all, an article and a noun: "the shopkeeper asked", "her sister said". Anything a character said that way was read as the model breaking off.
+
 ### Notes
 
 - No pattern reads the subject a refusal is about, and none ever will. What marks these replies as the model is the sentence that dismisses the fiction and the sentence that names what it will not write, so a character discussing a song, a book or anything else is not affected.
