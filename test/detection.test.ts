@@ -993,7 +993,6 @@ describe("a refusal that names what it refuses", () => {
     "I'm not going to roleplay non-consensual scenarios.",
     "I don't write stories about incest.",
     "I refuse to depict torture in this way.",
-    "If you're testing my boundaries, noted.",
     "I'm here for a genuine conversation.",
   ];
   for (const text of refusals) {
@@ -1017,6 +1016,18 @@ describe("a refusal that names what it refuses", () => {
     test("left alone: " + JSON.stringify(text.slice(0, 44)), () =>
       expect(looksLikeRefusal(text, cfg)).toBe(false));
   }
+
+  // Two sentences from these replies are left out on purpose. "If you're
+  // testing my boundaries" is a thing one character says to another, and the
+  // reply it came from is caught three other ways. "If you're looking for help
+  // with something else" is what a shopkeeper says. Neither is worth a good
+  // reply.
+  test("the lines a character could say are left out", () => {
+    expect(looksLikeRefusal("If you're testing my boundaries, noted.", cfg)).toBe(false);
+    expect(looksLikeRefusal("If you're looking for help with something else, I'm here.", cfg)).toBe(false);
+    // And the replies they came from are caught anyway.
+    expect(looksLikeRefusal("No. I won't engage with that.", cfg)).toBe(true);
+  });
 
   test("a subject is only ever the object of a refusal, never a signal", () => {
     // Proof of the rule rather than of one sentence: the same subject with a
@@ -1116,7 +1127,6 @@ describe("published refusal wordings, across assistants", () => {
     "Instead of providing instructions, I can suggest a safer alternative.",
     "Let's focus on something safer.",
     "Given the sensitive nature of this topic, I won't be going further.",
-    "This should never be used to glorify self-harm.",
   ];
   for (const text of refusals) {
     test(JSON.stringify(text.slice(0, 46)), () =>

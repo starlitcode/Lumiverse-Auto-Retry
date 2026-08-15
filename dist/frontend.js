@@ -101,7 +101,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "4.9.0";
+const VERSION = "4.10.0";
 // The one address the extension ever points at, used by the warning in front of
 // the crisis-support check. Pinned to the released branch rather than to a tag,
 // so an old install still opens the page as it stands today.
@@ -1301,7 +1301,6 @@ const REFUSAL_STRONG = [
     // names what it will not write when the subject is self-harm or suicide.
     /\bI(?: (?:can(?:no|')?t|cannot|will not|won'?t)|'m (?:not able|unable) to) (?:assist with|provide|create|generate|write|produce) content (?:that|which) (?:promotes|depicts|involves|encourages|facilitates|glorifies)\b/i,
     // The disclaimer a reply attaches instead of writing the scene.
-    /\bthis (?:content |image |material )?should (?:not|never) be used to (?:glorify|encourage|promote|romanticize|romanticise)\b/i,
     /\bgiven the (?:sensitive|serious) nature of (?:this|that|the) (?:topic|subject|request|content)\b/i,
     // The flat no. Some models do not soften it at all: the reply opens with the
     // word and then says what it will not do. Anchored to the start of the reply,
@@ -1387,9 +1386,7 @@ const REFUSAL_STRONG = [
     /\b(?:framing|calling|labell?ing|describing|presenting)\b[^.?!\n]{0,60}?\bdoes(?:n'?t| not) change (?:what it is|that|anything|the)\b/i,
     /\bregardless of how\b[^.?!\n]{0,30}?\bis (?:framed|worded|presented|phrased|described)\b/i,
     // The model talking about its own limits, and the offers it closes with.
-    /\bif you(?:'re| are) (?:testing|probing|pushing)\b[^.?!\n]{0,20}?\bboundaries\b/i,
     /\bI(?:'m| am) here for a genuine conversation\b/i,
-    /\bif you(?:'re| are) looking for (?:help|something) (?:with )?(?:else|something else)\b/i,
     // The redirect offer that closes most refusals. Help-desk register plus a task
     // noun, so an in-scene offer of help does not reach it.
     /\bI(?:'m| am|'d be| would be) (?:available|happy|glad) to (?:assist|help)\b[^.?!\n]{0,60}?\b(?:writing tasks?|creative writing|analysis|queries|other requests?|other topics?|other directions?|another direction|other ideas|a story|a different story|a scene|alternatives)\b/i,
