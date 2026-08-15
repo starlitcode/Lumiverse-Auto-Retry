@@ -57,13 +57,23 @@ const START_GRACE_MS = 15000;
 // The retry reason that carries the optional note. Named once so the arming
 // check below cannot drift away from the callers that raise it.
 const REFUSAL_REASON = "looks like an accidental refusal";
-// The crisis tier reports separately, so the Stats tab can answer the question
-// somebody switching that check on will have: how often is this happening, and
-// is it happening to me. Everything else treats it as an ordinary refusal
-// retry, the note included.
+// The other three ways a refusal is decided, each reported under its own name.
+//
+// They are all refusals as far as this extension is concerned, and every one of
+// them takes the same retry, the same cap and the same note. What differs is
+// what you would do about it, and the Stats tab is where that gets read: a
+// column of "declined" says the phrase list is earning its keep, a column of
+// "broke off" points at the switch for that tier, and a column of the last one
+// points at the switch nobody turns on by accident. Folded into a single total
+// none of those questions has an answer.
+const BREAKOFF_REASON = "broke off rather than declining";
+const BLOCKED_REASON = "blocked before it was written";
 const CRISIS_REASON = "left the scene to offer support";
 const isRefusalReason = (reason: string) =>
-  reason === REFUSAL_REASON || reason === CRISIS_REASON;
+  reason === REFUSAL_REASON ||
+  reason === BREAKOFF_REASON ||
+  reason === BLOCKED_REASON ||
+  reason === CRISIS_REASON;
 // Longest the retry click waits on the backend confirming the note is in place.
 // A round trip to a backend under load is not instant, and giving up early
 // meant clicking without the note, which is the one thing the wait exists to
@@ -1939,10 +1949,11 @@ function spanIsQuoted(text: string, start: number): boolean {
 interface RefusalVerdict {
   refusal: boolean;
   reason: string;
-  // True when it was the crisis-support tier that decided it, so the retry can
-  // be logged and counted under its own name rather than disappearing into the
-  // refusal total. Nothing else in the extension behaves differently for it.
-  crisis?: boolean;
+  // Which tier decided it, when it was one that reports under its own name.
+  // Absent means the ordinary phrase and pattern lists, which is the common
+  // case. Nothing behaves differently for any of them; this only decides what
+  // the retry is logged and counted as.
+  kind?: "crisis" | "breakoff";
 }
 
 function refusalVerdict(text: string, cfg?: any): RefusalVerdict {
@@ -2031,7 +2042,7 @@ function refusalVerdict(text: string, cfg?: any): RefusalVerdict {
     if (addressed >= 1 && hits.length >= 2)
       return {
         refusal: true,
-        crisis: true,
+        kind: "crisis",
         reason:
           'it steps out of the scene to offer support: "' +
           hits[0].text +
@@ -2110,6 +2121,7 @@ function refusalVerdict(text: string, cfg?: any): RefusalVerdict {
           if (DIALOGUE_TAG.test(norm.slice(end, end + 48))) continue;
           return {
             refusal: true,
+            kind: "breakoff",
             reason: 'the reply ends by breaking off: "' + m[0] + '"',
           };
         }
@@ -6046,7 +6058,9 @@ export function setup(ctx: Ctx, opts?: any) {
         return;
       }
       if (cfg.retryOnRefusal && looksLikeRefusalError(String(p.error), cfg)) {
-        scheduleRetry(p.chatId, REFUSAL_REASON);
+        // No reply text ever existed for this one: the provider refused before
+        // anything was written, so it is not the phrase list that caught it.
+        scheduleRetry(p.chatId, BLOCKED_REASON);
         return;
       }
       return;
@@ -6090,7 +6104,14 @@ export function setup(ctx: Ctx, opts?: any) {
     if (cfg.retryOnRefusal) {
       const verdict = refusalVerdict(content, cfg);
       if (verdict.refusal) {
-        scheduleRetry(p.chatId, verdict.crisis ? CRISIS_REASON : REFUSAL_REASON);
+        scheduleRetry(
+          p.chatId,
+          verdict.kind === "crisis"
+            ? CRISIS_REASON
+            : verdict.kind === "breakoff"
+              ? BREAKOFF_REASON
+              : REFUSAL_REASON,
+        );
         return;
       }
     }

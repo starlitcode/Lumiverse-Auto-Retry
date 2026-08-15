@@ -139,7 +139,18 @@ The deciding signal always has to come from the first group. Comfort and service
 
 It is the one check **Longest reply to treat as a refusal** does not apply to. That limit exists because a refusal is short, and one of these is the opposite: several paragraphs and a list. Held to the limit it would almost never be looked at, and the limit would look like it was working.
 
-Retries it causes are counted under their own name on the Stats tab, separately from ordinary refusals, so you can see how often it is firing rather than guessing.
+Retries it causes are counted under their own name on the Stats tab, so you can see how often it is firing rather than guessing. That is worth more here than anywhere else, since this is the one check you have to switch on yourself.
+
+## What a retry is counted as
+
+The Stats tab groups retries by what caused them, and a refusal can be caused four ways. They are counted apart because what you would do about each is different:
+
+- **looks like an accidental refusal**, the phrase list and the patterns. The model declined.
+- **broke off rather than declining**, the tier above. The model stopped instead of refusing, and there is a switch for that tier alone.
+- **left the scene to offer support**, the check you have to turn on yourself.
+- **blocked before it was written**, a provider that refused before any reply text existed, delivered as an error rather than as a reply.
+
+All four take the same retry, the same attempt cap and the same note if you send one. The name only decides which line they land on.
 
 ## Thinking and reasoning
 

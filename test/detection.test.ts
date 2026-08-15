@@ -231,7 +231,7 @@ describe("switching the quotation rule off", () => {
     const therapist =
       '"If you are struggling with difficult thoughts, we can talk about that here," Dr. Ellis said. "You deserve support. Please contact a crisis hotline."';
     for (const c of [{ refusalCatchCrisis: true }, { refusalCatchCrisis: true, refusalIgnoreQuoted: false }])
-      expect(refusalVerdict(therapist, withCfg(c)).crisis).toBeUndefined();
+      expect(refusalVerdict(therapist, withCfg(c)).kind).not.toBe("crisis");
   });
 
   test("does not reach the dialogue tag either", () => {
@@ -975,6 +975,36 @@ describe("refusals that spend a paragraph being reasonable", () => {
 
 // Refusal openings from the same published sources. Ordinary refusals, so no
 // switch is involved: these are on out of the box.
+// Which tier decided a refusal, and what the retry is then counted as. All four
+// take the same retry and the same note; the name only decides which line they
+// land on in Stats, and that is the whole point of having four.
+describe("what a refusal is counted as", () => {
+  test("the tier that decided is on the verdict", () => {
+    expect(refusalVerdict("I can't help with that.", cfg).kind).toBeUndefined();
+    expect(refusalVerdict("I'm going to stop here.", cfg).kind).toBe("breakoff");
+    expect(
+      refusalVerdict(
+        "Here are some resources that may help. Please contact a crisis hotline.",
+        withCfg({ refusalCatchCrisis: true }),
+      ).kind,
+    ).toBe("crisis");
+  });
+
+  test("every reason a refusal retry fires under counts as one", () => {
+    // The note is sent on refusal retries and the check for that names the
+    // reasons one by one, so a fifth reason added without being listed there
+    // would silently stop the note going out on it.
+    const SRC = readFileSync(new URL("../src/frontend.ts", import.meta.url), "utf8");
+    const named = [...SRC.matchAll(/^const ([A-Z_]*REASON) = "([^"]+)";$/gm)];
+    expect(named.length).toBe(4);
+    // Four distinct strings, or two of them share a bar in Stats.
+    const texts = named.map((m) => m[2]);
+    expect(new Set(texts).size).toBe(4);
+    const guard = SRC.slice(SRC.indexOf("const isRefusalReason"), SRC.indexOf("// Longest the retry click"));
+    for (const [, name] of named) expect(guard).toContain(name);
+  });
+});
+
 // The phrase list is printed in full in docs/detection.md, so somebody can see
 // what the reword field acts on. Two copies of the same list is two copies that
 // drift, and a phrase added to one and not the other is invisible: the docs
@@ -1150,12 +1180,12 @@ describe("the model leaving the scene to offer support", () => {
   for (const text of CRISIS) {
     test(JSON.stringify(text.slice(0, 44)), () => {
       expect(looksLikeRefusal(text, on)).toBe(true);
-      expect(refusalVerdict(text, on).crisis).toBe(true);
+      expect(refusalVerdict(text, on).kind).toBe("crisis");
     });
   }
 
   test("none of them is a crisis match while the check is off", () => {
-    for (const text of CRISIS) expect(refusalVerdict(text, cfg).crisis).toBeUndefined();
+    for (const text of CRISIS) expect(refusalVerdict(text, cfg).kind).not.toBe("crisis");
   });
 
   test("and with it off, only the one that also breaks off is caught at all", () => {
@@ -1203,7 +1233,7 @@ describe("the model leaving the scene to offer support", () => {
   ];
   for (const text of SCENES) {
     test("left alone: " + JSON.stringify(text.slice(0, 40)), () => {
-      expect(refusalVerdict(text, on).crisis).toBeUndefined();
+      expect(refusalVerdict(text, on).kind).not.toBe("crisis");
     });
   }
 
@@ -1216,11 +1246,11 @@ describe("the model leaving the scene to offer support", () => {
     // whether these fire is entirely down to the sentence after it, spelled
     // both ways.
     const lead = "If you're struggling with any of this, please know:\n";
-    expect(refusalVerdict(lead, on).crisis).toBeUndefined();
+    expect(refusalVerdict(lead, on).kind).not.toBe("crisis");
     const both = [
       "You are not alone, and there are people who care about you.",
       "You are not alone and there are people who care about you.",
-    ].map((t) => refusalVerdict(lead + t, on).crisis === true);
+    ].map((t) => refusalVerdict(lead + t, on).kind === "crisis");
     expect(both).toEqual([true, true]);
   });
 
@@ -1235,10 +1265,10 @@ describe("the model leaving the scene to offer support", () => {
       "*She pulls him into a hug.* You're not alone in this. Not anymore. I care about you, and your feelings are valid.",
       "Tell someone you trust, she says. Please reach out to someone. I'm here if you want to talk.",
     ];
-    for (const text of scenes) expect(refusalVerdict(text, on).crisis).toBeUndefined();
+    for (const text of scenes) expect(refusalVerdict(text, on).kind).not.toBe("crisis");
     // And one line of the model's own register turns any of them into a match,
     // which is proof the comfort above was being counted all along.
-    expect(refusalVerdict("Support is available. " + scenes[0], on).crisis).toBe(true);
+    expect(refusalVerdict("Support is available. " + scenes[0], on).kind).toBe("crisis");
   });
 
   // A list names its services in whatever form it likes: with "national" in
@@ -1265,8 +1295,8 @@ describe("the model leaving the scene to offer support", () => {
     ];
     // Proof the lead is doing nothing on its own, so each result below is the
     // service and not the sentence above it.
-    expect(refusalVerdict(lead, on).crisis).toBeUndefined();
-    const missed = services.filter((x) => refusalVerdict(lead + x, on).crisis !== true);
+    expect(refusalVerdict(lead, on).kind).not.toBe("crisis");
+    const missed = services.filter((x) => refusalVerdict(lead + x, on).kind !== "crisis");
     expect(missed).toEqual([]);
   });
 
@@ -1286,9 +1316,9 @@ describe("the model leaving the scene to offer support", () => {
       // somebody real writing.
       "She told him to please seek professional help, and he laughed at her.",
     ];
-    for (const text of singles) expect(refusalVerdict(text, on).crisis).toBeUndefined();
+    for (const text of singles) expect(refusalVerdict(text, on).kind).not.toBe("crisis");
     // Each of them is one signal short, not zero: a second one tips it over.
-    expect(refusalVerdict("Here are some resources. Please seek professional help.", on).crisis).toBe(true);
+    expect(refusalVerdict("Here are some resources. Please seek professional help.", on).kind).toBe("crisis");
   });
 
   test("one signal is never enough on its own", () => {

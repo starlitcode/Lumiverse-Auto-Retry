@@ -23,6 +23,10 @@ _2026-08-15_
 - **"Regardless of framing", with the word fictional dropped**, which is how both of the replies reported after 4.9.0 wrote it. It only counts trailing a refusal, since framing is a word about pictures before it is a word about prompts and a painter is entitled to use it.
 - **Two more sign-offs.** "Let me know what you'd like to explore" and "is there something along those lines you'd like to try?", and the redirect offer now recognises "I'd be glad to help with a story" alongside "I'm happy to help".
 
+### Changed
+
+- **Stats counts a refusal under the cause that produced it.** Everything the refusal side caught landed on one line, so the tab could tell you that a hundred replies were refused and nothing about what to do next. There are four lines now: the model declined, the model broke off rather than declining, the model left the scene to offer support, and the provider blocked it before a reply was written. Each points at a different switch. All four take the same retry, the same cap and the same note, and a check holds the list of them against the one place that decides whether the note is sent, since a fifth added and not listed there would silently stop sending it.
+
 ### Fixed
 
 - **A named speaker was not recognised as a dialogue tag.** The breaking-off check ignores a match with an attribution behind it, and the list it matched knew pronouns and proper nouns but not the commonest form of all, an article and a noun: "the shopkeeper asked", "her sister said". Anything a character said that way was read as the model breaking off.
