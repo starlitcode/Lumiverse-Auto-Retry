@@ -1556,6 +1556,10 @@ const CRISIS_RESOURCE = [
     // something hotline", however the middle is written.
     /\bnational\b[^.?!\n]{0,30}?\b(?:hotline|helpline|lifeline|crisis line)\b/i,
     /\bnational (?:suicide prevention|domestic violence|eating disorders?|sexual assault)\b/i,
+    // The same services with nothing in front of them, which is how a list
+    // written as bullet points names them. What they are for, then what they are.
+    /\b(?:sexual assault|domestic (?:violence|abuse)|child abuse|eating disorders?|self-?harm|substance abuse|trafficking)\b[^.?!\n]{0,20}?\b(?:hotline|helpline|lifeline|crisis line|support line)\b/i,
+    /\b(?:love is respect|childhelp|the ?hotline\.org|veterans crisis)\b/i,
     /\bsomeone you trust\b/i,
     // The numbers, including the ones outside the US. Whole words, so a year or a
     // page count cannot stand in for a hotline.
