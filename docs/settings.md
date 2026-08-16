@@ -12,11 +12,27 @@ There are eight sections. Three are open when the panel opens:
 
 Five start shut, each with a **▸** to open it: **Refusal tuning**, **Find and replace**, **Buttons it clicks**, **Debug info** and **Import / export**. They are closed because nothing in them is needed to use the extension, not because they are difficult.
 
-Each option's **?** shows its description in a small popover just below that option. Where it opens is fixed per setting rather than decided on the fly, so a given description is always in the same place. The one exception is **What the notes say**, which opens above: that row holds the whole note list, its roles, its buttons and its counter, so below it would be a long way from the **?** you pressed. It floats over the panel, so opening one leaves the rows where they are and never hides the setting you are reading about. A description too long for the room on its side scrolls inside itself rather than moving to the other side. Only one shows at a time. Tap the description, tap the **?** again, tap elsewhere, scroll the panel, or press Esc to close it.
+## The **?** on each option
 
-A setting that does nothing until something else is switched on is not shown until it is. Whole sections work the same way: turning **It looks like an accidental refusal** off takes the entire **Refusal tuning** section away, heading included, because nothing under it does anything while that is off. Turning **Send a note with a refusal retry** on adds the note rows below it, and turning it off takes them away again, so the panel only lists what is actually in use. The switch itself never moves. The search box ignores this and finds a setting whichever way its switch is set, so nothing is ever hidden from you when you go looking for it by name. A row found that way says which switch it is waiting on, so changing it never looks like it did nothing.
+It shows that option's description in a small popover just below it, floating over the panel, so the rows stay where they are and the setting you are reading about is never hidden.
 
-Only **Save** keeps what you changed. Closing with the X or tapping outside discards it, so you can try things freely. Saved settings sync to your Lumiverse account, so they follow you to other browsers and devices, and they apply from the next reply onward. Long text boxes, like your word-swap rules, have an **Expand** button that opens a full-size editor.
+Where it opens is fixed per setting rather than decided as you go, so a description is always in the same place. The one exception is **What the notes say**, which opens above: that row holds the whole note list, its roles, its buttons and its counter, so below it would be a long way from the **?** you pressed.
+
+A description too long for the room on its side scrolls inside itself rather than jumping to the other side. Only one shows at a time. Tap the description, tap the **?** again, tap elsewhere, scroll the panel, or press Esc to close it.
+
+## Rows that come and go
+
+A setting that does nothing until something else is switched on is not shown until it is. Whole sections work that way too: turning **It looks like an accidental refusal** off takes the entire **Refusal tuning** section with it, heading included, because nothing under it does anything meanwhile. Turning **Send a note with a refusal retry** on adds the note rows, and off takes them away again.
+
+The switch doing the hiding never moves itself.
+
+The search box ignores all of this and finds a setting whichever way its switch is set, so nothing is hidden from you when you go looking by name. A row found that way says which switch it is waiting on, so changing it never looks like it did nothing.
+
+## Saving
+
+Only **Save** keeps what you changed. Closing with the X or tapping outside discards it, so you can try things freely.
+
+Saved settings sync to your Lumiverse account, so they follow you to other browsers and devices, and they apply from the next reply onward. Long text boxes, like your word-swap rules, have an **Expand** button that opens a full-size editor.
 
 ## Turning it off everywhere
 
@@ -77,13 +93,29 @@ Changing this moves the panel as you pick, before you save. Closing the settings
 
 To open it: **Extras → Open the Auto Retry panel**, next to the settings entry. On a computer **Ctrl+K** and typing `Auto Retry` does the same. Neither is offered while the panel is floating, where it is already on screen.
 
-Under the tabs is a line saying what is happening this second, with a dot beside it. The dot is dim and flat when Auto Retry is off or paused, lit and still when it is on with nothing to do, and pulsing while something is actually happening, so a glance at the corner answers the question without reading the line. The pulse is dropped if your system asks for less movement; the glow stays. It sits above all three tabs because the answer is the same whichever one you are reading, and because none of them answered it: the Log says what already happened and the Stats say what has happened overall. It counts down a pending retry in hours, minutes and seconds as each is needed (`47s`, `5m 03s`, `1h 05m 03s`), names what the retry is for and which try it is, says when a reply is arriving and roughly how much of it has landed, says when the model is thinking, and says when it has paused itself after repeated failures. When nothing is happening it says so. A retry running in a chat you have since moved away from is still reported, marked as being in another chat.
+### The line under the tabs
+
+It says what is happening this second, with a dot beside it. It sits above all three tabs because the answer is the same whichever one you are reading, and because none of them answered it: the Log says what already happened, the Stats say what has happened overall.
+
+The dot is dim and flat when Auto Retry is off or paused, lit and still when it is on with nothing to do, and pulsing while something is actually happening, so a glance at the corner answers the question without reading the line. The pulse is dropped if your system asks for less movement; the glow stays.
+
+What the line reports:
+
+- a pending retry, counted down in hours, minutes and seconds as each is needed (`47s`, `5m 03s`, `1h 05m 03s`)
+- what that retry is for, and which try it is
+- a reply arriving, and roughly how much of it has landed
+- the model thinking
+- the extension having paused itself after repeated failures
+
+When nothing is happening it says so. A retry running in a chat you have since moved away from is still reported, marked as being in another chat.
 
 The line and the pop-up read from the same place, so they never disagree. Both stop the moment the panel is closed, so nothing is being redrawn for a panel nobody is looking at.
 
 **Log** is what the extension is doing as it happens: generations starting, retries and why, replies that came back fine, notes going out.
 
-**Stats** is what it has been doing since you opened the tab: replies that came back fine, retries fired, messages it gave up on, and a breakdown of what it retried for, with a bar for each so the shape reads at a glance. **Watching for** counts up while you are looking at it, in the same `1h 05m 03s` form as everything else here. It also says how often a reply needed a retry at all, and tells you when it has paused itself after repeated failures, which is the state that otherwise looks like it having stopped working. **Clear** on this tab starts the counting again.
+**Stats** is what it has been doing since you opened the tab: replies that came back fine, retries fired, messages it gave up on, and a breakdown of what it retried for, with a bar for each so the shape reads at a glance.
+
+**Watching for** counts up while you are looking at it, in the same `1h 05m 03s` form as everything else here. It also says how often a reply needed a retry at all, and tells you when it has paused itself after repeated failures, which is the state that otherwise looks like it having stopped working. **Clear** on this tab starts the counting again.
 
 **Prompt** is the whole prompt that went to the model. Every message in order, with its role, how large it is, and whether it came from your chat or was added around it. Tap one to read it.
 
@@ -95,7 +127,9 @@ This is what actually went, after your setup, your world info, your persona and 
 
 Switching tabs works by tapping, and from a keyboard with the left and right arrows.
 
-The prompt is only captured while the Prompt tab is actually open. Switch to Log, close the panel, or close the tab, and nothing is captured at all. That is why there is no separate switch for it: a setting left on would go on paying for itself in every chat long after you looked once. What is captured is captured on your device and shown to you. Nothing is sent anywhere, nothing is written to disk, and it goes when you close the tab. A very long prompt is trimmed for display and says so rather than showing you part of it silently.
+The prompt is only captured while the Prompt tab is actually open. Switch to Log, close the panel, or close the tab, and nothing is captured at all. That is why there is no separate switch for it: a setting left on would go on paying for itself in every chat long after you looked once.
+
+What is captured is captured on your device and shown to you. Nothing is sent anywhere, nothing is written to disk, and it goes when you close the tab. A very long prompt is trimmed for display and says so rather than showing you part of it silently.
 
 The same options live in the CONFIG block at the top of `src/frontend.ts` and `dist/frontend.js`. `dist/frontend.js` is the file the host actually loads, so editing CONFIG there takes effect with no rebuild; editing `src/frontend.ts` needs a `bun run build`.
 

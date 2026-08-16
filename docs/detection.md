@@ -4,7 +4,11 @@ This page covers the two checks that look at the text of a finished reply. The o
 
 ## Cut-off detection
 
-A reply that streams real text and then gets chopped off mid-sentence is easy to miss. Lumiverse does not tell an extension *why* a reply ended, so this works off the shape of the text instead. `retryOnTruncated` (on by default) treats a reply as cut off when its structure is left open. Reasoning blocks are removed before these are counted, so punctuation inside a model's thinking cannot unbalance them; a reasoning block left open with no close still counts as cut off. This does not depend on the **Ignore the thinking / reasoning** option, which applies to refusal matching only. The checks:
+A reply that streams real text and then gets chopped off mid-sentence is easy to miss. Lumiverse does not tell an extension *why* a reply ended, so this works off the shape of the text instead. `retryOnTruncated` (on by default) treats a reply as cut off when its structure is left open.
+
+Reasoning blocks are removed before these are counted, so punctuation inside a model's thinking cannot unbalance them. A reasoning block left open with no close still counts as cut off. This does not depend on the **Ignore the thinking / reasoning** option, which applies to refusal matching only.
+
+The checks:
 
 - an unclosed code block or inline backtick
 - markup left open: a container never closed, a tag with no closing bracket, a comment with no end (see below)
@@ -19,9 +23,15 @@ Inline HTML is removed before any of this is counted. Models colour their dialog
 
 Every check above the last one is about prose: dialogue left open, a sentence stopping on a comma, an emphasis run with no partner. Two things are not prose and are left out of that counting.
 
-The first is code, which is full of the same characters meaning something else, so what is inside a code fence or an inline backtick span is not counted. One `const a = b * 2;` in a snippet used to read as an opened emphasis run and re-roll a finished answer. The fences and the backticks themselves are counted first, while they are still there, so a reply cut off inside a code block is still caught. A reply that is nothing but a code block is a finished reply.
+The first is code, which is full of the same characters meaning something else, so what is inside a code fence or an inline backtick span is not counted. One `const a = b * 2;` in a snippet used to read as an opened emphasis run and re-roll a finished answer.
 
-The second is anything inside an HTML container that closed. The model reached the closing tag, so nothing in there was cut off and none of it can say whether the reply was. Cards that render a whole interface every reply, a chat window or a profile card, put dozens of nested `div`s of text into the reply, and that text is not written like prose: a height written `6'2"` is a single unpaired quotation mark, and it flipped the count for every properly closed piece of dialogue around it. Nothing is lost by trusting a closing tag, because a reply cut off inside a widget never reaches one, which leaves the container open and is read as cut off below. Prose after a widget is still prose, so a reply that renders its card and then stops mid-sentence is still caught.
+The fences and the backticks themselves are counted first, while they are still there, so a reply cut off inside a code block is still caught. A reply that is nothing but a code block is a finished reply.
+
+The second is anything inside an HTML container that closed. The model reached the closing tag, so nothing in there was cut off and none of it can say whether the reply was.
+
+Cards that render a whole interface every reply, a chat window or a profile card, put dozens of nested `div`s of text into the reply, and that text is not written like prose: a height written `6'2"` is a single unpaired quotation mark, and it flipped the count for every properly closed piece of dialogue around it.
+
+Nothing is lost by trusting a closing tag, because a reply cut off inside a widget never reaches one, which leaves the container open and is read as cut off below. Prose after a widget is still prose, so a reply that renders its card and then stops mid-sentence is still caught.
 
 A row of asterisks with space on either side is not emphasis either. `Mood: ***`, printed by a card as a gauge, and a line of them used as a divider both stopped counting. Emphasis has to touch the words it marks, so `*He nods*` and `**bold**` are unaffected.
 
@@ -61,7 +71,9 @@ comes out with balanced quotes, ends on punctuation, and would otherwise read as
 
 A `<` someone typed in a scene is not a tag, so `if x<y then` and `the value was < 5` are left alone.
 
-Cards also ask for a planning or bookkeeping block wrapped in a tag of their own making. A reply cut off inside one of those is the hardest case here, because the text inside can end on a full stop with its quotation marks balanced, so nothing about the shape of the reply says anything is wrong. Such a tag counts when it is alone on its line and its name is not one HTML has: both together, because every HTML element already has a rule above, and a word in angle brackets inside a sentence is how people write an emote.
+Cards also ask for a planning or bookkeeping block wrapped in a tag of their own making. A reply cut off inside one of those is the hardest case here, because the text inside can end on a full stop with its quotation marks balanced, so nothing about the shape of the reply says anything is wrong.
+
+Such a tag counts when it is alone on its line and its name is not one HTML has: both together, because every HTML element already has a rule above, and a word in angle brackets inside a sentence is how people write an emote.
 
 An unclosed reasoning block counts too, and it reads the same list of names as the stripper, so the built-in set and anything you add under **Extra thinking tag names** are both covered.
 
@@ -92,15 +104,15 @@ Curly and straight apostrophes are treated the same, and only replies short enou
 
 A line inside quotation marks is a character speaking, so it is not counted as the model refusing. `"I can't help with that," the innkeeper muttered` is dialogue and is left alone; the same sentence with no quotes around it is a refusal and is retried.
 
-What counts as inside is worked out by counting the quotation marks between the start of the line and the match. An odd number means one was opened and not closed, so the match is inside it; an even number means every quotation before it on that line has been closed and the match is outside them all. A line break ends every quotation, so a refusal in its own paragraph is never read as speech from the paragraph above it. An apostrophe is not a quotation mark, so contractions play no part.
+What counts as inside is worked out by counting the quotation marks between the start of the line and the match. An odd number means one was opened and not closed, so the match is inside it. An even number means every quotation before it on that line has been closed and the match is outside them all.
 
-This applies to the built-in lists only. Phrases you add under **Your own refusal phrases** are counted wherever they appear, quoted or not, because you put them there on purpose.
+A line break ends every quotation, so a refusal in its own paragraph is never read as speech from the paragraph above it. An apostrophe is not a quotation mark, so contractions play no part.
 
 Turn it off with **Ignore refusals inside quotation marks** if your model puts its own refusals in quotes. Almost none do.
 
-Switching it off reaches the phrase list and the patterns, and nothing else. Three things are outside it:
+Switching it off reaches the built-in phrase list and the patterns, and nothing else. Three things are outside it:
 
-- **Your own phrases**, which are counted wherever they appear either way, because you put them there on purpose.
+- **Your own phrases** under **Your own refusal phrases**, which are counted wherever they appear either way, quoted or not, because you put them there on purpose.
 - **The dialogue tag.** `I'm going to stop now, he said` is speech with the marks left off, and that rule is about the attribution rather than about quotation marks. No model writes "he said" after its own refusal.
 - **[Stopping to offer support](#stopping-to-offer-support)**, which ignores quoted lines whatever this switch says. No model wraps that message in quotation marks, since it is addressed to you rather than spoken by anybody, so switching this off could never help that check find a real one. What it would do is stop a character in the scene whose job is to say these things, a doctor or a counsellor, from being told apart from the model.
 
@@ -114,7 +126,9 @@ This is the riskiest thing the extension looks for, because most of these are th
 - It cannot be inside quotation marks.
 - It cannot have a dialogue tag behind it. `I'm going to stop now, he said, and pulled the cart over` is speech with the quotes left off.
 
-It also catches the closing offer, which is how most of these replies sign off: the scene is not coming back, so here is a menu instead. "Is there something else I can help you with, or a different kind of story you'd like to explore?" Each of these needs the model's own object beside it, a different story, another direction, something instead, because the bare line is what every shopkeeper in every tavern scene says, and in script format it carries no quotation marks for the rule above to catch. If your model signs off with the bare line, add it under **Your own refusal phrases**, where it is matched wherever it appears.
+It also catches the closing offer, which is how most of these replies sign off: the scene is not coming back, so here is a menu instead. "Is there something else I can help you with, or a different kind of story you'd like to explore?"
+
+Each of these needs the model's own object beside it, a different story, another direction, something instead. The bare line is what every shopkeeper in every tavern scene says, and in script format it carries no quotation marks for the rule above to catch. If your model signs off with the bare line, add it under **Your own refusal phrases**, where it is matched wherever it appears.
 
 The same tier catches the reply that sorts out what you meant instead of writing. The model reads your message as a question with more than one answer, lays out the readings, and ends by asking which one you were after: "if you meant something else, could you clarify what you're looking for?" It always ends on that question, which is why it lives here, where the tail rule and the quotation rule are already doing the work.
 
@@ -132,10 +146,13 @@ It takes two agreeing signals to count, and they are drawn from three groups:
 
 - **The model addressing you rather than your character.** "What you've shared is deeply concerning", "if you or someone you know is in immediate danger", "here are some resources that may be able to help", "you are not alone, and there are people who care about you", "you deserve support", "please reach out to one of these resources". The line that announces the list belongs here too, and it is the most reliable tell in the whole message: a reply carrying a list of services always introduces it, and nothing in a scene introduces one. So does the sign-off underneath the list, "please take care of yourself", and the sentence where the model says out loud that it is stepping out of the roleplay.
 - **The furniture that comes with one.** A crisis line by name or by number, a helpline, a national hotline however it is abbreviated, a mental health professional, emergency services, a trusted adult, someone you trust.
-
 - **Comfort.** "You are not alone, and there are people who care about you", "you don't have to go through this alone", "your safety matters", "I care about you", "if you feel unsafe". These belong to the message too, but every one of them is also a line a character says, and in the kind of scene somebody switches this on for, they do.
 
-The deciding signal always has to come from the first group. Comfort and services can only ever agree with it, never carry it on their own. That is what separates the message from the scene: a man crouching beside somebody to say she does not have to go through this alone, and that her safety matters, is two hits of pure comfort and no model at all. So is a nurse saying that if she feels unsafe at home there are people who can help. Neither of them fires. The quotation rule applies on top, as it does everywhere else, which is what keeps a therapist in the scene from reading as the model.
+The deciding signal always has to come from the first group. Comfort and services can only ever agree with it, never carry it on their own.
+
+That is what separates the message from the scene: a man crouching beside somebody to say she does not have to go through this alone, and that her safety matters, is two hits of pure comfort and no model at all. So is a nurse saying that if she feels unsafe at home there are people who can help. Neither of them fires.
+
+The quotation rule applies on top, as it does everywhere else, which is what keeps a therapist in the scene from reading as the model.
 
 It is the one check **Longest reply to treat as a refusal** does not apply to. That limit exists because a refusal is short, and one of these is the opposite: several paragraphs and a list. Held to the limit it would almost never be looked at, and the limit would look like it was working.
 
@@ -163,7 +180,9 @@ Only the final reply is ever checked for a refusal, never the model's thinking. 
 | Pipes | `<\|think\|>` … `<\|/think\|>`, and `<\|think>` … `<think\|>` |
 | Channels | `<\|channel\|>analysis<\|message\|>` … `<\|end\|>` |
 
-The channel form is the one models trained on the Harmony format use. It has no closing tag of its own: the reasoning runs until the next control token. Only the thinking channels are removed. The `final` channel is the visible reply and is kept, along with anything outside a block. So if a model weighs a refusal while reasoning but then writes a normal reply, nothing is re-rolled. If a refusal ends up in the actual reply, it is caught as usual, and if the model reasons and then produces nothing, that is handled by the empty-reply retry instead.
+The channel form is the one models trained on the Harmony format use. It has no closing tag of its own: the reasoning runs until the next control token. Only the thinking channels are removed. The `final` channel is the visible reply and is kept, along with anything outside a block.
+
+So if a model weighs a refusal while reasoning but then writes a normal reply, nothing is re-rolled. If a refusal ends up in the actual reply, it is caught as usual, and if the model reasons and then produces nothing, that is handled by the empty-reply retry instead.
 
 If your model wraps its thinking in an unusual tag the built-in set misses, add its name under **Extra thinking tag names** in the refusal tuning section, one per line, just the name (no brackets or pipes). A name you add works in all four forms above. You can turn the whole thing off with **Ignore the thinking / reasoning**, though leaving it on is the safe default.
 
@@ -189,7 +208,9 @@ Off by default. Every other retry re-sends your request exactly as it was, and s
 
 Turn on **Send a note with a refusal retry** in the refusal tuning section and write the note in the box below it. Whatever you type is sent exactly as written. Nothing is added to it, nothing is removed, and nothing in it is checked.
 
-**You can send more than one.** The **+** button adds another note and **−** removes it, up to ten. They go out together, in the order you wrote them, so a note can answer the one before it: a system note explaining the scene, then a line in the character's voice picking it back up, then a line from you asking it to continue. Each note carries its own role. An empty note is skipped, so a half-filled list is not a trap, and nothing is sent at all when they are all empty.
+**You can send more than one.** The **+** button adds another note and **−** removes it, up to ten. They go out together, in the order you wrote them, so a note can answer the one before it: a system note explaining the scene, then a line in the character's voice picking it back up, then a line from you asking it to continue.
+
+Each note carries its own role. An empty note is skipped, so a half-filled list is not a trap, and nothing is sent at all when they are all empty.
 
 Ten is the ceiling because every note is a whole message added to the prompt on every refusal retry. Past that they stop reading as a note and start crowding out the scene they are meant to rescue. There is no floor beyond one: use fewer by adding fewer.
 
@@ -201,6 +222,7 @@ Two things belong to each note on its own, set on its row:
 Two things belong to the list as a whole, and apply to every note in it rather than to any one of them:
 
 - **Where the notes go.** Whichever notes are going are inserted together as one block, which is what lets one answer the one before it. **After the last message** puts them at the end, right before the point the reply continues from. **Before the last message** puts them one place earlier, so the newest line is still last. **At the very start** puts them ahead of everything, with the setup.
+- **Only send them on a regenerate or a swipe.** Whether any note is sent at all, rather than which. Off by default, for the reason below.
 
 What it does not do:
 
@@ -210,13 +232,17 @@ What it does not do:
 - It is scoped to one chat. A note armed in one chat is never attached to a generation in another.
 - It expires. A note nothing collects is dropped after 45 seconds, and if the retry click it was armed for turns out to have started nothing, it is taken back straight away rather than waiting that out. If there is no retry button on screen to click at all, nothing is armed in the first place.
 
-- **Only send them on a regenerate or a swipe.** Whether any note is sent at all, rather than which. Off by default, for the reason below.
-
-**A note about "Only send them on a regenerate or a swipe."** Lumiverse tells the extension what kind of generation is running, and earlier versions required that to say "regenerate" or "swipe" before attaching the note. Most builds report every generation as "normal", including a regenerate, so on those builds the note was armed, the retry ran without it, and nothing said so. That check is now a setting of its own and it is off by default. Turn it on only if your build reports the kind properly and you want the extra check; if your notes stop arriving after you turn it on, that is why. The guarantees above do not depend on it.
-
 This needs the `interceptor` permission, which is what lets an extension add to a prompt before it reaches the model. Without it granted the rest of the extension works and this one feature does nothing.
 
-**Where to check that it went.** Turn on the on-screen panel (**Basics**, **Show the on-screen panel**) and it writes a line saying the note was sent and how many went with it, on the retry it went with. That is the reliable answer.
+### Why "Only send them on a regenerate or a swipe" is off
+
+Lumiverse tells the extension what kind of generation is running, and earlier versions required that to say "regenerate" or "swipe" before attaching the note. Most builds report every generation as "normal", including a regenerate, so on those builds the note was armed, the retry ran without it, and nothing said so.
+
+That check is now a setting of its own and it is off by default. Turn it on only if your build reports the kind properly and you want the extra check; if your notes stop arriving after you turn it on, that is why. The guarantees above do not depend on it.
+
+### Where to check that it went
+
+Turn on the on-screen panel (**Basics**, **Show the on-screen panel**) and it writes a line saying the note was sent and how many went with it, on the retry it went with. That is the reliable answer.
 
 Do not expect to find it in **Prompt Breakdown**. The note is not a message in your chat: it is added to the prompt for one generation and thrown away, and the breakdown lists the things your chat is built from. The extension does label the note for the breakdown, so it may show up depending on your Lumiverse build, but it not being there does not mean the note was not sent. The log line is what tells you.
 
@@ -276,9 +302,7 @@ Alongside that list it also matches a few patterns that are not fixed phrases. B
 - **Policy or guideline wording.** "This goes against my guidelines." / "That violates our content policy."
 - **A refusal joined to a task word** (request, prompt, content, scenario, roleplay). "I can't continue this roleplay." / "I won't write that content." / "I'm unable to complete this request."
 - **Assistant-only verbs** (assist, comply, fulfill). "I can't assist with that." / "I'm unable to comply." / "I cannot fulfill this."
-- **A refusal that names what it refuses.** "I won't write content depicting X", "I can't create scenes involving X", "I don't write stories about X". Every other pattern here needs a meta object, a request or a prompt or a roleplay, and these replies use none: the subject itself is the object. The list of subjects covers what a model declines a roleplay over: explicit writing by every name it goes by, consent framings including dubious and non-consensual, kink and BDSM, the family framings read as incest whether or not they are, the ages a model decides a character is, content it calls illegal, and the horror side, which is graphic violence, gore, mutilation, body horror, animal cruelty and the rest. That list is words that turn up in refusal messages, kept so a refusal can be recognised as one. It is not a list of things the extension produces or helps anybody get: nothing in it reaches a prompt, and a match only decides that a reply was a refusal rather than writing, which makes the extension press regenerate. A model that means a refusal gives the same one back on the next attempt, and the cap ends it.
-
-Subjects are listed in the forms a refusal uses them in, not only as bare nouns, since a reply about somebody's past declines to write "a character is raped" rather than "rape". The subject on its own is never a signal, only ever the object of a refusal verb, so a kissing scene, a scene with rope in it, a stepbrother who resents his stepsister, a minor character in act two, somebody choking on smoke, a knife in the porch light, or a character telling you what was done to them are all left alone. Some words are kept out of the list entirely for the same reason: "violence" on its own, because a character says "I can't describe the violence", and "choking", because a scene can choke on smoke. That rule is what makes the list safe to keep wide.
+- **A refusal that names what it refuses.** "I won't write content depicting X", "I can't create scenes involving X", "I don't write stories about X". The subject list this one reads is described below.
 - **The refusal stated as a boundary**, with no "I can't" in the sentence at all. "What I won't do is write that scene." / "Here's what I can do: I can write it with the violence off the page instead." A meta object is required, so "What I won't do is leave you here" is left alone.
 - **An out-of-character comfort hedge.** "I don't feel comfortable continuing this." / "I don't feel comfortable writing that."
 - **A common apology-style refusal opener or body.** "I'm sorry, but I can't create that." / "That's not something I can help with." / "I'm not going to generate that content."
@@ -291,6 +315,28 @@ Subjects are listed in the forms a refusal uses them in, not only as bare nouns,
 Apologetic openings on their own ("I'm sorry", "Unfortunately", "I apologize") are **not** in any of these. They open as many ordinary replies as refusals, and a character apologising is one of the most common things in roleplay. They are only matched as part of a longer refusal, such as "I'm sorry, but I can't create that content."
 
 On the error side, when a reply comes back as an error rather than text, it matches content-block wording. Examples: "PROHIBITED_CONTENT", "Blocked by safety settings.", "finish_reason: safety". Ordinary network errors like "connection refused" are ignored.
+
+### The subject list
+
+Every pattern above except one needs a meta object, a request or a prompt or a roleplay. "A refusal that names what it refuses" is the exception: those replies carry no meta object, because the subject itself is the object.
+
+The subjects are what a model declines a roleplay over:
+
+- explicit writing by every name it goes by
+- consent framings, including dubious and non-consensual
+- kink and BDSM
+- the family framings read as incest whether or not they are
+- the ages a model decides a character is
+- content it calls illegal
+- the horror side: graphic violence, gore, mutilation, body horror, animal cruelty and the rest
+
+That list is words that turn up in refusal messages, kept so a refusal can be recognised as one. It is not a list of things the extension produces or helps anybody get. Nothing in it reaches a prompt, and a match only decides that a reply was a refusal rather than writing, which makes the extension press regenerate. A model that means a refusal gives the same one back on the next attempt, and the cap ends it.
+
+Subjects are listed in the forms a refusal uses them in, not only as bare nouns, since a reply about somebody's past declines to write "a character is raped" rather than "rape".
+
+The subject on its own is never a signal, only ever the object of a refusal verb. So a kissing scene, a scene with rope in it, a stepbrother who resents his stepsister, a minor character in act two, somebody choking on smoke, a knife in the porch light, or a character telling you what was done to them are all left alone.
+
+Some words are kept out of the list entirely for the same reason: "violence" on its own, because a character says "I can't describe the violence", and "choking", because a scene can choke on smoke. That rule is what makes the list safe to keep wide.
 
 ---
 

@@ -51,7 +51,9 @@ Behind those it uses eight Lumiverse APIs and nothing else, and everything the e
 
 ### The note sent with a refusal retry
 
-That note is the only thing in the extension that changes what the model is asked, so it is worth being precise about. It carries the text you typed and nothing else: your prompt is not read, nothing is copied out of it, and nothing is stored. Nothing is written to your chat. Because it is never a message in your chat, it will not necessarily appear in Prompt Breakdown, which lists what your chat is built from; the extension labels it for that panel, but whether it shows depends on your Lumiverse build. To see for yourself what went out and when, turn on the on-screen panel, which writes a line naming the note on the retry that carried it.
+That note is the only thing in the extension that changes what the model is asked, so it is worth being precise about. It carries the text you typed and nothing else: your prompt is not read, nothing is copied out of it, and nothing is stored. Nothing is written to your chat.
+
+Because it is never a message in your chat, it will not necessarily appear in Prompt Breakdown, which lists what your chat is built from. The extension labels it for that panel, but whether it shows depends on your Lumiverse build. To see for yourself what went out and when, turn on the on-screen panel, which writes a line naming the note on the retry that carried it.
 
 It is put in place the moment before the extension clicks your retry button, and four things keep it to that one generation:
 
@@ -82,11 +84,18 @@ It reads a reply only to run its checks on the one that just arrived, and it doe
 
 Your settings and your word-swap presets are saved twice over: once in your browser's local storage, and once in Lumiverse's own per-user storage so they follow your account between devices. That is the only thing that reaches your account.
 
-Two more things are written, and both stay in this browser. Where you left the on-screen panel and the floating button, which is two positions, a size and which tab was open, so an update does not put them back in the corner. And the list of chats you have switched Auto Retry off in, which is chat ids and nothing more: no titles and no text. Neither is synced and neither is included in an export, since a position on one screen and an id on one account mean nothing on another. That is everything written anywhere.
+Two more things are written, and both stay in this browser:
+
+- Where you left the on-screen panel and the floating button, which is two positions, a size and which tab was open, so an update does not put them back in the corner.
+- The list of chats you have switched Auto Retry off in, which is chat ids and nothing more: no titles and no text.
+
+Neither is synced and neither is included in an export, since a position on one screen and an id on one account mean nothing on another. That is everything written anywhere.
 
 Separately it keeps the last twenty lines of what it did, and a few counters for the session: replies that came back fine, retries fired, what they fired for, and how many happened in each chat, named where a name was available. That is all in memory, so the Copy debug info button has something to report. Both die with the tab. Neither is written to disk and neither leaves your device.
 
-The on-screen panel's **Prompt** tab is the one part that holds more than that, and only while you are looking at it. Opening that tab asks the extension to keep a copy of the prompt on its way to the model, which is the text of your chat, so that it can show it to you. Switch to another tab, close the panel, or close the browser tab and nothing is kept at all. It is never written to disk and never leaves your device, and only one prompt is held at a time: each generation replaces the last. This is why there is no separate switch to leave on and forget about.
+The on-screen panel's **Prompt** tab is the one part that holds more than that, and only while you are looking at it. Opening that tab asks the extension to keep a copy of the prompt on its way to the model, which is the text of your chat, so that it can show it to you.
+
+Switch to another tab, close the panel, or close the browser tab and nothing is kept at all. It is never written to disk and never leaves your device, and only one prompt is held at a time: each generation replaces the last. This is why there is no separate switch to leave on and forget about.
 
 ## One thing to be careful with
 
@@ -94,7 +103,9 @@ Nothing in this section leaves your device by itself. All three are buttons that
 
 The Copy debug info button gathers your settings, your button selectors, your browser string, the session counters, and that recent activity log. The activity log records what the extension saw, so it can contain short fragments of a reply. Read what you copied before pasting it somewhere public, and untick any section you would rather keep to yourself. The tick boxes are there for exactly that.
 
-The **Copy** button on the on-screen panel is the same thing in miniature, and it takes everything the tab is showing. On the Log tab that is the whole activity log in one tap, fragments included, and on the Prompt tab the entire prompt, which is most of your chat. The Stats tab is the safe one: counters and the names of what it retried for, no text from any reply. It is there because selecting text by hand on a phone is awkward, and the same advice applies before you paste any of it anywhere.
+The **Copy** button on the on-screen panel is the same thing in miniature, and it takes everything the tab is showing. On the Log tab that is the whole activity log in one tap, fragments included, and on the Prompt tab the entire prompt, which is most of your chat. The Stats tab is the safe one: counters and the names of what it retried for, no text from any reply.
+
+It is there because selecting text by hand on a phone is awkward, and the same advice applies before you paste any of it anywhere.
 
 The refusal tester in the settings panel only reads the text in its box. **Use my last reply** fills that box by reading the reply rendered on the page at the moment you press it, which is the same reply the extension already reads to run its checks. Nothing is kept between replies. It runs the check on your device and reports the verdict; it sends nothing and stores nothing.
 

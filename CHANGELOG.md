@@ -255,7 +255,6 @@ What has not started counting: a `<` someone typed in a scene, `if x<y`, a bare 
 - **Extra dialog buttons is behind a switch now, and off.** Its own description said "almost nobody needs this", and it sat in the panel anyway, one more box to wonder about. **My dialog's button says something else** reveals it. The built-in list, which knows Skip, Regenerate, Confirm, Proceed, Submit and OK, is used either way, so nothing about retrying changes. The switch genuinely gates the box rather than only hiding it: a hidden box whose contents were still being pressed would be the panel saying one thing and doing another. If you already had wording typed in there, the switch was turned on for you, so nothing you set has stopped working.
 - **The two note settings that are not per note now sit under a heading saying so.** The list gives every note a role and a try to start on, which made the two settings underneath it look like more of the same. They are not: where the block goes and whether it is sent at all are set once and apply to whichever notes are due. **For the whole list** now sits above them and says which is which.
 
-
 ### Fixed
 
 - **A card that prints a tracker no longer has every reply thrown away.** 4.4.0 turned **Retry when a reply has no ending punctuation** on by default, and a tracker is the one shape that check was worst at. A weather box, a stat block, a status line, a table: none of them end on a full stop, so the reply read as cut off mid-sentence, the retry ended the same way, and it went round until the cap stopped it. A reply that ends on a block ends on a block. Closing HTML, a markdown table row and a run of two or more label lines like `HP: 20/20` all count as an ending now. Prose that stops mid-sentence after a tracker is still caught, and a single line with a colon in it is still an ordinary sentence, since a tracker never has only the one field.
@@ -316,7 +315,6 @@ _2026-08-06_
 
 - **The separate Start the note on try setting.** Replaced by a **from try** box on each note, which is what lets a list escalate. Your existing value is carried onto every note you already had.
 - **The separate Reset button selectors button.** It existed because resetting everything to fix one mistyped selector was too blunt. The picker covers that properly: tick **Button selectors** and nothing else.
-
 
 ## 4.3.0
 

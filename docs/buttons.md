@@ -6,7 +6,9 @@ There are three button fields: **regenerate** (redo a reply), **next / swipe** (
 
 By default a retry uses the regenerate button, which on some builds redoes the reply in place and clears the other rerolls on that message. If you'd rather keep those rerolls, turn on **Retry by adding a new reroll** (at the end of "How it retries" in settings). A retry then clicks the next / swipe button, which adds a new reroll and leaves the existing ones in place.
 
-Whichever button the toggle prefers, the other one is the fallback, and the choice is made at the moment of the click from what is on screen and actually clickable. A button that is present but disabled or hidden is skipped rather than clicked, since clicking one of those does nothing and would burn a retry. This applies to every reason a retry fires, including empty replies and errors, so the toggle does what it says on all of them. Set the **next / swipe** selector below if retries stop happening after you turn it on.
+Whichever button the toggle prefers, the other one is the fallback, and the choice is made at the moment of the click from what is on screen and actually clickable. A button that is present but disabled or hidden is skipped rather than clicked, since clicking one of those does nothing and would burn a retry.
+
+This applies to every reason a retry fires, including empty replies and errors, so the toggle does what it says on all of them. Set the **next / swipe** selector below if retries stop happening after you turn it on.
 
 ## Setting the buttons without writing a selector
 
