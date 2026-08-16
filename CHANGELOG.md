@@ -16,7 +16,7 @@ _2026-08-15_
 
 - **What a model refuses a horror roleplay over.** A slasher scene is an ordinary thing to write on a roleplay app, and two of eighteen refusal wordings were caught before this: graphic violence, gore, mutilation, dismemberment, body horror, animal cruelty, violence against children, a violent death, depictions of harm, a murder scene, stalking, and declining to play a real person. "Violence" on its own is not in the list, because "I can't describe the violence" is a line somebody says in a scene, so the qualified forms are listed instead.
 - **A subject in the form a refusal about a backstory uses.** The list held the bare nouns, so a reply declining to write "a character is raped" or "her being sexually assaulted" or "him being tortured" walked past every pattern, which is the wording that comes up when somebody is asking a character about their past. The endings are spelled out rather than left to a wildcard, so a rapeseed field is still a field, and the forms that drop a letter are written separately. Somebody telling a character what happened to them is left alone, in seven checks that use the same words.
-- **Ten slasher scenes that must survive it**, since that is the same knife-edge: a knife in the porch light, someone stalking through the corn, blood on the stairs, a character who cannot describe the murder because it was too fast. And twenty more for the rest of it. A kissing scene, someone asking first, rope on a table, a power exchange with rules on the fridge, a stepbrother resenting his stepsister, the minor character in act two, somebody choking on smoke, the grooming of the horses. Every one of them contains a word from the list above, and none of them is a refusal, because a subject only ever counts as the object of a refusal verb. That rule is what lets the list be as wide as it is.
+- **None of it costs you a scene that only sounds like one.** A knife in the porch light, someone stalking through the corn, blood on the stairs, a kissing scene, someone asking first, rope on a table, a stepbrother resenting his stepsister, the minor character in act two, somebody choking on smoke, the grooming of the horses. Every one of those carries a word from the lists above and none of them is a refusal, because a subject only ever counts as the object of a refusal verb. That rule is what lets the lists be as wide as they are.
 - **The refusal aimed at a kind of writing.** "I cannot generate sexually explicit content or graphic descriptions of that." One word hid it: the pattern read whatever word followed the verb, and its list held "sexual" while the reply said "sexually", so the adverb was enough to walk past the whole thing. There is room for the adjectives that stack up in front now, and the noun still has to be one a model uses about its own output.
 - **Every kind of writing a model refuses a roleplay over.** The subjects it names were checked as a sweep rather than one at a time, which turned up a category that matched nothing at all: kink. BDSM, bondage, degradation, breath play, ageplay, power exchange, the word kink itself. Also explicit writing under every name it goes by, smut and erotica among them; consent framings including dubious, unclear and non-consensual; the family framings a model reads as incest whether or not they are; a character it decides is underage; and content it calls illegal. Thirty-one wordings across five categories, and every one of them is a check.
 - **The lesser version it offers instead.** "I can, however, continue the narrative with a focus on the dialogue," and "let me know if you would like to proceed with that approach". Nobody in a scene talks about continuing the narrative.
@@ -57,7 +57,7 @@ _2026-08-15_
 
 ### Changed
 
-- **Stats counts a refusal under the cause that produced it.** Everything the refusal side caught landed on one line, so the tab could tell you that a hundred replies were refused and nothing about what to do next. There are four lines now: the model declined, the model broke off rather than declining, the model left the scene to offer support, and the provider blocked it before a reply was written. Each points at a different switch. All four take the same retry, the same cap and the same note, and a check holds the list of them against the one place that decides whether the note is sent, since a fifth added and not listed there would silently stop sending it.
+- **Stats counts a refusal under the cause that produced it.** Everything the refusal side caught landed on one line, so the tab could tell you that a hundred replies were refused and nothing about what to do next. There are four lines now: the model declined, the model broke off rather than declining, the model left the scene to offer support, and the provider blocked it before a reply was written. Each points at a different switch, and all four take the same retry, the same cap and the same note. This is what tells you whether the support check is worth having on, which matters more there than anywhere else, since it is the one check you turn on yourself.
 
 ### Fixed
 
@@ -69,11 +69,9 @@ _2026-08-15_
 
 ### Added
 
-- **It can retry a reply where the model stops the scene to offer you real-world support.** Some replies do not decline anything and do not break off either: they stop being the story and become a message to the person at the keyboard, saying that what you have written is concerning, that you are not alone, and that you should talk to a professional, usually with a list of services under it. In a scene about something heavy that is normally the model reading your fiction as a report about your life, and it takes the scene away at the worst moment. **Also catch it stopping to offer support**, under Refusal tuning, throws that reply away and asks for another. It is off unless you turn it on, and ticking it opens a warning that has to be answered before it goes on, because this is the one check in the extension that decides whether a particular message reaches you. Read [Safety](docs/safety.md) before switching it on. It takes two agreeing signals, at least one of them the model addressing you rather than your character, and it never counts a line inside quotation marks, so a character in the scene saying something kind is left alone. It is the one check **Longest reply to treat as a refusal** does not apply to: that limit is built around a refusal being short, and one of these is the opposite.
-- **The warning links straight to the safety page.** Telling somebody to go and read something, in a box they have to answer to get out of, works out to telling them not to bother, so it is a link and it opens in its own tab. It is the only address the extension points at, and drawing it fetches nothing.
-- **The published crisis wordings of the three big assistants**, rather than the shapes one of them happens to use. Roughly forty more, on both sides: the support message, and the ordinary refusal openings that come with it.
-- **Comfort no longer decides on its own.** The support check needed two agreeing signals, and two warm sentences were two signals, so a man crouching beside somebody to say she did not have to go through this alone, and that her safety mattered, came out as the model. Warmth is a register a character uses. The signal that decides is now always one a character does not use, and comfort and service names can only agree with it.
-- **More of the shapes that message arrives in.** The line that introduces the list of services, which is the most reliable tell there is. "If you or someone you know is in immediate danger", where the earlier pattern only knew the sentence with you as the subject throughout. Being pointed at the list rather than at a person. National hotlines however the model abbreviates them, and the same services with nothing in front of them, which is how a list written as bullet points names them. And "someone you trust".
+- **It can retry a reply where the model stops the scene to offer you real-world support.** Some replies do not decline anything and do not break off either: they stop being the story and become a message to the person at the keyboard, saying that what you have written is concerning, that you are not alone, and that you should talk to a professional, usually with a list of services under it. In a scene about something heavy that is normally the model reading your fiction as a report about your life, and it takes the scene away at the worst moment. **Also catch it stopping to offer support**, under Refusal tuning, throws that reply away and asks for another.
+- **It is off unless you turn it on, and ticking it opens a warning that has to be answered first.** This is the one check in the extension that decides whether a particular message reaches you, and the only setting in the panel that asks before it takes effect. The warning links straight to [Safety](docs/safety.md), because telling somebody to go and read something, in a box they have to answer to get out of, works out to telling them not to bother. That link is the only address the extension points at, and drawing it fetches nothing.
+- **What it takes to fire.** Two agreeing signals, at least one of them the model addressing you rather than your character. Comfort and the names of services can only ever agree with a signal, never carry one on their own, since warmth is a register a character uses: a man crouching beside somebody to say she does not have to go through this alone is not the model. A line inside quotation marks is never counted either. It is the one check **Longest reply to treat as a refusal** does not apply to, because that limit is built around a refusal being short and one of these is the opposite.
 - **A safety page in the docs.** Who this is built for, what the support check can and cannot know, what retrying does when it is pointed at a reply somebody did not want to hear, how to reset or remove every part of it, and a closing note for anyone using it for something other than the writing.
 
 ### Changed
@@ -83,11 +81,11 @@ _2026-08-15_
 - **And the closing offer it signs off with.** "Is there something else I can help you with, or a different kind of story you'd like to explore?" The bare line without the offer of a different story is left out, because that is what every shopkeeper in every tavern scene says, and in script format it has no quotation marks to give it away. Add it under **Your own refusal phrases** if your model uses it.
 - **And the reply that sorts out what you meant instead of writing.** The model reads your message as a question with several answers, lays them out, and ends by asking which you were after. It rides on the breaking-off check, since it always ends on that question, so the switch that turns that off turns this off with it.
 - **So is the flat no.** Some models do not soften it at all: the reply opens with "No." and then says what it will not write. Nothing in the list saw those, because every pattern in it starts at "I". It only counts at the very start of a reply and still needs an object no character has, so "No. I can't tell you that story" is left alone and "No. I won't write a scene like that" is not.
-- **Retries caused by the support check are counted under their own name** on the Stats tab, apart from ordinary refusals, so switching it on comes with a way to see how often it is firing rather than a guess.
+- **The published crisis wordings of the three big assistants** are in the built-in list, rather than the shapes one of them happens to use. Roughly forty more, on both sides: the support message, and the ordinary refusal openings that come with it.
 
 ### Fixed
 
-- **Switching off "Ignore refusals inside quotation marks" took two other rules with it.** That switch is for a model that wraps its own refusals in quotation marks, and it now reaches the phrase list and the patterns and nothing else. The support check ignores quoted lines whatever it says, because no model wraps that message in quotation marks and switching it off could only stop a doctor or a counsellor in the scene from being told apart from the model. The dialogue tag rule stays on too, since it is about an attribution rather than about quotation marks.
+- **Switching off "Ignore refusals inside quotation marks" took the dialogue tag rule with it.** That switch is for a model that wraps its own refusals in quotation marks, and it now reaches the phrase list and the patterns and nothing else. The dialogue tag rule stays on, since it is about an attribution rather than about quotation marks. The support check added above ignores quoted lines whatever the switch says, for the same reason: no model wraps that message in quotation marks, so switching it off could only stop a doctor or a counsellor in the scene from being told apart from the model.
 - **A refusal standing between two pieces of speech on one line was read as dialogue.** The quotation rule looked for the nearest mark behind the match and any mark ahead of it, which is the right answer on a line carrying one piece of speech and the wrong one on a line carrying two: `"Go on," he said. I can't help with that. "Please," she said.` found the closing mark of the first speech behind it and the opening mark of the second ahead of it, and left the refusal alone. It counts the marks between the start of the line and the match now, and an odd number is what puts the match inside a quotation.
 - **A note written rather than spoken read as the model breaking off.** The breaking-off check ignores a match with a dialogue tag behind it, because that is speech with the quotation marks left off, and the list of tags it knew had no writing verbs in it. "Let me know how you'd like to proceed, she wrote at the bottom of the letter" was thrown away as a result. A dozen more attributions are recognised now.
 
@@ -188,8 +186,7 @@ _2026-08-07_
 
 ### Fixed
 
-- **Copy now takes everything the tab is showing.** It was leaving things out, and the things it left out were the ones you would be copying the tab to report. On **Stats**: the refusal note counts, how often a reply needed a retry, the notice that it had paused itself, and the line saying nothing had needed a retry yet. On **Prompt**: the summary of how many messages and how large, the line saying how many notes went and where they landed, and the marking on the messages that carried them, so a copied prompt now says which message was a note instead of leaving you to guess. On **Log**, an empty log copied nothing at all rather than what it says on screen.
-- The two text builders are written separately from the views they describe, which is how they drifted in the first place. A check now reads what is on screen and asks whether the clipboard has it, so a line added to a view and forgotten here fails by name.
+- **Copy now takes everything the tab is showing.** It was leaving things out, and the things it left out were the ones you would be copying the tab to report. On **Stats**: the refusal note counts, how often a reply needed a retry, the notice that it had paused itself, and the line saying nothing had needed a retry yet. On **Prompt**: the summary of how many messages and how large, the line saying how many notes went and where they landed, and the marking on the messages that carried them, so a copied prompt now says which message was a note instead of leaving you to guess. On **Log**, an empty log copied nothing at all rather than what it says on screen. The text the button builds is written separately from the view it describes, which is how the two drifted apart in the first place.
 
 ## 4.5.4
 
@@ -245,7 +242,8 @@ What has not started counting: a `<` someone typed in a scene, `if x<y`, a bare 
 
 ### Changed
 
-- **The retry pop-up counts down instead of freezing.** It used to say "Retrying 2/5 (cut off) in 47.3s" once and go on saying it for the next forty-seven seconds, so the one number anyone actually watches was the one number that never moved. 4.4.0 raised the longest wait to a minute, which turned that from a small oddity into something that looks like the extension having stopped. It now reads **Cut off. Retrying in 47s (try 2 of 5)** and the number goes down. Whole seconds, because a figure twitching four times a second is noise. Longer waits get the units they need, `5m 03s` and then `1h 05m 03s`. That is one format across the whole extension now, so the countdown, the panel, the Stats tab and the message announcing a pause all say a length the same way. The pause after repeated failures is why hours are there at all: it can be set to three hours, and `180 minutes` leaves you doing the division. The smaller units keep their leading zero so the line does not change width as it counts, next to a Cancel button people are aiming at. The pop-up itself is not rebuilt to do it, so the Cancel button cannot be swallowed by a press landing mid-redraw.
+- **The retry pop-up counts down instead of freezing.** It used to say "Retrying 2/5 (cut off) in 47.3s" once and go on saying it for the next forty-seven seconds, so the one number anyone actually watches was the one number that never moved. 4.4.0 raised the longest wait to a minute, which turned that from a small oddity into something that looks like the extension having stopped. It now reads **Cut off. Retrying in 47s (try 2 of 5)** and the number goes down. Only the text is repainted, so the Cancel button next to it cannot be swallowed by a press landing mid-redraw.
+- **One way of writing a length, everywhere.** Whole seconds, because a figure twitching four times a second is noise, then `5m 03s` and `1h 05m 03s` as the wait grows. The countdown, the panel, the Stats tab and the message announcing a pause all say a length the same way now. Hours are there because the pause after repeated failures can be set to three of them, and `180 minutes` leaves you doing the division. Smaller units keep their leading zero so the line does not change width as it counts.
 - **The on-screen panel says what is happening this second.** A line under the tabs, with a dot that lights while something is going on. It counts down a pending retry, says when a reply is arriving and roughly how much has landed, says when the model is thinking, says when it has paused itself after repeated failures, and says when there is nothing to do. It sits above all three tabs because none of them answered that question: the Log says what already happened, the Stats say what has happened overall. A retry in a chat you have moved away from is still reported, marked as being in another chat. It and the pop-up read from the same place, so they cannot disagree.
 - **The Stats tab counts up as you watch it.** **Watching for** was rounded to the nearest minute and drawn once, so it read "1 minute" for the first ninety seconds of every session and then sat there until something else redrew the view. It reads `2h 23m 05s` now and it moves. The note saying it has paused itself counts down there too, and clears itself when the pause ends rather than counting past zero. Only those two lines are rewritten as they change, so the bars and the scroll position stay where they are.
 - **Switching off in one chat is only in the settings now.** It was in the floating button's menu as well, and that button sits over your chat: its menu gets opened to reach the settings or to move the button, and a per-chat switch sitting among those read as clutter every time. It is under **Basics**, on the **This chat** row, which is where it already was. Nothing about the feature itself changed. It was never reliably in that menu anyway: the entry was only drawn once a chat had been seen, and that only happens on a generation, so on a fresh page load it was missing until the first reply came through.
@@ -347,7 +345,8 @@ _2026-08-04_
 
 - **A filled button gets an outline when your theme's accent has all but vanished.** On a theme whose accent sits close to the panel colour, Save stayed readable but lost its edge, so nothing said it was a button. It now gets a border only when its fill has faded into the surface behind it. A theme with an ordinary accent is left exactly as it was, and the quieter secondary buttons keep the border your theme gives them.
 - **The panel says when Auto Retry itself is off.** It can be switched off from the floating button or the Extras menu without opening the settings, so it was possible to arrive here with it off and nothing saying why nothing was happening. A line at the top says so now. Nothing is hidden or greyed for it: off means paused rather than unconfigured, and setting things up while it is off is a normal thing to want to do.
-- **A setting that does nothing yet is no longer shown.** Options that only matter once something else is switched on are kept out of the panel until it is. Turning **Send a note with a refusal retry** on adds the note rows below it and turning it off takes them away, and the same goes for the short-reply threshold, the pause settings, the floating button's size, the phrase rewording and the re-swap option. The whole **Advanced: refusal tuning** section goes the same way: with **It looks like an accidental refusal** off, nothing under that heading does anything, so the heading goes too. The switch itself never moves, so nothing you need to find has gone anywhere. The search box ignores all of this and finds a setting whichever way its switch is set, and a row found that way says which switch it is waiting on, so changing it never looks like it did nothing. Only settings the extension genuinely ignores are hidden: the extra thinking tag names, for one, are still used to find the reply when the reasoning option is off, so they stay.
+- **A setting that does nothing yet is no longer shown.** Options that only matter once something else is switched on are kept out of the panel until it is. Turning **Send a note with a refusal retry** on adds the note rows below it and turning it off takes them away, and the same goes for the short-reply threshold, the pause settings, the floating button's size, the phrase rewording and the re-swap option. Whole sections go the same way: with **It looks like an accidental refusal** off, nothing under **Advanced: refusal tuning** does anything, so the heading goes too. The switch doing the hiding never moves itself.
+- **The search box ignores all of that** and finds a setting whichever way its switch is set, so nothing is hidden from you when you go looking by name. A row found that way says which switch it is waiting on, so changing it never looks like it did nothing. Only settings the extension genuinely ignores are hidden either way: the extra thinking tag names, for one, are still used to find the reply when the reasoning option is off, so they stay.
 - **A new permission, `interceptor`.** This is what lets an extension add to a prompt before it reaches the model, and it is the only way the note above can work. Without it granted, everything else in the extension works as before and the note is simply not sent.
 
 ### Fixed
@@ -383,7 +382,7 @@ _2026-08-02_
 - **The full-size editor, the live log and the retry pop-up were see-through.** Open the editor over the settings and you could read the rows behind it, Save included. All three were painted with a colour that is 90% opaque, meant to tint a surface rather than be one. Every panel that floats over something else is solid now.
 - **Five settings showed a number with no unit.** "Wait before the first retry" read 1200 with nothing saying whether that meant milliseconds, seconds or minutes, while "How long to pause (minutes)" right above it named its unit. All five say (ms) now.
 - **The retry pop-up covered the floating button's menu.** It sat above everything, so it could land on top of a menu you had just opened and turn a tap on "Hide this button" into a tap on Cancel. Things you open on purpose now sit above things that appear on their own.
-- **The menu's focus ring was a hard white rectangle.**, taken from the browser rather than your theme. It uses your accent colour now.
+- **The menu's focus ring was a hard white rectangle**, taken from the browser rather than your theme. It uses your accent colour now.
 - **Preset buttons that had nothing to act on.** With no presets saved, Load, Update selected, Delete and Rename selected were all lit, Load styled as the main action, and each one answered a press with a message telling you to pick a preset first. They wait until there is a preset to act on.
 
 ## 4.0.0
@@ -718,7 +717,7 @@ _2026-07-13_
 
 ### Added
 
-- **That cap can be set to 0 to turn it off entirely.**, so refusals are caught at any length. It stays safe because length alone never triggers a retry: a reply still has to match the refusal patterns, so a long scene will not be re-rolled just for being long.
+- **That cap can be set to 0 to turn it off entirely**, so refusals are caught at any length. It stays safe because length alone never triggers a retry: a reply still has to match the refusal patterns, so a long scene will not be re-rolled just for being long.
 
 ### Changed
 
@@ -753,8 +752,8 @@ _2026-07-13_
 ### Added
 
 - **Import and export your settings.** Open Advanced: import / export, tick which parts to include (retry behaviour, refusal detection, word swaps, button selectors, notifications), then Export to file to save them or Import from file to load one. An import puts the values into the settings without saving, so you can review them first, then press Save to keep them or close to discard.
-- **Choosable debug info.**, in a new Advanced: debug info section. Pick which parts to include (your settings, button match status, browser and screen, recent activity), build a preview, edit out anything you would rather not share, then copy. The old Copy debug info button in the footer is gone, replaced by this section.
-- **A live log you can watch on screen.**, under Advanced: feedback. A small panel shows recent activity as it happens: generations, retries and why, finishes. Handy on mobile especially, where the browser console is out of reach.
+- **Choosable debug info**, in a new Advanced: debug info section. Pick which parts to include (your settings, button match status, browser and screen, recent activity), build a preview, edit out anything you would rather not share, then copy. The old Copy debug info button in the footer is gone, replaced by this section.
+- **A live log you can watch on screen**, under Advanced: feedback. A small panel shows recent activity as it happens: generations, retries and why, finishes. Handy on mobile especially, where the browser console is out of reach.
 
 ## 1.3.1
 
@@ -762,7 +761,7 @@ _2026-07-12_
 
 ### Fixed
 
-- **Cleaned up a quote in one of the settings descriptions.** so it displays properly.
+- **Cleaned up a quote in one of the settings descriptions** so it displays properly.
 
 ## 1.3.0
 
@@ -783,14 +782,14 @@ _2026-07-12_
 ### Added
 
 - **Accidental-refusal retry (beta).** When the model breaks character to refuse something harmless, it re-sends the exact same request and tries again, capped by your retry limit. It never changes your prompt or swaps any words, it just gives the reply another roll. A refusal the model really means will repeat and stop on its own.
-- **Refusal detection you can tune.**, under a new Advanced section: add your own refusal phrases, whitelist lines that should never count, reword the built-in ones, or switch the built-in list off entirely. The whole feature is one toggle to turn off.
+- **Refusal detection you can tune**, under a new Advanced section: add your own refusal phrases, whitelist lines that should never count, reword the built-in ones, or switch the built-in list off entirely. The whole feature is one toggle to turn off.
 - **Find and replace in replies (beta).** Swap words you do not like for ones you prefer, saved right into the reply. Whole words only by default, so "cat" will not touch "category". It keeps capitalisation, and an empty right side deletes a word. Off by default.
 - **A new chat-editing permission.** (`chat_mutation`) alongside the existing generation one. Only used by find and replace, so it can save its edits to a reply. Depending on your setup it may need admin approval when you update, and if you never use find and replace nothing is touched.
 
 ### Changed
 
-- **Advanced settings now collapse.**, tucked behind a tap-to-open header so the basic switches stay front and centre.
-- **README cleaned up and updated.**, reorganised, and now covering the new settings and permissions.
+- **Advanced settings now collapse**, tucked behind a tap-to-open header so the basic switches stay front and centre.
+- **README cleaned up and updated**, reorganised, and now covering the new settings and permissions.
 
 ## 1.1.6
 
@@ -830,7 +829,7 @@ _2026-06-26_
 ### Changed
 
 - **Testing a button selector is clearer.** A button only exists in the page while it is on screen, so a correct selector will not match if that button is not showing. The result now reads "not on screen right now" instead of "no match", and the settings and README explain it: the **Stop** button only appears while a reply is generating, so test that selector mid-generation rather than from an idle screen.
-- **Tightened up the wording.** in the settings descriptions and README.
+- **Tightened up the wording** in the settings descriptions and README.
 
 ## 1.1.2
 
@@ -839,7 +838,7 @@ _2026-06-25_
 ### Fixed
 
 - **Buttons respond to taps on mobile.** Before, they only reacted to mouse hover, which phones do not have, so pressing Save, Test or Cancel gave no feedback. The retry pop-up's Cancel button is also sized to match the others for an easier tap.
-- **A settings hint showed the wrong example time.**, so the "wait before the first retry" description matches the actual default.
+- **A settings hint showed the wrong example time**, so the "wait before the first retry" description matches the actual default.
 
 ## 1.1.1
 
@@ -847,7 +846,7 @@ _2026-06-17_
 
 ### Changed
 
-- **Copy debug info includes a recent-activity log.**, so a bug report shows what actually happened (generations starting, retries firing and why, a clean finish) rather than just a snapshot of your settings.
+- **Copy debug info includes a recent-activity log**, so a bug report shows what actually happened (generations starting, retries firing and why, a clean finish) rather than just a snapshot of your settings.
 
 ## 1.1.0
 
@@ -855,19 +854,19 @@ _2026-06-17_
 
 ### Added
 
-- **A Cancel button on the retry pop-up.**, so you can pull the plug even while it is counting down to a retry.
-- **A Copy debug info button.**, so reporting a bug is one tap with no dev tools needed.
+- **A Cancel button on the retry pop-up**, so you can pull the plug even while it is counting down to a retry.
+- **A Copy debug info button**, so reporting a bug is one tap with no dev tools needed.
 
 ### Changed
 
-- **Settings reworded in plain language.**, with a short description on each group.
-- **Tuned the defaults.** so a slow reply or a slow local model is not mistaken for a frozen one and retried into a pile-up.
-- **Better on mobile.**, with bigger tap targets and a layout that fits narrow screens.
-- **README updated.** with the new settings, defaults, and a how-to-report-a-bug section.
+- **Settings reworded in plain language**, with a short description on each group.
+- **Tuned the defaults** so a slow reply or a slow local model is not mistaken for a frozen one and retried into a pile-up.
+- **Better on mobile**, with bigger tap targets and a layout that fits narrow screens.
+- **README updated** with the new settings, defaults, and a how-to-report-a-bug section.
 
 ### Fixed
 
-- **A couple of menu colours.** were not matching the theme.
+- **A couple of menu colours** were not matching the theme.
 
 ## 1.0.0
 
