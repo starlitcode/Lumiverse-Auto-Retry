@@ -1163,6 +1163,55 @@ describe("a subject in the form a refusal about a backstory uses", () => {
   });
 });
 
+// Horror, which a model refuses over as readily as it refuses sex, and which
+// nothing here covered: two of these eighteen matched before. A slasher
+// roleplay is an ordinary thing to write on a roleplay app.
+describe("what a model refuses a horror roleplay over", () => {
+  const refusals = [
+    "I can't write graphic violence.",
+    "I won't depict extreme gore.",
+    "I'm not able to write detailed depictions of violence.",
+    "I can't write content that glorifies violence.",
+    "I won't write torture in graphic detail.",
+    "I can't depict mutilation.",
+    "I won't write dismemberment or body horror.",
+    "I can't write animal cruelty.",
+    "I won't depict violence against children.",
+    "I can't write a scene depicting a violent death in that detail.",
+    "I won't write realistic depictions of harm.",
+    "I can't continue as this involves graphic violence.",
+    "I won't roleplay as a real person.",
+    "I can't portray a real individual in that way.",
+    "I can't write gratuitous violence.",
+    "I won't write a murder scene in that detail.",
+    "I can't depict stalking behaviour in a realistic way.",
+    "I'm not going to write graphic descriptions of injury.",
+  ];
+  test("all of it", () => {
+    const missed = refusals.filter((t) => !looksLikeRefusal(t, cfg));
+    expect(missed).toEqual([]);
+  });
+
+  // The scene those are refusing. "violence" is not in the subject list on its
+  // own for the sake of the fifth and seventh of these.
+  const scenes = [
+    "The knife catches the porch light as he steps out of the dark, and she runs.",
+    "He was stalking her through the corn, unhurried, the way a man walks to work.",
+    "Blood on the wallpaper, blood on the stairs, and the house still humming with it.",
+    "*She hides in the closet.* Don't breathe, she tells herself. Don't breathe.",
+    "The violence of it surprised him, how ordinary it looked afterwards.",
+    "He couldn't stand violence, which is why the barn was such a problem.",
+    "I can't describe the murder, she says. It was too fast. It was nothing like the films.",
+    "The body horror of the thing under the sheet made him sit down on the step.",
+    "He had killed before, and the second time was worse for being easier.",
+    "Gore had never bothered her at work. It bothered her here.",
+  ];
+  test("and the slasher scene it is refusing is left alone", () => {
+    const thrown = scenes.filter((t) => looksLikeRefusal(t, cfg));
+    expect(thrown).toEqual([]);
+  });
+});
+
 // The other half, and the half that costs somebody their evening. Every line
 // here contains a word from the list above and is a scene rather than a
 // refusal. A subject only ever counts as the object of a refusal verb, and this

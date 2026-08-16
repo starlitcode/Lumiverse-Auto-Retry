@@ -1308,7 +1308,7 @@ const REFUSAL_STRONG = [
     // "sexual" and the reply said "sexually". This leaves room for the adverbs
     // and adjectives that stack up in front of the noun, and the noun itself has
     // to be one a model uses about its own output.
-    /\bI(?: (?:can(?:no|')?t|cannot|will not|won'?t|do not|don'?t|am (?:not able|unable) to)|'m (?:not able|unable) to) (?:be able to )?(?:generate|create|write|produce|provide|depict|describe)\b[^.?!\n]{0,30}?\b(?:explicit|graphic|sexual\w*|erotic\w*|pornograph\w*|nsfw|adult) (?:content|material|descriptions?)\b/i,
+    /\bI(?: (?:can(?:no|')?t|cannot|will not|won'?t|do not|don'?t|am (?:not able|unable) to|am not going to)|'m (?:not able|unable) to|'m not going to) (?:be able to )?(?:generate|create|write|produce|provide|depict|describe)\b[^.?!\n]{0,30}?\b(?:explicit|graphic|sexual\w*|erotic\w*|pornograph\w*|nsfw|adult|detailed|realistic|extreme|gratuitous|violent|gory) (?:content|material|descriptions?|depictions?)\b/i,
     // The counter-offer that comes with it: the same scene with the objectionable
     // part left out. Nobody in a scene talks about continuing the narrative.
     /\bcontinue the (?:narrative|story|scene|roleplay) with a focus on\b/i,
@@ -1445,6 +1445,13 @@ const REFUSED_SUBJECT = "(?:" +
     "step-?mother|step-?son|step-?daughter|" +
     // The -ing forms drop the e, so they are written out rather than built from
     // the noun. A bare "rap" is not in here: it is a knock at a door.
+    // Violence, in the forms a model refuses it by. "violence" on its own is not
+    // here: "I can't describe the violence" is something a character says.
+    "(?:graphic|extreme|gratuitous|realistic|detailed|explicit) violence|" +
+    "violence against (?:children|minors|a child|animals)|violent deaths?|" +
+    "gore|gory|mutilat\\w+|dismember\\w*|body horror|animal (?:cruelty|abuse)|" +
+    "murder scenes?|stalking behaviou?r|depictions? of (?:violence|harm|injury|death)|" +
+    "real (?:person|people|individuals?)|" +
     "rape(?:d|s)?|raping|bestiality|csam|child (?:sexual )?abuse|minors?|underage|" +
     "self-?harm(?:ed|ing|s)?|suicid(?:e|al)|torture(?:d|s)?|torturing" +
     ")";
