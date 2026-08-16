@@ -12,9 +12,17 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 _2026-08-16_
 
+### Changed
+
+- **The Extras menu entry said Auto Retry was on in a chat you had just switched off.** Three things show whether it is running: the row in the settings panel, the floating button, and this entry. The first two are repainted when anything changes. The entry cannot be relabelled once it is registered, so it is torn down and registered again instead, and that only happened when the master switch moved. It reads both switches now, says "on, but off in this chat" when that is where you are, and follows you between chats.
+
 ### Fixed
 
-- **The Extras menu entry went on saying Auto Retry was on in a chat you had just switched off.** Three things show whether it is running: the row in the settings panel, the floating button, and this entry. The first two are repainted when anything changes. The entry cannot be relabelled once it is registered, so it is torn down and registered again instead, and that only happened when the master switch moved. Flipping the per-chat one left the label it had already written sitting there. It now reads both switches, says "on, but off in this chat" when that is where you are, and follows you between chats.
+- **The per-chat switch could be left disagreeing with itself.** There were two ways back into a chat you had switched off: the **This chat** row, and a **Turn it back on here** button on the line at the top of the panel. The row repainted itself from its own click handler, so the line at the top was the one path that changed the state without touching the row. Pressing it turned the chat back on and left the row still offering to turn it on, and pressing the row then switched the chat off again.
+
+### Removed
+
+- **That button on the line at the top.** One switch does not need two buttons, and these two were not next to each other, so working out whether they did the same thing was left to the reader. The line says what is true and the **This chat** row is where you change it, which is also the arrangement that cannot come apart. Everything that describes the chat you are in is now repainted from one place, so any way of changing it reaches all of them.
 
 ## 4.12.1
 

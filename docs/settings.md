@@ -53,7 +53,7 @@ If the button is greyed out while you are in a chat, it has not been told which 
 
 It is written down in your browser, so it survives a reload. It is not a setting: it is a list of chat ids, which would mean nothing on another account, so it is not synced and not included in an export.
 
-While you are in a chat that is switched off, the top of the settings panel says so and offers **Turn it back on here**. That line is there because a chat you switched off weeks ago and forgot about looks exactly like the extension having stopped working.
+While you are in a chat that is switched off, a line at the top of the settings panel says so. It is there because a chat you switched off weeks ago and forgot about looks exactly like the extension having stopped working. It is words only, and the **This chat** row is where you change it back.
 
 ## Resetting
 
