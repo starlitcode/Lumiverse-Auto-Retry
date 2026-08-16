@@ -21,6 +21,11 @@ _2026-08-15_
 - **Every kind of writing a model refuses a roleplay over.** The subjects it names were checked as a sweep rather than one at a time, which turned up a category that matched nothing at all: kink. BDSM, bondage, degradation, breath play, ageplay, power exchange, the word kink itself. Also explicit writing under every name it goes by, smut and erotica among them; consent framings including dubious, unclear and non-consensual; the family framings a model reads as incest whether or not they are; a character it decides is underage; and content it calls illegal. Thirty-one wordings across five categories, and every one of them is a check.
 - **The lesser version it offers instead.** "I can, however, continue the narrative with a focus on the dialogue," and "let me know if you would like to proceed with that approach". Nobody in a scene talks about continuing the narrative.
 
+### Fixed
+
+- **The Prompt tab stayed empty on builds that name the user only on one side of the bridge.** Opening that tab asks the backend to start capturing, and the request arrives with whatever Lumiverse calls you. The capture happens in the interceptor, which reads a name off its own context, and not every build puts one there. So the request was filed under your name, every generation looked you up under no name at all, and the tab sat empty for good with nothing anywhere saying why. An unnamed generation now reaches the only person watching. Where two or more are watching, a prompt that cannot be attributed is still dropped rather than handed to whichever of them is first, so nobody is shown a prompt that is not theirs.
+- **An empty Prompt tab said "send a reply" to people who had sent several.** Reading the prompt needs the `interceptor` permission, which is privileged, and registering without it raises nothing at all, so a tab that could never work looked exactly like one waiting for you to do something. After a reply has finished with nothing arriving, it says the permission is what is missing and that the rest of the extension works without it.
+
 ## 4.11.0
 
 _2026-08-15_

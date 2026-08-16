@@ -160,8 +160,23 @@ const MAX_NOTES = 10;
 // one person opening the view is not a reason to capture anyone else's prompt.
 const promptWatchers = new Set<string>();
 const watcherKey = (userId?: string) => String(userId == null ? '' : userId);
-function watchingPrompt(userId?: string): boolean {
-  return promptWatchers.has(watcherKey(userId));
+// Who a snapshot belongs to, or null for nobody. The exact key answers it
+// whenever both sides name the same person, and they do not always: the panel's
+// request arrives through onFrontendMessage, which is given a userId, while the
+// interceptor reads one off its own context, which not every Lumiverse build
+// fills in. The watcher then goes in under a name and every lookup arrives
+// without one, so the view stays empty for good and nothing anywhere says why.
+//
+// An empty key means the host did not say who this is. On a build that never
+// says, the only person it can be is the one watching. Two or more watchers is
+// a real multi-user instance, where a prompt nobody can attribute must not be
+// handed to whichever of them happens to be first, so it is dropped instead.
+function promptWatcherFor(userId?: string): string | null {
+  const k = watcherKey(userId);
+  if (promptWatchers.has(k)) return k;
+  if (promptWatchers.size !== 1) return null;
+  const only = promptWatchers.values().next().value as string;
+  return k === '' || only === '' ? only : null;
 }
 // Enough to see the shape of a long prompt without shipping a novel through the
 // bridge on every generation. Anything past this is cut and said to be cut, so
@@ -187,7 +202,11 @@ async function countTokens(text: string, context: any, userId?: string): Promise
 }
 
 function snapshotPrompt(messages: any[], context: any, userId?: string, noteAt?: { from: number; count: number }): void {
-  if (!watchingPrompt(userId) || !Array.isArray(messages)) return;
+  const watcher = promptWatcherFor(userId);
+  if (watcher == null || !Array.isArray(messages)) return;
+  // An empty key is a host that does not name its users, where a broadcast and
+  // a targeted send reach the same one person.
+  const to = watcher === '' ? undefined : watcher;
   try {
     const out: any[] = [];
     let budget = VIEW_MAX_CHARS_TOTAL;
@@ -220,7 +239,7 @@ function snapshotPrompt(messages: any[], context: any, userId?: string, noteAt?:
     }
     const at = Date.now();
     const chatId = context && context.chatId ? String(context.chatId) : '';
-    replyTo(userId, {
+    replyTo(to, {
       type: 'prompt_snapshot',
       at: at,
       chatId: chatId,
@@ -234,10 +253,10 @@ function snapshotPrompt(messages: any[], context: any, userId?: string, noteAt?:
     // Counted from the whole prompt rather than the clipped copy above, and
     // sent as a second message so a slow tokeniser never delays the view. The
     // panel shows its own estimate until this lands, and replaces it if it does.
-    countTokens(messages.map((m: any) => String((m && m.content) || '')).join('\n'), context, userId)
+    countTokens(messages.map((m: any) => String((m && m.content) || '')).join('\n'), context, to)
       .then((tokens) => {
         if (tokens == null) return;
-        replyTo(userId, { type: 'prompt_tokens', at: at, chatId: chatId, tokens: tokens });
+        replyTo(to, { type: 'prompt_tokens', at: at, chatId: chatId, tokens: tokens });
       })
       .catch(() => {});
   } catch (_) { /* a viewer must never cost anyone their generation */ }

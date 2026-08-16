@@ -105,6 +105,51 @@ describe("one person watching does not capture another's prompt", () => {
   });
 });
 
+// The panel's request arrives through onFrontendMessage, which Lumiverse hands
+// a userId. The lookup happens in the interceptor, which reads one off its own
+// context, and not every build puts one there. The watcher then goes in under a
+// name and every lookup arrives without one, so the view stays empty for good
+// and nothing anywhere says why.
+describe("the two sides can name the watcher differently", () => {
+  test("a generation with no userId still reaches the only watcher", async () => {
+    const h = boot();
+    await h.watch(true, "alice");
+    await h.run(prompt(), { chatId: "c1" });
+    const snaps = h.snapshots();
+    expect(snaps.length).toBe(1);
+    expect(snaps[0].userId).toBe("alice");
+  });
+
+  test("and a named generation reaches a watcher who registered without one", async () => {
+    const h = boot();
+    await h.watch(true);
+    await h.run(prompt(), { chatId: "c1", userId: "alice" });
+    expect(h.snapshots().length).toBe(1);
+  });
+
+  test("but an unattributable prompt is dropped rather than handed to whoever is first", async () => {
+    const h = boot();
+    await h.watch(true, "alice");
+    await h.watch(true, "bob");
+    await h.run(prompt(), { chatId: "c1" });
+    expect(h.snapshots().length).toBe(0);
+  });
+
+  test("and two named people are still told apart", async () => {
+    const h = boot();
+    await h.watch(true, "alice");
+    await h.run(prompt(), { chatId: "c1", userId: "bob" });
+    expect(h.snapshots().length).toBe(0);
+  });
+
+  test("nobody watching still captures nothing, whatever the host calls it", async () => {
+    const h = boot();
+    await h.run(prompt(), { chatId: "c1" });
+    await h.run(prompt(), { chatId: "c1", userId: "alice" });
+    expect(h.snapshots().length).toBe(0);
+  });
+});
+
 // The interceptor leaves by five different doors. Every one has to send exactly
 // one snapshot: none and the view goes blank on that generation, two and it
 // shows the prompt twice.

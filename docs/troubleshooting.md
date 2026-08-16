@@ -21,7 +21,7 @@ For watching it work live, turn on **Show the on-screen panel** under Basics, an
 Three tabs:
 
 - **Log** updates as generations run and retries fire.
-- **Prompt** shows the whole prompt that went to the model, with your refusal notes marked where they were inserted. This is the quickest way to answer "did my note go, and where".
+- **Prompt** shows the whole prompt that went to the model, with your refusal notes marked where they were inserted. This is the quickest way to answer "did my note go, and where". It needs the `interceptor` permission, and it tells you so if it is empty after a reply.
 - **Stats** shows what it has been doing and what it keeps retrying for, and says when it has paused itself after repeated failures.
 
 Drag the panel by its header and resize it from the bottom corner. **Copy** and **Clear** act on whichever tab you are looking at. The toggle is the only thing controlling it, so turning that off makes it disappear.

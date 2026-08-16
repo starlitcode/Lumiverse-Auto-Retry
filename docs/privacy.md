@@ -52,9 +52,9 @@ Privileged. Only ever used to turn the card id a chat carries into a name, so th
 
 ### `interceptor`
 
-Privileged. Lets an extension add to a prompt on its way to the model. It is used by one feature, "Send a note with a refusal retry", which is off by default.
+Privileged. Lets an extension add to a prompt on its way to the model. Two things use it: "Send a note with a refusal retry", which is off by default, and the on-screen panel's **Prompt** tab, which reads the assembled prompt there because that is the only place the whole of it is visible.
 
-**Refuse it** and everything works. The refusal note is not sent.
+**Refuse it** and everything works. The refusal note is not sent, and the Prompt tab stays empty and says so.
 
 ### The APIs behind them
 

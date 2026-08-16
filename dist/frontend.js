@@ -2792,6 +2792,13 @@ export function setup(ctx, opts) {
     // panel's two views is showing. Held in memory only, thrown away on teardown
     // and with the tab, the same as the log beside it.
     let lastPrompt = null;
+    // Set when a generation finishes while the Prompt view is open and no prompt
+    // has ever arrived for it. Capturing runs off the interceptor, which is a
+    // privileged permission an admin has to approve, and registering without it
+    // is a no-op that raises nothing. Without this the view says "send a reply"
+    // to somebody who has sent several, which reads as a fault in their chat
+    // rather than a permission that was never granted.
+    let promptNeverArrived = false;
     // ---- where things were left ----
     //
     // The floating button and the on-screen panel both went back to their default
@@ -3077,7 +3084,9 @@ export function setup(ctx, opts) {
         body.replaceChildren();
         body.style.whiteSpace = "normal";
         if (!lastPrompt) {
-            body.textContent = "(no prompt seen yet; send a reply)";
+            body.textContent = promptNeverArrived
+                ? "That reply finished without a prompt reaching this tab. Reading the prompt needs the interceptor permission, which is privileged, so an admin has to approve it before it does anything. Everything else in the extension works without it."
+                : "(no prompt seen yet; send a reply)";
             return;
         }
         const chars = lastPrompt.messages.reduce((n, m) => n + (m.chars || 0), 0);
@@ -6190,6 +6199,13 @@ export function setup(ctx, opts) {
         lastChatId = p.chatId;
         lastMessageId = p.messageId;
         s.live = false;
+        // A generation has now been all the way through with the view open and
+        // asking, so a prompt that has still not arrived is not going to.
+        if (promptsAsked && !lastPrompt && !promptNeverArrived) {
+            promptNeverArrived = true;
+            if (liveTab === "prompt")
+                renderLiveLog();
+        }
         // The streamed copy has done its job the moment the reply ends, so it is
         // taken now and the chat's own copy dropped. It used to be dropped only
         // when the next reply started, which meant the text of a finished reply
@@ -9783,6 +9799,7 @@ export function setup(ctx, opts) {
                     }
                     if (msg.type === "prompt_snapshot") {
                         lastPrompt = msg;
+                        promptNeverArrived = false;
                         // The count for the previous prompt does not describe this one, and
                         // the follow-up carrying the new one may never arrive.
                         lastPromptTokens = 0;
