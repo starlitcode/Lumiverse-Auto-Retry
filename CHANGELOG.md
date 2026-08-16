@@ -18,6 +18,7 @@ _2026-08-16_
 
 ### Fixed
 
+- **Changing the floating button's size moved the button.** The position a host is given is a top-left, and that was what got carried across the rebuild a size change needs. So the button grew away from its corner, down and to the right, and then had to be pushed back on screen if that took it off an edge, which landed it somewhere it had never been put. It is measured from the middle now and grows around where it is sitting. Against an edge it still comes inward far enough to fit, since a bigger button has to, but it no longer travels along that edge as well.
 - **The per-chat switch could be left disagreeing with itself.** There were two ways back into a chat you had switched off: the **This chat** row, and a **Turn it back on here** button on the line at the top of the panel. The row repainted itself from its own click handler, so the line at the top was the one path that changed the state without touching the row. Pressing it turned the chat back on and left the row still offering to turn it on, and pressing the row then switched the chat off again.
 
 ### Removed
