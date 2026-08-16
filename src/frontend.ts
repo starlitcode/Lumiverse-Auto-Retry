@@ -112,7 +112,7 @@ const STREAM_BUF_MAX = 200000;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "4.12.1";
+const VERSION = "4.12.2";
 
 // The one address the extension ever points at, used by the warning in front of
 // the crisis-support check. Pinned to the released branch rather than to a tag,
@@ -2708,8 +2708,11 @@ export function setup(ctx: Ctx, opts?: any) {
   const TOGGLE_ICON_ON = markSvg(false);
   const TOGGLE_ICON_OFF = markSvg(true);
   // The state the registered entry was last labelled for, so it is only rebuilt
-  // when the label would actually change.
-  let toggleActionState: boolean | null = null;
+  // when the label would actually change. Both switches, because the entry says
+  // whether Auto Retry is on and the answer in a chat you switched off is no.
+  // Keyed on the pair rather than the master alone, or flipping the per-chat one
+  // would leave the label it wrote behind: same master state, nothing rebuilt.
+  let toggleActionState: string | null = null;
 
   function dropToggleAction() {
     if (!toggleAction) return;
@@ -2724,18 +2727,30 @@ export function setup(ctx: Ctx, opts?: any) {
     try {
       const canReg = !!(ctx && (ctx as any).ui && typeof (ctx as any).ui.registerInputBarAction === "function");
       const on = cfg.enabled !== false;
+      // Off in the chat you are in is off, whatever the master switch says, and
+      // the entry showed "on" through it until now. The float button has said
+      // both since it was built and this is the same sentence.
+      const hereOff = on && chatIsOff(lastChatId);
       if (!cfg.showExtrasToggle || !canReg) {
         dropToggleAction();
         return;
       }
-      if (toggleAction && toggleActionState === on) return;
+      const want = on ? (hereOff ? "here-off" : "on") : "off";
+      if (toggleAction && toggleActionState === want) return;
       dropToggleAction();
       toggleAction = (ctx as any).ui.registerInputBarAction({
         id: "auto-retry-toggle",
-        label: on ? "Auto Retry is on, turn it off" : "Auto Retry is off, turn it on",
-        iconSvg: on ? TOGGLE_ICON_ON : TOGGLE_ICON_OFF,
+        // Tapping is the master switch wherever it is tapped from, so a label
+        // saying only "turn it off" in a chat that is already off would be
+        // offering the wrong switch under the right words.
+        label: hereOff
+          ? "Auto Retry is on, but off in this chat. Turn it off everywhere"
+          : on
+            ? "Auto Retry is on, turn it off"
+            : "Auto Retry is off, turn it on",
+        iconSvg: on && !hereOff ? TOGGLE_ICON_ON : TOGGLE_ICON_OFF,
       });
-      toggleActionState = on;
+      toggleActionState = want;
       toggleActionOff = toggleAction.onClick(() => {
         // Flipping the switch relabels this very entry, which means destroying
         // it and registering it again. Doing that from inside its own click
@@ -4855,6 +4870,9 @@ export function setup(ctx: Ctx, opts?: any) {
     if (off) standDown(id, false);
     paintFloat();
     syncMasterNote();
+    // The Extras entry carries the state in its label, and it is the one place
+    // that has to be registered again to change rather than repainted.
+    syncToggleAction();
     paintNow();
   }
 
@@ -6087,6 +6105,7 @@ export function setup(ctx: Ctx, opts?: any) {
     }
     paintFloat();
     syncMasterNote();
+    syncToggleAction();
     paintNow();
   }
 
@@ -6104,6 +6123,7 @@ export function setup(ctx: Ctx, opts?: any) {
     }
     paintFloat();
     syncMasterNote();
+    syncToggleAction();
     paintNow();
   }
 

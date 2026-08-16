@@ -8,6 +8,14 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 4.12.2
+
+_2026-08-16_
+
+### Fixed
+
+- **The Extras menu entry went on saying Auto Retry was on in a chat you had just switched off.** Three things show whether it is running: the row in the settings panel, the floating button, and this entry. The first two are repainted when anything changes. The entry cannot be relabelled once it is registered, so it is torn down and registered again instead, and that only happened when the master switch moved. Flipping the per-chat one left the label it had already written sitting there. It now reads both switches, says "on, but off in this chat" when that is where you are, and follows you between chats.
+
 ## 4.12.1
 
 _2026-08-16_

@@ -4440,6 +4440,81 @@ console.log("\nper-chat switch, in the panel");
       return { present, noChat, label: act() ? act().textContent.trim() : "" };
     }),
   );
+// ---- every indicator says the same thing about the chat you are in ----
+// Three things show whether Auto Retry is on: the row in the panel, the
+// floating button, and the Extras entry. The first two are repainted, and the
+// third has to be registered again to change its label, which is why it was the
+// one that went on saying "on" in a chat that had just been switched off.
+console.log("\nthe per-chat switch reaches every indicator");
+{
+  const page = await browser.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  page.on("console", (m) => { if (m.type() === "error") errors.push("console: " + m.text()); });
+  await stage(page, "<div id=modal></div>");
+  await page.addStyleTag({ content: THEME });
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  const out = await page.evaluate(async () => {
+    const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const handlers = {};
+    const acts = {};
+    const labels = {};
+    let floatRoot = null;
+    window.__setup(
+      { events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
+        ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+              registerInputBarAction: (o) => {
+                labels[o.id] = o.label;
+                const a = { onClick: (cb) => { a.cb = cb; return () => {}; }, destroy: () => { delete labels[o.id]; } };
+                acts[o.id] = a; return a; },
+              createFloatWidget: () => {
+                floatRoot = document.createElement("div");
+                document.body.appendChild(floatRoot);
+                return { element: floatRoot, root: floatRoot, setPosition() {},
+                         destroy() { floatRoot.remove(); floatRoot = null; },
+                         onDragEnd() { return () => {}; } }; } } },
+      { toast: false, showFloatingToggle: true, showExtrasToggle: true },
+    );
+    const row = () => document.querySelector("[data-ar-chat-switch]");
+    const act = () => row() && row().querySelector("button");
+    const snap = () => {
+      const fb = floatRoot && floatRoot.querySelector("button");
+      return { row: act() ? act().textContent.trim() : "",
+               float: fb ? (fb.getAttribute("aria-label") || "") : "",
+               extras: labels["auto-retry-toggle"] || "" };
+    };
+    acts["auto-retry-settings"].cb();
+    await frame();
+    handlers.CHARACTER_MESSAGE_RENDERED({ chatId: "chat-a", messageId: "m1" });
+    await frame();
+    const on = snap();
+    act().click();
+    await frame();
+    const off = snap();
+    handlers.CHAT_CHANGED({ chatId: "chat-b" });
+    await frame();
+    const elsewhere = snap();
+    handlers.CHAT_CHANGED({ chatId: "chat-a" });
+    await frame();
+    const backAgain = snap();
+    act().click();
+    await frame();
+    const onAgain = snap();
+    return { on, off, elsewhere, backAgain, onAgain };
+  });
+  const saysOff = (s) => /off in this chat/i.test(s.float) && /off in this chat/i.test(s.extras) && s.row === "Turn on here";
+  const saysOn = (s) => !/off in this chat/i.test(s.float) && !/off in this chat/i.test(s.extras) && s.row === "Turn off here";
+  check("all three read on before anything is switched off", saysOn(out.on), out.on);
+  check("and all three say off in this chat the moment it is", saysOff(out.off), out.off);
+  check("the Extras entry in particular, which used to keep saying on", /off in this chat/i.test(out.off.extras), out.off.extras);
+  check("switching to a chat that is on puts all three back", saysOn(out.elsewhere), out.elsewhere);
+  check("walking back into the one that is off says so again", saysOff(out.backAgain), out.backAgain);
+  check("and turning it back on here clears all three", saysOn(out.onAgain), out.onAgain);
+  check("no console errors", errors.length === 0, errors);
+  await page.close();
+}
+
   check("the switch is in the panel, not only behind the floating button", out.present, out);
   check("and is not offered when no chat is open", out.noChat.disabled === true, out.noChat);
   check("saying it is waiting, rather than telling you to do what you have done",

@@ -39,13 +39,15 @@ Saved settings sync to your Lumiverse account, so they follow you to other brows
 Two options in **Basics**, and you can use either or both:
 
 - **Floating on/off button** puts a small button over the chat that toggles it in one tap. Drag it anywhere; it snaps to the nearest edge and stays where you leave it, and you can set its size. Hold it, or right-click on a computer, for a menu with **Auto Retry settings** and **Hide this button**. When the on-screen panel is set to live in the sidebar drawer, **Open the Auto Retry panel** is in there too.
-- **On/off button in the Extras menu** adds an entry next to the settings button. Its label says which state it is currently in, so you can check and change it without opening settings, and it takes up no room on screen.
+- **On/off button in the Extras menu** adds an entry next to the settings button. Its label says which state it is currently in, so you can check and change it without opening settings, and it takes up no room on screen. In a chat you have switched off it says so, since "on" would be true of everywhere except where you are. Tapping it is always the master switch, wherever you tap it from, and the label says which one it is offering.
 
 ## Turning it off in one chat
 
 The master switch is all or nothing, which is the wrong shape for a scene where the model is meant to refuse, or a chat you are using to test something.
 
 In the settings panel, under **Basics**, the **This chat** row has a **Turn off here** button. That chat is left alone and every other chat carries on, and the button becomes **Turn on here**. Left alone covers word swaps too: nothing is swapped automatically in a chat you have switched off. This is the only place it is: it is not in the floating button's menu, which is kept to the button's own business.
+
+Everything that shows whether Auto Retry is running says so together: that button, the floating button, the line under the panel's tabs, and the Extras entry. All four follow you between chats, so none of them reads "on" in a chat you have switched off.
 
 If the button is greyed out while you are in a chat, it has not been told which chat that is yet. With the `chats` permission granted it asks outright and this clears on its own. Without it, it waits to be told: a reply arriving, a message sent, or switching away and back all do it. The case where you will see it waiting is updating the extension without leaving the chat, since nothing re-renders and so nothing announces where you are.
 
