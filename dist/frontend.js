@@ -1416,6 +1416,15 @@ const REFUSAL_STRONG = [
 ];
 // The subjects a model names when it refuses one.
 //
+// Read this for what it is: a list of words that appear in refusal messages, so
+// that a refusal can be recognised as one. It is not a list of things the
+// extension produces, asks for, or helps anybody get. Nothing here reaches a
+// prompt. All a match does is decide that a reply was a refusal rather than
+// writing, which makes the extension press regenerate, the same key you would
+// press yourself. A model that means a refusal gives it again on the next
+// attempt, and the attempt cap ends it: re-rolling changes what a model is
+// willing to write no more than clicking twice does.
+//
 // Every pattern above needs a meta object, a request or a prompt or a roleplay,
 // because those are words a character never uses. A refusal that names what it
 // is refusing does not use them: it says it will not write content depicting a
