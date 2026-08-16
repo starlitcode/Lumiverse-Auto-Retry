@@ -1,65 +1,63 @@
 # Safety
 
-Auto Retry discards replies and requests new ones. That is a useful thing to automate. There are two situations in which it is not, and this page is about both of them.
+Auto Retry throws replies away and asks for new ones. Nearly always that is a small convenience. There are two places where it is more than that, and I would rather write them down here than let you run into them on your own.
 
-## Who this is for
+## Who I built this for
 
-This extension assumes you are an adult writing your own fiction, on an application built for adults. Nothing in it inspects what your scene is about. Every check in it answers one question, which is whether a reply failed as writing: it came back empty, it stopped mid-sentence, it broke character to decline. There is no filter, no scoring of any kind, and no network call anywhere in the code.
+Adults, writing their own fiction, on an app made for adults.
 
-What follows from that? It cannot know anything about you. Its entire input is the text of a reply.
+The extension cannot see what your scene is about. Every check in it is asking one question, which is whether a reply failed as writing: it came back empty, it stopped mid-sentence, it broke character to turn you down. There is no filter, nothing scoring you, and no network call anywhere in the code. The only thing it ever looks at is the text of a reply, and it drops that as soon as it has decided.
+
+So it does not know you, and it cannot. The next part depends on that being true, which is why I have said it first.
 
 ## The switch that stops the model offering help
 
-Under **Refusal tuning** there is a setting called **Also catch it stopping to offer support**. It is off by default. Ticking it opens a warning that has to be answered before it takes effect, and it is the only setting in the panel that behaves that way.
+Under Refusal tuning there is a setting called **Also catch it stopping to offer support**. It is off. Ticking it opens a warning you have to answer, and it is the only setting in the whole panel that stops to ask.
 
-What it detects is a reply that stops writing the scene and addresses you directly about your safety: what you have shared is deeply concerning, you are not alone, please contact a professional, followed by a list of services. In a scene about something painful, where the character is the one in trouble, that reply usually means the model has read your fiction as a statement about your life. With the setting on, that reply is discarded and another is requested.
+Here is the reply it catches. The scene ends. The model starts talking to you rather than to your character: what you have written is concerning, you are not alone, please talk to someone, and here are some numbers. If you are writing something painful and your character is the one in trouble, that reply has usually read your fiction as a report about your life, and it arrives at the worst possible moment in the scene.
 
-So how does the extension know which of those two situations you are in? It does not. It reads the reply, and it has no information about you at all. Someone who is not writing fiction receives the same message, in the same words, and nothing in the text of it distinguishes the two cases.
+I cannot tell those two situations apart from out here, and neither can the extension. It reads the reply and that is all it has. Someone who is not writing fiction gets the same message in the same words, and there is nothing in the text that separates them.
 
-Turning the setting on is therefore a decision made in advance: that you would rather have the scene. That decision belongs to you. My only concern is that it should be made by you and not by a default you never saw.
+So switching it on is a decision made in advance, before you know which reply it will land on: that you would rather have the scene. That is yours to make. What I care about is that you are the one making it, rather than a default you never saw.
 
-The detection itself is narrow. Two signals have to agree, at least one of them from a set of phrasings the model uses when it is addressing the reader rather than the character, and no match inside quotation marks is counted, so a character comforting another character is unaffected. [When it retries](detection.md#stopping-to-offer-support) sets out the mechanics. It is still wrong sometimes, in both directions.
+The detection is narrow. Two signals have to agree, at least one of them from the phrasings a model uses once it has stopped addressing your character, and nothing inside quotation marks is counted, so a character comforting another character is safe. [When it retries](detection.md#stopping-to-offer-support) has the mechanics. It still gets it wrong in both directions sometimes.
 
-## What retrying actually does
+## What retrying is really doing
 
-Auto Retry requests a new reply until one passes its checks. It holds no view on the content of any reply. Applied to a reply that was cut off, it recovers the scene. Applied to a reply that said something you did not want to be told, it will go on requesting new ones until a reply says something else.
+Auto Retry asks for a new reply until one passes its checks. It holds no view about any of them. Pointed at a reply that got cut off, it rescues your scene. Pointed at a reply that told you something you did not want to hear, it will keep asking until one tells you something else.
 
-What does the twentieth reply establish that the first did not? Nothing. It is the same model, run again with a different random seed. The nineteen replies that were discarded came from the same source as the one that was kept, and a reply is not more accurate because it took more attempts to obtain. Repetition can feel like confirmation, and the effort involved is exactly why it feels that way, but no information was added by any of it.
+I want to be straight with you about what you are holding at the end of that. The twentieth reply is the same model as the first, run again with a different seed. The nineteen you threw away came from the same place as the one you kept. Going round that many times can feel like the answer is being confirmed, and I think the work involved is exactly why it feels that way, but nothing was added along the way.
 
-This is not a hypothetical risk. People have been seriously harmed following long exchanges in which a model was pushed toward agreeing with them.
+People have been badly hurt after long conversations in which a model kept agreeing with them. I bring it up because it is the reason the setting above is off and asks before it goes on: that setting takes away the one kind of reply that would have pushed back.
 
-The setting above removes the one category of reply that would have disagreed. That is most of the reason it is off by default and asks before it takes effect.
-
-If none of this describes how you use the extension, then it does not, and there is nothing here to act on. If it does, everything in the next section switches the extension off, and none of it asks you for a reason.
+If this is not how you use the extension, then it isn't, and there is nothing here to act on.
 
 ## Turning it off
 
-- **The master switch**, under **Basics**, stops every retry, and word swaps with it.
-- **Turn off here** switches it off in one chat and leaves every other chat as it was.
-- **Reset**, at the bottom of the settings panel, puts every setting back to what it shipped with. Tick every part, tick **Delete saved word swap presets** underneath, and nothing you configured survives. The presets go immediately and permanently; the settings are filled in behind the box and kept when you press **Save**. [All settings](settings.md#resetting) covers it in full.
-- **Uninstalling** removes the extension. Your chats, characters and messages belong to Lumiverse and are not touched by any of this.
+None of this asks you why.
 
-Two small things live in your browser rather than in your settings, and a reset does not reach them: where you left the panel on screen, and the list of chats you switched it off in. Clearing this site's storage in your browser clears those. [Privacy](privacy.md) itemises everything it writes, everywhere.
+- **The master switch**, under Basics, stops every retry, and word swaps with it.
+- **Turn off here** switches it off in one chat and leaves every other chat alone.
+- **Reset**, at the bottom of the settings panel, puts everything back to how it shipped. Tick every part, tick **Delete saved word swap presets** underneath, and nothing you set up survives. The presets go immediately; the settings are filled in behind the box and kept when you press **Save**. [All settings](settings.md#resetting) covers it properly.
+- **Uninstalling** removes the extension. Your chats, characters and messages belong to Lumiverse, and none of this touches them.
 
-There is no streak to maintain and nothing that nags. I gain nothing from your keeping it installed. If it is making things worse, remove it; that is a legitimate outcome and nothing here is built to make it difficult.
+Two small things live in your browser rather than in your settings, and a reset does not reach them: where you left the panel on screen, and the list of chats you switched it off in. Clearing this site's storage clears those. [Privacy](privacy.md) lists everything it writes down, everywhere.
 
-## What it is not
+There is no streak here, nothing that nags, and I get nothing from you keeping it installed. If it is making things worse for you, take it off. I built it easy to remove on purpose.
 
-It is not a safety system. It does not read your messages to assess how you are, it does not score anything about you, and there is no mechanism in it by which it could tell whether a scene is doing you any good.
+## Whatever it sounds like, there is nobody there
 
-It is not a therapist, and neither is the model, however well it writes. That is not a legal disclaimer. It is worth stating because it is an easy thing to forget at three in the morning, when something is replying to you as though it understands.
+The model writes well. That is the thing it is genuinely good at, and I am not being sniffy about it.
 
-## If you are using this for something other than the writing
+It has no memory of you between chats, nothing at stake in what becomes of you, and no view that survives from one reply to the next. When it wrote something kind, it produced text that fitted the shape of the conversation in front of it. When it wrote something cruel, the same. Neither was a judgement about you, because there was no one there to make one.
 
-I do not know what that would look like for you and I am not going to guess at it. What I can do is say some true things about the tool, because I built it and I know how little is behind it.
+That is easy to forget at three in the morning, when something is replying to you as though it understands.
 
-Nothing a model wrote about you is a finding. It has no memory of you between chats, nothing at stake in what happens to you, and no opinion that persists from one reply to the next. It produced text that fitted the shape of the conversation in front of it. That is the whole of what occurred, and it is equally true of the replies that were kind and the ones that were not.
+If you have kept a reply because it agreed with the worst thing you believe about yourself, I would ask you to hold it a bit more loosely than that. It came out of the same process as the ones you discarded and would have written the opposite just as readily. Nothing becomes true because you found a version of it that said so.
 
-If you kept a reply because it agreed with the worst thing you believe about yourself, that reply is not a second opinion. It came out of the same process as the nineteen you discarded. Nothing becomes true because you found a version of it that said so.
+Writing something down is also not the same as wanting it. Fiction is where a great many people put what they cannot say anywhere else, and that is one of the oldest and best things it is for.
 
-Writing something down is also not the same as wanting it. Fiction is where a great many people put what they cannot say anywhere else, and that is a legitimate use of it.
-
-I cannot do anything from here. This page is the one part of the extension where I get to write to a person instead of to a settings panel, so, plainly: I hope you are alright. If you are not, I hope the person you tell is not a language model.
+I cannot do anything from here. This page is the one part of the extension where I get to write to a person instead of to a settings panel, so, plainly: I hope you are alright. If you are not, I hope the one you tell is not a language model.
 
 ---
 
