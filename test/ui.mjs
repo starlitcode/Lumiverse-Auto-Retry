@@ -3934,7 +3934,11 @@ console.log("\nper-chat switch");
     const note = document.querySelector("[data-ar-master]");
     const noteShown = note && getComputedStyle(note).display !== "none";
     const noteText = note ? note.textContent : "";
-    const backBtn = note ? [...note.querySelectorAll("button")].find((b) => /back on/i.test(b.textContent)) : null;
+    // The line is words only. It carried its own "Turn it back on here", which
+    // was a second button for a switch that already has one, sitting far enough
+    // from it to read as a different switch. The row is the way back.
+    const noteButtons = note ? note.querySelectorAll("button").length : -1;
+    const backBtn = chatRow() ? chatRow().querySelector("button") : null;
     if (backBtn) backBtn.click();
     await wait(20);
     const afterBack = {
@@ -3948,7 +3952,7 @@ console.log("\nper-chat switch");
 
     teardown();
     return { menuOn, offNow, retriedWhileOff, otherChatOn, retriedElsewhere, remembered,
-      noteShown, noteText, afterBack, menuBack, rowThere, saidBefore, saidAfter };
+      noteShown, noteText, noteButtons, afterBack, menuBack, rowThere, saidBefore, saidAfter };
   });
   await page.close();
   check("the hold menu keeps to the button's own business",
@@ -3969,7 +3973,8 @@ console.log("\nper-chat switch");
   // Somebody who switched a chat off and forgot cannot tell that from the
   // extension having broken, unless the panel tells them.
   check("the panel says this chat is switched off", out.noteShown && /off in this chat/i.test(out.noteText), out.noteText);
-  check("and offers the way back", out.afterBack.pressed === "true", out.afterBack);
+  check("carrying words and no button of its own", out.noteButtons === 0, out.noteButtons);
+  check("and the row is the way back", out.afterBack.pressed === "true", out.afterBack);
   check("which takes it out of the list", !out.afterBack.stored.includes("A"), out.afterBack.stored);
   check("and puts the line away", !out.afterBack.noteShown, out.afterBack);
   check("and the menu still stays out of it",
@@ -4440,6 +4445,15 @@ console.log("\nper-chat switch, in the panel");
       return { present, noChat, label: act() ? act().textContent.trim() : "" };
     }),
   );
+  check("the switch is in the panel, not only behind the floating button", out.present, out);
+  check("and is not offered when no chat is open", out.noChat.disabled === true, out.noChat);
+  check("saying it is waiting, rather than telling you to do what you have done",
+    /waiting to catch which chat/i.test(out.noChat.text) &&
+      !/open a chat/i.test(out.noChat.text),
+    out.noChat.text.slice(0, 90));
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- every indicator says the same thing about the chat you are in ----
 // Three things show whether Auto Retry is on: the row in the panel, the
 // floating button, and the Extras entry. The first two are repainted, and the
@@ -4515,14 +4529,6 @@ console.log("\nthe per-chat switch reaches every indicator");
   await page.close();
 }
 
-  check("the switch is in the panel, not only behind the floating button", out.present, out);
-  check("and is not offered when no chat is open", out.noChat.disabled === true, out.noChat);
-  check("saying it is waiting, rather than telling you to do what you have done",
-    /waiting to catch which chat/i.test(out.noChat.text) &&
-      !/open a chat/i.test(out.noChat.text),
-    out.noChat.text.slice(0, 90));
-  check("no console errors", errors.length === 0, errors);
-}
 
 // ---- the prompt viewer ----
 // Lumiverse's own Prompt Breakdown lists what a chat is built from, which is a

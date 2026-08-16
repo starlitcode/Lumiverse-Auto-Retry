@@ -4873,6 +4873,18 @@ export function setup(ctx, opts) {
         // Anything already in flight for that chat goes with it.
         if (off)
             standDown(id, false);
+        // Every one of these describes the chat this just changed, so all of them
+        // are repainted here rather than by whoever called. The row used to repaint
+        // itself from its own click handler, which left the line at the top of the
+        // panel as the one way to change this that did not touch the row: pressing
+        // "Turn it back on here" turned the chat back on and left the row below
+        // still offering to turn it on, and pressing that switched it off again.
+        if (chatSwitchPaint) {
+            try {
+                chatSwitchPaint();
+            }
+            catch (_) { }
+        }
         paintFloat();
         syncMasterNote();
         // The Extras entry carries the state in its label, and it is the one place
@@ -4888,15 +4900,12 @@ export function setup(ctx, opts) {
     // from the one that has a button.
     let masterNoteEl = null;
     let masterNoteWords = null;
-    let masterNoteBtn = null;
     function syncMasterNote() {
         if (!masterNoteEl)
             return;
         const globalOff = cfg.enabled === false;
         const hereOff = chatIsOff(lastChatId);
         masterNoteEl.style.display = globalOff || hereOff ? "flex" : "none";
-        if (masterNoteBtn)
-            masterNoteBtn.style.display = hereOff ? "" : "none";
         if (!masterNoteWords)
             return;
         masterNoteWords.textContent = globalOff
@@ -8176,15 +8185,13 @@ export function setup(ctx, opts) {
         // tell that from the extension having broken, so the panel says which.
         const masterWords = document.createElement("span");
         masterWords.style.cssText = "flex:1;min-width:0";
-        const masterBack = btn("Turn it back on here", false);
-        masterBack.style.cssText += "min-height:0;padding:4px 10px;font-size:12px;flex:none";
-        masterBack.addEventListener("click", () => {
-            setChatOff(lastChatId, false);
-        });
+        // Words only. It used to carry its own "Turn it back on here", which put
+        // two buttons for one switch in a panel where they were not even next to
+        // each other, and left a reader working out whether they did the same
+        // thing. Both switches this line describes have their own row below it,
+        // and each of those says what it will do. This says what is true.
         masterNote.style.cssText += ";align-items:center;gap:10px";
         masterNote.appendChild(masterWords);
-        masterNote.appendChild(masterBack);
-        masterNoteBtn = masterBack;
         // Above the search box rather than below it. This is the panel's own state
         // and it stays put, while the line under the box is about the search and
         // comes and goes, so the lasting one reads first.
@@ -8301,8 +8308,9 @@ export function setup(ctx, opts) {
         };
         act.addEventListener("click", () => {
             const off = chatIsOff(lastChatId);
+            // setChatOff repaints this row along with everything else that describes
+            // the chat, so there is nothing to do here but say what happened.
             setChatOff(lastChatId, !off);
-            paint();
             showToast(off
                 ? "Auto Retry is back on in this chat."
                 : "Auto Retry is off in this chat. Other chats are unaffected.", { force: true });
