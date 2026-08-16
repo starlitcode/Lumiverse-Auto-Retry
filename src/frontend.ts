@@ -4256,6 +4256,23 @@ export function setup(ctx: Ctx, opts?: any) {
     }
   }
 
+  // The middle of the button rather than its corner. A resize is the one thing
+  // that has to be measured from here: the position the host is given is a
+  // top-left, so carrying that across a size change pins the corner and lets
+  // the button grow away from it, down and to the right. On an edge the clamp
+  // then pushes it back on screen and it lands somewhere it was never put.
+  // Growing it around its middle leaves it where it is looking bigger.
+  function floatCentre(): { x: number; y: number } | null {
+    try {
+      const root = floatWidget && floatWidget.root;
+      const r = root && root.getBoundingClientRect ? root.getBoundingClientRect() : null;
+      if (!r || (!r.width && !r.height)) return null;
+      return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
+    } catch (_) {
+      return null;
+    }
+  }
+
   function syncFloat() {
     if (!cfg.showFloatingToggle) {
       hideFloat();
@@ -4266,12 +4283,15 @@ export function setup(ctx: Ctx, opts?: any) {
     //
     // Rebuilding used to start the new one at the default corner, so changing
     // the size threw away wherever the button had been dragged to. The old
-    // position is carried across, and showFloat clamps it: a button snapped to
-    // the right edge that gets bigger would otherwise hang off the screen, and
-    // clamping puts it back against the edge, which is where a snapped button
-    // belongs anyway.
+    // place is carried across, measured from the middle and turned back into a
+    // top-left for the new size, so the button grows around where it is sitting
+    // instead of away from its corner. showFloat still clamps: a button against
+    // an edge that gets bigger has to come back on screen, and against the edge
+    // is where a snapped button belongs anyway.
     if (floatWidget && floatWidgetSize !== floatSize()) {
-      const at = floatPos();
+      const mid = floatCentre();
+      const d = floatSize();
+      const at = mid ? { x: Math.round(mid.x - d / 2), y: Math.round(mid.y - d / 2) } : null;
       hideFloat();
       showFloat(at);
     } else {

@@ -1969,9 +1969,14 @@ console.log("\nfloat button menu");
   check("resizing rebuilds it too", out.resize.rebuilt, out.resize);
   check("at the new size", out.resize.size === 72, out.resize);
   // The whole point: the rebuild is handed where the button already was, not
-  // the corner a fresh one starts in.
-  check("and keeps where the button was",
-    !!out.resize.at && out.resize.at.x === 300 && out.resize.at.y === 260, out.resize);
+  // the corner a fresh one starts in. Measured from the middle, because the
+  // position a host is given is a top-left: carrying that across unchanged
+  // pins the corner and lets the button grow away from it, down and to the
+  // right, which on an edge is a jump to somewhere it was never put. The old
+  // button sits at 300,260 at 44 across, so its middle is 322,282, and a 72
+  // across button around that middle starts at 286,246.
+  check("and keeps the middle of the button where it was, rather than its corner",
+    !!out.resize.at && out.resize.at.x === 286 && out.resize.at.y === 246, out.resize);
   // A number in a box says nothing about how big the button will be.
   check("the preview circle is drawn at the size being typed",
     out.resize.previewPx === "72px", out.resize);
@@ -4452,6 +4457,76 @@ console.log("\nper-chat switch, in the panel");
       !/open a chat/i.test(out.noChat.text),
     out.noChat.text.slice(0, 90));
   check("no console errors", errors.length === 0, errors);
+}
+
+// ---- resizing the button leaves it where it is ----
+// The check above holds the arithmetic. This one puts a button against each
+// edge of a real viewport and measures where it ends up, because the thing
+// being reported was a button that jumped when its size changed, and a jump is
+// a distance on a screen rather than a number handed to a host.
+console.log("\nresizing the floating button does not move it");
+{
+  const drifts = {};
+  for (const [name, left, top] of [
+    ["rightEdge", 348, 300],
+    ["nearBottom", 348, 730],
+    ["leftEdge", 8, 400],
+    ["nearTop", 180, 8],
+  ]) {
+    const page = await browser.newPage({ viewport: { width: 400, height: 800 } });
+    await stage(page, "<div id=modal></div>");
+    await page.addStyleTag({ content: THEME });
+    await page.addScriptTag({ content: SOURCE, type: "module" });
+    await page.waitForFunction(() => !!window.__setup);
+    drifts[name] = await page.evaluate(async ([sl, st]) => {
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      const acts = {};
+      let host = null;
+      window.__setup(
+        { events: { on: () => () => {} },
+          ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+                registerInputBarAction: (o) => {
+                  const a = { onClick: (cb) => { a.cb = cb; return () => {}; }, destroy: () => {} };
+                  acts[o.id] = a; return a; },
+                // A host that honours initialPosition, so there is a real rect
+                // to measure. The stub used above returns a fixed element,
+                // which cannot show a button moving.
+                createFloatWidget: (o) => {
+                  host = document.createElement("div");
+                  host.style.cssText = "position:fixed;left:" + o.initialPosition.x + "px;top:" +
+                    o.initialPosition.y + "px;width:" + o.width + "px;height:" + o.height + "px";
+                  document.body.appendChild(host);
+                  return { root: host, destroy() { host.remove(); }, setPosition() {}, onDragEnd() { return () => {}; } }; } } },
+        { enabled: true, showFloatingToggle: true, floatingToggleSize: 44, toast: false },
+      );
+      await wait(30);
+      host.style.left = sl + "px";
+      host.style.top = st + "px";
+      const mid = () => { const r = host.getBoundingClientRect();
+        return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }; };
+      const before = mid();
+      acts["auto-retry-settings"].cb();
+      await wait(40);
+      const box = document.querySelector('[data-ar-row="floatingToggleSize"] input');
+      box.value = "72";
+      box.dispatchEvent(new Event("input", { bubbles: true }));
+      await wait(60);
+      const after = mid();
+      return { x: after.x - before.x, y: after.y - before.y };
+    }, [left, top]);
+    await page.close();
+  }
+  // Against an edge the button has to come inward to fit at its new size, so
+  // the movement perpendicular to that edge is the point rather than a fault.
+  // Everything else has to stay put, and it was the sideways drift of half the
+  // size change that read as the button jumping.
+  check("a button on the right edge does not move up or down", drifts.rightEdge.y === 0, drifts.rightEdge);
+  check("nor does one near the bottom, which is where it read as moving up", drifts.nearBottom.y === 0, drifts.nearBottom);
+  check("nor one on the left edge", drifts.leftEdge.y === 0, drifts.leftEdge);
+  check("one near the top does not move sideways", drifts.nearTop.x === 0, drifts.nearTop);
+  check("and each only comes in off the edge it is against, by half the change",
+    drifts.rightEdge.x === -14 && drifts.leftEdge.x === 14 && drifts.nearTop.y === 14,
+    drifts);
 }
 
 // ---- every indicator says the same thing about the chat you are in ----
