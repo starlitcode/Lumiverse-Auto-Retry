@@ -12,14 +12,14 @@ How to report a security problem in Auto Retry. For what the extension touches a
 
 Not sure which? Use Discord. If it turns out to be nothing sensitive, you can open an issue afterwards and nothing is lost. If you open an issue first and it was sensitive, deleting it does not undo anything: GitHub has already emailed it to everyone watching the repo, and search engines may have it.
 
-## Include
+## What to include
 
 - What you saw, and what you expected instead.
 - The steps that produce it, or the reply or setting that triggers it.
 - Your Lumiverse build, your browser, and the Auto Retry version from the top of the settings panel.
 - Whatever **Copy debug info** gives you. Use its tick boxes to leave out anything you would rather not share, and read it before you send it.
 
-## Do not
+## What not to do
 
 - **Do not post a working exploit in public** before I have replied.
 - **Do not include your API keys, passwords or session tokens.** I never need them, and nothing in a real report requires one.

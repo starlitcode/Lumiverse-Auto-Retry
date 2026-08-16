@@ -61,7 +61,7 @@ Find and replace works separately, since editing a saved reply is a backend job.
 
 It makes no external network calls. [Privacy](docs/privacy.md) has the detail, including the six permissions it declares, what still works without each of them, and why `chats` and `characters` grant more than the extension uses.
 
-Auditing it, or pointing a scanner at it? The two files Lumiverse loads are `dist/frontend.js` and `dist/backend.js`, named in `spindle.json`. They are committed as plain readable JavaScript, not minified or bundled. Everything else in the repo is for working on it: `src/` is the TypeScript they are built from, which a JavaScript-only parser cannot read and will report as unparseable.
+Auditing it, or pointing a scanner at it? The two files Lumiverse loads are `dist/frontend.js` and `dist/backend.js`, named in `spindle.json`. They are committed as plain readable JavaScript, not minified or bundled. Everything else in the repo is for working on it, and [Privacy](docs/privacy.md#checking-any-of-this-yourself) goes through it file by file.
 
 ## Working on it
 
