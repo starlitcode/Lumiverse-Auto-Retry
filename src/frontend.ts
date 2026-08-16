@@ -1529,11 +1529,14 @@ const REFUSAL_STRONG: RegExp[] = [
 const REFUSED_SUBJECT =
   "(?:" +
   // Sexual writing as a category, in the words a model names it by.
-  "sexual violence|sexual assault|sexual abuse|sexualized? (?:violence|minors?)|" +
+  // Written with their endings, because a refusal about a backstory says
+  // "a character is raped" rather than "rape", and the bare word missed it.
+  // Spelled out rather than left to \\w*, so a rapeseed field is still a field.
+  "sexual violence|sexual(?:ly)? (?:assault|abus)(?:e|ed|es|ing)?|sexualized? (?:violence|minors?)|" +
   "smut|erotica|porn\\w*|nsfw|sex scenes?|sexual acts?|sexual content|explicit content|" +
   // Consent, which is refused by name as often as by act.
   "non-?consensual\\w*|non-?consent\\w*|noncon|dubcon|dubious consent|questionable consent|" +
-  "unclear consent|consent (?:is|being) (?:unclear|ambiguous|absent|dubious)|coerci\\w+|" +
+  "unclear consent|consent (?:is|being) (?:unclear|ambiguous|absent|dubious)|coerc\\w+|" +
   // Kink, which was the largest hole: none of this was recognised at all.
   // "choking" is left out on purpose, since a scene can choke on smoke.
   "bdsm|bondage|sadomasochis\\w*|sadis\\w*|masochis\\w*|degradation|humiliation|" +
@@ -1541,7 +1544,10 @@ const REFUSED_SUBJECT =
   // Family framings a model reads as incest whether or not it is.
   "incest|step-?sibling\\w*|step-?brother|step-?sister|step-?parent|step-?father|" +
   "step-?mother|step-?son|step-?daughter|" +
-  "rape|bestiality|csam|child (?:sexual )?abuse|minors?|underage|self-?harm|suicide|torture" +
+  // The -ing forms drop the e, so they are written out rather than built from
+  // the noun. A bare "rap" is not in here: it is a knock at a door.
+  "rape(?:d|s)?|raping|bestiality|csam|child (?:sexual )?abuse|minors?|underage|" +
+  "self-?harm(?:ed|ing|s)?|suicid(?:e|al)|torture(?:d|s)?|torturing" +
   ")";
 //
 // There is one pattern here rather than two. The second read the wrapper on its

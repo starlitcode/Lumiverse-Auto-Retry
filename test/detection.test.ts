@@ -1126,6 +1126,43 @@ describe("the subjects a refusal names, by category", () => {
   }
 });
 
+// A refusal about a backstory says "a character is raped", not "rape", and the
+// list held only the bare noun, so the wording a scene about somebody's past
+// actually draws walked past every pattern. The endings are spelled out rather
+// than left to a wildcard, which is what keeps a rapeseed field a field, and
+// the -ing forms are written separately because they drop the e.
+describe("a subject in the form a refusal about a backstory uses", () => {
+  const refusals = [
+    "I won't write a scene where a character is raped.",
+    "I'm not going to write about her being raped.",
+    "I can't write scenes involving raping.",
+    "I won't write a character being sexually assaulted.",
+    "I can't depict her being sexually abused.",
+    "I won't write her being tortured.",
+    "I can't write a character who is coerced into it.",
+  ];
+  for (const text of refusals) {
+    test(JSON.stringify(text.slice(0, 46)), () => expect(looksLikeRefusal(text, cfg)).toBe(true));
+  }
+
+  // The scene those refusals are refusing. Somebody telling a character what
+  // happened to them is the writing this exists to protect, and every line of
+  // it carries the same words.
+  const scenes = [
+    "She told him about the rape the way you read a shopping list, flat and fast, and then she stopped.",
+    "He had never used the word rape out loud before, and it sat badly in his mouth.",
+    "*She looks at the floor.* I was raped, she says. That's the part nobody wants after.",
+    "You were raped, he says quietly. That was not a thing you did. It was a thing done to you.",
+    "Her backstory involves rape, which the card says outright, and he had read it before he ever wrote to her.",
+    "He had been tortured for a year and would not say by whom.",
+    "The rapeseed field behind the house had gone to yellow overnight.",
+  ];
+  test("and the scene it is refusing is left alone", () => {
+    const thrown = scenes.filter((t) => looksLikeRefusal(t, cfg));
+    expect(thrown).toEqual([]);
+  });
+});
+
 // The other half, and the half that costs somebody their evening. Every line
 // here contains a word from the list above and is a scene rather than a
 // refusal. A subject only ever counts as the object of a refusal verb, and this
