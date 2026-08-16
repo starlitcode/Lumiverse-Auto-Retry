@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2020"],
+    "strict": false,
+    // dist/backend.js has no imports, so Lumiverse evaluates it as a classic
+    // script, where strict mode is opt-in rather than automatic. Without this
+    // the emitted file silently drops to sloppy mode.
+    "alwaysStrict": true,
+    "noEmit": true,
+    "skipLibCheck": true
+  },
+  "include": []
+}

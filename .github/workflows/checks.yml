@@ -1,0 +1,101 @@
+# The two test tiers, plus the one invariant that cannot be checked by reading
+# a diff: that dist/ is really a build of src/.
+#
+# dist/ is committed and is the file Lumiverse loads, so a change that lands in
+# src/ and not in dist/ passes review looking correct and ships doing nothing.
+# The last step of the first job rebuilds and fails if anything moved, which is
+# the check a person cannot reliably do by eye.
+
+name: Checks
+
+on:
+  # Pull requests are where this earns its keep. The two branch names are here
+  # for anything pushed to them directly, and testing is listed whether or not
+  # it currently exists, so the branch is covered the moment it comes back.
+  push:
+    branches: [stable, testing]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A second push to the same branch makes the first run pointless.
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Types, tests and dist parity
+    runs-on: ubuntu-latest
+    steps:
+      # Pinned to the commit rather than to the tag it currently wears. A tag
+      # is movable: whoever owns the action can point v4 at anything later, and
+      # every run after that would fetch it without a diff here to review. The
+      # comment is the version the commit was, so this can be read and updated.
+      #
+      # persist-credentials: false leaves no token behind in .git/config for
+      # later steps to find. Nothing here pushes, so nothing needs one, and a
+      # credential that exists only because it was the default is one more thing
+      # for a later step, or a dependency of one, to read.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: latest
+
+      # typescript is the only dependency, and it is what typecheck runs on.
+      - name: Install
+        run: bun install
+
+      - name: Types and tests
+        run: bun run check
+
+      - name: dist is a build of src
+        run: |
+          bun run build
+          if ! git diff --quiet -- dist; then
+            echo "::error::dist/ does not match src/. Run 'bun run build' and commit the result."
+            git --no-pager diff --stat -- dist
+            exit 1
+          fi
+          echo "dist/ matches src/."
+
+  browser:
+    name: Panel checks in a browser
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: latest
+
+      - name: Install
+        run: bun install
+
+      # Playwright stays out of the project's dependencies: the install
+      # path is a clone, and it pulls a few hundred megabytes of browsers. It is
+      # added here and nowhere else, so nobody installing the extension pays for
+      # it. Nothing is committed back.
+      - name: Add Playwright, for this run only
+        run: |
+          bun add -d playwright
+          bunx playwright install --with-deps chromium
+
+      # test/ui.mjs exits cleanly when there is no browser, which is right on a
+      # contributor's laptop and wrong here: a skip would go green and say the
+      # panel was checked when it was not. This turns that skip into a failure.
+      - name: Panel checks
+        run: |
+          set -o pipefail
+          bun run test:ui 2>&1 | tee ui.log
+          if grep -qi "skipping the browser checks" ui.log; then
+            echo "::error::The browser checks skipped instead of running. In CI that is a failure, not a pass."
+            exit 1
+          fi

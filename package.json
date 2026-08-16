@@ -1,0 +1,36 @@
+{
+  "name": "lumiverse-auto-retry",
+  "version": "4.12.2",
+  "description": "Automatically re-fires failed, stalled, empty, or cut-off replies, with optional accidental-refusal retry and an optional find-and-replace on replies. Written from scratch for Lumiverse, with an in-app settings modal.",
+  "author": "starlitcode",
+  "license": "GPL-3.0-only",
+  "type": "module",
+  "homepage": "https://github.com/starlitcode/Lumiverse-Auto-Retry",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/starlitcode/Lumiverse-Auto-Retry.git"
+  },
+  "bugs": {
+    "url": "https://github.com/starlitcode/Lumiverse-Auto-Retry/issues"
+  },
+  "keywords": [
+    "lumiverse",
+    "spindle",
+    "extension",
+    "auto-retry"
+  ],
+  "scripts": {
+    "typecheck:frontend": "tsc -p tsconfig.frontend.json",
+    "typecheck:backend": "tsc -p tsconfig.backend.json",
+    "typecheck": "bun run typecheck:frontend && bun run typecheck:backend",
+    "test": "bun test",
+    "test:ui": "bun test/ui.mjs",
+    "check": "bun run typecheck && bun test",
+    "build:frontend": "tsc -p tsconfig.frontend.json --noEmit false --rootDir src --outDir dist",
+    "build:backend": "tsc -p tsconfig.backend.json --noEmit false --rootDir src --outDir dist",
+    "build": "bun run build:frontend && bun run build:backend"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  }
+}
