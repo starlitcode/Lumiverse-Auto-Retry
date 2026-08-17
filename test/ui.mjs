@@ -4459,6 +4459,91 @@ console.log("\nper-chat switch, in the panel");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- the Prompt tab only blames the permission when it can ----
+// A prompt is assembled at the start of a generation, which is when the
+// interceptor runs and the only chance there is to capture it. Arming the tab
+// after that cannot produce one for that generation however long it runs.
+//
+// The tab took that silence for a missing interceptor permission and said so.
+// Sending a reply with the panel shut, or on the Log tab, and opening the
+// Prompt tab while it ran was enough to be told the extension lacked a
+// permission it had. It named the one thing the reader could not check and was
+// wrong about it.
+console.log("\nthe Prompt tab only blames the permission when it can");
+{
+  const blames = /needs the interceptor permission/;
+  // Opened partway through: there was never a chance to capture, so the tab
+  // asks for another reply rather than accusing anything.
+  {
+    const page = await browser.newPage();
+    await stage(page, "<div id=modal></div>");
+    await page.addStyleTag({ content: THEME });
+    await page.addScriptTag({ content: SOURCE, type: "module" });
+    await page.waitForFunction(() => !!window.__setup);
+    const out = await page.evaluate(async () => {
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      const h = {};
+      window.__setup(
+        { events: { on: (n, fn) => { h[n] = fn; return () => {}; } },
+          sendToBackend: () => {},
+          onBackendMessage: () => () => {},
+          ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+                registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) } },
+        { liveLog: true, toast: false },
+      );
+      await wait(30);
+      const tab = (name) => [...document.querySelectorAll('#__lvRetryLog [role="tab"]')]
+        .find((b) => (b.textContent || "").trim() === name);
+      // Reading the Log, which is where the panel starts. Capture is off.
+      tab("Log").click();
+      await wait(20);
+      h.GENERATION_STARTED({ chatId: "c1", generationId: "g1", messageId: "m1" });
+      await wait(20);
+      // Now go and look at the prompt, mid-generation. This is what arms it.
+      tab("Prompt").click();
+      await wait(20);
+      h.GENERATION_ENDED({ chatId: "c1", generationId: "g1", messageId: "m1", content: "hello" });
+      await wait(30);
+      return document.getElementById("__lvRetryLogBody").textContent;
+    });
+    await page.close();
+    check("opening the tab partway through does not accuse the permission", !blames.test(out), out.slice(0, 130));
+    check("and asks for another reply instead", /send a reply/i.test(out), out.slice(0, 130));
+  }
+  // Watching from the start and still nothing came: that is the real thing the
+  // message is for, and it still says it.
+  {
+    const page = await browser.newPage();
+    await stage(page, "<div id=modal></div>");
+    await page.addStyleTag({ content: THEME });
+    await page.addScriptTag({ content: SOURCE, type: "module" });
+    await page.waitForFunction(() => !!window.__setup);
+    const out = await page.evaluate(async () => {
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      const h = {};
+      window.__setup(
+        { events: { on: (n, fn) => { h[n] = fn; return () => {}; } },
+          sendToBackend: () => {},
+          onBackendMessage: () => () => {},
+          ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+                registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) } },
+        { liveLog: true, toast: false },
+      );
+      await wait(30);
+      [...document.querySelectorAll('#__lvRetryLog [role="tab"]')]
+        .find((b) => (b.textContent || "").trim() === "Prompt").click();
+      await wait(20);
+      h.GENERATION_STARTED({ chatId: "c1", generationId: "g1", messageId: "m1" });
+      await wait(20);
+      h.GENERATION_ENDED({ chatId: "c1", generationId: "g1", messageId: "m1", content: "hello" });
+      await wait(30);
+      return document.getElementById("__lvRetryLogBody").textContent;
+    });
+    await page.close();
+    check("watching from the start with nothing arriving still names the permission", blames.test(out), out.slice(0, 130));
+  }
+}
+
 // ---- a prompt is only shown for the chat you are in ----
 // Snapshots are addressed to a person rather than to a window, so two chats
 // open in two tabs both receive every prompt either one produces. The tab

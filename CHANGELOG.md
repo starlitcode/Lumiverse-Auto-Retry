@@ -8,6 +8,14 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 4.13.1
+
+_2026-08-17_
+
+### Fixed
+
+- **The Prompt tab said the interceptor permission was missing when it was not.** A prompt is assembled as a reply begins, which is the only moment there is to capture it, so a tab opened partway through a reply cannot catch that one however long the reply runs. The tab took that silence for a missing permission and said so. Sending a reply with the panel shut, or while reading the Log, and then going to look at the prompt was enough to be told the extension lacked a permission it had, which is the one thing named there that you cannot check from the panel. It now only says that about a reply the tab was open and asking for from the start, and asks for another reply otherwise.
+
 ## 4.13.0
 
 _2026-08-17_
