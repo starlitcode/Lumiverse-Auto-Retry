@@ -206,12 +206,6 @@ function decodePixels(buf) {
   return px;
 }
 
-function brightestPixel(buf) {
-  const px = decodePixels(buf);
-  if (!px) return null;
-  return px.reduce((a, p) => (p.r + p.g + p.b > a.r + a.g + a.b ? p : a), px[0]);
-}
-
 // The field is whatever colour covers most of the sample; the cross is whatever
 // stands out furthest from it. That works whichever way round the theme is,
 // which "the brightest thing there" did not: on a light theme the brightest
