@@ -4459,12 +4459,13 @@ console.log("\nper-chat switch, in the panel");
   check("no console errors", errors.length === 0, errors);
 }
 
-// ---- the Prompt tab draws a message two ways ----
-// Raw is every character as the model got it, which is what the view is for.
-// Rendered lays the same text out with its emphasis applied, for reading a long
-// scene. The choice sits with Copy and Clear because it is a way of looking at
-// what is on screen rather than a setting, and it is remembered.
-console.log("\nthe Prompt tab has a raw and a rendered view");
+// ---- the Prompt tab draws the prompt two ways ----
+// Rendered is the panel as it has always looked, and the default: a row per
+// message with its role, its size, and whether it came from the chat or was
+// wrapped around it. Raw is the same prompt with all of that taken off, as the
+// data the model was handed, which is the form to read for structure and the
+// form to paste somewhere else.
+console.log("\nthe Prompt tab has a rendered and a raw view");
 {
   const page = await browser.newPage();
   await stage(page, "<div id=modal></div>");
@@ -4483,11 +4484,6 @@ console.log("\nthe Prompt tab has a raw and a rendered view");
       { liveLog: true, toast: false },
     );
     await wait(30);
-    const tabBtn = (name) =>
-      [...document.querySelectorAll('#__lvRetryLog [role="tab"]')]
-        .find((b) => (b.textContent || "").trim() === name);
-    // It sits with the prompt's own summary, not in the header shared by all
-    // three tabs. A fourth control up there does not fit a panel 200 across.
     const viewBtn = () =>
       [...document.querySelectorAll("#__lvRetryLogBody button")]
         .find((b) => /^(Raw|Rendered)$/.test((b.textContent || "").trim()));
@@ -4496,49 +4492,72 @@ console.log("\nthe Prompt tab has a raw and a rendered view");
       ![...document.querySelectorAll("#__lvRetryLog > div button")]
         .some((b) => /^(Raw|Rendered)$/.test((b.textContent || "").trim()));
     res.notOnTheLogTab = !viewBtn();
-    tabBtn("Prompt").click();
+    [...document.querySelectorAll('#__lvRetryLog [role="tab"]')]
+      .find((b) => (b.textContent || "").trim() === "Prompt").click();
     await wait(20);
     fromBackend({
-      type: "prompt_snapshot", at: 1, chatId: "c1", total: 1, notes: 0,
-      messages: [{ role: "user", content: "she *turned* and said **no**, 2 * 4 = 8 <b>x</b>",
-                   history: true, note: false }],
+      type: "prompt_snapshot", at: 1, chatId: "c1", total: 2, notes: 1,
+      messages: [
+        { role: "system", content: "You are a tavern keeper.", history: false, note: false },
+        { role: "user", content: "she *turned* and said <b>no</b>", history: true, note: true, noteIndex: 1 },
+      ],
     });
     await wait(30);
-    res.shownOnPrompt = !!viewBtn();
-    res.startsRaw = (viewBtn().textContent || "").trim() === "Raw";
-    // The message body, not the whole panel: the collapsed summary line above
-    // it shows a plain preview of the same text, markers and all, whichever
-    // view is on. That is the summary doing its job, not the body.
-    const bodyEl = () => document.querySelector("#__lvRetryLogBody details > div");
-    // Raw: the characters exactly, markers and all, and no elements made from them.
-    res.rawKeepsMarkers = bodyEl().textContent.indexOf("*turned*") >= 0;
-    res.rawHasNoEm = bodyEl().querySelectorAll("em, strong").length === 0;
+    const body = () => document.getElementById("__lvRetryLogBody");
+    const raw = () => body().querySelector("[data-ar-raw]");
+
+    // Rendered is where it starts, and it is the panel as it was.
+    res.startsRendered = (viewBtn().textContent || "").trim() === "Rendered";
+    res.renderedHasRows = body().querySelectorAll("details").length === 2;
+    res.renderedHasNoRawBlock = !raw();
+    res.renderedMarksTheNote = /Auto Retry note/.test(body().textContent);
+
+    // The switch sits under the count, on its own line, and cannot move when
+    // pressed: the label is the state, so its width changes with it.
+    const countLine = [...body().children].find((el) => /messages,/.test(el.textContent || ""));
+    const before = viewBtn().getBoundingClientRect();
+    res.underTheCount = !!countLine &&
+      countLine.compareDocumentPosition(viewBtn()) & Node.DOCUMENT_POSITION_FOLLOWING &&
+      viewBtn().getBoundingClientRect().top >= countLine.getBoundingClientRect().bottom - 1;
+
     viewBtn().click();
     await wait(30);
-    res.nowRendered = (viewBtn().textContent || "").trim() === "Rendered";
-    res.emphasisApplied =
-      bodyEl().querySelectorAll("em").length === 1 &&
-      bodyEl().querySelectorAll("strong").length === 1;
-    res.markersGone = bodyEl().textContent.indexOf("*turned*") < 0;
-    res.arithmeticKept = bodyEl().textContent.indexOf("2 * 4 = 8") >= 0;
-    // A prompt is somebody's chat and a model's output, so a tag in it is text.
-    res.tagIsText =
-      bodyEl().textContent.indexOf("<b>x</b>") >= 0 &&
-      bodyEl().querySelectorAll("b").length === 0;
+    const after = viewBtn().getBoundingClientRect();
+    res.didNotMove =
+      Math.abs(after.left - before.left) < 1 &&
+      Math.abs(after.top - before.top) < 1 &&
+      Math.abs(after.width - before.width) < 1;
+
+    // Raw: the data the model was handed, and none of the panel's own labelling.
+    res.nowRaw = (viewBtn().textContent || "").trim() === "Raw";
+    res.rawHasBlock = !!raw();
+    res.rawHasNoRows = body().querySelectorAll("details").length === 0;
+    let parsed = null;
+    try { parsed = JSON.parse(raw().textContent); } catch (_) {}
+    res.rawIsData =
+      Array.isArray(parsed) && parsed.length === 2 &&
+      parsed[0].role === "system" && parsed[1].content === "she *turned* and said <b>no</b>";
+    // Role and content are what crossed to the model. The chat-or-added marks
+    // and the note flag are this panel's, so they are not in the data.
+    res.rawIsOnlyWhatWentOut =
+      !!parsed && Object.keys(parsed[0]).sort().join(",") === "content,role";
+    res.rawKeepsMarkupAsText = body().querySelectorAll("[data-ar-raw] b").length === 0;
     res.remembered = JSON.parse(localStorage.getItem("lv-auto-retry:layout:v1") || "{}").promptView;
     return res;
   });
   await page.close();
-  check("the choice stays out of the header the three tabs share", out.notInTheHeader, out);
+  check("the switch stays out of the header the three tabs share", out.notInTheHeader, out);
   check("and is not drawn on a tab it means nothing on", out.notOnTheLogTab, out);
-  check("it is offered with the prompt's own summary", out.shownOnPrompt, out);
-  check("raw is where it starts", out.startsRaw, out);
-  check("raw keeps every character, and makes nothing of them", out.rawKeepsMarkers && out.rawHasNoEm, out);
-  check("rendered applies the emphasis", out.nowRendered && out.emphasisApplied, out);
-  check("and takes the markers out of the text", out.markersGone, out);
-  check("arithmetic is left alone", out.arithmeticKept, out);
-  check("a tag in the prompt stays text and never becomes an element", out.tagIsText, out);
-  check("the choice is remembered", out.remembered === "rendered", out);
+  check("rendered is where it starts", out.startsRendered, out);
+  check("rendered is the panel as it was, rows and all", out.renderedHasRows && out.renderedHasNoRawBlock, out);
+  check("with the note still marked", out.renderedMarksTheNote, out);
+  check("the switch sits under the count on its own line", !!out.underTheCount, out);
+  check("and does not move or resize when pressed", out.didNotMove, out);
+  check("raw replaces the rows with the prompt as data", out.nowRaw && out.rawHasBlock && out.rawHasNoRows, out);
+  check("the data is the messages the model was handed", out.rawIsData, out);
+  check("carrying only what went out, not the panel's own marks", out.rawIsOnlyWhatWentOut, out);
+  check("and markup in it stays text", out.rawKeepsMarkupAsText, out);
+  check("the choice is remembered", out.remembered === "raw", out);
 }
 
 // ---- the panel asks for prompts again when the backend comes back ----

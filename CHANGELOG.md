@@ -14,7 +14,7 @@ _2026-08-17_
 
 ### Added
 
-- **A rendered view of the prompt, beside the raw one.** The button next to **Copy** on the Prompt tab switches between them. Raw is every character exactly as the model got it, in a monospace font, which is the view to use when the question is what was actually sent. Rendered lays the same text out as prose with its emphasis applied, which is how you read a long scene without counting asterisks. It knows the four things a scene is written with, and leaves everything else as typed: `2 * 4 = 8` keeps both stars and `snake_case_name` stays whole. Nothing in a prompt is ever treated as markup, so a tag in your chat is shown as the characters you wrote. Raw is where it starts, and whichever you pick is remembered.
+- **A raw view of the prompt, beside the usual one.** The button under the message and character count switches between them. Rendered is the panel as it has always looked, and where it starts: a row per message, its role, its size, whether it came from the chat or was wrapped around it, and any notes marked. Raw takes all of that off and shows the prompt as the data the model was handed, role and content and nothing else, which is the form to read when the question is about structure rather than wording, and the form to paste somewhere else. **Copy** follows whichever view you are on. The button sits on its own line and is sized for the longer of its two labels, so pressing it cannot move it. Whichever you pick is remembered.
 
 ### Changed
 
