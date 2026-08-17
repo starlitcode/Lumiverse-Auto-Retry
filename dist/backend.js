@@ -875,82 +875,133 @@ spindle.on('GENERATION_ENDED', async (p) => {
 // Runs after the prompt is assembled and before it reaches the model. Priority
 // 150 rather than the default 100 so the note lands after anything another
 // extension adds, which is what "closest to the model" has to mean to be worth
-// choosing. Registering without the interceptor permission is a silent no-op,
-// so this is safe to call either way.
-try {
-    spindle.registerInterceptor(async (messages, context) => {
-        try {
-            const who = context && context.userId;
-            if (!refusalNote) {
-                snapshotPrompt(messages, context, who);
-                return messages;
-            }
-            const chatId = context && context.chatId;
-            // A note armed in one chat is not for a generation in another, and it
-            // stays armed so the retry it was meant for can still collect it.
-            if (chatId && refusalNote.chatId && String(chatId) !== refusalNote.chatId) {
-                snapshotPrompt(messages, context, who);
-                return messages;
-            }
-            const type = String((context && context.generationType) || '');
-            // Only when the user asked for it. Left on by default this rejected every
-            // generation on any build that reports "normal", which is the bug that
-            // made the note look like it did nothing at all.
-            if (refusalNote.strictType && type && RETRY_TYPES.indexOf(type.toLowerCase()) < 0) {
-                snapshotPrompt(messages, context, who);
-                // Named rather than swallowed. A note that never appears looks the same
-                // whether it was never armed or the host called this generation
-                // something else, and only one of those is fixable by the user. The
-                // note stays armed: with the strict check on, the point is to wait for
-                // a generation the host does call a retry.
-                try {
-                    replyTo(who, { type: 'note_skipped', reason: 'the strict check is on and the host called this generation "' + type + '"' });
-                }
-                catch (__) { }
-                return messages;
-            }
-            const armed = refusalNote;
-            refusalNote = null; // one generation, collected or not
-            if (Date.now() - armed.at > NOTE_MAX_AGE_MS) {
-                try {
-                    replyTo(who, { type: 'note_skipped', reason: 'it was armed too long ago to still belong to this generation' });
-                }
-                catch (__) { }
-                snapshotPrompt(messages, context, who);
-                return messages;
-            }
-            if (!Array.isArray(messages))
-                return messages;
-            const built = armed.notes.map((n) => ({ role: n.role, content: n.text }));
-            const placed = placeNotes(messages, built, armed.placement);
-            // Named in the Prompt Breakdown so each note is inspectable rather than
-            // something that silently happened to the prompt.
-            const breakdown = built.map((_, i) => ({
-                messageIndex: placed.from + i,
-                name: built.length > 1 ? 'Auto Retry refusal note ' + (i + 1) : 'Auto Retry refusal note',
-            }));
-            // Said out loud, so "did my note go?" has an answer in the live log
-            // instead of being something the user has to infer from the reply.
+// choosing.
+const promptInterceptor = async (messages, context) => {
+    try {
+        const who = context && context.userId;
+        if (!refusalNote) {
+            snapshotPrompt(messages, context, who);
+            return messages;
+        }
+        const chatId = context && context.chatId;
+        // A note armed in one chat is not for a generation in another, and it
+        // stays armed so the retry it was meant for can still collect it.
+        if (chatId && refusalNote.chatId && String(chatId) !== refusalNote.chatId) {
+            snapshotPrompt(messages, context, who);
+            return messages;
+        }
+        const type = String((context && context.generationType) || '');
+        // Only when the user asked for it. Left on by default this rejected every
+        // generation on any build that reports "normal", which is the bug that
+        // made the note look like it did nothing at all.
+        if (refusalNote.strictType && type && RETRY_TYPES.indexOf(type.toLowerCase()) < 0) {
+            snapshotPrompt(messages, context, who);
+            // Named rather than swallowed. A note that never appears looks the same
+            // whether it was never armed or the host called this generation
+            // something else, and only one of those is fixable by the user. The
+            // note stays armed: with the strict check on, the point is to wait for
+            // a generation the host does call a retry.
             try {
-                replyTo(who, { type: 'note_sent', count: built.length, generationType: type });
+                replyTo(who, { type: 'note_skipped', reason: 'the strict check is on and the host called this generation "' + type + '"' });
             }
             catch (__) { }
-            // After the note is in, so the panel shows what actually went rather than
-            // what would have gone without it.
-            snapshotPrompt(placed.list, context, who, { from: placed.from, count: built.length });
-            return { messages: placed.list, breakdown: breakdown };
+            return messages;
         }
-        catch (_) {
-            return messages; // a fault here must never cost the user their generation
+        const armed = refusalNote;
+        refusalNote = null; // one generation, collected or not
+        if (Date.now() - armed.at > NOTE_MAX_AGE_MS) {
+            try {
+                replyTo(who, { type: 'note_skipped', reason: 'it was armed too long ago to still belong to this generation' });
+            }
+            catch (__) { }
+            snapshotPrompt(messages, context, who);
+            return messages;
         }
-    }, 150);
-}
-catch (_) {
-    try {
-        spindle.log.warn('auto-retry: could not register the interceptor; the refusal note will not be sent');
+        if (!Array.isArray(messages))
+            return messages;
+        const built = armed.notes.map((n) => ({ role: n.role, content: n.text }));
+        const placed = placeNotes(messages, built, armed.placement);
+        // Named in the Prompt Breakdown so each note is inspectable rather than
+        // something that silently happened to the prompt.
+        const breakdown = built.map((_, i) => ({
+            messageIndex: placed.from + i,
+            name: built.length > 1 ? 'Auto Retry refusal note ' + (i + 1) : 'Auto Retry refusal note',
+        }));
+        // Said out loud, so "did my note go?" has an answer in the live log
+        // instead of being something the user has to infer from the reply.
+        try {
+            replyTo(who, { type: 'note_sent', count: built.length, generationType: type });
+        }
+        catch (__) { }
+        // After the note is in, so the panel shows what actually went rather than
+        // what would have gone without it.
+        snapshotPrompt(placed.list, context, who, { from: placed.from, count: built.length });
+        return { messages: placed.list, breakdown: breakdown };
     }
-    catch (__) { }
+    catch (_) {
+        return messages; // a fault here must never cost the user their generation
+    }
+};
+// Registering an interceptor without the permission does not throw. It is a
+// silent no-op, and the host notifies instead. Registering once as this module
+// loaded was therefore a bet that the grant was already in the local cache at
+// that moment, and a grant can be given or taken away while the extension runs
+// with nothing restarting. Lose that bet and the interceptor never exists: no
+// refusal note is ever added and no prompt ever reaches the Prompt tab, with
+// nothing anywhere saying why. The documented shape is this one, try at
+// startup, try again on the grant, and keep a flag so a second grant does not
+// register twice.
+let interceptorOn = false;
+function tryRegisterInterceptor() {
+    if (interceptorOn)
+        return;
+    try {
+        const perms = spindle.permissions;
+        // A build too old to have permissions.has gets the old behaviour, which is
+        // to register and let the host decide.
+        if (perms && typeof perms.has === 'function' && !perms.has('interceptor'))
+            return;
+    }
+    catch (_) { }
+    try {
+        spindle.registerInterceptor(promptInterceptor, 150);
+        interceptorOn = true;
+    }
+    catch (_) {
+        try {
+            spindle.log.warn('auto-retry: could not register the interceptor; the refusal note will not be sent');
+        }
+        catch (__) { }
+    }
 }
+tryRegisterInterceptor();
+try {
+    spindle.permissions.onChanged((e) => {
+        if (e && e.permission === 'interceptor' && e.granted)
+            tryRegisterInterceptor();
+    });
+}
+catch (_) { }
+// The only way to find out a fire-and-forget registration was refused. Said in
+// the log rather than swallowed, since the two features it takes out both look
+// like nothing happening.
+try {
+    spindle.permissions.onDenied((e) => {
+        if (e && e.permission === 'interceptor')
+            try {
+                spindle.log.warn('auto-retry: the interceptor permission is not granted, so the refusal note and the Prompt tab will not work');
+            }
+            catch (__) { }
+    });
+}
+catch (_) { }
+// Said out loud once this module is listening. A panel that asked to be sent
+// prompts has no way to know the backend was not up yet, or has restarted since
+// and forgotten, and its request is a one-off. Hearing this, it asks again.
+try {
+    replyTo(undefined, { type: 'backend_ready' });
+}
+catch (_) { }
 try {
     spindle.log.info('Auto Retry backend loaded (find and replace in replies).');
 }

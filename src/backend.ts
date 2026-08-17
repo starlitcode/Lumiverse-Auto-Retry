@@ -799,10 +799,8 @@ spindle.on('GENERATION_ENDED', async (p: any) => {
 // Runs after the prompt is assembled and before it reaches the model. Priority
 // 150 rather than the default 100 so the note lands after anything another
 // extension adds, which is what "closest to the model" has to mean to be worth
-// choosing. Registering without the interceptor permission is a silent no-op,
-// so this is safe to call either way.
-try {
-  spindle.registerInterceptor(async (messages: any[], context: any) => {
+// choosing.
+const promptInterceptor = async (messages: any[], context: any) => {
     try {
       const who = context && context.userId;
       if (!refusalNote) {
@@ -856,9 +854,52 @@ try {
     } catch (_) {
       return messages; // a fault here must never cost the user their generation
     }
-  }, 150);
-} catch (_) {
-  try { spindle.log.warn('auto-retry: could not register the interceptor; the refusal note will not be sent'); } catch (__) {}
+};
+
+// Registering an interceptor without the permission does not throw. It is a
+// silent no-op, and the host notifies instead. Registering once as this module
+// loaded was therefore a bet that the grant was already in the local cache at
+// that moment, and a grant can be given or taken away while the extension runs
+// with nothing restarting. Lose that bet and the interceptor never exists: no
+// refusal note is ever added and no prompt ever reaches the Prompt tab, with
+// nothing anywhere saying why. The documented shape is this one, try at
+// startup, try again on the grant, and keep a flag so a second grant does not
+// register twice.
+let interceptorOn = false;
+function tryRegisterInterceptor(): void {
+  if (interceptorOn) return;
+  try {
+    const perms: any = (spindle as any).permissions;
+    // A build too old to have permissions.has gets the old behaviour, which is
+    // to register and let the host decide.
+    if (perms && typeof perms.has === 'function' && !perms.has('interceptor')) return;
+  } catch (_) {}
+  try {
+    spindle.registerInterceptor(promptInterceptor, 150);
+    interceptorOn = true;
+  } catch (_) {
+    try { spindle.log.warn('auto-retry: could not register the interceptor; the refusal note will not be sent'); } catch (__) {}
+  }
 }
+tryRegisterInterceptor();
+try {
+  (spindle as any).permissions.onChanged((e: any) => {
+    if (e && e.permission === 'interceptor' && e.granted) tryRegisterInterceptor();
+  });
+} catch (_) {}
+// The only way to find out a fire-and-forget registration was refused. Said in
+// the log rather than swallowed, since the two features it takes out both look
+// like nothing happening.
+try {
+  (spindle as any).permissions.onDenied((e: any) => {
+    if (e && e.permission === 'interceptor')
+      try { spindle.log.warn('auto-retry: the interceptor permission is not granted, so the refusal note and the Prompt tab will not work'); } catch (__) {}
+  });
+} catch (_) {}
+
+// Said out loud once this module is listening. A panel that asked to be sent
+// prompts has no way to know the backend was not up yet, or has restarted since
+// and forgotten, and its request is a one-off. Hearing this, it asks again.
+try { replyTo(undefined, { type: 'backend_ready' }); } catch (_) {}
 
 try { spindle.log.info('Auto Retry backend loaded (find and replace in replies).'); } catch (_) {}

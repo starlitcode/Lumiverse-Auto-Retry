@@ -112,7 +112,7 @@ const STREAM_BUF_MAX = 200000;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "4.12.2";
+const VERSION = "4.12.3";
 
 // The one address the extension ever points at, used by the warning in front of
 // the crisis-support check. Pinned to the released branch rather than to a tag,
@@ -4395,9 +4395,17 @@ export function setup(ctx: Ctx, opts?: any) {
   // on every change of tab, open and close, and on teardown, so the cost stops
   // the moment the view does.
   let promptsAsked = false;
-  function askForPrompts() {
+  // Only sent when the answer changes, because there is no point repeating it.
+  // That holds as long as the backend heard the first one, and it does not
+  // always: the two sides have separate lifetimes, so a backend that was not up
+  // yet, or that restarted afterwards, is left knowing nothing while this side
+  // is certain it has already asked. Nothing then re-sends it, and the tab
+  // stays empty until something happens to toggle the view off and on again,
+  // which is why leaving the chat and coming back appeared to fix it. force is
+  // for the backend saying it has just started.
+  function askForPrompts(force?: boolean) {
     const want = !!(cfg.liveLog && (liveLogEl || drawerTab) && liveTab === "prompt");
-    if (want === promptsAsked) return;
+    if (want === promptsAsked && !force) return;
     promptsAsked = want;
     try {
       if (ctx && typeof (ctx as any).sendToBackend === "function")
@@ -9762,6 +9770,16 @@ export function setup(ctx: Ctx, opts?: any) {
           const yes = await confirmEdit("Apply your word swaps to this reply?");
           if (yes && ctx && typeof (ctx as any).sendToBackend === "function") {
             (ctx as any).sendToBackend({ type: "apply_replace_now", chatId: msg.chatId, messageId: msg.messageId, requestId: "ar-rep-" + Date.now() });
+          }
+          return;
+        }
+        // The backend has just come up, so whatever it was told before is gone.
+        // Only worth a message if this panel actually wants prompts; asking for
+        // nothing is what it would already be getting.
+        if (msg.type === "backend_ready") {
+          if (promptsAsked) {
+            log("backend restarted, asking it for prompts again");
+            askForPrompts(true);
           }
           return;
         }
