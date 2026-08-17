@@ -159,6 +159,12 @@ const MAX_NOTES = 10;
 // A set rather than a flag, because one backend can serve several accounts and
 // one person opening the view is not a reason to capture anyone else's prompt.
 const promptWatchers = new Set<string>();
+// A snapshot is identified to the panel by when it was taken, which is how a
+// token count that arrives later is matched to the prompt it describes. Two
+// generations in the same millisecond would share that identity and the count
+// for one would be shown against the other, so it is nudged forward to stay
+// strictly rising.
+let lastSnapshotAt = 0;
 const watcherKey = (userId?: string) => String(userId == null ? '' : userId);
 // Who a snapshot belongs to, or null for nobody. The exact key answers it
 // whenever both sides name the same person, and they do not always: the panel's
@@ -226,13 +232,15 @@ function snapshotPrompt(messages: any[], context: any, userId?: string, noteAt?:
         noteIndex: isNote ? i - noteAt!.from + 1 : 0,
       });
     }
-    const at = Date.now();
-    const chatId = context && context.chatId ? String(context.chatId) : '';
+    const at = Math.max(Date.now(), lastSnapshotAt + 1);
+    lastSnapshotAt = at;
+    // Only what the panel reads. This used to carry the chat id and the
+    // generation type as well, and nothing on the other side ever looked at
+    // either. A field nobody reads is one a reader has to work out the purpose
+    // of before deciding it has none.
     replyTo(to, {
       type: 'prompt_snapshot',
       at: at,
-      chatId: chatId,
-      generationType: String((context && context.generationType) || ''),
       messages: out,
       total: messages.length,
       notes: noteAt ? noteAt.count : 0,
@@ -242,7 +250,7 @@ function snapshotPrompt(messages: any[], context: any, userId?: string, noteAt?:
     countTokens(messages.map((m: any) => String((m && m.content) || '')).join('\n'), context, to)
       .then((tokens) => {
         if (tokens == null) return;
-        replyTo(to, { type: 'prompt_tokens', at: at, chatId: chatId, tokens: tokens });
+        replyTo(to, { type: 'prompt_tokens', at: at, tokens: tokens });
       })
       .catch(() => {});
   } catch (_) { /* a viewer must never cost anyone their generation */ }
