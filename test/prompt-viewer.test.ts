@@ -303,3 +303,32 @@ describe("registering the interceptor", () => {
     expect(BACK).toContain("permissions.onDenied");
   });
 });
+
+// What crosses the bridge, and nothing else. A field the other side never reads
+// is one a reader has to work out the purpose of before deciding it has none,
+// which is the same fault as a handler for a message nobody sends.
+describe("the snapshot carries only what the panel reads", () => {
+  test("role and content, and the two marks the panel draws", async () => {
+    const h = boot();
+    await h.watch(true);
+    await h.run([{ role: "user", content: "hi", __isChatHistory: true }], { chatId: "c1" });
+    const snap = h.snapshots().pop()!.msg;
+    expect(Object.keys(snap).sort()).toEqual(["at", "messages", "notes", "total", "type"]);
+    expect(Object.keys(snap.messages[0]).sort()).toEqual(
+      ["content", "history", "note", "noteIndex", "role"],
+    );
+  });
+
+  // The panel matches a token count to a prompt by when it was taken, so two
+  // taken in the same millisecond must not share that.
+  test("two prompts in a row never share an identity", async () => {
+    const h = boot();
+    await h.watch(true);
+    const seen = new Set<number>();
+    for (let i = 0; i < 50; i++) {
+      await h.run([{ role: "user", content: "n" + i }], { chatId: "c1" });
+      seen.add(h.snapshots().pop()!.msg.at);
+    }
+    expect(seen.size).toBe(50);
+  });
+});
