@@ -3101,12 +3101,29 @@ export function setup(ctx, opts) {
     // in order, with its role, its size, and whether it came from the chat or was
     // wrapped around it. Lumiverse's own Prompt Breakdown answers what the chat is
     // built from, which is a different question from what was sent.
+    // Whether the prompt being held describes the chat you are looking at.
+    //
+    // Snapshots are addressed to a person rather than to a window, so two chats
+    // open in two tabs both receive every prompt either one produces, and the tab
+    // showing chat B would draw chat A's prompt without a word about it.
+    //
+    // The prompt is kept either way and only its drawing is gated. Dropping it on
+    // arrival would mean trusting that this side already knows which chat the
+    // generation was for, and the snapshot and the events that set that are not
+    // ordered against each other. Held, a chat id that arrives late costs nothing:
+    // the next repaint simply starts matching. Either side being unknown counts as
+    // a match, since a guess is worse than the prompt somebody asked to see.
+    function promptIsForThisChat() {
+        if (!lastPrompt || !lastPrompt.chatId || !lastChatId)
+            return true;
+        return String(lastPrompt.chatId) === String(lastChatId);
+    }
     // The prompt as the model was handed it, with everything this panel adds
     // taken off: no roles coloured, no chat-or-added marks, no note highlighting,
     // none of the rows. Role and content are what actually crossed to the model,
     // so this is also the form that pastes into anything else.
     function promptAsData() {
-        if (!lastPrompt)
+        if (!lastPrompt || !promptIsForThisChat())
             return "[]";
         try {
             return JSON.stringify(lastPrompt.messages.map((m) => ({
@@ -3129,6 +3146,11 @@ export function setup(ctx, opts) {
             body.textContent = promptNeverArrived
                 ? "That reply finished without a prompt reaching this tab. Reading the prompt needs the interceptor permission, which is privileged, so an admin has to approve it before it does anything. Everything else in the extension works without it."
                 : "(no prompt seen yet; send a reply)";
+            return;
+        }
+        if (!promptIsForThisChat()) {
+            body.textContent =
+                "The last prompt captured was for a different chat. Send a reply here to see this one's.";
             return;
         }
         const chars = lastPrompt.messages.reduce((n, m) => n + String(m.content || "").length, 0);
@@ -3407,6 +3429,8 @@ export function setup(ctx, opts) {
         const promptAsText = () => {
             if (!lastPrompt)
                 return "(no prompt seen yet; send a reply)";
+            if (!promptIsForThisChat())
+                return "(the last prompt captured was for a different chat)";
             // Copy takes what is on screen, so in the raw view it takes the data.
             if (promptView === "raw")
                 return promptAsData();
@@ -6268,6 +6292,11 @@ export function setup(ctx, opts) {
         // that can also mean "no chat any more", which noteChat ignores on purpose.
         lastChatId = p.chatId || null;
         lastMessageId = null;
+        // The prompt on screen belongs to the chat that was just left, so the tab
+        // has to be told. It is the one thing here that describes a chat and is not
+        // repainted by paintNow below.
+        if (liveTab === "prompt")
+            renderLiveLog();
         // All of these describe the chat you are in, so all of them go stale on a
         // switch. The line most of all: walking into a chat you had switched off
         // should say so straight away, not on the next tick.

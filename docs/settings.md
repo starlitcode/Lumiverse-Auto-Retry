@@ -131,6 +131,8 @@ This is what actually went, after your setup, your world info, your persona and 
 
 Switching tabs works by tapping, and from a keyboard with the left and right arrows.
 
+What it shows is the prompt for the chat you are in. A captured prompt goes to you rather than to one window, so if you have two chats open in two tabs, both receive every prompt either one produces. The tab says so rather than showing you the other chat's, and walking back into the chat a prompt belongs to brings it back.
+
 The prompt is only captured while the Prompt tab is actually open. Switch to Log, close the panel, or close the tab, and nothing is captured at all. That is why there is no separate switch for it: a setting left on would go on paying for itself in every chat long after you looked once.
 
 Reading the prompt is the one thing in the panel that needs a permission. The assembled prompt is only visible to an extension through the `interceptor`, which is privileged, so an admin has to approve it. Without it the tab stays empty and says so after your next reply, rather than going on telling you to send one.

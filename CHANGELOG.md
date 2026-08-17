@@ -20,12 +20,9 @@ _2026-08-17_
 
 - **The Prompt tab shows the whole prompt.** It used to be capped at 200 messages, 4000 characters each and 300000 in total, with a line under a long message saying how much of it was missing. That was the one thing a reader could not work around, since what was cut only ever existed on the server and was thrown away as the view was built. Every message is now listed and every character of each one is there. The cost stays where it always was: a prompt is only captured while the Prompt tab is actually open, and nothing is captured at all once you switch away or close it.
 
-## 4.12.3
-
-_2026-08-17_
-
 ### Fixed
 
+- **The Prompt tab could show a prompt from a different chat.** A captured prompt is sent to a person rather than to a window, so with two chats open in two tabs, both of them received every prompt either one produced, and the tab showing one chat drew the other's without a word about it. The tab now checks, and says so instead of drawing it. The prompt itself is held rather than thrown away, so walking back into the chat it belongs to brings it back, and a prompt that arrives before anything has said which chat it was for is still shown once that is known.
 - **The Prompt tab could stay empty however long you waited, and the refusal note could never send.** Both run off an interceptor, and registering one is fire-and-forget: without the permission the host does not throw, it silently does nothing and notifies separately. This registered once as the backend loaded, which was a bet that the grant was already in the local cache at that instant. A grant can also be given or taken away while the extension runs with nothing restarting. Losing that bet left both features dead for the life of the backend with nothing anywhere saying so, which looks exactly like a quiet install. The permission is checked first now, the registration is tried again the moment the permission is granted, and a refusal is written to the log rather than passing in silence.
 - **The Prompt tab stayed empty until you left the chat and came back.** Asking the backend to capture prompts is a live request rather than a saved setting, and it was sent only when the answer changed. The two sides have separate lifetimes, so a backend that was not listening yet, or that restarted afterwards, knew nothing while the panel was certain it had already asked, and nothing ever re-sent it. Leaving the chat and returning happened to toggle the view off and on, which sent it again, which is why that appeared to be the fix. The backend now says when it has started, and any panel waiting on a prompt asks again when it hears it.
 

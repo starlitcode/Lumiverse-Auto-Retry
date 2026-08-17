@@ -4459,6 +4459,88 @@ console.log("\nper-chat switch, in the panel");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- a prompt is only shown for the chat you are in ----
+// Snapshots are addressed to a person rather than to a window, so two chats
+// open in two tabs both receive every prompt either one produces. The tab
+// showing chat B drew chat A's prompt without a word about it.
+//
+// The prompt is held either way and only its drawing is gated, because the
+// snapshot and the events that say which chat you are in are not ordered
+// against each other. A chat id that arrives late has to cost nothing.
+console.log("\na prompt is only shown for the chat you are in");
+{
+  const page = await browser.newPage();
+  await stage(page, "<div id=modal></div>");
+  await page.addStyleTag({ content: THEME });
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  const out = await page.evaluate(async () => {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const handlers = {};
+    let fromBackend = null;
+    window.__setup(
+      { events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
+        sendToBackend: () => {},
+        onBackendMessage: (fn) => { fromBackend = fn; return () => {}; },
+        ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+              registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) } },
+      { liveLog: true, toast: false },
+    );
+    await wait(30);
+    [...document.querySelectorAll('#__lvRetryLog [role="tab"]')]
+      .find((b) => (b.textContent || "").trim() === "Prompt").click();
+    await wait(20);
+    const shown = () => document.getElementById("__lvRetryLogBody").textContent;
+    const send = (chatId) => fromBackend({
+      type: "prompt_snapshot", at: Date.now(), chatId: chatId, total: 1, notes: 0,
+      messages: [{ role: "user", content: "prompt for " + chatId, history: true, note: false }],
+    });
+    const res = {};
+
+    // Nothing knows which chat this is yet. A guess is worse than the prompt
+    // somebody asked to see, so an unknown chat counts as a match.
+    send("A");
+    await wait(20);
+    res.shownWhenChatUnknown = /prompt for A/.test(shown());
+
+    // Now in chat A. Still its prompt.
+    handlers.CHAT_SWITCHED({ chatId: "A" });
+    await wait(20);
+    res.shownInItsOwnChat = /prompt for A/.test(shown());
+
+    // Walk into chat B without generating. A's prompt is not B's.
+    handlers.CHAT_SWITCHED({ chatId: "B" });
+    await wait(20);
+    res.hiddenInAnotherChat = !/prompt for A/.test(shown());
+    res.saysWhy = /different chat/i.test(shown());
+
+    // Back to A. The prompt was held, not thrown away, so it is there again.
+    handlers.CHAT_SWITCHED({ chatId: "A" });
+    await wait(20);
+    res.cameBackOnReturn = /prompt for A/.test(shown());
+
+    // The other tab's case: a prompt arrives for a chat this window is not in.
+    send("B");
+    await wait(20);
+    res.otherChatsPromptNotDrawn = !/prompt for B/.test(shown());
+
+    // And the ordering case this design exists for: the snapshot lands before
+    // anything says which chat it was. Held, so the switch reveals it.
+    handlers.CHAT_SWITCHED({ chatId: "B" });
+    await wait(20);
+    res.lateChatIdStillShows = /prompt for B/.test(shown());
+    return res;
+  });
+  await page.close();
+  check("a prompt is drawn while the chat is still unknown", out.shownWhenChatUnknown, out);
+  check("and in the chat it belongs to", out.shownInItsOwnChat, out);
+  check("it is not drawn in a different chat", out.hiddenInAnotherChat, out);
+  check("and the tab says why rather than going blank", out.saysWhy, out);
+  check("it comes back on returning to its own chat, so nothing was thrown away", out.cameBackOnReturn, out);
+  check("a prompt for a chat this window is not in is not drawn", out.otherChatsPromptNotDrawn, out);
+  check("and a chat id that arrives after the prompt costs nothing", out.lateChatIdStillShows, out);
+}
+
 // ---- the Prompt tab draws the prompt two ways ----
 // Rendered is the panel as it has always looked, and the default: a row per
 // message with its role, its size, and whether it came from the chat or was
