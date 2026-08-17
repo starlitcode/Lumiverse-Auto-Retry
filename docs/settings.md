@@ -135,7 +135,7 @@ What it shows is the prompt for the chat you are in. A captured prompt goes to y
 
 The prompt is only captured while the Prompt tab is actually open. Switch to Log, close the panel, or close the tab, and nothing is captured at all. That is why there is no separate switch for it: a setting left on would go on paying for itself in every chat long after you looked once.
 
-Reading the prompt is the one thing in the panel that needs a permission. The assembled prompt is only visible to an extension through the `interceptor`, which is privileged, so an admin has to approve it. Without it the tab stays empty and says so after your next reply, rather than going on telling you to send one.
+Reading the prompt is the one thing in the panel that needs a permission. The assembled prompt is only visible to an extension through the `interceptor`, which is privileged, so an admin has to approve it. Without it the tab stays empty and says so after your next reply, rather than going on telling you to send one. It only says that about a reply the tab was open for from the start: a prompt is assembled as a reply begins, so opening the tab partway through a reply cannot catch that one, and the tab asks for another rather than blaming the permission.
 
 What is captured is captured on your device and shown to you. Nothing is sent anywhere, nothing is written to disk, and it goes when you close the tab. A very long prompt is trimmed for display and says so rather than showing you part of it silently.
 

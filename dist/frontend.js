@@ -101,7 +101,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "4.13.0";
+const VERSION = "4.13.1";
 // The one address the extension ever points at, used by the warning in front of
 // the crisis-support check. Pinned to the released branch rather than to a tag,
 // so an old install still opens the page as it stands today.
@@ -6158,6 +6158,11 @@ export function setup(ctx, opts) {
             s.startWatchdog = null;
         }
         s.expectingStart = 0;
+        // Whether the Prompt tab was open and asking at the moment this generation
+        // began. The prompt is assembled at the start, which is when the interceptor
+        // runs and the only chance there is to capture it, so arming the tab any
+        // later cannot produce one for this generation however long it runs.
+        s.watchedFromStart = promptsAsked;
         const switched = lastChatId !== p.chatId;
         lastChatId = p.chatId;
         lastMessageId = p.messageId;
@@ -6360,7 +6365,15 @@ export function setup(ctx, opts) {
         s.live = false;
         // A generation has now been all the way through with the view open and
         // asking, so a prompt that has still not arrived is not going to.
-        if (promptsAsked && !lastPrompt && !promptNeverArrived) {
+        //
+        // Both ends have to have been asking, not just this one. Sending a reply
+        // with the panel shut, or on the Log tab, and opening the Prompt tab while
+        // it ran would arm capture after the prompt had already been assembled and
+        // gone: no snapshot could arrive for that generation, and this took the
+        // silence for a missing permission and said so. It named the one thing the
+        // reader could not check and was wrong about it, which is worse than
+        // saying nothing.
+        if (s.watchedFromStart && promptsAsked && !lastPrompt && !promptNeverArrived) {
             promptNeverArrived = true;
             if (liveTab === "prompt")
                 renderLiveLog();
