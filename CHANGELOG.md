@@ -8,14 +8,6 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
-## 4.13.1
-
-_2026-08-17_
-
-### Fixed
-
-- **The Prompt tab said the interceptor permission was missing when it was not.** A prompt is assembled as a reply begins, which is the only moment there is to capture it, so a tab opened partway through a reply cannot catch that one however long the reply runs. The tab took that silence for a missing permission and said so. Sending a reply with the panel shut, or while reading the Log, and then going to look at the prompt was enough to be told the extension lacked a permission it had, which is the one thing named there that you cannot check from the panel. It now only says that about a reply the tab was open and asking for from the start, and asks for another reply otherwise.
-
 ## 4.13.0
 
 _2026-08-17_
@@ -32,6 +24,7 @@ _2026-08-17_
 
 - **The Prompt tab could show a prompt from a different chat.** A captured prompt is sent to a person rather than to a window, so with two chats open in two tabs, both of them received every prompt either one produced, and the tab showing one chat drew the other's without a word about it. The tab now checks, and says so instead of drawing it. The prompt itself is held rather than thrown away, so walking back into the chat it belongs to brings it back, and a prompt that arrives before anything has said which chat it was for is still shown once that is known.
 - **The Prompt tab could stay empty however long you waited, and the refusal note could never send.** Both run off an interceptor, and registering one is fire-and-forget: without the permission the host does not throw, it silently does nothing and notifies separately. This registered once as the backend loaded, which was a bet that the grant was already in the local cache at that instant. A grant can also be given or taken away while the extension runs with nothing restarting. Losing that bet left both features dead for the life of the backend with nothing anywhere saying so, which looks exactly like a quiet install. The permission is checked first now, the registration is tried again the moment the permission is granted, and a refusal is written to the log rather than passing in silence.
+- **The Prompt tab said the interceptor permission was missing when it was not.** A prompt is assembled as a reply begins, which is the only moment there is to capture it, so a tab opened partway through a reply cannot catch that one however long the reply runs. The tab took that silence for a missing permission and said so. Sending a reply with the panel shut, or while reading the Log, and then going to look at the prompt was enough to be told the extension lacked a permission it had, which is the one thing named there that you cannot check from the panel. It now only says that about a reply the tab was open and asking for from the start, and asks for another reply otherwise.
 - **The Prompt tab stayed empty until you left the chat and came back.** Asking the backend to capture prompts is a live request rather than a saved setting, and it was sent only when the answer changed. The two sides have separate lifetimes, so a backend that was not listening yet, or that restarted afterwards, knew nothing while the panel was certain it had already asked, and nothing ever re-sent it. Leaving the chat and returning happened to toggle the view off and on, which sent it again, which is why that appeared to be the fix. The backend now says when it has started, and any panel waiting on a prompt asks again when it hears it.
 
 ## 4.12.2
