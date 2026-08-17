@@ -3813,9 +3813,10 @@ export function setup(ctx, opts) {
     }
     // A small round button that floats over the chat and turns the extension on or
     // off in one tap. The host owns the placement: ctx.ui.createFloatWidget gives
-    // it dragging, edge snapping, remembered position, and the right-click hide and
-    // reset-position options users get on any float widget. That is why this is not
-    // a hand-rolled fixed-position element with its own pointer handling.
+    // it dragging and edge snapping, which is why this is not a hand-rolled
+    // fixed-position element with its own pointer handling. Its right-click menu
+    // is the one thing not taken, since ours has to go there instead; see the
+    // contextmenu handler below.
     let floatWidget = null;
     let floatMenu = null;
     // Reassigned each time the button is rebuilt; the document listener below
@@ -3829,6 +3830,25 @@ export function setup(ctx, opts) {
     }
     const vpW = () => (typeof window !== "undefined" && window.innerWidth) || 360;
     const vpH = () => (typeof window !== "undefined" && window.innerHeight) || 640;
+    // Put a fixed element at a viewport position and make sure it got there.
+    // Where it is told to go is not always where it lands: Lumiverse's UI Scale is
+    // applied as a zoom, and anything parented to the page is zoomed with it, so
+    // at 0.9 an element set to 800 arrives at 720. Rather than guess at how a host
+    // applies its scale, put it somewhere, ask the browser where it actually went,
+    // and correct by the difference. That holds for a zoom, a transform, or
+    // anything else that moves it, because it is measured rather than assumed.
+    function placeFixed(el, left, top) {
+        el.style.left = Math.round(left) + "px";
+        el.style.top = Math.round(top) + "px";
+        const got = el.getBoundingClientRect();
+        const scale = el.offsetWidth > 0 ? got.width / el.offsetWidth : 1;
+        const dx = left - got.left;
+        const dy = top - got.top;
+        if (scale > 0.01 && (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5)) {
+            el.style.left = Math.round(left + dx / scale) + "px";
+            el.style.top = Math.round(top + dy / scale) + "px";
+        }
+    }
     function paintFloat() {
         if (!floatEl)
             return;
@@ -4016,6 +4036,10 @@ export function setup(ctx, opts) {
         // because the button snaps to the nearest edge once it is let go, and the
         // position wanted is the one it settles on, not the one your finger left.
         const rememberFloat = () => {
+            // Only ever one pending. Both events this is on can land from the same
+            // gesture, and an untracked timer is one hideFloat cannot call off.
+            if (floatSettle)
+                clearTimeout(floatSettle);
             floatSettle = setTimeout(() => {
                 floatSettle = null;
                 const at = floatPos();
@@ -4140,8 +4164,6 @@ export function setup(ctx, opts) {
         // It was also never reliably here. The entry was drawn only once a chat id
         // had been seen, and that only happens on a generation event, so on a fresh
         // page load it was missing until the first reply came through.
-        // Rebuilding the widget is what puts it back, since where it sits belongs to
-        // the host and a fresh one starts at the position it is handed.
         entry("Hide this button", () => {
             cfg.showFloatingToggle = false;
             saveSaved();
@@ -4168,19 +4190,7 @@ export function setup(ctx, opts) {
             const above = r.top - h - GAP;
             top = above >= 8 ? above : Math.max(8, vh - h - 8);
         }
-        // Same correction the hint popover needs: under a host that applies its UI
-        // Scale as a zoom, a fixed element does not land where it was told to. Put
-        // it down, measure where it went, and close the gap.
-        el.style.left = Math.round(left) + "px";
-        el.style.top = Math.round(top) + "px";
-        const got = el.getBoundingClientRect();
-        const scale = el.offsetWidth > 0 ? got.width / el.offsetWidth : 1;
-        const dx = left - got.left;
-        const dy = top - got.top;
-        if (scale > 0.01 && (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5)) {
-            el.style.left = Math.round(left + dx / scale) + "px";
-            el.style.top = Math.round(top + dy / scale) + "px";
-        }
+        placeFixed(el, left, top);
         floatMenu = el;
         ensureReadableTree(el, 2.6);
         try {
@@ -4218,9 +4228,11 @@ export function setup(ctx, opts) {
         // and every pointer move on the page went on running its hold check.
         holdMoveWatch = null;
     }
-    // Where the button is sitting right now, read off the screen. The host owns
-    // the position and does not hand it back, so the only way to keep it across a
-    // rebuild is to measure it before the old widget goes.
+    // Where the button is sitting right now, read off the screen. Used after a
+    // drag, which is the one time the button moves without this extension being
+    // told where to. Not used to carry the position across a rebuild: doing that
+    // fed the reading back in on every size change and walked the button up the
+    // screen.
     function floatPos() {
         try {
             const root = floatWidget && floatWidget.root;
@@ -4256,7 +4268,7 @@ export function setup(ctx, opts) {
         // button against an edge that gets bigger has to come back on screen, and
         // against the edge is where a snapped button belongs anyway.
         if (floatWidget && floatWidgetSize !== floatSize()) {
-            const was = floatAt || floatPos();
+            const was = floatAt;
             const d = floatSize();
             const at = was
                 ? {
@@ -4931,16 +4943,13 @@ export function setup(ctx, opts) {
     // they need different answers, so it names which one and offers the way back
     // from the one that has a button.
     let masterNoteEl = null;
-    let masterNoteWords = null;
     function syncMasterNote() {
         if (!masterNoteEl)
             return;
         const globalOff = cfg.enabled === false;
         const hereOff = chatIsOff(lastChatId);
-        masterNoteEl.style.display = globalOff || hereOff ? "flex" : "none";
-        if (!masterNoteWords)
-            return;
-        masterNoteWords.textContent = globalOff
+        masterNoteEl.style.display = globalOff || hereOff ? "block" : "none";
+        masterNoteEl.textContent = globalOff
             ? hereOff
                 ? "Auto Retry is off everywhere, and this chat is switched off as well. These settings are saved and apply when you turn it back on."
                 : "Auto Retry is off. These settings are saved and apply when you turn it back on."
@@ -6761,24 +6770,7 @@ export function setup(ctx, opts) {
         // where the anchor is half gone too.
         if (room <= 0)
             el.style.display = "none";
-        // Where it is told to go is not always where it lands. Lumiverse's UI Scale
-        // is applied as a zoom, and this is parented to the page so the zoom applies
-        // to it too: at 0.9 a popover set to 800 arrives at 720, most of a row too
-        // high and back on top of the setting it was describing. Rather than guess
-        // at how a host applies its scale, put it somewhere, ask the browser where
-        // it actually went, and correct by the difference. That holds for a zoom, a
-        // transform, or anything else that moves it, because it is measured rather
-        // than assumed.
-        el.style.left = Math.round(left) + "px";
-        el.style.top = Math.round(top) + "px";
-        const got = el.getBoundingClientRect();
-        const scale = el.offsetWidth > 0 ? got.width / el.offsetWidth : 1;
-        const dx = left - got.left;
-        const dy = top - got.top;
-        if (scale > 0.01 && (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5)) {
-            el.style.left = Math.round(left + dx / scale) + "px";
-            el.style.top = Math.round(top + dy / scale) + "px";
-        }
+        placeFixed(el, left, top);
         // Tapping the description dismisses it. On a phone that is the first thing
         // a thumb reaches for, and it did nothing.
         el.addEventListener("click", () => hideHint());
@@ -7227,6 +7219,31 @@ export function setup(ctx, opts) {
     let closeExpandEditor = null;
     // Same, for the warning that stands in front of the crisis-support check.
     let closeCrisisNotice = null;
+    // A column of checkboxes, one per entry, all ticked to start with. The debug
+    // report and the export dialog both offer the same shape of choice, and had
+    // the same fifteen lines each to draw it.
+    function buildCheckList(items) {
+        const wrap = document.createElement("div");
+        wrap.style.cssText = "display:flex;flex-direction:column;gap:6px";
+        const checks = [];
+        for (const it of items) {
+            const row = document.createElement("label");
+            row.style.cssText =
+                "display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer";
+            const cb = document.createElement("input");
+            cb.type = "checkbox";
+            cb.checked = true;
+            cb.style.cssText =
+                "accent-color:var(--lumiverse-primary,rgba(147,112,219,.9));cursor:pointer";
+            const txt = document.createElement("span");
+            txt.textContent = it.label;
+            row.appendChild(cb);
+            row.appendChild(txt);
+            wrap.appendChild(row);
+            checks.push({ id: it.id, input: cb });
+        }
+        return { wrap, checks };
+    }
     function buildSettingsBody(root, onSaved) {
         ensurePanelStyle();
         // The buttons a popover can be anchored to are about to be thrown away.
@@ -7238,6 +7255,30 @@ export function setup(ctx, opts) {
         // panel, so it is put back to doing nothing until the new one assigns it.
         applyDeps = () => { };
         presetBarRefreshers = [];
+        // Flush a field the user is still editing into cfg, then normalise every
+        // number so a blank or out-of-range box cannot be saved or captured into a
+        // preset.
+        const commit = () => {
+            const active = typeof document !== "undefined" ? document.activeElement : null;
+            if (active && typeof active.blur === "function")
+                active.blur();
+            for (const g of SCHEMA)
+                for (const fl of g.fields)
+                    if (fl.type === "num")
+                        cfg[fl.key] = clampField(fl, cfg[fl.key]);
+        };
+        // Everything a change to cfg needs to take effect: written to both stores,
+        // then each surface that reads cfg brought into line. Saving and loading a
+        // preset both end here, and missing one line is a surface left stale.
+        const applyAndSave = () => {
+            saveSaved();
+            saveToAccount();
+            syncLiveLog();
+            syncFloat();
+            syncInputBarActions();
+            if (onSaved)
+                onSaved();
+        };
         // A preset switcher: pick a saved preset and Load it into the settings, or
         // save the current settings as a preset. Load updates the on-screen fields in
         // place (no rebuild), so it never jumps the scroll or closes open sections.
@@ -7291,16 +7332,6 @@ export function setup(ctx, opts) {
                 "font-size:12px;line-height:1.4;color:var(--lumiverse-text-muted,rgba(255,255,255,.65));min-height:1em";
             const presets = loadPresets();
             const list = () => presets[kind] || [];
-            // Flush a field the user is still editing into cfg before we snapshot it.
-            const commit = () => {
-                const active = typeof document !== "undefined" ? document.activeElement : null;
-                if (active && typeof active.blur === "function")
-                    active.blur();
-                for (const g of SCHEMA)
-                    for (const fl of g.fields)
-                        if (fl.type === "num")
-                            cfg[fl.key] = clampField(fl, cfg[fl.key]);
-            };
             // A control that cannot do anything yet should look that way, rather than
             // sitting there fully lit and then telling you off when you press it.
             // With nothing saved, Load, Update, Delete and Rename all had a live
@@ -7365,13 +7396,7 @@ export function setup(ctx, opts) {
                         fieldSetters[k](cfg[k]);
                 }
                 applyDeps();
-                saveSaved();
-                saveToAccount();
-                syncLiveLog();
-                syncFloat();
-                syncInputBarActions();
-                if (onSaved)
-                    onSaved();
+                applyAndSave();
                 status.textContent = "Loaded preset: " + name + ". It's in effect now.";
             });
             saveNew.addEventListener("click", () => {
@@ -7925,25 +7950,7 @@ export function setup(ctx, opts) {
                 { id: "environment", label: "Browser and screen" },
                 { id: "activity", label: "Session totals and recent activity" },
             ];
-            const dchecks = [];
-            const dWrap = document.createElement("div");
-            dWrap.style.cssText = "display:flex;flex-direction:column;gap:6px";
-            for (const s of sections) {
-                const row = document.createElement("label");
-                row.style.cssText =
-                    "display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer";
-                const cb = document.createElement("input");
-                cb.type = "checkbox";
-                cb.checked = true;
-                cb.style.cssText =
-                    "accent-color:var(--lumiverse-primary,rgba(147,112,219,.9));cursor:pointer";
-                const txt = document.createElement("span");
-                txt.textContent = s.label;
-                row.appendChild(cb);
-                row.appendChild(txt);
-                dWrap.appendChild(row);
-                dchecks.push({ id: s.id, input: cb });
-            }
+            const { wrap: dWrap, checks: dchecks } = buildCheckList(sections);
             body.appendChild(dWrap);
             const opts = () => {
                 const o = {};
@@ -7998,25 +8005,7 @@ export function setup(ctx, opts) {
             const body = document.createElement("div");
             body.style.cssText = "display:none;flex-direction:column;gap:10px";
             body.appendChild(sectionDesc("Save settings to a file or load them from one. Tick the parts to include, then Export or Import. An import fills in the settings above without saving, so you can review first: press Save to keep it, or close to discard.", false));
-            const checks = [];
-            const checkWrap = document.createElement("div");
-            checkWrap.style.cssText = "display:flex;flex-direction:column;gap:6px";
-            for (const c of EXPORT_CATEGORIES) {
-                const row = document.createElement("label");
-                row.style.cssText =
-                    "display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer";
-                const cb = document.createElement("input");
-                cb.type = "checkbox";
-                cb.checked = true;
-                cb.style.cssText =
-                    "accent-color:var(--lumiverse-primary,rgba(147,112,219,.9));cursor:pointer";
-                const txt = document.createElement("span");
-                txt.textContent = c.label;
-                row.appendChild(cb);
-                row.appendChild(txt);
-                checkWrap.appendChild(row);
-                checks.push({ id: c.id, input: cb });
-            }
+            const { wrap: checkWrap, checks } = buildCheckList(EXPORT_CATEGORIES);
             body.appendChild(checkWrap);
             const chosen = () => checks.filter((x) => x.input.checked).map((x) => x.id);
             const status = document.createElement("div");
@@ -8206,30 +8195,27 @@ export function setup(ctx, opts) {
         // and no sign of why nothing is happening. Nothing is hidden or greyed for
         // it: off means paused, not unconfigured, and setting it up while it is off
         // is a normal thing to want to do.
+        // Filled in by syncMasterNote, which has two states to describe rather than
+        // one: the master switch being off, and this chat being one it was told to
+        // leave alone. Someone who switched a chat off and forgot has no way to
+        // tell that from the extension having broken, so the panel says which.
+        //
+        // Words only. It used to carry its own "Turn it back on here", which put
+        // two buttons for one switch in a panel where they were not even next to
+        // each other, and left a reader working out whether they did the same
+        // thing. Both switches this line describes have their own row below it,
+        // and each of those says what it will do. This says what is true. With the
+        // button went the reason this was a flex row wrapping a span.
         const masterNote = document.createElement("div");
         masterNote.style.cssText =
             "display:none;flex:none;margin:0 0 10px;font-size:12px;line-height:1.45;" +
                 "color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
         masterNote.setAttribute("data-ar-master", "1");
-        // Filled in by syncMasterNote, which has two states to describe rather than
-        // one: the master switch being off, and this chat being one it was told to
-        // leave alone. Someone who switched a chat off and forgot has no way to
-        // tell that from the extension having broken, so the panel says which.
-        const masterWords = document.createElement("span");
-        masterWords.style.cssText = "flex:1;min-width:0";
-        // Words only. It used to carry its own "Turn it back on here", which put
-        // two buttons for one switch in a panel where they were not even next to
-        // each other, and left a reader working out whether they did the same
-        // thing. Both switches this line describes have their own row below it,
-        // and each of those says what it will do. This says what is true.
-        masterNote.style.cssText += ";align-items:center;gap:10px";
-        masterNote.appendChild(masterWords);
         // Above the search box rather than below it. This is the panel's own state
         // and it stays put, while the line under the box is about the search and
         // comes and goes, so the lasting one reads first.
         panel.appendChild(masterNote);
         masterNoteEl = masterNote;
-        masterNoteWords = masterWords;
         syncMasterNote();
         panel.appendChild(searchWrap);
         panel.appendChild(scroller);
@@ -8261,22 +8247,8 @@ export function setup(ctx, opts) {
         });
         const save = btn("Save", true);
         save.addEventListener("click", () => {
-            // Commit a field the user is still editing, then normalise every number
-            // so a blank or out-of-range box can't be saved.
-            const active = typeof document !== "undefined" ? document.activeElement : null;
-            if (active && typeof active.blur === "function")
-                active.blur();
-            for (const g of SCHEMA)
-                for (const fl of g.fields)
-                    if (fl.type === "num")
-                        cfg[fl.key] = clampField(fl, cfg[fl.key]);
-            saveSaved();
-            saveToAccount();
-            syncLiveLog();
-            syncFloat();
-            syncInputBarActions();
-            if (onSaved)
-                onSaved();
+            commit();
+            applyAndSave();
             status.textContent = "Saved. Takes effect on the next reply.";
             log("settings saved", cfg);
             setTimeout(() => {
@@ -10092,10 +10064,7 @@ export const __testing = {
     refusalVerdict,
     looksLikeRefusalError,
     looksTruncated,
-    endsOnPunctuation,
-    endsOnABlock,
     sayTime,
-    stripMarkup,
     normalizeForMatch,
     splitPhrases,
     parseSubs,
@@ -10104,7 +10073,6 @@ export const __testing = {
     splitSelectorList,
     withLongForms,
     REFUSAL_PHRASES,
-    REFUSAL_DISENGAGE,
     // The defaults block and the form built from it, so a check can hold the two
     // against each other. Hints used to spell their default out by hand and went
     // stale every time one was retuned, with nothing to catch it.
