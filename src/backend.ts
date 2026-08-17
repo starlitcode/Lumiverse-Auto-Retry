@@ -234,13 +234,15 @@ function snapshotPrompt(messages: any[], context: any, userId?: string, noteAt?:
     }
     const at = Math.max(Date.now(), lastSnapshotAt + 1);
     lastSnapshotAt = at;
-    // Only what the panel reads. This used to carry the chat id and the
-    // generation type as well, and nothing on the other side ever looked at
-    // either. A field nobody reads is one a reader has to work out the purpose
-    // of before deciding it has none.
+    // The chat this belongs to, so the panel can tell whether the prompt it is
+    // holding is for the chat you are actually looking at. Snapshots are
+    // addressed to a person, not to a window, so somebody with two chats open
+    // in two tabs has both of them receiving every prompt either one produces.
+    // The generation type used to ride along here too and nothing ever read it.
     replyTo(to, {
       type: 'prompt_snapshot',
       at: at,
+      chatId: context && context.chatId ? String(context.chatId) : '',
       messages: out,
       total: messages.length,
       notes: noteAt ? noteAt.count : 0,

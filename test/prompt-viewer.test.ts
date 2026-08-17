@@ -306,14 +306,17 @@ describe("registering the interceptor", () => {
 
 // What crosses the bridge, and nothing else. A field the other side never reads
 // is one a reader has to work out the purpose of before deciding it has none,
-// which is the same fault as a handler for a message nobody sends.
+// which is the same fault as a handler for a message nobody sends. chatId is
+// here because the panel checks it against the chat you are looking at.
 describe("the snapshot carries only what the panel reads", () => {
   test("role and content, and the two marks the panel draws", async () => {
     const h = boot();
     await h.watch(true);
     await h.run([{ role: "user", content: "hi", __isChatHistory: true }], { chatId: "c1" });
     const snap = h.snapshots().pop()!.msg;
-    expect(Object.keys(snap).sort()).toEqual(["at", "messages", "notes", "total", "type"]);
+    expect(Object.keys(snap).sort()).toEqual(
+      ["at", "chatId", "messages", "notes", "total", "type"],
+    );
     expect(Object.keys(snap.messages[0]).sort()).toEqual(
       ["content", "history", "note", "noteIndex", "role"],
     );
