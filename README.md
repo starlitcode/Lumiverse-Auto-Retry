@@ -1,4 +1,4 @@
-![Auto Retry](docs/banner.webp)
+![Auto Retry](docs/banner.png)
 
 # Auto Retry
 
