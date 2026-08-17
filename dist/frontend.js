@@ -3873,6 +3873,15 @@ export function setup(ctx, opts) {
     // would otherwise fire against a widget that has gone and write its last
     // position over a newer one.
     let floatSettle = null;
+    // Where this extension last put the button, and the size it put it there at.
+    // Kept because a resize has to rebuild the widget, and the position handed to
+    // a rebuild used to be read back off the screen. That made every resize
+    // depend on the host reporting a rect the size of the button, and a host
+    // whose root does not carry that size reports a middle that is too high, so
+    // each resize placed the button a little above the last one and enough of
+    // them walked it to the top of the screen. Nothing here is measured, so a
+    // hundred resizes land in exactly the same place as one.
+    let floatAt = null;
     function showFloat(at) {
         if (floatWidget || typeof document === "undefined")
             return;
@@ -3894,6 +3903,10 @@ export function setup(ctx, opts) {
                 y: Math.max(8, Math.min(at.y, vpH() - d - 8)),
             }
             : home;
+        // Remembered as asked for, before the host has a say. Snapping moves the
+        // button afterwards and this is only ever used to work out where the next
+        // size should sit, which is a question about where it was put.
+        floatAt = { x: start.x, y: start.y };
         try {
             floatWidget = ctx.ui.createFloatWidget({
                 width: d,
@@ -4008,6 +4021,10 @@ export function setup(ctx, opts) {
                 const at = floatPos();
                 if (!at)
                     return;
+                // Dragging is the other thing that moves the button, so the next resize
+                // has to grow it around where the drag left it rather than where this
+                // extension last placed it.
+                floatAt = at;
                 if (layout.float && layout.float.x === at.x && layout.float.y === at.y)
                     return;
                 layout.float = at;
@@ -4208,27 +4225,16 @@ export function setup(ctx, opts) {
         try {
             const root = floatWidget && floatWidget.root;
             const r = root && root.getBoundingClientRect ? root.getBoundingClientRect() : null;
-            if (!r || (!r.width && !r.height))
+            if (!r)
+                return null;
+            // A box with no size and no position is a root that is not on screen, and
+            // there is nothing to read off it. One with no size but a position is a
+            // host whose root does not carry the widget's own box, which still knows
+            // where it is. Only the corner is taken from here, never the size: the
+            // size is floatWidgetSize, which is what this extension asked for.
+            if (!r.width && !r.height && !r.left && !r.top)
                 return null;
             return { x: Math.round(r.left), y: Math.round(r.top) };
-        }
-        catch (_) {
-            return null;
-        }
-    }
-    // The middle of the button rather than its corner. A resize is the one thing
-    // that has to be measured from here: the position the host is given is a
-    // top-left, so carrying that across a size change pins the corner and lets
-    // the button grow away from it, down and to the right. On an edge the clamp
-    // then pushes it back on screen and it lands somewhere it was never put.
-    // Growing it around its middle leaves it where it is looking bigger.
-    function floatCentre() {
-        try {
-            const root = floatWidget && floatWidget.root;
-            const r = root && root.getBoundingClientRect ? root.getBoundingClientRect() : null;
-            if (!r || (!r.width && !r.height))
-                return null;
-            return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
         }
         catch (_) {
             return null;
@@ -4243,16 +4249,21 @@ export function setup(ctx, opts) {
         // means building it again rather than restyling it.
         //
         // Rebuilding used to start the new one at the default corner, so changing
-        // the size threw away wherever the button had been dragged to. The old
-        // place is carried across, measured from the middle and turned back into a
-        // top-left for the new size, so the button grows around where it is sitting
-        // instead of away from its corner. showFloat still clamps: a button against
-        // an edge that gets bigger has to come back on screen, and against the edge
-        // is where a snapped button belongs anyway.
+        // the size threw away wherever the button had been dragged to. The place it
+        // was last put is carried across instead, held in floatAt rather than read
+        // back off the screen, and taken from the middle so the button grows around
+        // where it sits instead of away from its corner. showFloat still clamps: a
+        // button against an edge that gets bigger has to come back on screen, and
+        // against the edge is where a snapped button belongs anyway.
         if (floatWidget && floatWidgetSize !== floatSize()) {
-            const mid = floatCentre();
+            const was = floatAt || floatPos();
             const d = floatSize();
-            const at = mid ? { x: Math.round(mid.x - d / 2), y: Math.round(mid.y - d / 2) } : null;
+            const at = was
+                ? {
+                    x: Math.round(was.x + floatWidgetSize / 2 - d / 2),
+                    y: Math.round(was.y + floatWidgetSize / 2 - d / 2),
+                }
+                : null;
             hideFloat();
             showFloat(at);
         }
