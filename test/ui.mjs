@@ -1909,6 +1909,12 @@ console.log("\nfloat button menu");
     // that exercises the live preview at the same time.
     host.style.left = "300px";
     host.style.top = "260px";
+    // Let the settle read record it. Moving the element is not something the
+    // extension can see, and no longer something it goes looking for: reading
+    // the position back on every rebuild is what let a size change feed its own
+    // error in again. A drag says where the button ended up, and this is that.
+    up(btn());
+    await wait(500);
     const askedBefore = asked.length;
     acts["auto-retry-settings"].cb();
     await wait(30);
@@ -1969,7 +1975,7 @@ console.log("\nfloat button menu");
   check("resizing rebuilds it too", out.resize.rebuilt, out.resize);
   check("at the new size", out.resize.size === 72, out.resize);
   // The whole point: the rebuild is handed where the button already was, not
-  // the corner a fresh one starts in. Measured from the middle, because the
+  // the corner a fresh one starts in. Worked out from the middle, because the
   // position a host is given is a top-left: carrying that across unchanged
   // pins the corner and lets the button grow away from it, down and to the
   // right, which on an edge is a jump to somewhere it was never put. The old
@@ -4460,73 +4466,83 @@ console.log("\nper-chat switch, in the panel");
 }
 
 // ---- resizing the button leaves it where it is ----
-// The check above holds the arithmetic. This one puts a button against each
-// edge of a real viewport and measures where it ends up, because the thing
-// being reported was a button that jumped when its size changed, and a jump is
-// a distance on a screen rather than a number handed to a host.
-console.log("\nresizing the floating button does not move it");
+// The arithmetic check above holds one resize. This holds a run of them, which
+// is what the report was: a button that walked up the screen as the size was
+// dragged and stopped only when it ran out of screen.
+//
+// The mechanism was a feedback loop. A size change rebuilds the widget, and the
+// position for the rebuild was read back off the screen, so any disagreement
+// between what was measured and where the button really was got fed in again on
+// the next change and added up. Each host below is run through fourteen size
+// changes in a row: a position that holds for fourteen is not accumulating.
+//
+// The second host is the one that matters. Its root does not carry the widget's
+// own box, which a measurement of the middle cannot tell apart from a button
+// sitting higher up, and it is why measuring is gone from this path.
+console.log("\nresizing the floating button does not walk it up the screen");
 {
-  const drifts = {};
-  for (const [name, left, top] of [
-    ["rightEdge", 348, 300],
-    ["nearBottom", 348, 730],
-    ["leftEdge", 8, 400],
-    ["nearTop", 180, 8],
-  ]) {
+  const trails = {};
+  for (const kind of ["sized", "unsized"]) {
     const page = await browser.newPage({ viewport: { width: 400, height: 800 } });
     await stage(page, "<div id=modal></div>");
     await page.addStyleTag({ content: THEME });
     await page.addScriptTag({ content: SOURCE, type: "module" });
     await page.waitForFunction(() => !!window.__setup);
-    drifts[name] = await page.evaluate(async ([sl, st]) => {
+    trails[kind] = await page.evaluate(async (kind) => {
       const wait = (ms) => new Promise((r) => setTimeout(r, ms));
       const acts = {};
       let host = null;
+      let wrap = null;
       window.__setup(
         { events: { on: () => () => {} },
           ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
                 registerInputBarAction: (o) => {
                   const a = { onClick: (cb) => { a.cb = cb; return () => {}; }, destroy: () => {} };
                   acts[o.id] = a; return a; },
-                // A host that honours initialPosition, so there is a real rect
-                // to measure. The stub used above returns a fixed element,
-                // which cannot show a button moving.
                 createFloatWidget: (o) => {
-                  host = document.createElement("div");
-                  host.style.cssText = "position:fixed;left:" + o.initialPosition.x + "px;top:" +
+                  wrap = document.createElement("div");
+                  wrap.style.cssText = "position:fixed;left:" + o.initialPosition.x + "px;top:" +
                     o.initialPosition.y + "px;width:" + o.width + "px;height:" + o.height + "px";
-                  document.body.appendChild(host);
-                  return { root: host, destroy() { host.remove(); }, setPosition() {}, onDragEnd() { return () => {}; } }; } } },
+                  document.body.appendChild(wrap);
+                  if (kind === "sized") { host = wrap; }
+                  else {
+                    host = document.createElement("div");
+                    host.style.cssText = "position:absolute;left:0;top:0;width:0;height:0";
+                    wrap.appendChild(host);
+                  }
+                  return { root: host, destroy() { wrap.remove(); }, setPosition() {}, onDragEnd() { return () => {}; } }; } } },
         { enabled: true, showFloatingToggle: true, floatingToggleSize: 44, toast: false },
       );
       await wait(30);
-      host.style.left = sl + "px";
-      host.style.top = st + "px";
-      const mid = () => { const r = host.getBoundingClientRect();
-        return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }; };
-      const before = mid();
+      // Put it partway down the right edge and let the settle read record it,
+      // which is how a drag tells the extension where the button now lives.
+      wrap.style.left = "348px";
+      wrap.style.top = "500px";
+      wrap.querySelector("button").dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
+      await wait(500);
+      const midY = () => { const r = wrap.getBoundingClientRect(); return Math.round(r.top + r.height / 2); };
+      const before = midY();
       acts["auto-retry-settings"].cb();
       await wait(40);
       const box = document.querySelector('[data-ar-row="floatingToggleSize"] input');
-      box.value = "72";
-      box.dispatchEvent(new Event("input", { bubbles: true }));
-      await wait(60);
-      const after = mid();
-      return { x: after.x - before.x, y: after.y - before.y };
-    }, [left, top]);
+      const trail = [];
+      for (const v of [46, 48, 50, 52, 54, 56, 58, 60, 62, 64, 66, 68, 70, 72]) {
+        box.value = String(v);
+        box.dispatchEvent(new Event("input", { bubbles: true }));
+        await wait(12);
+        trail.push(midY());
+      }
+      return { before, trail };
+    }, kind);
     await page.close();
   }
-  // Against an edge the button has to come inward to fit at its new size, so
-  // the movement perpendicular to that edge is the point rather than a fault.
-  // Everything else has to stay put, and it was the sideways drift of half the
-  // size change that read as the button jumping.
-  check("a button on the right edge does not move up or down", drifts.rightEdge.y === 0, drifts.rightEdge);
-  check("nor does one near the bottom, which is where it read as moving up", drifts.nearBottom.y === 0, drifts.nearBottom);
-  check("nor one on the left edge", drifts.leftEdge.y === 0, drifts.leftEdge);
-  check("one near the top does not move sideways", drifts.nearTop.x === 0, drifts.nearTop);
-  check("and each only comes in off the edge it is against, by half the change",
-    drifts.rightEdge.x === -14 && drifts.leftEdge.x === 14 && drifts.nearTop.y === 14,
-    drifts);
+  for (const kind of ["sized", "unsized"]) {
+    const t = trails[kind];
+    const held = t.trail.every((y) => y === t.before);
+    const label = kind === "sized" ? "a host that reports the widget box" : "a host whose root does not carry the size";
+    check(label + " holds the button still through fourteen size changes", held,
+      { started: t.before, went: t.trail });
+  }
 }
 
 // ---- every indicator says the same thing about the chat you are in ----

@@ -10,7 +10,7 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ## 4.12.2
 
-_2026-08-16_
+_2026-08-17_
 
 ### Changed
 
@@ -18,7 +18,7 @@ _2026-08-16_
 
 ### Fixed
 
-- **Changing the floating button's size moved the button.** The position a host is given is a top-left, and that was what got carried across the rebuild a size change needs. So the button grew away from its corner, down and to the right, and then had to be pushed back on screen if that took it off an edge, which landed it somewhere it had never been put. It is measured from the middle now and grows around where it is sitting. Against an edge it still comes inward far enough to fit, since a bigger button has to, but it no longer travels along that edge as well.
+- **Changing the floating button's size walked the button up the screen.** A size change has to rebuild the widget, since width and height are fixed when it is created, and the position for the rebuild was read back off the screen. That made it a feedback loop: any gap between what was measured and where the button actually sat went back in on the next change and added up, so dragging the size along moved the button a little further each step until it ran out of screen and stopped. The gap comes from the measurement taking the button's size from the host's own box, which does not always carry it. Nothing on this path is measured now. The button is rebuilt around the place this extension last put it, at the size it knows it asked for, so a run of size changes lands exactly where one does. Against an edge it still comes inward far enough for the bigger size to fit.
 - **The per-chat switch could be left disagreeing with itself.** There were two ways back into a chat you had switched off: the **This chat** row, and a **Turn it back on here** button on the line at the top of the panel. The row repainted itself from its own click handler, so the line at the top was the one path that changed the state without touching the row. Pressing it turned the chat back on and left the row still offering to turn it on, and pressing the row then switched the chat off again.
 
 ### Removed
