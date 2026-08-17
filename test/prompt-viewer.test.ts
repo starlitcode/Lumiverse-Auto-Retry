@@ -265,3 +265,43 @@ test("a prompt that is not an array is not snapshotted, and costs nobody a gener
   expect(await h.run(null as any, { chatId: "c1" })).toBe(null);
   expect(h.snapshots().length).toBe(0);
 });
+
+// Capturing a prompt happens in the interceptor, so an interceptor that was
+// never registered takes the whole Prompt tab with it, along with the refusal
+// note. Registering it is fire-and-forget: without the permission the host does
+// not throw, it silently does nothing and notifies instead. Registering once as
+// the module loaded was a bet that the grant was already cached at that instant,
+// and a grant can be given or taken away while the extension runs with nothing
+// restarting. Losing that bet left both features dead for the life of the
+// process with nothing anywhere saying so.
+//
+// Held as a shape check on the source because there is no way to observe it
+// from a test: the failure is the host declining to call code that was never
+// registered, which looks exactly like a quiet install.
+describe("registering the interceptor", () => {
+  const BACK = readFileSync(new URL("../src/backend.ts", import.meta.url), "utf8");
+  test("goes through one guarded function rather than straight into module load", () => {
+    const calls = [...BACK.matchAll(/spindle\.registerInterceptor\(/g)].length;
+    expect(calls).toBe(1);
+    expect(BACK).toContain("function tryRegisterInterceptor()");
+    // The registration sits inside that function, not at the top level.
+    const fn = BACK.slice(BACK.indexOf("function tryRegisterInterceptor()"));
+    expect(fn.slice(0, fn.indexOf("\n}\n"))).toContain("spindle.registerInterceptor(");
+  });
+
+  test("checks the permission first, and does not register twice", () => {
+    const fn = BACK.slice(BACK.indexOf("function tryRegisterInterceptor()"));
+    const body = fn.slice(0, fn.indexOf("\n}\n"));
+    expect(body).toContain("has('interceptor')");
+    expect(body).toContain("if (interceptorOn) return;");
+  });
+
+  test("and tries again when the permission is granted later", () => {
+    expect(BACK).toContain("permissions.onChanged");
+    expect(BACK).toMatch(/permission === 'interceptor' && e\.granted\) tryRegisterInterceptor\(\)/);
+  });
+
+  test("a refusal is reported, since nothing else would show it", () => {
+    expect(BACK).toContain("permissions.onDenied");
+  });
+});

@@ -4459,6 +4459,59 @@ console.log("\nper-chat switch, in the panel");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- the panel asks for prompts again when the backend comes back ----
+// Asking the backend to capture prompts is a live request, and it used to be
+// sent only when the answer changed. The two sides have separate lifetimes, so
+// a backend that was not listening yet, or that restarted afterwards, knows
+// nothing while the panel is certain it has already asked. Nothing re-sent it,
+// so the Prompt tab stayed empty until the view happened to be toggled off and
+// on, which is why leaving the chat and coming back looked like the fix.
+//
+// The backend now says when it has started, and this is the panel hearing it.
+console.log("\nthe Prompt tab re-arms when the backend restarts");
+{
+  const page = await browser.newPage();
+  await stage(page, "<div id=modal></div>");
+  await page.addStyleTag({ content: THEME });
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  const out = await page.evaluate(async () => {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const sent = [];
+    let fromBackend = null;
+    window.__setup(
+      { events: { on: () => () => {} },
+        sendToBackend: (m) => sent.push(m),
+        onBackendMessage: (fn) => { fromBackend = fn; return () => {}; },
+        ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+              registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) } },
+      { liveLog: true, toast: false },
+    );
+    await wait(30);
+    const arms = () => sent.filter((m) => m && m.type === "set_prompt_capture" && m.on).length;
+    // Open the Prompt tab, which is the one thing that asks.
+    const tab = [...document.querySelectorAll('#__lvRetryLog [role="tab"], #__lvRetryLog button')]
+      .find((b) => (b.textContent || "").trim() === "Prompt");
+    if (!tab) return { err: "no Prompt tab" };
+    tab.click();
+    await wait(30);
+    const askedOnce = arms();
+    // Pressing it again is not a change, so it stays at one. This is the
+    // behaviour being kept, not the bug.
+    tab.click();
+    await wait(30);
+    const afterSameTab = arms();
+    // The backend says it has just started. Whatever it was told is gone.
+    fromBackend({ type: "backend_ready" });
+    await wait(30);
+    return { askedOnce, afterSameTab, afterReady: arms() };
+  });
+  await page.close();
+  check("opening the Prompt tab asks the backend to capture", out.askedOnce === 1, out);
+  check("and asking twice for the same view does not repeat it", out.afterSameTab === 1, out);
+  check("a backend that says it just started is asked again", out.afterReady === 2, out);
+}
+
 // ---- resizing the button leaves it where it is ----
 // The arithmetic check above holds one resize. This holds a run of them, which
 // is what the report was: a button that walked up the screen as the size was
