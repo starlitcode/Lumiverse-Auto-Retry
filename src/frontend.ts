@@ -110,9 +110,88 @@ const NOTE_FROM_TRY_MAX = 20;
 // event arrives without a content field. Trimmed from the front past this.
 const STREAM_BUF_MAX = 200000;
 
+// Splits a line of the light markdown a roleplay reply is written in into the
+// runs that carry emphasis. Text only: it returns what each run says and how it
+// should look, and never any markup, so the panel builds nodes from it and
+// there is no path by which a prompt could put HTML on the page.
+//
+// Deliberately small. This reads a prompt someone is debugging, not a document,
+// and the four that carry meaning in a scene are emphasis, strong emphasis,
+// code, and quoted speech. Anything it does not know stays as the characters
+// that were typed, which is the right answer for a view whose job is fidelity.
+type Run = { text: string; em?: boolean; strong?: boolean; code?: boolean };
+function splitEmphasis(line: string): Run[] {
+  const runs: Run[] = [];
+  let plain = "";
+  const flush = () => {
+    if (plain) runs.push({ text: plain });
+    plain = "";
+  };
+  let i = 0;
+  while (i < line.length) {
+    const c = line[i];
+    // Backticks win over everything, since code is where asterisks are meant
+    // literally.
+    if (c === "`") {
+      const end = line.indexOf("`", i + 1);
+      if (end > i + 1) {
+        flush();
+        runs.push({ text: line.slice(i + 1, end), code: true });
+        i = end + 1;
+        continue;
+      }
+    }
+    if (c === "*" || c === "_") {
+      const strong = line[i + 1] === c;
+      const mark = strong ? c + c : c;
+      const from = i + mark.length;
+      // A marker with a space after it is not opening anything. Without this,
+      // "2 * 4 = 8" reads as emphasis from the first star to the second and the
+      // arithmetic loses both of them.
+      const opens = !!line[from] && !/\s/.test(line[from]);
+      // An underscore only counts between words, so snake_case_name stays whole.
+      // Asterisks carry no such rule, since *a*b* is emphasis in every editor.
+      const freeBefore = c !== "_" || !/[A-Za-z0-9]/.test(line[i - 1] || "");
+      let end = -1;
+      if (opens && freeBefore) {
+        let k = from;
+        while (k < line.length) {
+          const j = line.indexOf(mark, k);
+          if (j < 0) break;
+          // The closer has the mirrored rules: no space in front of it, and for
+          // an underscore, no word character behind it.
+          const tight = !!line[j - 1] && !/\s/.test(line[j - 1]);
+          const freeAfter =
+            c !== "_" || !/[A-Za-z0-9]/.test(line[j + mark.length] || "");
+          if (j > from && tight && freeAfter) {
+            end = j;
+            break;
+          }
+          k = j + 1;
+        }
+      }
+      // An unclosed marker, or an empty pair, is just the character typed.
+      if (end > from) {
+        flush();
+        runs.push(
+          strong
+            ? { text: line.slice(from, end), strong: true }
+            : { text: line.slice(from, end), em: true },
+        );
+        i = end + mark.length;
+        continue;
+      }
+    }
+    plain += c;
+    i++;
+  }
+  flush();
+  return runs;
+}
+
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "4.12.3";
+const VERSION = "4.13.0";
 
 // The one address the extension ever points at, used by the warning in front of
 // the crisis-support check. Pinned to the released branch rather than to a tag,
@@ -2889,6 +2968,7 @@ export function setup(ctx: Ctx, opts?: any) {
     float?: { x: number; y: number };
     panel?: { x: number; y: number; w: number; h: number };
     tab?: string;
+    promptView?: string;
   };
   let layout: Layout = {};
   // Named for what it does rather than what it holds, since there is a "num"
@@ -2918,6 +2998,8 @@ export function setup(ctx: Ctx, opts?: any) {
           };
         if (raw.tab === "log" || raw.tab === "prompt" || raw.tab === "stats")
           layout.tab = raw.tab;
+        if (raw.promptView === "raw" || raw.promptView === "rendered")
+          layout.promptView = raw.promptView;
       }
     }
   } catch (_) { /* no storage, or nonsense in it: the defaults are fine */ }
@@ -2930,6 +3012,13 @@ export function setup(ctx: Ctx, opts?: any) {
 
   let liveTab: "log" | "prompt" | "stats" =
     (layout.tab as "log" | "prompt" | "stats") || "log";
+  // How the Prompt tab draws a message. Raw is every character exactly as the
+  // model got it, which is what this view is for. Rendered runs the same text
+  // through the light markdown a reply is written in, which is how you read a
+  // long scene without counting asterisks. Raw is the default, because the
+  // first question here is always what was actually sent.
+  let promptView: "raw" | "rendered" =
+    (layout.promptView as "raw" | "rendered") || "raw";
   let paintTabs: (() => void) | null = null;
   let focusTab: ((id: string) => void) | null = null;
   // Who each chat is with, once the backend has resolved it. A name is worth
@@ -2970,6 +3059,51 @@ export function setup(ctx: Ctx, opts?: any) {
     if (!statsTick) return;
     removeTicker(statsTick);
     statsTick = null;
+  }
+
+  // One message, drawn the way the Prompt tab is currently set to. Raw keeps
+  // every character and the monospace font, which is the view you want when the
+  // question is what exactly went. Rendered lays the same text out as prose with
+  // its emphasis applied, for reading a long scene.
+  //
+  // Built out of text nodes and elements throughout. A prompt is somebody's chat
+  // and a model's output, so it is never trusted enough to become markup.
+  function paintPromptBody(host: HTMLElement, text: string) {
+    host.textContent = "";
+    if (promptView === "raw") {
+      host.style.cssText =
+        "margin-top:4px;white-space:pre-wrap;line-height:1.4;" +
+        "font-family:var(--lumiverse-font-mono,ui-monospace,monospace)";
+      host.textContent = text;
+      return;
+    }
+    host.style.cssText =
+      "margin-top:4px;line-height:1.5;white-space:pre-wrap;" +
+      "font-family:var(--lumiverse-font-family,system-ui)";
+    for (const run of splitEmphasis(text)) {
+      if (run.code) {
+        const el = document.createElement("code");
+        el.textContent = run.text;
+        el.style.cssText =
+          "font-family:var(--lumiverse-font-mono,ui-monospace,monospace);" +
+          "background:var(--lumiverse-fill-subtle,rgba(255,255,255,.08));" +
+          "border-radius:var(--lumiverse-radius-sm,4px);padding:0 3px";
+        host.appendChild(el);
+      } else if (run.strong) {
+        const el = document.createElement("strong");
+        el.textContent = run.text;
+        host.appendChild(el);
+      } else if (run.em) {
+        const el = document.createElement("em");
+        el.textContent = run.text;
+        // Emphasis is where a scene puts action, so it is worth telling from
+        // the speech around it on a theme where italics alone are subtle.
+        el.style.color = "var(--lumiverse-text-muted,rgba(255,255,255,.75))";
+        host.appendChild(el);
+      } else {
+        host.appendChild(document.createTextNode(run.text));
+      }
+    }
   }
 
   function renderLiveLog() {
@@ -3174,16 +3308,45 @@ export function setup(ctx: Ctx, opts?: any) {
         : "(no prompt seen yet; send a reply)";
       return;
     }
-    const chars = lastPrompt.messages.reduce((n: number, m: any) => n + (m.chars || 0), 0);
+    const chars = lastPrompt.messages.reduce(
+      (n: number, m: any) => n + String(m.content || "").length,
+      0,
+    );
     const sum = document.createElement("div");
+    // The summary and the view switch on one line. The switch belongs to this
+    // tab rather than to the panel, so it lives here rather than in the header
+    // with Copy and Clear: a fourth control up there does not fit a panel 200
+    // across, and it would have to be hidden on the two tabs it means nothing
+    // on. Wraps rather than overflowing when there is no room beside the text.
     sum.style.cssText =
-      "margin-bottom:6px;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
-    sum.textContent =
+      "margin-bottom:6px;display:flex;flex-wrap:wrap;gap:6px;align-items:baseline;" +
+      "color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+    const sumWords = document.createElement("span");
+    sumWords.style.cssText = "flex:1 1 auto;min-width:0";
+    sumWords.textContent =
       lastPrompt.total + (lastPrompt.total === 1 ? " message, " : " messages, ") +
-      rough(chars) + " characters, " + sayTokens(chars) +
-      (lastPrompt.dropped
-        ? " (" + lastPrompt.dropped + " not listed below, all of them sent)"
-        : "");
+      rough(chars) + " characters, " + sayTokens(chars);
+    sum.appendChild(sumWords);
+    const viewBtn = document.createElement("button");
+    viewBtn.type = "button";
+    viewBtn.textContent = promptView === "raw" ? "Raw" : "Rendered";
+    viewBtn.title =
+      promptView === "raw"
+        ? "Showing every character as the model got it. Tap to lay it out."
+        : "Showing it laid out, with its emphasis applied. Tap for the exact characters.";
+    viewBtn.setAttribute("aria-label", viewBtn.title);
+    viewBtn.style.cssText =
+      "flex:none;cursor:pointer;font:inherit;min-height:28px;padding:2px 10px;" +
+      "border:1px solid var(--lumiverse-border,rgba(255,255,255,.18));" +
+      "border-radius:var(--lumiverse-radius-sm,5px);background:transparent;" +
+      "color:var(--lumiverse-text,#e9e4f0);touch-action:manipulation";
+    viewBtn.addEventListener("click", () => {
+      promptView = promptView === "raw" ? "rendered" : "raw";
+      layout.promptView = promptView;
+      saveLayout();
+      renderLiveLog();
+    });
+    sum.appendChild(viewBtn);
     body.appendChild(sum);
 
     // Where the notes landed, said in words as well as marked in the list. It
@@ -3241,7 +3404,7 @@ export function setup(ctx: Ctx, opts?: any) {
           : m.history
             ? "chat"
             : "added") +
-        " \u00b7 " + rough(m.chars || 0);
+        " \u00b7 " + rough(String(m.content || "").length);
       where.style.cssText =
         "font-size:11px;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
       const peek = document.createElement("span");
@@ -3253,20 +3416,7 @@ export function setup(ctx: Ctx, opts?: any) {
       head.appendChild(where);
       head.appendChild(peek);
       const full = document.createElement("div");
-      // Says which end the cut happened at. "(cut for display)" was ambiguous
-      // enough to read as the prompt itself having been shortened, which would
-      // be alarming and is not what happens: the model was sent the message
-      // whole, and only the copy this panel was handed is capped.
-      const shown = String(m.content || "");
-      const missing = Math.max(0, (m.chars || 0) - shown.length);
-      full.textContent =
-        shown +
-        (missing
-          ? "\n\n(" + rough(missing) + " more characters were sent to the model. Only this view is shortened.)"
-          : "");
-      full.style.cssText =
-        "margin-top:4px;white-space:pre-wrap;line-height:1.4;" +
-        "font-family:var(--lumiverse-font-mono,ui-monospace,monospace)";
+      paintPromptBody(full, String(m.content || ""));
       row.appendChild(head);
       row.appendChild(full);
       body.appendChild(row);
@@ -3413,13 +3563,13 @@ export function setup(ctx: Ctx, opts?: any) {
     };
     const promptAsText = () => {
       if (!lastPrompt) return "(no prompt seen yet; send a reply)";
-      const chars = lastPrompt.messages.reduce((n: number, m: any) => n + (m.chars || 0), 0);
+      const chars = lastPrompt.messages.reduce(
+        (n: number, m: any) => n + String(m.content || "").length,
+        0,
+      );
       const lines = [
         lastPrompt.total + (lastPrompt.total === 1 ? " message, " : " messages, ") +
-          rough(chars) + " characters, " + sayTokens(chars) +
-          (lastPrompt.dropped
-            ? " (" + lastPrompt.dropped + " not listed below, all of them sent)"
-            : ""),
+          rough(chars) + " characters, " + sayTokens(chars),
       ];
       if (lastPrompt.notes) {
         const at = lastPrompt.messages.findIndex((m: any) => m && m.note);
@@ -3441,15 +3591,9 @@ export function setup(ctx: Ctx, opts?: any) {
           "--- " + (i + 1) + " " + (m.role || "?") + " " +
             (m.history ? "(chat)" : "(added)") +
             (m.note ? " (Auto Retry note)" : "") + " " +
-            (m.chars || 0) + " chars ---",
+            String(m.content || "").length + " chars ---",
         );
-        const body = String(m.content || "");
-        lines.push(body);
-        // The header above says how many characters this message really is, and
-        // the text under it can be shorter, so without this the copy quietly
-        // disagrees with itself and reads as if the prompt were truncated.
-        const gone = Math.max(0, (m.chars || 0) - body.length);
-        if (gone) lines.push("(" + gone + " more characters were sent to the model, not shown here)");
+        lines.push(String(m.content || ""));
       }
       return lines.join("\n");
     };
@@ -9959,6 +10103,7 @@ export const __testing = {
   looksLikeRefusalError,
   looksTruncated,
   sayTime,
+  splitEmphasis,
   normalizeForMatch,
   splitPhrases,
   parseSubs,

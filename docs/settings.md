@@ -119,7 +119,9 @@ The line and the pop-up read from the same place, so they never disagree. Both s
 
 **Watching for** counts up while you are looking at it, in the same `1h 05m 03s` form as everything else here. It also says how often a reply needed a retry at all, and tells you when it has paused itself after repeated failures, which is the state that otherwise looks like it having stopped working. **Clear** on this tab starts the counting again.
 
-**Prompt** is the whole prompt that went to the model. Every message in order, with its role, how large it is, and whether it came from your chat or was added around it. Tap one to read it.
+**Prompt** is the whole prompt that went to the model. Every message in order, with its role, how large it is, and whether it came from your chat or was added around it. Tap one to read it. Nothing is trimmed: every message is listed and every character of each one is there, however long the chat.
+
+**Raw** and **Rendered** are the two ways to read a message, and the button beside **Copy** switches between them. Raw is every character exactly as the model got it, in a monospace font, which is the view to use when the question is what was actually sent. Rendered lays the same text out as prose with its emphasis applied, for reading a long scene without counting asterisks. It leaves arithmetic and `snake_case` names alone. Raw is where it starts, and whichever you pick is remembered.
 
 Your **refusal notes are marked** in that list, in the accent colour, and opened for you. A line at the top says how many went and where in the prompt they landed. That is the thing the Prompt view is most likely to be open for: seeing exactly how and where a note was inserted.
 
