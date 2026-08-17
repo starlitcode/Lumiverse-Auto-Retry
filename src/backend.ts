@@ -801,59 +801,59 @@ spindle.on('GENERATION_ENDED', async (p: any) => {
 // extension adds, which is what "closest to the model" has to mean to be worth
 // choosing.
 const promptInterceptor = async (messages: any[], context: any) => {
-    try {
-      const who = context && context.userId;
-      if (!refusalNote) {
-        snapshotPrompt(messages, context, who);
-        return messages;
-      }
-      const chatId = context && context.chatId;
-      // A note armed in one chat is not for a generation in another, and it
-      // stays armed so the retry it was meant for can still collect it.
-      if (chatId && refusalNote.chatId && String(chatId) !== refusalNote.chatId) {
-        snapshotPrompt(messages, context, who);
-        return messages;
-      }
-      const type = String((context && context.generationType) || '');
-      // Only when the user asked for it. Left on by default this rejected every
-      // generation on any build that reports "normal", which is the bug that
-      // made the note look like it did nothing at all.
-      if (refusalNote.strictType && type && RETRY_TYPES.indexOf(type.toLowerCase()) < 0) {
-        snapshotPrompt(messages, context, who);
-        // Named rather than swallowed. A note that never appears looks the same
-        // whether it was never armed or the host called this generation
-        // something else, and only one of those is fixable by the user. The
-        // note stays armed: with the strict check on, the point is to wait for
-        // a generation the host does call a retry.
-        try { replyTo(who, { type: 'note_skipped', reason: 'the strict check is on and the host called this generation "' + type + '"' }); } catch (__) {}
-        return messages;
-      }
-      const armed = refusalNote;
-      refusalNote = null; // one generation, collected or not
-      if (Date.now() - armed.at > NOTE_MAX_AGE_MS) {
-        try { replyTo(who, { type: 'note_skipped', reason: 'it was armed too long ago to still belong to this generation' }); } catch (__) {}
-        snapshotPrompt(messages, context, who);
-        return messages;
-      }
-      if (!Array.isArray(messages)) return messages;
-      const built = armed.notes.map((n) => ({ role: n.role, content: n.text }));
-      const placed = placeNotes(messages, built, armed.placement);
-      // Named in the Prompt Breakdown so each note is inspectable rather than
-      // something that silently happened to the prompt.
-      const breakdown = built.map((_, i) => ({
-        messageIndex: placed.from + i,
-        name: built.length > 1 ? 'Auto Retry refusal note ' + (i + 1) : 'Auto Retry refusal note',
-      }));
-      // Said out loud, so "did my note go?" has an answer in the live log
-      // instead of being something the user has to infer from the reply.
-      try { replyTo(who, { type: 'note_sent', count: built.length, generationType: type }); } catch (__) {}
-      // After the note is in, so the panel shows what actually went rather than
-      // what would have gone without it.
-      snapshotPrompt(placed.list, context, who, { from: placed.from, count: built.length });
-      return { messages: placed.list, breakdown: breakdown };
-    } catch (_) {
-      return messages; // a fault here must never cost the user their generation
+  try {
+    const who = context && context.userId;
+    if (!refusalNote) {
+      snapshotPrompt(messages, context, who);
+      return messages;
     }
+    const chatId = context && context.chatId;
+    // A note armed in one chat is not for a generation in another, and it
+    // stays armed so the retry it was meant for can still collect it.
+    if (chatId && refusalNote.chatId && String(chatId) !== refusalNote.chatId) {
+      snapshotPrompt(messages, context, who);
+      return messages;
+    }
+    const type = String((context && context.generationType) || '');
+    // Only when the user asked for it. Left on by default this rejected every
+    // generation on any build that reports "normal", which is the bug that
+    // made the note look like it did nothing at all.
+    if (refusalNote.strictType && type && RETRY_TYPES.indexOf(type.toLowerCase()) < 0) {
+      snapshotPrompt(messages, context, who);
+      // Named rather than swallowed. A note that never appears looks the same
+      // whether it was never armed or the host called this generation
+      // something else, and only one of those is fixable by the user. The
+      // note stays armed: with the strict check on, the point is to wait for
+      // a generation the host does call a retry.
+      try { replyTo(who, { type: 'note_skipped', reason: 'the strict check is on and the host called this generation "' + type + '"' }); } catch (__) {}
+      return messages;
+    }
+    const armed = refusalNote;
+    refusalNote = null; // one generation, collected or not
+    if (Date.now() - armed.at > NOTE_MAX_AGE_MS) {
+      try { replyTo(who, { type: 'note_skipped', reason: 'it was armed too long ago to still belong to this generation' }); } catch (__) {}
+      snapshotPrompt(messages, context, who);
+      return messages;
+    }
+    if (!Array.isArray(messages)) return messages;
+    const built = armed.notes.map((n) => ({ role: n.role, content: n.text }));
+    const placed = placeNotes(messages, built, armed.placement);
+    // Named in the Prompt Breakdown so each note is inspectable rather than
+    // something that silently happened to the prompt.
+    const breakdown = built.map((_, i) => ({
+      messageIndex: placed.from + i,
+      name: built.length > 1 ? 'Auto Retry refusal note ' + (i + 1) : 'Auto Retry refusal note',
+    }));
+    // Said out loud, so "did my note go?" has an answer in the live log
+    // instead of being something the user has to infer from the reply.
+    try { replyTo(who, { type: 'note_sent', count: built.length, generationType: type }); } catch (__) {}
+    // After the note is in, so the panel shows what actually went rather than
+    // what would have gone without it.
+    snapshotPrompt(placed.list, context, who, { from: placed.from, count: built.length });
+    return { messages: placed.list, breakdown: breakdown };
+  } catch (_) {
+    return messages; // a fault here must never cost the user their generation
+  }
 };
 
 // Registering an interceptor without the permission does not throw. It is a
