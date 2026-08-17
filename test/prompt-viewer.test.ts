@@ -211,7 +211,13 @@ describe("a note comes back marked and in its place", () => {
 });
 
 // A prompt can be enormous, and it crosses the bridge on every generation.
-describe("a vast prompt is trimmed, and says it was", () => {
+// The view used to be capped: 200 messages, 4000 characters each, 300000 in
+// total, with the rest reported as missing. It was the one thing somebody
+// reading this view could not work around, since what was cut only ever existed
+// on the server and was thrown away as the snapshot was built. It now goes
+// whole. A prompt is only captured while the Prompt tab is actually open, which
+// is where the cost is kept.
+describe("the whole prompt reaches the panel", () => {
   const huge = () =>
     Array.from({ length: 500 }, () => ({
       role: "user",
@@ -219,43 +225,35 @@ describe("a vast prompt is trimmed, and says it was", () => {
       __isChatHistory: true,
     }));
 
-  test("the message count is capped", async () => {
-    const h = boot();
-    await h.watch(true);
-    await h.run(huge(), { chatId: "c1" });
-    expect(h.snapshots().pop()!.msg.messages.length).toBeLessThanOrEqual(200);
-  });
-
-  test("so is the total text", async () => {
-    const h = boot();
-    await h.watch(true);
-    await h.run(huge(), { chatId: "c1" });
-    const total = h.snapshots().pop()!.msg.messages
-      .reduce((n: number, m: any) => n + m.content.length, 0);
-    expect(total).toBeLessThanOrEqual(300000);
-  });
-
-  // Trimmed and silent about it would be worse than not showing it at all: the
-  // whole point of the view is that it is what actually went.
-  test("and it says how much it left out", async () => {
+  test("every message is listed, however many there are", async () => {
     const h = boot();
     await h.watch(true);
     await h.run(huge(), { chatId: "c1" });
     const snap = h.snapshots().pop()!.msg;
+    expect(snap.messages.length).toBe(500);
     expect(snap.total).toBe(500);
-    expect(snap.dropped).toBe(300);
-    expect(snap.clipped).toBeGreaterThan(0);
   });
 
-  // Each message reports its whole size even when only part of it was sent, so
-  // the panel can say how big something is while showing a piece of it.
-  test("a trimmed message still reports its real size", async () => {
+  test("and every character of each one is there", async () => {
     const h = boot();
     await h.watch(true);
     await h.run(huge(), { chatId: "c1" });
-    const first = h.snapshots().pop()!.msg.messages[0];
-    expect(first.chars).toBe(20000);
-    expect(first.content.length).toBeLessThan(first.chars);
+    const msgs = h.snapshots().pop()!.msg.messages;
+    expect(msgs[0].content).toBe("z".repeat(20000));
+    expect(msgs[499].content).toBe("z".repeat(20000));
+    expect(msgs.reduce((n: number, m: any) => n + m.content.length, 0)).toBe(10000000);
+  });
+
+  // Nothing is left out, so nothing counts what was left out. A field that is
+  // always zero is one more thing to read and get wrong.
+  test("and nothing is left saying what was trimmed", async () => {
+    const h = boot();
+    await h.watch(true);
+    await h.run(huge(), { chatId: "c1" });
+    const snap = h.snapshots().pop()!.msg;
+    expect(snap.dropped).toBeUndefined();
+    expect(snap.clipped).toBeUndefined();
+    expect(snap.messages[0].chars).toBeUndefined();
   });
 });
 

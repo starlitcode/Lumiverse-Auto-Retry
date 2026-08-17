@@ -178,12 +178,11 @@ function promptWatcherFor(userId?: string): string | null {
   const only = promptWatchers.values().next().value as string;
   return k === '' || only === '' ? only : null;
 }
-// Enough to see the shape of a long prompt without shipping a novel through the
-// bridge on every generation. Anything past this is cut and said to be cut, so
-// what is on screen is never quietly incomplete.
-const VIEW_MAX_MESSAGES = 200;
-const VIEW_MAX_CHARS_PER_MESSAGE = 4000;
-const VIEW_MAX_CHARS_TOTAL = 300000;
+// The whole prompt goes to the panel, every message and every character of it.
+// This used to be capped, which kept the cost of a generation down and left the
+// view saying a message was longer than what it was showing, which is the one
+// thing somebody opening this view cannot work around. A prompt is only sent
+// while the Prompt tab is actually open, and that is where the cost is kept.
 
 // The tokeniser the host actually uses, when it will tell us. The panel's own
 // figure is characters divided by four, which is a serviceable guess and wrong
@@ -209,16 +208,9 @@ function snapshotPrompt(messages: any[], context: any, userId?: string, noteAt?:
   const to = watcher === '' ? undefined : watcher;
   try {
     const out: any[] = [];
-    let budget = VIEW_MAX_CHARS_TOTAL;
-    let clipped = 0;
-    for (let i = 0; i < messages.length && i < VIEW_MAX_MESSAGES; i++) {
+    for (let i = 0; i < messages.length; i++) {
       const m = messages[i];
       if (!m) continue;
-      const full = String(m.content == null ? '' : m.content);
-      const room = Math.max(0, Math.min(VIEW_MAX_CHARS_PER_MESSAGE, budget));
-      const text = full.length > room ? full.slice(0, room) : full;
-      if (text.length < full.length) clipped++;
-      budget -= text.length;
       // The extension's own notes, marked so the panel can point at them. Where
       // a note lands is the whole question someone opens this view to answer,
       // and it is not something they can work out by reading the text.
@@ -226,10 +218,7 @@ function snapshotPrompt(messages: any[], context: any, userId?: string, noteAt?:
         !!noteAt && i >= noteAt.from && i < noteAt.from + noteAt.count;
       out.push({
         role: String(m.role == null ? '' : m.role),
-        content: text,
-        // The whole length, not the length of what was sent, so the panel can
-        // say how big a message is even when it is showing part of it.
-        chars: full.length,
+        content: String(m.content == null ? '' : m.content),
         // Marks the messages that came from stored chat turns, which is what
         // separates the conversation from everything wrapped around it.
         history: !!m.__isChatHistory,
@@ -246,12 +235,9 @@ function snapshotPrompt(messages: any[], context: any, userId?: string, noteAt?:
       generationType: String((context && context.generationType) || ''),
       messages: out,
       total: messages.length,
-      dropped: Math.max(0, messages.length - out.length),
-      clipped: clipped,
       notes: noteAt ? noteAt.count : 0,
     });
-    // Counted from the whole prompt rather than the clipped copy above, and
-    // sent as a second message so a slow tokeniser never delays the view. The
+    // Sent as a second message so a slow tokeniser never delays the view. The
     // panel shows its own estimate until this lands, and replaces it if it does.
     countTokens(messages.map((m: any) => String((m && m.content) || '')).join('\n'), context, to)
       .then((tokens) => {

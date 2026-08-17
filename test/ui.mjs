@@ -4459,6 +4459,88 @@ console.log("\nper-chat switch, in the panel");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- the Prompt tab draws a message two ways ----
+// Raw is every character as the model got it, which is what the view is for.
+// Rendered lays the same text out with its emphasis applied, for reading a long
+// scene. The choice sits with Copy and Clear because it is a way of looking at
+// what is on screen rather than a setting, and it is remembered.
+console.log("\nthe Prompt tab has a raw and a rendered view");
+{
+  const page = await browser.newPage();
+  await stage(page, "<div id=modal></div>");
+  await page.addStyleTag({ content: THEME });
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  const out = await page.evaluate(async () => {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    let fromBackend = null;
+    window.__setup(
+      { events: { on: () => () => {} },
+        sendToBackend: () => {},
+        onBackendMessage: (fn) => { fromBackend = fn; return () => {}; },
+        ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+              registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) } },
+      { liveLog: true, toast: false },
+    );
+    await wait(30);
+    const tabBtn = (name) =>
+      [...document.querySelectorAll('#__lvRetryLog [role="tab"]')]
+        .find((b) => (b.textContent || "").trim() === name);
+    // It sits with the prompt's own summary, not in the header shared by all
+    // three tabs. A fourth control up there does not fit a panel 200 across.
+    const viewBtn = () =>
+      [...document.querySelectorAll("#__lvRetryLogBody button")]
+        .find((b) => /^(Raw|Rendered)$/.test((b.textContent || "").trim()));
+    const res = {};
+    res.notInTheHeader =
+      ![...document.querySelectorAll("#__lvRetryLog > div button")]
+        .some((b) => /^(Raw|Rendered)$/.test((b.textContent || "").trim()));
+    res.notOnTheLogTab = !viewBtn();
+    tabBtn("Prompt").click();
+    await wait(20);
+    fromBackend({
+      type: "prompt_snapshot", at: 1, chatId: "c1", total: 1, notes: 0,
+      messages: [{ role: "user", content: "she *turned* and said **no**, 2 * 4 = 8 <b>x</b>",
+                   history: true, note: false }],
+    });
+    await wait(30);
+    res.shownOnPrompt = !!viewBtn();
+    res.startsRaw = (viewBtn().textContent || "").trim() === "Raw";
+    // The message body, not the whole panel: the collapsed summary line above
+    // it shows a plain preview of the same text, markers and all, whichever
+    // view is on. That is the summary doing its job, not the body.
+    const bodyEl = () => document.querySelector("#__lvRetryLogBody details > div");
+    // Raw: the characters exactly, markers and all, and no elements made from them.
+    res.rawKeepsMarkers = bodyEl().textContent.indexOf("*turned*") >= 0;
+    res.rawHasNoEm = bodyEl().querySelectorAll("em, strong").length === 0;
+    viewBtn().click();
+    await wait(30);
+    res.nowRendered = (viewBtn().textContent || "").trim() === "Rendered";
+    res.emphasisApplied =
+      bodyEl().querySelectorAll("em").length === 1 &&
+      bodyEl().querySelectorAll("strong").length === 1;
+    res.markersGone = bodyEl().textContent.indexOf("*turned*") < 0;
+    res.arithmeticKept = bodyEl().textContent.indexOf("2 * 4 = 8") >= 0;
+    // A prompt is somebody's chat and a model's output, so a tag in it is text.
+    res.tagIsText =
+      bodyEl().textContent.indexOf("<b>x</b>") >= 0 &&
+      bodyEl().querySelectorAll("b").length === 0;
+    res.remembered = JSON.parse(localStorage.getItem("lv-auto-retry:layout:v1") || "{}").promptView;
+    return res;
+  });
+  await page.close();
+  check("the choice stays out of the header the three tabs share", out.notInTheHeader, out);
+  check("and is not drawn on a tab it means nothing on", out.notOnTheLogTab, out);
+  check("it is offered with the prompt's own summary", out.shownOnPrompt, out);
+  check("raw is where it starts", out.startsRaw, out);
+  check("raw keeps every character, and makes nothing of them", out.rawKeepsMarkers && out.rawHasNoEm, out);
+  check("rendered applies the emphasis", out.nowRendered && out.emphasisApplied, out);
+  check("and takes the markers out of the text", out.markersGone, out);
+  check("arithmetic is left alone", out.arithmeticKept, out);
+  check("a tag in the prompt stays text and never becomes an element", out.tagIsText, out);
+  check("the choice is remembered", out.remembered === "rendered", out);
+}
+
 // ---- the panel asks for prompts again when the backend comes back ----
 // Asking the backend to capture prompts is a live request, and it used to be
 // sent only when the answer changed. The two sides have separate lifetimes, so
@@ -4723,15 +4805,16 @@ console.log("\nprompt viewer");
       type: "prompt_snapshot",
       at: Date.now(),
       chatId: "c1",
+      // Whole messages, since that is what the backend now sends. The last one
+      // is long on purpose: it used to arrive capped at 4000 characters with a
+      // line under it saying how much was missing.
       messages: [
-        { role: "system", content: "You are a tavern keeper.", chars: 24, history: false },
-        { role: "user", content: "I sat down by the fire.", chars: 23, history: true },
-        { role: "system", content: "This was refused by mistake.", chars: 28, history: false, note: true, noteIndex: 1 },
-        { role: "assistant", content: "A long reply.", chars: 9000, history: true },
+        { role: "system", content: "You are a tavern keeper.", history: false },
+        { role: "user", content: "I sat down by the fire.", history: true },
+        { role: "system", content: "This was refused by mistake.", history: false, note: true, noteIndex: 1 },
+        { role: "assistant", content: "q".repeat(9000), history: true },
       ],
       total: 4,
-      dropped: 0,
-      clipped: 1,
       notes: 1,
     });
     await wait(30);
@@ -4747,12 +4830,18 @@ console.log("\nprompt viewer");
           return /note/i.test(label) ? "note" : /chat/.test(label) ? "chat" : "added";
         })
       : [];
-    // A message shown in part has to say so, and has to say which end the cut
-    // happened at. "(cut for display)" read as if the prompt itself had been
-    // shortened, so the wording now names the model as having had it whole.
-    const saysClipped = /more characters were sent to the model/.test(shown);
-    const blamesTheView = /only this view is shortened/i.test(shown);
-    const doesNotSoundLikeTheModelMissedIt = !/cut for display/i.test(shown);
+    // Nothing is trimmed any more, so nothing in the view talks about trimming.
+    // The panel used to cap a message and say how much of it was missing, which
+    // was the one thing a reader could not work around: what was cut only ever
+    // existed on the server and was thrown away as the view was built.
+    const saysNothingAboutTrimming =
+      !/more characters were sent to the model/.test(shown) &&
+      !/only this view is shortened/i.test(shown) &&
+      !/cut for display/i.test(shown) &&
+      !/not listed below/i.test(shown);
+    // Every message whole, as sent. The long one is the test: it used to arrive
+    // capped at 4000.
+    const wholeLongMessage = shown.indexOf("q".repeat(6000)) >= 0;
 
     // Where the note went is the question this view is opened for.
     const noteLine = /Auto Retry note/.test(shown);
@@ -4779,7 +4868,7 @@ console.log("\nprompt viewer");
     teardown();
     const gone = !panel();
     const askedOnTeardown = sent.filter((m) => m.type === "set_prompt_capture").map((m) => m.on);
-    return { opened, tabs, landedOn, beforeAny, shown, rows, marks, saysClipped, blamesTheView, doesNotSoundLikeTheModelMissedIt, afterLogTab,
+    return { opened, tabs, landedOn, beforeAny, shown, rows, marks, saysNothingAboutTrimming, wholeLongMessage, afterLogTab,
       gone, askedBefore, askedAfter, askedOnLeave, askedOnTeardown, noteLine, notePlace,
       noteOpen, tabFocus: tabs0, afterArrow, tabH: Math.round(tabBox.height) };
   });
@@ -4801,9 +4890,8 @@ console.log("\nprompt viewer");
   check("with a summary of the size", /4 messages/.test(out.shown), out.shown.slice(0, 120));
   check("marking what came from the chat, what was added, and what is ours",
     out.marks.join(",") === "added,chat,note,chat", out.marks);
-  check("a message shown in part says so", out.saysClipped, out.shown.slice(-120));
-  check("and says the model was sent the whole thing", out.blamesTheView, out);
-  check("and no longer reads as the prompt being cut", out.doesNotSoundLikeTheModelMissedIt, out);
+  check("a long message arrives whole", out.wholeLongMessage, out.shown.length);
+  check("and nothing in the view talks about trimming", out.saysNothingAboutTrimming, out.shown.slice(0, 160));
   // What the panel is for, in the user's words: knowing how and where a note
   // was inserted.
   check("a note is named rather than being one more added row", out.noteLine, out.shown.slice(0, 200));

@@ -8,6 +8,18 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 4.13.0
+
+_2026-08-17_
+
+### Added
+
+- **A rendered view of the prompt, beside the raw one.** The button next to **Copy** on the Prompt tab switches between them. Raw is every character exactly as the model got it, in a monospace font, which is the view to use when the question is what was actually sent. Rendered lays the same text out as prose with its emphasis applied, which is how you read a long scene without counting asterisks. It knows the four things a scene is written with, and leaves everything else as typed: `2 * 4 = 8` keeps both stars and `snake_case_name` stays whole. Nothing in a prompt is ever treated as markup, so a tag in your chat is shown as the characters you wrote. Raw is where it starts, and whichever you pick is remembered.
+
+### Changed
+
+- **The Prompt tab shows the whole prompt.** It used to be capped at 200 messages, 4000 characters each and 300000 in total, with a line under a long message saying how much of it was missing. That was the one thing a reader could not work around, since what was cut only ever existed on the server and was thrown away as the view was built. Every message is now listed and every character of each one is there. The cost stays where it always was: a prompt is only captured while the Prompt tab is actually open, and nothing is captured at all once you switch away or close it.
+
 ## 4.12.3
 
 _2026-08-17_
