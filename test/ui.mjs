@@ -4537,10 +4537,17 @@ console.log("\nthe Prompt tab only blames the permission when it can");
       await wait(20);
       h.GENERATION_ENDED({ chatId: "c1", generationId: "g1", messageId: "m1", content: "hello" });
       await wait(30);
-      return document.getElementById("__lvRetryLogBody").textContent;
+      const after = document.getElementById("__lvRetryLogBody").textContent;
+      // Clear throws the prompt away, so it has to throw away what the tab was
+      // saying about the reply that prompt came from.
+      [...document.querySelectorAll("#__lvRetryLog button")]
+        .find((b) => (b.textContent || "").trim() === "Clear").click();
+      await wait(20);
+      return { after: after, cleared: document.getElementById("__lvRetryLogBody").textContent };
     });
     await page.close();
-    check("watching from the start with nothing arriving still names the permission", blames.test(out), out.slice(0, 130));
+    check("watching from the start with nothing arriving still names the permission", blames.test(out.after), out.after.slice(0, 130));
+    check("and Clear takes that back too, rather than emptying the tab and going on saying it", !blames.test(out.cleared) && /send a reply/i.test(out.cleared), out.cleared.slice(0, 130));
   }
 }
 
