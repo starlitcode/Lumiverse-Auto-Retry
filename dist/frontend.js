@@ -3111,8 +3111,8 @@ export function setup(ctx, opts) {
     // arrival would mean trusting that this side already knows which chat the
     // generation was for, and the snapshot and the events that set that are not
     // ordered against each other. Held, a chat id that arrives late costs nothing:
-    // the next repaint simply starts matching. Either side being unknown counts as
-    // a match, since a guess is worse than the prompt somebody asked to see.
+    // the next repaint starts matching. Either side being unknown counts as a
+    // match, since a guess is worse than the prompt somebody asked to see.
     function promptIsForThisChat() {
         if (!lastPrompt || !lastPrompt.chatId || !lastChatId)
             return true;
@@ -3123,7 +3123,10 @@ export function setup(ctx, opts) {
     // none of the rows. Role and content are what actually crossed to the model,
     // so this is also the form that pastes into anything else.
     function promptAsData() {
-        if (!lastPrompt || !promptIsForThisChat())
+        // Whether a prompt should be shown at all is decided by the two places that
+        // call this, and both have decided before they get here. Asking again would
+        // be a third copy of that rule to keep in step with the other two.
+        if (!lastPrompt)
             return "[]";
         try {
             return JSON.stringify(lastPrompt.messages.map((m) => ({
@@ -3478,8 +3481,13 @@ export function setup(ctx, opts) {
         });
         const clearBtn = tinyBtn("Clear");
         clearBtn.addEventListener("click", () => {
-            if (liveTab === "prompt")
+            if (liveTab === "prompt") {
                 lastPrompt = null;
+                // And what it was saying about the reply that prompt came from. Left
+                // set, Clear emptied the tab and kept it telling you the interceptor
+                // permission was missing, about a reply you had just discarded.
+                promptNeverArrived = false;
+            }
             else if (liveTab === "stats") {
                 // Counting starts again from now, so the clock resets with the counts
                 // or the rate below them would be measured against the wrong window.
