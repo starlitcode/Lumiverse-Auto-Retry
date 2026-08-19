@@ -8,6 +8,14 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 4.14.6
+
+_2026-08-19_
+
+### Fixed
+
+- **The floating button's menu could still open with its first entry lit, and the reset picker with a ring around Go back.** Both fixes asked the browser whether focus should be shown, and that is a guess: the browser answers from the last kind of input it saw anywhere on the page, so opening the menu with a thumb shortly after typing in the chat still counted as keyboard and lit the top entry. That is why it came back only sometimes. Focus the extension moves itself is now marked as its own, so neither is drawn on, and the mark lifts at the first key pressed, so tabbing and the arrow keys show where you are exactly as before.
+
 ## 4.14.5
 
 _2026-08-19_

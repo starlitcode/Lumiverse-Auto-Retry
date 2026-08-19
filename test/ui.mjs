@@ -1928,8 +1928,12 @@ console.log("\nfloat button menu");
 
     // How a menu item shows focus, and where the menu sits in the stack. Read
     // while the button still exists, since the next step removes it.
+    //
+    // The second item, not the first. The menu focuses its first as it opens,
+    // and that focus is marked as the extension's own so it draws nothing; the
+    // question here is what focus looks like on an item somebody moved to.
     down(btn(), 130, 130); await wait(620);
-    const item = document.querySelector('[role="menuitem"]');
+    const item = document.querySelectorAll('[role="menuitem"]')[1];
     const focus = {
       outline: getComputedStyle(item).outlineStyle,
       ringWhenFocused: (item.focus(), getComputedStyle(item).boxShadow),
@@ -4698,6 +4702,75 @@ console.log("\nopening the float menu");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- and not after you have been typing either ----
+// :focus-visible is a guess. The browser answers it from the last kind of input
+// it saw, so a menu opened by hand shortly after typing in the chat still came
+// up with its top entry lit, which is why it only happened sometimes. Asking
+// the browser was therefore never enough on its own.
+//
+// Reproduced here with a real text field typed into for real, then the menu
+// raised from the keyboard, which is the strongest form of the case: the
+// browser says outright that this focus should be shown, and the entry still
+// must not be lit.
+console.log("\nopening the float menu after typing");
+{
+  const page = await browser.newPage({ viewport: { width: 420, height: 640 } });
+  const errors = [];
+  page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
+  page.on("console", (m) => { if (m.type() === "error") errors.push("console: " + m.text()); });
+  await stage(page, "<div id=modal></div><input id=chat>");
+  await page.addStyleTag({ content: THEME });
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  await page.evaluate(async () => {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    window.__setup(
+      { events: { on: () => () => {} },
+        sendToBackend: () => {},
+        onBackendMessage: () => () => {},
+        ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+              registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }),
+              createFloatWidget: (o) => {
+                const wrap = document.createElement("div");
+                wrap.style.cssText = "position:fixed;left:" + o.initialPosition.x + "px;top:" +
+                  o.initialPosition.y + "px;width:" + o.width + "px;height:" + o.height + "px";
+                document.body.appendChild(wrap);
+                return { root: wrap, destroy() { wrap.remove(); }, setPosition() {}, onDragEnd() { return () => {}; } };
+              } } },
+      { enabled: true, showFloatingToggle: true, floatingToggleSize: 44, toast: false },
+    );
+    await wait(40);
+  });
+  await page.click("#chat");
+  await page.keyboard.type("hello");
+  await page.waitForTimeout(60);
+  const typing = await page.evaluate(() => document.querySelector("#chat").matches(":focus-visible"));
+  // Shift+F10 is the keyboard's own way of raising a context menu, so this is
+  // the same door a right-click uses with the modality left as keyboard.
+  await page.evaluate(() => document.querySelector("button[aria-pressed]").focus());
+  await page.keyboard.press("Shift+F10");
+  await page.waitForTimeout(300);
+  const out = await page.evaluate(() => {
+    const items = [...document.querySelectorAll('[role="menuitem"], [role="menu"] button')];
+    const first = items[0];
+    if (!first) return { opened: false };
+    return {
+      opened: items.length > 1,
+      focusedFirst: document.activeElement === first,
+      browserSaysShow: first.matches(":focus-visible"),
+      lit: getComputedStyle(first).backgroundColor,
+      ring: getComputedStyle(first).boxShadow,
+    };
+  });
+  await page.close();
+  check("typing counts as keyboard", typing === true, typing);
+  check("the menu still opens", out.opened, out);
+  check("and the browser would have shown the focus", out.browserSaysShow === true, out);
+  check("but the entry is not lit", out.lit === "rgba(0, 0, 0, 0)" || out.lit === "transparent", out);
+  check("nor ringed", out.ring === "none", out);
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- holding an entry lights it, and letting go puts it out ----
 // A phone cannot hover, and a browser on one sends a hover when a finger rests
 // somewhere and never sends the matching leave. Drawn from hover alone, holding
@@ -4847,6 +4920,34 @@ console.log("\nwhen a button shows its focus");
       ((document.activeElement && document.activeElement.textContent) || "").trim());
     res.tabbedRing = await page.evaluate(() =>
       getComputedStyle(document.activeElement).boxShadow);
+    // The dialog case for real, and with the browser leaning the wrong way.
+    // The reset picker's second step focuses Go back so a keyboard can answer
+    // it, and here the step is reached from the keyboard, so :focus-visible on
+    // its own says to mark it. Nobody has gone near Go back, so it stays plain.
+    res.opened = await press("Reset…");
+    await page.waitForTimeout(200);
+    res.ticked = await page.evaluate(() => {
+      const box = document.querySelector('[data-ar-reset="retry"] input');
+      if (!box) return false;
+      box.checked = true;
+      const go = [...document.querySelectorAll("#__lvRetryReset button")]
+        .find((b) => b.textContent.trim() === "Reset ticked");
+      if (!go) return false;
+      go.focus({ preventScroll: true });
+      return true;
+    });
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(250);
+    res.onGoBack = await page.evaluate(() => {
+      const b = [...document.querySelectorAll("#__lvRetryReset button")]
+        .find((x) => x.textContent.trim() === "Go back");
+      if (!b) return null;
+      return {
+        focused: document.activeElement === b,
+        browserSaysShow: b.matches(":focus-visible"),
+        ring: getComputedStyle(b).boxShadow,
+      };
+    });
     return res;
   });
   check("a button was pressed for real", out.pressed, out);
@@ -4855,6 +4956,12 @@ console.log("\nwhen a button shows its focus");
   check("and that button is not marked either", out.codeFocusNoRing, out);
   check("tabbing lands on a button", out.tabbedTo.length > 0, out);
   check("and that one does wear the ring", out.tabbedRing !== "none", out);
+  check("the reset picker reaches its second step from a key",
+    out.opened && out.ticked && out.onGoBack && out.onGoBack.focused, out.onGoBack);
+  check("the browser would have marked Go back",
+    out.onGoBack && out.onGoBack.browserSaysShow === true, out.onGoBack);
+  check("and it is not marked all the same",
+    out.onGoBack && out.onGoBack.ring === "none", out.onGoBack);
   check("no console errors", errors.length === 0, errors);
 }
 
