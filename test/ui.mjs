@@ -4945,6 +4945,113 @@ console.log("\nholding a float menu entry");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- a phone that claims it can hover is still a phone ----
+// The guard above asked the screen whether the device hovers, and a phone told
+// to show the desktop site answers yes. The guard then came off, a synthesised
+// hover counted, and since a finger never sends the matching leave the entry
+// stayed lit with nothing able to put it out. Nothing on the page can see that
+// setting, which is why it came and went.
+//
+// The lie is emulated rather than the setting, since the two are the same thing
+// from in here: matchMedia says it hovers while the pointers are all fingers.
+console.log("\na phone that says it can hover");
+{
+  const page = await browser.newPage({
+    viewport: { width: 412, height: 900 }, hasTouch: true, isMobile: true,
+  });
+  const errors = [];
+  page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
+  page.on("console", (m) => { if (m.type() === "error") errors.push("console: " + m.text()); });
+  await page.addInitScript(() => {
+    const real = window.matchMedia.bind(window);
+    window.matchMedia = (q) => {
+      const r = real(q);
+      if (/hover:\s*hover/.test(String(q))) {
+        return { matches: true, media: r.media, addEventListener() {}, removeEventListener() {},
+                 addListener() {}, removeListener() {}, onchange: null, dispatchEvent() { return false; } };
+      }
+      return r;
+    };
+  });
+  await stage(page, "<div id=modal></div>");
+  await page.addStyleTag({ content: THEME });
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  await page.evaluate(async () => {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    window.__setup(
+      { events: { on: () => () => {} },
+        sendToBackend: () => {},
+        onBackendMessage: () => () => {},
+        ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+              registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }),
+              createFloatWidget: (o) => {
+                const w = document.createElement("div");
+                w.style.cssText = "position:fixed;left:40px;top:60px;width:" + o.width + "px;height:" + o.height + "px";
+                document.body.appendChild(w);
+                return { root: w, destroy() { w.remove(); }, setPosition() {}, onDragEnd() { return () => {}; } };
+              } } },
+      { enabled: true, showFloatingToggle: true, floatingToggleSize: 44, toast: false },
+    );
+    await wait(60);
+  });
+  const out = { lies: await page.evaluate(() => matchMedia("(hover: hover)").matches) };
+  // Opened with a real held finger, which is also what writes down that the
+  // pointers here are fingers.
+  const at = await page.evaluate(() => {
+    const b = document.querySelector("button[aria-pressed]");
+    const r = b.getBoundingClientRect();
+    return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
+  });
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("Input.dispatchTouchEvent", {
+    type: "touchStart",
+    touchPoints: [{ x: at.x, y: at.y, radiusX: 12, radiusY: 12, force: 1, id: 1 }],
+  });
+  await page.waitForTimeout(900);
+  await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  await page.waitForTimeout(250);
+  const clear2 = (v) => v === "rgba(0, 0, 0, 0)" || v === "transparent";
+  out.opened = await page.evaluate(() =>
+    document.querySelectorAll('[role="menuitem"]').length > 1);
+  out.restClear = await page.evaluate(() => {
+    const f = document.querySelector('[role="menuitem"]');
+    const v = getComputedStyle(f).backgroundColor;
+    return v === "rgba(0, 0, 0, 0)" || v === "transparent";
+  });
+  // The hover a touch browser synthesises, and the one it never takes back.
+  // Coming back to a backgrounded tab sends this over the last place touched,
+  // which is when it was reported.
+  out.afterFakeHover = await page.evaluate(() => {
+    const f = document.querySelector('[role="menuitem"]');
+    f.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+    f.dispatchEvent(new MouseEvent("mouseenter"));
+    return getComputedStyle(f).backgroundColor;
+  });
+  // And a finger let go on the entry, which the old guard also read as a mouse
+  // still resting there.
+  out.afterTouchUp = await page.evaluate(() => {
+    const f = document.querySelector('[role="menuitem"]');
+    f.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerType: "touch" }));
+    f.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, pointerType: "touch" }));
+    return getComputedStyle(f).backgroundColor;
+  });
+  // A real mouse on the same page still gets its highlight.
+  out.afterMouseOver = await page.evaluate(() => {
+    const f = document.querySelector('[role="menuitem"]');
+    f.dispatchEvent(new PointerEvent("pointerenter", { pointerType: "mouse" }));
+    return getComputedStyle(f).backgroundColor;
+  });
+  await page.close();
+  check("the screen claims it can hover", out.lies === true, out);
+  check("the menu still opens on a hold", out.opened, out);
+  check("its entry starts unlit", out.restClear, out);
+  check("a synthesised hover does not light it", clear2(out.afterFakeHover), out);
+  check("nor does letting a finger go on it", clear2(out.afterTouchUp), out);
+  check("but a mouse moving onto it still does", !clear2(out.afterMouseOver), out);
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- a button is marked when it was reached by keyboard, and not otherwise ----
 // Whether a button should show its focus is the browser's own question, asked
 // as :focus-visible. Tracking pointer presses by hand answered it wrongly the
