@@ -5,6 +5,12 @@
     "moduleResolution": "bundler",
     "lib": ["ES2020"],
     "strict": false,
+    // On, while the rest of strict is not. It is the check that catches a
+    // function used where its answer was meant: "if (canHover)" on something
+    // declared as "() => boolean" is always true, reads exactly like the
+    // working version, and took a working feature out of the panel silently.
+    // Everything here already passes it, so it costs nothing to keep.
+    "strictNullChecks": true,
     // dist/backend.js has no imports, so Lumiverse evaluates it as a classic
     // script, where strict mode is opt-in rather than automatic. Without this
     // the emitted file silently drops to sloppy mode.
