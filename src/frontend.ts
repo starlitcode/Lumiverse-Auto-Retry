@@ -7762,14 +7762,12 @@ export function setup(ctx: Ctx, opts?: any) {
     // past it. The vh term is what keeps a short screen from overflowing.
     const panel = document.createElement("div");
     panel.style.cssText =
-      "display:flex;flex-direction:column;max-height:min(74vh,640px);overflow:hidden;box-sizing:border-box;font:13px/1.45 var(--lumiverse-font-family,system-ui);color:var(--lumiverse-text,#eee);" +
-      // A little depth down the panel: the same surface the host painted, shaded
-      // slightly toward the bottom. Laid on as a wash of transparent to dark
-      // rather than as two colours of its own, so it has no colour to disagree
-      // with the theme about and works the same whether the surface under it is
-      // dark or light. Nothing behind it is replaced, so the modal's own corners
-      // and edges are still the ones showing.
-      "background-image:linear-gradient(rgba(0,0,0,0),rgba(0,0,0,.13))";
+      "display:flex;flex-direction:column;max-height:min(74vh,640px);overflow:hidden;box-sizing:border-box;font:13px/1.45 var(--lumiverse-font-family,system-ui);color:var(--lumiverse-text,#eee)";
+    // No shading down the panel. It was tried and taken back out: this element
+    // is only the modal's content area, and the header, the frame and the
+    // footer around it belong to the host. Anything painted here stops at a
+    // hard line where that chrome takes over, so a wash that is meant to read
+    // as depth reads as one panel not matching the window it is in.
     matchColorScheme(panel);
 
     // the one scroll area: flexes to fill whatever height is left after the
