@@ -400,7 +400,7 @@ describe("reporting which permissions are granted", () => {
   // there reported a permission as refused at the moment it was granted, so the
   // panel put its note back up on the grant that should have taken it down.
   describe("when a grant changes under it", () => {
-    const bootChanging = (has: (n: string) => boolean) => {
+    const bootChanging = (has: (n: string) => boolean, getGranted?: () => Promise<string[]>) => {
       let onFrontend: any = null;
       let onChanged: any = null;
       const sent: Array<{ msg: any }> = [];
@@ -412,11 +412,14 @@ describe("reporting which permissions are granted", () => {
         chat: { getMessages: async () => [], updateMessage: async () => {} },
         registerInterceptor: () => {},
         log: { info() {}, warn() {}, error() {} },
-        permissions: {
-          has: has,
-          onChanged: (fn: any) => { onChanged = fn; },
-          onDenied: () => {},
-        },
+        permissions: Object.assign(
+          {
+            has: has,
+            onChanged: (fn: any) => { onChanged = fn; },
+            onDenied: () => {},
+          },
+          getGranted ? { getGranted: getGranted } : {},
+        ),
       };
       new Function("spindle", readFileSync(new URL("../dist/backend.js", import.meta.url), "utf8"))(spindle);
       return {
@@ -459,17 +462,17 @@ describe("reporting which permissions are granted", () => {
       expect(g.interceptor).toBe(false);
     });
 
-    test("an empty list is ignored rather than read as nothing granted", () => {
+    // An empty list is a real answer: it means nothing is granted.
+    test("an empty list means nothing is granted", () => {
       const h = bootChanging(() => true);
       h.change({ permission: "interceptor", granted: false, allGranted: [] });
       const g = h.reply().granted;
-      expect(g.generation).toBe(true);
+      expect(g.generation).toBe(false);
       expect(g.interceptor).toBe(false);
     });
 
-    // A Set is an object with no key for any of these names. Read as a map it
-    // answers no to all of them.
-    test("a set is ignored rather than read as a map", () => {
+    // Not the documented shape, so not a list this can read.
+    test("a set is ignored rather than guessed at", () => {
       const h = bootChanging(() => true);
       h.change({ permission: "interceptor", granted: false, allGranted: new Set(["generation"]) });
       const g = h.reply().granted;
@@ -477,19 +480,22 @@ describe("reporting which permissions are granted", () => {
       expect(g.interceptor).toBe(false);
     });
 
-    test("a map of names to answers is read as one", () => {
-      const h = bootChanging(() => false);
-      h.change({ permission: "chats", granted: true, allGranted: { generation: true, chats: true } });
+    // Asking outright is rare and is the answer somebody acts on, so it pays
+    // for the authoritative roundtrip rather than reading the cache beside it.
+    test("asking outright uses the authoritative list, not the cache", async () => {
+      let asked = 0;
+      const h = bootChanging(() => false, async () => { asked++; return ["generation", "chats"]; });
+      await h.ask();
       const g = h.reply().granted;
+      expect(asked).toBe(1);
       expect(g.generation).toBe(true);
       expect(g.chats).toBe(true);
       expect(g.interceptor).toBe(false);
     });
 
-    // Nothing to do with a change: a plain ask still reads the cache.
-    test("asking outright still reads the cache", () => {
+    test("and falls back to the cache on a build without it", async () => {
       const h = bootChanging((n) => n === "chats");
-      h.ask();
+      await h.ask();
       const g = h.reply().granted;
       expect(g.chats).toBe(true);
       expect(g.interceptor).toBe(false);

@@ -662,11 +662,24 @@ spindle.onFrontendMessage(async (payload: any, userId?: string) => {
       return;
     }
     if (payload.type === 'get_permissions') {
+      // getGranted is a roundtrip to the host and is the authoritative answer,
+      // where has() reads a cache. This is the one place worth paying for it: a
+      // panel opening is rare, and this is the answer somebody acts on. A build
+      // without it falls back to the cache.
+      let granted: Record<string, boolean | null> | null = null;
+      try {
+        const perms: any = (spindle as any).permissions;
+        if (perms && typeof perms.getGranted === 'function') {
+          const live = await perms.getGranted();
+          if (Array.isArray(live) && live.every((x: any) => typeof x === 'string'))
+            granted = grantedMap({ allGranted: live });
+        }
+      } catch (_) {}
       replyTo(userId, {
         type: 'permissions',
         requestId: payload.requestId,
         list: PERMISSIONS,
-        granted: grantedMap(),
+        granted: granted || grantedMap(),
       });
       return;
     }
@@ -893,21 +906,14 @@ const PERMISSIONS: Array<{ name: string; costs: string }> = [
 // panel put the note back up on the grant that should have taken it down.
 function grantedMap(e?: any): Record<string, boolean | null> {
   const all = e && e.allGranted;
-  // Only where the shape is unambiguous, because a wrong reading here is a
-  // panel full of permissions reported as refused that are not. A Set is an
-  // object with no key for any of these names, and read as a map it answers no
-  // to every one of them. An array that holds anything other than names, or no
-  // names at all, says nothing either. In every one of those cases this backs
-  // off to the cache, which is the answer this had before the event existed.
-  const fromAll = (name: string): boolean | null => {
-    if (Array.isArray(all))
-      return all.length && all.every((x: any) => typeof x === 'string')
-        ? all.indexOf(name) >= 0
-        : null;
-    if (all && typeof all === 'object' && Object.prototype.hasOwnProperty.call(all, name))
-      return !!all[name];
-    return null;
-  };
+  // allGranted is the full list of what is granted after the change, as an
+  // array of names. Anything else arriving in that field is not a list this can
+  // read, so it backs off to the cache rather than guessing: read wrongly it
+  // answers no to every permission, which is a panel full of refusals that are
+  // not real. An empty list is a real answer and means nothing is granted.
+  const usable = Array.isArray(all) && all.every((x: any) => typeof x === 'string');
+  const fromAll = (name: string): boolean | null =>
+    usable ? all.indexOf(name) >= 0 : null;
   const out: Record<string, boolean | null> = {};
   for (const p of PERMISSIONS) {
     let v: boolean | null = fromAll(p.name);

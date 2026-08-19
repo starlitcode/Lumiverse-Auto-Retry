@@ -14,7 +14,7 @@ _2026-08-19_
 
 ### Fixed
 
-- **A permission note came back on the grant that should have taken it away.** The backend answers with what the host says is granted, and when a grant changed it re-read that from a local cache rather than believing the event announcing the change. Inside that callback the cache can still hold the answer from before it, so turning a permission on reported it as still refused, and the note somebody had just put away came straight back and stayed. The event is believed for the permission it is about now, and its full list is used when the host sends one. The panel also asks again every time it opens, so a grant is picked up even on a build that raises no event at all.
+- **A permission note came back on the grant that should have taken it away.** The backend answers with what the host says is granted, and when a grant changed it re-read that from a local cache rather than believing the event announcing the change. Inside that callback the cache can still hold the answer from before it, so turning a permission on reported it as still refused, and the note somebody had just put away came straight back and stayed. The event is believed for the permission it is about now, and its full list is used when the host sends one. When the panel asks outright it uses the host's authoritative answer rather than that cache, since a panel opening is rare and it is the answer somebody acts on. The panel also asks again every time it opens, so a grant is picked up even on a build that raises no event at all.
 
 ### Changed
 
