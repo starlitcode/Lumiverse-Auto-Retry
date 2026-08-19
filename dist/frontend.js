@@ -101,7 +101,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "4.14.0";
+const VERSION = "4.14.1";
 // The one address the extension ever points at, used by the warning in front of
 // the crisis-support check. Pinned to the released branch rather than to a tag,
 // so an old install still opens the page as it stands today.
@@ -8976,15 +8976,45 @@ export function setup(ctx, opts) {
         }
         return row;
     }
+    // The mark on whatever has focus, and the one place it is described.
+    //
+    // A tinted border on its own is a single hairline, which on a busy theme is
+    // easy to lose and on a wide field says very little. This is the same tint
+    // with room around it: a soft band just outside the edge, and a wider halo
+    // past that, both in the theme's own accent so it follows whatever colour
+    // the user runs. Nothing is painted inside the field, so the text is never
+    // sat on and contrast is untouched.
+    //
+    // Two layers rather than one because a single large blur reads as a smudge
+    // and a single tight band reads as a second border. Together they give the
+    // edge somewhere to fall off to.
+    const FOCUS_RING = "0 0 0 3px var(--lumiverse-primary-020,rgba(147,112,219,.2))," +
+        "0 0 16px 2px var(--lumiverse-primary-015,rgba(147,112,219,.15))";
     function styleField(input) {
         input.style.cssText +=
             "padding:9px 10px;border-radius:var(--lumiverse-radius,8px);" +
                 "border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));" +
                 "background:var(--lumiverse-fill-subtle,rgba(0,0,0,.1));" +
                 "color:var(--lumiverse-text,#eee);font:13px var(--lumiverse-font-family,system-ui);outline:none;" +
-                "transition:border-color var(--lumiverse-transition-fast,150ms ease)";
+                // The ring fades in with the border it belongs to rather than appearing
+                // out of nowhere. Nothing moves and nothing is laid out again: both of
+                // these paint outside the box, so neither can push the row around.
+                "transition:border-color var(--lumiverse-transition-fast,150ms ease)," +
+                "box-shadow var(--lumiverse-transition-fast,150ms ease)";
         ensureReadable(input);
-        // On focus, tint the border so the active field is clear. No glow ring.
+        // A field lifts its border under the pointer, so it reads as something you
+        // can put a cursor in before you have. Focus overwrites this and blur puts
+        // it back, so the two never argue over the border.
+        let focused = false;
+        input.addEventListener("pointerenter", () => {
+            if (!focused)
+                input.style.borderColor = "var(--lumiverse-border-hover,rgba(147,112,219,.25))";
+        });
+        input.addEventListener("pointerleave", () => {
+            if (!focused)
+                input.style.borderColor = "var(--lumiverse-border,rgba(255,255,255,.16))";
+        });
+        // On focus, tint the border and put the ring around it.
         //
         // Except on a dropdown opened by pointer. Clicking one puts its menu on
         // screen with the choice already in front of you, so the mark says nothing
@@ -9004,12 +9034,17 @@ export function setup(ctx, opts) {
             const dropdown = String(input.tagName || "").toUpperCase() === "SELECT";
             const skip = dropdown && byPointer;
             byPointer = false;
-            if (!skip)
+            if (!skip) {
+                focused = true;
                 input.style.borderColor = "var(--lumiverse-primary,rgba(147,112,219,.9))";
+                input.style.boxShadow = FOCUS_RING;
+            }
         });
         input.addEventListener("blur", () => {
             byPointer = false;
+            focused = false;
             input.style.borderColor = "var(--lumiverse-border,rgba(255,255,255,.16))";
+            input.style.boxShadow = "none";
         });
     }
     function btn(label, primary) {
@@ -9022,7 +9057,8 @@ export function setup(ctx, opts) {
                 // when hovering brightened the button instead of recolouring it; nothing
                 // has set filter since, and animating it is what forces a button onto its
                 // own compositing layer for no benefit.
-                "transition:background-color var(--lumiverse-transition-fast,150ms ease);" +
+                "transition:background-color var(--lumiverse-transition-fast,150ms ease)," +
+                "box-shadow var(--lumiverse-transition-fast,150ms ease);" +
                 (primary
                     ? // A filled button's label has to contrast with the fill, not with the
                         // panel. Lumiverse has no on-accent colour to ask for, and the body
@@ -9041,6 +9077,29 @@ export function setup(ctx, opts) {
         ensureReadable(b);
         if (primary)
             ensureEdge(b);
+        // The same ring the fields wear, so keyboard focus looks like one thing
+        // across the panel rather than a themed field and a browser default button.
+        // Left to the browser, a button focused by tab drew whatever outline the
+        // host's own stylesheet happened to leave it, which on a dark theme was
+        // often nothing anybody could see.
+        //
+        // Only when focus did not come from a pointer: pressing a button already
+        // tells you which one you pressed, and the ring hanging around after the
+        // click reads as though something is still waiting on you.
+        let pressed = false;
+        b.addEventListener("pointerdown", () => {
+            pressed = true;
+        });
+        b.addEventListener("focus", () => {
+            const byPointer = pressed;
+            pressed = false;
+            if (!byPointer)
+                b.style.boxShadow = FOCUS_RING;
+        });
+        b.addEventListener("blur", () => {
+            pressed = false;
+            b.style.boxShadow = "none";
+        });
         // Hovering swaps to the theme's own hover colour rather than brightening the
         // resting one, so a button lights up the same way the rest of Lumiverse does.
         let restBg = primary

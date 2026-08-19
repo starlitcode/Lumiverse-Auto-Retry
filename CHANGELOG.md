@@ -8,6 +8,16 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 4.14.1
+
+_2026-08-18_
+
+### Changed
+
+- **The panel marks what has focus properly.** A field used to tint one hairline of border, which is easy to lose on a busy theme and says very little across a wide box. It now carries a soft band just outside the edge and a wider halo past that, both in the theme's own accent, so it follows whatever colours you run. All of it is painted outside the box, so nothing sits on the text and no row moves when it lands.
+- **Buttons reached by keyboard wear the same mark.** They were left with whatever outline the host's stylesheet happened to give them, which on a dark theme was often nothing you could see. A button you pressed with a pointer still wears nothing, since the press already said which one it was.
+- **Fields lift their border under the pointer**, so a box reads as something you can put a cursor in before you have.
+
 ## 4.14.0
 
 _2026-08-18_
