@@ -885,14 +885,30 @@ const PERMISSIONS: Array<{ name: string; costs: string }> = [
 ];
 // null where the host is too old to say, which is not the same as denied and is
 // not worth showing as one.
-function grantedMap(): Record<string, boolean | null> {
+//
+// Given the event from onChanged, that event is believed over has(). has()
+// reads a local cache the host keeps in step, and inside the very callback
+// announcing a change it can still hold the answer from before it: asking it
+// there reported a permission as refused at the moment it was granted, and the
+// panel put the note back up on the grant that should have taken it down.
+function grantedMap(e?: any): Record<string, boolean | null> {
+  const all = e && e.allGranted;
+  const fromAll = (name: string): boolean | null => {
+    if (Array.isArray(all)) return all.indexOf(name) >= 0;
+    if (all && typeof all === 'object') return !!all[name];
+    return null;
+  };
   const out: Record<string, boolean | null> = {};
   for (const p of PERMISSIONS) {
-    let v: boolean | null = null;
-    try {
-      const perms: any = (spindle as any).permissions;
-      if (perms && typeof perms.has === 'function') v = !!perms.has(p.name);
-    } catch (_) {}
+    let v: boolean | null = fromAll(p.name);
+    if (v === null) {
+      try {
+        const perms: any = (spindle as any).permissions;
+        if (perms && typeof perms.has === 'function') v = !!perms.has(p.name);
+      } catch (_) {}
+    }
+    // The one the event is actually about, straight from the event.
+    if (e && e.permission === p.name && typeof e.granted === 'boolean') v = e.granted;
     out[p.name] = v;
   }
   return out;
@@ -921,7 +937,7 @@ try {
     // Grants change while the extension runs and nothing restarts, so a panel
     // that is open is told rather than left showing what was true when it
     // opened.
-    try { replyTo(undefined, { type: 'permissions', list: PERMISSIONS, granted: grantedMap() }); } catch (__) {}
+    try { replyTo(undefined, { type: 'permissions', list: PERMISSIONS, granted: grantedMap(e) }); } catch (__) {}
   });
 } catch (_) {}
 // The only way to find out a fire-and-forget registration was refused. Said in

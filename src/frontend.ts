@@ -7366,6 +7366,11 @@ export function setup(ctx: Ctx, opts?: any) {
     applyDeps = () => {};
     permPaint = null;
     presetBarRefreshers = [];
+    // Ask again on every open. The backend says so when a grant changes, but
+    // only on a build that raises that event at all, and a panel that opens
+    // showing what was true at startup is a panel that goes on reporting a
+    // permission somebody has already turned on.
+    askForPermissions();
 
     // Flush a field the user is still editing into cfg, then normalise every
     // number so a blank or out-of-range box cannot be saved or captured into a
