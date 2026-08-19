@@ -112,7 +112,7 @@ const STREAM_BUF_MAX = 200000;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "4.14.4";
+const VERSION = "4.14.5";
 
 // The one address the extension ever points at, used by the warning in front of
 // the crisis-support check. Pinned to the released branch rather than to a tag,
@@ -4014,6 +4014,21 @@ export function setup(ctx: Ctx, opts?: any) {
     return Number.isFinite(v) && v >= 28 ? Math.min(v, 96) : 44;
   }
 
+  // Whether the pointer can hover at all. A phone cannot, and a browser on one
+  // synthesises a hover when a finger rests somewhere, so anything drawn from
+  // hover alone arrives on a tap and has nothing to take it off again.
+  const canHover = (): boolean => {
+    try {
+      return (
+        typeof window !== "undefined" &&
+        !!window.matchMedia &&
+        window.matchMedia("(hover: hover)").matches
+      );
+    } catch (_) {
+      return false;
+    }
+  };
+
   const vpW = (): number =>
     (typeof window !== "undefined" && window.innerWidth) || 360;
   const vpH = (): number =>
@@ -4311,8 +4326,22 @@ export function setup(ctx: Ctx, opts?: any) {
           ? "inset 0 0 0 2px var(--lumiverse-primary-050,rgba(147,112,219,.5))"
           : "none";
       };
-      b.addEventListener("mouseenter", () => lit(true));
-      b.addEventListener("mouseleave", () => lit(false));
+      // Hover only on something that hovers. On a phone the browser sends one
+      // when a finger rests on the entry and never sends the matching leave, so
+      // holding this lit it and lifting left it lit until the menu closed.
+      if (canHover()) {
+        b.addEventListener("mouseenter", () => lit(true));
+        b.addEventListener("mouseleave", () => lit(false));
+      }
+      // What a hold should do instead, on any device: light while it is held
+      // and go out when it is let go. A press with nothing to show for it reads
+      // as a tap that missed.
+      b.addEventListener("pointerdown", () => lit(true));
+      // Still under a mouse after the press, so a mouse keeps its hover. A
+      // finger has nothing to hover with, so it goes out.
+      b.addEventListener("pointerup", () => lit(canHover()));
+      b.addEventListener("pointercancel", () => lit(false));
+      b.addEventListener("pointerleave", () => lit(false));
       // Marked only when focus came from a key. This menu focuses its first
       // entry as it opens so a keyboard can act on it straight away, and that
       // was drawn the same as hovering, so a menu opened with a thumb came up
@@ -8685,11 +8714,7 @@ export function setup(ctx: Ctx, opts?: any) {
       };
       // Mouse devices reveal on hover (and keyboard focus); touch devices, which
       // can't hover, toggle on tap.
-      const canHover =
-        typeof window !== "undefined" &&
-        !!window.matchMedia &&
-        window.matchMedia("(hover: hover)").matches;
-      if (canHover) {
+      if (canHover()) {
         info.addEventListener("mouseenter", open);
         info.addEventListener("mouseleave", () => {
           if (mine()) hideHint();
@@ -9912,10 +9937,7 @@ export function setup(ctx: Ctx, opts?: any) {
     // dropped rather than repeated back.
     const what =
       String(label || "").replace(/^your\s+/i, "").trim() || "retry button";
-    const hasKeyboard =
-      typeof window !== "undefined" &&
-      !!window.matchMedia &&
-      window.matchMedia("(hover: hover)").matches;
+    const hasKeyboard = canHover();
     showToast(
       "Click your " + what + ". " + (hasKeyboard ? "Esc or Cancel to stop." : "Or press Cancel."),
       {
