@@ -101,7 +101,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "4.14.1";
+const VERSION = "4.14.2";
 // The one address the extension ever points at, used by the warning in front of
 // the crisis-support check. Pinned to the released branch rather than to a tag,
 // so an old install still opens the page as it stands today.
@@ -2819,6 +2819,21 @@ export function setup(ctx, opts) {
     let permGranted = {};
     let permList = [];
     let permPaint = null;
+    // Permissions whose note has been put away. Some of these are meant to be
+    // refused: somebody who does not want their prompt read declines the
+    // interceptor on purpose, and a panel telling them so on every visit is
+    // nagging about a decision they already made. Kept by name rather than as one
+    // flag, so putting away the note about a permission you chose to refuse does
+    // not also hide the next one that goes missing for a reason you did not
+    // choose.
+    const permIsHidden = (name) => !!layout.permHidden && layout.permHidden.indexOf(name) >= 0;
+    function hidePermNote(name) {
+        const list = (layout.permHidden || []).slice();
+        if (list.indexOf(name) < 0)
+            list.push(name);
+        layout.permHidden = list.slice(-40);
+        saveLayout();
+    }
     // true, false, or null for a host too old to say. null is not a denial and is
     // never shown as one.
     const permIs = (name) => Object.prototype.hasOwnProperty.call(permGranted, name) ? permGranted[name] : null;
@@ -2871,6 +2886,10 @@ export function setup(ctx, opts) {
                     layout.tab = raw.tab;
                 if (raw.promptView === "raw" || raw.promptView === "rendered")
                     layout.promptView = raw.promptView;
+                if (Array.isArray(raw.permHidden))
+                    layout.permHidden = raw.permHidden
+                        .filter((x) => typeof x === "string")
+                        .slice(0, 40);
             }
         }
     }
@@ -8449,7 +8468,7 @@ export function setup(ctx, opts) {
         box.setAttribute("data-ar-perms", "1");
         const paint = () => {
             box.replaceChildren();
-            const missing = permList.filter((p) => permIs(p.name) === false);
+            const missing = permList.filter((p) => permIs(p.name) === false && !permIsHidden(p.name));
             if (!missing.length) {
                 box.style.display = "none";
                 return;
@@ -8470,18 +8489,42 @@ export function setup(ctx, opts) {
             box.appendChild(head);
             for (const p of missing) {
                 const line = document.createElement("div");
-                line.style.cssText = "margin-top:3px";
+                line.style.cssText =
+                    "margin-top:3px;display:flex;align-items:flex-start;gap:8px";
+                const words = document.createElement("span");
+                words.style.cssText = "flex:1;min-width:0";
                 const who = document.createElement("span");
                 who.style.fontFamily = "var(--lumiverse-font-mono,ui-monospace,monospace)";
                 who.textContent = p.name;
-                line.appendChild(who);
-                line.appendChild(document.createTextNode(". " + p.costs));
+                words.appendChild(who);
+                words.appendChild(document.createTextNode(". " + p.costs));
+                line.appendChild(words);
+                // Puts this one away for good. Sized for a thumb rather than drawn as
+                // a hairline cross, since this panel is read on a phone as often as on
+                // a computer.
+                const shut = document.createElement("button");
+                shut.type = "button";
+                shut.textContent = "\u00d7";
+                shut.title = "Hide this note. It stays hidden, and the debug report still lists every permission.";
+                shut.setAttribute("aria-label", "Hide the note about the " + p.name + " permission");
+                shut.style.cssText =
+                    "flex:none;cursor:pointer;border:0;background:transparent;padding:0;" +
+                        "width:28px;height:28px;margin:-4px -4px 0 0;line-height:1;font-size:16px;" +
+                        "font-family:inherit;color:inherit;opacity:.65;border-radius:var(--lumiverse-radius-sm,5px);" +
+                        "touch-action:manipulation";
+                shut.addEventListener("pointerenter", () => { shut.style.opacity = "1"; });
+                shut.addEventListener("pointerleave", () => { shut.style.opacity = ".65"; });
+                shut.addEventListener("click", () => {
+                    hidePermNote(p.name);
+                    paint();
+                });
+                line.appendChild(shut);
                 box.appendChild(line);
             }
             const how = document.createElement("div");
             how.style.cssText = "margin-top:6px;opacity:.85";
             how.textContent =
-                "These are approved in Lumiverse's own extension settings. Some are privileged, which means an admin has to grant them.";
+                "These are approved in Lumiverse's own extension settings. Some are privileged, which means an admin has to grant them. Refusing one on purpose is a fair answer: put its note away with the cross beside it.";
             box.appendChild(how);
             try {
                 ensureReadableTree(box, 2.6);

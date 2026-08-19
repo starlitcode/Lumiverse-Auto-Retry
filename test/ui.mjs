@@ -4714,6 +4714,74 @@ console.log("\na missing permission is said out loud");
     check("with what stops working without it", /refusal note/i.test(out.text), out.text.slice(0, 140));
     check("and the one that is granted is not listed", !/generation/.test(out.text), out.text.slice(0, 140));
   }
+  // Refusing a permission on purpose is a fair answer, and a panel saying so on
+  // every visit is nagging about a decision already made. Each note is put away
+  // by name, so putting away the one you chose to refuse does not hide the next
+  // one that goes missing for a reason you did not choose.
+  {
+    const page = await browser.newPage();
+    await stage(page, "<div id=modal></div>");
+    await page.addStyleTag({ content: THEME });
+    await page.addScriptTag({ content: SOURCE, type: "module" });
+    await page.waitForFunction(() => !!window.__setup);
+    const res = await page.evaluate(async () => {
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      const acts = {};
+      // Every handler, not just the newest. Opening the panel registers more of
+      // these for its own one-off replies, and a stub that keeps only the last
+      // one sends everything to whichever was registered most recently, which
+      // silently drops the messages the extension actually listens for.
+      const handlers = [];
+      window.__setup(
+        { events: { on: () => () => {} },
+          sendToBackend: () => {},
+          onBackendMessage: (fn) => {
+            handlers.push(fn);
+            return () => { const i = handlers.indexOf(fn); if (i >= 0) handlers.splice(i, 1); };
+          },
+          ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+                registerInputBarAction: (o) => { const a = { onClick: (cb) => { a.cb = cb; return () => {}; }, destroy: () => {} }; acts[o.id] = a; return a; } } },
+        { liveLog: false, toast: false },
+      );
+      const send = (m) => { for (const h of handlers.slice()) h(m); };
+      const say = (granted) => send({
+        type: "permissions",
+        list: [
+          { name: "generation", costs: "Everything. Nothing is ever retried." },
+          { name: "interceptor", costs: "The refusal note, and the Prompt tab." },
+        ],
+        granted: granted,
+      });
+      const openPanel = async () => { acts["auto-retry-settings"].cb(); await wait(50); };
+      const box = () => document.querySelector("[data-ar-perms]");
+      const shown = () => (box() && getComputedStyle(box()).display !== "none" ? box().textContent : "");
+      const out = {};
+      await wait(30);
+      say({ generation: true, interceptor: false });
+      await openPanel();
+      out.before = shown();
+      const cross = box().querySelector("button");
+      out.hasCross = !!cross;
+      cross.click();
+      await wait(20);
+      out.afterHiding = shown();
+      // Reopening is where a note that was not really put away comes back, so
+      // that is what is checked rather than the click alone.
+      await openPanel();
+      out.afterReopen = shown();
+      // A different permission going missing is a different question, and is
+      // still asked even though one note was put away.
+      say({ generation: false, interceptor: false });
+      await openPanel();
+      out.newOne = shown();
+      return out;
+    });
+    await page.close();
+    check("a note carries a way to put it away", res.hasCross, res);
+    check("and putting it away takes it off the panel", /interceptor/.test(res.before) && !/interceptor/.test(res.afterHiding), res);
+    check("it stays away when the panel is opened again", !/interceptor/.test(res.afterReopen), res);
+    check("but a different permission going missing is still said", /generation/.test(res.newOne), res);
+  }
 }
 
 // ---- the Prompt tab only blames the permission when it can ----
