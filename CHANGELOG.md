@@ -8,6 +8,14 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 4.14.2
+
+_2026-08-19_
+
+### Changed
+
+- **A note about a missing permission can be put away.** Some are meant to be refused: somebody who does not want their prompt read declines the interceptor on purpose, and a panel telling them so on every visit is nagging about a decision they already made. Each note now carries a cross that hides it for good. They are hidden by name rather than all at once, so putting away the one you chose to refuse does not also hide the next one that goes missing for a reason you did not choose. The debug report still lists every permission either way.
+
 ## 4.14.1
 
 _2026-08-18_
