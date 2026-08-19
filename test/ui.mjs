@@ -4702,6 +4702,87 @@ console.log("\nopening the float menu");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- nor when a finger opens it after you have been typing ----
+// The path this was actually reported on, and the reason the first fix did not
+// hold. A touch does not move focus, so the chat box is still the focused
+// element when the hold fires, and a text box always counts as worth marking;
+// Chromium carries that answer across a focus moved by script, so the entry
+// came up lit. A mouse press does move focus and flips the browser to pointer,
+// which is why holding with one never showed it.
+//
+// Held through the devtools protocol, since a real held finger is not
+// something the test driver's touchscreen can do on its own.
+console.log("\nholding the float button open after typing");
+{
+  const page = await browser.newPage({ viewport: { width: 412, height: 900 }, hasTouch: true, isMobile: true });
+  const errors = [];
+  page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
+  page.on("console", (m) => { if (m.type() === "error") errors.push("console: " + m.text()); });
+  await stage(page, "<div id=modal></div><textarea id=chat style='position:fixed;left:10px;bottom:10px;width:200px;height:40px'></textarea>");
+  await page.addStyleTag({ content: THEME });
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  await page.evaluate(async () => {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    window.__setup(
+      { events: { on: () => () => {} },
+        sendToBackend: () => {},
+        onBackendMessage: () => () => {},
+        ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+              registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }),
+              createFloatWidget: (o) => {
+                const w = document.createElement("div");
+                w.style.cssText = "position:fixed;left:40px;top:60px;width:" + o.width + "px;height:" + o.height + "px";
+                document.body.appendChild(w);
+                return { root: w, destroy() { w.remove(); }, setPosition() {}, onDragEnd() { return () => {}; } };
+              } } },
+      { enabled: true, showFloatingToggle: true, floatingToggleSize: 44, toast: false },
+    );
+    await wait(60);
+  });
+  await page.tap("#chat");
+  await page.keyboard.type("hey there");
+  await page.waitForTimeout(60);
+  const before = await page.evaluate(() => ({
+    inChat: document.activeElement.id === "chat",
+    marked: document.activeElement.matches(":focus-visible"),
+  }));
+  const at = await page.evaluate(() => {
+    const b = document.querySelector("button[aria-pressed]");
+    const r = b.getBoundingClientRect();
+    return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
+  });
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("Input.dispatchTouchEvent", {
+    type: "touchStart",
+    touchPoints: [{ x: at.x, y: at.y, radiusX: 12, radiusY: 12, force: 1, id: 1 }],
+  });
+  await page.waitForTimeout(900);
+  const held = await page.evaluate(() => {
+    const items = [...document.querySelectorAll('[role="menuitem"], [role="menu"] button')];
+    const f = items[0];
+    if (!f) return { opened: false };
+    return {
+      opened: items.length > 1,
+      focused: document.activeElement === f,
+      browserSaysShow: f.matches(":focus-visible"),
+      lit: getComputedStyle(f).backgroundColor,
+      ring: getComputedStyle(f).boxShadow,
+    };
+  });
+  await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  await page.waitForTimeout(250);
+  await page.close();
+  check("typing leaves the chat box focused and marked", before.inChat && before.marked, before);
+  check("the hold opens the menu", held.opened, held);
+  check("on the first entry", held.focused, held);
+  check("and the browser would have shown that focus", held.browserSaysShow === true, held);
+  check("but the entry is not lit under the finger",
+    held.lit === "rgba(0, 0, 0, 0)" || held.lit === "transparent", held);
+  check("nor ringed", held.ring === "none", held);
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- and not after you have been typing either ----
 // :focus-visible is a guess. The browser answers it from the last kind of input
 // it saw, so a menu opened by hand shortly after typing in the chat still came
