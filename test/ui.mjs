@@ -4613,20 +4613,7 @@ console.log("\nthe focus ring");
       field.blur();
       await settle();
       res.ringGoesOnBlur = getComputedStyle(field).boxShadow === "none";
-      // A button reached by keyboard wears the same mark, rather than whatever
-      // outline the host's stylesheet happens to leave it.
-      btn.focus();
-      await settle();
-      res.buttonRingOnTab = getComputedStyle(btn).boxShadow !== "none";
-      res.sameRing = getComputedStyle(btn).boxShadow === getComputedStyle(field).boxShadow ||
-        getComputedStyle(btn).boxShadow !== "none";
-      btn.blur();
-      // Pressed rather than tabbed to: the click already says which button it
-      // was, and a ring left behind reads as something still waiting on you.
-      btn.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
-      btn.focus();
-      await settle();
-      res.noRingWhenPressed = getComputedStyle(btn).boxShadow === "none";
+      if (btn) btn.blur();
       return res;
     });
   });
@@ -4637,8 +4624,73 @@ console.log("\nthe focus ring");
   check("the field does not move when it lands", out.fieldDidNotMove, out);
   check("nor does the row around it", out.rowDidNotMove, out);
   check("blur takes it off", out.ringGoesOnBlur, out);
-  check("a button reached by keyboard wears it too", out.buttonRingOnTab, out);
-  check("but a button that was pressed does not", out.noRingWhenPressed, out);
+  check("no console errors", errors.length === 0, errors);
+}
+
+// ---- a button is marked when it was reached by keyboard, and not otherwise ----
+// Whether a button should show its focus is the browser's own question, asked
+// as :focus-visible. Tracking pointer presses by hand answered it wrongly the
+// moment a dialog moved focus itself: the reset picker's second step focuses Go
+// back so a keyboard can act on it, and by hand that looked exactly like
+// tabbing to it, so the dialog opened with a ring around a button nobody had
+// touched.
+//
+// Driven with real input, because a dispatched press is untrusted and the
+// browser does not count it when deciding.
+console.log("\nwhen a button shows its focus");
+{
+  const { out, errors } = await inPanel(browser, {}, async (page) => {
+    const ringOf = (label) => page.evaluate((s) => {
+      const el = [...document.querySelectorAll("button")].find((b) => (b.textContent || "").trim() === s);
+      return el ? getComputedStyle(el).boxShadow : "no such button";
+    }, label);
+    // Clicked for real, by finding the button and pressing where it is. A text
+    // selector is no good here: these labels carry an ellipsis character.
+    const press = async (label) => {
+      const box = await page.evaluate((s) => {
+        const el = [...document.querySelectorAll("button")].find((b) => (b.textContent || "").trim() === s);
+        if (!el) return null;
+        el.scrollIntoView({ block: "center" });
+        const r = el.getBoundingClientRect();
+        return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+      }, label);
+      if (!box) return false;
+      await page.mouse.click(box.x, box.y);
+      return true;
+    };
+    const res = {};
+    // A real press, which is what tells the browser somebody is using a
+    // pointer. Nothing after this should be marked unless a key is pressed.
+    res.pressed = await press("Save");
+    await page.waitForTimeout(150);
+    res.pressedNoRing = (await ringOf("Save")) === "none";
+    // Now focus moved by code rather than by the person, which is what a dialog
+    // does when it opens: the reset picker's second step focuses its safe
+    // answer so a keyboard can act on it. Counted by hand this looked exactly
+    // like tabbing, and the button lit up with nobody having gone near it.
+    res.movedByCode = await page.evaluate(() => {
+      const el = [...document.querySelectorAll("button")].find((b) => (b.textContent || "").trim() === "Reset\u2026");
+      if (!el) return false;
+      el.focus({ preventScroll: true });
+      return document.activeElement === el;
+    });
+    await page.waitForTimeout(200);
+    res.codeFocusNoRing = (await ringOf("Reset\u2026")) === "none";
+    // And a real key press, which is the one case that should be marked.
+    await page.keyboard.press("Tab");
+    await page.waitForTimeout(250);
+    res.tabbedTo = await page.evaluate(() =>
+      ((document.activeElement && document.activeElement.textContent) || "").trim());
+    res.tabbedRing = await page.evaluate(() =>
+      getComputedStyle(document.activeElement).boxShadow);
+    return res;
+  });
+  check("a button was pressed for real", out.pressed, out);
+  check("and wears no ring for it", out.pressedNoRing, out);
+  check("focus can be moved by code, the way a dialog does", out.movedByCode, out);
+  check("and that button is not marked either", out.codeFocusNoRing, out);
+  check("tabbing lands on a button", out.tabbedTo.length > 0, out);
+  check("and that one does wear the ring", out.tabbedRing !== "none", out);
   check("no console errors", errors.length === 0, errors);
 }
 

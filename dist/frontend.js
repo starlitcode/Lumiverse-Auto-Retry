@@ -101,7 +101,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "4.14.2";
+const VERSION = "4.14.3";
 // The one address the extension ever points at, used by the warning in front of
 // the crisis-support check. Pinned to the released branch rather than to a tag,
 // so an old install still opens the page as it stands today.
@@ -5736,7 +5736,10 @@ export function setup(ctx, opts) {
                     // nothing is lost with them gone.
                     "[data-ar-num]::-webkit-outer-spin-button,[data-ar-num]::-webkit-inner-spin-button" +
                     "{-webkit-appearance:none;appearance:none;margin:0}" +
-                    "[data-ar-num]{-moz-appearance:textfield;appearance:textfield}";
+                    "[data-ar-num]{-moz-appearance:textfield;appearance:textfield}" +
+                    // The mark on a button reached by keyboard. In the stylesheet rather
+                    // than set inline because only a stylesheet can ask :focus-visible.
+                    "[data-ar-btn]:focus-visible{box-shadow:" + FOCUS_RING + ";outline:none}";
             (document.head || document.documentElement).appendChild(el);
             panelStyleEl = el;
         }
@@ -7800,7 +7803,14 @@ export function setup(ctx, opts) {
         // past it. The vh term is what keeps a short screen from overflowing.
         const panel = document.createElement("div");
         panel.style.cssText =
-            "display:flex;flex-direction:column;max-height:min(74vh,640px);overflow:hidden;box-sizing:border-box;font:13px/1.45 var(--lumiverse-font-family,system-ui);color:var(--lumiverse-text,#eee)";
+            "display:flex;flex-direction:column;max-height:min(74vh,640px);overflow:hidden;box-sizing:border-box;font:13px/1.45 var(--lumiverse-font-family,system-ui);color:var(--lumiverse-text,#eee);" +
+                // A little depth down the panel: the same surface the host painted, shaded
+                // slightly toward the bottom. Laid on as a wash of transparent to dark
+                // rather than as two colours of its own, so it has no colour to disagree
+                // with the theme about and works the same whether the surface under it is
+                // dark or light. Nothing behind it is replaced, so the modal's own corners
+                // and edges are still the ones showing.
+                "background-image:linear-gradient(rgba(0,0,0,0),rgba(0,0,0,.13))";
         matchColorScheme(panel);
         // the one scroll area: flexes to fill whatever height is left after the
         // footer. min-height:0 lets it actually shrink and scroll inside the flex.
@@ -9158,29 +9168,17 @@ export function setup(ctx, opts) {
         ensureReadable(b);
         if (primary)
             ensureEdge(b);
-        // The same ring the fields wear, so keyboard focus looks like one thing
-        // across the panel rather than a themed field and a browser default button.
-        // Left to the browser, a button focused by tab drew whatever outline the
-        // host's own stylesheet happened to leave it, which on a dark theme was
-        // often nothing anybody could see.
+        // Marks it for the focus rule in the panel's stylesheet. Left to the
+        // browser a button focused by tab drew whatever outline the host happened
+        // to leave it, which on a dark theme was often nothing anybody could see.
         //
-        // Only when focus did not come from a pointer: pressing a button already
-        // tells you which one you pressed, and the ring hanging around after the
-        // click reads as though something is still waiting on you.
-        let pressed = false;
-        b.addEventListener("pointerdown", () => {
-            pressed = true;
-        });
-        b.addEventListener("focus", () => {
-            const byPointer = pressed;
-            pressed = false;
-            if (!byPointer)
-                b.style.boxShadow = FOCUS_RING;
-        });
-        b.addEventListener("blur", () => {
-            pressed = false;
-            b.style.boxShadow = "none";
-        });
+        // The rule asks :focus-visible rather than plain :focus, which is the
+        // browser's own answer to "should this be marked", and it is the right one
+        // here. Tracking pointer presses by hand got it wrong the moment a dialog
+        // moved focus itself: opening the reset picker's second step focuses Go
+        // back so a keyboard can act on it, and by hand that looked exactly like
+        // tabbing to it, so the button opened wearing a ring nobody asked for.
+        b.setAttribute("data-ar-btn", "1");
         // Hovering swaps to the theme's own hover colour rather than brightening the
         // resting one, so a button lights up the same way the rest of Lumiverse does.
         let restBg = primary
