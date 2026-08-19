@@ -5698,7 +5698,15 @@ export function setup(ctx: Ctx, opts?: any) {
         "background-color:currentColor;opacity:.6;" +
         "-webkit-mask:" + SEARCH_X + " center/contain no-repeat;" +
         "mask:" + SEARCH_X + " center/contain no-repeat}" +
-        "#" + SEARCH_ID + "::-webkit-search-cancel-button:hover{opacity:1}";
+        "#" + SEARCH_ID + "::-webkit-search-cancel-button:hover{opacity:1}" +
+        // The browser's own up and down arrows on a number box. They are drawn
+        // by the browser rather than the theme, so on a dark panel they arrive
+        // as a pair of small grey chevrons that belong to no design here. The
+        // value is typed, and a focused box still steps with the arrow keys, so
+        // nothing is lost with them gone.
+        "[data-ar-num]::-webkit-outer-spin-button,[data-ar-num]::-webkit-inner-spin-button" +
+        "{-webkit-appearance:none;appearance:none;margin:0}" +
+        "[data-ar-num]{-moz-appearance:textfield;appearance:textfield}";
       (document.head || document.documentElement).appendChild(el);
       panelStyleEl = el;
     } catch (_) {}
@@ -8875,6 +8883,11 @@ export function setup(ctx: Ctx, opts?: any) {
       const input = document.createElement("input");
       input.type = "number";
       input.inputMode = "numeric";
+      // Marks it for the rule that takes the browser's spinner off. An
+      // attribute of ours rather than a bare input[type=number] selector,
+      // because that stylesheet is on the host's page and would reach every
+      // number box Lumiverse has.
+      input.setAttribute("data-ar-num", "1");
       input.value = String(cfg[f.key]);
       styleField(input);
       input.style.width = "120px";

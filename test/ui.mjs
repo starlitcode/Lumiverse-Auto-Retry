@@ -4481,6 +4481,56 @@ console.log("\nper-chat switch, in the panel");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- the browser's spinner is off our number boxes, and only ours ----
+// The arrows a browser draws on a number box are its own, not the theme's, so
+// on a dark panel they arrive as grey chevrons belonging to no design here. The
+// value is typed and a focused box still steps with the arrow keys.
+//
+// The rule lives in a stylesheet on the host's page, so the half that matters
+// is that it is scoped to an attribute of ours and cannot reach a number box
+// belonging to Lumiverse.
+console.log("\nthe number box spinner");
+{
+  const { out, errors } = await inPanel(browser, {}, async (page) => {
+    await page.evaluate(async () => {
+      for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      // A number box the host might have, outside anything of ours.
+      const theirs = document.createElement("input");
+      theirs.type = "number";
+      theirs.id = "not-ours";
+      theirs.value = "5";
+      document.body.appendChild(theirs);
+    });
+    return page.evaluate(() => {
+      const ours = [...document.querySelectorAll('[data-ar-row] input[type="number"]')]
+        .find((el) => el.offsetParent !== null);
+      const theirs = document.getElementById("not-ours");
+      // Read off the input rather than off the spinner pseudo-element, which
+      // reports the same thing for both whether the rule applies or not. The
+      // input's own appearance is the rule: textfield is a number box with the
+      // browser's arrows suppressed, auto is one that still has them.
+      const appearance = (el) => getComputedStyle(el).appearance;
+      const res = {};
+      res.marked = !!ours && ours.getAttribute("data-ar-num") === "1";
+      res.oursHidden = appearance(ours) === "textfield";
+      res.theirsUntouched = appearance(theirs) !== "textfield";
+      // Still a number box: it steps, and the value still clamps.
+      const before = ours.value;
+      ours.focus({ preventScroll: true });
+      ours.stepUp();
+      res.stillSteps = ours.value !== before;
+      ours.value = before;
+      return res;
+    });
+  });
+  check("our number boxes are marked for the rule", out.marked, out);
+  check("and the browser's spinner is off them", out.oursHidden, out);
+  check("a number box that is not ours keeps its own", out.theirsUntouched, out);
+  check("and ours still steps", out.stillSteps, out);
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- the focus ring ----
 // A tinted hairline on its own is easy to lose on a busy theme. The mark is
 // that tint plus room around it, in the theme's accent, painted outside the box
