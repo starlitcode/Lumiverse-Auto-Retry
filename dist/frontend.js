@@ -2731,24 +2731,19 @@ export function setup(ctx, opts) {
             // a tab to bring forward. With the panel floating it is already on
             // screen, and an entry that opens what you can see is noise in a menu
             // somebody opened for something else.
-            const wantOpen = !!(cfg.liveLog &&
-                cfg.panelHome === "drawer" &&
-                drawerTab &&
-                typeof drawerTab.activate === "function");
+            // Only in Extras when the floating button is not on screen. The button's
+            // own menu carries it otherwise, and two ways in, one of them a tap away
+            // and the other three, is one more than the menu needs. With the button
+            // hidden, or the widget refused for want of ui_panels, Extras is the only
+            // way in on a phone, so it comes back.
+            const wantOpen = canOpenPanel() && !floatIsUp();
             if (wantOpen && canReg && !openPanelAction) {
                 openPanelAction = ctx.ui.registerInputBarAction({
                     id: "auto-retry-open-panel",
                     label: "Open the Auto Retry panel",
                     iconSvg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="15" y1="3" x2="15" y2="21"/></svg>',
                 });
-                openPanelActionOff = openPanelAction.onClick(() => {
-                    try {
-                        drawerTab && drawerTab.activate();
-                    }
-                    catch (e) {
-                        log("could not open the drawer tab", e);
-                    }
-                });
+                openPanelActionOff = openPanelAction.onClick(openDrawerPanel);
             }
             else if ((!wantOpen || !canReg) && openPanelAction) {
                 try {
@@ -3939,6 +3934,26 @@ export function setup(ctx, opts) {
     // is the one thing not taken, since ours has to go there instead; see the
     // contextmenu handler below.
     let floatWidget = null;
+    // Whether there is a panel to bring forward, and whether the floating button
+    // is on screen to offer it. Asked in two places that must agree: the Extras
+    // entry stands down when the button's own menu is carrying this.
+    function canOpenPanel() {
+        return !!(cfg.liveLog &&
+            cfg.panelHome === "drawer" &&
+            drawerTab &&
+            typeof drawerTab.activate === "function");
+    }
+    function openDrawerPanel() {
+        try {
+            drawerTab && drawerTab.activate();
+        }
+        catch (e) {
+            log("could not open the drawer tab", e);
+        }
+    }
+    function floatIsUp() {
+        return !!floatWidget && !!floatEl;
+    }
     // The host's menu while it is open, as a token to compare against. Null when
     // there is none. It answers two questions at once: whether one is already up,
     // and whether the answer now arriving belongs to the one still wanted.
@@ -3948,6 +3963,9 @@ export function setup(ctx, opts) {
     let holdMoveWatch = null;
     let floatEl = null;
     let floatWidgetSize = 0;
+    // What the button was last painted as, so a repaint that says nothing new
+    // does not animate. Null until the first paint, which never animates either.
+    let floatShownOn = null;
     function floatSize() {
         const v = Math.floor(Number(cfg.floatingToggleSize));
         return Number.isFinite(v) && v >= 28 ? Math.min(v, 96) : 44;
@@ -4074,6 +4092,7 @@ export function setup(ctx, opts) {
     function paintFloat() {
         if (!floatEl)
             return;
+        const wasOn = floatShownOn;
         // What the button shows is whether a reply would actually be retried right
         // now, which is both switches. Showing only the master one would leave it
         // looking on in a chat it has been told to leave alone.
@@ -4096,6 +4115,14 @@ export function setup(ctx, opts) {
             : "var(--lumiverse-text-muted,rgba(255,255,255,.65))";
         floatEl.style.opacity = on ? "1" : "0.75";
         floatEl.innerHTML = markSvg(!on, glyph);
+        // A fresh element every paint, so the fade is put on the one just made and
+        // there is nothing to clear up afterwards.
+        floatShownOn = on;
+        if (wasOn !== null && wasOn !== on) {
+            const mark = floatEl.firstElementChild;
+            if (mark && mark.style)
+                mark.style.animation = "lvRetryFloatMark 180ms ease";
+        }
         // Tapping is always the master switch, whatever is showing. The per-chat
         // one lives in the hold menu, and the label says so rather than leaving
         // somebody to find out by tapping.
@@ -4177,11 +4204,17 @@ export function setup(ctx, opts) {
                 "user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;" +
                 "font-family:var(--lumiverse-font-family,system-ui);" +
                 "box-shadow:var(--lumiverse-shadow-sm,0 2px 8px rgba(0,0,0,.2));";
-        // Nothing here animates. This button carried transitions on four colour
-        // properties and a scale dip on every press, which is a compositing layer
-        // and four interpolations for a control whose entire job is to flip between
-        // two states. Flipping instantly says the same thing sooner, and there is
-        // nothing left that a device asking for less movement needs spared.
+        // The colours ease between the two states, and the mark fades in over the
+        // one it replaces, so turning it off reads as one movement rather than a
+        // flicker. Only on a real change of state: repainting for a chat switch or
+        // after a drag says nothing new and animating it would be noise.
+        //
+        // Nothing moves the button itself. A scale dip on every press was here once
+        // and it forced a compositing layer on a control whose whole job is to flip
+        // between two states, and a press that is opening the menu should not look
+        // like a tap. A device asking for less movement gets neither.
+        el.setAttribute("data-ar-float", "1");
+        ensureFloatStyle();
         //
         // A press held down opens the menu instead of toggling. Right-click does the
         // same on a pointer device. Without this the only way to put the button away
@@ -4301,6 +4334,8 @@ export function setup(ctx, opts) {
         }
         floatEl = el;
         paintFloat();
+        // And stands down again now that the button's own menu has it.
+        syncToggleAction();
     }
     // Not a close: the menu belongs to the host, which shuts it on Escape, on a
     // tap outside, and when its promise resolves. This is for the case where the
@@ -4365,6 +4400,12 @@ export function setup(ctx, opts) {
                     // chat id had been seen, and that only happens on a generation event,
                     // so on a fresh page load it was missing until the first reply came.
                     { key: "hide", label: "Hide this button" },
+                    // Only when there is a panel in the drawer to bring forward. With the
+                    // panel floating it is already on screen, and an entry that opens
+                    // what you can see is noise in a menu opened for something else.
+                    ...(canOpenPanel()
+                        ? [{ key: "panel", label: "Open the Auto Retry panel" }]
+                        : []),
                 ],
             });
             selectedKey = (res && res.selectedKey) || null;
@@ -4382,6 +4423,9 @@ export function setup(ctx, opts) {
         floatMenuToken = null;
         if (selectedKey === "settings") {
             openSettings();
+        }
+        else if (selectedKey === "panel") {
+            openDrawerPanel();
         }
         else if (selectedKey === "hide") {
             cfg.showFloatingToggle = false;
@@ -4418,10 +4462,15 @@ export function setup(ctx, opts) {
         floatWidget = null;
         floatEl = null;
         floatWidgetSize = 0;
+        // A button that comes back later starts fresh rather than fading in from
+        // whatever the last one was showing.
+        floatShownOn = null;
         // The document-level pointermove listener calls through this. Left set, it
         // kept a whole button's worth of handlers alive after the button was gone,
         // and every pointer move on the page went on running its hold check.
         holdMoveWatch = null;
+        // Extras carries the way into the panel whenever the button cannot.
+        syncToggleAction();
     }
     // Where the button is sitting right now, read off the screen. Used after a
     // drag, which is the one time the button moves without this extension being
@@ -5785,6 +5834,28 @@ export function setup(ctx, opts) {
                     "#__lvRetryStatus [data-ar-state]{animation:none !important}}";
             (document.head || document.documentElement).appendChild(el);
             statusStyleEl = el;
+        }
+        catch (_) { }
+    }
+    let floatStyleEl = null;
+    function ensureFloatStyle() {
+        if (floatStyleEl || typeof document === "undefined")
+            return;
+        try {
+            const el = document.createElement("style");
+            el.id = "__lvRetryFloatStyle";
+            el.textContent =
+                "[data-ar-float]{transition:background-color var(--lumiverse-transition-fast,150ms ease)," +
+                    "border-color var(--lumiverse-transition-fast,150ms ease)," +
+                    "color var(--lumiverse-transition-fast,150ms ease)," +
+                    "opacity var(--lumiverse-transition-fast,150ms ease)}" +
+                    "[data-ar-float] svg{transform-origin:50% 50%}" +
+                    "@keyframes lvRetryFloatMark{from{opacity:0;transform:scale(.72)}to{opacity:1;transform:scale(1)}}" +
+                    "@media (prefers-reduced-motion:reduce){" +
+                    "[data-ar-float]{transition:none}" +
+                    "[data-ar-float] svg{animation:none !important}}";
+            (document.head || document.documentElement).appendChild(el);
+            floatStyleEl = el;
         }
         catch (_) { }
     }
@@ -10442,6 +10513,13 @@ export function setup(ctx, opts) {
             }
             catch (_) { }
             statusStyleEl = null;
+        }
+        if (floatStyleEl) {
+            try {
+                floatStyleEl.remove();
+            }
+            catch (_) { }
+            floatStyleEl = null;
         }
         offs.forEach((o) => {
             try {
