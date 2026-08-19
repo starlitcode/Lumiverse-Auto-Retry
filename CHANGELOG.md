@@ -8,6 +8,18 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 4.14.3
+
+_2026-08-19_
+
+### Fixed
+
+- **A button lit up when a dialog moved focus onto it.** Opening the reset picker's second step puts focus on the safe answer so a keyboard can act on it, and the panel counted that as somebody having tabbed there, so the dialog opened with a ring around a button nobody had gone near. Whether a button should show its focus is a question the browser already answers, and it is asked properly now: pressed with a pointer, no mark; reached with a key, marked.
+
+### Changed
+
+- **The settings panel is shaded down its height.** The top keeps the colour your theme gives it and the bottom sits a little darker. It is laid on as a wash rather than as colours of its own, so it has nothing to disagree with your theme about and reads the same whether your surface is dark or light.
+
 ## 4.14.2
 
 _2026-08-19_
