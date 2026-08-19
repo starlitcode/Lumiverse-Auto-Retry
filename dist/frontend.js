@@ -7868,11 +7868,21 @@ export function setup(ctx, opts) {
         // two hand-built sections at the bottom had drifted a little from the ones
         // built from the schema. One copy each, and they cannot drift again.
         const MUTED = "var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+        // The box a section's rows sit in. Written out at each of the three places
+        // that build one, which is how the two hand-built sections drifted from the
+        // schema-built ones in the first place.
+        const SECTION_CSS = "display:flex;flex-direction:column;gap:10px";
         const HEADING_CSS = "font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:" + MUTED;
         function sectionHeader(title, collapsible) {
             const header = document.createElement("div");
+            // A rule under the heading. Sections were text sitting above rows with
+            // nothing between them, so on a long panel one section ran into the next
+            // and the headings read as another row rather than as a break. Drawn in
+            // the theme's own border colour, which is faint by design: enough to
+            // separate, not enough to become furniture.
             header.style.cssText =
-                "font-size:11px;letter-spacing:.07em;text-transform:uppercase;font-family:var(--lumiverse-font-family,system-ui);color:" +
+                "font-size:11px;letter-spacing:.07em;text-transform:uppercase;font-family:var(--lumiverse-font-family,system-ui);" +
+                    "padding-bottom:7px;border-bottom:1px solid var(--lumiverse-border,rgba(255,255,255,.12));color:" +
                     MUTED;
             const caret = document.createElement("span");
             if (!collapsible) {
@@ -7952,7 +7962,7 @@ export function setup(ctx, opts) {
         }
         for (const group of SCHEMA) {
             const sec = document.createElement("div");
-            sec.style.cssText = "display:flex;flex-direction:column;gap:10px";
+            sec.style.cssText = SECTION_CSS;
             const handle = {
                 sec: sec,
                 title: group.title,
@@ -8079,7 +8089,7 @@ export function setup(ctx, opts) {
         // debug info section (collapsible): choose what to include, review, redact, copy
         {
             const sec = document.createElement("div");
-            sec.style.cssText = "display:flex;flex-direction:column;gap:10px";
+            sec.style.cssText = SECTION_CSS;
             const { header: h, caret } = sectionHeader("Debug info", true);
             sec.appendChild(h);
             const handle = {
@@ -8140,7 +8150,7 @@ export function setup(ctx, opts) {
         // import / export section (collapsible, same as the schema's own)
         {
             const sec = document.createElement("div");
-            sec.style.cssText = "display:flex;flex-direction:column;gap:10px";
+            sec.style.cssText = SECTION_CSS;
             const { header: h, caret } = sectionHeader("Import / export", true);
             sec.appendChild(h);
             const handle = {
@@ -8988,8 +8998,13 @@ export function setup(ctx, opts) {
     // Two layers rather than one because a single large blur reads as a smudge
     // and a single tight band reads as a second border. Together they give the
     // edge somewhere to fall off to.
-    const FOCUS_RING = "0 0 0 3px var(--lumiverse-primary-020,rgba(147,112,219,.2))," +
-        "0 0 16px 2px var(--lumiverse-primary-015,rgba(147,112,219,.15))";
+    // Kept tight on purpose. The halo used to be blurred 16 with 2 of spread,
+    // which paints 18 past the edge, and the rows in this panel are nowhere near
+    // 18 apart: it washed over whatever sat above and below and read as the glow
+    // belonging to the row rather than to the box. Eight is far enough to be a
+    // halo and short enough to stay inside the field's own gap.
+    const FOCUS_RING = "0 0 0 2px var(--lumiverse-primary-020,rgba(147,112,219,.2))," +
+        "0 0 8px 0 var(--lumiverse-primary-020,rgba(147,112,219,.2))";
     function styleField(input) {
         input.style.cssText +=
             "padding:9px 10px;border-radius:var(--lumiverse-radius,8px);" +
