@@ -8,17 +8,19 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
-## 4.14.6
+## 4.15.0
 
 _2026-08-19_
 
+### Changed
+
+- **The floating button's menu is now drawn by Lumiverse instead of by the extension.** It arrives in your own theme, accent and dark or light mode, clamps itself to the screen, and closes on Escape, and it looks the same as the menu any other extension puts there. The two entries are unchanged: **Auto Retry settings** and **Hide this button**. A run of bugs on phones came from that menu being drawn by hand, each one down to guessing what a pointer was doing, and none of that is the extension's to get wrong any more. On a Lumiverse too old to have this menu, holding the button says where the settings are rather than opening nothing.
+
 ### Fixed
 
-- **On a phone set to show the desktop site, an entry in the floating button's menu could light up on its own and stay lit.** The check that keeps hover out of a finger's way asked the screen whether the device can hover, and a phone showing the desktop site says it can, so the check came off. The hover a touch browser makes up then counted as real, and a finger never sends the matching leave, so nothing could put the highlight out. Returning to the tab sends that made-up hover over the last place you touched, which is when it showed. Nothing on the page can see that setting, so it came and went with no pattern. These now read the pointer that caused the event, which says outright whether it was a finger or a mouse.
-- **On any phone, a button in the settings panel stayed in its hover colour once tapped.** A touch browser raises the hover at the end of a tap and never sends the matching leave, and the reset that would have caught it had already run by then. This one was not limited to the desktop-site setting; it happened to every button in the panel on every touch device.
-- **Descriptions in the settings panel could open on a tap with no way to close them**, on the same phones and for the same reason as the menu: the wrong answer wired up the hover pair and switched the tap off.
-- **Holding a menu entry no longer lets the phone's own long-press behaviour run over it**, so it cannot start selecting the text, raise the browser's menu on top, or leave a tap flash behind.
-- **The floating button's menu could open with its first entry lit, and the reset picker with a ring around Go back.** Both earlier fixes asked the browser whether the focus should be shown, and that is a guess: it answers from the last kind of input seen anywhere on the page, so opening the menu with a thumb after typing in the chat counted as keyboard. Focus the extension moves itself is now marked as its own, and the mark lifts at the first key pressed. It survives leaving the tab and coming back, which was being read as somebody moving focus.
+- **On a phone, a button in the settings panel stayed in its hover colour once you tapped it.** A touch browser raises the hover at the end of a tap and never sends the matching leave, and the reset that would have caught it had already run by then. Hover is now read from the pointer that caused the event, which says outright whether it was a finger or a mouse, rather than from the screen, which a phone showing the desktop site answers wrongly.
+- **Descriptions in the settings panel could open on a tap with no way to close them, on a phone set to show the desktop site.** The same wrong answer wired up the hover pair and switched the tap off. Touching a long description to scroll it no longer closes it either.
+- **The reset picker's second step opened with a ring around Go back.** It puts focus there so a keyboard can answer it, and whether that focus was drawn was left to the browser, which decides from the last kind of input it saw anywhere on the page. Focus the extension moves itself is now marked as its own, and the mark lifts at the first key pressed, so tabbing still shows where you are.
 
 ## 4.14.5
 

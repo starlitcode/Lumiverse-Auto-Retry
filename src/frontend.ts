@@ -22,7 +22,7 @@ const CARET_SHUT = "\u25B8"; // right triangle
 // Stacking order for everything this extension puts on screen, in one place.
 //
 // Two of these sat at 2147483647, the highest a browser accepts. Nothing can be
-// drawn above that, so an Auto Retry hint or menu stayed on top of whatever
+// drawn above that, so an Auto Retry hint stayed on top of whatever
 // another extension opened over it, and the other extension had no number left
 // to win with. These are high enough to clear ordinary page content and low
 // enough to leave room above for anyone who needs it.
@@ -31,7 +31,6 @@ const CARET_SHUT = "\u25B8"; // right triangle
 // host's own settings modal and have to be above it to be usable at all.
 const Z_LIVE_LOG = 2147483000;
 const Z_TOAST = 2147483100;
-const Z_FLOAT_MENU = 2147483200;
 const Z_HINT = 2147483300;
 const Z_OVERLAY = 2147483600;
 
@@ -112,7 +111,7 @@ const STREAM_BUF_MAX = 200000;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "4.14.6";
+const VERSION = "4.15.0";
 
 // The one address the extension ever points at, used by the warning in front of
 // the crisis-support check. Pinned to the released branch rather than to a tag,
@@ -4002,7 +4001,9 @@ export function setup(ctx: Ctx, opts?: any) {
   // is the one thing not taken, since ours has to go there instead; see the
   // contextmenu handler below.
   let floatWidget: any = null;
-  let floatMenu: HTMLElement | null = null;
+  // Which opening of the host's menu is current. An answer from an earlier
+  // one, still in flight when the button was hidden, is not acted on.
+  let floatMenuRun = 0;
   // Reassigned each time the button is rebuilt; the document listener below
   // calls through this so only one listener is ever registered.
   let holdMoveWatch: ((e: any) => void) | null = null;
@@ -4067,14 +4068,6 @@ export function setup(ctx: Ctx, opts?: any) {
   // when focus moves off it, so tabbing and the arrow keys mark as they always
   // did.
   const QUIET_ATTR = "data-ar-quiet";
-
-  const isQuiet = (el: any): boolean => {
-    try {
-      return !!el && !!el.hasAttribute && el.hasAttribute(QUIET_ATTR);
-    } catch (_) {
-      return false;
-    }
-  };
 
   const focusQuietly = (el: any): void => {
     if (!el || !el.focus) return;
@@ -4344,130 +4337,82 @@ export function setup(ctx: Ctx, opts?: any) {
     paintFloat();
   }
 
+  // Nothing of ours is on screen any more: the menu is the host's, and it
+  // closes itself on Escape, on a tap outside, and when its promise resolves.
+  // Kept as a name because the places that used to close the menu still read
+  // better saying so, and one of them still has a job: forgetting a menu whose
+  // answer is no longer wanted.
   function hideFloatMenu() {
-    if (floatMenu) {
-      try { floatMenu.remove(); } catch (_) {}
-    }
-    floatMenu = null;
+    floatMenuRun += 1;
   }
 
   // The menu behind a hold or a right-click on the floating button. Two entries,
   // both about the button itself rather than about retrying, so nothing here can
   // change what the extension does to a reply.
-  function showFloatMenu() {
-    hideFloatMenu();
+  //
+  // Drawn by Lumiverse rather than by us. It arrives in the user's own theme,
+  // accent and dark or light mode, clamps itself to the screen, and closes on
+  // Escape. Ours did all of that by hand, and every part of it that had to
+  // guess what a pointer was doing got it wrong on a phone at least once: an
+  // entry lit as the menu opened, an entry that stayed lit after a finger left,
+  // a highlight that came back on returning to the tab. None of that is ours to
+  // get wrong now.
+  async function showFloatMenu() {
+    const menu = ctx?.ui?.showContextMenu;
+    if (typeof menu !== "function") {
+      // An older Lumiverse without the API. Say where the settings are rather
+      // than opening nothing and looking broken.
+      log("host has no showContextMenu; float menu unavailable");
+      showToast("Auto Retry settings are in the chat bar's Extras popover.", { force: true });
+      return;
+    }
     if (typeof document === "undefined" || !floatEl || !floatEl.getBoundingClientRect)
       return;
-    const el = document.createElement("div");
-    el.setAttribute("role", "menu");
-    el.style.cssText =
-      "position:fixed;z-index:" + Z_FLOAT_MENU + ";box-sizing:border-box;padding:4px;" +
-      "border-radius:var(--lumiverse-radius-md,10px);min-width:180px;" +
-      // Opaque for the same reason the hint is: it lands over the chat, and the
-      // elevated colour alone is see-through enough to read words underneath it.
-      "background-color:var(--lumiverse-card-bg-solid,rgb(24,20,34));" +
-      "background-image:linear-gradient(var(--lumiverse-bg-elevated,rgba(35,30,48,.98))," +
-      "var(--lumiverse-bg-elevated,rgba(35,30,48,.98)));" +
-      "border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));" +
-      "box-shadow:var(--lumiverse-shadow-md,0 8px 24px rgba(0,0,0,.4));" +
-      "color:var(--lumiverse-text,#eee);font:13px/1.4 var(--lumiverse-font-family,system-ui);" +
-      "left:0;top:-9999px";
 
-    const entry = (label: string, run: () => void) => {
-      const b = document.createElement("button");
-      b.type = "button";
-      b.setAttribute("role", "menuitem");
-      b.textContent = label;
-      b.style.cssText =
-        "display:block;width:100%;box-sizing:border-box;text-align:left;cursor:pointer;" +
-        "padding:9px 10px;border:0;border-radius:var(--lumiverse-radius-sm,5px);" +
-        // The browser's own focus ring is drawn from its colour scheme, which
-        // on this menu is a hard white rectangle. Replaced below with a ring in
-        // the theme's accent, so keyboard focus is still plain to see.
-        "outline:none;background:transparent;color:inherit;font:inherit;" +
-        // The entries are reached by holding, and a hold over a word is also
-        // how a phone is asked to select it or to raise its own menu over ours.
-        // The button beneath already turns all of that off; these never did.
-        "user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;" +
-        "-webkit-tap-highlight-color:transparent;touch-action:manipulation";
-      const lit = (on: boolean) => {
-        b.style.background = on
-          ? "var(--lumiverse-secondary-hover,rgba(128,128,128,.25))"
-          : "transparent";
-      };
-      const ring = (on: boolean) => {
-        b.style.boxShadow = on
-          ? "inset 0 0 0 2px var(--lumiverse-primary-050,rgba(147,112,219,.5))"
-          : "none";
-      };
-      // Hover, from a mouse and nothing else. A phone sends one when a finger
-      // rests on the entry and never sends the matching leave, so holding this
-      // lit it and lifting left it lit until the menu closed.
-      //
-      // Asked of the pointer rather than of the screen. Asking the screen was
-      // the same bug over again: a phone set to show the desktop site says it
-      // can hover, so the guard came off and the stuck highlight came back, on
-      // and off depending on a setting nothing here can see.
-      b.addEventListener("mouseenter", (e: any) => {
-        if (fromMouse(e)) lit(true);
-      });
-      // What a hold should do instead, on any device: light while it is held
-      // and go out when it is let go. A press with nothing to show for it reads
-      // as a tap that missed.
-      b.addEventListener("pointerdown", () => lit(true));
-      // Still under a mouse after the press, so a mouse keeps its hover. A
-      // finger has nothing to hover with, so it goes out.
-      b.addEventListener("pointerup", (e: any) => lit(fromMouse(e)));
-      b.addEventListener("pointercancel", () => lit(false));
-      // Covers a mouse leaving and a finger sliding off alike, and putting a
-      // highlight out is safe whichever it was, so this one is not asked.
-      b.addEventListener("pointerleave", () => lit(false));
-      // Marked only when focus came from a key. This menu focuses its first
-      // entry as it opens so a keyboard can act on it straight away, and that
-      // was drawn the same as hovering, so a menu opened with a thumb came up
-      // with its top entry already lit as though it were about to be chosen.
-      //
-      // Two answers together. :focus-visible knows a tap from a Tab, but it
-      // answers from the last input the page saw rather than from this focus,
-      // so on its own it still lit the entry when the menu was opened by hand
-      // after typing. The quiet mark says outright that the extension moved
-      // focus here, and it beats the guess. The entry holds focus either way,
-      // so Enter and the arrow keys work exactly as before.
-      b.addEventListener("focus", () => {
-        let byKey = true;
-        try { byKey = b.matches(":focus-visible"); } catch (_) {}
-        if (isQuiet(b)) byKey = false;
-        lit(byKey);
-        ring(byKey);
-      });
-      b.addEventListener("blur", () => {
-        lit(false);
-        ring(false);
-      });
-      b.addEventListener("click", () => {
-        hideFloatMenu();
-        run();
-      });
-      el.appendChild(b);
-      return b;
-    };
+    // Anchored to the middle of the button. Not to the pointer: the menu is
+    // also raised from the keyboard, and a hold means the finger is over the
+    // button anyway, so the button is the one place that is always right.
+    const r = floatEl.getBoundingClientRect();
+    const position = { x: Math.round(r.left + r.width / 2), y: Math.round(r.bottom) };
 
-    // Settings first. Reaching them otherwise means the input bar's Extras
-    // popover, which is several taps away and is the thing someone holding this
-    // button is most likely to be after.
-    const first = entry("Auto Retry settings", () => {
+    // Which opening this answer belongs to. Hiding the button, or opening
+    // another menu, moves this on, and an answer from a menu that has been left
+    // behind is dropped instead of acted on.
+    floatMenuRun += 1;
+    const run = floatMenuRun;
+
+    let selectedKey: string | null = null;
+    try {
+      const res = await menu.call(ctx.ui, {
+        position,
+        items: [
+          // Settings first. Reaching them otherwise means the input bar's
+          // Extras popover, which is several taps away and is the thing someone
+          // holding this button is most likely to be after.
+          { key: "settings", label: "Auto Retry settings" },
+          // Switching off in one chat is not here. It lives in the settings
+          // panel, under Basics, on the "This chat" row. This menu opens from a
+          // button that sits over the chat, so it is worth keeping to the few
+          // things that are about the button itself and the way to the
+          // settings; a per-chat switch among them reads as clutter every time
+          // you open it for something else.
+          //
+          // It was also never reliably here. The entry was drawn only once a
+          // chat id had been seen, and that only happens on a generation event,
+          // so on a fresh page load it was missing until the first reply came.
+          { key: "hide", label: "Hide this button" },
+        ],
+      });
+      selectedKey = (res && res.selectedKey) || null;
+    } catch (e) {
+      log("float menu failed", e);
+      return;
+    }
+
+    if (run !== floatMenuRun) return;
+    if (selectedKey === "settings") {
       openSettings();
-    });
-    // Switching off in one chat is not here. It lives in the settings panel,
-    // under Basics, on the "This chat" row. This menu opens from a button that
-    // sits over the chat, so it is worth keeping to the few things that are
-    // about the button itself and the way to the settings; a per-chat switch in
-    // among them reads as clutter every time you open it for something else.
-    //
-    // It was also never reliably here. The entry was drawn only once a chat id
-    // had been seen, and that only happens on a generation event, so on a fresh
-    // page load it was missing until the first reply came through.
-    entry("Hide this button", () => {
+    } else if (selectedKey === "hide") {
       cfg.showFloatingToggle = false;
       saveSaved();
       hideFloat();
@@ -4475,31 +4420,7 @@ export function setup(ctx: Ctx, opts?: any) {
       showToast("Floating button hidden. Turn it back on in Auto Retry settings.", {
         force: true,
       });
-    });
-
-    (document.body || document.documentElement).appendChild(el);
-
-    // Beside the button, nudged back on screen. The button snaps to whichever
-    // edge is nearest, so the menu has to be able to sit on either side of it
-    // and above it as well as below.
-    const vw = vpW();
-    const vh = vpH();
-    const r = floatEl.getBoundingClientRect();
-    const box = el.getBoundingClientRect();
-    const w = box.width || el.offsetWidth || 0;
-    const h = box.height || el.offsetHeight || 0;
-    const GAP = 8;
-    const left = Math.max(8, Math.min(r.left + r.width / 2 - w / 2, vw - w - 8));
-    let top = r.bottom + GAP;
-    if (top + h > vh - 8) {
-      const above = r.top - h - GAP;
-      top = above >= 8 ? above : Math.max(8, vh - h - 8);
     }
-    placeFixed(el, left, top);
-
-    floatMenu = el;
-    ensureReadableTree(el, 2.6);
-    focusQuietly(first);
   }
 
   function hideFloat() {
@@ -7028,18 +6949,6 @@ export function setup(ctx: Ctx, opts?: any) {
   if (typeof document !== "undefined") {
     const onHintDismiss = (e: any) => {
       const t = e && e.target;
-      // The float menu shares these listeners rather than adding its own. A
-      // press on the button itself is left alone, or opening the menu would
-      // immediately close it again.
-      if (floatMenu) {
-        let inside = false;
-        try {
-          inside =
-            (!!t && floatMenu.contains && floatMenu.contains(t)) ||
-            (!!t && !!floatEl && (t === floatEl || (floatEl.contains && floatEl.contains(t))));
-        } catch (_) {}
-        if (!inside) hideFloatMenu();
-      }
       if (!hintPop) return;
       try {
         // The "?" itself is left alone so its own handler can close it, rather
@@ -7049,8 +6958,6 @@ export function setup(ctx: Ctx, opts?: any) {
       } catch (_) {}
       hideHint();
     };
-    // The float button is fixed, so a scroll does not move it and the menu can
-    // stay. A resize can put it somewhere else entirely, so that closes it.
     // A long description scrolls inside itself. That scroll is someone reading
     // it, not the anchor moving, so it is the one scroll that leaves it open.
     const onHintScroll = (e: any) => {
@@ -7062,13 +6969,12 @@ export function setup(ctx: Ctx, opts?: any) {
     };
     const onHintResize = () => {
       hideHint();
-      hideFloatMenu();
     };
+    // Only the description. The float menu is the host's now, and it clamps
+    // itself to a resize and closes itself on Escape; taking its answer away
+    // here would throw away a choice the user had gone on to make.
     const onHintKey = (e: any) => {
-      if (e && e.key === "Escape") {
-        hideHint();
-        hideFloatMenu();
-      }
+      if (e && e.key === "Escape") hideHint();
     };
     // Every pointer on the page passes through these two, which is where what
     // kind it is gets written down for the compatibility events that follow.
