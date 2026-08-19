@@ -101,7 +101,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "4.14.6";
+const VERSION = "4.14.7";
 // The one address the extension ever points at, used by the warning in front of
 // the crisis-support check. Pinned to the released branch rather than to a tag,
 // so an old install still opens the page as it stands today.
@@ -3953,6 +3953,12 @@ export function setup(ctx, opts) {
     // Whether the pointer can hover at all. A phone cannot, and a browser on one
     // synthesises a hover when a finger rests somewhere, so anything drawn from
     // hover alone arrives on a tap and has nothing to take it off again.
+    //
+    // Only worth asking about a device as a whole, never about one event. A phone
+    // asked to show the desktop site answers yes to this, and so does anything
+    // else without the touch flag set, which is what made a highlight stick.
+    // Anything deciding what a particular touch or click should do asks
+    // fromMouse below instead.
     const canHover = () => {
         try {
             return (typeof window !== "undefined" &&
@@ -3962,6 +3968,29 @@ export function setup(ctx, opts) {
         catch (_) {
             return false;
         }
+    };
+    // What last touched the page, read off the pointer event rather than guessed
+    // from the screen. Pointer events carry pointerType, which is "touch" for a
+    // finger whatever the browser claims about hovering, so a highlight drawn
+    // only for a mouse can no longer be raised by a thumb.
+    //
+    // Kept for the compatibility events, mouseenter and click, which carry no
+    // pointerType of their own but always follow a pointer event from the same
+    // gesture.
+    let lastPointerType = "";
+    const fromMouse = (e) => {
+        const t = e && e.pointerType;
+        if (t)
+            return t === "mouse";
+        // A compatibility event, which carries no pointerType of its own. The
+        // pointer that caused it has already been through the recorder, since every
+        // one of them follows its pointer event rather than leading it.
+        if (lastPointerType)
+            return lastPointerType === "mouse";
+        // Nothing has touched the page yet, so the screen is the only thing left to
+        // ask. It is only ever wrong about a device that turned out to have a
+        // finger, and one touch is enough to correct it for good.
+        return canHover();
     };
     // Focus something without marking it as keyboard focus.
     //
@@ -3997,9 +4026,23 @@ export function setup(ctx, opts) {
             }
             catch (_) { }
             try {
-                el.removeEventListener("blur", clear, true);
+                el.removeEventListener("blur", onBlur, true);
             }
             catch (_) { }
+        };
+        // Leaving the tab blurs whatever was focused and focusing the tab again
+        // puts it back, which runs the focus handler a second time long after the
+        // gesture that opened this. Treated as somebody moving focus, the mark came
+        // off on the way out and the guess decided on the way back in, so the thing
+        // lit up on returning to the page. A blur with the whole document out of
+        // focus is the window leaving, not a person, so the mark stays.
+        const onBlur = () => {
+            try {
+                if (!document.hasFocus())
+                    return;
+            }
+            catch (_) { }
+            clear();
         };
         try {
             el.setAttribute(QUIET_ATTR, "1");
@@ -4010,7 +4053,7 @@ export function setup(ctx, opts) {
         }
         catch (_) { }
         try {
-            el.addEventListener("blur", clear, true);
+            el.addEventListener("blur", onBlur, true);
         }
         catch (_) { }
         try {
@@ -4311,7 +4354,12 @@ export function setup(ctx, opts) {
                     // The browser's own focus ring is drawn from its colour scheme, which
                     // on this menu is a hard white rectangle. Replaced below with a ring in
                     // the theme's accent, so keyboard focus is still plain to see.
-                    "outline:none;background:transparent;color:inherit;font:inherit";
+                    "outline:none;background:transparent;color:inherit;font:inherit;" +
+                    // The entries are reached by holding, and a hold over a word is also
+                    // how a phone is asked to select it or to raise its own menu over ours.
+                    // The button beneath already turns all of that off; these never did.
+                    "user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;" +
+                    "-webkit-tap-highlight-color:transparent;touch-action:manipulation";
             const lit = (on) => {
                 b.style.background = on
                     ? "var(--lumiverse-secondary-hover,rgba(128,128,128,.25))"
@@ -4322,22 +4370,32 @@ export function setup(ctx, opts) {
                     ? "inset 0 0 0 2px var(--lumiverse-primary-050,rgba(147,112,219,.5))"
                     : "none";
             };
-            // Hover only on something that hovers. On a phone the browser sends one
-            // when a finger rests on the entry and never sends the matching leave, so
-            // holding this lit it and lifting left it lit until the menu closed.
-            if (canHover()) {
-                b.addEventListener("mouseenter", () => lit(true));
-                b.addEventListener("mouseleave", () => lit(false));
-            }
+            // Hover, from a mouse and nothing else. A phone sends one when a finger
+            // rests on the entry and never sends the matching leave, so holding this
+            // lit it and lifting left it lit until the menu closed.
+            //
+            // Asked of the pointer rather than of the screen. Asking the screen was
+            // the same bug over again: a phone set to show the desktop site says it
+            // can hover, so the guard came off and the stuck highlight came back, on
+            // and off depending on a setting nothing here can see.
+            b.addEventListener("pointerenter", (e) => {
+                if (fromMouse(e))
+                    lit(true);
+            });
+            b.addEventListener("mouseenter", (e) => {
+                if (fromMouse(e))
+                    lit(true);
+            });
             // What a hold should do instead, on any device: light while it is held
             // and go out when it is let go. A press with nothing to show for it reads
             // as a tap that missed.
             b.addEventListener("pointerdown", () => lit(true));
             // Still under a mouse after the press, so a mouse keeps its hover. A
             // finger has nothing to hover with, so it goes out.
-            b.addEventListener("pointerup", () => lit(canHover()));
+            b.addEventListener("pointerup", (e) => lit(fromMouse(e)));
             b.addEventListener("pointercancel", () => lit(false));
             b.addEventListener("pointerleave", () => lit(false));
+            b.addEventListener("mouseleave", () => lit(false));
             // Marked only when focus came from a key. This menu focuses its first
             // entry as it opens so a keyboard can act on it straight away, and that
             // was drawn the same as hovering, so a menu opened with a thumb came up
@@ -7099,6 +7157,14 @@ export function setup(ctx, opts) {
             if (holdMoveWatch)
                 holdMoveWatch(e);
         };
+        // Every pointer on the page passes here first, which is where what kind it
+        // is gets written down for the compatibility events that follow it.
+        const onPointerKind = (e) => {
+            if (e && e.pointerType)
+                lastPointerType = String(e.pointerType);
+        };
+        document.addEventListener("pointerdown", onPointerKind, true);
+        document.addEventListener("pointermove", onPointerKind, true);
         document.addEventListener("pointermove", onHoldMove, true);
         document.addEventListener("pointerdown", onHintDismiss, true);
         document.addEventListener("scroll", onHintScroll, true);
@@ -7106,6 +7172,14 @@ export function setup(ctx, opts) {
         if (typeof window !== "undefined")
             window.addEventListener("resize", onHintResize);
         disposers.push(() => {
+            try {
+                document.removeEventListener("pointerdown", onPointerKind, true);
+            }
+            catch (_) { }
+            try {
+                document.removeEventListener("pointermove", onPointerKind, true);
+            }
+            catch (_) { }
             try {
                 document.removeEventListener("pointermove", onHoldMove, true);
             }
@@ -8759,20 +8833,43 @@ export function setup(ctx, opts) {
                 showHint(info, String(f.hint), () => paint(false));
                 paint(true);
             };
-            // Mouse devices reveal on hover (and keyboard focus); touch devices, which
-            // can't hover, toggle on tap.
-            if (canHover()) {
-                info.addEventListener("mouseenter", open);
-                info.addEventListener("mouseleave", () => {
-                    if (mine())
-                        hideHint();
-                });
-                info.addEventListener("focus", open);
-                info.addEventListener("blur", () => {
-                    if (mine())
-                        hideHint();
-                });
-            }
+            // A mouse reveals on hover, a keyboard on focus, a finger on tap. Which
+            // one is happening is read off each event rather than decided once from
+            // the screen: a phone showing the desktop site says it can hover, and
+            // that answer wired up the hover pair and switched the tap off, leaving a
+            // description that opened on a tap with nothing able to close it.
+            info.addEventListener("pointerenter", (e) => {
+                if (fromMouse(e))
+                    open();
+            });
+            info.addEventListener("mouseenter", (e) => {
+                if (fromMouse(e))
+                    open();
+            });
+            const leave = () => {
+                if (mine())
+                    hideHint();
+            };
+            info.addEventListener("pointerleave", (e) => {
+                if (fromMouse(e))
+                    leave();
+            });
+            info.addEventListener("mouseleave", (e) => {
+                if (fromMouse(e))
+                    leave();
+            });
+            // Focus opens it only when a key put you there. A tap focuses the button
+            // too, and opening from that as well would fight the tap below.
+            info.addEventListener("focus", () => {
+                let byKey = true;
+                try {
+                    byKey = info.matches(":focus-visible");
+                }
+                catch (_) { }
+                if (byKey)
+                    open();
+            });
+            info.addEventListener("blur", leave);
             info.addEventListener("click", (e) => {
                 // Stop the row-label from toggling its control when the button is clicked.
                 if (e) {
@@ -8780,7 +8877,7 @@ export function setup(ctx, opts) {
                     e.stopPropagation();
                 }
                 // On touch, click toggles. On a mouse, hover already handles it.
-                if (canHover())
+                if (fromMouse(e))
                     return;
                 if (mine())
                     hideHint();
