@@ -17,15 +17,7 @@ _2026-08-19_
 - **On a phone set to show the desktop site, an entry in the floating button's menu could light up on its own and stay lit.** The check that keeps hover out of the way of a finger asked the screen whether the device can hover, and a phone showing the desktop site says it can. The check then came off, the hover a touch browser makes up counted as real, and since a finger never sends the matching leave there was nothing left to put the highlight out. Coming back to the tab after a while sends that made-up hover over the last place you touched, which is when it turned up. Nothing on the page can see that setting, so it came and went with no pattern. Every one of these now reads the pointer that caused it, which says outright whether it was a finger or a mouse.
 - **Descriptions in the settings panel could open on a tap with no way to close them, on the same phones and for the same reason.** They are meant to open on hover with a mouse and toggle on a tap with a finger, and the same wrong answer wired up the hover pair and switched the tap off.
 - **The menu entries no longer let the phone's own long-press behaviour run over them**, so holding one cannot start selecting its text, raise the browser's own menu on top, or leave a tap flash behind.
-- **A highlight the extension put on could come back when you left the tab and returned.** Leaving blurs whatever was focused and returning puts it back, which was read as somebody moving focus, so the mark saying the extension had focused it itself came off on the way out and the browser's guess decided again on the way in.
-
-## 4.14.6
-
-_2026-08-19_
-
-### Fixed
-
-- **The floating button's menu could still open with its first entry lit, and the reset picker with a ring around Go back.** Both fixes asked the browser whether focus should be shown, and that is a guess: the browser answers from the last kind of input it saw anywhere on the page, so opening the menu with a thumb shortly after typing in the chat still counted as keyboard and lit the top entry. That is why it came back only sometimes. Focus the extension moves itself is now marked as its own, so neither is drawn on, and the mark lifts at the first key pressed, so tabbing and the arrow keys show where you are exactly as before.
+- **The floating button's menu could still open with its first entry lit, and the reset picker with a ring around Go back.** Both earlier fixes asked the browser whether focus should be shown, and that is a guess: the browser answers from the last kind of input it saw anywhere on the page, so opening the menu with a thumb shortly after typing in the chat still counted as keyboard and lit the top entry. Focus the extension moves itself is now marked as its own, so neither is drawn on, and the mark lifts at the first key pressed, so tabbing and the arrow keys show where you are exactly as before. It also survives leaving the tab and coming back, which blurs whatever was focused and puts it back, and was being read as somebody moving focus.
 
 ## 4.14.5
 
