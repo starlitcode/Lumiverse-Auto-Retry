@@ -5036,10 +5036,13 @@ console.log("\na phone that says it can hover");
     f.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, pointerType: "touch" }));
     return getComputedStyle(f).backgroundColor;
   });
-  // A real mouse on the same page still gets its highlight.
+  // A mouse on the same page still gets its highlight. Moved first, the way a
+  // real one arrives: the move says what kind of pointer this is, and the
+  // hover that follows carries nothing to say it itself.
   out.afterMouseOver = await page.evaluate(() => {
+    document.dispatchEvent(new PointerEvent("pointermove", { bubbles: true, pointerType: "mouse" }));
     const f = document.querySelector('[role="menuitem"]');
-    f.dispatchEvent(new PointerEvent("pointerenter", { pointerType: "mouse" }));
+    f.dispatchEvent(new MouseEvent("mouseenter"));
     return getComputedStyle(f).backgroundColor;
   });
   await page.close();
@@ -5049,6 +5052,39 @@ console.log("\na phone that says it can hover");
   check("a synthesised hover does not light it", clear2(out.afterFakeHover), out);
   check("nor does letting a finger go on it", clear2(out.afterTouchUp), out);
   check("but a mouse moving onto it still does", !clear2(out.afterMouseOver), out);
+  check("no console errors", errors.length === 0, errors);
+}
+
+// ---- a tapped button does not keep its hover colour ----
+// The same half-sent pair, in the panel rather than the menu: a touch browser
+// raises mouseenter at the end of a tap and never sends the matching leave, so
+// every button in the panel stayed lit in its hover colour once tapped. The
+// pointerleave that resets it has already run by the time that hover arrives.
+console.log("\ntapping a button in the panel");
+{
+  const { out, errors } = await inPanel(
+    browser, { viewport: { width: 393, height: 780 }, touch: true },
+    async (page) => {
+      const bg = () => page.evaluate(() => {
+        const b = [...document.querySelectorAll("button")].find((x) => x.textContent.trim() === "Save");
+        return b ? getComputedStyle(b).backgroundColor : "gone";
+      });
+      const at = await page.evaluate(() => {
+        const b = [...document.querySelectorAll("button")].find((x) => x.textContent.trim() === "Save");
+        if (!b) return null;
+        b.scrollIntoView({ block: "center" });
+        const r = b.getBoundingClientRect();
+        return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
+      });
+      if (!at) return { err: "no Save button" };
+      const rest = await bg();
+      await page.touchscreen.tap(at.x, at.y);
+      await page.waitForTimeout(400);
+      return { rest, after: await bg() };
+    },
+  );
+  check("the button has a resting colour", out.rest && out.rest !== "gone", out);
+  check("and is back at it after a tap", out.after === out.rest, out);
   check("no console errors", errors.length === 0, errors);
 }
 
@@ -6150,6 +6186,52 @@ console.log("\nhint placement");
     check("its scroll does not chain to the panel", out.contains, out);
     check("reading it does not close it", out.stillOpenAfterOwnScroll, out);
     check("scrolling the panel still closes it", out.closedByPanelScroll, out);
+    check("no console errors", errors.length === 0, errors);
+  }
+
+  // ---- and reading it with a finger does not close it either ----
+  // A description opened by tapping the ? leaves the ? focused. Touching the
+  // popover to scroll it takes focus off the ?, and closing on that would shut
+  // the very thing being read. Only a description that focus opened closes on
+  // focus leaving.
+  {
+    const { out, errors } = await inPanel(
+      browser, { css: PANEL, viewport: { width: 393, height: 460 }, touch: true, settings: { refusalNote: true } },
+      async (page) => {
+        const at = await page.evaluate(async (want) => {
+          const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+          for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+          await frame();
+          const row = document.querySelector('[data-ar-row="' + want + '"]');
+          if (!row) return null;
+          row.scrollIntoView({ block: "end" });
+          await frame();
+          const r = row.querySelector("[data-ar-hint]").getBoundingClientRect();
+          return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
+        }, want);
+        if (!at) return { err: "no row" };
+        // A real tap, so the browser knows a finger is in use and does not
+        // count the focus it leaves behind as worth marking.
+        await page.touchscreen.tap(at.x, at.y);
+        await page.waitForTimeout(150);
+        const res = await page.evaluate(() => ({
+          opened: !!document.querySelector('[role="tooltip"]'),
+          focused: !!document.activeElement && document.activeElement.hasAttribute("data-ar-hint"),
+        }));
+        // A finger landing on the description takes focus off the button.
+        await page.evaluate(() => {
+          const q = document.querySelector("[data-ar-hint]:focus") || document.activeElement;
+          if (q && q.blur) q.blur();
+        });
+        await page.waitForTimeout(150);
+        res.stillOpenAfterTouching = await page.evaluate(() =>
+          !!document.querySelector('[role="tooltip"]'));
+        return res;
+      },
+    );
+    check("a tap opens the description", out.opened, out);
+    check("and leaves the ? focused", out.focused, out);
+    check("touching the description does not close it", out.stillOpenAfterTouching, out);
     check("no console errors", errors.length === 0, errors);
   }
 
