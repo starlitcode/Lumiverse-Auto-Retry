@@ -4698,6 +4698,99 @@ console.log("\nopening the float menu");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- holding an entry lights it, and letting go puts it out ----
+// A phone cannot hover, and a browser on one sends a hover when a finger rests
+// somewhere and never sends the matching leave. Drawn from hover alone, holding
+// an entry lit it and lifting left it lit until the menu closed.
+console.log("\nholding a float menu entry");
+{
+  const page = await browser.newPage({
+    viewport: { width: 400, height: 700 }, hasTouch: true, isMobile: true,
+  });
+  const errors = [];
+  page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
+  await stage(page, "<div id=modal></div>");
+  await page.addStyleTag({ content: THEME });
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  await page.evaluate(async () => {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    window.__setup(
+      { events: { on: () => () => {} },
+        sendToBackend: () => {},
+        onBackendMessage: () => () => {},
+        ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+              registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }),
+              createFloatWidget: (o) => {
+                const w = document.createElement("div");
+                w.style.cssText = "position:fixed;left:20px;top:20px;width:" + o.width + "px;height:" + o.height + "px";
+                document.body.appendChild(w);
+                return { root: w, destroy() { w.remove(); }, setPosition() {}, onDragEnd() { return () => {}; } };
+              } } },
+      { enabled: true, showFloatingToggle: true, floatingToggleSize: 44, toast: false },
+    );
+    await wait(40);
+  });
+  const out = { hovers: await page.evaluate(() => matchMedia("(hover: hover)").matches) };
+  const centre = (sel) => page.evaluate((s) => {
+    const el = s === "entry"
+      ? [...document.querySelectorAll('[role="menuitem"], [role="menu"] button')][0]
+      : document.querySelector("button[aria-pressed]");
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  }, sel);
+  const bg = () => page.evaluate(() => {
+    const f = [...document.querySelectorAll('[role="menuitem"], [role="menu"] button')][0];
+    return f ? getComputedStyle(f).backgroundColor : "gone";
+  });
+  const clear = (v) => v === "rgba(0, 0, 0, 0)" || v === "transparent";
+  // Held open with real input, so the browser knows a pointer is in use. A
+  // dispatched press is untrusted and leaves it still thinking a keyboard is.
+  const onButton = await centre("button");
+  await page.mouse.move(onButton.x, onButton.y);
+  await page.mouse.down();
+  await page.waitForTimeout(900);
+  await page.mouse.up();
+  await page.waitForTimeout(150);
+  const onEntry = await centre("entry");
+  out.opened = !!onEntry;
+  if (onEntry) {
+    out.restClear = clear(await bg());
+    // What a touch browser does to an entry a finger rests on: a hover it will
+    // never take back, alongside the press. Dispatched rather than driven,
+    // because there is no way to make a real mouse send a hover it does not
+    // then undo, and that asymmetry is the whole fault.
+    //
+    // The press is not completed on the entry, since a completed one closes the
+    // menu and takes the question with it. A finger that lands and slides off
+    // leaves the menu open, and that is where a stuck highlight is visible.
+    out.litWhileHeld = await page.evaluate(() => {
+      const f = [...document.querySelectorAll('[role="menuitem"], [role="menu"] button')][0];
+      f.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+      f.dispatchEvent(new MouseEvent("mouseenter"));
+      f.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+      const v = getComputedStyle(f).backgroundColor;
+      return v !== "rgba(0, 0, 0, 0)" && v !== "transparent";
+    });
+    await page.evaluate(() => {
+      const f = [...document.querySelectorAll('[role="menuitem"], [role="menu"] button')][0];
+      f.dispatchEvent(new PointerEvent("pointercancel", { bubbles: true }));
+    });
+    await page.waitForTimeout(150);
+    out.stillOpen = !!(await centre("entry"));
+    out.clearAfterLifting = clear(await bg());
+  }
+  await page.close();
+  check("the device does not hover", out.hovers === false, out);
+  check("the menu opens on a hold", out.opened, out);
+  check("its entry starts unlit", out.restClear, out);
+  check("holding one lights it", out.litWhileHeld, out);
+  check("the menu is still open to look at", out.stillOpen, out);
+  check("and taking the finger away puts it out", out.clearAfterLifting, out);
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- a button is marked when it was reached by keyboard, and not otherwise ----
 // Whether a button should show its focus is the browser's own question, asked
 // as :focus-visible. Tracking pointer presses by hand answered it wrongly the

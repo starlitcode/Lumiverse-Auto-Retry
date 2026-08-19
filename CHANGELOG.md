@@ -8,6 +8,14 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 4.14.5
+
+_2026-08-19_
+
+### Fixed
+
+- **An entry in the floating button's menu could stay highlighted after your finger left it.** A phone cannot hover, and a browser on one sends a hover when a finger rests somewhere and never sends the matching leave. The highlight was drawn from that hover alone, so touching an entry and sliding off it left the entry lit with the menu still open. Hovering is now only read on something that hovers, and a press lights the entry while it is held and puts it out when it is let go, which is what holding one should look like on any device.
+
 ## 4.14.4
 
 _2026-08-19_
