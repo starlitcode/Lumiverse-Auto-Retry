@@ -335,3 +335,63 @@ describe("the snapshot carries only what the panel reads", () => {
     expect(seen.size).toBe(50);
   });
 });
+
+// A refused permission is the one failure that raises nothing anywhere: a gated
+// event never fires and a fire-and-forget registration silently does nothing.
+// Every other fault announces itself, so this one is asked about instead.
+describe("reporting which permissions are granted", () => {
+  const bootWith = (has?: (n: string) => boolean) => {
+    let onFrontend: any = null;
+    const sent: Array<{ msg: any; userId: any }> = [];
+    const spindle: any = {
+      storage: { read: async () => { throw new Error("empty"); }, write: async () => {} },
+      onFrontendMessage: (fn: any) => { onFrontend = fn; },
+      sendToFrontend: (msg: any, userId?: any) => sent.push({ msg, userId }),
+      on: () => {},
+      chat: { getMessages: async () => [], updateMessage: async () => {} },
+      registerInterceptor: () => {},
+      log: { info() {}, warn() {}, error() {} },
+    };
+    if (has) spindle.permissions = { has: has, onChanged: () => {}, onDenied: () => {} };
+    new Function("spindle", readFileSync(new URL("../dist/backend.js", import.meta.url), "utf8"))(spindle);
+    return {
+      ask: () => onFrontend({ type: "get_permissions", requestId: "p1" }),
+      reply: () => sent.filter((x) => x.msg && x.msg.type === "permissions").pop()!.msg,
+    };
+  };
+
+  test("every permission the manifest asks for is reported", () => {
+    const declared = JSON.parse(
+      readFileSync(new URL("../spindle.json", import.meta.url), "utf8"),
+    ).permissions as string[];
+    const h = bootWith(() => true);
+    h.ask();
+    const named = h.reply().list.map((p: any) => p.name).sort();
+    expect(named).toEqual([...declared].sort());
+  });
+
+  test("each one says what stops working without it", () => {
+    const h = bootWith(() => true);
+    h.ask();
+    for (const p of h.reply().list) {
+      expect(typeof p.costs).toBe("string");
+      expect(p.costs.length).toBeGreaterThan(10);
+    }
+  });
+
+  test("a denial is reported as denied", () => {
+    const h = bootWith((n) => n !== "interceptor");
+    h.ask();
+    const g = h.reply().granted;
+    expect(g.interceptor).toBe(false);
+    expect(g.generation).toBe(true);
+  });
+
+  // A host too old to answer is not a host that said no, and showing it as one
+  // would send somebody looking for a setting that is already right.
+  test("a build that cannot say answers unknown rather than denied", () => {
+    const h = bootWith(undefined);
+    h.ask();
+    for (const v of Object.values(h.reply().granted)) expect(v).toBe(null);
+  });
+});

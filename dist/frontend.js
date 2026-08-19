@@ -101,7 +101,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "4.13.0";
+const VERSION = "4.14.0";
 // The one address the extension ever points at, used by the warning in front of
 // the crisis-support check. Pinned to the released branch rather than to a tag,
 // so an old install still opens the page as it stands today.
@@ -313,8 +313,7 @@ const SCHEMA = [
                 min: 28,
                 max: 96,
                 live: true,
-                preview: "circle",
-                hint: "How wide the floating button is, in pixels. The default of " + def("floatingToggleSize") + " is about a comfortable thumb. Larger is easier to hit on a phone, smaller keeps it out of the way. The circle beside the box is drawn at the size you type, and the real button resizes as you type too, so you can see it before you save. Closing without saving puts it back.",
+                hint: "How wide the floating button is, in pixels. The default of " + def("floatingToggleSize") + " is about a comfortable thumb. Larger is easier to hit on a phone, smaller keeps it out of the way. The button itself resizes as you type, so you can see it on the chat before you save. Closing without saving puts it back.",
             },
             {
                 key: "showExtrasToggle",
@@ -2814,6 +2813,22 @@ export function setup(ctx, opts) {
     // to somebody who has sent several, which reads as a fault in their chat
     // rather than a permission that was never granted.
     let promptNeverArrived = false;
+    // What the host has actually granted, as the backend sees it. Held rather
+    // than guessed at: a missing permission raises nothing, so without asking,
+    // the only evidence is a feature quietly doing nothing.
+    let permGranted = {};
+    let permList = [];
+    let permPaint = null;
+    // true, false, or null for a host too old to say. null is not a denial and is
+    // never shown as one.
+    const permIs = (name) => Object.prototype.hasOwnProperty.call(permGranted, name) ? permGranted[name] : null;
+    function askForPermissions() {
+        try {
+            if (ctx && typeof ctx.sendToBackend === "function")
+                ctx.sendToBackend({ type: "get_permissions", requestId: "ar-perm-" + Date.now() });
+        }
+        catch (_) { }
+    }
     // ---- where things were left ----
     //
     // The floating button and the on-screen panel both went back to their default
@@ -3146,9 +3161,18 @@ export function setup(ctx, opts) {
         body.replaceChildren();
         body.style.whiteSpace = "normal";
         if (!lastPrompt) {
-            body.textContent = promptNeverArrived
-                ? "That reply finished without a prompt reaching this tab. Reading the prompt needs the interceptor permission, which is privileged, so an admin has to approve it before it does anything. Everything else in the extension works without it."
-                : "(no prompt seen yet; send a reply)";
+            // The panel used to guess at this, and a guess about a permission is the
+            // one thing a reader cannot check from here. It is asked for now, so a
+            // denial is stated and a grant is not blamed.
+            const interceptor = permIs("interceptor");
+            body.textContent =
+                interceptor === false
+                    ? "The interceptor permission is not granted, so no prompt can be read. It is privileged, so an admin has to approve it. Everything else in the extension works without it."
+                    : promptNeverArrived
+                        ? interceptor === true
+                            ? "That reply finished without a prompt reaching this tab, and the interceptor permission is granted, so this is worth reporting as a bug."
+                            : "That reply finished without a prompt reaching this tab. Reading the prompt needs the interceptor permission, which is privileged, so an admin has to approve it before it does anything. Everything else in the extension works without it."
+                        : "(no prompt seen yet; send a reply)";
             return;
         }
         if (!promptIsForThisChat()) {
@@ -4402,7 +4426,7 @@ export function setup(ctx, opts) {
     }
     // Settings marked live are applied as they are typed. Nothing is saved by
     // this: cfg is what the panel is holding, and closing the panel without
-    // saving restores the baseline and re-syncs, which puts the preview back.
+    // saving restores the baseline and re-syncs, which puts it back.
     function onLiveEdit(key) {
         try {
             if (key === "floatingToggleSize")
@@ -7210,8 +7234,21 @@ export function setup(ctx, opts) {
             lines.push("  stopSelector       = " + cfg.stopSelector);
         }
         if (inc(o.environment)) {
+            // First in this section, because it is the one line that explains a
+            // report where nothing happened at all. A refused permission raises
+            // nothing, so without it a bug report says the extension did nothing and
+            // gives no reason.
+            lines.push("");
+            if (!permList.length) {
+                lines.push("permissions: not reported by this build");
+            }
+            else {
+                const say = (v) => v === true ? "granted" : v === false ? "MISSING" : "unknown";
+                lines.push("permissions:");
+                for (const p of permList)
+                    lines.push("  " + p.name + " = " + say(permIs(p.name)));
+            }
             try {
-                lines.push("");
                 lines.push("browser: " + ((navigator && navigator.userAgent) || "unknown"));
             }
             catch (_) { }
@@ -7364,6 +7401,7 @@ export function setup(ctx, opts) {
         // The rows the old one closed over have just been thrown away with the
         // panel, so it is put back to doing nothing until the new one assigns it.
         applyDeps = () => { };
+        permPaint = null;
         presetBarRefreshers = [];
         // Flush a field the user is still editing into cfg, then normalise every
         // number so a blank or out-of-range box cannot be saved or captured into a
@@ -8324,6 +8362,7 @@ export function setup(ctx, opts) {
         // Above the search box rather than below it. This is the panel's own state
         // and it stays put, while the line under the box is about the search and
         // comes and goes, so the lasting one reads first.
+        panel.appendChild(buildPermissionNotice());
         panel.appendChild(masterNote);
         masterNoteEl = masterNote;
         syncMasterNote();
@@ -8377,6 +8416,63 @@ export function setup(ctx, opts) {
         // quieter than the rest, so it is held to a gentler floor than the controls
         // and only repainted on a theme where it has all but vanished.
         ensureReadableTree(panel, 2.6);
+    }
+    // What is missing, and what that costs. Drawn only while something is
+    // actually missing, so a correctly installed extension carries no panel
+    // furniture for a problem it does not have.
+    //
+    // This exists because a refused permission is the one failure that raises
+    // nothing anywhere: a gated event never fires, and a fire-and-forget
+    // registration silently does nothing. Every other fault in here announces
+    // itself. This one leaves the extension looking installed and working while
+    // it quietly does none of what it was asked to.
+    function buildPermissionNotice() {
+        const box = document.createElement("div");
+        box.setAttribute("data-ar-perms", "1");
+        const paint = () => {
+            box.replaceChildren();
+            const missing = permList.filter((p) => permIs(p.name) === false);
+            if (!missing.length) {
+                box.style.display = "none";
+                return;
+            }
+            box.style.display = "block";
+            box.style.cssText +=
+                ";margin:0 0 10px;padding:8px 10px;font-size:12px;line-height:1.45;" +
+                    "border-radius:var(--lumiverse-radius-sm,5px);" +
+                    "border-left:3px solid var(--lumiverse-primary,rgba(147,112,219,.9));" +
+                    "background:var(--lumiverse-primary-020,rgba(147,112,219,.2));" +
+                    "color:var(--lumiverse-text,#e9e4f0)";
+            const head = document.createElement("div");
+            head.style.cssText = "font-weight:600;margin-bottom:4px";
+            head.textContent =
+                missing.length === 1
+                    ? "A permission this extension needs is not granted"
+                    : missing.length + " permissions this extension needs are not granted";
+            box.appendChild(head);
+            for (const p of missing) {
+                const line = document.createElement("div");
+                line.style.cssText = "margin-top:3px";
+                const who = document.createElement("span");
+                who.style.fontFamily = "var(--lumiverse-font-mono,ui-monospace,monospace)";
+                who.textContent = p.name;
+                line.appendChild(who);
+                line.appendChild(document.createTextNode(". " + p.costs));
+                box.appendChild(line);
+            }
+            const how = document.createElement("div");
+            how.style.cssText = "margin-top:6px;opacity:.85";
+            how.textContent =
+                "These are approved in Lumiverse's own extension settings. Some are privileged, which means an admin has to grant them.";
+            box.appendChild(how);
+            try {
+                ensureReadableTree(box, 2.6);
+            }
+            catch (_) { }
+        };
+        paint();
+        permPaint = paint;
+        return box;
     }
     // Per-chat on and off, shaped like the rows around it so it does not read as
     // something bolted on, but holding no setting.
@@ -8771,37 +8867,14 @@ export function setup(ctx, opts) {
             styleField(input);
             input.style.width = "120px";
             input.style.flex = "none";
-            // Drawn at the size the box says, so the number means something without
-            // having to picture it. Its own box is fixed at the largest the setting
-            // allows, so the row does not grow and shrink as the number is typed.
-            let dot = null;
-            if (f.preview === "circle") {
-                const pad = document.createElement("div");
-                const room = (typeof f.max === "number" ? f.max : 96) + 8;
-                pad.style.cssText =
-                    "flex:none;display:flex;align-items:center;justify-content:center;" +
-                        "width:" + room + "px;height:" + room + "px";
-                dot = document.createElement("div");
-                dot.setAttribute("aria-hidden", "true");
-                dot.style.cssText =
-                    "border-radius:50%;box-sizing:border-box;" +
-                        "border:1px solid var(--lumiverse-primary-050,rgba(147,112,219,.5));" +
-                        "background:var(--lumiverse-primary-020,rgba(147,112,219,.2))";
-                pad.appendChild(dot);
-                top.appendChild(pad);
-            }
-            const paintPreview = () => {
-                if (!dot)
-                    return;
-                const d = clampField(f, input.value);
-                dot.style.width = d + "px";
-                dot.style.height = d + "px";
-            };
-            paintPreview();
             // On input, not just on change: a number box only raises change when it
-            // is left, and the point of a preview is to move while it is being typed.
+            // is left, and a setting marked live is meant to move while it is typed.
+            // The floating button is the one that does, and watching the real button
+            // resize on the chat is what a preview beside the box was standing in
+            // for. The circle also reserved a box the width of the largest size the
+            // setting allows, so it took that much room out of every panel whether
+            // or not the button was even switched on.
             input.addEventListener("input", () => {
-                paintPreview();
                 if (!f.live)
                     return;
                 cfg[f.key] = clampField(f, input.value);
@@ -8810,13 +8883,11 @@ export function setup(ctx, opts) {
             input.addEventListener("change", () => {
                 cfg[f.key] = clampField(f, input.value);
                 input.value = String(cfg[f.key]);
-                paintPreview();
                 if (f.live)
                     onLiveEdit(String(f.key));
             });
             fieldSetters[f.key] = (v) => {
                 input.value = String(v);
-                paintPreview();
             };
             top.appendChild(input);
             row.appendChild(top);
@@ -9943,10 +10014,24 @@ export function setup(ctx, opts) {
                     // Only worth a message if this panel actually wants prompts; asking for
                     // nothing is what it would already be getting.
                     if (msg.type === "backend_ready") {
+                        askForPermissions();
                         if (promptsAsked) {
                             log("backend restarted, asking it for prompts again");
                             askForPrompts(true);
                         }
+                        return;
+                    }
+                    if (msg.type === "permissions") {
+                        permGranted = (msg && msg.granted) || {};
+                        permList = Array.isArray(msg && msg.list) ? msg.list : [];
+                        if (permPaint) {
+                            try {
+                                permPaint();
+                            }
+                            catch (_) { }
+                        }
+                        if (liveTab === "prompt")
+                            renderLiveLog();
                         return;
                     }
                     if (msg.type === "prompt_snapshot") {
@@ -10062,6 +10147,7 @@ export function setup(ctx, opts) {
         toggleAction && toggleAction.destroy();
     }
     catch (_) { } });
+    askForPermissions();
     log("ready v" + VERSION, cfg);
     return () => {
         clearConfirmWatch();
