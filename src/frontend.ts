@@ -4001,9 +4001,10 @@ export function setup(ctx: Ctx, opts?: any) {
   // is the one thing not taken, since ours has to go there instead; see the
   // contextmenu handler below.
   let floatWidget: any = null;
-  // Which opening of the host's menu is current. An answer from an earlier
-  // one, still in flight when the button was hidden, is not acted on.
-  let floatMenuRun = 0;
+  // The host's menu while it is open, as a token to compare against. Null when
+  // there is none. It answers two questions at once: whether one is already up,
+  // and whether the answer now arriving belongs to the one still wanted.
+  let floatMenuToken: object | null = null;
   // Reassigned each time the button is rebuilt; the document listener below
   // calls through this so only one listener is ever registered.
   let holdMoveWatch: ((e: any) => void) | null = null;
@@ -4283,8 +4284,8 @@ export function setup(ctx: Ctx, opts?: any) {
       showFloatMenu();
     };
     // Android raises this on a long press too, so it can arrive alongside the
-    // timer above. showFloatMenu closes any open menu first, so a second call
-    // reopens rather than stacking.
+    // timer above. showFloatMenu drops the second of the two rather than asking
+    // the host for a menu it cannot then take back.
     el.addEventListener("contextmenu", onMenu, true);
     // The host owns the element our button sits in, and that is where its own
     // menu is wired, so a press that lands on the padding around the button
@@ -4337,13 +4338,12 @@ export function setup(ctx: Ctx, opts?: any) {
     paintFloat();
   }
 
-  // Nothing of ours is on screen any more: the menu is the host's, and it
-  // closes itself on Escape, on a tap outside, and when its promise resolves.
-  // Kept as a name because the places that used to close the menu still read
-  // better saying so, and one of them still has a job: forgetting a menu whose
-  // answer is no longer wanted.
-  function hideFloatMenu() {
-    floatMenuRun += 1;
+  // Not a close: the menu belongs to the host, which shuts it on Escape, on a
+  // tap outside, and when its promise resolves. This is for the case where the
+  // button goes away while one is still up, so the answer that arrives after is
+  // dropped rather than acted on for a button that is no longer there.
+  function forgetFloatMenu() {
+    floatMenuToken = null;
   }
 
   // The menu behind a hold or a right-click on the floating button. Two entries,
@@ -4368,6 +4368,12 @@ export function setup(ctx: Ctx, opts?: any) {
     }
     if (typeof document === "undefined" || !floatEl || !floatEl.getBoundingClientRect)
       return;
+    // One at a time. Android raises contextmenu on a long press as well as
+    // running the timer below, so this is asked for twice on the way to one
+    // gesture. Ours used to be removed and rebuilt on the second call; the
+    // host's cannot be, so the second call is dropped instead of stacking a
+    // second menu on top of the first.
+    if (floatMenuToken) return;
 
     // Anchored to the middle of the button. Not to the pointer: the menu is
     // also raised from the keyboard, and a hold means the finger is over the
@@ -4375,11 +4381,8 @@ export function setup(ctx: Ctx, opts?: any) {
     const r = floatEl.getBoundingClientRect();
     const position = { x: Math.round(r.left + r.width / 2), y: Math.round(r.bottom) };
 
-    // Which opening this answer belongs to. Hiding the button, or opening
-    // another menu, moves this on, and an answer from a menu that has been left
-    // behind is dropped instead of acted on.
-    floatMenuRun += 1;
-    const run = floatMenuRun;
+    const token = {};
+    floatMenuToken = token;
 
     let selectedKey: string | null = null;
     try {
@@ -4405,11 +4408,15 @@ export function setup(ctx: Ctx, opts?: any) {
       });
       selectedKey = (res && res.selectedKey) || null;
     } catch (e) {
+      if (floatMenuToken === token) floatMenuToken = null;
       log("float menu failed", e);
       return;
     }
 
-    if (run !== floatMenuRun) return;
+    // Left behind: the button was hidden, or the extension torn down, while
+    // this was on screen.
+    if (floatMenuToken !== token) return;
+    floatMenuToken = null;
     if (selectedKey === "settings") {
       openSettings();
     } else if (selectedKey === "hide") {
@@ -4424,7 +4431,7 @@ export function setup(ctx: Ctx, opts?: any) {
   }
 
   function hideFloat() {
-    hideFloatMenu();
+    forgetFloatMenu();
     if (floatSettle) {
       clearTimeout(floatSettle);
       floatSettle = null;
