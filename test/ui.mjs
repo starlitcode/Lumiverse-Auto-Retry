@@ -2505,12 +2505,34 @@ console.log("\ndropdown focus");
       const textRest = await border(TEXT);
       await page.click(TEXT);
       const textClicked = await border(TEXT);
-      return { selectRest, selectClicked, focused, afterTab, textRest, textClicked };
+      // Resolved on the page rather than written in here, so the check follows
+      // the theme instead of a colour copied out of the source.
+      const [selectFocusColour, selectHoverColour] = await page.evaluate(() => {
+        const of = (v) => {
+          const probe = document.createElement("div");
+          probe.style.color = v;
+          document.body.appendChild(probe);
+          const got = getComputedStyle(probe).color;
+          probe.remove();
+          return got;
+        };
+        return [
+          of("var(--lumiverse-primary,rgba(147,112,219,.9))"),
+          of("var(--lumiverse-border-hover,rgba(147,112,219,.25))"),
+        ];
+      });
+      return { selectRest, selectClicked, focused, afterTab, textRest, textClicked,
+               selectFocusColour, selectHoverColour };
     },
   );
   check("the dropdown is there to test", out.selectRest !== null, out);
   check("clicking it still focuses it", out.focused === true, out);
-  check("but leaves its border alone", out.selectClicked === out.selectRest, out);
+  // The point is that clicking a dropdown does not mark it as focused, not that
+  // its border never moves at all. A field lifts its border under the pointer
+  // now, which a click necessarily is, so what has to hold is that the lift is
+  // the hover colour and not the focus one.
+  check("but does not mark it as focused", out.selectClicked !== out.selectFocusColour, out);
+  check("and lifts only as far as the hover colour", out.selectClicked === out.selectHoverColour, out);
   check("reaching that same dropdown without the pointer does mark it",
     out.afterTab.onIt === true && out.afterTab.border !== out.selectRest, out);
   check("and a text box clicked is still marked", out.textClicked !== out.textRest, out);
@@ -4456,6 +4478,77 @@ console.log("\nper-chat switch, in the panel");
     /waiting to catch which chat/i.test(out.noChat.text) &&
       !/open a chat/i.test(out.noChat.text),
     out.noChat.text.slice(0, 90));
+  check("no console errors", errors.length === 0, errors);
+}
+
+// ---- the focus ring ----
+// A tinted hairline on its own is easy to lose on a busy theme. The mark is
+// that tint plus room around it, in the theme's accent, painted outside the box
+// so it can never sit on the text or move the row it is in.
+console.log("\nthe focus ring");
+{
+  const { out, errors } = await inPanel(browser, {}, async (page) => {
+    await page.evaluate(async () => {
+      for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    });
+    return page.evaluate(async () => {
+      // The ring fades in with the border, so it is read after that has run
+      // rather than on the frame focus landed.
+      const settle = () => new Promise((r) => setTimeout(r, 260));
+      // A visible one. Rows behind a switch are in the DOM but hidden, and a
+      // hidden element cannot take focus, so picking the first match found one
+      // that could never light up.
+      const field = [...document.querySelectorAll('[data-ar-row] input[type="number"], [data-ar-row] input[type="text"]')]
+        .find((el) => el.offsetParent !== null);
+      const btn = [...document.querySelectorAll("button")].find((b) => (b.textContent || "").trim() === "Save");
+      // Measured against the panel rather than the viewport. Focusing scrolls
+      // a field into view, which moves it on screen without anything having
+      // been laid out again, and that is not what is being asked here.
+      const box = (el) => [el.offsetLeft, el.offsetTop, el.offsetWidth, el.offsetHeight].join(",");
+      const res = {};
+      res.restNoRing = getComputedStyle(field).boxShadow === "none";
+      const before = box(field);
+      const rowBefore = box(field.closest("[data-ar-row]"));
+      field.focus({ preventScroll: true });
+      await settle();
+      res.ringOnFocus = getComputedStyle(field).boxShadow !== "none";
+      // Two layers, so the edge has somewhere to fall off to rather than
+      // reading as a smudge or as a second border.
+      res.twoLayers = (getComputedStyle(field).boxShadow.match(/rgba?\(/g) || []).length === 2;
+      // Nothing inside the box: an inset ring would sit on the text.
+      res.notInset = getComputedStyle(field).boxShadow.indexOf("inset") < 0;
+      res.fieldDidNotMove = box(field) === before;
+      res.rowDidNotMove = box(field.closest("[data-ar-row]")) === rowBefore;
+      field.blur();
+      await settle();
+      res.ringGoesOnBlur = getComputedStyle(field).boxShadow === "none";
+      // A button reached by keyboard wears the same mark, rather than whatever
+      // outline the host's stylesheet happens to leave it.
+      btn.focus();
+      await settle();
+      res.buttonRingOnTab = getComputedStyle(btn).boxShadow !== "none";
+      res.sameRing = getComputedStyle(btn).boxShadow === getComputedStyle(field).boxShadow ||
+        getComputedStyle(btn).boxShadow !== "none";
+      btn.blur();
+      // Pressed rather than tabbed to: the click already says which button it
+      // was, and a ring left behind reads as something still waiting on you.
+      btn.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+      btn.focus();
+      await settle();
+      res.noRingWhenPressed = getComputedStyle(btn).boxShadow === "none";
+      return res;
+    });
+  });
+  check("a field at rest wears no ring", out.restNoRing, out);
+  check("focus puts one on", out.ringOnFocus, out);
+  check("built from two layers", out.twoLayers, out);
+  check("and none of it inside the box, where the text is", out.notInset, out);
+  check("the field does not move when it lands", out.fieldDidNotMove, out);
+  check("nor does the row around it", out.rowDidNotMove, out);
+  check("blur takes it off", out.ringGoesOnBlur, out);
+  check("a button reached by keyboard wears it too", out.buttonRingOnTab, out);
+  check("but a button that was pressed does not", out.noRingWhenPressed, out);
   check("no console errors", errors.length === 0, errors);
 }
 
