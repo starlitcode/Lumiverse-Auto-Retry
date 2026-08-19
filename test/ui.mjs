@@ -1712,6 +1712,7 @@ console.log("\nicons");
           ui: {
             showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
             registerInputBarAction: (o) => { actions.push(o); return { onClick: () => () => {}, destroy: () => {} }; },
+            showContextMenu: (o) => { (window.__menus ||= []).push(o); return Promise.resolve({ selectedKey: window.__pick === undefined ? null : window.__pick }); },
             createFloatWidget: () => ({ root: host, destroy: () => {}, setPosition: () => {} }),
           },
         },
@@ -1785,6 +1786,7 @@ console.log("\nicons");
           ui: {
             showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
             registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }),
+            showContextMenu: (o) => { (window.__menus ||= []).push(o); return Promise.resolve({ selectedKey: window.__pick === undefined ? null : window.__pick }); },
             createFloatWidget: () => ({ root: host, destroy: () => {}, setPosition: () => {} }),
           },
         },
@@ -1849,6 +1851,7 @@ console.log("\nfloat button menu");
             acts[o.id] = a;
             return a;
           },
+          showContextMenu: (o) => { (window.__menus ||= []).push(o); return Promise.resolve({ selectedKey: window.__pick === undefined ? null : window.__pick }); },
           createFloatWidget: (opts) => {
             widgets++;
             asked.push(opts);
@@ -1860,8 +1863,11 @@ console.log("\nfloat button menu");
     );
     const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     const btn = () => host.querySelector("button");
-    const menu = () => document.querySelector('[role="menu"]');
-    const items = () => [...document.querySelectorAll('[role="menuitem"]')].map((b) => b.textContent);
+    // The menu is the host's now, so what there is to check is what it was
+    // asked to show, not what got drawn.
+    const shown = () => (window.__menus || []).length;
+    const last = () => (window.__menus || [])[(window.__menus || []).length - 1] || null;
+    const items = () => (last() ? last().items.map((i) => i.label) : []);
     const down = (el, x, y) => el.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, clientX: x, clientY: y }));
     // Dispatched at the document, which is what a host that has captured the
     // pointer for its drag would produce. A move aimed at the button would not
@@ -1872,29 +1878,30 @@ console.log("\nfloat button menu");
     // A quick tap toggles and opens nothing.
     const wasOn = btn().getAttribute("aria-pressed");
     down(btn(), 130, 130); await wait(60); up(btn()); btn().click();
-    const afterTap = { pressed: btn().getAttribute("aria-pressed"), menu: !!menu() };
+    const afterTap = { pressed: btn().getAttribute("aria-pressed"), menu: shown() > 0 };
     btn().click(); // back on
 
     // A hold opens the menu and does not toggle.
     const before = btn().getAttribute("aria-pressed");
     down(btn(), 130, 130); await wait(620);
-    const openedByHold = !!menu();
+    const openedByHold = shown() === 1;
     const entries = items();
+    const keys = last() ? last().items.map((i) => i.key) : [];
     up(btn()); btn().click();
     const afterHold = { pressed: btn().getAttribute("aria-pressed"), same: btn().getAttribute("aria-pressed") === before };
 
-    // On screen, not off the edge.
-    const box = menu() ? menu().getBoundingClientRect() : null;
-    const onScreen = !!box && box.left >= 0 && box.top >= 0 &&
-      box.right <= innerWidth + 1 && box.bottom <= innerHeight + 1;
-
-    // Esc closes it.
-    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-    const afterEsc = !!menu();
+    // Anchored to the button, and on screen. The host clamps it from there, so
+    // this is about handing it a sensible place rather than about where it ends
+    // up drawn.
+    const at = last() ? last().position : null;
+    const bb = btn().getBoundingClientRect();
+    const onScreen = !!at && at.x >= 0 && at.y >= 0 && at.x <= innerWidth && at.y <= innerHeight;
+    const onButton = !!at && Math.abs(at.x - (bb.left + bb.width / 2)) <= 1;
 
     // A drag is not a hold.
+    const beforeDrag = shown();
     down(btn(), 130, 130); move(btn(), 190, 175); await wait(620);
-    const afterDrag = !!menu();
+    const afterDrag = shown() > beforeDrag;
     up(btn());
 
     // Resizing rebuilds the widget, and the rebuild used to start where a fresh
@@ -1926,34 +1933,28 @@ console.log("\nfloat button menu");
       noCircle: !document.querySelector('[data-ar-row="floatingToggleSize"] div[aria-hidden="true"]'),
     };
 
-    // How a menu item shows focus, and where the menu sits in the stack. Read
-    // while the button still exists, since the next step removes it.
-    //
-    // The second item, not the first. The menu focuses its first as it opens,
-    // and that focus is marked as the extension's own so it draws nothing; the
-    // question here is what focus looks like on an item somebody moved to.
-    down(btn(), 130, 130); await wait(620);
-    const item = document.querySelectorAll('[role="menuitem"]')[1];
-    const focus = {
-      outline: getComputedStyle(item).outlineStyle,
-      ringWhenFocused: (item.focus(), getComputedStyle(item).boxShadow),
-      ringWhenBlurred: (item.blur(), getComputedStyle(item).boxShadow),
-    };
-    const menuZ = Number(getComputedStyle(menu()).zIndex);
-    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-    up(btn());
-
-    // "Hide this button" takes it away and leaves no menu behind.
-    down(btn(), 130, 130); await wait(620);
-    [...document.querySelectorAll('[role="menuitem"]')].find((b) => /hide/i.test(b.textContent)).click();
+    // Dismissing it does nothing at all.
+    window.__pick = null;
+    let held = btn();
+    down(held, 130, 130); await wait(620); up(held);
     await wait(30);
-    const gone = { button: !host.querySelector("button"), menu: !!menu() };
+    const afterDismiss = { button: !!host.querySelector("button") };
 
-    // And teardown after all that leaves nothing.
+    // Answering "hide" takes the button away. The reference is kept because the
+    // answer arrives before the finger lifts, and by then there is no button to
+    // look up any more.
+    window.__pick = "hide";
+    held = btn();
+    down(held, 130, 130); await wait(620); up(held);
+    await wait(50);
+    const gone = { button: !host.querySelector("button") };
+
+    // And teardown after all that leaves nothing of ours behind.
     down(document.body, 1, 1);
     teardown();
-    const left = { menu: !!menu(), items: items().length };
-    return { wasOn, afterTap, openedByHold, entries, afterHold, onScreen, afterEsc, afterDrag, resize, gone, left, focus, menuZ };
+    const left = { ours: document.querySelectorAll('[role="menu"],[role="menuitem"]').length };
+    return { wasOn, afterTap, openedByHold, entries, keys, afterHold, onScreen, onButton,
+             afterDrag, resize, afterDismiss, gone, left };
   });
   await page.close();
   check("a quick tap still toggles", out.afterTap.pressed !== out.wasOn, out.afterTap);
@@ -1966,8 +1967,12 @@ console.log("\nfloat button menu");
   // the one their thumb lands on first.
   check("settings is the first of them", /settings/i.test(out.entries[0]), out.entries);
   check("a hold does not also toggle", out.afterHold.same, out.afterHold);
-  check("the menu lands on screen", out.onScreen);
-  check("Esc closes it", !out.afterEsc);
+  // The keys are what the answer comes back as, so they are the contract, not
+  // the labels.
+  check("its entries carry the keys the answer is read from",
+    out.keys.join(",") === "settings,hide", out.keys);
+  check("it is anchored on screen", out.onScreen, out);
+  check("and centred on the button", out.onButton, out);
   check("dragging is not a hold", !out.afterDrag);
   check("resizing rebuilds it too", out.resize.rebuilt, out.resize);
   check("at the new size", out.resize.size === 72, out.resize);
@@ -1984,43 +1989,9 @@ console.log("\nfloat button menu");
   // one too, and it reserved a box as wide as the largest size the setting
   // allows in every panel, switched on or not.
   check("no preview circle is drawn beside the box", out.resize.noCircle, out.resize);
-  check("hiding removes the button", out.gone.button, out.gone);
-  check("and leaves no menu behind", !out.gone.menu);
-  check("teardown leaves nothing", !out.left.menu && out.left.items === 0, out.left);
-  // 2147483647 is the highest a browser accepts. Anything sitting there cannot
-  // be drawn over by another extension, however much it needs to be.
-  check("the menu does not claim the top of the stacking order",
-    out.menuZ > 1000000 && out.menuZ < 2147483647, out.menuZ);
-  check("menu items drop the browser's own focus ring", out.focus.outline === "none", out.focus);
-  check("and show focus in the theme's colour instead",
-    out.focus.ringWhenFocused !== "none" && out.focus.ringWhenBlurred === "none", out.focus);
-  // Read from the built stylesheet rather than hard-coded here, so this tracks
-  // whatever the pop-up actually uses.
-  const toastZ = await (async () => {
-    const page2 = await browser.newPage();
-    await stage(page2, '<div id=modal></div><button data-testid="regenerate">Regenerate</button>');
-    await page2.addStyleTag({ content: THEME });
-    await page2.addScriptTag({ content: SOURCE, type: "module" });
-    await page2.waitForFunction(() => !!window.__setup);
-    const z = await page2.evaluate(async () => {
-      const handlers = {};
-      window.__setup(
-        { events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
-          ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
-                registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) } },
-        { toast: true, retryDelayMs: 400, backoffFactor: 1, jitter: false, maxRetries: 2,
-          stuckTimeoutMs: 0, idleTimeoutMs: 0, pauseWhenFailing: false },
-      );
-      handlers.GENERATION_STARTED({ chatId: "c", generationId: "g" });
-      handlers.GENERATION_ENDED({ chatId: "c", content: "" });
-      await new Promise((r) => setTimeout(r, 80));
-      const t = document.getElementById("__lvRetryToast");
-      return t ? Number(getComputedStyle(t).zIndex) : null;
-    });
-    await page2.close();
-    return z;
-  })();
-  check("the menu sits above the retry pop-up", out.menuZ > toastZ, { menu: out.menuZ, toast: toastZ });
+  check("dismissing it changes nothing", out.afterDismiss.button, out.afterDismiss);
+  check("answering hide removes the button", out.gone.button, out.gone);
+  check("teardown leaves no menu of ours anywhere", out.left.ours === 0, out.left);
   check("no console errors", errors.length === 0, errors);
 }
 
@@ -3891,6 +3862,7 @@ console.log("\nper-chat switch");
             acts[o.id] = a;
             return a;
           },
+          showContextMenu: (o) => { (window.__menus ||= []).push(o); return Promise.resolve({ selectedKey: window.__pick === undefined ? null : window.__pick }); },
           createFloatWidget: () => ({ root: host, destroy: () => {}, setPosition: () => {} }),
         },
       },
@@ -3899,7 +3871,10 @@ console.log("\nper-chat switch");
         stuckTimeoutMs: 0, idleTimeoutMs: 0, pauseWhenFailing: false },
     );
     const btn = () => host.querySelector("button");
-    const menu = () => [...document.querySelectorAll('[role="menuitem"]')].map((b) => b.textContent);
+    const menu = () => {
+      const m = (window.__menus || [])[(window.__menus || []).length - 1];
+      return m ? m.items.map((i) => i.label) : [];
+    };
     const hold = async () => {
       btn().dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, clientX: 130, clientY: 130 }));
       await wait(620);
@@ -4107,6 +4082,7 @@ console.log("\ntwo menus, one press");
       { events: { on: () => () => {} },
         ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
               registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }),
+              showContextMenu: (o) => { (window.__menus ||= []).push(o); return Promise.resolve({ selectedKey: window.__pick === undefined ? null : window.__pick }); },
               createFloatWidget: () => ({ root: host, destroy: () => {}, setPosition: () => {} }) } },
       { showFloatingToggle: true, floatingToggleSize: 44, toast: false },
     );
@@ -4115,20 +4091,21 @@ console.log("\ntwo menus, one press");
     document.addEventListener("contextmenu", () => { rootMenus++; });
 
     const btn = host.querySelector("button");
-    const menu = () => document.querySelector('[role="menu"]');
+    // Counted rather than looked for: the menu itself is the host's, and what
+    // matters here is that exactly one was asked for and the host's own
+    // listeners never heard the press that asked for it.
+    const shown = () => (window.__menus || []).length;
 
     // Right-click, which is the desktop path.
     btn.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 40, clientY: 40 }));
     await wait(40);
-    const afterRightClick = { ours: !!menu(), hostSaw: hostMenus, docSaw: rootMenus };
+    const afterRightClick = { ours: shown() === 1, hostSaw: hostMenus, docSaw: rootMenus };
 
-    // Escape shuts ours, then the same again on the padding around the button,
-    // which is the host's own element rather than anything we created.
-    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-    await wait(20);
+    // The same again on the padding around the button, which is the host's own
+    // element rather than anything we created.
     host.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 40, clientY: 40 }));
     await wait(40);
-    const afterRootPress = { ours: !!menu(), hostSaw: hostMenus, docSaw: rootMenus };
+    const afterRootPress = { ours: shown() === 2, hostSaw: hostMenus, docSaw: rootMenus };
 
     // A plain tap must still reach the host, or dragging would stop working.
     let pointerSeen = 0;
@@ -4177,6 +4154,7 @@ console.log("\nthe quick toggle syncs");
         sendToBackend: (m) => sent.push(m),
         ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
               registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }),
+              showContextMenu: (o) => { (window.__menus ||= []).push(o); return Promise.resolve({ selectedKey: window.__pick === undefined ? null : window.__pick }); },
               createFloatWidget: () => ({ root: host, destroy: () => {}, setPosition: () => {} }) } },
       { enabled: true, showFloatingToggle: true, floatingToggleSize: 44, toast: false },
     );
@@ -4631,334 +4609,62 @@ console.log("\nthe focus ring");
   check("no console errors", errors.length === 0, errors);
 }
 
-// ---- the float menu does not open with an entry already lit ----
-// It focuses its first entry as it opens so a keyboard can act on it straight
-// away, and that was drawn the same as hovering: a menu opened with a thumb
-// came up with its top entry lit as though it were about to be chosen.
-//
-// Real input, because a dispatched press is untrusted and the browser does not
-// count it when deciding whether focus should be shown.
-console.log("\nopening the float menu");
+// ---- a tapped button does not keep its hover colour ----
+// The same half-sent pair, in the panel rather than the menu: a touch browser
+// raises mouseenter at the end of a tap and never sends the matching leave, so
+// every button in the panel stayed lit in its hover colour once tapped. The
+// pointerleave that resets it has already run by the time that hover arrives.
+// ---- an older Lumiverse without the menu API says where to go ----
+// The menu is the host's, and a build that predates it has no showContextMenu
+// at all. Opening nothing would read as the button being broken, so it says
+// where the settings actually are.
+console.log("\na host with no context menu API");
 {
-  const page = await browser.newPage({ viewport: { width: 420, height: 640 } });
+  const page = await browser.newPage({ viewport: { width: 412, height: 800 } });
   const errors = [];
   page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
-  page.on("console", (m) => { if (m.type() === "error") errors.push("console: " + m.text()); });
-  await stage(page, "<div id=modal></div>");
+  await stage(page, "<div id=modal></div><div id=host></div>");
   await page.addStyleTag({ content: THEME });
   await page.addScriptTag({ content: SOURCE, type: "module" });
   await page.waitForFunction(() => !!window.__setup);
-  await page.evaluate(async () => {
+  const out = await page.evaluate(async () => {
     const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const host = document.getElementById("host");
+    host.style.cssText = "position:fixed;left:60px;top:60px";
     window.__setup(
       { events: { on: () => () => {} },
-        sendToBackend: () => {},
-        onBackendMessage: () => () => {},
         ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
               registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }),
-              createFloatWidget: (o) => {
-                const wrap = document.createElement("div");
-                wrap.style.cssText = "position:fixed;left:" + o.initialPosition.x + "px;top:" +
-                  o.initialPosition.y + "px;width:" + o.width + "px;height:" + o.height + "px";
-                document.body.appendChild(wrap);
-                return { root: wrap, destroy() { wrap.remove(); }, setPosition() {}, onDragEnd() { return () => {}; } };
-              } } },
-      { enabled: true, showFloatingToggle: true, floatingToggleSize: 44, toast: false },
+              // No showContextMenu, which is the whole point.
+              createFloatWidget: () => ({ root: host, destroy: () => {}, setPosition: () => {} }) } },
+      { enabled: true, showFloatingToggle: true, floatingToggleSize: 44 },
     );
     await wait(40);
-  });
-  // Right-click opens it, which is a real pointer gesture.
-  const at = await page.evaluate(() => {
-    const b = document.querySelector("button[aria-pressed]");
-    const r = b.getBoundingClientRect();
-    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
-  });
-  await page.mouse.click(at.x, at.y, { button: "right" });
-  await page.waitForTimeout(250);
-  const out = await page.evaluate(() => {
-    const items = [...document.querySelectorAll('[role="menuitem"], [role="menu"] button')];
-    const first = items[0];
-    return {
-      opened: items.length > 1,
-      labels: items.map((b) => (b.textContent || "").trim()),
-      focusedFirst: document.activeElement === first,
-      lit: first ? getComputedStyle(first).backgroundColor : "",
-      ring: first ? getComputedStyle(first).boxShadow : "",
-    };
-  });
-  // Then a real key, which is the case the mark is for.
-  await page.keyboard.press("Tab");
-  await page.waitForTimeout(200);
-  const afterKey = await page.evaluate(() => ({
-    ring: getComputedStyle(document.activeElement).boxShadow,
-    label: (document.activeElement.textContent || "").trim(),
-  }));
-  await page.close();
-  check("the menu opens with its entries", out.opened, out);
-  check("and puts focus on the first, for the keyboard", out.focusedFirst, out);
-  check("but does not light it", out.lit === "rgba(0, 0, 0, 0)" || out.lit === "transparent", out);
-  check("nor ring it", out.ring === "none", out);
-  check("a key moves on and that one is marked", afterKey.ring !== "none", afterKey);
-  check("no console errors", errors.length === 0, errors);
-}
-
-// ---- nor when a finger opens it after you have been typing ----
-// The path this was actually reported on, and the reason the first fix did not
-// hold. A touch does not move focus, so the chat box is still the focused
-// element when the hold fires, and a text box always counts as worth marking;
-// Chromium carries that answer across a focus moved by script, so the entry
-// came up lit. A mouse press does move focus and flips the browser to pointer,
-// which is why holding with one never showed it.
-//
-// Held through the devtools protocol, since a real held finger is not
-// something the test driver's touchscreen can do on its own.
-console.log("\nholding the float button open after typing");
-{
-  const page = await browser.newPage({ viewport: { width: 412, height: 900 }, hasTouch: true, isMobile: true });
-  const errors = [];
-  page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
-  page.on("console", (m) => { if (m.type() === "error") errors.push("console: " + m.text()); });
-  await stage(page, "<div id=modal></div><textarea id=chat style='position:fixed;left:10px;bottom:10px;width:200px;height:40px'></textarea>");
-  await page.addStyleTag({ content: THEME });
-  await page.addScriptTag({ content: SOURCE, type: "module" });
-  await page.waitForFunction(() => !!window.__setup);
-  await page.evaluate(async () => {
-    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-    window.__setup(
-      { events: { on: () => () => {} },
-        sendToBackend: () => {},
-        onBackendMessage: () => () => {},
-        ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
-              registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }),
-              createFloatWidget: (o) => {
-                const w = document.createElement("div");
-                w.style.cssText = "position:fixed;left:40px;top:60px;width:" + o.width + "px;height:" + o.height + "px";
-                document.body.appendChild(w);
-                return { root: w, destroy() { w.remove(); }, setPosition() {}, onDragEnd() { return () => {}; } };
-              } } },
-      { enabled: true, showFloatingToggle: true, floatingToggleSize: 44, toast: false },
-    );
+    const b = host.querySelector("button");
+    b.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, clientX: 80, clientY: 80 }));
+    await wait(700);
+    b.dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
     await wait(60);
-  });
-  await page.tap("#chat");
-  await page.keyboard.type("hey there");
-  await page.waitForTimeout(60);
-  const before = await page.evaluate(() => ({
-    inChat: document.activeElement.id === "chat",
-    marked: document.activeElement.matches(":focus-visible"),
-  }));
-  const at = await page.evaluate(() => {
-    const b = document.querySelector("button[aria-pressed]");
-    const r = b.getBoundingClientRect();
-    return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
-  });
-  const cdp = await page.context().newCDPSession(page);
-  await cdp.send("Input.dispatchTouchEvent", {
-    type: "touchStart",
-    touchPoints: [{ x: at.x, y: at.y, radiusX: 12, radiusY: 12, force: 1, id: 1 }],
-  });
-  await page.waitForTimeout(900);
-  const held = await page.evaluate(() => {
-    const items = [...document.querySelectorAll('[role="menuitem"], [role="menu"] button')];
-    const f = items[0];
-    if (!f) return { opened: false };
+    const t = document.getElementById("__lvRetryToast");
     return {
-      opened: items.length > 1,
-      focused: document.activeElement === f,
-      browserSaysShow: f.matches(":focus-visible"),
-      lit: getComputedStyle(f).backgroundColor,
-      ring: getComputedStyle(f).boxShadow,
-    };
-  });
-  await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
-  await page.waitForTimeout(250);
-  await page.close();
-  check("typing leaves the chat box focused and marked", before.inChat && before.marked, before);
-  check("the hold opens the menu", held.opened, held);
-  check("on the first entry", held.focused, held);
-  check("and the browser would have shown that focus", held.browserSaysShow === true, held);
-  check("but the entry is not lit under the finger",
-    held.lit === "rgba(0, 0, 0, 0)" || held.lit === "transparent", held);
-  check("nor ringed", held.ring === "none", held);
-  check("no console errors", errors.length === 0, errors);
-}
-
-// ---- and not after you have been typing either ----
-// :focus-visible is a guess. The browser answers it from the last kind of input
-// it saw, so a menu opened by hand shortly after typing in the chat still came
-// up with its top entry lit, which is why it only happened sometimes. Asking
-// the browser was therefore never enough on its own.
-//
-// Reproduced here with a real text field typed into for real, then the menu
-// raised from the keyboard, which is the strongest form of the case: the
-// browser says outright that this focus should be shown, and the entry still
-// must not be lit.
-console.log("\nopening the float menu after typing");
-{
-  const page = await browser.newPage({ viewport: { width: 420, height: 640 } });
-  const errors = [];
-  page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
-  page.on("console", (m) => { if (m.type() === "error") errors.push("console: " + m.text()); });
-  await stage(page, "<div id=modal></div><input id=chat>");
-  await page.addStyleTag({ content: THEME });
-  await page.addScriptTag({ content: SOURCE, type: "module" });
-  await page.waitForFunction(() => !!window.__setup);
-  await page.evaluate(async () => {
-    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-    window.__setup(
-      { events: { on: () => () => {} },
-        sendToBackend: () => {},
-        onBackendMessage: () => () => {},
-        ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
-              registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }),
-              createFloatWidget: (o) => {
-                const wrap = document.createElement("div");
-                wrap.style.cssText = "position:fixed;left:" + o.initialPosition.x + "px;top:" +
-                  o.initialPosition.y + "px;width:" + o.width + "px;height:" + o.height + "px";
-                document.body.appendChild(wrap);
-                return { root: wrap, destroy() { wrap.remove(); }, setPosition() {}, onDragEnd() { return () => {}; } };
-              } } },
-      { enabled: true, showFloatingToggle: true, floatingToggleSize: 44, toast: false },
-    );
-    await wait(40);
-  });
-  await page.click("#chat");
-  await page.keyboard.type("hello");
-  await page.waitForTimeout(60);
-  const typing = await page.evaluate(() => document.querySelector("#chat").matches(":focus-visible"));
-  // Shift+F10 is the keyboard's own way of raising a context menu, so this is
-  // the same door a right-click uses with the modality left as keyboard.
-  await page.evaluate(() => document.querySelector("button[aria-pressed]").focus());
-  await page.keyboard.press("Shift+F10");
-  await page.waitForTimeout(300);
-  const out = await page.evaluate(() => {
-    const items = [...document.querySelectorAll('[role="menuitem"], [role="menu"] button')];
-    const first = items[0];
-    if (!first) return { opened: false };
-    return {
-      opened: items.length > 1,
-      focusedFirst: document.activeElement === first,
-      browserSaysShow: first.matches(":focus-visible"),
-      lit: getComputedStyle(first).backgroundColor,
-      ring: getComputedStyle(first).boxShadow,
+      stillThere: !!host.querySelector("button"),
+      said: t ? (t.textContent || "").trim() : "",
     };
   });
   await page.close();
-  check("typing counts as keyboard", typing === true, typing);
-  check("the menu still opens", out.opened, out);
-  check("and the browser would have shown the focus", out.browserSaysShow === true, out);
-  check("but the entry is not lit", out.lit === "rgba(0, 0, 0, 0)" || out.lit === "transparent", out);
-  check("nor ringed", out.ring === "none", out);
-  check("no console errors", errors.length === 0, errors);
-}
-
-// ---- holding an entry lights it, and letting go puts it out ----
-// A phone cannot hover, and a browser on one sends a hover when a finger rests
-// somewhere and never sends the matching leave. Drawn from hover alone, holding
-// an entry lit it and lifting left it lit until the menu closed.
-console.log("\nholding a float menu entry");
-{
-  const page = await browser.newPage({
-    viewport: { width: 400, height: 700 }, hasTouch: true, isMobile: true,
-  });
-  const errors = [];
-  page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
-  await stage(page, "<div id=modal></div>");
-  await page.addStyleTag({ content: THEME });
-  await page.addScriptTag({ content: SOURCE, type: "module" });
-  await page.waitForFunction(() => !!window.__setup);
-  await page.evaluate(async () => {
-    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-    window.__setup(
-      { events: { on: () => () => {} },
-        sendToBackend: () => {},
-        onBackendMessage: () => () => {},
-        ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
-              registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }),
-              createFloatWidget: (o) => {
-                const w = document.createElement("div");
-                w.style.cssText = "position:fixed;left:20px;top:20px;width:" + o.width + "px;height:" + o.height + "px";
-                document.body.appendChild(w);
-                return { root: w, destroy() { w.remove(); }, setPosition() {}, onDragEnd() { return () => {}; } };
-              } } },
-      { enabled: true, showFloatingToggle: true, floatingToggleSize: 44, toast: false },
-    );
-    await wait(40);
-  });
-  const out = { hovers: await page.evaluate(() => matchMedia("(hover: hover)").matches) };
-  const centre = (sel) => page.evaluate((s) => {
-    const el = s === "entry"
-      ? [...document.querySelectorAll('[role="menuitem"], [role="menu"] button')][0]
-      : document.querySelector("button[aria-pressed]");
-    if (!el) return null;
-    const r = el.getBoundingClientRect();
-    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
-  }, sel);
-  const bg = () => page.evaluate(() => {
-    const f = [...document.querySelectorAll('[role="menuitem"], [role="menu"] button')][0];
-    return f ? getComputedStyle(f).backgroundColor : "gone";
-  });
-  const clear = (v) => v === "rgba(0, 0, 0, 0)" || v === "transparent";
-  // Held open with real input, so the browser knows a pointer is in use. A
-  // dispatched press is untrusted and leaves it still thinking a keyboard is.
-  const onButton = await centre("button");
-  await page.mouse.move(onButton.x, onButton.y);
-  await page.mouse.down();
-  await page.waitForTimeout(900);
-  await page.mouse.up();
-  await page.waitForTimeout(150);
-  const onEntry = await centre("entry");
-  out.opened = !!onEntry;
-  if (onEntry) {
-    out.restClear = clear(await bg());
-    // What a touch browser does to an entry a finger rests on: a hover it will
-    // never take back, alongside the press. Dispatched rather than driven,
-    // because there is no way to make a real mouse send a hover it does not
-    // then undo, and that asymmetry is the whole fault.
-    //
-    // The press is not completed on the entry, since a completed one closes the
-    // menu and takes the question with it. A finger that lands and slides off
-    // leaves the menu open, and that is where a stuck highlight is visible.
-    out.litWhileHeld = await page.evaluate(() => {
-      const f = [...document.querySelectorAll('[role="menuitem"], [role="menu"] button')][0];
-      f.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
-      f.dispatchEvent(new MouseEvent("mouseenter"));
-      f.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
-      const v = getComputedStyle(f).backgroundColor;
-      return v !== "rgba(0, 0, 0, 0)" && v !== "transparent";
-    });
-    await page.evaluate(() => {
-      const f = [...document.querySelectorAll('[role="menuitem"], [role="menu"] button')][0];
-      f.dispatchEvent(new PointerEvent("pointercancel", { bubbles: true }));
-    });
-    await page.waitForTimeout(150);
-    out.stillOpen = !!(await centre("entry"));
-    out.clearAfterLifting = clear(await bg());
-  }
-  await page.close();
-  check("the device does not hover", out.hovers === false, out);
-  check("the menu opens on a hold", out.opened, out);
-  check("its entry starts unlit", out.restClear, out);
-  check("holding one lights it", out.litWhileHeld, out);
-  check("the menu is still open to look at", out.stillOpen, out);
-  check("and taking the finger away puts it out", out.clearAfterLifting, out);
+  check("the button survives a hold it cannot answer", out.stillThere, out);
+  check("and it says where the settings are", /Extras/i.test(out.said), out);
   check("no console errors", errors.length === 0, errors);
 }
 
 // ---- a phone that claims it can hover is still a phone ----
-// The guard above asked the screen whether the device hovers, and a phone told
-// to show the desktop site answers yes. The guard then came off, a synthesised
-// hover counted, and since a finger never sends the matching leave the entry
-// stayed lit with nothing able to put it out. Nothing on the page can see that
-// setting, which is why it came and went.
-//
-// The lie is emulated rather than the setting, since the two are the same thing
-// from in here: matchMedia says it hovers while the pointers are all fingers.
+// A phone told to show the desktop site says it can hover. Anything guarded on
+// that question alone loses its guard there, and a synthesised hover with no
+// matching leave then sticks. The menu is the host's now; the panel's own
+// buttons are still ours, and this is the case that catches them.
 console.log("\na phone that says it can hover");
 {
-  const page = await browser.newPage({
-    viewport: { width: 412, height: 900 }, hasTouch: true, isMobile: true,
-  });
+  const page = await browser.newPage({ viewport: { width: 393, height: 780 }, hasTouch: true, isMobile: true });
   const errors = [];
   page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
   page.on("console", (m) => { if (m.type() === "error") errors.push("console: " + m.text()); });
@@ -4979,87 +4685,40 @@ console.log("\na phone that says it can hover");
   await page.waitForFunction(() => !!window.__setup);
   await page.evaluate(async () => {
     const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    window.__acts = {};
     window.__setup(
       { events: { on: () => () => {} },
-        sendToBackend: () => {},
-        onBackendMessage: () => () => {},
         ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
-              registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }),
-              createFloatWidget: (o) => {
-                const w = document.createElement("div");
-                w.style.cssText = "position:fixed;left:40px;top:60px;width:" + o.width + "px;height:" + o.height + "px";
-                document.body.appendChild(w);
-                return { root: w, destroy() { w.remove(); }, setPosition() {}, onDragEnd() { return () => {}; } };
-              } } },
-      { enabled: true, showFloatingToggle: true, floatingToggleSize: 44, toast: false },
+              registerInputBarAction: (o) => { const a = { onClick: (cb) => { a.cb = cb; return () => {}; }, destroy: () => {} }; window.__acts[o.id] = a; return a; } } },
+      { toast: false },
     );
-    await wait(60);
+    await wait(30);
+    window.__acts["auto-retry-settings"].cb();
+    await wait(200);
   });
-  const out = { lies: await page.evaluate(() => matchMedia("(hover: hover)").matches) };
-  // Opened with a real held finger, which is also what writes down that the
-  // pointers here are fingers.
+  const lies = await page.evaluate(() => matchMedia("(hover: hover)").matches);
+  const bg = () => page.evaluate(() => {
+    const b = [...document.querySelectorAll("button")].find((x) => x.textContent.trim() === "Save");
+    return b ? getComputedStyle(b).backgroundColor : "gone";
+  });
   const at = await page.evaluate(() => {
-    const b = document.querySelector("button[aria-pressed]");
+    const b = [...document.querySelectorAll("button")].find((x) => x.textContent.trim() === "Save");
+    if (!b) return null;
+    b.scrollIntoView({ block: "center" });
     const r = b.getBoundingClientRect();
     return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
   });
-  const cdp = await page.context().newCDPSession(page);
-  await cdp.send("Input.dispatchTouchEvent", {
-    type: "touchStart",
-    touchPoints: [{ x: at.x, y: at.y, radiusX: 12, radiusY: 12, force: 1, id: 1 }],
-  });
-  await page.waitForTimeout(900);
-  await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
-  await page.waitForTimeout(250);
-  const clear2 = (v) => v === "rgba(0, 0, 0, 0)" || v === "transparent";
-  out.opened = await page.evaluate(() =>
-    document.querySelectorAll('[role="menuitem"]').length > 1);
-  out.restClear = await page.evaluate(() => {
-    const f = document.querySelector('[role="menuitem"]');
-    const v = getComputedStyle(f).backgroundColor;
-    return v === "rgba(0, 0, 0, 0)" || v === "transparent";
-  });
-  // The hover a touch browser synthesises, and the one it never takes back.
-  // Coming back to a backgrounded tab sends this over the last place touched,
-  // which is when it was reported.
-  out.afterFakeHover = await page.evaluate(() => {
-    const f = document.querySelector('[role="menuitem"]');
-    f.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
-    f.dispatchEvent(new MouseEvent("mouseenter"));
-    return getComputedStyle(f).backgroundColor;
-  });
-  // And a finger let go on the entry, which the old guard also read as a mouse
-  // still resting there.
-  out.afterTouchUp = await page.evaluate(() => {
-    const f = document.querySelector('[role="menuitem"]');
-    f.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerType: "touch" }));
-    f.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, pointerType: "touch" }));
-    return getComputedStyle(f).backgroundColor;
-  });
-  // A mouse on the same page still gets its highlight. Moved first, the way a
-  // real one arrives: the move says what kind of pointer this is, and the
-  // hover that follows carries nothing to say it itself.
-  out.afterMouseOver = await page.evaluate(() => {
-    document.dispatchEvent(new PointerEvent("pointermove", { bubbles: true, pointerType: "mouse" }));
-    const f = document.querySelector('[role="menuitem"]');
-    f.dispatchEvent(new MouseEvent("mouseenter"));
-    return getComputedStyle(f).backgroundColor;
-  });
+  const rest = await bg();
+  if (at) await page.touchscreen.tap(at.x, at.y);
+  await page.waitForTimeout(400);
+  const after = await bg();
   await page.close();
-  check("the screen claims it can hover", out.lies === true, out);
-  check("the menu still opens on a hold", out.opened, out);
-  check("its entry starts unlit", out.restClear, out);
-  check("a synthesised hover does not light it", clear2(out.afterFakeHover), out);
-  check("nor does letting a finger go on it", clear2(out.afterTouchUp), out);
-  check("but a mouse moving onto it still does", !clear2(out.afterMouseOver), out);
+  check("the screen claims it can hover", lies === true, lies);
+  check("the panel opened with its buttons", rest !== "gone", { rest });
+  check("and a tap leaves the button at its resting colour", after === rest, { rest, after });
   check("no console errors", errors.length === 0, errors);
 }
 
-// ---- a tapped button does not keep its hover colour ----
-// The same half-sent pair, in the panel rather than the menu: a touch browser
-// raises mouseenter at the end of a tap and never sends the matching leave, so
-// every button in the panel stayed lit in its hover colour once tapped. The
-// pointerleave that resets it has already run by the time that hover arrives.
 console.log("\ntapping a button in the panel");
 {
   const { out, errors } = await inPanel(
@@ -5706,6 +5365,7 @@ console.log("\nresizing the floating button does not walk it up the screen");
                 registerInputBarAction: (o) => {
                   const a = { onClick: (cb) => { a.cb = cb; return () => {}; }, destroy: () => {} };
                   acts[o.id] = a; return a; },
+                showContextMenu: (o) => { (window.__menus ||= []).push(o); return Promise.resolve({ selectedKey: window.__pick === undefined ? null : window.__pick }); },
                 createFloatWidget: (o) => {
                   wrap = document.createElement("div");
                   wrap.style.cssText = "position:fixed;left:" + o.initialPosition.x + "px;top:" +
@@ -5780,6 +5440,7 @@ console.log("\nthe per-chat switch reaches every indicator");
                 labels[o.id] = o.label;
                 const a = { onClick: (cb) => { a.cb = cb; return () => {}; }, destroy: () => { delete labels[o.id]; } };
                 acts[o.id] = a; return a; },
+              showContextMenu: (o) => { (window.__menus ||= []).push(o); return Promise.resolve({ selectedKey: window.__pick === undefined ? null : window.__pick }); },
               createFloatWidget: () => {
                 floatRoot = document.createElement("div");
                 document.body.appendChild(floatRoot);
@@ -7530,6 +7191,7 @@ console.log("\nteardown");
             live.set(o.id, a);
             return a;
           },
+          showContextMenu: (o) => { (window.__menus ||= []).push(o); return Promise.resolve({ selectedKey: window.__pick === undefined ? null : window.__pick }); },
           createFloatWidget: () => ({ root: document.createElement("div"), destroy() {} }),
         },
       },
