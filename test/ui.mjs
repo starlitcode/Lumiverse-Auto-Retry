@@ -1812,12 +1812,17 @@ console.log("\nicons");
   const normal = await press("no-preference");
   const reduced = await press("reduce");
   for (const [name, r] of [["normally", normal], ["with reduced motion", reduced]]) {
+    // The button itself never moves. A press can be the start of a hold that
+    // opens the menu, and a dip on the way in would read as a tap that took.
     check(name + ", the button does not move under a press", !r.moved, r.moved);
-    check(name + ", it animates nothing at all",
-      /^0s(,\s*0s)*$/.test(String(r.transition).trim()), r.transition);
-    // Removing the animation must not remove the feedback with it.
     check(name + ", a tap still changes its colour", r.recoloured, r);
   }
+  // Turning it on and off eases between the two states. Asking for less
+  // movement gets the same change with nothing in between.
+  check("normally, the colours ease between the two states",
+    !/^0s(,\s*0s)*$/.test(String(normal.transition).trim()), normal.transition);
+  check("with reduced motion, they change with no animation at all",
+    /^0s(,\s*0s)*$/.test(String(reduced.transition).trim()), reduced.transition);
   check("no console errors", normal.errs.length + reduced.errs.length === 0,
     normal.errs.concat(reduced.errs));
 }
@@ -4621,6 +4626,124 @@ console.log("\nthe focus ring");
 // so the menu gets asked for twice on the way to one gesture. Ours used to be
 // removed and rebuilt on the second ask. The host's cannot be taken back, so a
 // second ask would leave two menus stacked.
+// ---- the way into the panel follows the floating button ----
+// It used to sit in Extras whatever else was on screen. The button's own menu
+// carries it now, and Extras only keeps it when there is no button to carry it,
+// which on a phone is the difference between one way in and none.
+console.log("\nwhere the way into the panel lives");
+{
+  for (const withButton of [true, false]) {
+    const page = await browser.newPage({ viewport: { width: 412, height: 800 } });
+    const errors = [];
+    page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
+    page.on("console", (m) => { if (m.type() === "error") errors.push("console: " + m.text()); });
+    await stage(page, "<div id=modal></div><div id=host></div>");
+    await page.addStyleTag({ content: THEME });
+    await page.addScriptTag({ content: SOURCE, type: "module" });
+    await page.waitForFunction(() => !!window.__setup);
+    const out = await page.evaluate(async (withButton) => {
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      const host = document.getElementById("host");
+      host.style.cssText = "position:fixed;left:60px;top:60px";
+      const acts = {};
+      let activated = 0;
+      window.__menus = [];
+      window.__pick = null;
+      window.__setup(
+        { events: { on: () => () => {} },
+          ui: {
+            showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+            registerInputBarAction: (o) => {
+              const a = { onClick: (cb) => { a.cb = cb; return () => {}; }, destroy: () => { delete acts[o.id]; } };
+              acts[o.id] = a;
+              return a;
+            },
+            registerDrawerTab: () => {
+              const root = document.createElement("div");
+              document.body.appendChild(root);
+              return { root, setBadge: () => {}, activate: () => { activated++; }, destroy: () => root.remove() };
+            },
+            showContextMenu: (o) => { window.__menus.push(o); return Promise.resolve({ selectedKey: window.__pick }); },
+            createFloatWidget: () => ({ root: host, destroy: () => { host.innerHTML = ""; }, setPosition: () => {} }),
+          } },
+        { liveLog: true, panelHome: "drawer", showFloatingToggle: withButton, toast: false },
+      );
+      await wait(60);
+      const res = { inExtras: Object.keys(acts).indexOf("auto-retry-open-panel") >= 0, inMenu: false, opened: 0 };
+      const b = host.querySelector("button");
+      if (b) {
+        // Hold it open and take the panel entry.
+        window.__pick = "panel";
+        b.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, clientX: 80, clientY: 80 }));
+        await wait(700);
+        b.dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
+        await wait(60);
+        const m = window.__menus[window.__menus.length - 1];
+        res.inMenu = !!m && m.items.some((i) => i.key === "panel");
+        res.opened = activated;
+      }
+      res.hasButton = !!b;
+      return res;
+    }, withButton);
+    await page.close();
+    const n = withButton ? "with the button on screen" : "with no button";
+    check(n + ": the button is " + (withButton ? "there" : "absent"), out.hasButton === withButton, out);
+    check(n + ": Extras " + (withButton ? "leaves it to the menu" : "carries it"),
+      out.inExtras === !withButton, out);
+    if (withButton) {
+      check(n + ": the menu offers it", out.inMenu, out);
+      check(n + ": and choosing it brings the tab forward", out.opened === 1, out);
+    }
+    check(n + ": no console errors", errors.length === 0, errors);
+  }
+}
+
+// ---- the mark fades in when the button is turned on or off ----
+// Only on a real change. The button repaints when the chat changes and after a
+// drag, and animating those would be movement saying nothing.
+console.log("\nturning the floating button on and off");
+{
+  const page = await browser.newPage({ viewport: { width: 412, height: 800 } });
+  const errors = [];
+  page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
+  await stage(page, "<div id=modal></div><div id=host></div>");
+  await page.addStyleTag({ content: THEME });
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  const out = await page.evaluate(async () => {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const host = document.getElementById("host");
+    host.style.cssText = "position:fixed;left:60px;top:60px";
+    const handlers = {};
+    window.__setup(
+      { events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
+        ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+              registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }),
+              createFloatWidget: () => ({ root: host, destroy: () => {}, setPosition: () => {} }) } },
+      { enabled: true, showFloatingToggle: true, floatingToggleSize: 44, toast: false },
+    );
+    await wait(60);
+    const b = host.querySelector("button");
+    const anim = () => { const s = b.querySelector("svg"); return s ? s.style.animation : "gone"; };
+    const first = anim();
+    b.click();
+    await wait(20);
+    const afterToggle = anim();
+    // A repaint that says nothing new: same state, different chat.
+    handlers.GENERATION_STARTED && handlers.GENERATION_STARTED({ chatId: "z", generationId: "g" });
+    await wait(40);
+    const afterIdlePaint = anim();
+    return { first, afterToggle, afterIdlePaint,
+             eases: getComputedStyle(b).transitionDuration };
+  });
+  await page.close();
+  check("the first paint does not animate", !out.first, out);
+  check("turning it off fades the new mark in", /lvRetryFloatMark/.test(out.afterToggle), out);
+  check("a repaint that changes nothing does not", !out.afterIdlePaint, out);
+  check("and the colours ease", !/^0s(,\s*0s)*$/.test(String(out.eases).trim()), out);
+  check("no console errors", errors.length === 0, errors);
+}
+
 console.log("\nAndroid asking for the menu twice");
 {
   const page = await browser.newPage({ viewport: { width: 412, height: 800 } });

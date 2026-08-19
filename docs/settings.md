@@ -38,7 +38,7 @@ Saved settings sync to your Lumiverse account, so they follow you to other brows
 
 Two options in **Basics**, and you can use either or both:
 
-- **Floating on/off button** puts a small button over the chat that toggles it in one tap. Drag it anywhere; it snaps to the nearest edge and stays where you leave it, and you can set its size, which the button itself takes on as you type so you can see it before saving. Changing the size grows it around where it is sitting rather than moving it, though a button against an edge does come inward far enough for the bigger size to fit. Hold it, or right-click on a computer, for a menu with **Auto Retry settings** and **Hide this button**. That menu is drawn by Lumiverse, so it arrives in your own theme and accent. Those two entries are all of it: **Open the Auto Retry panel** lives in the Extras popover, not here.
+- **Floating on/off button** puts a small button over the chat that toggles it in one tap. Drag it anywhere; it snaps to the nearest edge and stays where you leave it, and you can set its size, which the button itself takes on as you type so you can see it before saving. Changing the size grows it around where it is sitting rather than moving it, though a button against an edge does come inward far enough for the bigger size to fit. Tapping it eases between on and off rather than flicking, and a device set to reduce motion gets the same change with nothing in between. Hold it, or right-click on a computer, for a menu with **Auto Retry settings** and **Hide this button**, plus **Open the Auto Retry panel** when the panel is set to live in the drawer. That menu is drawn by Lumiverse, so it arrives in your own theme and accent.
 - **On/off button in the Extras menu** adds an entry next to the settings button. Its label says which state it is currently in, so you can check and change it without opening settings, and it takes up no room on screen. In a chat you have switched off it says so, since "on" would be true of everywhere except where you are. Tapping it is always the master switch, wherever you tap it from, and the label says which one it is offering.
 
 ## Turning it off in one chat
@@ -93,7 +93,7 @@ This is kept in your browser rather than in your settings, like the list of chat
 
 Changing this moves the panel as you pick, before you save. Closing the settings without saving puts it back. If your Lumiverse build has no drawer for extensions, asking for the sidebar gets you the floating panel and a line in the Log saying why.
 
-To open it: **Extras → Open the Auto Retry panel**, next to the settings entry. On a computer **Ctrl+K** and typing `Auto Retry` does the same. Neither is offered while the panel is floating, where it is already on screen.
+To open it: hold the floating button and choose **Open the Auto Retry panel**. With the floating button turned off, that entry is in the **Extras** popover instead, next to the settings entry, so there is always exactly one way in. On a computer **Ctrl+K** and typing `Auto Retry` does the same. None of them is offered while the panel is floating, where it is already on screen.
 
 ### The line under the tabs
 
