@@ -8295,7 +8295,7 @@ export function setup(ctx: Ctx, opts?: any) {
     search.id = SEARCH_ID;
     search.placeholder = "Search settings";
     search.setAttribute("aria-label", "Search settings");
-    styleField(search);
+    styleField(search, { mark: false });
     search.style.width = "100%";
     search.style.boxSizing = "border-box";
     const searchNote = document.createElement("div");
@@ -9023,7 +9023,15 @@ export function setup(ctx: Ctx, opts?: any) {
     "0 0 0 2px var(--lumiverse-primary-020,rgba(147,112,219,.2))," +
     "0 0 8px 0 var(--lumiverse-primary-020,rgba(147,112,219,.2))";
 
-  function styleField(input: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement) {
+  // mark:false gives a field the panel's look without the pointer lift or the
+  // focus ring. For the search box, which sits alone above the scroll area with
+  // nothing to tell it apart from and answers every keystroke by filtering the
+  // list underneath it.
+  function styleField(
+    input: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement,
+    opts?: { mark?: boolean },
+  ) {
+    const mark = !opts || opts.mark !== false;
     input.style.cssText +=
       "padding:9px 10px;border-radius:var(--lumiverse-radius,8px);" +
       "border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));" +
@@ -9031,10 +9039,14 @@ export function setup(ctx: Ctx, opts?: any) {
       "color:var(--lumiverse-text,#eee);font:13px var(--lumiverse-font-family,system-ui);outline:none;" +
       // The ring fades in with the border it belongs to rather than appearing
       // out of nowhere. Nothing moves and nothing is laid out again: both of
-      // these paint outside the box, so neither can push the row around.
-      "transition:border-color var(--lumiverse-transition-fast,150ms ease)," +
-      "box-shadow var(--lumiverse-transition-fast,150ms ease)";
+      // these paint outside the box, so neither can push the row around. No
+      // transition on a field that never changes either of them.
+      (mark
+        ? "transition:border-color var(--lumiverse-transition-fast,150ms ease)," +
+          "box-shadow var(--lumiverse-transition-fast,150ms ease)"
+        : "");
     ensureReadable(input);
+    if (!mark) return;
     // A field lifts its border under the pointer, so it reads as something you
     // can put a cursor in before you have. Focus overwrites this and blur puts
     // it back, so the two never argue over the border.
