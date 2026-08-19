@@ -2685,7 +2685,6 @@ console.log("\nphone panel");
     await page.addScriptTag({ content: SOURCE, type: "module" });
     await page.waitForFunction(() => !!window.__setup);
     const out = await page.evaluate(async () => {
-      const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       const handlers = {};
       const teardown = window.__setup(
         { events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
@@ -4444,7 +4443,6 @@ console.log("\nper-chat switch, in the panel");
 {
   const { out, errors } = await inPanel(browser, {}, async (page) =>
     page.evaluate(async () => {
-      const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       const row = () => document.querySelector("[data-ar-chat-switch]");
       const act = () => row() && row().querySelector("button");
       const present = !!row();
@@ -4618,6 +4616,62 @@ console.log("\nthe focus ring");
 // The menu is the host's, and a build that predates it has no showContextMenu
 // at all. Opening nothing would read as the button being broken, so it says
 // where the settings actually are.
+// ---- one menu per gesture, even when Android asks twice ----
+// A long press on Android runs our hold timer and raises contextmenu as well,
+// so the menu gets asked for twice on the way to one gesture. Ours used to be
+// removed and rebuilt on the second ask. The host's cannot be taken back, so a
+// second ask would leave two menus stacked.
+console.log("\nAndroid asking for the menu twice");
+{
+  const page = await browser.newPage({ viewport: { width: 412, height: 800 } });
+  const errors = [];
+  page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
+  await stage(page, "<div id=modal></div><div id=host></div>");
+  await page.addStyleTag({ content: THEME });
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  const out = await page.evaluate(async () => {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const host = document.getElementById("host");
+    host.style.cssText = "position:fixed;left:60px;top:60px";
+    let asked = 0;
+    let answer = null;
+    window.__setup(
+      { events: { on: () => () => {} },
+        ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+              registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }),
+              // Stays open until answered, which is what a menu on screen does
+              // and what the immediate stub could never catch.
+              showContextMenu: () => { asked += 1; return new Promise((r) => { answer = r; }); },
+              createFloatWidget: () => ({ root: host, destroy: () => {}, setPosition: () => {} }) } },
+      { enabled: true, showFloatingToggle: true, floatingToggleSize: 44, toast: false },
+    );
+    await wait(40);
+    const b = host.querySelector("button");
+    // The hold fires the timer, and Android's own contextmenu lands on top of
+    // it while the first menu is still up.
+    b.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, clientX: 80, clientY: 80 }));
+    await wait(700);
+    const afterHold = asked;
+    b.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 80, clientY: 80 }));
+    await wait(60);
+    const afterBoth = asked;
+    // Answering the one that is up still works, and frees the next gesture.
+    answer({ selectedKey: null });
+    await wait(60);
+    b.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 80, clientY: 80 }));
+    await wait(60);
+    return { afterHold, afterBoth, afterAnswering: asked };
+  });
+  await page.close();
+  check("the hold asks for a menu", out.afterHold === 1, out);
+  check("and the contextmenu on top of it does not ask for a second",
+    out.afterBoth === 1, out);
+  check("once answered, the next gesture opens one again",
+    out.afterAnswering === 2, out);
+  check("no console errors", errors.length === 0, errors);
+}
+
 console.log("\na host with no context menu API");
 {
   const page = await browser.newPage({ viewport: { width: 412, height: 800 } });
