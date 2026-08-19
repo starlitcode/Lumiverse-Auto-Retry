@@ -4627,6 +4627,77 @@ console.log("\nthe focus ring");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- the float menu does not open with an entry already lit ----
+// It focuses its first entry as it opens so a keyboard can act on it straight
+// away, and that was drawn the same as hovering: a menu opened with a thumb
+// came up with its top entry lit as though it were about to be chosen.
+//
+// Real input, because a dispatched press is untrusted and the browser does not
+// count it when deciding whether focus should be shown.
+console.log("\nopening the float menu");
+{
+  const page = await browser.newPage({ viewport: { width: 420, height: 640 } });
+  const errors = [];
+  page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
+  page.on("console", (m) => { if (m.type() === "error") errors.push("console: " + m.text()); });
+  await stage(page, "<div id=modal></div>");
+  await page.addStyleTag({ content: THEME });
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  await page.evaluate(async () => {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    window.__setup(
+      { events: { on: () => () => {} },
+        sendToBackend: () => {},
+        onBackendMessage: () => () => {},
+        ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+              registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }),
+              createFloatWidget: (o) => {
+                const wrap = document.createElement("div");
+                wrap.style.cssText = "position:fixed;left:" + o.initialPosition.x + "px;top:" +
+                  o.initialPosition.y + "px;width:" + o.width + "px;height:" + o.height + "px";
+                document.body.appendChild(wrap);
+                return { root: wrap, destroy() { wrap.remove(); }, setPosition() {}, onDragEnd() { return () => {}; } };
+              } } },
+      { enabled: true, showFloatingToggle: true, floatingToggleSize: 44, toast: false },
+    );
+    await wait(40);
+  });
+  // Right-click opens it, which is a real pointer gesture.
+  const at = await page.evaluate(() => {
+    const b = document.querySelector("button[aria-pressed]");
+    const r = b.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  });
+  await page.mouse.click(at.x, at.y, { button: "right" });
+  await page.waitForTimeout(250);
+  const out = await page.evaluate(() => {
+    const items = [...document.querySelectorAll('[role="menuitem"], [role="menu"] button')];
+    const first = items[0];
+    return {
+      opened: items.length > 1,
+      labels: items.map((b) => (b.textContent || "").trim()),
+      focusedFirst: document.activeElement === first,
+      lit: first ? getComputedStyle(first).backgroundColor : "",
+      ring: first ? getComputedStyle(first).boxShadow : "",
+    };
+  });
+  // Then a real key, which is the case the mark is for.
+  await page.keyboard.press("Tab");
+  await page.waitForTimeout(200);
+  const afterKey = await page.evaluate(() => ({
+    ring: getComputedStyle(document.activeElement).boxShadow,
+    label: (document.activeElement.textContent || "").trim(),
+  }));
+  await page.close();
+  check("the menu opens with its entries", out.opened, out);
+  check("and puts focus on the first, for the keyboard", out.focusedFirst, out);
+  check("but does not light it", out.lit === "rgba(0, 0, 0, 0)" || out.lit === "transparent", out);
+  check("nor ring it", out.ring === "none", out);
+  check("a key moves on and that one is marked", afterKey.ring !== "none", afterKey);
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- a button is marked when it was reached by keyboard, and not otherwise ----
 // Whether a button should show its focus is the browser's own question, asked
 // as :focus-visible. Tracking pointer presses by hand answered it wrongly the
