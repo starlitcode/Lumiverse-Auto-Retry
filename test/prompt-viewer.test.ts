@@ -448,6 +448,44 @@ describe("reporting which permissions are granted", () => {
       expect(g.interceptor).toBe(false);
     });
 
+    // A list whose shape cannot be read says nothing, and this backs off to the
+    // cache. Read wrongly it would answer no to every permission, which is a
+    // panel full of refusals that are not real.
+    test("a list of names that is not a list of names is ignored", () => {
+      const h = bootChanging(() => true);
+      h.change({ permission: "interceptor", granted: false, allGranted: [{ name: "generation" }] });
+      const g = h.reply().granted;
+      expect(g.generation).toBe(true);
+      expect(g.interceptor).toBe(false);
+    });
+
+    test("an empty list is ignored rather than read as nothing granted", () => {
+      const h = bootChanging(() => true);
+      h.change({ permission: "interceptor", granted: false, allGranted: [] });
+      const g = h.reply().granted;
+      expect(g.generation).toBe(true);
+      expect(g.interceptor).toBe(false);
+    });
+
+    // A Set is an object with no key for any of these names. Read as a map it
+    // answers no to all of them.
+    test("a set is ignored rather than read as a map", () => {
+      const h = bootChanging(() => true);
+      h.change({ permission: "interceptor", granted: false, allGranted: new Set(["generation"]) });
+      const g = h.reply().granted;
+      expect(g.generation).toBe(true);
+      expect(g.interceptor).toBe(false);
+    });
+
+    test("a map of names to answers is read as one", () => {
+      const h = bootChanging(() => false);
+      h.change({ permission: "chats", granted: true, allGranted: { generation: true, chats: true } });
+      const g = h.reply().granted;
+      expect(g.generation).toBe(true);
+      expect(g.chats).toBe(true);
+      expect(g.interceptor).toBe(false);
+    });
+
     // Nothing to do with a change: a plain ask still reads the cache.
     test("asking outright still reads the cache", () => {
       const h = bootChanging((n) => n === "chats");
