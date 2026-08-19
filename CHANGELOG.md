@@ -12,6 +12,10 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 _2026-08-19_
 
+### Fixed
+
+- **A permission note came back on the grant that should have taken it away.** The backend answers with what the host says is granted, and when a grant changed it re-read that from a local cache rather than believing the event announcing the change. Inside that callback the cache can still hold the answer from before it, so turning a permission on reported it as still refused, and the note somebody had just put away came straight back and stayed. The event is believed for the permission it is about now, and its full list is used when the host sends one. The panel also asks again every time it opens, so a grant is picked up even on a build that raises no event at all.
+
 ### Changed
 
 - **A note about a missing permission can be put away.** Some are meant to be refused: somebody who does not want their prompt read declines the interceptor on purpose, and a panel telling them so on every visit is nagging about a decision they already made. Each note now has an × that hides it until you reload the page. Nothing is written down, so a reload brings every note back, and granting a permission and then losing it again brings its own note back too: hiding one answers the permission being off now, not for the rest of time. They are hidden by name rather than all at once, so putting away the one you chose to refuse does not also hide the next one that goes missing for a reason you did not choose. The debug report lists every permission either way.

@@ -394,4 +394,67 @@ describe("reporting which permissions are granted", () => {
     h.ask();
     for (const v of Object.values(h.reply().granted)) expect(v).toBe(null);
   });
+
+  // has() reads a cache the host keeps in step, and inside the callback that
+  // announces a change it can still hold the answer from before it. Asking it
+  // there reported a permission as refused at the moment it was granted, so the
+  // panel put its note back up on the grant that should have taken it down.
+  describe("when a grant changes under it", () => {
+    const bootChanging = (has: (n: string) => boolean) => {
+      let onFrontend: any = null;
+      let onChanged: any = null;
+      const sent: Array<{ msg: any }> = [];
+      const spindle: any = {
+        storage: { read: async () => { throw new Error("empty"); }, write: async () => {} },
+        onFrontendMessage: (fn: any) => { onFrontend = fn; },
+        sendToFrontend: (msg: any) => sent.push({ msg }),
+        on: () => {},
+        chat: { getMessages: async () => [], updateMessage: async () => {} },
+        registerInterceptor: () => {},
+        log: { info() {}, warn() {}, error() {} },
+        permissions: {
+          has: has,
+          onChanged: (fn: any) => { onChanged = fn; },
+          onDenied: () => {},
+        },
+      };
+      new Function("spindle", readFileSync(new URL("../dist/backend.js", import.meta.url), "utf8"))(spindle);
+      return {
+        change: (e: any) => onChanged(e),
+        ask: () => onFrontend({ type: "get_permissions", requestId: "p1" }),
+        reply: () => sent.filter((x) => x.msg && x.msg.type === "permissions").pop()!.msg,
+      };
+    };
+
+    test("the event is believed over the cache it is racing", () => {
+      // The cache still says no while the event says it was just granted.
+      const h = bootChanging(() => false);
+      h.change({ permission: "interceptor", granted: true });
+      expect(h.reply().granted.interceptor).toBe(true);
+    });
+
+    test("and a revoke is believed the same way", () => {
+      const h = bootChanging(() => true);
+      h.change({ permission: "interceptor", granted: false });
+      expect(h.reply().granted.interceptor).toBe(false);
+    });
+
+    test("a full list on the event is used for every permission", () => {
+      const h = bootChanging(() => false);
+      h.change({ permission: "generation", granted: true, allGranted: ["generation", "chats"] });
+      const g = h.reply().granted;
+      expect(g.generation).toBe(true);
+      expect(g.chats).toBe(true);
+      expect(g.interceptor).toBe(false);
+    });
+
+    // Nothing to do with a change: a plain ask still reads the cache.
+    test("asking outright still reads the cache", () => {
+      const h = bootChanging((n) => n === "chats");
+      h.ask();
+      const g = h.reply().granted;
+      expect(g.chats).toBe(true);
+      expect(g.interceptor).toBe(false);
+    });
+  });
 });
