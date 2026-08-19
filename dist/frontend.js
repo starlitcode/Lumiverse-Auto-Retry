@@ -8718,7 +8718,7 @@ export function setup(ctx, opts) {
                     e.stopPropagation();
                 }
                 // On touch, click toggles. On a mouse, hover already handles it.
-                if (canHover)
+                if (canHover())
                     return;
                 if (mine())
                     hideHint();
