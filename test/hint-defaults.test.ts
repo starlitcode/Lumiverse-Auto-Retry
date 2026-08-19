@@ -143,3 +143,63 @@ describe("the settings table matches what ships", () => {
     });
   }
 });
+
+// The same fault one file further out: a default written into the docs by hand.
+//
+// The docs name a default in prose several times, "(on by default)" and the
+// like, and nothing tied those to the settings they describe. A retune moves
+// the value and the page goes on stating the old one, which is worse than
+// stating none, because a page is where somebody checks what they cannot see in
+// the panel.
+//
+// Reads the real defaults block rather than the source text, and matches a
+// claim to a setting by the label the panel shows, so it holds whatever a
+// reader is actually told.
+describe("defaults quoted in the docs", () => {
+  const scalars: Record<string, string> = {};
+  {
+    const src = readFileSync(new URL("../src/frontend.ts", import.meta.url), "utf8");
+    const body = (src.match(/const CONFIG = \{([\s\S]*?)\n\};/) || [])[1] || "";
+    for (const line of body.split("\n")) {
+      const m = line.match(/^ {2}(\w+):\s*(true|false|-?\d+(?:\.\d+)?|"[^"]*")\s*,/);
+      if (m) scalars[m[1]] = m[2];
+    }
+  }
+  const byLabel: Record<string, string> = {};
+  for (const f of FIELDS) byLabel[f.label] = f.key;
+
+  const claims: Array<{ file: string; label: string; said: string }> = [];
+  for (const file of ["settings.md", "detection.md", "word-swaps.md", "buttons.md",
+                      "privacy.md", "safety.md", "import-export.md", "troubleshooting.md"]) {
+    let text = "";
+    try { text = readFileSync(new URL("../docs/" + file, import.meta.url), "utf8"); } catch (_) { continue; }
+    const re = /\*\*([^*]{3,60})\*\*[^.\n]{0,80}?\((on|off|\d+(?:\.\d+)?) by default\)/g;
+    for (let m = re.exec(text); m; m = re.exec(text)) {
+      claims.push({ file: file, label: m[1].trim().replace(/\.$/, ""), said: m[2] });
+    }
+  }
+
+  // Without this the two below pass on an empty list, which is the failure this
+  // whole file exists to stop happening quietly.
+  test("there are claims to check, and settings to check them against", () => {
+    expect(claims.length).toBeGreaterThan(0);
+    expect(Object.keys(scalars).length).toBeGreaterThan(20);
+    expect(claims.filter((c) => byLabel[c.label]).length).toBeGreaterThan(0);
+  });
+
+  test("every default the docs name matches the defaults block", () => {
+    const wrong: string[] = [];
+    for (const c of claims) {
+      const key = byLabel[c.label];
+      if (!key) continue;
+      const real = scalars[key];
+      if (real === undefined) continue;
+      const ok =
+        (c.said === "on" && real === "true") ||
+        (c.said === "off" && real === "false") ||
+        c.said === real;
+      if (!ok) wrong.push(`${c.file}: "${c.label}" says ${c.said}, ${key} is ${real}`);
+    }
+    expect(wrong).toEqual([]);
+  });
+});
