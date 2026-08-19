@@ -8,6 +8,14 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 4.14.4
+
+_2026-08-19_
+
+### Fixed
+
+- **The floating button's menu opened with its first entry already lit.** It puts focus there as it opens so a keyboard can act on it straight away, and that was drawn the same as hovering, so a menu opened with a thumb came up looking like **Auto Retry settings** was about to be chosen. The entry still takes focus, so Enter and the arrow keys work exactly as before; it is only marked when a key put you there. Same fault as the one fixed in 4.14.3, in the other menu.
+
 ## 4.14.3
 
 _2026-08-19_

@@ -101,7 +101,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "4.14.3";
+const VERSION = "4.14.4";
 // The one address the extension ever points at, used by the warning in front of
 // the crisis-support check. Pinned to the released branch rather than to a tag,
 // so an old install still opens the page as it stands today.
@@ -4256,9 +4256,22 @@ export function setup(ctx, opts) {
             };
             b.addEventListener("mouseenter", () => lit(true));
             b.addEventListener("mouseleave", () => lit(false));
+            // Marked only when focus came from a key. This menu focuses its first
+            // entry as it opens so a keyboard can act on it straight away, and that
+            // was drawn the same as hovering, so a menu opened with a thumb came up
+            // with its top entry already lit as though it were about to be chosen.
+            //
+            // :focus-visible is the browser's own answer to whether focus should be
+            // shown, and it knows a tap from a Tab. The entry still holds focus
+            // either way, so Enter and the arrow keys work exactly as before.
             b.addEventListener("focus", () => {
-                lit(true);
-                ring(true);
+                let byKey = true;
+                try {
+                    byKey = b.matches(":focus-visible");
+                }
+                catch (_) { }
+                lit(byKey);
+                ring(byKey);
             });
             b.addEventListener("blur", () => {
                 lit(false);
