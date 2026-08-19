@@ -112,7 +112,7 @@ const STREAM_BUF_MAX = 200000;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "4.14.5";
+const VERSION = "4.14.6";
 
 // The one address the extension ever points at, used by the warning in front of
 // the crisis-support check. Pinned to the released branch rather than to a tag,
@@ -4029,6 +4029,41 @@ export function setup(ctx: Ctx, opts?: any) {
     }
   };
 
+  // Focus something without marking it as keyboard focus.
+  //
+  // :focus-visible is a guess, not a rule. The browser remembers the last kind
+  // of input it saw and answers from that, so focusing a menu entry from a
+  // thumb still counted as keyboard if a key had been pressed anywhere on the
+  // page beforehand, and the menu came up with its top entry lit. That is why
+  // it only happened sometimes: it depended on whether you had typed in the
+  // chat before holding the button.
+  //
+  // The attribute below says this focus was ours rather than yours. It comes
+  // off at the first key pressed on the element, so tabbing and the arrow keys
+  // still mark exactly as they did, and off on blur so nothing is left behind.
+  const QUIET_ATTR = "data-ar-quiet";
+
+  const isQuiet = (el: any): boolean => {
+    try {
+      return !!el && !!el.hasAttribute && el.hasAttribute(QUIET_ATTR);
+    } catch (_) {
+      return false;
+    }
+  };
+
+  const focusQuietly = (el: any): void => {
+    if (!el || !el.focus) return;
+    const clear = () => {
+      try { el.removeAttribute(QUIET_ATTR); } catch (_) {}
+      try { el.removeEventListener("keydown", clear, true); } catch (_) {}
+      try { el.removeEventListener("blur", clear, true); } catch (_) {}
+    };
+    try { el.setAttribute(QUIET_ATTR, "1"); } catch (_) {}
+    try { el.addEventListener("keydown", clear, true); } catch (_) {}
+    try { el.addEventListener("blur", clear, true); } catch (_) {}
+    try { el.focus({ preventScroll: true }); } catch (_) {}
+  };
+
   const vpW = (): number =>
     (typeof window !== "undefined" && window.innerWidth) || 360;
   const vpH = (): number =>
@@ -4347,12 +4382,16 @@ export function setup(ctx: Ctx, opts?: any) {
       // was drawn the same as hovering, so a menu opened with a thumb came up
       // with its top entry already lit as though it were about to be chosen.
       //
-      // :focus-visible is the browser's own answer to whether focus should be
-      // shown, and it knows a tap from a Tab. The entry still holds focus
-      // either way, so Enter and the arrow keys work exactly as before.
+      // Two answers together. :focus-visible knows a tap from a Tab, but it
+      // answers from the last input the page saw rather than from this focus,
+      // so on its own it still lit the entry when the menu was opened by hand
+      // after typing. The quiet mark says outright that the extension moved
+      // focus here, and it beats the guess. The entry holds focus either way,
+      // so Enter and the arrow keys work exactly as before.
       b.addEventListener("focus", () => {
         let byKey = true;
         try { byKey = b.matches(":focus-visible"); } catch (_) {}
+        if (isQuiet(b)) byKey = false;
         lit(byKey);
         ring(byKey);
       });
@@ -4415,7 +4454,7 @@ export function setup(ctx: Ctx, opts?: any) {
 
     floatMenu = el;
     ensureReadableTree(el, 2.6);
-    try { first.focus({ preventScroll: true }); } catch (_) {}
+    focusQuietly(first);
   }
 
   function hideFloat() {
@@ -5762,7 +5801,12 @@ export function setup(ctx: Ctx, opts?: any) {
         "[data-ar-num]{-moz-appearance:textfield;appearance:textfield}" +
         // The mark on a button reached by keyboard. In the stylesheet rather
         // than set inline because only a stylesheet can ask :focus-visible.
-        "[data-ar-btn]:focus-visible{box-shadow:" + FOCUS_RING + ";outline:none}";
+        // The browser's own ring goes either way. Ours replaces it, and a
+        // button the extension focused itself is not meant to be marked at all.
+        "[data-ar-btn]:focus-visible{outline:none}" +
+        // Ours, and not on one the extension focused itself: see focusQuietly.
+        "[data-ar-btn]:not([data-ar-quiet]):focus-visible" +
+        "{box-shadow:" + FOCUS_RING + "}";
       (document.head || document.documentElement).appendChild(el);
       panelStyleEl = el;
     } catch (_) {}
@@ -9612,7 +9656,7 @@ export function setup(ctx: Ctx, opts?: any) {
     back.addEventListener("click", () => {
       freeze(false);
       status.textContent = "";
-      try { go.focus({ preventScroll: true }); } catch (_) {}
+      focusQuietly(go);
     });
 
     go.addEventListener("click", () => {
@@ -9627,7 +9671,7 @@ export function setup(ctx: Ctx, opts?: any) {
       freeze(true);
       // The safe one is where the finger already is, so a second tap in the
       // same place goes back rather than through.
-      try { back.focus({ preventScroll: true }); } catch (_) {}
+      focusQuietly(back);
     });
 
     yes.addEventListener("click", () => {
