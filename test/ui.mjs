@@ -1915,7 +1915,6 @@ console.log("\nfloat button menu");
     for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
     await wait(30);
     const sizeBox = document.querySelector('[data-ar-row="floatingToggleSize"] input');
-    const dot = document.querySelector('[data-ar-row="floatingToggleSize"] div[aria-hidden="true"]');
     sizeBox.value = "72";
     // input, not change: a preview is meant to move while it is being typed.
     sizeBox.dispatchEvent(new Event("input", { bubbles: true }));
@@ -1924,7 +1923,7 @@ console.log("\nfloat button menu");
       rebuilt: asked.length > askedBefore,
       at: asked.length ? asked[asked.length - 1].initialPosition : null,
       size: asked.length ? asked[asked.length - 1].width : null,
-      previewPx: dot ? dot.style.width : null,
+      noCircle: !document.querySelector('[data-ar-row="floatingToggleSize"] div[aria-hidden="true"]'),
     };
 
     // How a menu item shows focus, and where the menu sits in the stack. Read
@@ -1977,9 +1976,10 @@ console.log("\nfloat button menu");
   // across button around that middle starts at 286,246.
   check("and keeps the middle of the button where it was, rather than its corner",
     !!out.resize.at && out.resize.at.x === 286 && out.resize.at.y === 246, out.resize);
-  // A number in a box says nothing about how big the button will be.
-  check("the preview circle is drawn at the size being typed",
-    out.resize.previewPx === "72px", out.resize);
+  // The button on the chat is the preview. A circle beside the box used to be
+  // one too, and it reserved a box as wide as the largest size the setting
+  // allows in every panel, switched on or not.
+  check("no preview circle is drawn beside the box", out.resize.noCircle, out.resize);
   check("hiding removes the button", out.gone.button, out.gone);
   check("and leaves no menu behind", !out.gone.menu);
   check("teardown leaves nothing", !out.left.menu && out.left.items === 0, out.left);
@@ -4457,6 +4457,80 @@ console.log("\nper-chat switch, in the panel");
       !/open a chat/i.test(out.noChat.text),
     out.noChat.text.slice(0, 90));
   check("no console errors", errors.length === 0, errors);
+}
+
+// ---- a missing permission is said out loud ----
+// It is the one failure that raises nothing: a gated event never fires and a
+// fire-and-forget registration silently does nothing, so the extension sits
+// there looking installed while doing none of what it was asked to.
+console.log("\na missing permission is said out loud");
+{
+  const open = async (page, granted) => page.evaluate(async (granted) => {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const acts = {};
+    let fromBackend = null;
+    window.__setup(
+      { events: { on: () => () => {} },
+        sendToBackend: () => {},
+        onBackendMessage: (fn) => { fromBackend = fn; return () => {}; },
+        ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+              registerInputBarAction: (o) => { const a = { onClick: (cb) => { a.cb = cb; return () => {}; }, destroy: () => {} }; acts[o.id] = a; return a; } } },
+      { liveLog: true, toast: false },
+    );
+    await wait(30);
+    fromBackend({
+      type: "permissions",
+      list: [
+        { name: "generation", costs: "Everything. Nothing is ever retried." },
+        { name: "interceptor", costs: "The refusal note, and the Prompt tab." },
+      ],
+      granted: granted,
+    });
+    await wait(20);
+    acts["auto-retry-settings"].cb();
+    await wait(40);
+    const box = document.querySelector("[data-ar-perms]");
+    return {
+      drawn: !!box && getComputedStyle(box).display !== "none",
+      text: box ? box.textContent : "",
+    };
+  }, granted);
+
+  // Nothing missing: no furniture for a problem that is not there.
+  {
+    const page = await browser.newPage();
+    await stage(page, "<div id=modal></div>");
+    await page.addStyleTag({ content: THEME });
+    await page.addScriptTag({ content: SOURCE, type: "module" });
+    await page.waitForFunction(() => !!window.__setup);
+    const out = await open(page, { generation: true, interceptor: true });
+    await page.close();
+    check("nothing is drawn when everything is granted", !out.drawn, out);
+  }
+  // A build too old to answer is not a build that said no.
+  {
+    const page = await browser.newPage();
+    await stage(page, "<div id=modal></div>");
+    await page.addStyleTag({ content: THEME });
+    await page.addScriptTag({ content: SOURCE, type: "module" });
+    await page.waitForFunction(() => !!window.__setup);
+    const out = await open(page, { generation: null, interceptor: null });
+    await page.close();
+    check("and nothing is drawn when the host cannot say", !out.drawn, out);
+  }
+  // One missing: named, with what it costs.
+  {
+    const page = await browser.newPage();
+    await stage(page, "<div id=modal></div>");
+    await page.addStyleTag({ content: THEME });
+    await page.addScriptTag({ content: SOURCE, type: "module" });
+    await page.waitForFunction(() => !!window.__setup);
+    const out = await open(page, { generation: true, interceptor: false });
+    await page.close();
+    check("a missing permission is named in the panel", out.drawn && /interceptor/.test(out.text), out.text.slice(0, 140));
+    check("with what stops working without it", /refusal note/i.test(out.text), out.text.slice(0, 140));
+    check("and the one that is granted is not listed", !/generation/.test(out.text), out.text.slice(0, 140));
+  }
 }
 
 // ---- the Prompt tab only blames the permission when it can ----

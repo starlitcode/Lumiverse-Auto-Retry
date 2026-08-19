@@ -8,6 +8,19 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 4.14.0
+
+_2026-08-19_
+
+### Added
+
+- **The panel says when a permission it needs was never granted.** This is the one fault that raises nothing anywhere: a gated event simply never arrives and a registration that needs approval silently does nothing, so an extension with the wrong grants sits there looking installed while doing none of what it was asked to. Missing `generation` means nothing is ever retried, and until now nothing said so. The panel now names each one that is missing and what it costs, and shows nothing at all when everything is granted. The debug report lists every one either way, so a report about an extension that did nothing carries the reason.
+- **The Prompt tab says whether the interceptor permission is actually missing.** It used to guess from a prompt that never arrived, and a guess about a permission is the one claim in the panel you cannot check from the panel. It now asks, so a denial is stated plainly and a permission that is granted is never blamed.
+
+### Removed
+
+- **The preview circle beside the floating button's size.** It reserved a box as wide as the largest size the setting allows, in every panel, whether or not the button was even switched on. The button on the chat still takes the size on as you type, which is the preview that shows it where it will actually be.
+
 ## 4.13.0
 
 _2026-08-17_

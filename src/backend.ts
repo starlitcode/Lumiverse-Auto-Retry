@@ -661,6 +661,15 @@ spindle.onFrontendMessage(async (payload: any, userId?: string) => {
       chatsOff = new Set(list.slice(0, 500).map((c: any) => String(c)));
       return;
     }
+    if (payload.type === 'get_permissions') {
+      replyTo(userId, {
+        type: 'permissions',
+        requestId: payload.requestId,
+        list: PERMISSIONS,
+        granted: grantedMap(),
+      });
+      return;
+    }
     if (payload.type === 'set_prompt_capture') {
       const k = watcherKey(userId);
       if (payload.on) promptWatchers.add(k);
@@ -861,6 +870,34 @@ const promptInterceptor = async (messages: any[], context: any) => {
 // nothing anywhere saying why. The documented shape is this one, try at
 // startup, try again on the grant, and keep a flag so a second grant does not
 // register twice.
+// Every permission this extension asks for, and what stops working without it.
+// A missing permission is the one failure that raises nothing to catch: a gated
+// event simply never fires and a fire-and-forget registration silently does
+// nothing, so an extension with the wrong grants sits there looking installed
+// and working. The panel asks for this and says which are missing.
+const PERMISSIONS: Array<{ name: string; costs: string }> = [
+  { name: 'generation', costs: 'Everything. Retries run off the generation events, and without this none of them arrive, so nothing is ever retried.' },
+  { name: 'interceptor', costs: 'The refusal note, and the Prompt tab.' },
+  { name: 'chat_mutation', costs: 'Word swaps. Nothing can be written back to a reply.' },
+  { name: 'chats', costs: 'The chat name in the log, and knowing which chat you are in without a reply first.' },
+  { name: 'characters', costs: 'The character name in the log.' },
+  { name: 'ui_panels', costs: 'The floating button. The on-screen panel falls back to its own window.' },
+];
+// null where the host is too old to say, which is not the same as denied and is
+// not worth showing as one.
+function grantedMap(): Record<string, boolean | null> {
+  const out: Record<string, boolean | null> = {};
+  for (const p of PERMISSIONS) {
+    let v: boolean | null = null;
+    try {
+      const perms: any = (spindle as any).permissions;
+      if (perms && typeof perms.has === 'function') v = !!perms.has(p.name);
+    } catch (_) {}
+    out[p.name] = v;
+  }
+  return out;
+}
+
 let interceptorOn = false;
 function tryRegisterInterceptor(): void {
   if (interceptorOn) return;
@@ -881,6 +918,10 @@ tryRegisterInterceptor();
 try {
   (spindle as any).permissions.onChanged((e: any) => {
     if (e && e.permission === 'interceptor' && e.granted) tryRegisterInterceptor();
+    // Grants change while the extension runs and nothing restarts, so a panel
+    // that is open is told rather than left showing what was true when it
+    // opened.
+    try { replyTo(undefined, { type: 'permissions', list: PERMISSIONS, granted: grantedMap() }); } catch (__) {}
   });
 } catch (_) {}
 // The only way to find out a fire-and-forget registration was refused. Said in
