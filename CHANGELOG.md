@@ -757,8 +757,6 @@ _2026-07-15_
 
 _2026-07-14_
 
-Changes how rules are formatted, plus a spacing fix.
-
 ### Changed
 
 - **Rules and phrases are one per line.** Word swaps, custom refusal phrases, the whitelist and reword rules are no longer separated by commas.
@@ -784,8 +782,6 @@ _2026-07-13_
 ## 1.4.1
 
 _2026-07-13_
-
-A patch: fixes and cleanup, nothing new.
 
 ### Changed
 
@@ -824,8 +820,6 @@ _2026-07-12_
 ## 1.3.0
 
 _2026-07-12_
-
-Follow-up building on find and replace.
 
 ### Added
 
