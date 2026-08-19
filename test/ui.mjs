@@ -4774,6 +4774,17 @@ console.log("\na missing permission is said out loud");
       say({ generation: false, interceptor: false });
       await openPanel();
       out.newOne = shown();
+      // Granted again, then taken away again. Putting a note away answers the
+      // permission being off now, not for the rest of time.
+      say({ generation: true, interceptor: true });
+      await wait(20);
+      say({ generation: true, interceptor: false });
+      await openPanel();
+      out.backAfterRegrant = shown();
+      // Nothing about this is written down, so a reload brings every note back.
+      try {
+        out.stored = localStorage.getItem("lv-auto-retry:layout:v1") || "";
+      } catch (e) { out.stored = "ERR"; }
       return out;
     });
     await page.close();
@@ -4781,6 +4792,8 @@ console.log("\na missing permission is said out loud");
     check("and putting it away takes it off the panel", /interceptor/.test(res.before) && !/interceptor/.test(res.afterHiding), res);
     check("it stays away when the panel is opened again", !/interceptor/.test(res.afterReopen), res);
     check("but a different permission going missing is still said", /generation/.test(res.newOne), res);
+  check("and a note comes back if the permission is granted and lost again", /interceptor/.test(res.backAfterRegrant), res);
+  check("nothing about it is written down, so a reload brings them all back", res.stored.indexOf("perm") < 0, res.stored);
   }
 }
 

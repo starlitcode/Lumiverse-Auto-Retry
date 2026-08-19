@@ -2878,18 +2878,17 @@ export function setup(ctx: Ctx, opts?: any) {
   // Permissions whose note has been put away. Some of these are meant to be
   // refused: somebody who does not want their prompt read declines the
   // interceptor on purpose, and a panel telling them so on every visit is
-  // nagging about a decision they already made. Kept by name rather than as one
-  // flag, so putting away the note about a permission you chose to refuse does
-  // not also hide the next one that goes missing for a reason you did not
-  // choose.
-  const permIsHidden = (name: string): boolean =>
-    !!layout.permHidden && layout.permHidden.indexOf(name) >= 0;
-  function hidePermNote(name: string) {
-    const list = (layout.permHidden || []).slice();
-    if (list.indexOf(name) < 0) list.push(name);
-    layout.permHidden = list.slice(-40);
-    saveLayout();
-  }
+  // nagging about a decision they already made.
+  //
+  // Held in memory and nowhere else, so a reload brings them back. Written down
+  // it would be a note somebody dismissed once and could never see again, which
+  // is a worse failure than the nagging: a permission going missing months
+  // later for a reason nobody chose would be silent.
+  //
+  // By name rather than as one flag, so putting away the note about a
+  // permission you chose to refuse does not also hide the next one.
+  const permHidden = new Set<string>();
+  const permIsHidden = (name: string): boolean => permHidden.has(name);
   // true, false, or null for a host too old to say. null is not a denial and is
   // never shown as one.
   const permIs = (name: string): boolean | null =>
@@ -2919,7 +2918,6 @@ export function setup(ctx: Ctx, opts?: any) {
     panel?: { x: number; y: number; w: number; h: number };
     tab?: string;
     promptView?: string;
-    permHidden?: string[];
   };
   let layout: Layout = {};
   // Named for what it does rather than what it holds, since there is a "num"
@@ -2951,10 +2949,6 @@ export function setup(ctx: Ctx, opts?: any) {
           layout.tab = raw.tab;
         if (raw.promptView === "raw" || raw.promptView === "rendered")
           layout.promptView = raw.promptView;
-        if (Array.isArray(raw.permHidden))
-          layout.permHidden = raw.permHidden
-            .filter((x: any) => typeof x === "string")
-            .slice(0, 40);
       }
     }
   } catch (_) { /* no storage, or nonsense in it: the defaults are fine */ }
@@ -8520,8 +8514,8 @@ export function setup(ctx: Ctx, opts?: any) {
         const shut = document.createElement("button");
         shut.type = "button";
         shut.textContent = "\u00d7";
-        shut.title = "Hide this note. It stays hidden, and the debug report still lists every permission.";
-        shut.setAttribute("aria-label", "Hide the note about the " + p.name + " permission");
+        shut.title = "Hide this note until you reload. The debug report lists every permission either way.";
+        shut.setAttribute("aria-label", "Hide the note about the " + p.name + " permission until you reload");
         shut.style.cssText =
           "flex:none;cursor:pointer;border:0;background:transparent;padding:0;" +
           "width:28px;height:28px;margin:-4px -4px 0 0;line-height:1;font-size:16px;" +
@@ -8530,7 +8524,7 @@ export function setup(ctx: Ctx, opts?: any) {
         shut.addEventListener("pointerenter", () => { shut.style.opacity = "1"; });
         shut.addEventListener("pointerleave", () => { shut.style.opacity = ".65"; });
         shut.addEventListener("click", () => {
-          hidePermNote(p.name);
+          permHidden.add(p.name);
           paint();
         });
         line.appendChild(shut);
@@ -8539,7 +8533,7 @@ export function setup(ctx: Ctx, opts?: any) {
       const how = document.createElement("div");
       how.style.cssText = "margin-top:6px;opacity:.85";
       how.textContent =
-        "These are approved in Lumiverse's own extension settings. Some are privileged, which means an admin has to grant them. Refusing one on purpose is a fair answer: put its note away with the cross beside it.";
+        "These are approved in Lumiverse's own extension settings. Some are privileged, which means an admin has to grant them. If you turned one off on purpose, press the \u00d7 to hide its note until you reload the page.";
       box.appendChild(how);
       try { ensureReadableTree(box, 2.6); } catch (_) {}
     };
@@ -10113,6 +10107,12 @@ export function setup(ctx: Ctx, opts?: any) {
         if (msg.type === "permissions") {
           permGranted = (msg && msg.granted) || {};
           permList = Array.isArray(msg && msg.list) ? msg.list : [];
+          // Granted again clears the note that was put away, so if it is taken
+          // away later that is a new thing to say rather than something already
+          // dismissed. Putting a note away answers the permission being off
+          // now, not for the rest of time.
+          for (const name of Array.from(permHidden))
+            if (permIs(name) === true) permHidden.delete(name);
           if (permPaint) {
             try { permPaint(); } catch (_) {}
           }
