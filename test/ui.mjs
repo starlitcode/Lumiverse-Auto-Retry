@@ -4481,6 +4481,46 @@ console.log("\nper-chat switch, in the panel");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- the search box stays quiet ----
+// It sits alone above the scroll area with nothing beside it to be told apart
+// from, and it answers every keystroke by filtering the list underneath, so it
+// wears none of the marks the rows below it do.
+console.log("\nthe search box stays quiet");
+{
+  const { out, errors } = await inPanel(browser, {}, async (page) =>
+    page.evaluate(async () => {
+      const settle = () => new Promise((r) => setTimeout(r, 260));
+      const search = document.querySelector('input[type="search"]');
+      const row = [...document.querySelectorAll('[data-ar-row] input[type="number"], [data-ar-row] input[type="text"]')]
+        .find((el) => el.offsetParent !== null);
+      const res = { found: !!search };
+      if (!search || !row) return res;
+      const rest = getComputedStyle(search).borderTopColor;
+      search.dispatchEvent(new PointerEvent("pointerenter", { bubbles: true }));
+      await settle();
+      res.noHoverLift = getComputedStyle(search).borderTopColor === rest;
+      search.focus({ preventScroll: true });
+      await settle();
+      res.noRing = getComputedStyle(search).boxShadow === "none";
+      res.noBorderTint = getComputedStyle(search).borderTopColor === rest;
+      search.blur();
+      // The rows below still take both, so this is the search box being quiet
+      // rather than the marks having come off everything.
+      row.focus({ preventScroll: true });
+      await settle();
+      res.rowsStillMarked = getComputedStyle(row).boxShadow !== "none";
+      row.blur();
+      return res;
+    }),
+  );
+  check("the search box is there to check", out.found, out);
+  check("it does not lift under the pointer", out.noHoverLift, out);
+  check("it takes no ring on focus", out.noRing, out);
+  check("nor a tinted border", out.noBorderTint, out);
+  check("while the rows below it still take both", out.rowsStillMarked, out);
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- the browser's spinner is off our number boxes, and only ours ----
 // The arrows a browser draws on a number box are its own, not the theme's, so
 // on a dark panel they arrive as grey chevrons belonging to no design here. The
