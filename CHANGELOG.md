@@ -8,7 +8,7 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
-## 4.14.7
+## 4.14.6
 
 _2026-08-19_
 
