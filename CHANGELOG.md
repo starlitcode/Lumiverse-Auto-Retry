@@ -14,7 +14,6 @@ _2026-08-20_
 
 ### Added
 
-- **Holding the floating button now shows the hold building.** A press has to be held for half a second before the menu opens, and for that half second the button sat there doing nothing, so a hold that had registered looked exactly like one that had not. A ring now grows around it while you hold, and goes the moment you let go, drag, or the menu arrives. It is drawn outside the button, so the button itself still does not move.
 - **Turning the floating button on or off eases between the two states.** The colours fade and the new mark grows in over the old one, so a tap reads as one movement rather than a flicker. Only on a real change: the button repaints when you switch chats and after a drag, and animating those would be movement saying nothing. A device set to reduce motion gets the same change with nothing in between, and the button itself still never moves under a press, since a press can be the start of a hold.
 
 ### Changed
