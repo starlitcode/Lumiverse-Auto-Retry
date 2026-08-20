@@ -5666,6 +5666,73 @@ console.log("\nthe per-chat switch reaches every indicator");
 }
 
 
+// ---- a panel that comes back does not inherit the asking ----
+// Capture follows the panel now rather than the tab, so the thing that has to
+// hold is that closing it forgets. Otherwise asking for a prompt once would
+// pay for itself every time the panel came back, which is the cost tying it to
+// the tab was avoiding in the first place.
+console.log("\nreopening the panel after asking for a prompt");
+{
+  const page = await browser.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await stage(page, "<div id=modal></div>");
+  await page.addStyleTag({ content: THEME });
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  const out = await page.evaluate(async () => {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const open = (sent) => window.__setup(
+      { events: { on: () => () => {} },
+        sendToBackend: (m) => sent.push(m),
+        onBackendMessage: () => () => {},
+        ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+              registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) } },
+      { liveLog: true, toast: false },
+    );
+    const tab = (label) => [...document.querySelectorAll('[role="tab"]')]
+      .find((b) => b.textContent.trim() === label);
+    const capture = (sent) => sent.filter((m) => m.type === "set_prompt_capture").map((m) => m.on);
+
+    // First time round: ask for a prompt, then go back to the log and close.
+    const first = [];
+    let teardown = open(first);
+    await wait(30);
+    tab("Prompt").click();
+    await wait(20);
+    const asked = capture(first);
+    tab("Log").click();
+    await wait(20);
+    teardown();
+    await wait(20);
+    const afterClosing = capture(first);
+
+    // Second time round, landing on the log, which is where it was left.
+    const second = [];
+    teardown = open(second);
+    await wait(40);
+    const landedOn = tab("Log") ? tab("Log").getAttribute("aria-selected") : null;
+    const askedAgain = capture(second);
+    // And asking afresh still works.
+    tab("Prompt").click();
+    await wait(20);
+    const afterAskingAgain = capture(second);
+    teardown();
+    return { asked, afterClosing, landedOn, askedAgain, afterAskingAgain };
+  });
+  await page.close();
+  check("the first panel asks once the prompt tab is opened",
+    out.asked[out.asked.length - 1] === true, out.asked);
+  check("and stops asking when it closes",
+    out.afterClosing[out.afterClosing.length - 1] === false, out.afterClosing);
+  check("the next panel opens where it was left", out.landedOn === "true", out);
+  check("and asks for nothing, having not been asked",
+    out.askedAgain.filter((v) => v).length === 0, out.askedAgain);
+  check("until the prompt tab is opened again",
+    out.afterAskingAgain[out.afterAskingAgain.length - 1] === true, out.afterAskingAgain);
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- the prompt viewer ----
 // Lumiverse's own Prompt Breakdown lists what a chat is built from, which is a
 // different question from what actually went to the model after every extension
@@ -5801,6 +5868,7 @@ console.log("\nprompt viewer");
   check("opening it asks for capture", out.askedAfter[out.askedAfter.length - 1] === true, out.askedAfter);
   check("looking at another view does not stop it",
     out.askedOnLeave[out.askedOnLeave.length - 1] === true, out.askedOnLeave);
+
   check("and so does closing the panel",
     out.askedOnTeardown[out.askedOnTeardown.length - 1] === false, out.askedOnTeardown);
   check("it says nothing has been seen yet before a generation",
