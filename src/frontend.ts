@@ -4251,18 +4251,19 @@ export function setup(ctx: Ctx, opts?: any) {
       "user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;" +
       "font-family:var(--lumiverse-font-family,system-ui);" +
       "box-shadow:var(--lumiverse-shadow-sm,0 2px 8px rgba(0,0,0,.2));";
-    // The colours ease between the two states, and the mark fades in over the
-    // one it replaces, so turning it off reads as one movement rather than a
+    // The colours ease between the two states and the mark fades in over the one
+    // it replaces, so turning it off reads as one movement rather than a
     // flicker. Only on a real change of state: repainting for a chat switch or
-    // after a drag says nothing new and animating it would be noise.
+    // after a drag says nothing new, and a device asking for less movement gets
+    // the change with none of this.
     //
-    // Nothing moves the button itself. A scale dip on every press was here once
+    // The button itself never moves. A scale dip on every press was here once,
     // and it forced a compositing layer on a control whose whole job is to flip
-    // between two states, and a press that is opening the menu should not look
-    // like a tap. A device asking for less movement gets neither.
+    // between two states; a press is also how the menu is opened, so dipping on
+    // the way in makes a hold look like a tap that took.
     el.setAttribute("data-ar-float", "1");
     ensureFloatStyle();
-    //
+
     // A press held down opens the menu instead of toggling. Right-click does the
     // same on a pointer device. Without this the only way to put the button away
     // was to open settings and turn it off, which is a long walk for something
@@ -9904,7 +9905,6 @@ export function setup(ctx: Ctx, opts?: any) {
     title.style.cssText =
       "flex:none;font-size:13px;font-weight:600;color:var(--lumiverse-warning,#f59e0b)";
     const body = document.createElement("div");
-    body.setAttribute("data-ar-crisis-notice", "1");
     body.style.cssText =
       "flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:8px;font-size:13px;line-height:1.5";
     for (const para of [
