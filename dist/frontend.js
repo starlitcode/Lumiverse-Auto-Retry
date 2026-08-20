@@ -4620,6 +4620,16 @@ export function setup(ctx, opts) {
         // setting changes: this is the one place that registers and drops one.
         syncInputBarActions();
     }
+    // Whether the Prompt tab has been opened while this panel has been up.
+    //
+    // Capture used to follow the tab itself, which meant switching to the log for
+    // a moment and back lost the prompt sent in between, and that is most of what
+    // anybody does with the panel open. It follows the panel now, but only once
+    // you have asked for a prompt at least once: somebody who opens the panel for
+    // the log and never goes near this tab has nothing kept for them, which is
+    // the whole reason it was tied to the tab in the first place. Closing the
+    // panel forgets it, so the asking starts over next time.
+    let promptTabSeen = false;
     // The backend captures a prompt only while somebody is looking at one. Told
     // on every change of tab, open and close, and on teardown, so the cost stops
     // the moment the view does.
@@ -4633,7 +4643,12 @@ export function setup(ctx, opts) {
     // which is why leaving the chat and coming back appeared to fix it. force is
     // for the backend saying it has just started.
     function askForPrompts(force) {
-        const want = !!(cfg.liveLog && (liveLogEl || drawerTab) && liveTab === "prompt");
+        const up = !!(liveLogEl || drawerTab);
+        if (!up)
+            promptTabSeen = false;
+        else if (liveTab === "prompt")
+            promptTabSeen = true;
+        const want = !!(cfg.liveLog && up && promptTabSeen);
         if (want === promptsAsked && !force)
             return;
         promptsAsked = want;

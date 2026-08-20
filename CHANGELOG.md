@@ -19,6 +19,7 @@ _2026-08-20_
 
 ### Changed
 
+- **The Prompt tab keeps up while the panel is open, instead of only while you are looking at it.** Switching to the log for a moment and back used to lose the prompt sent in between, which is most of what anybody does with the panel open. Nothing is still kept until you open the Prompt tab at least once, so using the panel for its log alone costs nothing, and closing the panel forgets it again.
 - **Open the Auto Retry panel has moved out of the Extras popover and into the floating button's menu.** Hold the button and it is there, under the two entries that were already there. It stays in Extras only when there is no floating button to carry it, so there is always exactly one way in and never two.
 
 ## 4.15.0
