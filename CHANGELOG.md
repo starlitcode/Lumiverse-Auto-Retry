@@ -8,6 +8,15 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 4.17.0
+
+_2026-08-20_
+
+### Changed
+
+- **The support check knows more of the wordings models actually use.** It caught the shape that is mostly a list of services; the shape that spends most of its length being kind and carries one line of referral was going past it. Reported wordings are now covered: "I'm glad you told me", "that takes courage to say out loud", "I'm listening", "I'm not going anywhere", "I won't judge you", "you matter", "this pain doesn't have to be carried alone", and the heading that introduces a second list of services under the first.
+- Every one of those went in the softer of the two lists, which can agree with a signal but can never be one. A character in a scene says all of them, and two of them were already in the checks as scenes that must not be caught. The rule is unchanged: two agreeing signals, and the deciding one has to come from the register no scene uses. Take the referral line off any of the new replies and the same words are one character comforting another, which the checks now hold them to in both directions.
+
 ## 4.16.0
 
 _2026-08-20_

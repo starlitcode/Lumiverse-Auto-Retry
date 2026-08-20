@@ -100,7 +100,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "4.16.0";
+const VERSION = "4.17.0";
 // The one address the extension ever points at, used by the warning in front of
 // the crisis-support check. Pinned to the released branch rather than to a tag,
 // so an old install still opens the page as it stands today.
@@ -1704,6 +1704,10 @@ const CRISIS_ADDRESS = [
     // there is, because a reply carrying a list of services always announces it
     // and nothing in a scene announces one.
     /\bhere (?:are|is) (?:some |a few |a list of |the )?(?:resources|helplines|hotlines|numbers|places|people|support options)\b/i,
+    // The same announcement as a heading rather than a sentence, which is how the
+    // longer replies lay out a second list under the first. A line of its own,
+    // ending in a colon: a scene does not format itself.
+    /^[^\S\n]*(?:international|additional|other|more|global|worldwide)\s+(?:resources|helplines|hotlines|support(?: options)?)\s*:/im,
     /\bresources that (?:may|might|can) (?:be able to )?help\b/i,
     /\b(?:reach out to|contact|call) (?:one of )?(?:these|the above|any of these) (?:resources|services|numbers|lines|organi[sz]ations)\b/i,
     // Referring you on, which is the move that belongs to the model. A character
@@ -1761,7 +1765,21 @@ const CRISIS_COMFORT = [
     /\bif you (?:do not|don'?t) feel safe\b/i,
     /\bplease (?:reach out|talk|speak) to someone\b/i,
     /\bplease (?:take care of yourself|be gentle with yourself|stay safe|look after yourself)\b/i,
-    /\bI(?:'m| am) here (?:to talk|if you (?:want|need) to talk|for you if)\b/i,
+    /\bI(?:'m| am) here (?:to talk|to listen|if you (?:want|need) to talk|for you if)\b/i,
+    // Wordings from replies people have actually been sent. Each one is also a
+    // line one character says to another, which is exactly why they are here and
+    // not in the list above: two of them are already in the checks as scenes that
+    // must not be caught.
+    /\bI(?:'m| am) (?:really |so |very )?glad (?:that )?you (?:told me|shared|said|reached out)\b/i,
+    /\btakes (?:a lot of |real |so much )?courage to (?:say|share|admit|speak|talk)\b/i,
+    /\byou(?:'re| are) carrying (?:so much|such|a lot of) (?:pain|weight|hurt)\b/i,
+    /\bI(?:'m| am) not going anywhere\b/i,
+    /\bI(?:'m| am) listening\b/i,
+    /\bI (?:won'?t|will not) (?:judge|dismiss)\b/i,
+    /\byou matter[.,!]/i,
+    /\b(?:this|that|the) pain (?:does not|doesn'?t) have to be (?:carried|faced|borne) alone\b/i,
+    /\bputting it into words\b/i,
+    /\bif you(?:'re| are) willing to share\b/i,
 ];
 const CRISIS_RESOURCE = [
     // Services by name and by number. Written as whole words so a year or a page
