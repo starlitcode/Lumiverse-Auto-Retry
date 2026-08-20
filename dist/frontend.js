@@ -100,7 +100,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "4.17.0";
+const VERSION = "4.18.0";
 // The one address the extension ever points at, used by the warning in front of
 // the crisis-support check. Pinned to the released branch rather than to a tag,
 // so an old install still opens the page as it stands today.
@@ -301,7 +301,7 @@ const SCHEMA = [
                 key: "showFloatingToggle",
                 label: "Floating on/off button",
                 type: "bool",
-                hint: "Off by default. Puts a small round button on top of the chat that turns Auto Retry on or off in one tap. It shows which state it is in, and you can drag it anywhere; where you leave it is remembered. Handy if you switch it on and off a lot.",
+                hint: "Off by default. Puts a small round button on top of the chat that turns Auto Retry on or off in one tap. It shows which state it is in, and you can drag it anywhere; where you leave it is remembered. Hold it, or right-click it, for the settings, the panel and the manual swaps, which move out of the Extras menu and into it while it is showing. Handy if you switch it on and off a lot.",
             },
             {
                 key: "floatingToggleSize",
@@ -318,7 +318,7 @@ const SCHEMA = [
                 key: "showExtrasToggle",
                 label: "On/off button in the Extras menu",
                 type: "bool",
-                hint: "Off by default. Adds an Auto Retry on/off entry to the chat input's Extras menu, next to the settings button. It says which state it is in, so you can check and change it without opening settings. Unlike the floating button it takes up no room on screen.",
+                hint: "Off by default. Adds an Auto Retry on/off entry to the chat input's Extras menu, next to the settings button. It says which state it is in, so you can check and change it without opening settings. Unlike the floating button it takes up no room on screen, and it steps aside while that button is showing, since one tap on the button does the same thing.",
             },
             {
                 key: "toast",
@@ -342,7 +342,7 @@ const SCHEMA = [
                     { value: "float", label: "Floating over the chat" },
                     { value: "drawer", label: "In the sidebar drawer" },
                 ],
-                hint: "Floating is a small box in the corner: drag its header to move it, its corner to resize, and where you leave it is remembered. In the sidebar hands it to Lumiverse's own drawer, which sizes and places it, so it never covers the reply you are reading. Open it from Extras, or with Ctrl+K on a computer. Its tab shows a dot while a retry is running. A build with no drawer falls back to floating and says so in the log.",
+                hint: "Floating is a small box in the corner: drag its header to move it, its corner to resize, and where you leave it is remembered. In the sidebar hands it to Lumiverse's own drawer, which sizes and places it, so it never covers the reply you are reading. Open it from Extras, from the floating button's own menu while that button is showing, or with Ctrl+K on a computer. Its tab shows a dot while a retry is running. A build with no drawer falls back to floating and says so in the log.",
             },
         ],
     },
@@ -668,13 +668,13 @@ const SCHEMA = [
                 key: "showReplaceButton",
                 label: "Show a \"swap words now\" button",
                 type: "bool",
-                hint: "Off by default. Adds a button to the chat input's Extras menu that applies your word swaps on demand to the latest reply, so you can swap without leaving the automatic swap on. Only assistant replies are swapped, never your own messages, and the same reply won't be swapped twice. Needs your swap rules set up.",
+                hint: "Off by default. Adds a button that applies your word swaps on demand to the latest reply, so you can swap without leaving the automatic swap on. It sits in the chat input's Extras menu, or in the floating button's own menu while that button is showing. Only assistant replies are swapped, never your own messages, and the same reply won't be swapped twice. Needs your swap rules set up.",
             },
             {
                 key: "showSwapAllButton",
                 label: "Show a swap-whole-chat button",
                 type: "bool",
-                hint: "Off by default. Adds a button to the input's Extras menu that applies your rules once to every generated reply in the chat you're viewing. The greeting is never touched.",
+                hint: "Off by default. Adds a button that applies your rules once to every generated reply in the chat you're viewing. It sits in the chat input's Extras menu, or in the floating button's own menu while that button is showing. The greeting is never touched.",
             },
             {
                 key: "allowReSwap",
@@ -2511,6 +2511,27 @@ function markSvg(off, size) {
         (off ? MARK_SLASH : "") +
         "</svg>");
 }
+// The entries that live in the chat input's Extras popover while the floating
+// button is down, and in that button's own menu while it is up. Their wording is
+// held in one place because an entry that changes what it says when it moves
+// reads as a different action rather than the same one somewhere else.
+const SWAP_ONE_LABEL = "Swap words in the last reply";
+const SWAP_ALL_LABEL = "Swap words in every reply";
+const OPEN_PANEL_LABEL = "Open the Auto Retry panel";
+function iconSvg(body) {
+    return ('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"' +
+        ' stroke-linecap="round" stroke-linejoin="round">' +
+        body +
+        "</svg>");
+}
+// Two arrows going opposite ways: this text for that text. The whole-chat one
+// is the same mark with a bar down the middle, which is what tells the two
+// apart at the 16 pixels the Extras menu draws them at.
+const SWAP_ARROWS = '<polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/>' +
+    '<polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>';
+const SWAP_ONE_ICON = iconSvg(SWAP_ARROWS);
+const SWAP_ALL_ICON = iconSvg(SWAP_ARROWS + '<line x1="12" y1="7" x2="12" y2="17"/>');
+const OPEN_PANEL_ICON = iconSvg('<rect x="3" y="3" width="18" height="18" rx="2"/><line x1="15" y1="3" x2="15" y2="21"/>');
 export function setup(ctx, opts) {
     // cfg is mutable so the settings modal can change it live. Order: code
     // defaults, then GitHub opts, then whatever the user saved in the UI.
@@ -2551,6 +2572,11 @@ export function setup(ctx, opts) {
                     saveSaved();
                     syncLiveLog();
                     syncFloat();
+                    // Settings arriving from the account can switch any of the Extras
+                    // entries on or off, and this was the one path that did not re-read
+                    // them. It got away with it because syncFloat happens to run the
+                    // same sync on its way past, which is not a thing to rely on.
+                    syncInputBarActions();
                     if (modalHandle && modalRoot) {
                         if (modalSnapshot)
                             modalSnapshot();
@@ -2578,16 +2604,25 @@ export function setup(ctx, opts) {
     }
     let lastChatId = null;
     let lastMessageId = null;
-    let replaceAction = null;
-    let replaceActionOff = null;
-    let replaceAllAction = null;
-    let replaceAllActionOff = null;
-    let openPanelAction = null;
-    let openPanelActionOff = null;
+    // Every Extras entry that can come and go, keyed by name, each held as its
+    // registration and the disposer for its click handler. One map rather than a
+    // pair of variables per entry, so registering, dropping and tearing one down
+    // is the same code whichever it is; the swap-whole-chat entry was once missed
+    // in teardown and stacked a duplicate button on every reload, which is the
+    // sort of thing a per-entry copy of the same three lines invites.
+    //
+    // The on/off entry is not in here. Its label carries the current state and
+    // the host offers no way to relabel a registered entry, so it is registered
+    // again to change rather than left alone, and syncToggleAction owns it.
+    const barEntries = {};
     let toggleAction = null;
     let toggleActionOff = null;
-    // Manual "swap words now": an optional Extras-menu button that applies the word
-    // swaps to the latest reply on demand, instead of only automatically on finish.
+    // Set the moment teardown starts, and asked before anything registers an
+    // Extras entry. Teardown drops the entries and then hides the floating
+    // button, and hiding that button hands back whatever had stood down for it,
+    // so without this every entry was registered again on the way out and left
+    // behind for the next load to stack a duplicate on.
+    let tornDown = false;
     // Optional consent dialog before any edit, for people who don't want surprises.
     // Returns true to proceed. If the host has no confirm dialog, proceeds.
     async function confirmEdit(message) {
@@ -2656,6 +2691,8 @@ export function setup(ctx, opts) {
         toggleActionState = null;
     }
     function syncToggleAction() {
+        if (tornDown)
+            return;
         try {
             const canReg = !!(ctx && ctx.ui && typeof ctx.ui.registerInputBarAction === "function");
             const on = cfg.enabled !== false;
@@ -2663,7 +2700,12 @@ export function setup(ctx, opts) {
             // the entry showed "on" through it until now. The float button has said
             // both since it was built and this is the same sentence.
             const hereOff = on && chatIsOff(lastChatId);
-            if (!cfg.showExtrasToggle || !canReg) {
+            // Down while the floating button is up, and not moved into that button's
+            // menu either: the button is this switch already, one tap and wearing its
+            // state on its face. A menu entry for it would be a third way to the same
+            // switch. This one goes by the button alone rather than by whether the
+            // host can draw a menu, because the button replaces it either way.
+            if (!cfg.showExtrasToggle || !canReg || floatIsUp()) {
                 dropToggleAction();
                 return;
             }
@@ -2694,87 +2736,63 @@ export function setup(ctx, opts) {
         }
         catch (_) { }
     }
-    // Add or remove the Extras-menu buttons to match their toggles. Called on load
-    // and whenever settings are saved, so flipping a toggle takes effect at once.
+    function dropBarEntry(key) {
+        const held = barEntries[key];
+        if (!held)
+            return;
+        // Off the map first, so a throw on the way out cannot leave a dead entry
+        // behind that every later sync then reads as live.
+        delete barEntries[key];
+        try {
+            held.off && held.off();
+        }
+        catch (_) { }
+        try {
+            held.action && held.action.destroy();
+        }
+        catch (_) { }
+    }
+    // Register or drop one entry to match want. Everything in here is drawn from a
+    // fixed label and icon, so none of it has to be rebuilt to change: it is
+    // either there or it is not.
+    function syncBarEntry(key, want, spec, onClick) {
+        if (!want) {
+            dropBarEntry(key);
+            return;
+        }
+        if (barEntries[key])
+            return;
+        const action = ctx.ui.registerInputBarAction(spec);
+        barEntries[key] = { action: action, off: action.onClick(onClick) };
+    }
+    function dropBarEntries() {
+        for (const key of Object.keys(barEntries))
+            dropBarEntry(key);
+    }
+    // Add or remove the Extras entries to match their toggles and what else is on
+    // screen. Called on load, whenever settings are saved, and whenever the
+    // floating button or the drawer tab comes or goes.
     function syncInputBarActions() {
+        if (tornDown)
+            return;
         syncToggleAction();
         try {
             const canReg = !!(ctx && ctx.ui && typeof ctx.ui.registerInputBarAction === "function");
-            if (cfg.showReplaceButton && canReg && !replaceAction) {
-                replaceAction = ctx.ui.registerInputBarAction({
-                    id: "auto-retry-replace-now",
-                    label: "Swap words in the last reply",
-                    iconSvg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>',
-                });
-                replaceActionOff = replaceAction.onClick(() => applyReplaceNow());
-            }
-            else if ((!cfg.showReplaceButton || !canReg) && replaceAction) {
-                try {
-                    replaceActionOff && replaceActionOff();
-                }
-                catch (_) { }
-                try {
-                    replaceAction.destroy();
-                }
-                catch (_) { }
-                replaceAction = null;
-                replaceActionOff = null;
-            }
-            if (cfg.showSwapAllButton && canReg && !replaceAllAction) {
-                replaceAllAction = ctx.ui.registerInputBarAction({
-                    id: "auto-retry-replace-all",
-                    label: "Swap words in every reply",
-                    iconSvg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/><line x1="12" y1="7" x2="12" y2="17"/></svg>',
-                });
-                replaceAllActionOff = replaceAllAction.onClick(() => applyReplaceAllNow());
-            }
-            else if ((!cfg.showSwapAllButton || !canReg) && replaceAllAction) {
-                try {
-                    replaceAllActionOff && replaceAllActionOff();
-                }
-                catch (_) { }
-                try {
-                    replaceAllAction.destroy();
-                }
-                catch (_) { }
-                replaceAllAction = null;
-                replaceAllActionOff = null;
-            }
-            // The one way in, and the only one worth writing: Extras is a tap away on
-            // a phone and on a desktop alike, and it is where the settings are opened
-            // from anyway. Registering the tab already puts it in the Ctrl+K palette
-            // for free, which covers a keyboard without any code here.
-            //
+            // Each of these lives in one place at a time. With the floating button on
+            // screen its own menu carries them; Extras keeps them only when there is
+            // no button to. Two ways to the same thing, one of them a tap away and
+            // the other three, is one more than a menu opened for something else
+            // needs. With the button hidden, or the widget refused for want of
+            // ui_panels, Extras is the only way in on a phone, so they come back.
+            const inExtras = canReg && !floatCarriesEntries();
+            syncBarEntry("replaceNow", inExtras && !!cfg.showReplaceButton, { id: "auto-retry-replace-now", label: SWAP_ONE_LABEL, iconSvg: SWAP_ONE_ICON }, applyReplaceNow);
+            syncBarEntry("replaceAll", inExtras && !!cfg.showSwapAllButton, { id: "auto-retry-replace-all", label: SWAP_ALL_LABEL, iconSvg: SWAP_ALL_ICON }, applyReplaceAllNow);
             // Only while the panel is set to live in the drawer and the host gave us
             // a tab to bring forward. With the panel floating it is already on
-            // screen, and an entry that opens what you can see is noise in a menu
-            // somebody opened for something else.
-            // Only in Extras when the floating button is not on screen. The button's
-            // own menu carries it otherwise, and two ways in, one of them a tap away
-            // and the other three, is one more than the menu needs. With the button
-            // hidden, or the widget refused for want of ui_panels, Extras is the only
-            // way in on a phone, so it comes back.
-            const wantOpen = canOpenPanel() && !floatIsUp();
-            if (wantOpen && canReg && !openPanelAction) {
-                openPanelAction = ctx.ui.registerInputBarAction({
-                    id: "auto-retry-open-panel",
-                    label: "Open the Auto Retry panel",
-                    iconSvg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="15" y1="3" x2="15" y2="21"/></svg>',
-                });
-                openPanelActionOff = openPanelAction.onClick(openDrawerPanel);
-            }
-            else if ((!wantOpen || !canReg) && openPanelAction) {
-                try {
-                    openPanelActionOff && openPanelActionOff();
-                }
-                catch (_) { }
-                try {
-                    openPanelAction.destroy();
-                }
-                catch (_) { }
-                openPanelAction = null;
-                openPanelActionOff = null;
-            }
+            // screen, and an entry that opens what you can see is noise. Registering
+            // the tab already puts it in the Ctrl+K palette for free, which covers a
+            // keyboard without any code here.
+            syncBarEntry("openPanel", inExtras && canOpenPanel(), { id: "auto-retry-open-panel", label: OPEN_PANEL_LABEL, iconSvg: OPEN_PANEL_ICON }, openDrawerPanel);
         }
         catch (_) { }
     }
@@ -3952,9 +3970,8 @@ export function setup(ctx, opts) {
     // is the one thing not taken, since ours has to go there instead; see the
     // contextmenu handler below.
     let floatWidget = null;
-    // Whether there is a panel to bring forward, and whether the floating button
-    // is on screen to offer it. Asked in two places that must agree: the Extras
-    // entry stands down when the button's own menu is carrying this.
+    // Whether there is a panel to bring forward. Asked in two places that must
+    // agree: the Extras entry stands down when the button's own menu carries this.
     function canOpenPanel() {
         return !!(cfg.liveLog &&
             cfg.panelHome === "drawer" &&
@@ -3971,6 +3988,14 @@ export function setup(ctx, opts) {
     }
     function floatIsUp() {
         return !!floatWidget && !!floatEl;
+    }
+    // Whether the floating button can carry the entries that stand down for it.
+    // The menu behind it is the host's, and a build without showContextMenu falls
+    // back to a toast saying where the settings are, so on one of those the
+    // button carries nothing: an entry that stood down for it would have nowhere
+    // left to be.
+    function floatCarriesEntries() {
+        return floatIsUp() && typeof ctx?.ui?.showContextMenu === "function";
     }
     // The host's menu while it is open, as a token to compare against. Null when
     // there is none. It answers two questions at once: whether one is already up,
@@ -4141,11 +4166,13 @@ export function setup(ctx, opts) {
             if (mark && mark.style)
                 mark.style.animation = "lvRetryFloatMark 180ms ease";
         }
-        // Tapping is always the master switch, whatever is showing. The per-chat
-        // one lives in the hold menu, and the label says so rather than leaving
-        // somebody to find out by tapping.
+        // Tapping is always the master switch, whatever is showing, so the label
+        // says which switch a tap reaches rather than leaving somebody to find out
+        // by pressing it. It used to offer the per-chat switch on a hold as well.
+        // That entry left the hold menu and the label kept promising it, which on a
+        // screen reader is the only description of the button there is.
         const label = onlyHere
-            ? "Auto Retry is on, but off in this chat. Tap to turn it off everywhere, or hold for this chat"
+            ? "Auto Retry is on, but off in this chat. Tap to turn it off everywhere"
             : on
                 ? "Auto Retry is on, tap to turn off"
                 : "Auto Retry is off, tap to turn on";
@@ -4352,8 +4379,10 @@ export function setup(ctx, opts) {
         }
         floatEl = el;
         paintFloat();
-        // And stands down again now that the button's own menu has it.
-        syncToggleAction();
+        // Everything the button's own menu now carries stands down from Extras. The
+        // whole point of the split, so it runs from here rather than only when a
+        // setting is saved: the button can arrive without one being touched.
+        syncInputBarActions();
     }
     // Not a close: the menu belongs to the host, which shuts it on Escape, on a
     // tap outside, and when its promise resolves. This is for the case where the
@@ -4362,9 +4391,10 @@ export function setup(ctx, opts) {
     function forgetFloatMenu() {
         floatMenuToken = null;
     }
-    // The menu behind a hold or a right-click on the floating button. Two entries,
-    // both about the button itself rather than about retrying, so nothing here can
-    // change what the extension does to a reply.
+    // The menu behind a hold or a right-click on the floating button. It carries
+    // the ways into the extension's own surfaces, the manual word swaps while
+    // those are switched on, and the button's own hide. Nothing here changes how
+    // a reply is retried; the settings panel is the one place that does.
     //
     // Drawn by Lumiverse rather than by us. It arrives in the user's own theme,
     // accent and dark or light mode, clamps itself to the screen, and closes on
@@ -4407,23 +4437,29 @@ export function setup(ctx, opts) {
                     // Extras popover, which is several taps away and is the thing someone
                     // holding this button is most likely to be after.
                     { key: "settings", label: "Auto Retry settings" },
-                    // Switching off in one chat is not here. It lives in the settings
-                    // panel, under Basics, on the "This chat" row. This menu opens from a
-                    // button that sits over the chat, so it is worth keeping to the few
-                    // things that are about the button itself and the way to the
-                    // settings; a per-chat switch among them reads as clutter every time
+                    // Only when there is a panel in the drawer to bring forward. With the
+                    // panel floating it is already on screen, and an entry that opens
+                    // what you can see is noise in a menu opened for something else.
+                    ...(canOpenPanel() ? [{ key: "panel", label: OPEN_PANEL_LABEL }] : []),
+                    // The manual swaps, on the same terms as the panel entry: their
+                    // setting puts them in Extras, and this menu takes them over while the
+                    // button is on screen to hold them.
+                    ...(cfg.showReplaceButton ? [{ key: "swap", label: SWAP_ONE_LABEL }] : []),
+                    ...(cfg.showSwapAllButton ? [{ key: "swapAll", label: SWAP_ALL_LABEL }] : []),
+                    // Last, under everything that opens or does something, because it is
+                    // the only entry here that takes this menu away with it.
+                    //
+                    // Switching Auto Retry off in one chat is not here. It lives in the
+                    // settings panel, under Basics, on the "This chat" row. This menu
+                    // opens from a button that sits over the chat, so it is worth keeping
+                    // to the things that are about the button and the ways into the
+                    // extension; a per-chat switch among them reads as clutter every time
                     // you open it for something else.
                     //
                     // It was also never reliably here. The entry was drawn only once a
                     // chat id had been seen, and that only happens on a generation event,
                     // so on a fresh page load it was missing until the first reply came.
                     { key: "hide", label: "Hide this button" },
-                    // Only when there is a panel in the drawer to bring forward. With the
-                    // panel floating it is already on screen, and an entry that opens
-                    // what you can see is noise in a menu opened for something else.
-                    ...(canOpenPanel()
-                        ? [{ key: "panel", label: "Open the Auto Retry panel" }]
-                        : []),
                 ],
             });
             selectedKey = (res && res.selectedKey) || null;
@@ -4444,6 +4480,12 @@ export function setup(ctx, opts) {
         }
         else if (selectedKey === "panel") {
             openDrawerPanel();
+        }
+        else if (selectedKey === "swap") {
+            applyReplaceNow();
+        }
+        else if (selectedKey === "swapAll") {
+            applyReplaceAllNow();
         }
         else if (selectedKey === "hide") {
             cfg.showFloatingToggle = false;
@@ -4487,8 +4529,11 @@ export function setup(ctx, opts) {
         // kept a whole button's worth of handlers alive after the button was gone,
         // and every pointer move on the page went on running its hold check.
         holdMoveWatch = null;
-        // Extras carries the way into the panel whenever the button cannot.
-        syncToggleAction();
+        // Extras carries all of it again now that there is no button to. Hiding
+        // this button from its own menu is the path that made this necessary:
+        // nothing else runs afterwards, so without it the entries the menu had
+        // taken over went down with the menu.
+        syncInputBarActions();
     }
     // Where the button is sitting right now, read off the screen. Used after a
     // drag, which is the one time the button moves without this extension being
@@ -6434,22 +6479,12 @@ export function setup(ctx, opts) {
             s.startTimer = setTimeout(() => abortAndRetry(p.chatId, "stuck"), cfg.stuckTimeoutMs);
         }
     }
-    // The manual swap buttons need a chat id, and generation events were the only
-    // thing setting one, so opening an older chat and pressing swap reported that
-    // there was no reply to swap until something had been generated in it.
-    // Every event that carries a chat id goes through here, not just the ones
-    // that announce a change. The per-chat switch was reachable only once a chat
-    // id had been seen, and the only events that carried one were a chat change
-    // and a generation. So on a fresh page load, sitting in a chat, there was
-    // nothing to switch: the row stayed greyed out until the user left the chat
-    // and came back, or sent a message. Neither is a thing anyone should have to
-    // work out. A message rendering is what actually happens when a chat opens,
-    // and it carries the id, so it is enough on its own.
     // Ask the backend which chat is open. Everything else that sets the chat id
     // waits for something to happen in the chat, which leaves the per-chat switch
     // greyed out after an update: nothing re-renders, so nothing announces where
     // you are. This asks outright. Answers null without the chats permission, in
     // which case nothing changes and the old waiting behaviour stands.
+    //
     // Handlers waiting on an answer that may never come. Held so teardown can
     // drop them, and so one is never left listening for a reply to a question
     // asked minutes ago.
@@ -6507,6 +6542,16 @@ export function setup(ctx, opts) {
         }
         catch (_) { }
     }
+    // Where every chat id the extension learns arrives, whatever carried it, and
+    // not only the events that announce a change.
+    //
+    // The manual swap buttons need a chat id, and generation events were the only
+    // thing setting one, so opening an older chat and pressing swap reported that
+    // there was no reply to swap until something had been generated in it. The
+    // per-chat switch had the same gap from the other side: on a fresh page load,
+    // sitting in a chat, the row stayed greyed out until the user left and came
+    // back or sent a message. A message rendering is what actually happens when a
+    // chat opens, and it carries the id, so it is enough on its own.
     function noteChat(id) {
         const next = id == null ? null : id;
         if (next == null || next === lastChatId)
@@ -10466,40 +10511,16 @@ export function setup(ctx, opts) {
         }
     }
     catch (_) { }
-    // Every Extras entry the extension can register is torn down here. The
-    // swap-whole-chat one used to be missed, so it survived a reload and stacked
+    // Every Extras entry the extension can register is torn down here, by walking
+    // the map rather than by naming them one at a time. The swap-whole-chat one
+    // used to be missed off a list like that, so it survived a reload and stacked
     // up a duplicate button each time.
-    disposers.push(() => { try {
-        replaceActionOff && replaceActionOff();
-    }
-    catch (_) { } try {
-        replaceAction && replaceAction.destroy();
-    }
-    catch (_) { } });
-    disposers.push(() => { try {
-        replaceAllActionOff && replaceAllActionOff();
-    }
-    catch (_) { } try {
-        replaceAllAction && replaceAllAction.destroy();
-    }
-    catch (_) { } });
-    disposers.push(() => { try {
-        openPanelActionOff && openPanelActionOff();
-    }
-    catch (_) { } try {
-        openPanelAction && openPanelAction.destroy();
-    }
-    catch (_) { } });
-    disposers.push(() => { try {
-        toggleActionOff && toggleActionOff();
-    }
-    catch (_) { } try {
-        toggleAction && toggleAction.destroy();
-    }
-    catch (_) { } });
+    disposers.push(() => dropBarEntries());
+    disposers.push(() => dropToggleAction());
     askForPermissions();
     log("ready v" + VERSION, cfg);
     return () => {
+        tornDown = true;
         clearConfirmWatch();
         // The full-size editor is parented to the page, not to the modal, so
         // dismissing the modal below does not take it with it. Left open it would

@@ -38,8 +38,8 @@ Saved settings sync to your Lumiverse account, so they follow you to other brows
 
 Two options in **Basics**, and you can use either or both:
 
-- **Floating on/off button** puts a small button over the chat that toggles it in one tap. Drag it anywhere; it snaps to the nearest edge and stays where you leave it, and you can set its size, which the button itself takes on as you type so you can see it before saving. Changing the size grows it around where it is sitting rather than moving it, though a button against an edge does come inward far enough for the bigger size to fit. Tapping it eases between on and off rather than flicking, and a device set to reduce motion gets the same change with nothing in between. Hold it, or right-click on a computer, for a menu with **Auto Retry settings** and **Hide this button**, plus **Open the Auto Retry panel** when the panel is set to live in the drawer. That menu is drawn by Lumiverse, so it arrives in your own theme and accent.
-- **On/off button in the Extras menu** adds an entry next to the settings button. Its label says which state it is currently in, so you can check and change it without opening settings, and it takes up no room on screen. In a chat you have switched off it says so, since "on" would be true of everywhere except where you are. Tapping it is always the master switch, wherever you tap it from, and the label says which one it is offering.
+- **Floating on/off button** puts a small button over the chat that toggles it in one tap. Drag it anywhere; it snaps to the nearest edge and stays where you leave it, and you can set its size, which the button itself takes on as you type so you can see it before saving. Changing the size grows it around where it is sitting rather than moving it, though a button against an edge does come inward far enough for the bigger size to fit. Tapping it eases between on and off rather than flicking, and a device set to reduce motion gets the same change with nothing in between. Hold it, or right-click on a computer, for its menu. That menu is drawn by Lumiverse, so it arrives in your own theme and accent, and it is where everything that would otherwise sit in the **Extras** popover moves to while the button is showing: **Auto Retry settings**, **Open the Auto Retry panel** when the panel is set to live in the drawer, the two manual swap buttons when you have those switched on, and **Hide this button** at the bottom.
+- **On/off button in the Extras menu** adds an entry next to the settings button. Its label says which state it is currently in, so you can check and change it without opening settings, and it takes up no room on screen. In a chat you have switched off it says so, since "on" would be true of everywhere except where you are. Tapping it is always the master switch, wherever you tap it from, and the label says which one it is offering. It steps aside while the floating button is showing, because that button is the same switch in one tap.
 
 ## Turning it off in one chat
 
@@ -47,7 +47,7 @@ The master switch is all or nothing, which is the wrong shape for a scene where 
 
 In the settings panel, under **Basics**, the **This chat** row has a **Turn off here** button. That chat is left alone and every other chat carries on, and the button becomes **Turn on here**. Left alone covers word swaps too: nothing is swapped automatically in a chat you have switched off. This is the only place it is: it is not in the floating button's menu, which is kept to the button's own business.
 
-Everything that shows whether Auto Retry is running says so together: that button, the floating button, the line under the panel's tabs, and the Extras entry. All four follow you between chats, so none of them reads "on" in a chat you have switched off.
+Everything that shows whether Auto Retry is running says so together: that button, the line under the panel's tabs, and whichever of the floating button and the Extras entry you have on. All of them follow you between chats, so none reads "on" in a chat you have switched off.
 
 If the button is greyed out while you are in a chat, it has not been told which chat that is yet. With the `chats` permission granted it asks outright and this clears on its own. Without it, it waits to be told: a reply arriving, a message sent, or switching away and back all do it. The case where you will see it waiting is updating the extension without leaving the chat, since nothing re-renders and so nothing announces where you are.
 
@@ -93,7 +93,7 @@ This is kept in your browser rather than in your settings, like the list of chat
 
 Changing this moves the panel as you pick, before you save. Closing the settings without saving puts it back. If your Lumiverse build has no drawer for extensions, asking for the sidebar gets you the floating panel and a line in the Log saying why.
 
-To open it: hold the floating button and choose **Open the Auto Retry panel**. With the floating button turned off, that entry is in the **Extras** popover instead, next to the settings entry, so there is always exactly one way in. On a computer **Ctrl+K** and typing `Auto Retry` does the same. None of them is offered while the panel is floating, where it is already on screen.
+To open it: hold the floating button and choose **Open the Auto Retry panel**. With the floating button turned off, that entry is in the **Extras** popover instead, next to the settings entry, so there is always exactly one way in. On a computer **Ctrl+K** and typing `Auto Retry` does the same. None of them is offered while the panel is floating, where it is already on screen. A Lumiverse too old to draw the button's menu keeps the entry in Extras, since a button that can open no menu carries nothing.
 
 ### The line under the tabs
 
@@ -146,7 +146,7 @@ The same options live in the CONFIG block at the top of `src/frontend.ts` and `d
 | enabled | true | Master switch. |
 | showFloatingToggle | false | Put a small draggable on/off button over the chat. |
 | floatingToggleSize | 44 | How wide that floating button is, in pixels (28-96). Shown only while `showFloatingToggle` is on. |
-| showExtrasToggle | false | Add an on/off entry to the chat input's Extras menu. Its label says which state it is in. |
+| showExtrasToggle | false | Add an on/off entry to the chat input's Extras menu. Its label says which state it is in. Stands down while the floating button is showing. |
 | maxRetries | 4 | Hard cap per message. Nothing retries past this. The lowest is 1: to stop it retrying, switch it off rather than setting this to 0. |
 | pauseWhenFailing | true | Pause auto-retry after several whole runs give up in a row. Cleared by the next reply that comes back fine. |
 | breakerRuns | 3 | How many failed runs in a row trigger the pause. A run is one message that used up all its tries. Shown only while `pauseWhenFailing` is on. |
@@ -185,8 +185,8 @@ The same options live in the CONFIG block at the top of `src/frontend.ts` and `d
 | replaceRules | (empty) | "old => new" word swaps, one per line. |
 | replaceRandom | false | When a word has more than one swap, pick one at random each time. |
 | replaceCaseSensitive | false | Match letter case exactly. Off = case-insensitive, capitalization kept. |
-| showReplaceButton | false | Add a button to the input Extras menu that applies your word swaps to the latest reply on demand. |
-| showSwapAllButton | false | Adds an Extras button that swaps every generated reply in the chat once. |
+| showReplaceButton | false | Add a button that applies your word swaps to the latest reply on demand. In the Extras menu, or the floating button's menu while that button is showing. |
+| showSwapAllButton | false | Add a button that swaps every generated reply in the chat once. Sits wherever the one above does. |
 | allowReSwap | false | Let either swap button swap a reply again even if it was already swapped (can stack swaps). Applies to both the swap-this-reply and swap-whole-chat buttons. Shown only while one of those two buttons is switched on. |
 | confirmBeforeEdit | false | Ask you to confirm before any word-swap edit (automatic or manual); you can cancel. |
 | swapWaitForEdits | false | Wait for another extension to finish editing a reply before swapping it. For running alongside Hone with auto-refine on. |
