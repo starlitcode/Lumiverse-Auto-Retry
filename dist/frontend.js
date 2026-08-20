@@ -100,7 +100,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "4.15.0";
+const VERSION = "4.16.0";
 // The one address the extension ever points at, used by the warning in front of
 // the crisis-support check. Pinned to the released branch rather than to a tag,
 // so an old install still opens the page as it stands today.
@@ -3951,6 +3951,20 @@ export function setup(ctx, opts) {
             log("could not open the drawer tab", e);
         }
     }
+    // Restarting the animation needs the attribute gone for a frame, which
+    // reading offsetWidth in between forces.
+    function holdRing(on) {
+        if (!floatEl)
+            return;
+        try {
+            floatEl.removeAttribute("data-ar-hold");
+            if (!on)
+                return;
+            void floatEl.offsetWidth;
+            floatEl.setAttribute("data-ar-hold", "1");
+        }
+        catch (_) { }
+    }
     function floatIsUp() {
         return !!floatWidget && !!floatEl;
     }
@@ -4229,13 +4243,18 @@ export function setup(ctx, opts) {
                 pressTimer = null;
             }
             pressFrom = null;
+            holdRing(false);
         };
         el.addEventListener("pointerdown", (e) => {
             openedByHold = false;
             pressFrom = { x: e && e.clientX, y: e && e.clientY };
+            holdRing(true);
             pressTimer = setTimeout(() => {
                 pressTimer = null;
                 openedByHold = true;
+                // The ring has finished saying what it had to say, and the menu is
+                // about to cover the button anyway.
+                holdRing(false);
                 showFloatMenu();
             }, HOLD_MS);
         });
@@ -5849,11 +5868,28 @@ export function setup(ctx, opts) {
                     "border-color var(--lumiverse-transition-fast,150ms ease)," +
                     "color var(--lumiverse-transition-fast,150ms ease)," +
                     "opacity var(--lumiverse-transition-fast,150ms ease)}" +
+                    "[data-ar-float]{position:relative}" +
                     "[data-ar-float] svg{transform-origin:50% 50%}" +
                     "@keyframes lvRetryFloatMark{from{opacity:0;transform:scale(.72)}to{opacity:1;transform:scale(1)}}" +
+                    // The ring that builds while the button is held. It says the hold has
+                    // been noticed and roughly how much longer it wants, which a button
+                    // that sits there doing nothing for half a second does not. Drawn
+                    // outside the button on a pseudo-element, so the button itself still
+                    // does not move: a dip on the way in reads as a tap that took, and this
+                    // press may yet turn out to be one.
+                    "[data-ar-float]::after{content:'';position:absolute;inset:-3px;border-radius:50%;" +
+                    "border:2px solid var(--lumiverse-primary,rgba(147,112,219,.9));" +
+                    "opacity:0;pointer-events:none}" +
+                    "[data-ar-float][data-ar-hold]::after{" +
+                    "animation:lvRetryFloatHold " + HOLD_MS + "ms ease-out forwards}" +
+                    "@keyframes lvRetryFloatHold{" +
+                    "from{opacity:0;transform:scale(.82)}" +
+                    "60%{opacity:.9}" +
+                    "to{opacity:.9;transform:scale(1.16)}}" +
                     "@media (prefers-reduced-motion:reduce){" +
                     "[data-ar-float]{transition:none}" +
-                    "[data-ar-float] svg{animation:none !important}}";
+                    "[data-ar-float] svg{animation:none !important}" +
+                    "[data-ar-float][data-ar-hold]::after{animation:none !important}}";
             (document.head || document.documentElement).appendChild(el);
             floatStyleEl = el;
         }
