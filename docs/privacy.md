@@ -113,9 +113,9 @@ Neither is synced and neither is included in an export, since a position on one 
 
 Separately it keeps the last twenty lines of what it did, and a few counters for the session: replies that came back fine, retries fired, what they fired for, and how many happened in each chat, named where a name was available. That is all in memory, so the Copy debug info button has something to report. Both die with the tab. Neither is written to disk and neither leaves your device.
 
-The on-screen panel's **Prompt** tab is the one part that holds more than that, and only while you are looking at it. Opening that tab asks the extension to keep a copy of the prompt on its way to the model, which is the text of your chat, so that it can show it to you.
+The on-screen panel's **Prompt** tab is the one part that holds more than that, and only once you have asked it to. Opening that tab asks the extension to keep a copy of the prompt on its way to the model, which is the text of your chat, so that it can show it to you. Until you open it, nothing is kept: someone who uses the panel for its log and never goes near this tab is not paying for it.
 
-Switch to another tab, close the panel, or close the browser tab and nothing is kept at all. It is never written to disk and never leaves your device, and only one prompt is held at a time: each generation replaces the last. This is why there is no separate switch to leave on and forget about.
+From then on it keeps up while the panel stays open, so glancing at the log does not lose the prompt you sent while you were there. Close the panel, or the browser tab, and nothing is kept at all, and the next time you open the panel it waits to be asked again. It is never written to disk and never leaves your device, and only one prompt is held at a time: each generation replaces the last. This is why there is no separate switch to leave on and forget about.
 
 ## One thing to be careful with
 

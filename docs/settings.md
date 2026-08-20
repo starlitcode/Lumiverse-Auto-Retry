@@ -133,7 +133,7 @@ Switching tabs works by tapping, and from a keyboard with the left and right arr
 
 What it shows is the prompt for the chat you are in. A captured prompt goes to you rather than to one window, so if you have two chats open in two tabs, both receive every prompt either one produces. The tab says so rather than showing you the other chat's, and walking back into the chat a prompt belongs to brings it back.
 
-The prompt is only captured while the Prompt tab is actually open. Switch to Log, close the panel, or close the tab, and nothing is captured at all. That is why there is no separate switch for it: a setting left on would go on paying for itself in every chat long after you looked once.
+Nothing is captured until you open this tab. Once you have, it keeps up for as long as the panel stays open, including while you are reading one of the other views, so a reply sent while you were on Log is waiting for you when you come back. Close the panel and nothing is captured at all, and the next time you open it, it waits to be asked again. That is why there is no separate switch for it: a setting left on would go on paying for itself in every chat long after you looked once.
 
 Reading the prompt is the one thing in the panel that needs a permission. The assembled prompt is only visible to an extension through the `interceptor`, which is privileged, so an admin has to approve it. Without it the tab stays empty and says so after your next reply, rather than going on telling you to send one. It only says that about a reply the tab was open for from the start: a prompt is assembled as a reply begins, so opening the tab partway through a reply cannot catch that one, and the tab asks for another rather than blaming the permission.
 

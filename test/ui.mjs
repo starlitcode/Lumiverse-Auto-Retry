@@ -5851,7 +5851,9 @@ console.log("\nprompt viewer");
     await wait(20);
     const afterArrow = tab("Log").getAttribute("aria-selected");
     const afterLogTab = body() ? body().textContent : "";
-    // And the capture stops the moment the prompt is not being looked at.
+    // Switching to another view does not stop it. Losing the prompt you sent
+    // while glancing at the log is most of what anybody does with the panel
+    // open, and the panel closing is what stops it.
     const askedOnLeave = sent.filter((m) => m.type === "set_prompt_capture").map((m) => m.on);
 
     // Big enough to hit with a thumb.
@@ -5873,7 +5875,8 @@ console.log("\nprompt viewer");
   check("nothing is captured until the prompt tab is opened",
     out.askedBefore.filter((v) => v).length === 0, out.askedBefore);
   check("opening it asks for capture", out.askedAfter[out.askedAfter.length - 1] === true, out.askedAfter);
-  check("leaving it stops capture", out.askedOnLeave[out.askedOnLeave.length - 1] === false, out.askedOnLeave);
+  check("looking at another view does not stop it",
+    out.askedOnLeave[out.askedOnLeave.length - 1] === true, out.askedOnLeave);
   check("and so does closing the panel",
     out.askedOnTeardown[out.askedOnTeardown.length - 1] === false, out.askedOnTeardown);
   check("it says nothing has been seen yet before a generation",
