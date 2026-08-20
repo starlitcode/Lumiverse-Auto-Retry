@@ -8,17 +8,25 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
-## 4.15.0
+## 4.16.0
 
-_2026-08-19_
+_2026-08-20_
 
 ### Added
 
+- **Holding the floating button now shows the hold building.** A press has to be held for half a second before the menu opens, and for that half second the button sat there doing nothing, so a hold that had registered looked exactly like one that had not. A ring now grows around it while you hold, and goes the moment you let go, drag, or the menu arrives. It is drawn outside the button, so the button itself still does not move.
 - **Turning the floating button on or off eases between the two states.** The colours fade and the new mark grows in over the old one, so a tap reads as one movement rather than a flicker. Only on a real change: the button repaints when you switch chats and after a drag, and animating those would be movement saying nothing. A device set to reduce motion gets the same change with nothing in between, and the button itself still never moves under a press, since a press can be the start of a hold.
 
 ### Changed
 
 - **Open the Auto Retry panel has moved out of the Extras popover and into the floating button's menu.** Hold the button and it is there, under the two entries that were already there. It stays in Extras only when there is no floating button to carry it, so there is always exactly one way in and never two.
+
+## 4.15.0
+
+_2026-08-19_
+
+### Changed
+
 - **The floating button's menu is now drawn by Lumiverse instead of by the extension.** It arrives in your own theme, accent and dark or light mode, clamps itself to the screen, and closes on Escape, and it looks the same as the menu any other extension puts there. A run of bugs on phones came from that menu being drawn by hand, each one down to guessing what a pointer was doing, and none of that is the extension's to get wrong any more. On a Lumiverse too old to have this menu, holding the button says where the settings are rather than opening nothing.
 
 ### Fixed
@@ -59,13 +67,8 @@ _2026-08-19_
 
 - **A permission note came back on the grant that should have taken it away.** The backend answers with what the host says is granted, and when a grant changed it re-read that from a local cache rather than believing the event announcing the change. Inside that callback the cache can still hold the answer from before it, so turning a permission on reported it as still refused, and the note somebody had just put away came straight back and stayed. The event is believed for the permission it is about now, and its full list is used when the host sends one. When the panel asks outright it uses the host's authoritative answer rather than that cache, since a panel opening is rare and it is the answer somebody acts on. The panel also asks again every time it opens, so a grant is picked up even on a build that raises no event at all.
 
-### Added
-
-- **Turning the floating button on or off eases between the two states.** The colours fade and the new mark grows in over the old one, so a tap reads as one movement rather than a flicker. Only on a real change: the button repaints when you switch chats and after a drag, and animating those would be movement saying nothing. A device set to reduce motion gets the same change with nothing in between, and the button itself still never moves under a press, since a press can be the start of a hold.
-
 ### Changed
 
-- **Open the Auto Retry panel has moved out of the Extras popover and into the floating button's menu.** Hold the button and it is there, under the two entries that were already there. It stays in Extras only when there is no floating button to carry it, so there is always exactly one way in and never two.
 
 - **A note about a missing permission can be put away.** Some are meant to be refused: somebody who does not want their prompt read declines the interceptor on purpose, and a panel telling them so on every visit is nagging about a decision they already made. Each note now has an × that hides it until you reload the page. Nothing is written down, so a reload brings every note back, and granting a permission and then losing it again brings its own note back too: hiding one answers the permission being off now, not for the rest of time. They are hidden by name rather than all at once, so putting away the one you chose to refuse does not also hide the next one that goes missing for a reason you did not choose. The debug report lists every permission either way.
 
@@ -73,13 +76,8 @@ _2026-08-19_
 
 _2026-08-18_
 
-### Added
-
-- **Turning the floating button on or off eases between the two states.** The colours fade and the new mark grows in over the old one, so a tap reads as one movement rather than a flicker. Only on a real change: the button repaints when you switch chats and after a drag, and animating those would be movement saying nothing. A device set to reduce motion gets the same change with nothing in between, and the button itself still never moves under a press, since a press can be the start of a hold.
-
 ### Changed
 
-- **Open the Auto Retry panel has moved out of the Extras popover and into the floating button's menu.** Hold the button and it is there, under the two entries that were already there. It stays in Extras only when there is no floating button to carry it, so there is always exactly one way in and never two.
 
 - **The panel marks what has focus properly.** A field used to tint one hairline of border, which is easy to lose on a busy theme and says very little across a wide box. It now carries a soft band just outside the edge and a short halo past that, both in the theme's own accent, so it follows whatever colours you run. It is kept tight on purpose: a wide halo washes over the rows above and below and reads as belonging to the row rather than to the box. All of it is painted outside the box, so nothing sits on the text and no row moves when it lands.
 - **Buttons reached by keyboard wear the same mark.** They were left with whatever outline the host's stylesheet happened to give them, which on a dark theme was often nothing you could see. A button you pressed with a pointer still wears nothing, since the press already said which one it was.
@@ -109,13 +107,8 @@ _2026-08-17_
 
 - **A raw view of the prompt, beside the usual one.** The button under the message and character count switches between them. Rendered is the panel as it has always looked, and where it starts: a row per message, its role, its size, whether it came from the chat or was wrapped around it, and any notes marked. Raw takes all of that off and shows the prompt as the data the model was handed, role and content and nothing else, which is the form to read when the question is about structure rather than wording, and the form to paste somewhere else. **Copy** follows whichever view you are on. The button sits on its own line and is sized for the longer of its two labels, so pressing it cannot move it. Whichever you pick is remembered.
 
-### Added
-
-- **Turning the floating button on or off eases between the two states.** The colours fade and the new mark grows in over the old one, so a tap reads as one movement rather than a flicker. Only on a real change: the button repaints when you switch chats and after a drag, and animating those would be movement saying nothing. A device set to reduce motion gets the same change with nothing in between, and the button itself still never moves under a press, since a press can be the start of a hold.
-
 ### Changed
 
-- **Open the Auto Retry panel has moved out of the Extras popover and into the floating button's menu.** Hold the button and it is there, under the two entries that were already there. It stays in Extras only when there is no floating button to carry it, so there is always exactly one way in and never two.
 
 - **The Prompt tab shows the whole prompt.** It used to be capped at 200 messages, 4000 characters each and 300000 in total, with a line under a long message saying how much of it was missing. That was the one thing a reader could not work around, since what was cut only ever existed on the server and was thrown away as the view was built. Every message is now listed and every character of each one is there. The cost stays where it always was: a prompt is only captured while the Prompt tab is actually open, and nothing is captured at all once you switch away or close it.
 
@@ -130,13 +123,8 @@ _2026-08-17_
 
 _2026-08-16_
 
-### Added
-
-- **Turning the floating button on or off eases between the two states.** The colours fade and the new mark grows in over the old one, so a tap reads as one movement rather than a flicker. Only on a real change: the button repaints when you switch chats and after a drag, and animating those would be movement saying nothing. A device set to reduce motion gets the same change with nothing in between, and the button itself still never moves under a press, since a press can be the start of a hold.
-
 ### Changed
 
-- **Open the Auto Retry panel has moved out of the Extras popover and into the floating button's menu.** Hold the button and it is there, under the two entries that were already there. It stays in Extras only when there is no floating button to carry it, so there is always exactly one way in and never two.
 
 - **The Extras menu entry said Auto Retry was on in a chat you had just switched off.** Three things show whether it is running: the row in the settings panel, the floating button, and this entry. The first two are repainted when anything changes. The entry cannot be relabelled once it is registered, so it is torn down and registered again instead, and that only happened when the master switch moved. It reads both switches now, says "on, but off in this chat" when that is where you are, and follows you between chats.
 
@@ -175,13 +163,8 @@ _2026-08-15_
 
 _2026-08-15_
 
-### Added
-
-- **Turning the floating button on or off eases between the two states.** The colours fade and the new mark grows in over the old one, so a tap reads as one movement rather than a flicker. Only on a real change: the button repaints when you switch chats and after a drag, and animating those would be movement saying nothing. A device set to reduce motion gets the same change with nothing in between, and the button itself still never moves under a press, since a press can be the start of a hold.
-
 ### Changed
 
-- **Open the Auto Retry panel has moved out of the Extras popover and into the floating button's menu.** Hold the button and it is there, under the two entries that were already there. It stays in Extras only when there is no floating button to carry it, so there is always exactly one way in and never two.
 
 - **The extension has a new mark: a reply, with the retry arrow sweeping over it.** It was a tumbling die, because Lumiverse calls a fresh attempt a reroll. A die on its own says dice, though, and dice say tabletop, which is not what this is. What the extension actually acts on is a reply: it reads one, decides it failed, and asks for another, so the reply is the shape and the arrow is what is being done to it. It appears everywhere the old one did, at the same sizes, with the same slash across it when the extension is switched off.
 
@@ -211,13 +194,8 @@ _2026-08-15_
 - **"This isn't something I'll write", and "that's something I won't write".** The same sentence both ways up, and neither was matched: the pattern behind it knew "I can" and "I could" and not the plain future. The conditional is kept out and the future has to end its clause where it lands, so "that is not something I would write in a letter to him" is left alone.
 - **The redirect offer and the sign-off, in the words a roleplay model uses.** It was looking for help-desk vocabulary, writing tasks and other topics, and had nothing for "I'm happy to help with other directions", "I'd be glad to help with a story", "let me know what you'd like to explore" or "is there something along those lines you'd like to try?".
 
-### Added
-
-- **Turning the floating button on or off eases between the two states.** The colours fade and the new mark grows in over the old one, so a tap reads as one movement rather than a flicker. Only on a real change: the button repaints when you switch chats and after a drag, and animating those would be movement saying nothing. A device set to reduce motion gets the same change with nothing in between, and the button itself still never moves under a press, since a press can be the start of a hold.
-
 ### Changed
 
-- **Open the Auto Retry panel has moved out of the Extras popover and into the floating button's menu.** Hold the button and it is there, under the two entries that were already there. It stays in Extras only when there is no floating button to carry it, so there is always exactly one way in and never two.
 
 - **Stats counts a refusal under the cause that produced it.** Everything the refusal side caught landed on one line, so the tab could tell you that a hundred replies were refused and nothing about what to do next. There are four lines now: the model declined, the model broke off rather than declining, the model left the scene to offer support, and the provider blocked it before a reply was written. Each points at a different switch, and all four take the same retry, the same cap and the same note. This is what tells you whether the support check is worth having on, which matters more there than anywhere else, since it is the one check you turn on yourself.
 
@@ -236,13 +214,8 @@ _2026-08-15_
 - **What it takes to fire.** Two agreeing signals, at least one of them the model addressing you rather than your character. Comfort and the names of services can only ever agree with a signal, never carry one on their own, since warmth is a register a character uses: a man crouching beside somebody to say she does not have to go through this alone is not the model. A line inside quotation marks is never counted either. It is the one check **Longest reply to treat as a refusal** does not apply to, because that limit is built around a refusal being short and one of these is the opposite.
 - **A safety page in the docs.** Who this is built for, what the support check can and cannot know, what retrying does when it is pointed at a reply somebody did not want to hear, how to reset or remove every part of it, and a closing note for anyone using it for something other than the writing.
 
-### Added
-
-- **Turning the floating button on or off eases between the two states.** The colours fade and the new mark grows in over the old one, so a tap reads as one movement rather than a flicker. Only on a real change: the button repaints when you switch chats and after a drag, and animating those would be movement saying nothing. A device set to reduce motion gets the same change with nothing in between, and the button itself still never moves under a press, since a press can be the start of a hold.
-
 ### Changed
 
-- **Open the Auto Retry panel has moved out of the Extras popover and into the floating button's menu.** Hold the button and it is there, under the two entries that were already there. It stays in Extras only when there is no floating button to carry it, so there is always exactly one way in and never two.
 
 - **The doubled refusal is caught: "I cannot and will not engage with content that ...".** Every pattern in the list expected the verb straight after "I can't", so putting "and will not" between them hid the most emphatic refusal a model writes. A meta object is still required, so a character saying "I cannot and will not marry him" is left alone.
 - **So is the refusal stated as a boundary.** "What I won't do is write that scene", and the offer that follows it, "here's what I can do". There is no "I can't" anywhere in either, so nothing in the list saw them. A meta object is required, so "What I won't do is leave you here" is left alone.
@@ -265,13 +238,8 @@ _2026-08-13_
 
 - **It can now ask Lumiverse which chat you are in, under a new `chats` permission.** This is what fixes **Turn off here** sitting greyed out in a chat you were already in, which happened after updating the extension because nothing re-renders and so nothing announced where you were. Auto Retry uses a single call from it, the one that answers which chat is open. It never creates, deletes or alters a chat. Refuse it and everything still works, with the switch waiting to be told as before. [Privacy](docs/privacy.md) covers what this permission reaches.
 
-### Added
-
-- **Turning the floating button on or off eases between the two states.** The colours fade and the new mark grows in over the old one, so a tap reads as one movement rather than a flicker. Only on a real change: the button repaints when you switch chats and after a drag, and animating those would be movement saying nothing. A device set to reduce motion gets the same change with nothing in between, and the button itself still never moves under a press, since a press can be the start of a hold.
-
 ### Changed
 
-- **Open the Auto Retry panel has moved out of the Extras popover and into the floating button's menu.** Hold the button and it is there, under the two entries that were already there. It stays in Extras only when there is no floating button to carry it, so there is always exactly one way in and never two.
 
 - **The panel says who a chat is with.** The **This chat** row reads "This chat, with *name*" and the Stats tab breaks retries down by chat as well as by cause, so a card whose replies keep needing a retry is visible instead of buried in a total. This needs the new `characters` permission alongside `chats`; without it the row reads "This chat" as before and the breakdown falls back to a short chat id. A group chat is named by its primary card.
 - **The Prompt tab counts tokens rather than estimating them.** It said "roughly N tokens", worked out as characters divided by four. Where Lumiverse will do the counting it now shows the real figure and drops the "roughly". This needs no permission, and the estimate is still what you see on a build or model that will not answer. The count arrives just after the view does, so nothing waits on it.
@@ -293,13 +261,8 @@ _2026-08-13_
 
 _2026-08-13_
 
-### Added
-
-- **Turning the floating button on or off eases between the two states.** The colours fade and the new mark grows in over the old one, so a tap reads as one movement rather than a flicker. Only on a real change: the button repaints when you switch chats and after a drag, and animating those would be movement saying nothing. A device set to reduce motion gets the same change with nothing in between, and the button itself still never moves under a press, since a press can be the start of a hold.
-
 ### Changed
 
-- **Open the Auto Retry panel has moved out of the Extras popover and into the floating button's menu.** Hold the button and it is there, under the two entries that were already there. It stays in Extras only when there is no floating button to carry it, so there is always exactly one way in and never two.
 
 - **The Prompt tab says plainly that only the view is shortened.** A long message was marked "(cut for display)", which reads as though the prompt had been cut before it went out. It now says how much more was sent and that only what you are looking at is capped, so there is no way to read it as the model having been given less. Copying the tab says the same: the header for a message claims its real length, and until now the text under it could be shorter with nothing saying so.
 
@@ -328,13 +291,8 @@ _2026-08-13_
 - **The on-screen panel can live in Lumiverse's sidebar drawer.** A new row under the panel switch, **Where that panel goes**, offers **Floating over the chat**, which is what it has always been, or **In the sidebar drawer**. Same panel, same three tabs, either way. In the drawer, Lumiverse places, sizes and themes it, so there is nothing to drag and nothing to remember, and it cannot cover the reply you are reading. Its tab carries a dot while a retry is running, so you can see something is happening without opening it. Floating is still the default, so an update does not move your panel. The drawer needs no permission, so the extension still declares the same four, and on a build with no drawer for extensions, asking for the sidebar gets you the floating panel and a line in the Log saying why.
 - **Open the Auto Retry panel**, in the chat input's **Extras** popover next to the settings entry, while the panel lives in the drawer. Where the drawer opens from belongs to Lumiverse and is not the same in every build, and **Ctrl+K** is no use on a phone, so Extras is the way in: one tap, any device, nothing else to switch on. It is not offered while the panel is floating, where it is already on screen.
 
-### Added
-
-- **Turning the floating button on or off eases between the two states.** The colours fade and the new mark grows in over the old one, so a tap reads as one movement rather than a flicker. Only on a real change: the button repaints when you switch chats and after a drag, and animating those would be movement saying nothing. A device set to reduce motion gets the same change with nothing in between, and the button itself still never moves under a press, since a press can be the start of a hold.
-
 ### Changed
 
-- **Open the Auto Retry panel has moved out of the Extras popover and into the floating button's menu.** Hold the button and it is there, under the two entries that were already there. It stays in Extras only when there is no floating button to carry it, so there is always exactly one way in and never two.
 
 - **The settings panel is down to eight sections from eleven, and opens on three.** Two of them were a heading over a single row, which is a heading that says nothing the row does not already say. **How it redoes a reply** was one switch and now sits at the end of **How it retries**, the section it was next to. **Watch for frozen replies** was two waits and now sits at the end of **When to count a reply as bad**, under a **Replies that freeze** heading, because a reply that never finished is a bad reply too. Nothing was renamed except **How hard it tries**, which is **How it retries** now that it also says which button a retry presses.
 - **The on-screen panel switch is in Basics.** It had an **Advanced: on-screen log** heading to itself, shut by default, so turning on the panel meant opening a collapsed Advanced section first. It is not advanced, and it is the first thing you are asked to turn on when reporting a bug. It is in Basics with the master switch and the other ways of seeing what the extension is doing.
@@ -358,13 +316,8 @@ _2026-08-10_
 
 _2026-08-07_
 
-### Added
-
-- **Turning the floating button on or off eases between the two states.** The colours fade and the new mark grows in over the old one, so a tap reads as one movement rather than a flicker. Only on a real change: the button repaints when you switch chats and after a drag, and animating those would be movement saying nothing. A device set to reduce motion gets the same change with nothing in between, and the button itself still never moves under a press, since a press can be the start of a hold.
-
 ### Changed
 
-- **Open the Auto Retry panel has moved out of the Extras popover and into the floating button's menu.** Hold the button and it is there, under the two entries that were already there. It stays in Extras only when there is no floating button to carry it, so there is always exactly one way in and never two.
 
 - **A dropdown is no longer left marked for having been clicked.** Clicking one used to tint its border to say it had the focus, and the tint stayed on the row after the choosing was done, until something else was clicked. It says nothing you cannot already see, since clicking a dropdown puts its menu on screen with the choice in front of you. Reaching one from the keyboard still marks it, because there is no menu then and nothing else saying where you are, and a text box is still marked either way, which is where the mark was doing its job.
 
@@ -372,13 +325,8 @@ _2026-08-07_
 
 _2026-08-07_
 
-### Added
-
-- **Turning the floating button on or off eases between the two states.** The colours fade and the new mark grows in over the old one, so a tap reads as one movement rather than a flicker. Only on a real change: the button repaints when you switch chats and after a drag, and animating those would be movement saying nothing. A device set to reduce motion gets the same change with nothing in between, and the button itself still never moves under a press, since a press can be the start of a hold.
-
 ### Changed
 
-- **Open the Auto Retry panel has moved out of the Extras popover and into the floating button's menu.** Hold the button and it is there, under the two entries that were already there. It stays in Extras only when there is no floating button to carry it, so there is always exactly one way in and never two.
 
 - **The description on What the notes say was nearly five times the length of a normal one, and said half of itself twice.** It explained that each note carries its own role and starting try, then explained it again a few sentences later, and it also described the two settings underneath the list, which now sit under a **For the whole list** heading that says so on its own. The heading went in a few versions back and the words it replaced were never taken out. The descriptions on **Where the notes go** and **Only send them on a regenerate or a swipe** both opened with the same redundant sentence and have lost it too.
 
@@ -390,13 +338,8 @@ _2026-08-07_
 
 _2026-08-07_
 
-### Added
-
-- **Turning the floating button on or off eases between the two states.** The colours fade and the new mark grows in over the old one, so a tap reads as one movement rather than a flicker. Only on a real change: the button repaints when you switch chats and after a drag, and animating those would be movement saying nothing. A device set to reduce motion gets the same change with nothing in between, and the button itself still never moves under a press, since a press can be the start of a hold.
-
 ### Changed
 
-- **Open the Auto Retry panel has moved out of the Extras popover and into the floating button's menu.** Hold the button and it is there, under the two entries that were already there. It stays in Extras only when there is no floating button to carry it, so there is always exactly one way in and never two.
 
 - **The dot beside the status line has three states instead of two.** Dim and flat when Auto Retry is off or paused. Lit, and still, when it is on with nothing to do. Pulsing while something is actually happening: a retry counting down, a reply arriving, the model thinking. Movement means movement rather than decoration, so glancing at the corner answers the question without reading the line. It is opacity and a glow only, and the movement is dropped for anyone whose system asks for less of it, keeping the glow, which is the part carrying the meaning.
 
@@ -444,13 +387,8 @@ _2026-08-07_
 
 What has not started counting: a `<` someone typed in a scene, `if x<y`, a bare inline tag left open, or list items written without their end tags. Elements whose end tag is optional in HTML are left out of the container count, because models write `<ul><li>one<li>two</ul>` and mean it. An inline tag left hanging is a finished reply written badly, and that is not worth throwing the reply away over.
 
-### Added
-
-- **Turning the floating button on or off eases between the two states.** The colours fade and the new mark grows in over the old one, so a tap reads as one movement rather than a flicker. Only on a real change: the button repaints when you switch chats and after a drag, and animating those would be movement saying nothing. A device set to reduce motion gets the same change with nothing in between, and the button itself still never moves under a press, since a press can be the start of a hold.
-
 ### Changed
 
-- **Open the Auto Retry panel has moved out of the Extras popover and into the floating button's menu.** Hold the button and it is there, under the two entries that were already there. It stays in Extras only when there is no floating button to carry it, so there is always exactly one way in and never two.
 
 - **The retry pop-up counts down instead of freezing.** It used to say "Retrying 2/5 (cut off) in 47.3s" once and go on saying it for the next forty-seven seconds, so the one number anyone actually watches was the one number that never moved. 4.4.0 raised the longest wait to a minute, which turned that from a small oddity into something that looks like the extension having stopped. It now reads **Cut off. Retrying in 47s (try 2 of 5)** and the number goes down. Only the text is repainted, so the Cancel button next to it cannot be swallowed by a press landing mid-redraw.
 - **One way of writing a length, everywhere.** Whole seconds, because a figure twitching four times a second is noise, then `5m 03s` and `1h 05m 03s` as the wait grows. The countdown, the panel, the Stats tab and the message announcing a pause all say a length the same way now. Hours are there because the pause after repeated failures can be set to three of them, and `180 minutes` leaves you doing the division. Smaller units keep their leading zero so the line does not change width as it counts.
@@ -489,13 +427,8 @@ _2026-08-06_
 - **Three more ways of wrapping reasoning are recognised.** On top of `<think>` and `[thinking]`, the pipe forms `<|think|>` … `<|/think|>` and `<|think>` … `<think|>` are read now, and so is the `<|channel|>analysis<|message|>` … `<|end|>` block that models trained on the Harmony format use. Only the thinking channels are removed; the `final` channel is the visible reply and is kept. Any tag name you add under **Extra thinking tag names** works in all four. Until now a reply wrapped this way was checked with its whole reasoning block counted as part of it, so a refusal the model only weighed up caused a retry, and the length limit was measured against text the reader never sees.
 - **The floating button's size can be seen while you set it.** A circle beside the box is drawn at the size you type, and the real button changes with it, so you are not guessing from a number. Closing the panel without saving puts it back.
 
-### Added
-
-- **Turning the floating button on or off eases between the two states.** The colours fade and the new mark grows in over the old one, so a tap reads as one movement rather than a flicker. Only on a real change: the button repaints when you switch chats and after a drag, and animating those would be movement saying nothing. A device set to reduce motion gets the same change with nothing in between, and the button itself still never moves under a press, since a press can be the start of a hold.
-
 ### Changed
 
-- **Open the Auto Retry panel has moved out of the Extras popover and into the floating button's menu.** Hold the button and it is there, under the two entries that were already there. It stays in Extras only when there is no floating button to carry it, so there is always exactly one way in and never two.
 
 - **Reset is no longer all or nothing.** **Reset…** at the bottom of the panel opens a picker: tick the parts you want put back to their defaults, and anything you leave unticked is not touched. The parts are the same ones import and export use, so the names match between the two panels. Each line says how many of its settings you have actually changed, and a part still at its defaults cannot be ticked, since there would be nothing for it to do.
 - **Nothing resets without being asked first.** **Reset ticked** shows what it is about to do, naming the parts you picked, how many settings are in each, and whether presets are going with them. Nothing happens until you press **Yes, reset**. **Go back** returns to the list with your ticks kept, and Escape or a click outside closes it without touching a setting. The question is asked by the extension rather than handed to Lumiverse's own confirm dialog, because not every build has one.
@@ -557,13 +490,8 @@ _2026-08-04_
 - **Three things control how the notes are sent.** Which role each is sent under: system, you, or your character. Where the block is inserted: after the last message, before it, or at the very start. And which try it starts on, 2 by default, so the first retry goes out unchanged and the note is added from the second onward. Set it to 1 to add it every time.
 - **The note never touches your chat.** It goes to the model for one generation and nothing else. No message is written, nothing is edited, and it is not part of the reply. It cannot attach itself to a message you type either: Lumiverse says what kind of generation is running, and anything you send yourself is a normal one, which the note is never applied to. If your Lumiverse shows a Prompt Breakdown, the note appears there as its own block so you can check exactly what went out.
 
-### Added
-
-- **Turning the floating button on or off eases between the two states.** The colours fade and the new mark grows in over the old one, so a tap reads as one movement rather than a flicker. Only on a real change: the button repaints when you switch chats and after a drag, and animating those would be movement saying nothing. A device set to reduce motion gets the same change with nothing in between, and the button itself still never moves under a press, since a press can be the start of a hold.
-
 ### Changed
 
-- **Open the Auto Retry panel has moved out of the Extras popover and into the floating button's menu.** Hold the button and it is there, under the two entries that were already there. It stays in Extras only when there is no floating button to carry it, so there is always exactly one way in and never two.
 
 - **A filled button gets an outline when your theme's accent has all but vanished.** On a theme whose accent sits close to the panel colour, Save stayed readable but lost its edge, so nothing said it was a button. It now gets a border only when its fill has faded into the surface behind it. A theme with an ordinary accent is left exactly as it was, and the quieter secondary buttons keep the border your theme gives them.
 - **The panel says when Auto Retry itself is off.** It can be switched off from the floating button or the Extras menu without opening the settings, so it was possible to arrive here with it off and nothing saying why nothing was happening. A line at the top says so now. Nothing is hidden or greyed for it: off means paused rather than unconfigured, and setting things up while it is off is a normal thing to want to do.
@@ -593,13 +521,8 @@ _2026-08-02_
 - **Hold the floating button for a menu.** Move it back to the corner, or hide it. Right-click does the same on a computer. Before this the only way to put that button away was to open settings and switch it off, and on a phone there is no right-click at all.
 - **The floating button follows your "reduce motion" setting.** It dips when pressed, which is the only thing in the extension that actually moves. If your device asks for less movement it stays still, and still changes colour so a tap is acknowledged.
 
-### Added
-
-- **Turning the floating button on or off eases between the two states.** The colours fade and the new mark grows in over the old one, so a tap reads as one movement rather than a flicker. Only on a real change: the button repaints when you switch chats and after a drag, and animating those would be movement saying nothing. A device set to reduce motion gets the same change with nothing in between, and the button itself still never moves under a press, since a press can be the start of a hold.
-
 ### Changed
 
-- **Open the Auto Retry panel has moved out of the Extras popover and into the floating button's menu.** Hold the button and it is there, under the two entries that were already there. It stays in Extras only when there is no floating button to carry it, so there is always exactly one way in and never two.
 
 - **Auto Retry has its own symbol.** A die caught mid-tumble, since a fresh attempt is a reroll. It replaces the circular arrow on the settings entry and the power symbol on the on/off entry. The floating button was drawing a text character, so its shape was whatever font your phone reached for. It is a real drawing now and holds together at every size.
 
@@ -619,13 +542,8 @@ _2026-07-31_
 
 **Reinstall required.** Renaming the repository's main branch broke the link your install used to find updates. Remove Auto Retry and install it again from the same URL and it will pick up the new name. Your settings are saved to your Lumiverse account, so they come back with it.
 
-### Added
-
-- **Turning the floating button on or off eases between the two states.** The colours fade and the new mark grows in over the old one, so a tap reads as one movement rather than a flicker. Only on a real change: the button repaints when you switch chats and after a drag, and animating those would be movement saying nothing. A device set to reduce motion gets the same change with nothing in between, and the button itself still never moves under a press, since a press can be the start of a hold.
-
 ### Changed
 
-- **Open the Auto Retry panel has moved out of the Extras popover and into the floating button's menu.** Hold the button and it is there, under the two entries that were already there. It stays in Extras only when there is no floating button to carry it, so there is always exactly one way in and never two.
 
 - **Main is now called `stable`, and there is a new `testing` branch.** Stable only moves when there is a real release, so installing from it means a notification when something has actually shipped. Testing is where work in progress goes, so install from there for an early look, bugs included.
 
@@ -648,13 +566,8 @@ _2026-07-31_
 - **Session totals in the debug report.** Alongside the activity timeline it now counts how many replies came back fine, how many retries fired, how many messages it gave up on, and a breakdown of retries by reason. It turns "it retries too much" into "ninety retries, all of them for cut off".
 - **Keyboard access to the Advanced sections.** Those headers could not be reached without a pointer, so refusal tuning, find and replace, buttons, debug info and import/export could not be opened from a keyboard at all. They are proper buttons now: tab to one and press Enter or Space.
 
-### Added
-
-- **Turning the floating button on or off eases between the two states.** The colours fade and the new mark grows in over the old one, so a tap reads as one movement rather than a flicker. Only on a real change: the button repaints when you switch chats and after a drag, and animating those would be movement saying nothing. A device set to reduce motion gets the same change with nothing in between, and the button itself still never moves under a press, since a press can be the start of a hold.
-
 ### Changed
 
-- **Open the Auto Retry panel has moved out of the Extras popover and into the floating button's menu.** Hold the button and it is there, under the two entries that were already there. It stays in Extras only when there is no floating button to carry it, so there is always exactly one way in and never two.
 
 - **Descriptions no longer shove the list around.** Tapping a **?** used to open the description inside the row and push everything below it down the screen, and opening a second one moved everything again. It now floats just below that setting, so nothing moves and the setting you asked about stays visible. Only one shows at a time. Tap the description, tap the **?** again, tap elsewhere, scroll, or press Esc to dismiss it.
 - **Find and replace says what a preset carries.** That section is split under two headings. **Saved in a preset** holds your rules and the two options that decide how they match. **Yours, whatever preset you load** holds everything a preset leaves alone: whether swapping is on at all, which buttons appear in your Extras menu, whether a reply can be swapped twice, and whether it confirms before editing. Loading a preset cannot change any of those.
@@ -677,13 +590,8 @@ _2026-07-31_
 
 _2026-07-29_
 
-### Added
-
-- **Turning the floating button on or off eases between the two states.** The colours fade and the new mark grows in over the old one, so a tap reads as one movement rather than a flicker. Only on a real change: the button repaints when you switch chats and after a drag, and animating those would be movement saying nothing. A device set to reduce motion gets the same change with nothing in between, and the button itself still never moves under a press, since a press can be the start of a hold.
-
 ### Changed
 
-- **Open the Auto Retry panel has moved out of the Extras popover and into the floating button's menu.** Hold the button and it is there, under the two entries that were already there. It stays in Extras only when there is no floating button to carry it, so there is always exactly one way in and never two.
 
 - **Clearer settings descriptions.** Trimmed the wordier ones again so they say what the setting does without the bloat.
 - **The docs are split into pages.** The README was getting long, so it is now a short intro plus a `docs/` folder: when it retries, word swaps, all settings, buttons it clicks, import and export, reporting a bug.
@@ -696,13 +604,8 @@ _2026-07-28_
 
 - **Extra dialog buttons it may press.** New box in the buttons settings, for the rare case where that dialog's button says something other than Skip. Type the wording exactly as it appears, one per line. Most people will not need it.
 
-### Added
-
-- **Turning the floating button on or off eases between the two states.** The colours fade and the new mark grows in over the old one, so a tap reads as one movement rather than a flicker. Only on a real change: the button repaints when you switch chats and after a drag, and animating those would be movement saying nothing. A device set to reduce motion gets the same change with nothing in between, and the button itself still never moves under a press, since a press can be the start of a hold.
-
 ### Changed
 
-- **Open the Auto Retry panel has moved out of the Extras popover and into the floating button's menu.** Hold the button and it is there, under the two entries that were already there. It stays in Extras only when there is no floating button to carry it, so there is always exactly one way in and never two.
 
 - **README.** New sections on how Regeneration Feedback and Auto Retry work together, and on writing selectors by hand.
 
@@ -730,13 +633,8 @@ _2026-07-24_
 
 _2026-07-24_
 
-### Added
-
-- **Turning the floating button on or off eases between the two states.** The colours fade and the new mark grows in over the old one, so a tap reads as one movement rather than a flicker. Only on a real change: the button repaints when you switch chats and after a drag, and animating those would be movement saying nothing. A device set to reduce motion gets the same change with nothing in between, and the button itself still never moves under a press, since a press can be the start of a hold.
-
 ### Changed
 
-- **Open the Auto Retry panel has moved out of the Extras popover and into the floating button's menu.** Hold the button and it is there, under the two entries that were already there. It stays in Extras only when there is no floating button to carry it, so there is always exactly one way in and never two.
 
 - **Word swap presets stick to your rules.** A preset used to carry the whole word-swap section, so loading one could switch swapping on, remove the confirm-before-editing prompt, allow double swaps, or move buttons around in your Extras menu. It now saves your rules plus **Pick a swap at random** and **Match case exactly**, and leaves the rest alone. Exports are unchanged, and presets already saved keep working.
 
@@ -761,13 +659,8 @@ _2026-07-23_
 
 - **Reset button selectors.** New button at the bottom of Advanced: buttons it clicks. Puts all three selectors back to the defaults without touching anything else. It fills the boxes, so press Save to keep it or close the panel to undo.
 
-### Added
-
-- **Turning the floating button on or off eases between the two states.** The colours fade and the new mark grows in over the old one, so a tap reads as one movement rather than a flicker. Only on a real change: the button repaints when you switch chats and after a drag, and animating those would be movement saying nothing. A device set to reduce motion gets the same change with nothing in between, and the button itself still never moves under a press, since a press can be the start of a hold.
-
 ### Changed
 
-- **Open the Auto Retry panel has moved out of the Extras popover and into the floating button's menu.** Hold the button and it is there, under the two entries that were already there. It stays in Extras only when there is no floating button to carry it, so there is always exactly one way in and never two.
 
 - **Shorter description on that section.** It had grown into a wall of text. The panel now covers what you need on first read, and the README has the fallback list and selector syntax.
 - **README: word swaps.** Clearer on how the longest-match rule and the random option differ. Longest match decides which rule fires when two compete for the same spot; random decides which replacement one rule uses when several are given. Also notes that identical left sides fall back to list order.
@@ -785,13 +678,8 @@ _2026-07-23_
 - **Pick it for me.** New button by each button setting. Press it, then click the real button in Lumiverse. It builds selectors from labels and data attributes rather than class names, which Lumiverse regenerates every release.
 - **Pause when everything is failing.** On by default. Several failed runs in a row pauses auto-retry instead of retrying on every message. Two boxes set how many and how long. A good reply ends it early.
 
-### Added
-
-- **Turning the floating button on or off eases between the two states.** The colours fade and the new mark grows in over the old one, so a tap reads as one movement rather than a flicker. Only on a real change: the button repaints when you switch chats and after a drag, and animating those would be movement saying nothing. A device set to reduce motion gets the same change with nothing in between, and the button itself still never moves under a press, since a press can be the start of a hold.
-
 ### Changed
 
-- **Open the Auto Retry panel has moved out of the Extras popover and into the floating button's menu.** Hold the button and it is there, under the two entries that were already there. It stays in Extras only when there is no floating button to carry it, so there is always exactly one way in and never two.
 
 - **Empty and cut-off checks no longer depend on the refusal option.** Turning off Ignore the thinking / reasoning was also switching off those two checks, so thinking-only and mid-thought replies slipped through. That option covers refusal matching only now.
 - **Selectors can contain commas.** `:is(a, b)` and `[aria-label="Next, swipe"]` each count as one entry.
@@ -820,13 +708,8 @@ _2026-07-22_
 
 - **New refusal pattern.** Covers models breaking character to refuse by naming specific prohibited content policies.
 
-### Added
-
-- **Turning the floating button on or off eases between the two states.** The colours fade and the new mark grows in over the old one, so a tap reads as one movement rather than a flicker. Only on a real change: the button repaints when you switch chats and after a drag, and animating those would be movement saying nothing. A device set to reduce motion gets the same change with nothing in between, and the button itself still never moves under a press, since a press can be the start of a hold.
-
 ### Changed
 
-- **Open the Auto Retry panel has moved out of the Extras popover and into the floating button's menu.** Hold the button and it is there, under the two entries that were already there. It stays in Extras only when there is no floating button to carry it, so there is always exactly one way in and never two.
 
 - **Selectors check in the order given.** Comma-separated selectors now evaluate left to right. Put specific selectors first, broad ones last.
 
@@ -853,13 +736,8 @@ _2026-07-21_
 
 _2026-07-21_
 
-### Added
-
-- **Turning the floating button on or off eases between the two states.** The colours fade and the new mark grows in over the old one, so a tap reads as one movement rather than a flicker. Only on a real change: the button repaints when you switch chats and after a drag, and animating those would be movement saying nothing. A device set to reduce motion gets the same change with nothing in between, and the button itself still never moves under a press, since a press can be the start of a hold.
-
 ### Changed
 
-- **Open the Auto Retry panel has moved out of the Extras popover and into the floating button's menu.** Hold the button and it is there, under the two entries that were already there. It stays in Extras only when there is no floating button to carry it, so there is always exactly one way in and never two.
 
 - **Whole-chat swapping is its own button.** The "Button swaps the whole chat" toggle is gone. A new option adds a second Extras button, **Swap words in every reply**, that applies your rules once to every generated reply in the chat, which is handy after adding a rule mid-chat or loading a different preset. Off by default, and the original swap button now always does just the latest reply.
 
@@ -871,13 +749,8 @@ _2026-07-21_
 
 - **Presets travel with your exports.** Advanced: import / export has a Word swap presets option. Tick it to include your presets in the export file. Importing merges them: same-named presets are replaced, new ones are added, the rest are left alone. Since presets lived on one browser at the time, this was how to move them between devices or share them. Imported presets save right away, with no Save press needed.
 
-### Added
-
-- **Turning the floating button on or off eases between the two states.** The colours fade and the new mark grows in over the old one, so a tap reads as one movement rather than a flicker. Only on a real change: the button repaints when you switch chats and after a drag, and animating those would be movement saying nothing. A device set to reduce motion gets the same change with nothing in between, and the button itself still never moves under a press, since a press can be the start of a hold.
-
 ### Changed
 
-- **Open the Auto Retry panel has moved out of the Extras popover and into the floating button's menu.** Hold the button and it is there, under the two entries that were already there. It stays in Extras only when there is no floating button to carry it, so there is always exactly one way in and never two.
 
 - **Shorter store description.** Trimmed to one line so it reads clean in the extension list.
 
@@ -894,13 +767,8 @@ _2026-07-19_
 - **Word swap presets.** Save your word-swap setups as named presets and switch between them without copying rules by hand. They live at the bottom of Advanced: find and replace. Pick one and press Load, or use Save as new, Rename selected, Update selected and Delete. Loading takes effect right away. Kept on your browser, so they do not sync across devices.
 - **Expand button on long text boxes.** Any multiline field, such as word-swap rules or refusal phrase lists, has an Expand button that opens a full-size editor. It opens without popping the keyboard, so you can read first and tap in when you want to type.
 
-### Added
-
-- **Turning the floating button on or off eases between the two states.** The colours fade and the new mark grows in over the old one, so a tap reads as one movement rather than a flicker. Only on a real change: the button repaints when you switch chats and after a drag, and animating those would be movement saying nothing. A device set to reduce motion gets the same change with nothing in between, and the button itself still never moves under a press, since a press can be the start of a hold.
-
 ### Changed
 
-- **Open the Auto Retry panel has moved out of the Extras popover and into the floating button's menu.** Hold the button and it is there, under the two entries that were already there. It stays in Extras only when there is no floating button to carry it, so there is always exactly one way in and never two.
 
 - **Descriptions moved into tooltips.** Each setting's explanation sits behind a small **?** next to its name. Hover on a computer, tap on a phone. Keeps the panel much more compact.
 - **Follows your theme's fonts.** Panels and the settings UI use the Lumiverse global font, headers use the bold version, and the code areas (debug preview and live log) use the mono font.
@@ -920,13 +788,8 @@ _2026-07-18_
 - **Keep your rerolls on retry.** Suggested by a Discord user. New toggle, "Retry by adding a new reroll", under a "How it redoes a reply" section. Off (the default), a retry redoes the reply in place with your regenerate button, which on some builds clears the other rerolls on that message. On, a retry clicks your next / swipe button instead, adding a fresh reroll and leaving existing ones in place. It falls back to regenerate if the swipe button is not found, so set that selector in the buttons section if retries stop after turning it on.
 - **Heads up on repeated failures.** In the new mode each retry adds a reroll rather than replacing one, so a reply that fails a few times before it lands can leave a couple of empty or partial rerolls stacked next to the good one. Regenerate mode still replaces in place with no pile-up, so both behaviours are there to pick from.
 
-### Added
-
-- **Turning the floating button on or off eases between the two states.** The colours fade and the new mark grows in over the old one, so a tap reads as one movement rather than a flicker. Only on a real change: the button repaints when you switch chats and after a drag, and animating those would be movement saying nothing. A device set to reduce motion gets the same change with nothing in between, and the button itself still never moves under a press, since a press can be the start of a hold.
-
 ### Changed
 
-- **Open the Auto Retry panel has moved out of the Extras popover and into the floating button's menu.** Hold the button and it is there, under the two entries that were already there. It stays in Extras only when there is no floating button to carry it, so there is always exactly one way in and never two.
 
 - **Easier to debug.** Copy debug info lists which retry mode is active, and the "couldn't find your button" messages no longer assume regenerate, so they read right in either mode.
 
@@ -940,13 +803,8 @@ _2026-07-17_
 - **More swap control.** Two new options: swap the whole chat at once instead of just the latest reply, and allow re-swapping a reply already swapped, useful after changing your rules. By default a reply is only swapped once, so swaps never stack.
 - **Ask before editing.** New toggle that makes every swap, automatic or manual, ask for confirmation before changing a reply. Off by default.
 
-### Added
-
-- **Turning the floating button on or off eases between the two states.** The colours fade and the new mark grows in over the old one, so a tap reads as one movement rather than a flicker. Only on a real change: the button repaints when you switch chats and after a drag, and animating those would be movement saying nothing. A device set to reduce motion gets the same change with nothing in between, and the button itself still never moves under a press, since a press can be the start of a hold.
-
 ### Changed
 
-- **Open the Auto Retry panel has moved out of the Extras popover and into the floating button's menu.** Hold the button and it is there, under the two entries that were already there. It stays in Extras only when there is no floating button to carry it, so there is always exactly one way in and never two.
 
 - **The greeting is never touched.** Word swaps only apply to generated replies. The opening message is always left alone, in both automatic and manual modes.
 - **Clearer input focus.** Text and swap-rule boxes show a soft accent glow when focused instead of a barely visible outline.
@@ -965,13 +823,8 @@ _2026-07-16_
 
 - **Custom thinking tags.** Add any wrapper your model uses under "Extra thinking tag names", one per line. New "Ignore the thinking / reasoning" toggle, on by default.
 
-### Added
-
-- **Turning the floating button on or off eases between the two states.** The colours fade and the new mark grows in over the old one, so a tap reads as one movement rather than a flicker. Only on a real change: the button repaints when you switch chats and after a drag, and animating those would be movement saying nothing. A device set to reduce motion gets the same change with nothing in between, and the button itself still never moves under a press, since a press can be the start of a hold.
-
 ### Changed
 
-- **Open the Auto Retry panel has moved out of the Extras popover and into the floating button's menu.** Hold the button and it is there, under the two entries that were already there. It stays in Extras only when there is no floating button to carry it, so there is always exactly one way in and never two.
 
 - **Refusals inside the model's thinking are ignored.** Only the final reply is checked. Reasoning blocks (`<think>`, `<thinking>`, `<reasoning>`, `<reflection>`, `<scratchpad>` and similar, plus `[tag]` forms) are stripped before matching.
 - **Settings sync to your Lumiverse account.** They follow you across browsers and devices instead of living in one browser. Existing settings migrate up automatically.
@@ -1011,13 +864,8 @@ _2026-07-15_
 
 _2026-07-14_
 
-### Added
-
-- **Turning the floating button on or off eases between the two states.** The colours fade and the new mark grows in over the old one, so a tap reads as one movement rather than a flicker. Only on a real change: the button repaints when you switch chats and after a drag, and animating those would be movement saying nothing. A device set to reduce motion gets the same change with nothing in between, and the button itself still never moves under a press, since a press can be the start of a hold.
-
 ### Changed
 
-- **Open the Auto Retry panel has moved out of the Extras popover and into the floating button's menu.** Hold the button and it is there, under the two entries that were already there. It stays in Extras only when there is no floating button to carry it, so there is always exactly one way in and never two.
 
 - **Rules and phrases are one per line.** Word swaps, custom refusal phrases, the whitelist and reword rules are no longer separated by commas.
 - **Word swap and refusal settings use multi-line text areas.** Easier to manage lists, and Enter starts a new rule directly in the settings.
@@ -1035,13 +883,8 @@ _2026-07-13_
 
 - **That cap can be set to 0 to turn it off entirely**, so refusals are caught at any length. It stays safe because length alone never triggers a retry: a reply still has to match the refusal patterns, so a long scene will not be re-rolled just for being long.
 
-### Added
-
-- **Turning the floating button on or off eases between the two states.** The colours fade and the new mark grows in over the old one, so a tap reads as one movement rather than a flicker. Only on a real change: the button repaints when you switch chats and after a drag, and animating those would be movement saying nothing. A device set to reduce motion gets the same change with nothing in between, and the button itself still never moves under a press, since a press can be the start of a hold.
-
 ### Changed
 
-- **Open the Auto Retry panel has moved out of the Extras popover and into the floating button's menu.** Hold the button and it is there, under the two entries that were already there. It stays in Extras only when there is no floating button to carry it, so there is always exactly one way in and never two.
 
 - **The "longest reply to treat as a refusal" cap defaults to 2000.** (was 1200). Some models write long, padded refusals (apology, "as an AI", a paragraph of reasoning, then offered alternatives) that ran past the old limit and slipped through. 2000 catches those while leaving genuinely long replies alone.
 
@@ -1049,13 +892,8 @@ _2026-07-13_
 
 _2026-07-13_
 
-### Added
-
-- **Turning the floating button on or off eases between the two states.** The colours fade and the new mark grows in over the old one, so a tap reads as one movement rather than a flicker. Only on a real change: the button repaints when you switch chats and after a drag, and animating those would be movement saying nothing. A device set to reduce motion gets the same change with nothing in between, and the button itself still never moves under a press, since a press can be the start of a hold.
-
 ### Changed
 
-- **Open the Auto Retry panel has moved out of the Extras popover and into the floating button's menu.** Hold the button and it is there, under the two entries that were already there. It stays in Extras only when there is no floating button to carry it, so there is always exactly one way in and never two.
 
 - **Renamed:** the "On / off" settings group to "Basics".
 - **Renamed:** the "Notifications" import/export category to "On-screen", since it covers the retry pop-up and the live log.
@@ -1110,13 +948,8 @@ _2026-07-12_
 - **Find and replace in replies (beta).** Swap words you do not like for ones you prefer, saved right into the reply. Whole words only by default, so "cat" will not touch "category". It keeps capitalisation, and an empty right side deletes a word. Off by default.
 - **A new chat-editing permission.** (`chat_mutation`) alongside the existing generation one. Only used by find and replace, so it can save its edits to a reply. Depending on your setup it may need admin approval when you update, and if you never use find and replace nothing is touched.
 
-### Added
-
-- **Turning the floating button on or off eases between the two states.** The colours fade and the new mark grows in over the old one, so a tap reads as one movement rather than a flicker. Only on a real change: the button repaints when you switch chats and after a drag, and animating those would be movement saying nothing. A device set to reduce motion gets the same change with nothing in between, and the button itself still never moves under a press, since a press can be the start of a hold.
-
 ### Changed
 
-- **Open the Auto Retry panel has moved out of the Extras popover and into the floating button's menu.** Hold the button and it is there, under the two entries that were already there. It stays in Extras only when there is no floating button to carry it, so there is always exactly one way in and never two.
 
 - **Advanced settings now collapse**, tucked behind a tap-to-open header so the basic switches stay front and centre.
 - **README cleaned up and updated**, reorganised, and now covering the new settings and permissions.
@@ -1133,13 +966,8 @@ _2026-06-27_
 
 _2026-06-27_
 
-### Added
-
-- **Turning the floating button on or off eases between the two states.** The colours fade and the new mark grows in over the old one, so a tap reads as one movement rather than a flicker. Only on a real change: the button repaints when you switch chats and after a drag, and animating those would be movement saying nothing. A device set to reduce motion gets the same change with nothing in between, and the button itself still never moves under a press, since a press can be the start of a hold.
-
 ### Changed
 
-- **Open the Auto Retry panel has moved out of the Extras popover and into the floating button's menu.** Hold the button and it is there, under the two entries that were already there. It stays in Extras only when there is no floating button to carry it, so there is always exactly one way in and never two.
 
 - **The selector Test no longer overstates what it knows.** A failed match says "no match right now" instead of "not on screen right now".
 
@@ -1147,13 +975,8 @@ _2026-06-27_
 
 _2026-06-27_
 
-### Added
-
-- **Turning the floating button on or off eases between the two states.** The colours fade and the new mark grows in over the old one, so a tap reads as one movement rather than a flicker. Only on a real change: the button repaints when you switch chats and after a drag, and animating those would be movement saying nothing. A device set to reduce motion gets the same change with nothing in between, and the button itself still never moves under a press, since a press can be the start of a hold.
-
 ### Changed
 
-- **Open the Auto Retry panel has moved out of the Extras popover and into the floating button's menu.** Hold the button and it is there, under the two entries that were already there. It stays in Extras only when there is no floating button to carry it, so there is always exactly one way in and never two.
 
 - **Closing settings with the X discards unsaved changes.** Before, edits took effect the moment you made them, so closing without saving still left them applied to the current session, which was confusing. Now only **Save** keeps changes, and closing with X or tapping outside throws away anything unsaved. **Reset** counts as a change you made, so it sticks.
 - **Testing an empty selector box gives a clearer message.** It says "type a selector first" instead of reporting no match right now.
@@ -1168,13 +991,8 @@ _2026-06-27_
 
 _2026-06-26_
 
-### Added
-
-- **Turning the floating button on or off eases between the two states.** The colours fade and the new mark grows in over the old one, so a tap reads as one movement rather than a flicker. Only on a real change: the button repaints when you switch chats and after a drag, and animating those would be movement saying nothing. A device set to reduce motion gets the same change with nothing in between, and the button itself still never moves under a press, since a press can be the start of a hold.
-
 ### Changed
 
-- **Open the Auto Retry panel has moved out of the Extras popover and into the floating button's menu.** Hold the button and it is there, under the two entries that were already there. It stays in Extras only when there is no floating button to carry it, so there is always exactly one way in and never two.
 
 - **Testing a button selector is clearer.** A button only exists in the page while it is on screen, so a correct selector will not match if that button is not showing. The result now reads "not on screen right now" instead of "no match", and the settings and README explain it: the **Stop** button only appears while a reply is generating, so test that selector mid-generation rather than from an idle screen.
 - **Tightened up the wording** in the settings descriptions and README.
@@ -1192,13 +1010,8 @@ _2026-06-25_
 
 _2026-06-17_
 
-### Added
-
-- **Turning the floating button on or off eases between the two states.** The colours fade and the new mark grows in over the old one, so a tap reads as one movement rather than a flicker. Only on a real change: the button repaints when you switch chats and after a drag, and animating those would be movement saying nothing. A device set to reduce motion gets the same change with nothing in between, and the button itself still never moves under a press, since a press can be the start of a hold.
-
 ### Changed
 
-- **Open the Auto Retry panel has moved out of the Extras popover and into the floating button's menu.** Hold the button and it is there, under the two entries that were already there. It stays in Extras only when there is no floating button to carry it, so there is always exactly one way in and never two.
 
 - **Copy debug info includes a recent-activity log**, so a bug report shows what actually happened (generations starting, retries firing and why, a clean finish) rather than just a snapshot of your settings.
 
@@ -1211,13 +1024,8 @@ _2026-06-17_
 - **A Cancel button on the retry pop-up**, so you can pull the plug even while it is counting down to a retry.
 - **A Copy debug info button**, so reporting a bug is one tap with no dev tools needed.
 
-### Added
-
-- **Turning the floating button on or off eases between the two states.** The colours fade and the new mark grows in over the old one, so a tap reads as one movement rather than a flicker. Only on a real change: the button repaints when you switch chats and after a drag, and animating those would be movement saying nothing. A device set to reduce motion gets the same change with nothing in between, and the button itself still never moves under a press, since a press can be the start of a hold.
-
 ### Changed
 
-- **Open the Auto Retry panel has moved out of the Extras popover and into the floating button's menu.** Hold the button and it is there, under the two entries that were already there. It stays in Extras only when there is no floating button to carry it, so there is always exactly one way in and never two.
 
 - **Settings reworded in plain language**, with a short description on each group.
 - **Tuned the defaults** so a slow reply or a slow local model is not mistaken for a frozen one and retried into a pile-up.
