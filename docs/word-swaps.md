@@ -12,16 +12,16 @@ Only generated assistant replies are swapped, by either the automatic mode or th
 
 ## Swapping by hand
 
-If you would rather apply swaps by hand than have them run on every reply, turn on **Show a 'swap words now' button** under Find and replace. That adds a button to the chat input's Extras menu, next to the settings button, that applies your swaps on demand. It only ever edits assistant replies, never your own messages.
+If you would rather apply swaps by hand than have them run on every reply, turn on **Show a 'swap words now' button** under Find and replace. That adds a button that applies your swaps on demand: in the chat input's Extras menu, next to the settings button, or in the floating on/off button's own menu while that button is showing. It only ever edits assistant replies, never your own messages.
 
 By default it swaps just the latest reply and won't swap the same reply twice, so it won't stack on top of an automatic swap or an earlier tap. Two options change that:
 
-- **Show a swap-whole-chat button** adds a second Extras button, **Swap words in every reply**, which applies your rules once to every generated reply in the chat you are viewing. Handy after adding a rule mid-chat or loading a different preset.
+- **Show a swap-whole-chat button** adds a second button beside it, **Swap words in every reply**, which applies your rules once to every generated reply in the chat you are viewing. Handy after adding a rule mid-chat or loading a different preset.
 - **Allow swapping a reply again** lets it swap a reply you already swapped, which is useful after you change your rules, though it can stack swaps.
 
 There is no way to pick individual arbitrary messages; the choice is the latest reply or the whole chat.
 
-It acts on replies from the current session, the ones you have generated, so it is most reliable right after a reply. On a freshly opened old chat it will say there is no reply to swap until you generate one. It works whether or not automatic swapping is on, and appears in the Extras menu on both mobile and desktop.
+It acts on replies from the current session, the ones you have generated, so it is most reliable right after a reply. On a freshly opened old chat it will say there is no reply to swap until you generate one. It works whether or not automatic swapping is on, and is a tap away on both mobile and desktop.
 
 ## Confirming each swap
 
@@ -87,7 +87,7 @@ At the bottom of the find-and-replace settings you can save your word-swap setup
 
 The find-and-replace settings are split into two runs so you can see this at a glance. Under **Saved in a preset** are your rules and the two options that decide how they match, **Pick a swap at random** and **Match case exactly**. Rules saved without those behave differently when loaded, which defeats the point of a preset.
 
-Under **Yours, whatever preset you load** is everything a preset leaves alone. Whether swapping is switched on at all, which buttons appear in your Extras menu, whether a reply can be swapped twice, and whether it confirms before editing all stay as you have them. Exporting still carries all of them, since an export is a backup of your whole setup rather than a preset you load.
+Under **Yours, whatever preset you load** is everything a preset leaves alone. Whether swapping is switched on at all, which of the manual buttons you have, whether a reply can be swapped twice, and whether it confirms before editing all stay as you have them. Exporting still carries all of them, since an export is a backup of your whole setup rather than a preset you load.
 
 The buttons:
 

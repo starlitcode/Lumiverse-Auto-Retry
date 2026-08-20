@@ -1965,7 +1965,10 @@ console.log("\nfloat button menu");
   check("a quick tap still toggles", out.afterTap.pressed !== out.wasOn, out.afterTap);
   check("and opens no menu", !out.afterTap.menu);
   check("a hold opens the menu", out.openedByHold);
-  check("with its two entries", out.entries.length === 2, out.entries);
+  // Two, because nothing else here is switched on. The panel entry and the two
+  // manual swaps join it when theirs are, which "where the ways into the
+  // extension live" covers; this is the floor.
+  check("with its two entries, nothing else being on", out.entries.length === 2, out.entries);
   check("and neither of them offers to move it, since dragging does that",
     !out.entries.some((t) => /corner|move/i.test(t)), out.entries);
   // The thing someone holding this button is most likely to be after, so it is
@@ -1976,6 +1979,9 @@ console.log("\nfloat button menu");
   // the labels.
   check("its entries carry the keys the answer is read from",
     out.keys.join(",") === "settings,hide", out.keys);
+  // Hide is last whatever else is in the menu, because it is the only entry
+  // that takes the menu away with it.
+  check("and hide is the last of them", out.keys[out.keys.length - 1] === "hide", out.keys);
   check("it is anchored on screen", out.onScreen, out);
   check("and centred on the button", out.onButton, out);
   check("dragging is not a hold", !out.afterDrag);
@@ -4612,27 +4618,27 @@ console.log("\nthe focus ring");
   check("no console errors", errors.length === 0, errors);
 }
 
-// ---- a tapped button does not keep its hover colour ----
-// The same half-sent pair, in the panel rather than the menu: a touch browser
-// raises mouseenter at the end of a tap and never sends the matching leave, so
-// every button in the panel stayed lit in its hover colour once tapped. The
-// pointerleave that resets it has already run by the time that hover arrives.
-// ---- an older Lumiverse without the menu API says where to go ----
-// The menu is the host's, and a build that predates it has no showContextMenu
-// at all. Opening nothing would read as the button being broken, so it says
-// where the settings actually are.
-// ---- one menu per gesture, even when Android asks twice ----
-// A long press on Android runs our hold timer and raises contextmenu as well,
-// so the menu gets asked for twice on the way to one gesture. Ours used to be
-// removed and rebuilt on the second ask. The host's cannot be taken back, so a
-// second ask would leave two menus stacked.
-// ---- the way into the panel follows the floating button ----
-// It used to sit in Extras whatever else was on screen. The button's own menu
-// carries it now, and Extras only keeps it when there is no button to carry it,
-// which on a phone is the difference between one way in and none.
-console.log("\nwhere the way into the panel lives");
+// ---- what the floating button takes over ----
+// The ways into the extension used to sit in Extras whatever else was on
+// screen. The button's own menu carries them now, and Extras keeps them only
+// when there is no button to carry them, which on a phone is the difference
+// between one way in and two of them three taps apart.
+//
+// Three cases, because the middle one is the one that bites: a build with no
+// showContextMenu has a button that can carry nothing, so nothing may stand
+// down for it.
+console.log("\nwhere the ways into the extension live");
 {
-  for (const withButton of [true, false]) {
+  // The entries the button's menu takes over. The settings one is not among
+  // them on purpose: it is the extension's one guaranteed way in, so it stays
+  // in Extras throughout.
+  const MOVABLE = ["auto-retry-open-panel", "auto-retry-replace-now", "auto-retry-replace-all"];
+  const CASES = [
+    { name: "with the button on screen", button: true, menu: true },
+    { name: "with a button but no menu API", button: true, menu: false },
+    { name: "with no button", button: false, menu: true },
+  ];
+  for (const mode of CASES) {
     const page = await browser.newPage({ viewport: { width: 412, height: 800 } });
     const errors = [];
     page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
@@ -4641,60 +4647,100 @@ console.log("\nwhere the way into the panel lives");
     await page.addStyleTag({ content: THEME });
     await page.addScriptTag({ content: SOURCE, type: "module" });
     await page.waitForFunction(() => !!window.__setup);
-    const out = await page.evaluate(async (withButton) => {
+    const out = await page.evaluate(async (mode) => {
       const wait = (ms) => new Promise((r) => setTimeout(r, ms));
       const host = document.getElementById("host");
       host.style.cssText = "position:fixed;left:60px;top:60px";
       const acts = {};
+      const sent = [];
       let activated = 0;
       window.__menus = [];
       window.__pick = null;
+      const ui = {
+        showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+        registerInputBarAction: (o) => {
+          const a = { onClick: (cb) => { a.cb = cb; return () => {}; }, destroy: () => { delete acts[o.id]; } };
+          acts[o.id] = a;
+          return a;
+        },
+        registerDrawerTab: () => {
+          const root = document.createElement("div");
+          document.body.appendChild(root);
+          return { root, setBadge: () => {}, activate: () => { activated++; }, destroy: () => root.remove() };
+        },
+        createFloatWidget: () => ({ root: host, destroy: () => { host.innerHTML = ""; }, setPosition: () => {} }),
+      };
+      if (mode.menu) {
+        ui.showContextMenu = (o) => { window.__menus.push(o); return Promise.resolve({ selectedKey: window.__pick }); };
+      }
       window.__setup(
         { events: { on: () => () => {} },
-          ui: {
-            showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
-            registerInputBarAction: (o) => {
-              const a = { onClick: (cb) => { a.cb = cb; return () => {}; }, destroy: () => { delete acts[o.id]; } };
-              acts[o.id] = a;
-              return a;
-            },
-            registerDrawerTab: () => {
-              const root = document.createElement("div");
-              document.body.appendChild(root);
-              return { root, setBadge: () => {}, activate: () => { activated++; }, destroy: () => root.remove() };
-            },
-            showContextMenu: (o) => { window.__menus.push(o); return Promise.resolve({ selectedKey: window.__pick }); },
-            createFloatWidget: () => ({ root: host, destroy: () => { host.innerHTML = ""; }, setPosition: () => {} }),
-          } },
-        { liveLog: true, panelHome: "drawer", showFloatingToggle: withButton, toast: false },
+          sendToBackend: (m) => sent.push(m),
+          onBackendMessage: () => () => {},
+          ui },
+        {
+          liveLog: true,
+          panelHome: "drawer",
+          showFloatingToggle: mode.button,
+          showReplaceButton: true,
+          showSwapAllButton: true,
+          showExtrasToggle: true,
+          toast: false,
+        },
       );
       await wait(60);
-      const res = { inExtras: Object.keys(acts).indexOf("auto-retry-open-panel") >= 0, inMenu: false, opened: 0 };
+      const res = {
+        inExtras: Object.keys(acts).sort(),
+        menuKeys: [],
+        opened: 0,
+        swapped: 0,
+      };
       const b = host.querySelector("button");
-      if (b) {
-        // Hold it open and take the panel entry.
-        window.__pick = "panel";
-        b.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, clientX: 80, clientY: 80 }));
-        await wait(700);
-        b.dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
-        await wait(60);
-        const m = window.__menus[window.__menus.length - 1];
-        res.inMenu = !!m && m.items.some((i) => i.key === "panel");
-        res.opened = activated;
-      }
       res.hasButton = !!b;
+      if (b && mode.menu) {
+        // Hold it open once to read the menu, and again to take an entry.
+        const hold = async (pick) => {
+          window.__pick = pick;
+          b.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, clientX: 80, clientY: 80 }));
+          await wait(700);
+          b.dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
+          await wait(60);
+          return window.__menus[window.__menus.length - 1];
+        };
+        const m = await hold("panel");
+        res.menuKeys = (m && m.items.map((i) => i.key)) || [];
+        res.opened = activated;
+        await hold("swapAll");
+        res.swapped = sent.filter((x) => x && x.type === "apply_replace_now" && x.wholeChat).length;
+      }
       return res;
-    }, withButton);
+    }, mode);
     await page.close();
-    const n = withButton ? "with the button on screen" : "with no button";
-    check(n + ": the button is " + (withButton ? "there" : "absent"), out.hasButton === withButton, out);
-    check(n + ": Extras " + (withButton ? "leaves it to the menu" : "carries it"),
-      out.inExtras === !withButton, out);
-    if (withButton) {
-      check(n + ": the menu offers it", out.inMenu, out);
-      check(n + ": and choosing it brings the tab forward", out.opened === 1, out);
+    const carried = mode.button && mode.menu;
+    const moved = MOVABLE.filter((id) => out.inExtras.indexOf(id) >= 0);
+    check(mode.name + ": the button is " + (mode.button ? "there" : "absent"), out.hasButton === mode.button, out);
+    check(mode.name + ": settings stays in Extras either way",
+      out.inExtras.indexOf("auto-retry-settings") >= 0, out.inExtras);
+    check(mode.name + ": Extras " + (carried ? "leaves the rest to the menu" : "carries the rest"),
+      carried ? moved.length === 0 : moved.length === MOVABLE.length, out.inExtras);
+    // The on/off entry answers to the button rather than to the menu, because
+    // what replaces it is the button itself: one tap, with the state on its
+    // face. So it stands down even on a build that can draw no menu at all.
+    check(mode.name + ": the on/off entry is " + (mode.button ? "down for the button" : "in Extras"),
+      (out.inExtras.indexOf("auto-retry-toggle") >= 0) === !mode.button, out.inExtras);
+    if (carried) {
+      check(mode.name + ": the menu offers the panel and both swaps",
+        ["panel", "swap", "swapAll"].every((k) => out.menuKeys.indexOf(k) >= 0), out.menuKeys);
+      // The on/off entry is the one thing that does not move into the menu: the
+      // button is that switch already, one tap and wearing its state.
+      check(mode.name + ": and no on/off entry, which the button already is",
+        out.menuKeys.indexOf("toggle") < 0, out.menuKeys);
+      check(mode.name + ": hide sits last, under everything that opens or does",
+        out.menuKeys[out.menuKeys.length - 1] === "hide", out.menuKeys);
+      check(mode.name + ": the panel entry brings the tab forward", out.opened === 1, out);
+      check(mode.name + ": and swap-every-reply reaches the backend", out.swapped === 1, out);
     }
-    check(n + ": no console errors", errors.length === 0, errors);
+    check(mode.name + ": no console errors", errors.length === 0, errors);
   }
 }
 
@@ -4744,6 +4790,11 @@ console.log("\nturning the floating button on and off");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- one menu per gesture, even when Android asks twice ----
+// A long press on Android runs our hold timer and raises contextmenu as well,
+// so the menu gets asked for twice on the way to one gesture. Ours used to be
+// removed and rebuilt on the second ask. The host's cannot be taken back, so a
+// second ask would leave two menus stacked.
 console.log("\nAndroid asking for the menu twice");
 {
   const page = await browser.newPage({ viewport: { width: 412, height: 800 } });
@@ -4795,6 +4846,10 @@ console.log("\nAndroid asking for the menu twice");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- an older Lumiverse without the menu API says where to go ----
+// The menu is the host's, and a build that predates it has no showContextMenu
+// at all. Opening nothing would read as the button being broken, so it says
+// where the settings actually are.
 console.log("\na host with no context menu API");
 {
   const page = await browser.newPage({ viewport: { width: 412, height: 800 } });
@@ -4896,6 +4951,11 @@ console.log("\na phone that says it can hover");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- a tapped button does not keep its hover colour ----
+// The same half-sent pair, in the panel rather than the menu: a touch browser
+// raises mouseenter at the end of a tap and never sends the matching leave, so
+// every button in the panel stayed lit in its hover colour once tapped. The
+// pointerleave that resets it has already run by the time that hover arrives.
 console.log("\ntapping a button in the panel");
 {
   const { out, errors } = await inPanel(
@@ -5594,8 +5654,12 @@ console.log("\nresizing the floating button does not walk it up the screen");
 // floating button, and the Extras entry. The first two are repainted, and the
 // third has to be registered again to change its label, which is why it was the
 // one that went on saying "on" in a chat that had just been switched off.
+//
+// The last two are never up together: the Extras entry stands down while the
+// button is on screen, since the button is that switch already. So this runs
+// twice, once with each of them, and reads whichever is there.
 console.log("\nthe per-chat switch reaches every indicator");
-{
+for (const withButton of [true, false]) {
   const page = await browser.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
@@ -5604,7 +5668,7 @@ console.log("\nthe per-chat switch reaches every indicator");
   await page.addStyleTag({ content: THEME });
   await page.addScriptTag({ content: SOURCE, type: "module" });
   await page.waitForFunction(() => !!window.__setup);
-  const out = await page.evaluate(async () => {
+  const out = await page.evaluate(async (withButton) => {
     const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
     const handlers = {};
     const acts = {};
@@ -5624,7 +5688,7 @@ console.log("\nthe per-chat switch reaches every indicator");
                 return { element: floatRoot, root: floatRoot, setPosition() {},
                          destroy() { floatRoot.remove(); floatRoot = null; },
                          onDragEnd() { return () => {}; } }; } } },
-      { toast: false, showFloatingToggle: true, showExtrasToggle: true },
+      { toast: false, showFloatingToggle: withButton, showExtrasToggle: true },
     );
     const row = () => document.querySelector("[data-ar-chat-switch]");
     const act = () => row() && row().querySelector("button");
@@ -5652,16 +5716,23 @@ console.log("\nthe per-chat switch reaches every indicator");
     await frame();
     const onAgain = snap();
     return { on, off, elsewhere, backAgain, onAgain };
-  });
-  const saysOff = (s) => /off in this chat/i.test(s.float) && /off in this chat/i.test(s.extras) && s.row === "Turn on here";
-  const saysOn = (s) => !/off in this chat/i.test(s.float) && !/off in this chat/i.test(s.extras) && s.row === "Turn off here";
-  check("all three read on before anything is switched off", saysOn(out.on), out.on);
-  check("and all three say off in this chat the moment it is", saysOff(out.off), out.off);
-  check("the Extras entry in particular, which used to keep saying on", /off in this chat/i.test(out.off.extras), out.off.extras);
-  check("switching to a chat that is on puts all three back", saysOn(out.elsewhere), out.elsewhere);
-  check("walking back into the one that is off says so again", saysOff(out.backAgain), out.backAgain);
-  check("and turning it back on here clears all three", saysOn(out.onAgain), out.onAgain);
-  check("no console errors", errors.length === 0, errors);
+  }, withButton);
+  // The one that carries the state outside the panel in this run. The other is
+  // empty, and an empty string would pass "does not say off" for free.
+  const side = (s) => (withButton ? s.float : s.extras);
+  const saysOff = (s) => !!side(s) && /off in this chat/i.test(side(s)) && s.row === "Turn on here";
+  const saysOn = (s) => !!side(s) && !/off in this chat/i.test(side(s)) && s.row === "Turn off here";
+  const n = withButton ? "with the floating button" : "with the Extras entry";
+  check(n + ": both read on before anything is switched off", saysOn(out.on), out.on);
+  check(n + ": and both say off in this chat the moment it is", saysOff(out.off), out.off);
+  check(n + ": the one outside the panel in particular, which used to keep saying on",
+    /off in this chat/i.test(side(out.off)), side(out.off));
+  check(n + ": switching to a chat that is on puts both back", saysOn(out.elsewhere), out.elsewhere);
+  check(n + ": walking back into the one that is off says so again", saysOff(out.backAgain), out.backAgain);
+  check(n + ": and turning it back on here clears both", saysOn(out.onAgain), out.onAgain);
+  check(n + ": the other surface is not up at the same time",
+    (withButton ? out.off.extras : out.off.float) === "", out.off);
+  check(n + ": no console errors", errors.length === 0, errors);
   await page.close();
 }
 
@@ -7443,7 +7514,10 @@ console.log("\nteardown");
           createFloatWidget: () => ({ root: document.createElement("div"), destroy() {} }),
         },
       },
-      { showExtrasToggle: true, showFloatingToggle: true, showReplaceButton: true, showSwapAllButton: true },
+      // The floating button stays down here. With it up its own menu takes the
+      // movable entries over and only the settings one is left in Extras, which
+      // is the wrong shape for a check about tearing all of them down.
+      { showExtrasToggle: true, showFloatingToggle: false, showReplaceButton: true, showSwapAllButton: true },
     );
     const registered = [...live.keys()];
     // Open a hint first, or "the popover is gone afterwards" passes because one

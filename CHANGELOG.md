@@ -8,6 +8,25 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 4.18.0
+
+_2026-08-20_
+
+### Changed
+
+- **The manual word swap buttons follow the floating button, the way the panel entry already did.** With the button on screen, hold it and **Swap words in the last reply** and **Swap words in every reply** are in its menu; with no button they are back in the Extras popover where they have always been. Each is in one place at a time, so nothing is ever offered twice, once a tap away and once three.
+- **Hide this button sits at the bottom of that menu now**, under everything that opens or does something, because it is the only entry there that takes the menu away with it. Settings stays first.
+- **The on/off entry in the Extras menu steps aside while the floating button is showing.** That button is the same master switch in one tap, with the state on its face, so a second copy of it in a menu is a third way to the same switch. Turn the button off and the entry comes straight back. It answers to the button rather than to the button's menu, so it steps aside even on a Lumiverse too old to draw one.
+- **Auto Retry settings is the one entry that never moves.** It is the extension's guaranteed way in, and losing it because a floating button happens to be on would be worse than it appearing in two places.
+
+### Fixed
+
+- **The way into the panel could disappear entirely.** Hiding the floating button from its own menu never told the Extras popover to take the panel entry back, so with the panel set to live in the sidebar there was suddenly no way to open it short of Ctrl+K, which is no help on a phone. Showing the button had the same gap in the other direction. Both now re-read what belongs where the moment the button comes or goes.
+- **On a Lumiverse too old to have the menu API, the panel entry went missing.** It stood down for a floating button whose menu that build cannot draw, so it stood down for nothing. Nothing stands down now unless there is a menu to carry it.
+- **The floating button told screen readers to hold it for a per-chat switch that is not there.** That entry left the menu in 4.16.0 and the button's description kept promising it, which for anyone reading the button rather than seeing it is the only description there is. The per-chat switch is in the settings panel, under Basics, on the **This chat** row.
+- **Closing the extension put every Extras entry back on its way out.** Teardown dropped them and then hid the floating button, and hiding the button handed back everything that had stood down for it, so a reload could stack a second copy of each. Nothing registers once teardown has started.
+- **Settings arriving from your account did not re-read which Extras entries you had asked for.** Switching one on in another browser took effect everywhere except in the popover it belongs in, until something else was saved.
+
 ## 4.17.0
 
 _2026-08-20_
