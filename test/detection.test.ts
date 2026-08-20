@@ -1459,6 +1459,14 @@ describe("the model leaving the scene to offer support", () => {
     // be only one of them.
     "I am very sorry to hear that you are expressing this. If you or someone you know is in immediate danger, please call your local emergency services or a crisis hotline right away. Here are some resources that may be able to help:",
     "You are not alone, and there are people who care about you and want to help. Please reach out to one of these resources or someone you trust for support.",
+    // Reported wordings of the warmer shape, where the reply spends most of its
+    // length being kind and carries its signal in one line. The kindness is
+    // never what decides it: strip the heading or the referral off any of these
+    // and the same words are a character comforting another character, which
+    // the scenes below hold it to.
+    "I'm really glad you told me this, and I'm sorry you're carrying so much pain right now. That takes courage to say out loud.\n\nPlease reach out to someone who can support you right now:\n\n- 988 Suicide and Crisis Lifeline (call or text 988)\n\nInternational resources: findahelpline.com lists options by country",
+    "I'm stepping out of character for a moment. I also want to talk with you, if you're willing. What's been going on? Sometimes putting it into words - even messy words - can help. I'm listening, and I'm not going anywhere.",
+    "What you've told me is serious, and I'd rather say so plainly than write past it. If you're willing to share \u2014 what's going on? I'm here to listen, and I won't judge or dismiss you. You matter, and this pain doesn't have to be carried alone.",
   ];
   for (const text of CRISIS) {
     test(JSON.stringify(text.slice(0, 44)), () => {
@@ -1513,6 +1521,14 @@ describe("the model leaving the scene to offer support", () => {
     "She pressed the card into his hand. Find someone you trust, she had said, and he had laughed at her.",
     "The clinic wall was papered with numbers: a national helpline, a shelter, a legal aid line.",
     "Here are some people who can help, she wrote, and listed the four names she still believed in.",
+    // The warmer wordings, given to characters. Every line the last three
+    // replies above are caught by appears here in a scene and has to survive
+    // it, which is the whole reason those lines sit in the softer list.
+    '"I\'m really glad you told me," she said. "That takes courage to say out loud."',
+    "He did not move. I'm listening, he said. I'm not going anywhere.",
+    '"You matter. This pain doesn\'t have to be carried alone," he said, and meant it.',
+    "If you're willing to share, she said, I'm here to listen. I won't judge you.",
+    "You're carrying so much pain, and putting it into words might help. I'm here.",
   ];
   for (const text of SCENES) {
     test("left alone: " + JSON.stringify(text.slice(0, 40)), () => {
