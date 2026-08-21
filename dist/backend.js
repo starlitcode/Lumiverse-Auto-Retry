@@ -624,7 +624,20 @@ spindle.onFrontendMessage(async (payload, userId) => {
             return;
         if (payload.type === 'save_settings' && payload.settings && typeof payload.settings === 'object') {
             applyReplaceFromSettings(payload.settings);
-            await writeUserJson(SETTINGS_FILE, payload.settings, userId);
+            // A failed write here is the account copy, which is what carries settings
+            // between a user's devices. It used to throw into the catch at the bottom
+            // and be logged on the server, where nobody it affects can read it, while
+            // the panel said the settings were saved.
+            try {
+                await writeUserJson(SETTINGS_FILE, payload.settings, userId);
+            }
+            catch (e) {
+                try {
+                    spindle.log.warn('auto-retry: could not save settings to the account');
+                }
+                catch (__) { }
+                replyTo(userId, { type: 'account_save_failed', what: 'settings' });
+            }
             return;
         }
         if (payload.type === 'load_settings') {
@@ -752,7 +765,16 @@ spindle.onFrontendMessage(async (payload, userId) => {
             return;
         }
         if (payload.type === 'save_presets' && payload.presets && typeof payload.presets === 'object') {
-            await writeUserJson(PRESETS_FILE, payload.presets, userId);
+            try {
+                await writeUserJson(PRESETS_FILE, payload.presets, userId);
+            }
+            catch (e) {
+                try {
+                    spindle.log.warn('auto-retry: could not save presets to the account');
+                }
+                catch (__) { }
+                replyTo(userId, { type: 'account_save_failed', what: 'presets' });
+            }
             return;
         }
         if (payload.type === 'load_presets') {

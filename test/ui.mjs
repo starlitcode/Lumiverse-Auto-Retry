@@ -4743,6 +4743,65 @@ console.log("\nwhere the ways into the extension live");
   }
 }
 
+// ---- Save does not claim a save that did not happen ----
+// The browser copy is what survives a reload, and writing it can fail outright:
+// a browser with site data blocked, or with no room left, throws. That throw
+// was swallowed, so the panel said "Saved" over settings that were gone the
+// next time the page loaded. The presets have always said when this happens;
+// the settings did not.
+console.log("\nSave tells the truth about the browser copy");
+{
+  for (const storageWorks of [true, false]) {
+    const page = await browser.newPage();
+    const errors = [];
+    page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
+    page.on("console", (m) => { if (m.type() === "error") errors.push("console: " + m.text()); });
+    await stage(page, "<div id=modal></div>");
+    await page.addStyleTag({ content: THEME });
+    await page.addScriptTag({ content: SOURCE, type: "module" });
+    await page.waitForFunction(() => !!window.__setup);
+    const out = await page.evaluate(async (storageWorks) => {
+      const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const acts = {};
+      window.__setup(
+        { events: { on: () => () => {} },
+          ui: {
+            showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+            registerInputBarAction: (o) => {
+              const a = { onClick: (cb) => { a.cb = cb; return () => {}; }, destroy: () => {} };
+              acts[o.id] = a;
+              return a;
+            },
+          } },
+        { toast: false },
+      );
+      acts["auto-retry-settings"].cb();
+      await frame();
+      // Broken only once the panel is up, so opening it is unaffected and the
+      // press is the only thing under test.
+      if (!storageWorks) {
+        Storage.prototype.setItem = function () { throw new Error("site data is blocked"); };
+      }
+      const save = [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === "Save");
+      const pressed = !!save;
+      if (save) save.click();
+      await frame();
+      const el = document.querySelector("[data-ar-save-status]");
+      const line = el ? (el.textContent || "").trim() : "";
+      return { pressed, line };
+    }, storageWorks);
+    await page.close();
+    const n = storageWorks ? "with storage working" : "with storage blocked";
+    check(n + ": the Save button was there to press", out.pressed, out);
+    check(n + ": it says " + (storageWorks ? "it saved" : "it could not"),
+      storageWorks ? /^Saved\./.test(out.line) : /^Could not save/.test(out.line), out.line);
+    if (!storageWorks) {
+      check(n + ": and never claims it saved", !/^Saved\./.test(out.line), out.line);
+    }
+    check(n + ": no console errors", errors.length === 0, errors);
+  }
+}
+
 // ---- a swap that nobody answers says so ----
 // Pressing a swap button used to be able to do nothing at all, and say nothing
 // about it. If the host would not send the message, or the backend was not
