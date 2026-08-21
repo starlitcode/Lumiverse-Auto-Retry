@@ -3934,7 +3934,7 @@ export function setup(ctx, opts) {
         if (drawerTab)
             return true;
         if (!ctx || !ctx.ui || typeof ctx.ui.registerDrawerTab !== "function") {
-            log("host has no drawer tab API; keeping the panel over the chat");
+            log("this version of Lumiverse has no sidebar panel for extensions, so the panel stays over the chat");
             return false;
         }
         try {
@@ -3980,7 +3980,7 @@ export function setup(ctx, opts) {
             return true;
         }
         catch (e) {
-            log("could not open the drawer tab; keeping the panel over the chat", e);
+            log("could not open the sidebar panel, so the panel stays over the chat", e);
             hideDrawerPanel();
             return false;
         }
@@ -4288,7 +4288,7 @@ export function setup(ctx, opts) {
             // Float widgets need the ui_panels permission. Without it the extension
             // still works; there is just no floating button.
             floatWidget = null;
-            log("host would not create a float widget; is ui_panels granted?");
+            log("could not create the floating button. Check that the ui_panels permission is granted.");
             return;
         }
         floatWidgetSize = d;
@@ -4461,7 +4461,7 @@ export function setup(ctx, opts) {
         if (typeof menu !== "function") {
             // An older Lumiverse without the API. Say where the settings are rather
             // than opening nothing and looking broken.
-            log("host has no showContextMenu; float menu unavailable");
+            log("this version of Lumiverse cannot open the floating button's menu");
             showToast("Auto Retry settings are in the chat bar's Extras popover.", { force: true });
             return;
         }
@@ -4814,17 +4814,24 @@ export function setup(ctx, opts) {
             return {};
         }
     }
+    // Returns whether the browser copy was actually written. A browser with site
+    // data blocked, or with no room left, throws here. Swallowing that let the
+    // panel say "Saved" over settings that were gone on the next reload, which is
+    // the one thing a Save button must never do. savePresets has always said.
     function saveSaved() {
         try {
             if (typeof localStorage === "undefined")
-                return;
+                return false;
             const out = {};
             for (const g of SCHEMA)
                 for (const f of g.fields)
                     out[f.key] = cfg[f.key];
             localStorage.setItem(STORE_KEY, JSON.stringify(out));
+            return true;
         }
-        catch (_) { }
+        catch (_) {
+            return false;
+        }
     }
     function coerce(type, val, fallback, f) {
         if (type === "bool")
@@ -5736,7 +5743,7 @@ export function setup(ctx, opts) {
             disarmRefusalNote(chatId);
             if (announce)
                 showToast("Auto Retry stopped.");
-            log("stood down", chatId);
+            log("stopped retrying in this chat", chatId);
         }
         // Called off is a change too, and the one people are watching for after
         // pressing Cancel.
@@ -6355,7 +6362,7 @@ export function setup(ctx, opts) {
             return;
         }
         if (Date.now() < s.suppressUntil) {
-            log("suppressed (just stopped/cancelled)", chatId);
+            log("ignored, you had just stopped or cancelled it", chatId);
             return;
         }
         if (s.attempts >= cfg.maxRetries) {
@@ -6728,7 +6735,7 @@ export function setup(ctx, opts) {
             return; // aborted gen's trailing event, retry already scheduled
         clearTimers(s);
         if (Date.now() < s.suppressUntil) {
-            log("gen end ignored (just stopped)");
+            log("the reply ended just after you stopped it, so ignoring it");
             s.attempts = 0;
             return;
         } // user just stopped; do not retry
@@ -6767,7 +6774,7 @@ export function setup(ctx, opts) {
             return;
         }
         if (content.length === 0) {
-            log("gen end with no readable content; leaving it alone");
+            log("the reply ended with no text to read, so leaving it alone");
             s.attempts = 0;
             return;
         }
@@ -7726,13 +7733,14 @@ export function setup(ctx, opts) {
         // then each surface that reads cfg brought into line. Saving and loading a
         // preset both end here, and missing one line is a surface left stale.
         const applyAndSave = () => {
-            saveSaved();
+            const storedHere = saveSaved();
             saveToAccount();
             syncLiveLog();
             syncFloat();
             syncInputBarActions();
             if (onSaved)
                 onSaved();
+            return storedHere;
         };
         // A preset switcher: pick a saved preset and Load it into the settings, or
         // save the current settings as a preset. Load updates the on-screen fields in
@@ -8696,6 +8704,9 @@ export function setup(ctx, opts) {
         actions.style.cssText =
             "display:flex;align-items:center;flex-wrap:wrap;gap:8px;flex:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--lumiverse-border,rgba(255,255,255,.08))";
         const status = document.createElement("span");
+        // Named so the browser checks can read this line rather than guessing at it
+        // by tag and text, which is how a check ends up passing over nothing.
+        status.setAttribute("data-ar-save-status", "");
         status.style.cssText =
             "flex:1;min-width:120px;font-size:12px;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
         // Opens the picker rather than resetting on the spot. There is no confirm
@@ -8719,7 +8730,15 @@ export function setup(ctx, opts) {
         const save = btn("Save", true);
         save.addEventListener("click", () => {
             commit();
-            applyAndSave();
+            const storedHere = applyAndSave();
+            if (!storedHere) {
+                // Left on screen rather than cleared after a moment: this one is not a
+                // confirmation somebody can miss without cost.
+                status.textContent =
+                    "Could not save in this browser. Check that it is not blocking site data.";
+                log("settings could not be saved in this browser");
+                return;
+            }
             status.textContent = "Saved. Takes effect on the next reply.";
             log("settings saved", cfg);
             setTimeout(() => {
@@ -10272,7 +10291,7 @@ export function setup(ctx, opts) {
     }
     function openSettings() {
         if (!ctx?.ui?.showModal) {
-            log("host has no modal API; cannot open settings");
+            log("this version of Lumiverse cannot open the settings window");
             return;
         }
         try {
@@ -10355,7 +10374,7 @@ export function setup(ctx, opts) {
             });
         }
         catch (e) {
-            log("failed to open settings", e);
+            log("could not open the settings window", e);
         }
     }
     // entry point: a button in the chat input "Extras" popover
@@ -10375,11 +10394,11 @@ export function setup(ctx, opts) {
             });
         }
         else {
-            log("host has no input bar action API; open settings via ctx only");
+            log("this version of Lumiverse cannot add buttons to the Extras menu");
         }
     }
     catch (e) {
-        log("failed to register settings action", e);
+        log("could not add the settings button to the Extras menu", e);
     }
     // backup stop-press catcher (see onDocClick)
     if (typeof document !== "undefined") {
@@ -10423,7 +10442,7 @@ export function setup(ctx, opts) {
         ];
     }
     catch (e) {
-        log("failed to subscribe to generation events", e);
+        log("could not listen for replies. Check that the generation permission is granted.", e);
     }
     syncLiveLog();
     syncFloat();
@@ -10532,6 +10551,15 @@ export function setup(ctx, opts) {
                             return;
                         applySwapsToView(msg.pairs || []);
                         repairEditBox();
+                        return;
+                    }
+                    // The account copy could not be written. The browser copy may well have
+                    // worked, so this does not say the settings are lost: it says the part
+                    // that carries them to another device did not happen.
+                    if (msg.type === "account_save_failed") {
+                        const what = msg.what === "presets" ? "presets" : "settings";
+                        log("the account copy of the " + what + " could not be saved");
+                        showToast("Your " + what + " are saved in this browser, but could not be saved to your account, so they will not follow you to another device.", { force: true });
                         return;
                     }
                     // Said as soon as the backend has the request, before any work. It is
