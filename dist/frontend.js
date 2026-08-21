@@ -5285,9 +5285,10 @@ export function setup(ctx, opts) {
         }
         catch (_) { }
     }
+    // Returns whether this browser will remember the change after a reload.
     function setChatOff(chatId, off) {
         if (chatId == null)
-            return;
+            return false;
         const id = String(chatId);
         const at = chatsOff.indexOf(id);
         if (off && at < 0)
@@ -5298,9 +5299,16 @@ export function setup(ctx, opts) {
         // bound in somebody's browser.
         if (chatsOff.length > CHATS_OFF_CAP)
             chatsOff = chatsOff.slice(-CHATS_OFF_CAP);
+        // Whether this browser will still know about it after a reload. The switch
+        // itself works either way, because the list is held in memory; a browser
+        // that blocks site data just forgets it. The docs say this is remembered,
+        // so a browser that will not remember it has to say so.
+        let remembered = false;
         try {
-            if (typeof localStorage !== "undefined")
+            if (typeof localStorage !== "undefined") {
                 localStorage.setItem(CHATS_OFF_KEY, JSON.stringify(chatsOff));
+                remembered = true;
+            }
         }
         catch (_) { }
         tellBackendChatsOff();
@@ -5325,6 +5333,7 @@ export function setup(ctx, opts) {
         // that has to be registered again to change rather than repainted.
         syncToggleAction();
         paintNow();
+        return remembered;
     }
     // Both switches have to be on for anything to happen, and this is the one
     // place that says so.
@@ -8885,10 +8894,13 @@ export function setup(ctx, opts) {
             const off = chatIsOff(lastChatId);
             // setChatOff repaints this row along with everything else that describes
             // the chat, so there is nothing to do here but say what happened.
-            setChatOff(lastChatId, !off);
-            showToast(off
+            const remembered = setChatOff(lastChatId, !off);
+            const said = off
                 ? "Auto Retry is back on in this chat."
-                : "Auto Retry is off in this chat. Other chats are unaffected.", { force: true });
+                : "Auto Retry is off in this chat. Other chats are unaffected.";
+            showToast(remembered
+                ? said
+                : said + " This browser will not remember it after a reload.", { force: true });
         });
         paint();
         // Held so the row can be repainted from outside. It is built once when the
