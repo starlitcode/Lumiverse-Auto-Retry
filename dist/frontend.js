@@ -2518,6 +2518,12 @@ function markSvg(off, size) {
 const SWAP_ONE_LABEL = "Swap words in the last reply";
 const SWAP_ALL_LABEL = "Swap words in every reply";
 const OPEN_PANEL_LABEL = "Open the Auto Retry panel";
+// Every tick box in the panel, at one size. The settings rows have always set
+// this; the reset picker and the import and export lists set nothing and got
+// the browser default of 13px, which is a small thing to hit with a thumb and
+// smaller than the same control one screen over. The reset picker is the worst
+// place for that, since a tick there can delete saved presets.
+const CHECKBOX_STYLE = "flex:none;width:20px;height:20px;accent-color:var(--lumiverse-primary,rgba(147,112,219,.9));";
 function iconSvg(body) {
     return ('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"' +
         ' stroke-linecap="round" stroke-linejoin="round">' +
@@ -7710,8 +7716,7 @@ export function setup(ctx, opts) {
             const cb = document.createElement("input");
             cb.type = "checkbox";
             cb.checked = true;
-            cb.style.cssText =
-                "accent-color:var(--lumiverse-primary,rgba(147,112,219,.9));cursor:pointer";
+            cb.style.cssText = CHECKBOX_STYLE + "cursor:pointer";
             const txt = document.createElement("span");
             txt.textContent = it.label;
             row.appendChild(cb);
@@ -9041,8 +9046,7 @@ export function setup(ctx, opts) {
             const input = document.createElement("input");
             input.type = "checkbox";
             input.checked = !!cfg[f.key];
-            input.style.cssText =
-                "flex:none;width:20px;height:20px;accent-color:var(--lumiverse-primary,rgba(147,112,219,.9));cursor:pointer";
+            input.style.cssText = CHECKBOX_STYLE + "cursor:pointer";
             input.addEventListener("change", () => {
                 // Turning the crisis check on is the one tick that has to be answered
                 // for first. The box goes back to where it was straight away, so the
@@ -9715,9 +9719,7 @@ export function setup(ctx, opts) {
             // A part already at its defaults is nothing to press. Left tickable it
             // reads as an action that did nothing when the count came back zero.
             cb.disabled = n === 0;
-            cb.style.cssText =
-                "accent-color:var(--lumiverse-primary,rgba(147,112,219,.9));cursor:" +
-                    (n ? "pointer" : "default");
+            cb.style.cssText = CHECKBOX_STYLE + "cursor:" + (n ? "pointer" : "default");
             const txt = document.createElement("span");
             txt.textContent = part.label;
             const count = document.createElement("span");
@@ -9748,9 +9750,7 @@ export function setup(ctx, opts) {
         presetCb.type = "checkbox";
         presetCb.checked = false;
         presetCb.disabled = presetCount === 0;
-        presetCb.style.cssText =
-            "accent-color:var(--lumiverse-primary,rgba(147,112,219,.9));cursor:" +
-                (presetCount ? "pointer" : "default");
+        presetCb.style.cssText = CHECKBOX_STYLE + "cursor:" + (presetCount ? "pointer" : "default");
         const presetTxt = document.createElement("span");
         // The one line in the picker that destroys something no Save can take back,
         // so it is the one line that does not look like the others.

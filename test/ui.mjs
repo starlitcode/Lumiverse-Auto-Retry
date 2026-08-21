@@ -4743,6 +4743,45 @@ console.log("\nwhere the ways into the extension live");
   }
 }
 
+// ---- every tick box is the same size ----
+// The settings rows set 20px. The reset picker and the import and export lists
+// set nothing and took the browser default of 13px, so the same control was one
+// size on one screen and another size on the next, and the small one was in the
+// dialog where a mis-tap deletes saved presets.
+console.log("\nthe tick boxes are one size");
+{
+  const { out, errors } = await inPanel(
+    browser, { viewport: { width: 412, height: 800 } },
+    async (page) => page.evaluate(async () => {
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      const sizes = (where) => {
+        const seen = {};
+        for (const el of document.querySelectorAll(where + ' input[type="checkbox"]')) {
+          const r = el.getBoundingClientRect();
+          if (!r.width) continue;
+          const k = Math.round(r.width) + "x" + Math.round(r.height);
+          seen[k] = (seen[k] || 0) + 1;
+        }
+        return seen;
+      };
+      for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      await wait(40);
+      const rows = sizes("#modal");
+      // The reset picker is its own overlay, and the one that matters most.
+      [...document.querySelectorAll("button")].find((b) => /^Reset/.test(b.textContent.trim())).click();
+      await wait(40);
+      const picker = sizes("#__lvRetryReset");
+      return { rows, picker };
+    }),
+  );
+  const all = { ...out.rows, ...out.picker };
+  check("the settings rows have tick boxes to measure", Object.values(out.rows).reduce((a, b) => a + b, 0) > 10, out.rows);
+  check("so does the reset picker", Object.values(out.picker).reduce((a, b) => a + b, 0) > 2, out.picker);
+  check("and every one of them is the same size", Object.keys(all).length === 1, all);
+  check("at 20px, not the browser default of 13", Object.keys(all)[0] === "20x20", all);
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- the toast may use the whole width it is allowed ----
 // "No reply found to swap in this chat." wrapped onto two lines on a phone and
 // left "chat." alone on the second, on a message that fits on one line easily.
