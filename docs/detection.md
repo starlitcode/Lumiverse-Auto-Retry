@@ -29,7 +29,7 @@ The fences and the backticks themselves are counted first, while they are still 
 
 The second is anything inside an HTML container that closed. The model reached the closing tag, so nothing in there was cut off and none of it can say whether the reply was.
 
-Cards that render a whole interface every reply, a chat window or a profile card, put dozens of nested `div`s of text into the reply, and that text is not written like prose: a height written `6'2"` is a single unpaired quotation mark, and it flipped the count for every properly closed piece of dialogue around it.
+Cards that render a whole interface every reply, like a chat window or a profile card, put dozens of nested `div`s of text into the reply. That text is not written like prose. A height written `6'2"` is a single unpaired quotation mark, and it used to flip the count for every properly closed piece of dialogue around it.
 
 Nothing is lost by trusting a closing tag, because a reply cut off inside a widget never reaches one, which leaves the container open and is read as cut off below. Prose after a widget is still prose, so a reply that renders its card and then stops mid-sentence is still caught.
 
@@ -59,7 +59,7 @@ Elements whose end tag is optional in HTML are left out of the container count: 
 
 An inline tag counts only when it carries an attribute. A bare `<b>` or `<i>` left open is a finished reply written badly, and models fumble those in ordinary prose often enough that counting them would throw away good writing. A `<span style="...">` is not that: it is there because a card asked for coloured speech, and a card that asks for it gets the closing tag every time, so a missing one means the reply stopped.
 
-What counts is the attribute, not what is in it. A gradient, a single colour, a colour plus other styling, a `<font color="...">`, a `<span class="...">`, single or double quotes, upper case or lower: all of them count, and a reply with several spans is checked on how many were opened against how many were closed, so one left hanging among others that closed is still caught.
+What counts is the attribute, not what is in it. A gradient, a single colour, a colour plus other styling, a `<font color="...">`, a `<span class="...">`, single or double quotes, upper case or lower: all of them count. A reply with several spans is checked on how many were opened against how many were closed, so one left open among others that closed is still caught.
 
 That case matters more than it looks, because it is invisible to everything else here. Speech closes its own quotation marks, so:
 
@@ -130,7 +130,7 @@ It also catches the closing offer, which is how most of these replies sign off: 
 
 Each of these needs the model's own object beside it, a different story, another direction, something instead. The bare line is what every shopkeeper in every tavern scene says, and in script format it carries no quotation marks for the rule above to catch. If your model signs off with the bare line, add it under **Your own refusal phrases**, where it is matched wherever it appears.
 
-The same tier catches the reply that sorts out what you meant instead of writing. The model reads your message as a question with more than one answer, lays out the readings, and ends by asking which one you were after: "if you meant something else, could you clarify what you're looking for?" It always ends on that question, which is why it lives here, where the tail rule and the quotation rule are already doing the work.
+The same tier catches the reply that sorts out what you meant instead of writing. The model reads your message as a question with more than one answer, lays out the readings, and ends by asking which one you were after: "if you meant something else, could you clarify what you're looking for?" It always ends on that question. That is why it belongs in this tier, where the tail rule and the quotation rule are already doing the work.
 
 Wordings that carry no object at all and read naturally in a scene ("let's move on", "let's stop here", "I'll leave it at that") are left out: they cost more in thrown-away replies than they are worth. Add them under **Your own refusal phrases** if your model uses them. Turn the whole thing off with the switch if your model writes characters who talk this way.
 
@@ -200,7 +200,7 @@ Everything sits under **Refusal tuning** in the settings, so the basic on/off to
 - **Never treat these as a refusal.** A whitelist. If a reply contains any of these, one per line, it is never re-rolled. This wins over everything else.
 - **Longest reply to treat as a refusal** (2000 by default). Longer replies are assumed to be real writing and left alone. Raise it if your model writes long, padded refusals, lower it to be safer with long scenes, or set it to 0 to scan replies of any length.
 
-To run entirely on your own phrases, turn off the built-in list and put your wording into "Your own refusal phrases." It is marked beta because the built-in wordlists are still being tuned, so turn the whole thing off with the "It looks like an accidental refusal" toggle if you would rather it never touch a refusal-shaped reply.
+To run entirely on your own phrases, turn off the built-in list and put your wording into "Your own refusal phrases." It is marked beta because the built-in wordlists are still being tuned. If you would rather it never touched a refusal-shaped reply at all, turn the whole thing off with the "It looks like an accidental refusal" toggle.
 
 ## Sending a note with the retry
 

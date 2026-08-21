@@ -520,7 +520,7 @@ async function swapMessageNow(chatId: string, messageId: any, userId?: string): 
   markSwapped(messageId);
   // Both halves of the message go with the pairs. The pairs patch what is on
   // screen; the halves let the frontend recognise the pre-swap text if the host
-  // hands it back in its edit box, which it does when its own copy of the
+  // puts it back in its edit box, which it does when its own copy of the
   // message did not pick the change up.
   replyTo(userId, {
     type: 'swapped',
@@ -594,7 +594,7 @@ try { spindle.on('SWIPE_EDITED', readEdit); } catch (_) {}
 })();
 
 // Settings bridge with the UI: save the whole settings object to per-user
-// account storage, hand it back on request, and keep the find-and-replace state
+// account storage, send it back on request, and keep the find-and-replace state
 // in sync with it.
 spindle.onFrontendMessage(async (payload: any, userId?: string) => {
   try {
@@ -904,8 +904,8 @@ const promptInterceptor = async (messages: any[], context: any) => {
 // Every permission this extension asks for, and what stops working without it.
 // A missing permission is the one failure that raises nothing to catch: a gated
 // event simply never fires and a fire-and-forget registration silently does
-// nothing, so an extension with the wrong grants sits there looking installed
-// and working. The panel asks for this and says which are missing.
+// nothing, so an extension with the wrong grants stays installed and looks
+// like it is working. The panel asks for this and says which are missing.
 const PERMISSIONS: Array<{ name: string; costs: string }> = [
   { name: 'generation', costs: 'Everything. Retries run off the generation events, and without this none of them arrive, so nothing is ever retried.' },
   { name: 'interceptor', costs: 'The refusal note, and the Prompt tab.' },
