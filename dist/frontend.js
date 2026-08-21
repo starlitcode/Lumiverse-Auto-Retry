@@ -293,7 +293,7 @@ const SCHEMA = [
         fields: [
             {
                 key: "enabled",
-                label: "Turn auto-retry on",
+                label: "Turn Auto Retry on",
                 type: "bool",
                 hint: "When on, it quietly tries again whenever a reply fails or gets cut off. Turn it off and it does nothing.",
             },
@@ -301,7 +301,7 @@ const SCHEMA = [
                 key: "showFloatingToggle",
                 label: "Floating on/off button",
                 type: "bool",
-                hint: "Off by default. Puts a small round button on top of the chat that turns Auto Retry on or off in one tap. It shows which state it is in, and you can drag it anywhere; where you leave it is remembered. Hold it, or right-click it, for the settings, the panel and the manual swaps, which move out of the Extras menu and into it while it is showing. Handy if you switch it on and off a lot.",
+                hint: "Off by default. Puts a small round button on top of the chat. Tap it to turn Auto Retry on or off. It shows which one it is, and you can drag it anywhere. Where you leave it is remembered. Hold the button, or right-click it, to open a menu with the settings, the panel and the swap buttons. While this button is on, those live in its menu instead of in the Extras menu. Useful if you switch Auto Retry on and off a lot.",
             },
             {
                 key: "floatingToggleSize",
@@ -318,7 +318,7 @@ const SCHEMA = [
                 key: "showExtrasToggle",
                 label: "On/off button in the Extras menu",
                 type: "bool",
-                hint: "Off by default. Adds an Auto Retry on/off entry to the chat input's Extras menu, next to the settings button. It says which state it is in, so you can check and change it without opening settings. Unlike the floating button it takes up no room on screen, and it steps aside while that button is showing, since one tap on the button does the same thing.",
+                hint: "Off by default. Adds an Auto Retry on/off button to the chat input's Extras menu, next to the settings button. It says which one it is, so you can check and change it without opening the settings. It takes up no room on the screen, unlike the floating button. While the floating button is on, this one is hidden: that button is the same on/off switch, and one tap does it.",
             },
             {
                 key: "toast",
@@ -342,7 +342,7 @@ const SCHEMA = [
                     { value: "float", label: "Floating over the chat" },
                     { value: "drawer", label: "In the sidebar drawer" },
                 ],
-                hint: "Floating is a small box in the corner: drag its header to move it, its corner to resize, and where you leave it is remembered. In the sidebar hands it to Lumiverse's own drawer, which sizes and places it, so it never covers the reply you are reading. Open it from Extras, from the floating button's own menu while that button is showing, or with Ctrl+K on a computer. Its tab shows a dot while a retry is running. A build with no drawer falls back to floating and says so in the log.",
+                hint: "Floating is a small box in the corner. Drag the top of it to move it, drag the bottom corner to resize it, and where you leave it is remembered. In the sidebar puts it in Lumiverse's own side panel instead. Lumiverse decides the size and place, so it never covers the reply you are reading. To open it: the Extras menu, or the floating button's menu while that button is on, or Ctrl+K on a computer. Its tab shows a dot while a retry is running. If your version of Lumiverse has no side panel for extensions, you get the floating box instead, and the Log says so.",
             },
         ],
     },
@@ -369,7 +369,7 @@ const SCHEMA = [
                 key: "pauseWhenFailing",
                 label: "Pause when everything is failing",
                 type: "bool",
-                hint: "On by default. If several whole runs give up in a row, the provider is probably down, so auto-retry stops for a while instead of retrying on every message you send. The next reply that works clears it, and you can still send and regenerate by hand while it's paused. The two boxes below set how many runs and how long.",
+                hint: "On by default. If several whole runs give up in a row, the provider is probably down, so Auto Retry stops for a while instead of retrying on every message you send. The next reply that works clears it, and you can still send and regenerate by hand while it's paused. The two boxes below set how many runs and how long.",
             },
             {
                 key: "breakerRuns",
@@ -389,7 +389,7 @@ const SCHEMA = [
                 int: true,
                 min: 1,
                 max: 180,
-                hint: "How long auto-retry stays off once it pauses. Shorter suits a provider that hiccups and recovers; longer suits a real outage. Any reply that comes back fine ends the pause early, whatever this is set to.",
+                hint: "How long Auto Retry stays off once it pauses. A short pause suits a provider that drops out for a moment and comes back. A long one suits a real outage. Any reply that comes back fine ends the pause early, whatever this is set to.",
             },
             {
                 key: "retryDelayMs",
@@ -548,13 +548,13 @@ const SCHEMA = [
                 needs: ["refusalUseBuiltins"],
                 label: "Also catch it stopping to offer support",
                 type: "bool",
-                hint: "Off by default, and it asks you to read a warning before it goes on. Catches a reply that leaves the story to speak to you rather than to your character: what you have written is concerning, you are not alone, please talk to a professional, followed by a list of services. It needs two signals to agree and never counts a line inside quotation marks, so a character in the scene saying something kind is left alone. It is the one check the length limit below does not apply to, because these replies are long. Read the safety page in the docs before turning it on.",
+                hint: "Off by default, and it asks you to read a warning before it goes on. Catches a reply that leaves the story to speak to you rather than to your character: what you have written is concerning, you are not alone, please talk to a professional, followed by a list of services. Two separate parts of the reply have to point that way before it counts, and a line inside quotation marks never counts, so a character in the scene saying something kind is left alone. It is the one check the length limit below does not apply to, because these replies are long. Read the safety page in the docs before turning it on.",
             },
             {
                 key: "refusalIgnoreQuoted",
                 label: "Ignore refusals inside quotation marks",
                 type: "bool",
-                hint: "On by default. A line inside quotation marks is a character speaking, so it is not counted as the model refusing. This is what keeps \"I can't help with that,\" said the innkeeper from being thrown away. Turn it off only if your model puts its own refusals in quotes. Two things are not affected by it: your own phrases are always counted either way, and the support check above always ignores quoted lines, since no model puts that message in quotation marks and switching this off would only stop a character in the scene from being told apart from it.",
+                hint: "On by default. A line inside quotation marks is a character speaking, so it is not counted as the model refusing. This is what keeps \"I can't help with that,\" said the innkeeper from being thrown away. Turn it off only if your model puts its own refusals in quotes. Two things ignore this setting. Your own phrases are always counted, on or off. So is the support check above, which always skips quoted lines: no model puts that kind of message in quotation marks, so turning this off there would only make a character in the scene harder to tell apart from it.",
             },
             {
                 key: "refusalExtraPhrases",
@@ -608,7 +608,7 @@ const SCHEMA = [
                 hintAbove: true,
                 label: "What the notes say",
                 type: "notes",
-                hint: "Goes to the model, not into your chat, and exactly as written: nothing is added, removed or checked. Up to ten, and empty ones are skipped. Each note carries its own role and its own starting try. Role puts it with the instructions your setup already sends (system), your own messages (you), or the replies (the character). A starting try of 2 lets the first retry re-send unchanged and joins that note from the second onward; 1 puts it on every refusal retry, so different numbers let a list escalate. Whichever are due go together, in the order you wrote them, so one can answer another.",
+                hint: "Your notes go to the model, not into your chat, and exactly as you typed them. Nothing is added, removed or checked. You can have up to ten, and empty ones are skipped. Each note has its own Role and its own From try. Role decides where the note sits: with the instructions your setup already sends (system), with your own messages (you), or with the replies (the character). From try decides which retry it joins in on. 1 sends it on every refusal retry. 2 lets the first retry go out unchanged and sends the note from the second try onward, so you can start gentle and get firmer further down the list. Notes that are due go out together, in the order you wrote them, so one can answer another.",
             },
             {
                 key: "refusalNotePlacement",
@@ -703,7 +703,7 @@ const SCHEMA = [
                 int: true,
                 min: 1,
                 max: 300,
-                hint: "How long to give another extension to make its edit before swapping anyway. Each edit restarts the clock and the swap follows shortly after the last one, so this is only the full wait when nothing else edits at all. The default of " + def("swapWaitSecs") + " covers a refinement pass on most models: that pass is a whole generation, so how long it takes depends on the model, the prompt and how much it has to read. Raise it if your swaps still get overwritten, lower it if you are only waiting on something quick.",
+                hint: "How long to give another extension to make its edit before swapping anyway. Each edit restarts the clock and the swap follows shortly after the last one, so this is only the full wait when nothing else edits at all. The default of " + def("swapWaitSecs") + " covers most models. The other extension is writing a whole new reply, so how long that takes depends on the model, the prompt and how much there is to read. Raise it if your swaps still get overwritten, lower it if you are only waiting on something quick.",
             },
         ],
     },
@@ -730,7 +730,7 @@ const SCHEMA = [
                 key: "confirmButtonsCustom",
                 label: "My dialog's button says something else",
                 type: "bool",
-                hint: "Leave this off unless a retry opens a dialog that Auto Retry does not get past. It already knows Skip, Regenerate, Confirm, Proceed, Submit and OK, which covers Lumiverse's Regeneration Feedback and every build seen so far, and that list is used whether this is on or off. Turning it on adds a box for the wording your build uses instead. It is a switch rather than just an empty box because almost nobody needs it, and an option nobody needs is worth keeping out of the way.",
+                hint: "Leave this off unless a retry opens a dialog that Auto Retry does not get past. It already knows Skip, Regenerate, Confirm, Proceed, Submit and OK, which covers Lumiverse's Regeneration Feedback and every build seen so far, and that list is used whether this is on or off. Turning it on adds a box where you can type the wording your own dialog uses.",
             },
             {
                 key: "confirmButtonLabels",
@@ -2511,10 +2511,10 @@ function markSvg(off, size) {
         (off ? MARK_SLASH : "") +
         "</svg>");
 }
-// The entries that live in the chat input's Extras popover while the floating
-// button is down, and in that button's own menu while it is up. Their wording is
-// held in one place because an entry that changes what it says when it moves
-// reads as a different action rather than the same one somewhere else.
+// These buttons appear in the chat input's Extras menu when the floating button
+// is off, and in the floating button's own menu when it is on. The wording is
+// written once, here, because the same button has to say the same thing in both
+// places. Different wording would look like a different button.
 const SWAP_ONE_LABEL = "Swap words in the last reply";
 const SWAP_ALL_LABEL = "Swap words in every reply";
 const OPEN_PANEL_LABEL = "Open the Auto Retry panel";
@@ -2524,9 +2524,10 @@ function iconSvg(body) {
         body +
         "</svg>");
 }
-// Two arrows going opposite ways: this text for that text. The whole-chat one
-// is the same mark with a bar down the middle, which is what tells the two
-// apart at the 16 pixels the Extras menu draws them at.
+// Two arrows pointing opposite ways: one word replaced by another. The
+// whole-chat icon is the same drawing with a line down the middle. That line is
+// the only difference between them, and it has to work at 16 pixels, which is
+// the size the Extras menu draws these at.
 const SWAP_ARROWS = '<polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/>' +
     '<polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>';
 const SWAP_ONE_ICON = iconSvg(SWAP_ARROWS);
@@ -2604,24 +2605,27 @@ export function setup(ctx, opts) {
     }
     let lastChatId = null;
     let lastMessageId = null;
-    // Every Extras entry that can come and go, keyed by name, each held as its
-    // registration and the disposer for its click handler. One map rather than a
-    // pair of variables per entry, so registering, dropping and tearing one down
-    // is the same code whichever it is; the swap-whole-chat entry was once missed
-    // in teardown and stacked a duplicate button on every reload, which is the
-    // sort of thing a per-entry copy of the same three lines invites.
+    // Every Extras button that can come and go, keyed by name. Each one is stored
+    // as its registration plus the function that removes its click handler.
     //
-    // The on/off entry is not in here. Its label carries the current state and
-    // the host offers no way to relabel a registered entry, so it is registered
-    // again to change rather than left alone, and syncToggleAction owns it.
+    // One map instead of two variables per button, so adding, removing and
+    // tearing one down is the same code for all of them. When each button had its
+    // own copy of that code, the swap-whole-chat one was left out of teardown and
+    // a duplicate piled up on every reload.
+    //
+    // The on/off button is not in here. Its label changes with the state, and the
+    // host has no way to relabel a button once it is registered, so it has to be
+    // registered again to change. syncToggleAction handles that one.
     const barEntries = {};
     let toggleAction = null;
     let toggleActionOff = null;
-    // Set the moment teardown starts, and asked before anything registers an
-    // Extras entry. Teardown drops the entries and then hides the floating
-    // button, and hiding that button hands back whatever had stood down for it,
-    // so without this every entry was registered again on the way out and left
-    // behind for the next load to stack a duplicate on.
+    // True from the moment teardown starts. Checked before anything registers an
+    // Extras button.
+    //
+    // Teardown removes the buttons and then hides the floating button. Hiding
+    // that button puts back whatever was hidden for it, so without this flag
+    // every button was registered again on the way out and left behind. The next
+    // load then had two of each.
     let tornDown = false;
     // Optional consent dialog before any edit, for people who don't want surprises.
     // Returns true to proceed. If the host has no confirm dialog, proceeds.
@@ -2635,34 +2639,79 @@ export function setup(ctx, opts) {
         catch (_) { }
         return true;
     }
-    async function applyReplaceNow() {
+    // Swap requests that have gone out and have not been picked up yet.
+    //
+    // Somebody pressed a button to start a swap, so nothing happening is the one
+    // outcome they cannot make sense of: it looks exactly like the extension
+    // being broken.
+    //
+    // The backend answers twice. Once straight away to say it has the request,
+    // and again when the work is finished. This keeps a timer per request against
+    // the first answer, so a backend that is not running, or a message that never
+    // arrives, gets a message instead of silence.
+    //
+    // The timer waits for the first answer rather than the finished work, because
+    // swapping a whole chat can take a while and a timer on the finish would
+    // report a slow job as a failure.
+    const swapWaits = new Map();
+    // Read from the setup argument rather than from the settings, because it is
+    // not a choice anybody should have to make: it is here so the browser checks
+    // can drive this path without sitting through the real wait.
+    const SWAP_ACK_MS = Number(opts && opts.swapAckMs) > 0 ? Number(opts.swapAckMs) : 8000;
+    function clearSwapWait(requestId) {
+        const id = String(requestId == null ? "" : requestId);
+        const timer = swapWaits.get(id);
+        if (timer === undefined)
+            return;
+        swapWaits.delete(id);
         try {
-            if (!ctx || typeof ctx.sendToBackend !== "function") {
-                showToast("Find and replace needs the backend, which this host does not offer.");
-                return;
-            }
-            if (cfg.confirmBeforeEdit) {
-                if (!(await confirmEdit("Apply your word swaps to the latest reply?")))
-                    return;
-            }
-            ctx.sendToBackend({ type: "apply_replace_now", chatId: lastChatId, messageId: lastMessageId, requestId: "ar-rep-" + Date.now() });
+            clearTimeout(timer);
         }
         catch (_) { }
     }
+    // Sends one swap request and starts the timer above. Nothing is returned:
+    // what happens next arrives as a message from the backend, or as the timeout
+    // saying nothing did.
+    function sendSwapRequest(payload) {
+        const requestId = String(payload.requestId);
+        try {
+            ctx.sendToBackend(payload);
+        }
+        catch (e) {
+            // The host would not send the message. Saying nothing here is what made a
+            // pressed button look broken.
+            log("could not send the swap request", e);
+            showToast("Could not send that to the word swapper. Reload the page and try again.");
+            return;
+        }
+        swapWaits.set(requestId, setTimeout(() => {
+            swapWaits.delete(requestId);
+            log("no answer to the swap request");
+            showToast("No answer from the word swapper. Reload the page and try again.");
+        }, SWAP_ACK_MS));
+    }
+    async function applyReplaceNow() {
+        if (!ctx || typeof ctx.sendToBackend !== "function") {
+            showToast("Word swaps need this extension's backend, which your Lumiverse has not loaded.");
+            return;
+        }
+        if (cfg.confirmBeforeEdit) {
+            if (!(await confirmEdit("Apply your word swaps to the latest reply?")))
+                return;
+        }
+        sendSwapRequest({ type: "apply_replace_now", chatId: lastChatId, messageId: lastMessageId, requestId: "ar-rep-" + Date.now() });
+    }
     // Swap every generated reply in the current chat, once, on request.
     async function applyReplaceAllNow() {
-        try {
-            if (!ctx || typeof ctx.sendToBackend !== "function") {
-                showToast("Find and replace needs the backend, which this host does not offer.");
-                return;
-            }
-            if (cfg.confirmBeforeEdit) {
-                if (!(await confirmEdit("Apply your word swaps to every reply in this chat?")))
-                    return;
-            }
-            ctx.sendToBackend({ type: "apply_replace_now", chatId: lastChatId, wholeChat: true, requestId: "ar-rep-all-" + Date.now() });
+        if (!ctx || typeof ctx.sendToBackend !== "function") {
+            showToast("Word swaps need this extension's backend, which your Lumiverse has not loaded.");
+            return;
         }
-        catch (_) { }
+        if (cfg.confirmBeforeEdit) {
+            if (!(await confirmEdit("Apply your word swaps to every reply in this chat?")))
+                return;
+        }
+        sendSwapRequest({ type: "apply_replace_now", chatId: lastChatId, wholeChat: true, requestId: "ar-rep-all-" + Date.now() });
     }
     // The Extras-menu on/off entry. Its label and icon carry the current state,
     // and the host offers no way to relabel an action once it is registered, so a
@@ -2700,11 +2749,13 @@ export function setup(ctx, opts) {
             // the entry showed "on" through it until now. The float button has said
             // both since it was built and this is the same sentence.
             const hereOff = on && chatIsOff(lastChatId);
-            // Down while the floating button is up, and not moved into that button's
-            // menu either: the button is this switch already, one tap and wearing its
-            // state on its face. A menu entry for it would be a third way to the same
-            // switch. This one goes by the button alone rather than by whether the
-            // host can draw a menu, because the button replaces it either way.
+            // Hidden while the floating button is on, and not moved into that
+            // button's menu either. The floating button is already this same on/off
+            // switch: one tap, and its icon shows the state. A menu entry for it
+            // would be a third way to reach one switch.
+            //
+            // This checks the button alone, not whether the host can draw a menu,
+            // because it is the button that replaces this, not the menu.
             if (!cfg.showExtrasToggle || !canReg || floatIsUp()) {
                 dropToggleAction();
                 return;
@@ -2740,8 +2791,8 @@ export function setup(ctx, opts) {
         const held = barEntries[key];
         if (!held)
             return;
-        // Off the map first, so a throw on the way out cannot leave a dead entry
-        // behind that every later sync then reads as live.
+        // Removed from the map first. If destroy throws, the entry is already gone
+        // from the map, so later syncs do not treat a dead button as a live one.
         delete barEntries[key];
         try {
             held.off && held.off();
@@ -2752,9 +2803,9 @@ export function setup(ctx, opts) {
         }
         catch (_) { }
     }
-    // Register or drop one entry to match want. Everything in here is drawn from a
-    // fixed label and icon, so none of it has to be rebuilt to change: it is
-    // either there or it is not.
+    // Adds or removes one button to match want. Every button here has a fixed
+    // label and icon, so none of them ever needs rebuilding: it is either there
+    // or it is not.
     function syncBarEntry(key, want, spec, onClick) {
         if (!want) {
             dropBarEntry(key);
@@ -2778,12 +2829,14 @@ export function setup(ctx, opts) {
         syncToggleAction();
         try {
             const canReg = !!(ctx && ctx.ui && typeof ctx.ui.registerInputBarAction === "function");
-            // Each of these lives in one place at a time. With the floating button on
-            // screen its own menu carries them; Extras keeps them only when there is
-            // no button to. Two ways to the same thing, one of them a tap away and
-            // the other three, is one more than a menu opened for something else
-            // needs. With the button hidden, or the widget refused for want of
-            // ui_panels, Extras is the only way in on a phone, so they come back.
+            // Each of these is in one place at a time. When the floating button is on
+            // screen, its menu holds them. The Extras menu holds them only when there
+            // is no floating button to.
+            //
+            // Two ways to reach one thing is one more than anybody needs, and it
+            // clutters a menu somebody opened for something else. With the floating
+            // button hidden, or refused because ui_panels was not granted, the Extras
+            // menu is the only way to reach these on a phone, so they come back.
             const inExtras = canReg && !floatCarriesEntries();
             syncBarEntry("replaceNow", inExtras && !!cfg.showReplaceButton, { id: "auto-retry-replace-now", label: SWAP_ONE_LABEL, iconSvg: SWAP_ONE_ICON }, applyReplaceNow);
             syncBarEntry("replaceAll", inExtras && !!cfg.showSwapAllButton, { id: "auto-retry-replace-all", label: SWAP_ALL_LABEL, iconSvg: SWAP_ALL_ICON }, applyReplaceAllNow);
@@ -3245,8 +3298,8 @@ export function setup(ctx, opts) {
         viewBtn.textContent = promptView === "raw" ? "Raw" : "Rendered";
         viewBtn.title =
             promptView === "raw"
-                ? "Showing the prompt as data, with the panel's own labelling taken off. Tap to go back to the readable view."
-                : "Showing the readable view. Tap to see the prompt as the data the model was handed.";
+                ? "Showing the raw data, without the panel's own labels. Tap to go back to the readable view."
+                : "Showing the readable view. Tap to see the raw data that was sent to the model.";
         viewBtn.setAttribute("aria-label", viewBtn.title);
         viewBtn.style.cssText =
             "cursor:pointer;font:inherit;min-height:30px;padding:3px 12px;" +
@@ -3970,8 +4023,8 @@ export function setup(ctx, opts) {
     // is the one thing not taken, since ours has to go there instead; see the
     // contextmenu handler below.
     let floatWidget = null;
-    // Whether there is a panel to bring forward. Asked in two places that must
-    // agree: the Extras entry stands down when the button's own menu carries this.
+    // Whether there is a panel to bring forward. Asked in two places that have to
+    // agree: the Extras button is removed when the floating button's menu has it.
     function canOpenPanel() {
         return !!(cfg.liveLog &&
             cfg.panelHome === "drawer" &&
@@ -3989,11 +4042,11 @@ export function setup(ctx, opts) {
     function floatIsUp() {
         return !!floatWidget && !!floatEl;
     }
-    // Whether the floating button can carry the entries that stand down for it.
-    // The menu behind it is the host's, and a build without showContextMenu falls
-    // back to a toast saying where the settings are, so on one of those the
-    // button carries nothing: an entry that stood down for it would have nowhere
-    // left to be.
+    // Whether the floating button can actually hold the buttons that hide for it.
+    //
+    // Its menu is drawn by Lumiverse. A version without showContextMenu shows a
+    // message saying where the settings are instead, so on those the button has
+    // no menu at all. A button that hid for it would then have nowhere to be.
     function floatCarriesEntries() {
         return floatIsUp() && typeof ctx?.ui?.showContextMenu === "function";
     }
@@ -4379,9 +4432,9 @@ export function setup(ctx, opts) {
         }
         floatEl = el;
         paintFloat();
-        // Everything the button's own menu now carries stands down from Extras. The
-        // whole point of the split, so it runs from here rather than only when a
-        // setting is saved: the button can arrive without one being touched.
+        // Everything the floating button's menu now holds is removed from the
+        // Extras menu. This runs here rather than only when a setting is saved,
+        // because the button can appear without any setting being changed.
         syncInputBarActions();
     }
     // Not a close: the menu belongs to the host, which shuts it on Escape, on a
@@ -4391,10 +4444,10 @@ export function setup(ctx, opts) {
     function forgetFloatMenu() {
         floatMenuToken = null;
     }
-    // The menu behind a hold or a right-click on the floating button. It carries
-    // the ways into the extension's own surfaces, the manual word swaps while
-    // those are switched on, and the button's own hide. Nothing here changes how
-    // a reply is retried; the settings panel is the one place that does.
+    // The menu shown by holding or right-clicking the floating button. It holds
+    // the ways into the extension's own screens, the two word swap buttons when
+    // those are switched on, and hiding the button itself. Nothing here changes
+    // how a reply is retried. The settings panel is the only place that does.
     //
     // Drawn by Lumiverse rather than by us. It arrives in the user's own theme,
     // accent and dark or light mode, clamps itself to the screen, and closes on
@@ -4441,13 +4494,13 @@ export function setup(ctx, opts) {
                     // panel floating it is already on screen, and an entry that opens
                     // what you can see is noise in a menu opened for something else.
                     ...(canOpenPanel() ? [{ key: "panel", label: OPEN_PANEL_LABEL }] : []),
-                    // The manual swaps, on the same terms as the panel entry: their
-                    // setting puts them in Extras, and this menu takes them over while the
-                    // button is on screen to hold them.
+                    // The two word swap buttons, on the same terms as the panel one:
+                    // their setting puts them in the Extras menu, and this menu takes
+                    // them over while the floating button is on screen.
                     ...(cfg.showReplaceButton ? [{ key: "swap", label: SWAP_ONE_LABEL }] : []),
                     ...(cfg.showSwapAllButton ? [{ key: "swapAll", label: SWAP_ALL_LABEL }] : []),
-                    // Last, under everything that opens or does something, because it is
-                    // the only entry here that takes this menu away with it.
+                    // Last, under everything else, because it is the only entry here
+                    // that closes this menu for good.
                     //
                     // Switching Auto Retry off in one chat is not here. It lives in the
                     // settings panel, under Basics, on the "This chat" row. This menu
@@ -4529,10 +4582,10 @@ export function setup(ctx, opts) {
         // kept a whole button's worth of handlers alive after the button was gone,
         // and every pointer move on the page went on running its hold check.
         holdMoveWatch = null;
-        // Extras carries all of it again now that there is no button to. Hiding
-        // this button from its own menu is the path that made this necessary:
-        // nothing else runs afterwards, so without it the entries the menu had
-        // taken over went down with the menu.
+        // The Extras menu takes them all back, now that there is no floating
+        // button. Hiding the button from its own menu is why this is needed:
+        // nothing else runs afterwards, so without it the buttons that had moved
+        // into the menu disappeared along with it.
         syncInputBarActions();
     }
     // Where the button is sitting right now, read off the screen. Used after a
@@ -5638,7 +5691,7 @@ export function setup(ctx, opts) {
         const picked = pickRetryControl();
         if (!picked) {
             log("no retry control found, set the button selectors in settings");
-            showToast("Auto-retry: couldn't find your retry button. Set it in Auto Retry settings.");
+            showToast("Auto Retry could not find your regenerate button. Set it in Auto Retry settings.");
             return null;
         }
         hideToast();
@@ -5682,7 +5735,7 @@ export function setup(ctx, opts) {
             // The retry this note was armed for is off, so the note goes with it.
             disarmRefusalNote(chatId);
             if (announce)
-                showToast("Auto-retry stopped.");
+                showToast("Auto Retry stopped.");
             log("stood down", chatId);
         }
         // Called off is a change too, and the one people are watching for after
@@ -6330,7 +6383,7 @@ export function setup(ctx, opts) {
                 // Forced: the toast setting covers the pop-up on each retry, and going
                 // quiet for minutes at a time is a state change, not a retry. A
                 // user who sees nothing has no way to tell this from the thing breaking.
-                showToast("Auto-retry paused for " + sayTime(pauseMs) +
+                showToast("Auto Retry paused for " + sayTime(pauseMs) +
                     ": the last " + runsNeeded + (runsNeeded === 1 ? " run" : " runs") + " failed.", { force: true });
                 // Pausing is the state that most looks like the extension having
                 // stopped working, so the line saying otherwise should not be a
@@ -6338,7 +6391,7 @@ export function setup(ctx, opts) {
                 paintNow();
             }
             else {
-                showToast("Auto-retry: gave up after " + cfg.maxRetries + " tries.");
+                showToast("Auto Retry gave up after " + cfg.maxRetries + " tries.");
             }
             return;
         }
@@ -6684,7 +6737,7 @@ export function setup(ctx, opts) {
             // failure, so don't let the hard-error skip swallow it before the refusal check.
             if (cfg.ignoreHardErrors && isHardError(p.error) && !(cfg.retryOnRefusal && looksLikeRefusalError(String(p.error), cfg))) {
                 log("hard error ignored", p.error);
-                showToast("Auto-retry skipped: hard failure (auth/model).");
+                showToast("Auto Retry did not retry: that error will not fix itself, so trying again would not help.");
                 s.attempts = 0;
                 return;
             }
@@ -7997,7 +8050,7 @@ export function setup(ctx, opts) {
                 const v = refusalVerdict(text, cfg);
                 if (v.refusal) {
                     out.textContent =
-                        "Counts as a refusal, so a retry would fire - " +
+                        "This counts as a refusal, so it would retry: " +
                             v.reason +
                             (cfg.retryOnRefusal
                                 ? "."
@@ -8006,7 +8059,7 @@ export function setup(ctx, opts) {
                 }
                 else {
                     out.textContent =
-                        "Reads as normal writing, so no retry - " + v.reason + ".";
+                        "This reads as normal writing, so it would not retry: " + v.reason + ".";
                     out.style.color = "var(--lumiverse-text-muted,rgba(255,255,255,.65))";
                 }
                 ensureReadable(out, 2.6);
@@ -8804,7 +8857,7 @@ export function setup(ctx, opts) {
                 // message or switching away and back. Updating the extension while
                 // sitting in a chat is the case that leaves it waiting, because nothing
                 // re-renders and so nothing announces which chat you are in.
-                ? "Waiting to catch which chat this is. Send a message, or switch away and back, and this is ready. Every other chat carries on as it is."
+                ? "Waiting to find out which chat this is. Send a message, or switch to another chat and back, and this is ready. Every other chat carries on as it is."
                 : off
                     ? "Auto Retry is switched off in this chat. Every other chat carries on as it is. This is remembered, and it is kept in this browser rather than in your settings."
                     : "Switch Auto Retry off in this chat alone, for a scene where the model is meant to refuse. Every other chat carries on as it is.";
@@ -10011,9 +10064,9 @@ export function setup(ctx, opts) {
         body.style.cssText =
             "flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:8px;font-size:13px;line-height:1.5";
         for (const para of [
-            "This throws away a reply where the model stops the story to speak to you about your safety, and asks for another one in its place. In a heavy scene that is usually the model misreading the fiction, and you get your scene back.",
-            "Sometimes it is not misreading. The same message goes out to somebody who needs it, and nothing here can tell those two apart. It reads the reply. It has no idea how you are.",
-            "So the thing to keep hold of: if a scene is making you feel worse rather than more, that is worth listening to, and this switch is built to remove the one message that would have said so out loud.",
+            "This throws away a reply where the model stops the story to talk to you about your safety, and asks for a new reply instead. In a dark or intense scene that is usually the model misreading the fiction, and you get your scene back.",
+            "Sometimes it is not misreading. The same message is sent to people who need it, and this extension cannot tell the two apart. It only reads the reply. It has no idea how you are.",
+            "So the one thing to keep in mind: if a chat is making you feel worse, that is worth paying attention to. This setting takes away the one message that would have said so out loud.",
             "It changes nothing else, it stays off unless you turn it on, and you can switch it off again whenever you like.",
         ]) {
             const p = document.createElement("div");
@@ -10394,7 +10447,7 @@ export function setup(ctx, opts) {
                         }
                         const yes = await confirmEdit("Apply your word swaps to this reply?");
                         if (yes && ctx && typeof ctx.sendToBackend === "function") {
-                            ctx.sendToBackend({ type: "apply_replace_now", chatId: msg.chatId, messageId: msg.messageId, requestId: "ar-rep-" + Date.now() });
+                            sendSwapRequest({ type: "apply_replace_now", chatId: msg.chatId, messageId: msg.messageId, requestId: "ar-rep-" + Date.now() });
                         }
                         return;
                     }
@@ -10481,8 +10534,17 @@ export function setup(ctx, opts) {
                         repairEditBox();
                         return;
                     }
+                    // Said as soon as the backend has the request, before any work. It is
+                    // the only thing the timeout is waiting for.
+                    if (msg.type === "replace_now_ack") {
+                        clearSwapWait(msg.requestId);
+                        return;
+                    }
                     if (msg.type !== "replace_now_result")
                         return;
+                    // Also here, for a build whose acknowledgement never arrived: the
+                    // result answers the same question, later.
+                    clearSwapWait(msg.requestId);
                     for (const e of msg.edits || [])
                         rememberSwap(e && e.before, e && e.after);
                     if (msg.ok) {
@@ -10511,12 +10573,23 @@ export function setup(ctx, opts) {
         }
     }
     catch (_) { }
-    // Every Extras entry the extension can register is torn down here, by walking
-    // the map rather than by naming them one at a time. The swap-whole-chat one
-    // used to be missed off a list like that, so it survived a reload and stacked
-    // up a duplicate button each time.
+    // Every Extras button the extension can add is removed here, by walking the
+    // map instead of naming them one at a time. The swap-whole-chat one used to
+    // be left off a list like that, so it survived a reload and a duplicate
+    // piled up each time.
     disposers.push(() => dropBarEntries());
     disposers.push(() => dropToggleAction());
+    // A swap timer left running would show a message about a backend nobody is
+    // waiting on any more, from an extension that has already been closed.
+    disposers.push(() => {
+        for (const timer of Array.from(swapWaits.values())) {
+            try {
+                clearTimeout(timer);
+            }
+            catch (_) { }
+        }
+        swapWaits.clear();
+    });
     askForPermissions();
     log("ready v" + VERSION, cfg);
     return () => {

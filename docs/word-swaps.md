@@ -19,7 +19,7 @@ By default it swaps just the latest reply and won't swap the same reply twice, s
 - **Show a swap-whole-chat button** adds a second button beside it, **Swap words in every reply**, which applies your rules once to every generated reply in the chat you are viewing. Handy after adding a rule mid-chat or loading a different preset.
 - **Allow swapping a reply again** lets it swap a reply you already swapped, which is useful after you change your rules, though it can stack swaps.
 
-There is no way to pick individual arbitrary messages; the choice is the latest reply or the whole chat.
+You cannot pick out individual messages. The choice is the latest reply, or the whole chat.
 
 It acts on replies from the current session, the ones you have generated, so it is most reliable right after a reply. On a freshly opened old chat it will say there is no reply to swap until you generate one. It works whether or not automatic swapping is on, and is a tap away on both mobile and desktop.
 

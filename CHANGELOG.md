@@ -10,22 +10,25 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ## 4.18.0
 
-_2026-08-20_
+_2026-08-21_
 
 ### Changed
 
-- **The manual word swap buttons follow the floating button, the way the panel entry already did.** With the button on screen, hold it and **Swap words in the last reply** and **Swap words in every reply** are in its menu; with no button they are back in the Extras popover where they have always been. Each is in one place at a time, so nothing is ever offered twice, once a tap away and once three.
-- **Hide this button sits at the bottom of that menu now**, under everything that opens or does something, because it is the only entry there that takes the menu away with it. Settings stays first.
-- **The on/off entry in the Extras menu steps aside while the floating button is showing.** That button is the same master switch in one tap, with the state on its face, so a second copy of it in a menu is a third way to the same switch. Turn the button off and the entry comes straight back. It answers to the button rather than to the button's menu, so it steps aside even on a Lumiverse too old to draw one.
-- **Auto Retry settings is the one entry that never moves.** It is the extension's guaranteed way in, and losing it because a floating button happens to be on would be worse than it appearing in two places.
+- **The two word swap buttons now follow the floating button, the same way the panel button already did.** When the floating button is on, hold it and **Swap words in the last reply** and **Swap words in every reply** are in its menu. When the floating button is off, they are back in the Extras menu. Each button is in one place at a time, so you never get the same thing twice.
+- **Hide this button** is now at the bottom of that menu, under everything else, because it is the only one that closes the menu for good. **Auto Retry settings** is still at the top.
+- **The on/off button in the Extras menu is hidden while the floating button is on.** The floating button is the same on/off switch and one tap does it, so having both was two buttons for one thing. Turn the floating button off and this one comes back. This happens even on an older Lumiverse that cannot open the floating button's menu, because it is the button itself that replaces it, not the menu.
+- **Auto Retry settings never moves.** It stays in the Extras menu whatever else is on, so there is always one way in that does not depend on anything.
+- **The extension is called Auto Retry everywhere now.** Some messages said "auto-retry" and others said "Auto Retry", and one said both in the same sentence.
+- **Clearer wording in the settings and the docs.** Several descriptions were long, or used a turn of phrase instead of saying the thing. The warning before you turn on the support-message option had a sentence that did not finish its comparison, which is the last place that should happen.
 
 ### Fixed
 
-- **The way into the panel could disappear entirely.** Hiding the floating button from its own menu never told the Extras popover to take the panel entry back, so with the panel set to live in the sidebar there was suddenly no way to open it short of Ctrl+K, which is no help on a phone. Showing the button had the same gap in the other direction. Both now re-read what belongs where the moment the button comes or goes.
-- **On a Lumiverse too old to have the menu API, the panel entry went missing.** It stood down for a floating button whose menu that build cannot draw, so it stood down for nothing. Nothing stands down now unless there is a menu to carry it.
-- **The floating button told screen readers to hold it for a per-chat switch that is not there.** That entry left the menu in 4.16.0 and the button's description kept promising it, which for anyone reading the button rather than seeing it is the only description there is. The per-chat switch is in the settings panel, under Basics, on the **This chat** row.
-- **Closing the extension put every Extras entry back on its way out.** Teardown dropped them and then hid the floating button, and hiding the button handed back everything that had stood down for it, so a reload could stack a second copy of each. Nothing registers once teardown has started.
-- **Settings arriving from your account did not re-read which Extras entries you had asked for.** Switching one on in another browser took effect everywhere except in the popover it belongs in, until something else was saved.
+- **Pressing a word swap button could do nothing at all, with no message.** If the extension's backend was not running, the request went out and no answer ever came back, so the button looked broken. It now says so after a few seconds and tells you to reload. The backend confirms it has the request before it starts work, so swapping a long chat, which can take a while, never shows that message by mistake.
+- **The button to open the panel could disappear completely.** Hiding the floating button from its own menu never put that button back in the Extras menu. If your panel was set to live in the sidebar, there was suddenly no way to open it except Ctrl+K, which is no use on a phone. Turning the floating button on had the same problem in reverse.
+- **On an older Lumiverse, the panel button went missing.** It moved into the floating button's menu on versions that cannot open that menu at all. Nothing moves into that menu now unless there is a menu to move into.
+- **The floating button told screen readers to hold it for a per-chat switch that is not there.** That option moved to the settings panel in 4.16.0 and the button's description was never updated. For anyone using a screen reader, that description is the only thing describing the button. The per-chat switch is in the settings panel, under Basics, on the **This chat** row.
+- **Closing the extension put its Extras buttons back on the way out**, so reloading the page could leave you with two of each.
+- **Settings arriving from your account did not update which Extras buttons you had asked for.** Turning one on in another browser worked everywhere except in the menu it belongs in, until you saved something else.
 
 ## 4.17.0
 

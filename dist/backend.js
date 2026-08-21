@@ -767,6 +767,10 @@ spindle.onFrontendMessage(async (payload, userId) => {
             return;
         }
         if (payload.type === 'apply_replace_now') {
+            // Said before any work, so the frontend knows the request landed. A whole
+            // chat can take a while to swap, and without this the only way to tell a
+            // long job from a backend that is not running is to wait and see.
+            replyTo(userId, { type: 'replace_now_ack', requestId: payload.requestId });
             let ok = true, found = false, changed = 0, skipped = 0;
             // Literal substitutions made, passed back so the frontend can update the
             // rendered text. The host saves the message without redrawing the chat.
