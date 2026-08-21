@@ -20,8 +20,7 @@ _2026-08-21_
 - **Auto Retry settings never moves.** It stays in the Extras menu whatever else is on, so there is always one way in that does not depend on anything.
 - **The extension is called Auto Retry everywhere now.** Some messages said "auto-retry" and others said "Auto Retry", and one said both in the same sentence.
 - **The Log tab speaks plainly.** Several lines in it named an internal part of Lumiverse or an API, which tells you nothing you can act on. They say what happened in ordinary words now. The permission names stay, because those are what Lumiverse's own extension settings call them, so they are worth knowing.
-- **The Safety page says what the retry loop looks like from the inside, and where to find a person.** It used to say it would not guess what that looked like for you, which was meant as respect and worked as a locked door: anyone who did not already recognise themselves in it got nothing to go on. There is a short list now of things worth stopping on, and findahelpline.com, which lists free lines by country.
-- **Clearer wording in the settings and the docs.** Several descriptions were long, or used a turn of phrase instead of saying the thing. The warning before you turn on the support-message option had a sentence that did not finish its comparison, which is the last place that should happen.
+- **Clearer wording in the settings panel.** Several descriptions were long, or used a turn of phrase instead of saying the thing. The warning before you turn on the support-message option had a sentence that did not finish its comparison, which is the last place that should happen.
 
 ### Fixed
 
