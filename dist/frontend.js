@@ -2518,15 +2518,6 @@ function markSvg(off, size) {
 const SWAP_ONE_LABEL = "Swap words in the last reply";
 const SWAP_ALL_LABEL = "Swap words in every reply";
 const OPEN_PANEL_LABEL = "Open the Auto Retry panel";
-// Short messages wrap on their own and can leave one word alone on the last
-// line, which reads as a mistake rather than as a wrap. Balancing the lines
-// evens them out instead. Measured across the messages the extension actually
-// shows: it never added a line, so no box gets taller for it.
-//
-// "pretty" is the option named for this and does almost nothing here: Chromium
-// applies it narrowly and still left single-word last lines on two of the five
-// messages checked. A browser without either just wraps as before.
-const BALANCE_WRAP = "text-wrap:balance;";
 function iconSvg(body) {
     return ('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"' +
         ' stroke-linecap="round" stroke-linejoin="round">' +
@@ -7342,7 +7333,19 @@ export function setup(ctx, opts) {
             // on its own; those are opened by the user, and a notification landing on
             // top of a menu turns a tap on "Hide this button" into a tap on Cancel.
             t.style.cssText =
-                "position:fixed;bottom:max(20px,env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);" +
+                // Centred by pinning both edges and letting the margins share what is
+                // left, not by left:50% and a transform. With only a left edge set, the
+                // box's containing block starts halfway across the screen and ends at
+                // the right edge, so it could never be wider than half the viewport:
+                // max-width was 379px on a 412px phone and the box stopped at 206px.
+                // Messages that fit on one line wrapped, and the wrap stranded a word.
+                // fit-content keeps a short message from being padded out to the cap.
+                "position:fixed;bottom:max(20px,env(safe-area-inset-bottom,0px));left:0;right:0;" +
+                    "margin-left:auto;margin-right:auto;width:fit-content;" +
+                    // Without this the cap applies to the text and the padding and border
+                    // sit outside it, so the box came out 26px wider than it was allowed
+                    // and all but touched both edges of a phone.
+                    "box-sizing:border-box;" +
                     "z-index:" + Z_TOAST + ";display:flex;align-items:center;gap:10px;" +
                     "font:13px/1.4 var(--lumiverse-font-family,system-ui);padding:9px 12px;border-radius:var(--lumiverse-radius-lg,12px);" +
                     "color:var(--lumiverse-text,#fff);" +
@@ -7422,7 +7425,7 @@ export function setup(ctx, opts) {
             t.innerHTML = "";
             const span = document.createElement("span");
             span.textContent = msg;
-            span.style.cssText = "flex:1;" + BALANCE_WRAP;
+            span.style.cssText = "flex:1";
             t.appendChild(span);
             // Kept so a countdown can rewrite the words without rebuilding the box.
             // Rebuilding would replace the Cancel button four times a second, which
@@ -8705,7 +8708,6 @@ export function setup(ctx, opts) {
         const masterNote = document.createElement("div");
         masterNote.style.cssText =
             "display:none;flex:none;margin:0 0 10px;font-size:12px;line-height:1.45;" +
-                BALANCE_WRAP +
                 "color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
         masterNote.setAttribute("data-ar-master", "1");
         // Above the search box rather than below it. This is the panel's own state
@@ -8727,8 +8729,7 @@ export function setup(ctx, opts) {
         // by tag and text, which is how a check ends up passing over nothing.
         status.setAttribute("data-ar-save-status", "");
         status.style.cssText =
-            "flex:1;min-width:120px;font-size:12px;" + BALANCE_WRAP +
-                "color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+            "flex:1;min-width:120px;font-size:12px;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
         // Opens the picker rather than resetting on the spot. There is no confirm
         // dialog in front of it any more: the picker itself is the confirmation,
         // it says what each part would change before anything happens, and what it

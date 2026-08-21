@@ -4743,15 +4743,17 @@ console.log("\nwhere the ways into the extension live");
   }
 }
 
-// ---- no message leaves one word alone on the last line ----
-// A toast wraps on its own, and "No reply found to swap in this chat." put
-// "chat." on a line by itself, which reads as a mistake rather than as a wrap.
-// text-wrap:balance evens the lines out instead.
+// ---- the toast may use the whole width it is allowed ----
+// "No reply found to swap in this chat." wrapped onto two lines on a phone and
+// left "chat." alone on the second, on a message that fits on one line easily.
 //
-// Driven through the real controls rather than by feeding strings to a test
-// hook, so what is measured is a message the extension actually puts on screen.
-// Both of these strand a word without the rule.
-console.log("\nmessages wrap without stranding a word");
+// The cause was the centring. A fixed box with only a left edge set has a
+// containing block running from that edge to the right of the screen, so
+// left:50% left it half a viewport to work with: max-width was 379px on a
+// 412px phone and the box stopped dead at 206px. It is centred by pinning both
+// edges and sharing the remainder between the margins now, so the cap it was
+// given is the cap it gets.
+console.log("\nthe toast gets the width it was given");
 {
   const page = await browser.newPage({ viewport: { width: 412, height: 800 } });
   const errors = [];
@@ -4775,58 +4777,64 @@ console.log("\nmessages wrap without stranding a word");
             return a;
           },
         } },
-      { toast: true },
+      { toast: true, showExtrasToggle: true },
     );
-    // Where each word of an element's text landed, so the last line can be
-    // counted. Ranges rather than innerText, because only the layout knows
-    // where the browser chose to break.
-    const lastLine = (el) => {
-      const node = el.firstChild;
-      if (!node || !node.textContent.trim()) return null;
+    const read = () => {
+      const t = document.getElementById("__lvRetryToast");
+      const r = t.getBoundingClientRect();
+      const span = t.firstElementChild;
+      const node = span.firstChild;
       const tops = [];
       let at = 0;
       for (const word of node.textContent.split(" ")) {
         if (word) {
-          const r = document.createRange();
-          r.setStart(node, at);
-          r.setEnd(node, at + word.length);
-          tops.push(Math.round(r.getBoundingClientRect().top));
+          const rr = document.createRange();
+          rr.setStart(node, at);
+          rr.setEnd(node, at + word.length);
+          tops.push(Math.round(rr.getBoundingClientRect().top));
         }
         at += word.length + 1;
       }
       const bottom = Math.max(...tops);
-      const style = getComputedStyle(el);
       return {
+        text: node.textContent,
+        width: Math.round(r.width),
         lines: new Set(tops).size,
         lastWords: tops.filter((t) => t === bottom).length,
-        balanced: style.textWrap === "balance" || style.textWrapStyle === "balance",
-        text: node.textContent.slice(0, 34),
+        // Centred on the viewport, and not hanging off either edge.
+        centred: Math.abs(r.left + r.width / 2 - 206) < 2,
+        onScreen: r.left >= 0 && r.right <= 412,
       };
     };
 
-    // A chat has to be known before the per-chat row will act.
     handlers.CHARACTER_MESSAGE_RENDERED({ chatId: "A", messageId: "m1" });
     await wait(20);
     acts["auto-retry-settings"].cb();
     await wait(40);
-    // Switching this chat off raises the toast, and turning the master switch
-    // off puts the note at the top of the panel up. Two different elements,
-    // both of them a standalone sentence that wraps.
+    // A long one: switching this chat off. Wrapping is fair here, and it must
+    // still use the full width it is allowed rather than half of it.
     document.querySelector("[data-ar-chat-switch]").querySelector("button").click();
     await wait(40);
-    const toast = lastLine(document.getElementById("__lvRetryToast").firstElementChild);
-    document.querySelector('[data-ar-row="enabled"] input').click();
-    await wait(40);
-    const note = lastLine(document.querySelector("[data-ar-master]"));
-    return { toast, note };
+    const long = read();
+    // And a short one, which must not be padded out to the cap. The checkbox
+    // in the panel raises no toast, so this uses the Extras on/off entry,
+    // which is the control that announces the switch.
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    await wait(20);
+    acts["auto-retry-toggle"].cb();
+    await wait(60);
+    const short = read();
+    return { long, short };
   });
   await page.close();
-  for (const [what, m] of [["the toast", out.toast], ["the panel note", out.note]]) {
-    check(what + ": there was a message to measure", !!m && m.text.length > 0, m);
-    check(what + ": the balance rule reached it", !!m && m.balanced, m);
-    check(what + ": it wrapped, so this is a real test of the wrap", !!m && m.lines > 1, m);
-    check(what + ": and no single word is left alone on the last line",
-      !!m && m.lastWords > 1, m);
+  // 206 is exactly half of this viewport, which is what the old centring
+  // capped every message at whatever max-width said.
+  check("a long message is wider than half the screen", out.long.width > 206, out.long);
+  check("and no wider than the cap it was given", out.long.width <= Math.round(412 * 0.92), out.long);
+  check("a short message is not padded out to the cap", out.short.width < 206, out.short);
+  for (const [what, m] of [["long", out.long], ["short", out.short]]) {
+    check(what + ": centred on the screen", m.centred, m);
+    check(what + ": and fully on it", m.onScreen, m);
   }
   check("no console errors", errors.length === 0, errors);
 }
