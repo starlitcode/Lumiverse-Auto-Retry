@@ -4743,6 +4743,94 @@ console.log("\nwhere the ways into the extension live");
   }
 }
 
+// ---- no message leaves one word alone on the last line ----
+// A toast wraps on its own, and "No reply found to swap in this chat." put
+// "chat." on a line by itself, which reads as a mistake rather than as a wrap.
+// text-wrap:balance evens the lines out instead.
+//
+// Driven through the real controls rather than by feeding strings to a test
+// hook, so what is measured is a message the extension actually puts on screen.
+// Both of these strand a word without the rule.
+console.log("\nmessages wrap without stranding a word");
+{
+  const page = await browser.newPage({ viewport: { width: 412, height: 800 } });
+  const errors = [];
+  page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
+  page.on("console", (m) => { if (m.type() === "error") errors.push("console: " + m.text()); });
+  await stage(page, "<div id=modal></div>");
+  await page.addStyleTag({ content: THEME });
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  const out = await page.evaluate(async () => {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const handlers = {};
+    const acts = {};
+    window.__setup(
+      { events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
+        ui: {
+          showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+          registerInputBarAction: (o) => {
+            const a = { onClick: (cb) => { a.cb = cb; return () => {}; }, destroy: () => {} };
+            acts[o.id] = a;
+            return a;
+          },
+        } },
+      { toast: true },
+    );
+    // Where each word of an element's text landed, so the last line can be
+    // counted. Ranges rather than innerText, because only the layout knows
+    // where the browser chose to break.
+    const lastLine = (el) => {
+      const node = el.firstChild;
+      if (!node || !node.textContent.trim()) return null;
+      const tops = [];
+      let at = 0;
+      for (const word of node.textContent.split(" ")) {
+        if (word) {
+          const r = document.createRange();
+          r.setStart(node, at);
+          r.setEnd(node, at + word.length);
+          tops.push(Math.round(r.getBoundingClientRect().top));
+        }
+        at += word.length + 1;
+      }
+      const bottom = Math.max(...tops);
+      const style = getComputedStyle(el);
+      return {
+        lines: new Set(tops).size,
+        lastWords: tops.filter((t) => t === bottom).length,
+        balanced: style.textWrap === "balance" || style.textWrapStyle === "balance",
+        text: node.textContent.slice(0, 34),
+      };
+    };
+
+    // A chat has to be known before the per-chat row will act.
+    handlers.CHARACTER_MESSAGE_RENDERED({ chatId: "A", messageId: "m1" });
+    await wait(20);
+    acts["auto-retry-settings"].cb();
+    await wait(40);
+    // Switching this chat off raises the toast, and turning the master switch
+    // off puts the note at the top of the panel up. Two different elements,
+    // both of them a standalone sentence that wraps.
+    document.querySelector("[data-ar-chat-switch]").querySelector("button").click();
+    await wait(40);
+    const toast = lastLine(document.getElementById("__lvRetryToast").firstElementChild);
+    document.querySelector('[data-ar-row="enabled"] input').click();
+    await wait(40);
+    const note = lastLine(document.querySelector("[data-ar-master]"));
+    return { toast, note };
+  });
+  await page.close();
+  for (const [what, m] of [["the toast", out.toast], ["the panel note", out.note]]) {
+    check(what + ": there was a message to measure", !!m && m.text.length > 0, m);
+    check(what + ": the balance rule reached it", !!m && m.balanced, m);
+    check(what + ": it wrapped, so this is a real test of the wrap", !!m && m.lines > 1, m);
+    check(what + ": and no single word is left alone on the last line",
+      !!m && m.lastWords > 1, m);
+  }
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- Save does not claim a save that did not happen ----
 // The browser copy is what survives a reload, and writing it can fail outright:
 // a browser with site data blocked, or with no room left, throws. That throw

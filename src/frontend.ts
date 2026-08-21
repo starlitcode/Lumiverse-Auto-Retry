@@ -2637,6 +2637,16 @@ const SWAP_ONE_LABEL = "Swap words in the last reply";
 const SWAP_ALL_LABEL = "Swap words in every reply";
 const OPEN_PANEL_LABEL = "Open the Auto Retry panel";
 
+// Short messages wrap on their own and can leave one word alone on the last
+// line, which reads as a mistake rather than as a wrap. Balancing the lines
+// evens them out instead. Measured across the messages the extension actually
+// shows: it never added a line, so no box gets taller for it.
+//
+// "pretty" is the option named for this and does almost nothing here: Chromium
+// applies it narrowly and still left single-word last lines on two of the five
+// messages checked. A browser without either just wraps as before.
+const BALANCE_WRAP = "text-wrap:balance;";
+
 function iconSvg(body: string): string {
   return (
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"' +
@@ -7365,7 +7375,7 @@ export function setup(ctx: Ctx, opts?: any) {
       t.innerHTML = "";
       const span = document.createElement("span");
       span.textContent = msg;
-      span.style.cssText = "flex:1";
+      span.style.cssText = "flex:1;" + BALANCE_WRAP;
       t.appendChild(span);
       // Kept so a countdown can rewrite the words without rebuilding the box.
       // Rebuilding would replace the Cancel button four times a second, which
@@ -8723,6 +8733,7 @@ export function setup(ctx: Ctx, opts?: any) {
     const masterNote = document.createElement("div");
     masterNote.style.cssText =
       "display:none;flex:none;margin:0 0 10px;font-size:12px;line-height:1.45;" +
+      BALANCE_WRAP +
       "color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
     masterNote.setAttribute("data-ar-master", "1");
     // Above the search box rather than below it. This is the panel's own state
@@ -8746,7 +8757,8 @@ export function setup(ctx: Ctx, opts?: any) {
     // by tag and text, which is how a check ends up passing over nothing.
     status.setAttribute("data-ar-save-status", "");
     status.style.cssText =
-      "flex:1;min-width:120px;font-size:12px;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+      "flex:1;min-width:120px;font-size:12px;" + BALANCE_WRAP +
+      "color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
 
     // Opens the picker rather than resetting on the spot. There is no confirm
     // dialog in front of it any more: the picker itself is the confirmation,
