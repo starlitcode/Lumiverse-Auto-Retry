@@ -6049,7 +6049,22 @@ export function setup(ctx: Ctx, opts?: any) {
         "[data-ar-btn]:focus-visible{outline:none}" +
         // Ours, and not on one the extension focused itself: see focusQuietly.
         "[data-ar-btn]:not([data-ar-quiet]):focus-visible" +
-        "{box-shadow:" + FOCUS_RING + "}";
+        "{box-shadow:" + FOCUS_RING + "}" +
+        // The "?" beside each setting. Its size is here rather than inline on
+        // the button because an inline style cannot be answered by a media
+        // query, and this needs one: 18px is comfortable under a mouse and
+        // small under a thumb, so a screen that is touched gets 28px, which
+        // clears the 24px minimum target size. A computer keeps the smaller
+        // one, where the pointer is precise and the rows are read a screenful
+        // at a time.
+        //
+        // The button itself grows rather than an invisible hit area being laid
+        // over it. Each "?" sits at the end of a row that is one large label,
+        // so a hit area reaching past the button would take taps meant for the
+        // setting it explains.
+        "button[data-ar-hint]{width:18px;height:18px;font-size:11px}" +
+        "@media (pointer:coarse){" +
+        "button[data-ar-hint]{width:28px;height:28px;font-size:14px}}";
       (document.head || document.documentElement).appendChild(el);
       panelStyleEl = el;
     } catch (_) {}
@@ -8999,6 +9014,7 @@ export function setup(ctx: Ctx, opts?: any) {
     name.style.cssText = "font-size:13.5px";
     labelWrap.appendChild(name);
     if (f.hint) {
+      ensurePanelStyle();
       const info = document.createElement("button");
       info.type = "button";
       info.textContent = "?";
@@ -9007,8 +9023,10 @@ export function setup(ctx: Ctx, opts?: any) {
       // click can close a popover rather than closing and reopening it.
       info.setAttribute("data-ar-hint", "1");
       if (f.hintAbove) info.setAttribute("data-ar-hint-above", "1");
+      // Size and text size are in the panel stylesheet, not here, so the
+      // coarse-pointer rule can raise them. Everything else is inline.
       info.style.cssText =
-        "flex:none;width:18px;height:18px;padding:0;line-height:1;border-radius:50%;border:1px solid var(--lumiverse-border,rgba(255,255,255,.3));background:transparent;color:var(--lumiverse-text-muted,rgba(255,255,255,.65));font-size:11px;cursor:pointer";
+        "flex:none;padding:0;line-height:1;border-radius:50%;border:1px solid var(--lumiverse-border,rgba(255,255,255,.3));background:transparent;color:var(--lumiverse-text-muted,rgba(255,255,255,.65));cursor:pointer";
       const paint = (on: boolean) => {
         info.style.borderColor = on
           ? "var(--lumiverse-primary,rgba(147,112,219,.9))"

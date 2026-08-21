@@ -4743,6 +4743,81 @@ console.log("\nwhere the ways into the extension live");
   }
 }
 
+// ---- the "?" is bigger where a thumb has to hit it ----
+// 18px is comfortable under a mouse and small under a thumb. On a screen that
+// is touched it is 28px, which clears the 24px minimum target size, and a
+// computer keeps the smaller one so the panel stays as dense as it was.
+//
+// The button grows rather than an invisible hit area being laid over it: each
+// "?" sits at the end of a row that is one large label, so a hit area reaching
+// past the button would take taps meant for the setting.
+console.log("\nthe description button is sized for what is pointing at it");
+{
+  for (const [name, opts, want, rowFloor] of [
+    ["with a mouse", { viewport: { width: 1280, height: 800 } }, 18, 26],
+    ["with a finger", { viewport: { width: 412, height: 800 }, hasTouch: true, isMobile: true }, 28, 28],
+  ]) {
+    const page = await browser.newPage(opts);
+    const errors = [];
+    page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
+    page.on("console", (m) => { if (m.type() === "error") errors.push("console: " + m.text()); });
+    await stage(page, "<div id=modal></div>");
+    await page.addStyleTag({ content: THEME });
+    await page.addScriptTag({ content: SOURCE, type: "module" });
+    await page.waitForFunction(() => !!window.__setup);
+    const out = await page.evaluate(async () => {
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      const acts = {};
+      window.__setup(
+        { events: { on: () => () => {} },
+          ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+                registerInputBarAction: (o) => { const a = { onClick: (cb) => { a.cb = cb; return () => {}; }, destroy: () => {} }; acts[o.id] = a; return a; } } },
+        { toast: false },
+      );
+      acts["auto-retry-settings"].cb();
+      await wait(60);
+      for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      await wait(60);
+      const hints = [...document.querySelectorAll("button[data-ar-hint]")]
+        .filter((e) => e.getBoundingClientRect().width);
+      const sizes = [...new Set(hints.map((e) => Math.round(e.getBoundingClientRect().width)))];
+      // It still does its job at either size, by the gesture that device makes:
+      // a mouse reveals on hover, a finger on tap. Reading the wrong one here
+      // would say the button was broken when it was only never pointed at.
+      if (matchMedia("(pointer: coarse)").matches) {
+        hints[0].dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerType: "touch" }));
+        hints[0].click();
+      } else {
+        hints[0].dispatchEvent(new MouseEvent("mouseenter", { bubbles: false }));
+      }
+      await wait(40);
+      const opened = !!document.querySelector('[role="tooltip"]');
+      // And it never sits on top of another control, which is what a hit area
+      // laid over the row would have done.
+      const controls = [...document.querySelectorAll("#modal input,#modal select,#modal button")];
+      const overlaps = hints.some((h) => {
+        const a = h.getBoundingClientRect();
+        return controls.some((o) => {
+          if (o === h) return false;
+          const c = o.getBoundingClientRect();
+          return c.width && a.left < c.right && a.right > c.left && a.top < c.bottom && a.bottom > c.top;
+        });
+      });
+      const rowH = [...document.querySelectorAll("[data-ar-row]")]
+        .map((e) => Math.round(e.getBoundingClientRect().height)).filter(Boolean);
+      return { count: hints.length, sizes, opened, overlaps, rowMin: Math.min(...rowH) };
+    });
+    await page.close();
+    check(name + ": there are description buttons to measure", out.count > 20, out);
+    check(name + ": all of them are one size", out.sizes.length === 1, out.sizes);
+    check(name + ": that size is " + want + "px", out.sizes[0] === want, out.sizes);
+    check(name + ": the rows are no shorter than " + rowFloor + "px", out.rowMin >= rowFloor, out);
+    check(name + ": the gesture that device makes still opens its description", out.opened, out);
+    check(name + ": and none of them covers another control", out.overlaps === false, out);
+    check(name + ": no console errors", errors.length === 0, errors);
+  }
+}
+
 // ---- every tick box is the same size ----
 // The settings rows set 20px. The reset picker and the import and export lists
 // set nothing and took the browser default of 13px, so the same control was one
