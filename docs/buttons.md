@@ -12,7 +12,7 @@ This applies to every reason a retry fires, including empty replies and errors, 
 
 ## Setting the buttons without writing a selector
 
-Each button setting has a **Pick it for me** button next to **Test**. Press it and the settings panel steps aside; click the real button in Lumiverse and the selector is filled in for you. The click is swallowed, so picking your stop or regenerate button doesn't also press it. Press Cancel on the prompt to back out, or Esc if you're on a keyboard.
+Each button setting has a **Pick it for me** button next to **Test**. Press it and the settings panel hides. Click the real button in Lumiverse and the selector is filled in for you. The click is swallowed, so picking your stop or regenerate button doesn't also press it. Press Cancel on the prompt to back out, or Esc if you're on a keyboard.
 
 It builds the selector from what is most likely to survive an app update, preferring `aria-label`, `title` and `data-` attributes over class names. Lumiverse rebuilds its class names on every release, so a selector based on one stops matching the next time the app updates. Those are skipped. If the element it lands on has nothing dependable, it says so rather than saving something that will break; clicking the button itself rather than an icon inside it usually fixes that.
 

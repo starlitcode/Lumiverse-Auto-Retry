@@ -39,13 +39,15 @@ Saved settings sync to your Lumiverse account, so they follow you to other brows
 Two options in **Basics**, and you can use either or both:
 
 - **Floating on/off button** puts a small button over the chat that toggles it in one tap. Drag it anywhere; it snaps to the nearest edge and stays where you leave it, and you can set its size, which the button itself takes on as you type so you can see it before saving. Changing the size grows it around where it is sitting rather than moving it, though a button against an edge does come inward far enough for the bigger size to fit. Tapping it eases between on and off rather than flicking, and a device set to reduce motion gets the same change with nothing in between. Hold it, or right-click on a computer, for its menu. That menu is drawn by Lumiverse, so it arrives in your own theme and accent, and it is where everything that would otherwise sit in the **Extras** popover moves to while the button is showing: **Auto Retry settings**, **Open the Auto Retry panel** when the panel is set to live in the drawer, the two manual swap buttons when you have those switched on, and **Hide this button** at the bottom.
-- **On/off button in the Extras menu** adds an entry next to the settings button. Its label says which state it is currently in, so you can check and change it without opening settings, and it takes up no room on screen. In a chat you have switched off it says so, since "on" would be true of everywhere except where you are. Tapping it is always the master switch, wherever you tap it from, and the label says which one it is offering. It steps aside while the floating button is showing, because that button is the same switch in one tap.
+- **On/off button in the Extras menu** adds a button next to the settings button. Its label says whether Auto Retry is on or off, so you can check and change it without opening the settings. It takes up no room on the screen. In a chat you have switched off, it says so, because "on" would be true of everywhere except where you are. Tapping it always switches Auto Retry on or off everywhere, wherever you tap it from, and the label says so.
+
+  This button is hidden while the floating button is on. The floating button is the same on/off switch and one tap does it, so having both would be two buttons for one thing. Turn the floating button off and this one comes back.
 
 ## Turning it off in one chat
 
 The master switch is all or nothing, which is the wrong shape for a scene where the model is meant to refuse, or a chat you are using to test something.
 
-In the settings panel, under **Basics**, the **This chat** row has a **Turn off here** button. That chat is left alone and every other chat carries on, and the button becomes **Turn on here**. Left alone covers word swaps too: nothing is swapped automatically in a chat you have switched off. This is the only place it is: it is not in the floating button's menu, which is kept to the button's own business.
+In the settings panel, under **Basics**, the **This chat** row has a **Turn off here** button. That chat is left alone and every other chat carries on, and the button becomes **Turn on here**. Left alone covers word swaps too: nothing is swapped automatically in a chat you have switched off. This is the only place it is. It is not in the floating button's menu, which is kept to the settings, the panel, the swap buttons and hiding the button itself.
 
 Everything that shows whether Auto Retry is running says so together: that button, the line under the panel's tabs, and whichever of the floating button and the Extras entry you have on. All of them follow you between chats, so none reads "on" in a chat you have switched off.
 
@@ -93,7 +95,7 @@ This is kept in your browser rather than in your settings, like the list of chat
 
 Changing this moves the panel as you pick, before you save. Closing the settings without saving puts it back. If your Lumiverse build has no drawer for extensions, asking for the sidebar gets you the floating panel and a line in the Log saying why.
 
-To open it: hold the floating button and choose **Open the Auto Retry panel**. With the floating button turned off, that entry is in the **Extras** popover instead, next to the settings entry, so there is always exactly one way in. On a computer **Ctrl+K** and typing `Auto Retry` does the same. None of them is offered while the panel is floating, where it is already on screen. A Lumiverse too old to draw the button's menu keeps the entry in Extras, since a button that can open no menu carries nothing.
+To open it: hold the floating button and choose **Open the Auto Retry panel**. With the floating button turned off, that button is in the **Extras** menu instead, next to the settings button, so there is always exactly one way in. On a computer, **Ctrl+K** and typing `Auto Retry` does the same. None of them is offered while the panel is floating, because it is already on screen. If your version of Lumiverse is too old to open the floating button's menu, the button stays in the Extras menu, since there would be no menu to put it in.
 
 ### The line under the tabs
 
@@ -146,7 +148,7 @@ The same options live in the CONFIG block at the top of `src/frontend.ts` and `d
 | enabled | true | Master switch. |
 | showFloatingToggle | false | Put a small draggable on/off button over the chat. |
 | floatingToggleSize | 44 | How wide that floating button is, in pixels (28-96). Shown only while `showFloatingToggle` is on. |
-| showExtrasToggle | false | Add an on/off entry to the chat input's Extras menu. Its label says which state it is in. Stands down while the floating button is showing. |
+| showExtrasToggle | false | Add an on/off button to the chat input's Extras menu. Its label says whether Auto Retry is on or off. Hidden while the floating button is on. |
 | maxRetries | 4 | Hard cap per message. Nothing retries past this. The lowest is 1: to stop it retrying, switch it off rather than setting this to 0. |
 | pauseWhenFailing | true | Pause auto-retry after several whole runs give up in a row. Cleared by the next reply that comes back fine. |
 | breakerRuns | 3 | How many failed runs in a row trigger the pause. A run is one message that used up all its tries. Shown only while `pauseWhenFailing` is on. |

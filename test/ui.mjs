@@ -1965,9 +1965,9 @@ console.log("\nfloat button menu");
   check("a quick tap still toggles", out.afterTap.pressed !== out.wasOn, out.afterTap);
   check("and opens no menu", !out.afterTap.menu);
   check("a hold opens the menu", out.openedByHold);
-  // Two, because nothing else here is switched on. The panel entry and the two
-  // manual swaps join it when theirs are, which "where the ways into the
-  // extension live" covers; this is the floor.
+  // Two, because nothing else is switched on here. The panel button and the
+  // two word swap buttons join them when their settings are on, which the
+  // "where the ways into the extension live" checks cover. This is the floor.
   check("with its two entries, nothing else being on", out.entries.length === 2, out.entries);
   check("and neither of them offers to move it, since dragging does that",
     !out.entries.some((t) => /corner|move/i.test(t)), out.entries);
@@ -1980,7 +1980,7 @@ console.log("\nfloat button menu");
   check("its entries carry the keys the answer is read from",
     out.keys.join(",") === "settings,hide", out.keys);
   // Hide is last whatever else is in the menu, because it is the only entry
-  // that takes the menu away with it.
+  // that closes the menu for good.
   check("and hide is the last of them", out.keys[out.keys.length - 1] === "hide", out.keys);
   check("it is anchored on screen", out.onScreen, out);
   check("and centred on the button", out.onButton, out);
@@ -4331,7 +4331,7 @@ console.log("\nthe per-chat switch finds the chat");
   await page.close();
   check("with nothing seen yet it says it is waiting, not that you should open a chat",
     out.cold.disabled === true &&
-      /waiting to catch which chat/i.test(out.cold.note) &&
+      /waiting to find out which chat/i.test(out.cold.note) &&
       !/open a chat/i.test(out.cold.note), out.cold);
   check("a rendered message is enough to wake it up",
     out.afterRender.disabled === false && /turn off here/i.test(out.afterRender.label), out.afterRender);
@@ -4466,7 +4466,7 @@ console.log("\nper-chat switch, in the panel");
   check("the switch is in the panel, not only behind the floating button", out.present, out);
   check("and is not offered when no chat is open", out.noChat.disabled === true, out.noChat);
   check("saying it is waiting, rather than telling you to do what you have done",
-    /waiting to catch which chat/i.test(out.noChat.text) &&
+    /waiting to find out which chat/i.test(out.noChat.text) &&
       !/open a chat/i.test(out.noChat.text),
     out.noChat.text.slice(0, 90));
   check("no console errors", errors.length === 0, errors);
@@ -4619,19 +4619,18 @@ console.log("\nthe focus ring");
 }
 
 // ---- what the floating button takes over ----
-// The ways into the extension used to sit in Extras whatever else was on
-// screen. The button's own menu carries them now, and Extras keeps them only
-// when there is no button to carry them, which on a phone is the difference
-// between one way in and two of them three taps apart.
+// The ways into the extension used to sit in the Extras menu whatever else was
+// on screen. The floating button's own menu holds them now, and the Extras menu
+// keeps them only when there is no floating button.
 //
-// Three cases, because the middle one is the one that bites: a build with no
-// showContextMenu has a button that can carry nothing, so nothing may stand
-// down for it.
+// Three cases. The middle one is the one that catches mistakes: a Lumiverse
+// with no showContextMenu has a button with no menu, so nothing may hide for
+// it.
 console.log("\nwhere the ways into the extension live");
 {
-  // The entries the button's menu takes over. The settings one is not among
-  // them on purpose: it is the extension's one guaranteed way in, so it stays
-  // in Extras throughout.
+  // The buttons the floating button's menu takes over. The settings one is
+  // left out on purpose: it is the one way in that always works, so it stays in
+  // the Extras menu in every case below.
   const MOVABLE = ["auto-retry-open-panel", "auto-retry-replace-now", "auto-retry-replace-all"];
   const CASES = [
     { name: "with the button on screen", button: true, menu: true },
@@ -4723,16 +4722,16 @@ console.log("\nwhere the ways into the extension live");
       out.inExtras.indexOf("auto-retry-settings") >= 0, out.inExtras);
     check(mode.name + ": Extras " + (carried ? "leaves the rest to the menu" : "carries the rest"),
       carried ? moved.length === 0 : moved.length === MOVABLE.length, out.inExtras);
-    // The on/off entry answers to the button rather than to the menu, because
-    // what replaces it is the button itself: one tap, with the state on its
-    // face. So it stands down even on a build that can draw no menu at all.
+    // The on/off button follows the floating button, not its menu, because
+    // what replaces it is the button itself: one tap, and its icon shows the
+    // state. So it hides even on a Lumiverse that cannot draw a menu at all.
     check(mode.name + ": the on/off entry is " + (mode.button ? "down for the button" : "in Extras"),
       (out.inExtras.indexOf("auto-retry-toggle") >= 0) === !mode.button, out.inExtras);
     if (carried) {
       check(mode.name + ": the menu offers the panel and both swaps",
         ["panel", "swap", "swapAll"].every((k) => out.menuKeys.indexOf(k) >= 0), out.menuKeys);
-      // The on/off entry is the one thing that does not move into the menu: the
-      // button is that switch already, one tap and wearing its state.
+      // The on/off button is the one that does not move into the menu. The
+      // floating button is already that switch, in one tap.
       check(mode.name + ": and no on/off entry, which the button already is",
         out.menuKeys.indexOf("toggle") < 0, out.menuKeys);
       check(mode.name + ": hide sits last, under everything that opens or does",
@@ -4740,6 +4739,97 @@ console.log("\nwhere the ways into the extension live");
       check(mode.name + ": the panel entry brings the tab forward", out.opened === 1, out);
       check(mode.name + ": and swap-every-reply reaches the backend", out.swapped === 1, out);
     }
+    check(mode.name + ": no console errors", errors.length === 0, errors);
+  }
+}
+
+// ---- a swap that nobody answers says so ----
+// Pressing a swap button used to be able to do nothing at all, and say nothing
+// about it. If the host would not send the message, or the backend was not
+// running, the request went out and no answer ever came back. That looks
+// exactly like the extension being broken, which is the one impression it must
+// never give when somebody has just pressed a button.
+//
+// Three cases: an answer arrives, no answer arrives, and the send itself throws.
+console.log("\na swap request with no answer");
+{
+  const CASES = [
+    { name: "answered", answer: true, send: "ok", wantToast: false },
+    { name: "unanswered", answer: false, send: "ok", wantToast: true },
+    { name: "the send itself fails", answer: false, send: "throw", wantToast: true },
+  ];
+  for (const mode of CASES) {
+    const page = await browser.newPage();
+    const errors = [];
+    page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
+    page.on("console", (m) => { if (m.type() === "error") errors.push("console: " + m.text()); });
+    await stage(page, "<div id=modal></div>");
+    await page.addStyleTag({ content: THEME });
+    await page.addScriptTag({ content: SOURCE, type: "module" });
+    await page.waitForFunction(() => !!window.__setup);
+    const out = await page.evaluate(async (mode) => {
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      const acts = {};
+      let onMsg = null;
+      const sent = [];
+      const teardown = window.__setup(
+        {
+          events: { on: () => () => {} },
+          // The backend the frontend is talking to. In the answered case it
+          // acknowledges, which is all the timer is waiting for.
+          sendToBackend: (m) => {
+            if (mode.send === "throw") throw new Error("host refused");
+            sent.push(m);
+            if (mode.answer && onMsg) setTimeout(() => onMsg({ type: "replace_now_ack", requestId: m.requestId }), 0);
+          },
+          onBackendMessage: (cb) => { onMsg = cb; return () => { onMsg = null; }; },
+          ui: {
+            showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+            registerInputBarAction: (o) => {
+              const a = { onClick: (cb) => { a.cb = cb; return () => {}; }, destroy: () => { delete acts[o.id]; } };
+              acts[o.id] = a;
+              return a;
+            },
+          },
+        },
+        { showReplaceButton: true, swapAckMs: 120, toast: true },
+      );
+      const btn = acts["auto-retry-replace-now"];
+      const pressed = !!btn;
+      if (btn) btn.cb();
+      await wait(60);
+      const toastEarly = !!document.getElementById("__lvRetryToast");
+      await wait(220);
+      const el = document.getElementById("__lvRetryToast");
+      const res = {
+        pressed,
+        // Only the swap. Setup puts several other messages on the same bridge.
+        requests: sent.filter((m) => m && m.type === "apply_replace_now").length,
+        toastEarly,
+        toast: el ? (el.textContent || "") : "",
+      };
+      // Nothing may be left ticking behind a closed extension.
+      teardown();
+      await wait(220);
+      res.afterTeardown = !!document.getElementById("__lvRetryToast");
+      return res;
+    }, mode);
+    await page.close();
+    check(mode.name + ": the button was there to press", out.pressed, out);
+    check(mode.name + ": the request " + (mode.send === "throw" ? "could not go out" : "went out"),
+      out.requests === (mode.send === "throw" ? 0 : 1), out);
+    if (mode.send === "throw") {
+      // A send that throws is known to have failed at once, so there is nothing
+      // to wait for.
+      check(mode.name + ": and it says so straight away, without waiting", out.toastEarly, out);
+    }
+    check(mode.name + ": " + (mode.wantToast ? "it says so" : "it stays quiet"),
+      (out.toast.length > 0) === mode.wantToast, out);
+    if (mode.wantToast) {
+      check(mode.name + ": and the message names what to do about it",
+        /reload the page/i.test(out.toast), out.toast);
+    }
+    check(mode.name + ": nothing is left over after teardown", out.afterTeardown === false, out);
     check(mode.name + ": no console errors", errors.length === 0, errors);
   }
 }
@@ -5655,9 +5745,9 @@ console.log("\nresizing the floating button does not walk it up the screen");
 // third has to be registered again to change its label, which is why it was the
 // one that went on saying "on" in a chat that had just been switched off.
 //
-// The last two are never up together: the Extras entry stands down while the
-// button is on screen, since the button is that switch already. So this runs
-// twice, once with each of them, and reads whichever is there.
+// The last two are never on screen together: the Extras button is hidden while
+// the floating button is on, because the floating button is that same switch.
+// So this runs twice, once with each of them, and reads whichever is there.
 console.log("\nthe per-chat switch reaches every indicator");
 for (const withButton of [true, false]) {
   const page = await browser.newPage();
@@ -6365,7 +6455,7 @@ console.log("\nhint placement");
       async (page) => page.evaluate(async () => {
         const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
         const row = [...document.querySelectorAll("[data-ar-row]")]
-          .find((r) => (r.textContent || "").includes("Turn auto-retry on"));
+          .find((r) => (r.textContent || "").includes("Turn Auto Retry on"));
         row.scrollIntoView({ block: "start" });
         await frame();
         row.querySelector("[data-ar-hint]").dispatchEvent(new MouseEvent("mouseenter"));

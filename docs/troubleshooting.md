@@ -16,6 +16,14 @@ The settings it reports come straight from the option list, so every setting is 
 
 Under that is the **activity timeline**, the last twenty things it did, kept whether or not console logging is on.
 
+## "No answer from the word swapper"
+
+You get this after pressing **Swap words in the last reply** or **Swap words in every reply**, when nothing answers within a few seconds. The swap runs in the extension's backend, so this means the backend is not running, or the message never reached it.
+
+Reload the page and try again. If it keeps happening, the backend part of the extension is not loading, which is worth reporting. Everything else in Auto Retry works without it: only the word swaps need it.
+
+A long chat is not the cause. The backend says it has the request as soon as it gets it, before it starts any work, so a swap that simply takes a while never shows this message.
+
 ## The on-screen panel
 
 For watching it work live, turn on **Show the on-screen panel** under Basics, and pick where it goes with the row underneath: floating over the chat, or in Lumiverse's sidebar drawer. It is useful on a phone, where the browser console is out of reach.

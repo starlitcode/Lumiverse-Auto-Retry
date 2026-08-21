@@ -122,7 +122,7 @@ Some models do not decline. They stop: "I'm going to stop here.", "I won't conti
 
 This is the riskiest thing the extension looks for, because most of these are things a person says, so three rules narrow it down:
 
-- It has to be how the reply *ends*. A model that is bailing says so last. A character who stops walking and then carries on with the scene is not bailing, so a match with more than a couple of sentences of scene behind it is ignored.
+- It has to be how the reply *ends*. A model that is dropping out of the scene says so at the end. A character who stops walking and then carries on with the scene is not dropping out, so a match with more than a couple of sentences of scene after it is ignored.
 - It cannot be inside quotation marks.
 - It cannot have a dialogue tag behind it. `I'm going to stop now, he said, and pulled the cart over` is speech with the quotes left off.
 

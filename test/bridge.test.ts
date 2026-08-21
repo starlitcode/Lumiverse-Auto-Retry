@@ -15,7 +15,13 @@ const matches = (src: string, re: RegExp) =>
   uniq([...src.matchAll(re)].map((m) => m[1]));
 
 // What each side sends, and what each side answers to.
-const frontSends = matches(FRONT, /sendToBackend\(\{\s*type:\s*"([a-z_]+)"/g);
+//
+// Most sends call sendToBackend with the message written out on the spot. The
+// swap requests go through sendSwapRequest instead, which wraps the same call
+// so it can arm a timeout, so that name is read here too. A wrapper this does
+// not know about would hide whatever it sends, which the last test in this
+// block is there to catch.
+const frontSends = matches(FRONT, /(?:sendToBackend|sendSwapRequest)\(\{\s*type:\s*"([a-z_]+)"/g);
 const backHandles = matches(BACK, /payload\.type === '([a-z_]+)'/g);
 const backSends = matches(BACK, /replyTo\([^,]+,\s*\{\s*type:\s*'([a-z_]+)'/g);
 const frontHandles = uniq([
@@ -44,6 +50,16 @@ describe("the message bridge has no dead ends", () => {
 
   test("every reply the frontend waits for is actually sent", () => {
     expect(frontHandles.filter((t) => backSends.indexOf(t) < 0)).toEqual([]);
+  });
+
+  test("no send is hidden behind a wrapper this file does not read", () => {
+    // A sendToBackend call handed a variable says nothing about what it sends,
+    // so the checks above cannot see through it. The only one allowed is the
+    // wrapper named in frontSends, passing the argument it was given.
+    const indirect = uniq(
+      [...FRONT.matchAll(/sendToBackend\((?!\{)([A-Za-z_$][\w$]*)\)/g)].map((m) => m[1]),
+    );
+    expect(indirect).toEqual(["payload"]);
   });
 });
 
