@@ -2,7 +2,7 @@
 
 Switching Auto Retry itself off changes nothing in here. Every setting stays where it is and stays editable, because off means paused rather than unconfigured, and setting it up while it is off is a normal thing to want to do. A line at the top says it is off and that your settings are saved.
 
-The settings modal is the easy path, and the **Search settings** box at the top of it is the quickest way to reach one option out of the fifty-odd below: type part of a name or a description and it shows the matching rows, opening whichever closed section they live in. Clear the box to put the panel back as it was.
+The settings panel is the easy path. There are about fifty options below, so the quickest way to reach one is the **Search settings** box at the top: type part of a name or a description and it shows the rows that match, opening whichever closed section they are in. Clear the box to put the panel back as it was.
 
 There are eight sections. Three are open when the panel opens:
 
@@ -38,7 +38,9 @@ Saved settings sync to your Lumiverse account, so they follow you to other brows
 
 Two options in **Basics**, and you can use either or both:
 
-- **Floating on/off button** puts a small button over the chat that toggles it in one tap. Drag it anywhere; it snaps to the nearest edge and stays where you leave it, and you can set its size, which the button itself takes on as you type so you can see it before saving. Changing the size grows it around where it is sitting rather than moving it, though a button against an edge does come inward far enough for the bigger size to fit. Tapping it eases between on and off rather than flicking, and a device set to reduce motion gets the same change with nothing in between. Hold it, or right-click on a computer, for its menu. That menu is drawn by Lumiverse, so it arrives in your own theme and accent, and it is where everything that would otherwise sit in the **Extras** popover moves to while the button is showing: **Auto Retry settings**, **Open the Auto Retry panel** when the panel is set to live in the drawer, the two manual swap buttons when you have those switched on, and **Hide this button** at the bottom.
+- **Floating on/off button** puts a small button over the chat that toggles it in one tap. Drag it anywhere; it snaps to the nearest edge and stays where you leave it, and you can set its size, which the button itself takes on as you type so you can see it before saving. Changing the size grows it around where it is sitting rather than moving it, though a button against an edge does come inward far enough for the bigger size to fit. Tapping it eases between on and off rather than flicking, and a device set to reduce motion gets the same change with nothing in between. Hold it, or right-click on a computer, for its menu. That menu is drawn by Lumiverse, so it arrives in your own theme and accent.
+
+  While this button is showing, its menu holds everything that would otherwise be in the **Extras** menu. In order: **Auto Retry settings**, then **Open the Auto Retry panel** if the panel is set to live in the sidebar, then the two word swap buttons if you have those turned on, then **Hide this button** at the bottom.
 - **On/off button in the Extras menu** adds a button next to the settings button. Its label says whether Auto Retry is on or off, so you can check and change it without opening the settings. It takes up no room on the screen. In a chat you have switched off, it says so, because "on" would be true of everywhere except where you are. Tapping it always switches Auto Retry on or off everywhere, wherever you tap it from, and the label says so.
 
   This button is hidden while the floating button is on. The floating button is the same on/off switch and one tap does it, so having both would be two buttons for one thing. Turn the floating button off and this one comes back.

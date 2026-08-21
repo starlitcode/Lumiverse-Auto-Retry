@@ -270,10 +270,10 @@ const CONFIG = {
   // open, so there is nothing for a second switch to buy: a switch left on
   // would go on paying for itself in every chat long after somebody looked once.
   liveLog: false,
-  // Where that panel lives. "float" is the one it has always had, a small box
-  // over the chat that you drag where you want it. "drawer" hands it to
-  // Lumiverse's own sidebar, which places it, themes it, and lists it in the
-  // Ctrl+K palette, and where it cannot cover the reply you are reading.
+  // Where that panel lives. "float" is the original: a small box over the chat
+  // that the user drags where they want it. "drawer" puts it in Lumiverse's own
+  // sidebar, which places it, themes it, lists it in the Ctrl+K palette, and
+  // keeps it off the reply the user is reading.
   panelHome: "float",
 };
 
@@ -2604,7 +2604,7 @@ const HOLD_MS = 500;
 // the size the Extras menu draws them, which is 16 pixels and the size that
 // decides whether any of this works. Nothing reaches the edge of the 24 box
 // once its stroke is on: an arrowhead clipped by the viewBox reads as a shorter
-// arrow rather than as a mistake, which is how it survives review.
+// arrow rather than as a mistake.
 //
 // Strokes are currentColor so the mark follows the theme, and so fixContrast
 // can repaint it by setting colour on the element around it.
@@ -2876,10 +2876,10 @@ export function setup(ctx: Ctx, opts?: any) {
       });
       toggleActionState = want;
       toggleActionOff = toggleAction.onClick(() => {
-        // Flipping the switch relabels this very entry, which means destroying
-        // it and registering it again. Doing that from inside its own click
-        // handler would pull the entry out from under the host mid-dispatch, so
-        // it waits for the handler to return first.
+        // Flipping the switch relabels this same entry, which means removing
+        // it and registering it again. Doing that inside its own click handler
+        // would remove the entry while the host is still dispatching that
+        // click, so it waits for the handler to return first.
         setTimeout(() => toggleEnabled(), 0);
       });
     } catch (_) {}
@@ -2924,8 +2924,8 @@ export function setup(ctx: Ctx, opts?: any) {
       // screen, its menu holds them. The Extras menu holds them only when there
       // is no floating button to.
       //
-      // Two ways to reach one thing is one more than anybody needs, and it
-      // clutters a menu somebody opened for something else. With the floating
+      // Two ways to reach the same thing is one more than anybody needs, and
+      // clutters a menu that was opened for something else. With the floating
       // button hidden, or refused because ui_panels was not granted, the Extras
       // menu is the only way to reach these on a phone, so they come back.
       const inExtras = canReg && !floatCarriesEntries();
@@ -3036,8 +3036,8 @@ export function setup(ctx: Ctx, opts?: any) {
   //
   // Kept in the browser rather than in the settings, for the same reason the
   // list of switched-off chats is: a position is a property of the screen you
-  // are sitting at, not of your account. Carrying it to a phone would put the
-  // panel somewhere a phone has no room for, and it has no business in an
+  // are sitting at, not of your account. Copying it to a phone would put the
+  // panel somewhere a phone has no room for, and it does not belong in an
   // export somebody might share.
   const LAYOUT_KEY = "lv-auto-retry:layout:v1";
   type Layout = {
@@ -3831,7 +3831,7 @@ export function setup(ctx: Ctx, opts?: any) {
       oy = 0;
     const onDown = (e: any) => {
       // A press on one of the header's own buttons belongs to that button.
-      // Without this the drag captures the pointer out from under it.
+      // Without this the drag captures the pointer and the control never gets it.
       try {
         if (e && e.target && e.target.closest && e.target.closest("button")) return;
       } catch (_) {}
@@ -5296,7 +5296,7 @@ export function setup(ctx: Ctx, opts?: any) {
   //
   // Kept in the browser rather than in the settings. It is a list of chat ids,
   // which are not settings, would be meaningless on another account, and have
-  // no business in an export somebody might share.
+  // does not belong in an export somebody might share.
   const CHATS_OFF_KEY = "lv-auto-retry:chats-off:v1";
   const CHATS_OFF_CAP = 200;
   let chatsOff: string[] = [];
@@ -5451,9 +5451,9 @@ export function setup(ctx: Ctx, opts?: any) {
   // A running tally of what the extension has actually done since it loaded.
   // The event log keeps only the last twenty lines, so on a long session the
   // shape of a problem ("it retried ninety times, all of them for 'cut off'")
-  // has scrolled away by the time anyone thinks to look. This survives it, and
-  // is the difference between a bug report that can be acted on and one that
-  // says "it retries too much".
+  // has scrolled away by the time anyone thinks to look. These counters do not
+  // scroll away, so a bug report can say what actually happened instead of only
+  // "it retries too much".
   const stats = {
     retries: 0,
     gaveUp: 0,
@@ -5971,9 +5971,9 @@ export function setup(ctx: Ctx, opts?: any) {
   // all, so there is nothing there to restyle and nothing to break.
   const SEARCH_X =
     "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M19 6.4 17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z'/%3E%3C/svg%3E\")";
-  // The one animation in the extension. Everything else here paints instantly,
-  // and the reason this earns its place is that it is the only thing on screen
-  // saying work is happening rather than saying what happened. Opacity and a
+  // The only animation in the extension. Everything else paints instantly. This
+  // one is here because it is the only thing on screen saying work is happening
+  // right now, rather than reporting what already happened. Opacity and a
   // shadow only, so it composites without laying out anything, and it is off
   // for anyone whose system asks for less movement: the glow stays, which is
   // what carries the meaning, and only the movement goes.
@@ -6373,10 +6373,10 @@ export function setup(ctx: Ctx, opts?: any) {
     if (s.attempts >= cfg.maxRetries) {
       log("gave up", chatId, reason);
       s.attempts = 0;
-      // Belt and braces. The lowest the box allows is 1, and a saved 0 from
-      // before that is clamped on load, so this cannot fire from the panel. It
-      // stays because nothing here should assume a number it did not clamp
-      // itself: at zero no retry was ever made, so there is no failed run to
+      // A second guard on a value that is already clamped. The lowest the box
+      // allows is 1, and a saved 0 from before that is clamped on load, so this
+      // cannot happen from the panel. It stays because nothing here should
+      // assume a number it did not clamp itself: at zero no retry was ever made, so there is no failed run to
       // count and nothing worth announcing.
       if (cfg.maxRetries <= 0) return;
       stats.gaveUp += 1;
@@ -8420,7 +8420,7 @@ export function setup(ctx: Ctx, opts?: any) {
         // button's own business, so a per-chat switch among those entries read
         // as clutter. Built by hand rather than added to the form because it is
         // not a setting. It belongs to one chat, it is kept in the browser, and
-        // it has no business being exported, imported or reset with the rest.
+        // it does not belong in an export, an import or a reset with the rest.
         if (group.title === "Basics") sec.appendChild(buildChatSwitchRow());
       }
       scroller.appendChild(sec);
@@ -8807,9 +8807,9 @@ export function setup(ctx: Ctx, opts?: any) {
   //
   // This exists because a refused permission is the one failure that raises
   // nothing anywhere: a gated event never fires, and a fire-and-forget
-  // registration silently does nothing. Every other fault in here announces
-  // itself. This one leaves the extension looking installed and working while
-  // it quietly does none of what it was asked to.
+  // registration silently does nothing. Every other fault in here reports
+  // itself somewhere. This one leaves the extension installed and apparently
+  // working while it does none of what it was asked to.
   function buildPermissionNotice(): HTMLElement {
     const box = document.createElement("div");
     box.setAttribute("data-ar-perms", "1");
@@ -9530,8 +9530,9 @@ export function setup(ctx: Ctx, opts?: any) {
     // browser's own answer to "should this be marked", and it is the right one
     // here. Tracking pointer presses by hand got it wrong the moment a dialog
     // moved focus itself: opening the reset picker's second step focuses Go
-    // back so a keyboard can act on it, and by hand that looked exactly like
-    // tabbing to it, so the button opened wearing a ring nobody asked for.
+    // back so a keyboard can act on it, and tracking by hand could not tell
+    // that apart from tabbing to it, so the button opened with a focus ring
+    // around it that nobody had asked for.
     b.setAttribute("data-ar-btn", "1");
     // Hovering swaps to the theme's own hover colour rather than brightening the
     // resting one, so a button lights up the same way the rest of Lumiverse does.
