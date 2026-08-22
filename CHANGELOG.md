@@ -8,6 +8,20 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 4.18.3
+
+_2026-08-21_
+
+### Fixed
+
+- **A reply mentioning a height was read as cut off.** A height written 6'2", or a gap 3" wide, puts a single straight quote in ordinary prose, and the check that looks for dialogue opened and never closed counted it as an opening. Character descriptions are full of heights, so this threw away replies that were plainly complete. A measurement is no longer mistaken for the start of a line of speech.
+- **A reply that ends on a list was read as cut off.** A bullet or numbered item is a fragment and has no full stop at the end, which is what the check for a missing ending was looking for. A list that has finished now counts as an ending, while one cut mid-item is still caught.
+- **Multiplication written 2*3 was read as an unfinished action.** A single asterisk between two words is not the start of an *action*, so it is no longer counted as one.
+
+### Changed
+
+- **The cut-off check is now held to a corpus of whole replies**, both kinds: replies that are finished, which it must never throw away, and replies that really were cut, which it must still catch.
+
 ## 4.18.2
 
 _2026-08-21_
