@@ -672,6 +672,11 @@ spindle.onFrontendMessage(async (payload, userId) => {
         if (payload.type === 'get_active_chat') {
             let chatId = payload.chatId ? String(payload.chatId) : null;
             let character = null;
+            // Whether the host could actually be asked which chat is open. Without
+            // this a null chatId means two different things, "no chat is open" and
+            // "I could not look", and the frontend has to tell them apart: it refuses
+            // to swap on the first and must not on the second.
+            let resolved = false;
             try {
                 let chat = null;
                 if (chatId && spindle.chats && typeof spindle.chats.get === 'function') {
@@ -680,6 +685,8 @@ spindle.onFrontendMessage(async (payload, userId) => {
                 else if (spindle.chats && typeof spindle.chats.getActive === 'function') {
                     chat = await spindle.chats.getActive(userId);
                     chatId = (chat && chat.id) || null;
+                    // Answered, whether or not it named a chat.
+                    resolved = true;
                 }
                 // A chat can hold several cards, with character_id naming the one it
                 // belongs to. The primary is the useful answer here: the panel wants a
@@ -697,6 +704,7 @@ spindle.onFrontendMessage(async (payload, userId) => {
                 requestId: payload.requestId,
                 chatId: chatId,
                 character: character,
+                resolved: resolved,
             });
             return;
         }

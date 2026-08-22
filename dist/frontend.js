@@ -100,7 +100,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "4.18.1";
+const VERSION = "4.18.2";
 // The one address the extension ever points at, used by the warning in front of
 // the crisis-support check. Pinned to the released branch rather than to a tag,
 // so an old install still opens the page as it stands today.
@@ -2696,16 +2696,47 @@ export function setup(ctx, opts) {
             showToast("No answer from the word swapper. Reload the page and try again.");
         }, SWAP_ACK_MS));
     }
+    // Which chat a swap should act on, asked fresh at the moment the button is
+    // pressed. Returns null when there is no chat to act on, and the caller has
+    // already said so by then.
+    //
+    // These buttons live in the floating button's menu, which is on screen on the
+    // home screen and everywhere else, so they can be pressed with no chat open
+    // at all. The id held from the last chat is no answer: some builds never say
+    // when you leave one, so it is still the chat you walked away from, and
+    // swapping there edits saved replies you are not looking at and cannot undo.
+    async function chatForSwap() {
+        const open = await whichChatIsOpen();
+        // The backend looked and there is no chat. This is the home screen.
+        if (open.answered && open.resolved && !open.chatId) {
+            showToast("No chat is open. Open a chat and try again.");
+            return null;
+        }
+        // It looked and named one. Fresher than anything held here.
+        if (open.answered && open.resolved && open.chatId)
+            return open.chatId;
+        // It could not look, which is what a build without the chats permission
+        // does. Fall back to the last chat seen, which is all there has ever been.
+        if (lastChatId != null && lastChatId !== "")
+            return String(lastChatId);
+        showToast("No chat is open. Open a chat and try again.");
+        return null;
+    }
     async function applyReplaceNow() {
         if (!ctx || typeof ctx.sendToBackend !== "function") {
             showToast("Word swaps need this extension's backend, which your Lumiverse has not loaded.");
             return;
         }
+        // Before the confirmation, not after: asking whether to swap every reply in
+        // a chat that is not open is a question with no right answer.
+        const chatId = await chatForSwap();
+        if (chatId == null)
+            return;
         if (cfg.confirmBeforeEdit) {
             if (!(await confirmEdit("Apply your word swaps to the latest reply?")))
                 return;
         }
-        sendSwapRequest({ type: "apply_replace_now", chatId: lastChatId, messageId: lastMessageId, requestId: "ar-rep-" + Date.now() });
+        sendSwapRequest({ type: "apply_replace_now", chatId: chatId, messageId: lastMessageId, requestId: "ar-rep-" + Date.now() });
     }
     // Swap every generated reply in the current chat, once, on request.
     async function applyReplaceAllNow() {
@@ -2713,11 +2744,14 @@ export function setup(ctx, opts) {
             showToast("Word swaps need this extension's backend, which your Lumiverse has not loaded.");
             return;
         }
+        const chatId = await chatForSwap();
+        if (chatId == null)
+            return;
         if (cfg.confirmBeforeEdit) {
             if (!(await confirmEdit("Apply your word swaps to every reply in this chat?")))
                 return;
         }
-        sendSwapRequest({ type: "apply_replace_now", chatId: lastChatId, wholeChat: true, requestId: "ar-rep-all-" + Date.now() });
+        sendSwapRequest({ type: "apply_replace_now", chatId: chatId, wholeChat: true, requestId: "ar-rep-all-" + Date.now() });
     }
     // The Extras-menu on/off entry. Its label and icon carry the current state,
     // and the host offers no way to relabel an action once it is registered, so a
@@ -6608,12 +6642,37 @@ export function setup(ctx, opts) {
     // asked minutes ago.
     const chatAsks = new Set();
     const CHAT_ASK_MS = 8000;
-    function askActiveChat(forChat) {
+    // Asks which chat is open and hands back the answer, rather than only acting
+    // on it. The swap buttons need the answer itself: they edit saved replies and
+    // must not do that to a chat the user has walked away from.
+    //
+    // answered is false when there is no bridge or nothing came back in time.
+    // resolved is the backend saying it could actually look. A null chatId with
+    // resolved true means no chat is open; with resolved false it means nothing
+    // at all, and the caller falls back to what it already knew.
+    function whichChatIsOpen(forChat) {
+        return new Promise((resolve) => askActiveChat(forChat, resolve));
+    }
+    function askActiveChat(forChat, answer) {
+        const reply = (r) => {
+            if (!answer)
+                return;
+            const send = answer;
+            answer = undefined;
+            try {
+                send(r);
+            }
+            catch (_) { }
+        };
         try {
-            if (!ctx || typeof ctx.sendToBackend !== "function")
+            if (!ctx || typeof ctx.sendToBackend !== "function") {
+                reply({ answered: false, resolved: false, chatId: null });
                 return;
-            if (typeof ctx.onBackendMessage !== "function")
+            }
+            if (typeof ctx.onBackendMessage !== "function") {
+                reply({ answered: false, resolved: false, chatId: null });
                 return;
+            }
             const reqId = "ar-chat-" + Date.now() + "-" + Math.random().toString(36).slice(2);
             let done = false;
             let timer = null;
@@ -6631,11 +6690,35 @@ export function setup(ctx, opts) {
                 }
                 catch (_) { }
                 chatAsks.delete(finish);
+                // Nothing came back, so the caller is told that rather than being left
+                // waiting, and it falls back to what it already knew.
+                reply({ answered: false, resolved: false, chatId: null });
             };
             off = ctx.onBackendMessage((msg) => {
                 if (!msg || msg.type !== "active_chat" || msg.requestId !== reqId)
                     return;
+                const chatId = msg.chatId ? String(msg.chatId) : null;
+                const resolved = !!msg.resolved;
+                // The real answer goes out before finish, which otherwise reports that
+                // nothing came back when something just did.
+                reply({ answered: true, resolved: resolved, chatId: chatId });
                 finish();
+                // "Which chat is open" answered with "none", from a backend that could
+                // actually look, means the user has left the chat. Some builds never
+                // say so on their own, and the id we were holding is now the chat they
+                // walked away from.
+                if (!forChat && resolved && !chatId && lastChatId != null) {
+                    lastChatId = null;
+                    lastMessageId = null;
+                    if (chatSwitchPaint) {
+                        try {
+                            chatSwitchPaint();
+                        }
+                        catch (_) { }
+                    }
+                    syncMasterNote();
+                    paintNow();
+                }
                 if (!msg.chatId)
                     return;
                 // An empty answer is still an answer, and caching it stops the same
@@ -6658,7 +6741,13 @@ export function setup(ctx, opts) {
             timer = setTimeout(finish, CHAT_ASK_MS);
             ctx.sendToBackend({ type: "get_active_chat", requestId: reqId, chatId: forChat || null });
         }
-        catch (_) { }
+        catch (_) {
+            // A host that refuses to carry the question answers it by throwing. Left
+            // to the empty catch this never called back at all, so a swap waiting on
+            // the answer waited for ever and the button did nothing, silently, which
+            // is the exact fault this whole path exists to stop.
+            reply({ answered: false, resolved: false, chatId: null });
+        }
     }
     // Where every chat id the extension learns arrives, whatever carried it, and
     // not only the events that announce a change.
@@ -6675,6 +6764,12 @@ export function setup(ctx, opts) {
         if (next == null || next === lastChatId)
             return;
         lastChatId = next;
+        // The last reply seen belonged to the chat just left, so it is not the last
+        // reply here. onChatSwitched has always cleared this and noteChat never
+        // did, which left the manual swap aiming at a message in another chat. The
+        // backend falls back to the latest reply for an id it cannot find, so it
+        // did no harm, but it was asking for the wrong thing.
+        lastMessageId = null;
         // A chat learned from an event arrives as an id and nothing else, so this
         // is the moment to find out whose it is. Asked once per chat: the answer
         // does not change while you are in it.

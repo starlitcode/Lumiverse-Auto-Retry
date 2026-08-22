@@ -8,6 +8,18 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 4.18.2
+
+_2026-08-21_
+
+### Fixed
+
+- **A word swap pressed with no chat open could edit the chat you had just left.** The swap buttons sit in the floating button's menu, which is on screen on the home screen too. Auto Retry was acting on the last chat it had seen, and some builds never say when you leave one, so that was still the chat you walked away from. It swapped saved replies you were not looking at, and a swap cannot be undone. It now checks which chat is actually open at the moment you press, and if there is none it says so and does nothing.
+- **On the home screen it used to say "No reply found to swap in this chat"**, which named a chat that was not open. It says no chat is open.
+- **A swap could aim at a reply in a different chat.** The last reply seen was remembered when the chat changed, so it belonged to the chat before. Nothing was harmed, because a reply that cannot be found falls back to the latest one, but it was asking for the wrong thing.
+
+If your Lumiverse does not grant the chats permission, Auto Retry cannot check which chat is open and behaves as it did before.
+
 ## 4.18.1
 
 _2026-08-21_
