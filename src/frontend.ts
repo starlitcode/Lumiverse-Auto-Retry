@@ -111,7 +111,7 @@ const STREAM_BUF_MAX = 200000;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "4.18.2";
+const VERSION = "4.18.3";
 
 // The one address the extension ever points at, used by the warning in front of
 // the crisis-support check. Pinned to the released branch rather than to a tag,
@@ -1066,6 +1066,27 @@ function endsOnABlock(shown: string, visible: string): boolean {
   // A markdown table row.
   if (/^\|.*\|$/.test(lines[lines.length - 1])) return true;
 
+  // A bullet or numbered list. A reply that ends on its last item has ended,
+  // and the item is a fragment rather than a sentence, so the check for closing
+  // punctuation was reading every one of them as a reply cut off. Two in a row
+  // are needed for the same reason the labels below need two: one line opening
+  // with a dash is as likely to be prose.
+  const listItem = (l: string) => /^(?:[-*+]\s+|\d+[.)]\s+)\S/.test(l);
+  // A list item is a fragment, so it has no closing punctuation to look for and
+  // cannot be told from a cut one that way. What tells them apart is the last
+  // word: an item that has finished ends on something a phrase can end on, and
+  // one cut in half ends on a word that has to be followed by another. "a map
+  // she could not" is cut; "half a candle" is not.
+  const danglingWord =
+    /\b(?:a|an|and|are|as|at|be|been|being|but|by|can|could|for|from|had|has|have|he|her|his|i|in|into|is|it|its|may|might|must|my|no|not|of|on|onto|or|our|over|she|should|that|the|their|they|to|under|was|we|were|which|who|will|with|would|you|your)$/i;
+  if (
+    lines.length >= 2 &&
+    listItem(lines[lines.length - 1]) &&
+    listItem(lines[lines.length - 2]) &&
+    !danglingWord.test(lines[lines.length - 1])
+  )
+    return true;
+
   // A run of label lines: "HP: 20/20", "**Weather:** clear", "Time: 14:00".
   // Two in a row are needed rather than one, because an ordinary sentence can
   // carry a colon and a tracker never has only the one field. That keeps a
@@ -1228,10 +1249,28 @@ function looksTruncated(
   // marks, so *He nods* and **bold** are left in the count where they belong.
   const emphasis = prose
     .replace(/^[ \t]*\*[ \t]+/gm, "")
-    .replace(/(^|\s)\*+(?=\s|$)/gm, "$1");
+    .replace(/(^|\s)\*+(?=\s|$)/gm, "$1")
+    // Multiplication, and anything else written between two word characters.
+    // Emphasis wraps what it marks, so it always has a boundary on one side:
+    // *He nods* and **bold** keep both of theirs. "2*3 = 6" has neither, and
+    // counting that one asterisk read a finished reply as an opened action.
+    .replace(/(?<=\w)\*+(?=\w)/g, "");
   if ((emphasis.match(/\*/g) || []).length % 2 === 1) return true; // open emphasis / RP action
 
-  if ((prose.match(/"/g) || []).length % 2 === 1) return true; // open straight-quote dialogue
+  // An odd number of straight quotes means dialogue was opened and never
+  // closed. A measurement written with a quote is the exception: a height of
+  // 6'2", or a gap 3" wide, puts one straight quote in ordinary prose and made
+  // a finished reply read as cut open. Character descriptions are full of
+  // heights, so this fired on replies that were plainly complete.
+  //
+  // The measurement is only discounted when the count is odd, which is to say
+  // only when this check was about to fire. Discounting it always would break
+  // the opposite case, a quotation that closes on a number: He said "42" is
+  // even and correct, and taking that closing quote out would leave it odd.
+  if ((prose.match(/"/g) || []).length % 2 === 1) {
+    const withoutInches = prose.replace(/(\d)\s*"/g, "$1");
+    if ((withoutInches.match(/"/g) || []).length % 2 === 1) return true;
+  }
   if ((prose.match(/\u201C/g) || []).length !== (prose.match(/\u201D/g) || []).length)
     return true; // mismatched smart quotes
   if (/[,;]$/.test(prose)) return true; // cut mid-clause
