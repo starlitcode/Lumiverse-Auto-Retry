@@ -4652,6 +4652,7 @@ console.log("\nwhere the ways into the extension live");
       host.style.cssText = "position:fixed;left:60px;top:60px";
       const acts = {};
       const sent = [];
+      const handlers = {};
       let activated = 0;
       window.__menus = [];
       window.__pick = null;
@@ -4672,10 +4673,17 @@ console.log("\nwhere the ways into the extension live");
       if (mode.menu) {
         ui.showContextMenu = (o) => { window.__menus.push(o); return Promise.resolve({ selectedKey: window.__pick }); };
       }
+      let onMsg = null;
       window.__setup(
-        { events: { on: () => () => {} },
-          sendToBackend: (m) => sent.push(m),
-          onBackendMessage: () => () => {},
+        { events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
+          sendToBackend: (m) => {
+            sent.push(m);
+            // A swap will not go out unless a chat is open, so this stub
+            // answers that question the way a live backend does.
+            if (m && m.type === "get_active_chat" && onMsg)
+              setTimeout(() => onMsg({ type: "active_chat", requestId: m.requestId, chatId: "chat-A", character: null, resolved: true }), 0);
+          },
+          onBackendMessage: (cb) => { onMsg = cb; return () => { onMsg = null; }; },
           ui },
         {
           liveLog: true,
@@ -4687,6 +4695,8 @@ console.log("\nwhere the ways into the extension live");
           toast: false,
         },
       );
+      // A chat has to be open before a swap can act on one.
+      if (handlers.CHARACTER_MESSAGE_RENDERED) handlers.CHARACTER_MESSAGE_RENDERED({ chatId: "chat-A", messageId: "m1" });
       await wait(60);
       const res = {
         inExtras: Object.keys(acts).sort(),
@@ -4710,6 +4720,7 @@ console.log("\nwhere the ways into the extension live");
         res.menuKeys = (m && m.items.map((i) => i.key)) || [];
         res.opened = activated;
         await hold("swapAll");
+        await wait(120);
         res.swapped = sent.filter((x) => x && x.type === "apply_replace_now" && x.wholeChat).length;
       }
       return res;
@@ -4855,6 +4866,78 @@ console.log("\nthe tick boxes are one size");
   check("and every one of them is the same size", Object.keys(all).length === 1, all);
   check("at 20px, not the browser default of 13", Object.keys(all)[0] === "20x20", all);
   check("no console errors", errors.length === 0, errors);
+}
+
+// ---- a swap needs a chat to swap in ----
+// The swap buttons live in the floating button's menu, which is on screen on
+// the home screen too, so they can be pressed with no chat open at all.
+//
+// The id held from the last chat was no answer: some builds never say when you
+// leave one, so it was still the chat you walked away from, and pressing swap
+// there edited saved replies you were not looking at and cannot undo. Two of
+// the four ways of leaving a chat did exactly that.
+//
+// So the chat is asked for fresh at the moment the button is pressed. A backend
+// that looked and found none means the home screen, and nothing is sent. A
+// backend that could not look falls back to what was already known, because a
+// build without the chats permission has to keep working.
+console.log("\na swap needs a chat to swap in");
+{
+  const CASES = [
+    // hadChat, what the backend answers, the chat the swap should act on
+    ["never opened a chat", false, { chatId: null, resolved: true }, null],
+    ["left the chat, the build said nothing", true, { chatId: null, resolved: true }, null],
+    ["chat open, the backend names it", true, { chatId: "chat-A", resolved: true }, "chat-A"],
+    ["chat open, the backend names a newer one", true, { chatId: "chat-B", resolved: true }, "chat-B"],
+    ["chat open, the backend cannot look", true, { chatId: null, resolved: false }, "chat-A"],
+    ["no chat, the backend cannot look", false, { chatId: null, resolved: false }, null],
+  ];
+  for (const [name, hadChat, answer, want] of CASES) {
+    const page = await browser.newPage();
+    const errors = [];
+    page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
+    page.on("console", (m) => { if (m.type() === "error") errors.push("console: " + m.text()); });
+    await stage(page, "<div id=modal></div>");
+    await page.addStyleTag({ content: THEME });
+    await page.addScriptTag({ content: SOURCE, type: "module" });
+    await page.waitForFunction(() => !!window.__setup);
+    const out = await page.evaluate(async ([hadChat, answer]) => {
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      const handlers = {}, acts = {}, sent = [];
+      let onMsg = null;
+      window.__setup(
+        { events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
+          sendToBackend: (m) => {
+            sent.push(m);
+            if (m && m.type === "get_active_chat" && onMsg)
+              setTimeout(() => onMsg({ type: "active_chat", requestId: m.requestId, chatId: answer.chatId, character: null, resolved: answer.resolved }), 0);
+          },
+          onBackendMessage: (cb) => { onMsg = cb; return () => { onMsg = null; }; },
+          ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+                registerInputBarAction: (o) => { const a = { onClick: (cb) => { a.cb = cb; return () => {}; }, destroy: () => {} }; acts[o.id] = a; return a; } } },
+        { toast: true, showReplaceButton: true, showSwapAllButton: true, swapAckMs: 30000 },
+      );
+      if (hadChat) { handlers.CHARACTER_MESSAGE_RENDERED({ chatId: "chat-A", messageId: "m1" }); await wait(40); }
+      sent.length = 0;
+      acts["auto-retry-replace-all"].cb();
+      await wait(200);
+      const req = sent.find((m) => m && m.type === "apply_replace_now");
+      const t = document.getElementById("__lvRetryToast");
+      return {
+        actedOn: req ? String(req.chatId) : null,
+        toast: t && t.style.opacity === "1" ? (t.textContent || "").trim() : "",
+      };
+    }, [hadChat, answer]);
+    await page.close();
+    if (want === null) {
+      check(name + ": nothing is swapped", out.actedOn === null, out);
+      check(name + ": and it says why", /no chat is open/i.test(out.toast), out.toast);
+    } else {
+      check(name + ": swaps in " + want, out.actedOn === want, out);
+      check(name + ": and says nothing about no chat", !/no chat is open/i.test(out.toast), out.toast);
+    }
+    check(name + ": no console errors", errors.length === 0, errors);
+  }
 }
 
 // ---- a reply that finished is never re-rolled as stalled ----
@@ -5126,19 +5209,31 @@ console.log("\na swap request with no answer");
     const out = await page.evaluate(async (mode) => {
       const wait = (ms) => new Promise((r) => setTimeout(r, ms));
       const acts = {};
-      let onMsg = null;
+      const handlers = {};
+      // As many listeners as are registered, which is what the real host does.
+      // Keeping only the last one meant the per-request handler that asks which
+      // chat is open replaced the main one, so the reply to the swap itself
+      // reached nobody.
+      let listeners = [];
+      const onMsg = (m) => { for (const cb of listeners.slice()) { try { cb(m); } catch (_) {} } };
       const sent = [];
       const teardown = window.__setup(
         {
-          events: { on: () => () => {} },
+          events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
           // The backend the frontend is talking to. In the answered case it
           // acknowledges, which is all the timer is waiting for.
           sendToBackend: (m) => {
             if (mode.send === "throw") throw new Error("host refused");
             sent.push(m);
-            if (mode.answer && onMsg) setTimeout(() => onMsg({ type: "replace_now_ack", requestId: m.requestId }), 0);
+            // Which chat is open is asked before any swap goes out. A stub that
+            // never answered it would leave the press waiting on a timeout and
+            // this check measuring nothing.
+            if (m.type === "get_active_chat")
+              setTimeout(() => onMsg({ type: "active_chat", requestId: m.requestId, chatId: "chat-A", character: null, resolved: true }), 0);
+            if (mode.answer && m.type === "apply_replace_now")
+              setTimeout(() => onMsg({ type: "replace_now_ack", requestId: m.requestId }), 0);
           },
-          onBackendMessage: (cb) => { onMsg = cb; return () => { onMsg = null; }; },
+          onBackendMessage: (cb) => { listeners.push(cb); return () => { listeners = listeners.filter((x) => x !== cb); }; },
           ui: {
             showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
             registerInputBarAction: (o) => {
@@ -5150,10 +5245,15 @@ console.log("\na swap request with no answer");
         },
         { showReplaceButton: true, swapAckMs: 120, toast: true },
       );
+      // A chat has to be open, or the press is refused before it can fail the
+      // way this check is about. With the send throwing there is no answering
+      // that question either, so this is what leaves a chat id behind.
+      if (handlers.CHARACTER_MESSAGE_RENDERED) handlers.CHARACTER_MESSAGE_RENDERED({ chatId: "chat-A", messageId: "m1" });
+      await wait(40);
       const btn = acts["auto-retry-replace-now"];
       const pressed = !!btn;
       if (btn) btn.cb();
-      await wait(60);
+      await wait(80);
       const toastEarly = !!document.getElementById("__lvRetryToast");
       await wait(220);
       const el = document.getElementById("__lvRetryToast");
