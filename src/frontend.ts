@@ -111,7 +111,7 @@ const STREAM_BUF_MAX = 200000;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "4.18.0";
+const VERSION = "4.19.0";
 
 // The one address the extension ever points at, used by the warning in front of
 // the crisis-support check. Pinned to the released branch rather than to a tag,
@@ -5399,6 +5399,32 @@ export function setup(ctx: Ctx, opts?: any) {
   // teardown before, so browsing through a lot of chats in one sitting left a
   // state object behind for every one of them, streamed text and all.
   const chats = new Map<string, any>();
+  // Chat ids arrive from the host and nothing promises they are the same type
+  // on every event. A build that sent a string on the start of a generation and
+  // a number on its end got two state objects for one chat, so the end cleared
+  // the watchdogs of a chat that was not running and left the real ones armed.
+  // The one that was still armed then fired on a reply that had finished, and
+  // re-rolled it as stalled. Every lookup goes through here so that cannot
+  // happen again, whatever a build sends.
+  const chatKey = (chatId: any): string => String(chatId == null ? "" : chatId);
+  // Which chat each generation was started in. A watchdog is armed for one
+  // generation but can only be called off through its chat's state, so an end
+  // event that cannot find that state leaves the watchdog running. This answers
+  // the question the end event sometimes cannot: which chat is this.
+  //
+  // Bounded, and oldest first, because a long session generates a lot of these
+  // and only the ones still in the air can matter.
+  const genChats = new Map<string, string>();
+  const GEN_MEMORY_MAX = 40;
+  const genKey = (generationId: any): string =>
+    generationId == null ? "" : String(generationId);
+  function rememberGeneration(generationId: any, chatId: any) {
+    const g = genKey(generationId);
+    if (!g) return;
+    genChats.set(g, chatKey(chatId));
+    while (genChats.size > GEN_MEMORY_MAX)
+      genChats.delete(genChats.keys().next().value as string);
+  }
   const CHATS_MAX = 24; // chats kept before the quietest are let go
   // Anything mid-flight has to stay: dropping it would strand a running
   // watchdog and lose the budget for a retry that is already in the air.
@@ -5419,8 +5445,9 @@ export function setup(ctx: Ctx, opts?: any) {
       chats.delete(id);
     }
   }
-  const st = (chatId: string) => {
-    let s = chats.get(chatId);
+  const st = (chatId: any) => {
+    const key = chatKey(chatId);
+    let s = chats.get(key);
     if (s) {
       s.lastSeen = Date.now();
       return s;
@@ -5445,7 +5472,7 @@ export function setup(ctx: Ctx, opts?: any) {
       startWatchdog: null,
       expectingStart: 0,
     };
-    chats.set(chatId, s);
+    chats.set(key, s);
     evictIdleChats();
     return s;
   };
@@ -5537,7 +5564,7 @@ export function setup(ctx: Ctx, opts?: any) {
     // since navigated away from is still worth saying, but not over the top of
     // what is happening here.
     if (lastChatId != null) {
-      const here = chatStatus(chats.get(lastChatId));
+      const here = chatStatus(chats.get(chatKey(lastChatId)));
       if (here) return { text: here.text, busy: true, state: "busy" };
     }
     for (const [id, s] of chats) {
@@ -6556,6 +6583,7 @@ export function setup(ctx: Ctx, opts?: any) {
     } // fresh, user-initiated generation
     s.selfTriggered = false;
     s.genId = p.generationId;
+    rememberGeneration(p.generationId, p.chatId);
     // Whether a reply is in the air, as opposed to which one was last seen.
     // genId is never cleared, because the ids of generations already dealt with
     // are wanted afterwards, so it cannot answer this and the status line read
@@ -6721,9 +6749,26 @@ export function setup(ctx: Ctx, opts?: any) {
   }
 
   function onEnd(p: any) {
-    if (!p || !p.chatId) return;
-    const s = st(p.chatId);
-    lastChatId = p.chatId;
+    if (!p) return;
+    // Which chat it belongs to. The chat this generation started in is what
+    // counts, and it was written down then, so it is preferred over whatever
+    // the end event says: the generation id identifies the work, the chat id is
+    // only context, and where the two disagree the remembered one is right.
+    //
+    // This is what a build gets wrong. Leaving the chat id off the end event,
+    // or sending it in a different shape than the start did, sent this handler
+    // to a different chat's state or straight out of the function. Either way
+    // the watchdogs were left armed on the real state and one of them re-rolled
+    // a reply that had finished, and the text streamed so far was looked for on
+    // a state that had never seen any, so a good reply could read as empty.
+    const remembered = genChats.get(genKey(p.generationId));
+    const chatId =
+      remembered != null && remembered !== ""
+        ? remembered
+        : p.chatId;
+    if (chatId == null || chatId === "") return;
+    const s = st(chatId);
+    lastChatId = chatId;
     lastMessageId = p.messageId;
     s.live = false;
     // A generation has now been all the way through with the view open and
@@ -6766,13 +6811,13 @@ export function setup(ctx: Ctx, opts?: any) {
         return;
       }
       if (cfg.retryOnError) {
-        scheduleRetry(p.chatId, "error", p.error);
+        scheduleRetry(chatId, "error", p.error);
         return;
       }
       if (cfg.retryOnRefusal && looksLikeRefusalError(String(p.error), cfg)) {
         // No reply text ever existed for this one: the provider refused before
         // anything was written, so it is not the phrase list that caught it.
-        scheduleRetry(p.chatId, BLOCKED_REASON);
+        scheduleRetry(chatId, BLOCKED_REASON);
         return;
       }
       return;
@@ -6788,7 +6833,7 @@ export function setup(ctx: Ctx, opts?: any) {
     const isEmpty = content.length === 0 && (hasContentField || !s.sawContent);
     if (cfg.retryOnEmpty && isEmpty) {
       scheduleRetry(
-        p.chatId,
+        chatId,
         s.sawReasoning && !s.sawContent ? "cut off mid-reasoning" : "empty",
       );
       return;
@@ -6806,18 +6851,18 @@ export function setup(ctx: Ctx, opts?: any) {
       content.length > 0 &&
       stripThinkingAlways(content, cfg).trim().length === 0
     ) {
-      scheduleRetry(p.chatId, "thinking only, no reply");
+      scheduleRetry(chatId, "thinking only, no reply");
       return;
     }
     if (cfg.retryOnTruncated && looksTruncated(content, cfg.retryOnNoPunct, cfg)) {
-      scheduleRetry(p.chatId, "cut off");
+      scheduleRetry(chatId, "cut off");
       return;
     }
     if (cfg.retryOnRefusal) {
       const verdict = refusalVerdict(content, cfg);
       if (verdict.refusal) {
         scheduleRetry(
-          p.chatId,
+          chatId,
           verdict.kind === "crisis"
             ? CRISIS_REASON
             : verdict.kind === "breakoff"
@@ -6834,7 +6879,7 @@ export function setup(ctx: Ctx, opts?: any) {
       cfg.retryOnShort &&
       stripThinkingAlways(content, cfg).trim().length < cfg.minChars
     ) {
-      scheduleRetry(p.chatId, "short");
+      scheduleRetry(chatId, "short");
       return;
     }
     // A reply that came back fine means whatever was wrong has cleared.
