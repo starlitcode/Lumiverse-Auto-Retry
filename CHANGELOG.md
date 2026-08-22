@@ -8,6 +8,18 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 4.19.0
+
+_2026-08-21_
+
+### Fixed
+
+- **A reply that finished perfectly could be thrown away and asked for again as stalled.** Auto Retry sets a timer while a reply is coming in, and calls it off when the reply arrives. Finding the right timer to call off depends on Lumiverse telling it which chat the reply belongs to, and some builds leave that off the message that says the reply is done, or word it differently than they did when it started. When that happened the timer was never called off. It went on running and then re-rolled a reply that had been finished for a minute or more. Auto Retry now goes by the reply itself, which is named the same way every time, so it always finds the timer it set.
+- **The same slip could throw away a good reply as empty.** On builds that do not include the finished text in that message, Auto Retry uses the text it watched arrive. That is kept per chat, so looking in the wrong place found nothing and a perfectly good reply counted as blank.
+- **A chat could end up with two sets of timers.** A chat id that arrived as a number in one message and as text in another was treated as two different chats, so a reply was watched under one and finished under the other. They are read the same way now, whichever a build sends.
+
+Nothing about when a retry should happen has changed. A reply that never starts, stops halfway, comes back empty, cut off or with an error is retried exactly as before.
+
 ## 4.18.0
 
 _2026-08-21_

@@ -4857,6 +4857,93 @@ console.log("\nthe tick boxes are one size");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- a reply that finished is never re-rolled as stalled ----
+// The watchdogs belong to a generation but could only ever be called off
+// through its chat's state, found by chat id. Any end event whose chat id did
+// not resolve to that state left the watchdog running, and it went on to
+// re-roll a reply that had finished perfectly.
+//
+// Two ways that happened, both real: an end event with no chat id on it at all,
+// and one whose chat id came back a different type than the start's, which put
+// the two events on two different state objects.
+//
+// The other half of this check matters just as much: a reply that really does
+// stall still has to be retried, or the fix would have turned the extension off.
+console.log("\na finished reply is not re-rolled, a stalled one still is");
+{
+  const CASES = [
+    ["finished cleanly", "clean", false],
+    ["finished, no chat id on the end event", "no-chat-id", false],
+    ["finished, the end event named a different chat", "retyped", false],
+    ["finished, id shaped differently on the token event", "token-retyped", false],
+    ["finished, no content field, text only from the stream", "streamed-only", false],
+    ["empty reply, no chat id on the end event", "empty-no-id", true],
+    ["never produced a token", "never-started", true],
+    ["streamed then went silent", "went-silent", true],
+    ["finished with an error", "error", true],
+    ["finished empty", "empty", true],
+    ["finished cut off mid-sentence", "truncated", true],
+  ];
+  for (const [name, mode, wantRetry] of CASES) {
+    const page = await browser.newPage();
+    const errors = [];
+    page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
+    page.on("console", (m) => { if (m.type() === "error") errors.push("console: " + m.text()); });
+    await stage(page, '<div id=modal></div><button data-testid="regenerate">Regenerate</button>');
+    await page.addStyleTag({ content: THEME });
+    await page.addScriptTag({ content: SOURCE, type: "module" });
+    await page.waitForFunction(() => !!window.__setup);
+    const out = await page.evaluate(async (mode) => {
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      const handlers = {};
+      let clicks = 0;
+      document.querySelector("[data-testid=regenerate]").addEventListener("click", () => { clicks++; });
+      window.__setup(
+        { events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
+          ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+                registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) } },
+        // Short watchdogs so a false retry, if one is coming, arrives quickly.
+        { toast: false, idleTimeoutMs: 250, stuckTimeoutMs: 250, retryDelayMs: 10 },
+      );
+      const CID = "chat-7", GID = "g1";
+      const done = "Hello there, this is a finished reply.";
+      // The id shape a host uses can differ from one event to the next, so the
+      // token event is given a differently typed one in that case.
+      const startId = mode === "token-retyped" ? 7 : CID;
+      const tokenId = mode === "token-retyped" ? "7" : CID;
+      handlers.GENERATION_STARTED({ chatId: startId, generationId: GID });
+      await wait(20);
+      if (mode !== "never-started") {
+        const streamed = mode === "empty-no-id" ? "" : done;
+        if (streamed || mode !== "empty-no-id")
+          handlers.STREAM_TOKEN_RECEIVED({ chatId: tokenId, generationId: GID, token: streamed });
+        await wait(20);
+      }
+      if (mode === "clean") handlers.GENERATION_ENDED({ chatId: CID, generationId: GID, content: done });
+      else if (mode === "no-chat-id") handlers.GENERATION_ENDED({ generationId: GID, content: done });
+      else if (mode === "retyped") handlers.GENERATION_ENDED({ chatId: "some-other-chat", generationId: GID, content: done });
+      else if (mode === "token-retyped") handlers.GENERATION_ENDED({ chatId: startId, generationId: GID, content: done });
+      // No content field at all: the text that streamed has to stand in for it,
+      // and that lives on the chat's state. Find the wrong state and a good
+      // reply reads as empty and gets thrown away.
+      else if (mode === "streamed-only") handlers.GENERATION_ENDED({ chatId: "some-other-chat", generationId: GID });
+      else if (mode === "empty-no-id") handlers.GENERATION_ENDED({ generationId: GID, content: "" });
+      // Not one of the rate-limited wordings, or the retry would wait out the
+      // rate-limit delay and this would read as no retry at all.
+      else if (mode === "error") handlers.GENERATION_ENDED({ chatId: CID, generationId: GID, error: "the provider sent back nonsense" });
+      else if (mode === "empty") handlers.GENERATION_ENDED({ chatId: CID, generationId: GID, content: "" });
+      else if (mode === "truncated") handlers.GENERATION_ENDED({ chatId: CID, generationId: GID, content: 'She turned and said, "wait, I' });
+      // never-started and went-silent send no end event at all, which is the point.
+      await wait(800);
+      return { clicks };
+    }, mode);
+    await page.close();
+    check(name + ": " + (wantRetry ? "is retried" : "is left alone"),
+      (out.clicks > 0) === wantRetry, out);
+    check(name + ": no console errors", errors.length === 0, errors);
+  }
+}
+
 // ---- the toast may use the whole width it is allowed ----
 // "No reply found to swap in this chat." wrapped onto two lines on a phone and
 // left "chat." alone on the second, on a message that fits on one line easily.
