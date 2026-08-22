@@ -2328,10 +2328,15 @@ console.log("\ncopy takes everything");
 
     const handlers = {};
     const backend = [];
+    // As many listeners as are registered, like the host. Keeping only the last
+    // one meant a per-request handler replaced the main one and a prompt sent
+    // from here reached nobody.
+    let msgCbs = [];
+    window.__fromBackend = (m) => { for (const cb of msgCbs.slice()) { try { cb(m); } catch (_) {} } };
     const teardown = window.__setup(
       { events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
         sendToBackend: (m) => backend.push(m),
-        onBackendMessage: (fn) => { window.__fromBackend = fn; return () => {}; },
+        onBackendMessage: (fn) => { msgCbs.push(fn); return () => { msgCbs = msgCbs.filter((x) => x !== fn); }; },
         ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
               registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) } },
       { liveLog: true, toast: false, refusalNote: true, pauseWhenFailing: false,
@@ -3180,12 +3185,13 @@ console.log("\non-screen swap");
   await page.addScriptTag({ content: SOURCE, type: "module" });
   await page.waitForFunction(() => !!window.__setup);
   const out = await page.evaluate(async () => {
-    let onMsg = null;
+    let msgCbs = [];
+      const onMsg = (m) => { for (const cb of msgCbs.slice()) { try { cb(m); } catch (_) {} } };
     window.__setup(
       {
         events: { on: () => () => {} },
         sendToBackend: () => {},
-        onBackendMessage: (cb) => { onMsg = cb; return () => {}; },
+        onBackendMessage: (cb) => { msgCbs.push(cb); return () => { msgCbs = msgCbs.filter((x) => x !== cb); }; },
         ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
               registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) },
       },
@@ -4673,7 +4679,8 @@ console.log("\nwhere the ways into the extension live");
       if (mode.menu) {
         ui.showContextMenu = (o) => { window.__menus.push(o); return Promise.resolve({ selectedKey: window.__pick }); };
       }
-      let onMsg = null;
+      let msgCbs = [];
+      const onMsg = (m) => { for (const cb of msgCbs.slice()) { try { cb(m); } catch (_) {} } };
       window.__setup(
         { events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
           sendToBackend: (m) => {
@@ -4683,7 +4690,7 @@ console.log("\nwhere the ways into the extension live");
             if (m && m.type === "get_active_chat" && onMsg)
               setTimeout(() => onMsg({ type: "active_chat", requestId: m.requestId, chatId: "chat-A", character: null, resolved: true }), 0);
           },
-          onBackendMessage: (cb) => { onMsg = cb; return () => { onMsg = null; }; },
+          onBackendMessage: (cb) => { msgCbs.push(cb); return () => { msgCbs = msgCbs.filter((x) => x !== cb); }; },
           ui },
         {
           liveLog: true,
@@ -4868,6 +4875,79 @@ console.log("\nthe tick boxes are one size");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- the row says who the chat is with, however you got there ----
+// The name was only ever asked for where a chat id arrived through noteChat,
+// which is a message rendering. Switching chats and starting a generation both
+// make a chat current without going near it, so the two most ordinary ways of
+// ending up in a chat left the row reading "This chat" with no name on it.
+//
+// Asked once per chat, from every path plus the row itself, so a host that
+// never names a chat is not asked again on every repaint.
+console.log("\nthe chat row names the character");
+{
+  const WAYS = [
+    ["learned at startup", "startup"],
+    ["learned from a rendered message", "rendered"],
+    ["switched to with CHAT_CHANGED", "switched"],
+    ["learned from a generation starting", "generation"],
+  ];
+  for (const [name, mode] of WAYS) {
+    const page = await browser.newPage();
+    const errors = [];
+    page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
+    page.on("console", (m) => { if (m.type() === "error") errors.push("console: " + m.text()); });
+    await stage(page, "<div id=modal></div>");
+    await page.addStyleTag({ content: THEME });
+    await page.addScriptTag({ content: SOURCE, type: "module" });
+    await page.waitForFunction(() => !!window.__setup);
+    const out = await page.evaluate(async (mode) => {
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      const handlers = {}, acts = {}, asks = [];
+      let listeners = [];
+      const send = (m) => { for (const cb of listeners.slice()) { try { cb(m); } catch (_) {} } };
+      // Fixture names, picked to be nobody's: this is test data, not a persona.
+      const NAMES = { "chat-A": "Wren", "chat-B": "Tobias" };
+      window.__setup(
+        { events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
+          sendToBackend: (m) => {
+            if (m && m.type === "get_active_chat") {
+              asks.push(m.chatId);
+              setTimeout(() => send({ type: "active_chat", requestId: m.requestId,
+                chatId: m.chatId || "chat-A", character: NAMES[m.chatId || "chat-A"] || null, resolved: !m.chatId }), 0);
+            }
+          },
+          onBackendMessage: (cb) => { listeners.push(cb); return () => { listeners = listeners.filter((x) => x !== cb); }; },
+          ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+                registerInputBarAction: (o) => { const a = { onClick: (cb) => { a.cb = cb; return () => {}; }, destroy: () => {} }; acts[o.id] = a; return a; } } },
+        { toast: false },
+      );
+      await wait(80);
+      // Reached several times over, so asking once can be told from asking each
+      // time something repaints.
+      for (let i = 0; i < 4; i++) {
+        if (mode === "rendered") handlers.CHARACTER_MESSAGE_RENDERED({ chatId: "chat-B", messageId: "m" + i });
+        else if (mode === "switched") handlers.CHAT_CHANGED({ chatId: "chat-B" });
+        else if (mode === "generation") handlers.GENERATION_STARTED({ chatId: "chat-B", generationId: "g" + i });
+        await wait(20);
+      }
+      acts["auto-retry-settings"].cb();
+      await wait(100);
+      const row = document.querySelector("[data-ar-chat-switch]");
+      const want = mode === "startup" ? "chat-A" : "chat-B";
+      return {
+        text: row ? (row.textContent || "") : "",
+        asked: asks.filter((x) => x === (mode === "startup" ? null : "chat-B")).length,
+      };
+    }, mode);
+    await page.close();
+    const who = mode === "startup" ? "Wren" : "Tobias";
+    check(name + ": the row names the character", out.text.indexOf("This chat, with " + who) === 0, out.text.slice(0, 60));
+    if (mode !== "startup")
+      check(name + ": and asked for that name once, not on every repaint", out.asked === 1, out);
+    check(name + ": no console errors", errors.length === 0, errors);
+  }
+}
+
 // ---- a swap needs a chat to swap in ----
 // The swap buttons live in the floating button's menu, which is on screen on
 // the home screen too, so they can be pressed with no chat open at all.
@@ -4904,7 +4984,8 @@ console.log("\na swap needs a chat to swap in");
     const out = await page.evaluate(async ([hadChat, answer]) => {
       const wait = (ms) => new Promise((r) => setTimeout(r, ms));
       const handlers = {}, acts = {}, sent = [];
-      let onMsg = null;
+      let msgCbs = [];
+      const onMsg = (m) => { for (const cb of msgCbs.slice()) { try { cb(m); } catch (_) {} } };
       window.__setup(
         { events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
           sendToBackend: (m) => {
@@ -4912,7 +4993,7 @@ console.log("\na swap needs a chat to swap in");
             if (m && m.type === "get_active_chat" && onMsg)
               setTimeout(() => onMsg({ type: "active_chat", requestId: m.requestId, chatId: answer.chatId, character: null, resolved: answer.resolved }), 0);
           },
-          onBackendMessage: (cb) => { onMsg = cb; return () => { onMsg = null; }; },
+          onBackendMessage: (cb) => { msgCbs.push(cb); return () => { msgCbs = msgCbs.filter((x) => x !== cb); }; },
           ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
                 registerInputBarAction: (o) => { const a = { onClick: (cb) => { a.cb = cb; return () => {}; }, destroy: () => {} }; acts[o.id] = a; return a; } } },
         { toast: true, showReplaceButton: true, showSwapAllButton: true, swapAckMs: 30000 },
@@ -5640,11 +5721,13 @@ console.log("\na missing permission is said out loud");
   const open = async (page, granted) => page.evaluate(async (granted) => {
     const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     const acts = {};
-    let fromBackend = null;
+    // As many listeners as are registered, like the host.
+    let msgCbs = [];
+    const fromBackend = (m) => { for (const cb of msgCbs.slice()) { try { cb(m); } catch (_) {} } };
     window.__setup(
       { events: { on: () => () => {} },
         sendToBackend: () => {},
-        onBackendMessage: (fn) => { fromBackend = fn; return () => {}; },
+        onBackendMessage: (fn) => { msgCbs.push(fn); return () => { msgCbs = msgCbs.filter((x) => x !== fn); }; },
         ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
               registerInputBarAction: (o) => { const a = { onClick: (cb) => { a.cb = cb; return () => {}; }, destroy: () => {} }; acts[o.id] = a; return a; } } },
       { liveLog: true, toast: false },
@@ -5896,11 +5979,15 @@ console.log("\na prompt is only shown for the chat you are in");
   const out = await page.evaluate(async () => {
     const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     const handlers = {};
-    let fromBackend = null;
+    // As many listeners as are registered, like the host. Keeping only the last
+    // one meant a per-request handler replaced the main one, so a snapshot sent
+    // from here reached nobody.
+    let msgCbs = [];
+    const fromBackend = (m) => { for (const cb of msgCbs.slice()) { try { cb(m); } catch (_) {} } };
     window.__setup(
       { events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
         sendToBackend: () => {},
-        onBackendMessage: (fn) => { fromBackend = fn; return () => {}; },
+        onBackendMessage: (fn) => { msgCbs.push(fn); return () => { msgCbs = msgCbs.filter((x) => x !== fn); }; },
         ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
               registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) } },
       { liveLog: true, toast: false },
@@ -5975,11 +6062,13 @@ console.log("\nthe Prompt tab has a rendered and a raw view");
   await page.waitForFunction(() => !!window.__setup);
   const out = await page.evaluate(async () => {
     const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-    let fromBackend = null;
+    // As many listeners as are registered, like the host.
+    let msgCbs = [];
+    const fromBackend = (m) => { for (const cb of msgCbs.slice()) { try { cb(m); } catch (_) {} } };
     window.__setup(
       { events: { on: () => () => {} },
         sendToBackend: () => {},
-        onBackendMessage: (fn) => { fromBackend = fn; return () => {}; },
+        onBackendMessage: (fn) => { msgCbs.push(fn); return () => { msgCbs = msgCbs.filter((x) => x !== fn); }; },
         ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
               registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) } },
       { liveLog: true, toast: false },
@@ -6080,11 +6169,13 @@ console.log("\nthe Prompt tab re-arms when the backend restarts");
   const out = await page.evaluate(async () => {
     const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     const sent = [];
-    let fromBackend = null;
+    // As many listeners as are registered, like the host.
+    let msgCbs = [];
+    const fromBackend = (m) => { for (const cb of msgCbs.slice()) { try { cb(m); } catch (_) {} } };
     window.__setup(
       { events: { on: () => () => {} },
         sendToBackend: (m) => sent.push(m),
-        onBackendMessage: (fn) => { fromBackend = fn; return () => {}; },
+        onBackendMessage: (fn) => { msgCbs.push(fn); return () => { msgCbs = msgCbs.filter((x) => x !== fn); }; },
         ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
               registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) } },
       { liveLog: true, toast: false },
@@ -6367,14 +6458,15 @@ console.log("\nprompt viewer");
   await page.waitForFunction(() => !!window.__setup);
   const out = await page.evaluate(async () => {
     const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-    let onBackend = null;
+    let msgCbs = [];
+    const onBackend = (m) => { for (const cb of msgCbs.slice()) { try { cb(m); } catch (_) {} } };
     let tabs0 = false;
     const sent = [];
     const teardown = window.__setup(
       {
         events: { on: () => () => {} },
         sendToBackend: (m) => sent.push(m),
-        onBackendMessage: (cb) => { onBackend = cb; return () => {}; },
+        onBackendMessage: (cb) => { msgCbs.push(cb); return () => { msgCbs = msgCbs.filter((x) => x !== cb); }; },
         ui: {
           showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
           registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }),

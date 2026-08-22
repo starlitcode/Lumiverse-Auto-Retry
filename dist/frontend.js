@@ -3069,6 +3069,26 @@ export function setup(ctx, opts) {
     // is right but says nothing, and on a phone you may not have the header in
     // view. Empty until the chats and characters permissions are both granted.
     const chatNames = new Map();
+    // Chats the name has already been asked for, whether or not an answer came
+    // back. A host that will not name a chat answers with nothing, and without
+    // this the question would go out again every time anything repainted.
+    const namesAsked = new Set();
+    // Ask who a chat is with, once. Called from every path that makes a chat the
+    // current one, and from the row that shows the name.
+    //
+    // It used to be asked only where a chat id arrived through noteChat, which is
+    // a message rendering. Switching chats and starting a generation both set the
+    // current chat without going near it, so the two most ordinary ways of ending
+    // up in a chat left the row reading "This chat" with no name on it.
+    function ensureChatName(id) {
+        if (id == null || id === "")
+            return;
+        const key = String(id);
+        if (chatNames.has(key) || namesAsked.has(key))
+            return;
+        namesAsked.add(key);
+        askActiveChat(key);
+    }
     // The host's own token count for the last prompt, when it will give one. The
     // panel falls back to its own estimate, which is characters over four.
     let lastPromptTokens = 0;
@@ -6648,6 +6668,7 @@ export function setup(ctx, opts) {
         s.selfTriggered = false;
         s.genId = p.generationId;
         rememberGeneration(p.generationId, p.chatId);
+        ensureChatName(p.chatId);
         // Whether a reply is in the air, as opposed to which one was last seen.
         // genId is never cleared, because the ids of generations already dealt with
         // are wanted afterwards, so it cannot answer this and the status line read
@@ -6808,8 +6829,7 @@ export function setup(ctx, opts) {
         // A chat learned from an event arrives as an id and nothing else, so this
         // is the moment to find out whose it is. Asked once per chat: the answer
         // does not change while you are in it.
-        if (!chatNames.has(String(next)))
-            askActiveChat(String(next));
+        ensureChatName(next);
         // Anything that describes the chat you are in is now out of date.
         if (chatSwitchPaint) {
             try {
@@ -6829,6 +6849,7 @@ export function setup(ctx, opts) {
         // that can also mean "no chat any more", which noteChat ignores on purpose.
         lastChatId = p.chatId || null;
         lastMessageId = null;
+        ensureChatName(lastChatId);
         // The prompt on screen belongs to the chat that was just left, so the tab
         // has to be told. It is the one thing here that describes a chat and is not
         // repainted by paintNow below.
@@ -6910,6 +6931,7 @@ export function setup(ctx, opts) {
             return;
         const s = st(chatId);
         lastChatId = chatId;
+        ensureChatName(chatId);
         lastMessageId = p.messageId;
         s.live = false;
         // A generation has now been all the way through with the view open and
@@ -9074,6 +9096,10 @@ export function setup(ctx, opts) {
         const paint = () => {
             const known = lastChatId != null;
             const off = chatIsOff(lastChatId);
+            // Asked from here too, so a chat that reached the extension by some route
+            // nobody thought of still gets a name the moment this is looked at.
+            if (known)
+                ensureChatName(lastChatId);
             const who = known ? chatNames.get(String(lastChatId)) : "";
             // Named when the host will say who this chat is with, because "this chat"
             // is correct and tells you nothing, and the header naming it may not be
