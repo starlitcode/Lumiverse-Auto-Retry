@@ -490,7 +490,7 @@ const SCHEMA = [
                 int: true,
                 min: 0,
                 max: 100000,
-                hint: "Replies with fewer characters than this count as too short. Only the visible reply is counted, not any reasoning block. Only used when the option above is on.",
+                hint: "Replies with fewer characters than this count as too short. Only the words you read are counted: any reasoning block is left out, and so is markup, so a line wrapped in tags is measured by what it says rather than by the tags around it. Only used when the option above is on.",
             },
             {
                 key: "retryOnRefusal",
@@ -1971,6 +1971,13 @@ function stripThinking(text, cfg) {
 // counts. Asking whether a reply is empty, or whether it was cut off, is a
 // different question, and the answer is always no when the only thing there is
 // a think block.
+// Tags are not reply text. A line of dialogue wrapped in <font color="#ffff00">
+// carries twenty-nine characters of markup around whatever was actually said,
+// so a length test set for prose is measuring the tags as well as the words. A
+// reply of three short lines can clear a hundred characters while saying forty.
+function withoutMarkup(text) {
+    return String(text == null ? "" : text).replace(/<\/?[a-zA-Z][^>]*>/g, "");
+}
 function stripThinkingAlways(text, cfg) {
     return stripThinking(text, { refusalThinkTags: cfg && cfg.refusalThinkTags });
 }
@@ -7083,10 +7090,10 @@ export function setup(ctx, opts) {
             }
         }
         // Measured on the visible reply, not the raw output. A reasoning block can
-        // run to hundreds of characters, so counting it would let a two-word reply
-        // pass the length test on a thinking model.
+        // run to hundreds of characters, and markup adds tens per line, so counting
+        // either would let a two-word reply pass a length test set for prose.
         if (cfg.retryOnShort &&
-            stripThinkingAlways(content, cfg).trim().length < cfg.minChars) {
+            withoutMarkup(stripThinkingAlways(content, cfg)).trim().length < cfg.minChars) {
             scheduleRetry(chatId, "short");
             return;
         }
@@ -11052,6 +11059,7 @@ export const __testing = {
     parseSubs,
     applySubs,
     stripThinking,
+    withoutMarkup,
     splitSelectorList,
     withLongForms,
     REFUSAL_PHRASES,
