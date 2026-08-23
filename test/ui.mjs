@@ -1350,7 +1350,9 @@ console.log("\nthe crisis check asks first");
   check("ticking it asks first", out.asked === true, out);
   check("the box stays off while the question is open", out.whileAsking === false, out);
   check("the warning says the extension cannot tell the two cases apart",
-    /no idea how you are/i.test(out.wording) && /safety page/i.test(out.wording), out.wording.slice(0, 300));
+    /cannot tell the difference/i.test(out.wording) &&
+      /does not know anything about you/i.test(out.wording) &&
+      /safety page/i.test(out.wording), out.wording.slice(0, 300));
   check("the safety page is a link, not an instruction to go and find it",
     !!out.link && /\/docs\/safety\.md$/.test(out.link.href) && out.link.text === "the safety page", out.link);
   check("and it opens away from the chat, without handing the new tab a way back",
