@@ -10,6 +10,14 @@ It never changes what the model generated. Because it edits the stored reply rat
 
 Only generated assistant replies are swapped, by either the automatic mode or the button. The opening greeting is authored, not generated, so it is never swapped, and your own messages are never touched.
 
+## Tags in a reply
+
+Some replies carry markup, like `<font color="#ffff00">` for coloured speech or `<i>` for emphasis. Those tags are not prose, and words that appear in ordinary writing also appear in them: `color`, `font`, `small`, `center`.
+
+Swaps skip them. A rule of `color => colour` changes the word where you wrote it and leaves `<font color="...">` standing, because rewriting that does not change any wording, it just quietly stops the text being coloured. Words *between* tags are prose and swap as normal, so `<i>color</i>` becomes `<i>colour</i>`.
+
+**Also swap inside HTML tags**, under Find and replace, turns that off. The reason to want it is a rule aimed at the markup on purpose, such as `#ffff00 => #00ffff` to recolour every line at once.
+
 ## The model's thinking
 
 A reasoning model writes its working-out before the reply. Lumiverse shows that in its own block rather than in the message bubble, but when the model writes it as tags inside the reply it is still part of the stored message, which is the thing a swap rewrites.

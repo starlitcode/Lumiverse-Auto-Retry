@@ -206,6 +206,7 @@ const CONFIG = {
     showSwapAllButton: false, // adds an Extras button that swaps every generated reply in the chat once.
     allowReSwap: false, // let that button swap a reply again even if it was already swapped this session (can stack swaps).
     swapThinking: false, // also swap inside the model's thinking. Off = only the visible reply is swapped, and any reasoning block is left exactly as it was.
+    swapMarkup: false, // also swap inside HTML tags in a reply. Off = tags like <font color="#ff0"> are left alone, so a rule cannot break the markup.
     confirmBeforeEdit: false, // ask for confirmation before any word-swap edit (automatic or manual); the user can cancel.
     swapWaitForEdits: false, // wait for another extension to finish editing a reply before swapping it.
     // How long to give it, in seconds. Only used when the above is on.
@@ -689,6 +690,12 @@ const SCHEMA = [
                 label: "Also swap inside the thinking",
                 type: "bool",
                 hint: "Off by default, so only the reply you read is swapped and the model's thinking is left exactly as it was. Lumiverse shows reasoning in its own block, so a swap there changes nothing you see while still rewriting what the model worked out. Turn it on to swap the thinking too. Reasoning your provider returns separately, rather than in the reply, is never swapped either way.",
+            },
+            {
+                key: "swapMarkup",
+                label: "Also swap inside HTML tags",
+                type: "bool",
+                hint: "Off by default, so a rule only ever changes the words you read. Replies that use tags like <font color=\"#ffff00\"> carry words inside the markup, and a rule such as color => colour would rewrite the tag itself and quietly break it. Turn this on if you want your rules to reach the tags too, for example to change a colour everywhere at once.",
             },
             {
                 key: "confirmBeforeEdit",
@@ -5083,6 +5090,7 @@ export function setup(ctx, opts) {
                 "showSwapAllButton",
                 "allowReSwap",
                 "swapThinking",
+                "swapMarkup",
                 "confirmBeforeEdit",
                 "swapWaitForEdits",
                 "swapWaitSecs",
@@ -5224,6 +5232,7 @@ export function setup(ctx, opts) {
                 "showSwapAllButton",
                 "allowReSwap",
                 "swapThinking",
+                "swapMarkup",
                 "confirmBeforeEdit",
                 "swapWaitForEdits",
                 "swapWaitSecs",
