@@ -648,6 +648,10 @@ spindle.onFrontendMessage(async (payload: any, userId?: string) => {
         let chat: any = null;
         if (chatId && spindle.chats && typeof spindle.chats.get === 'function') {
           chat = await spindle.chats.get(chatId, userId);
+          // Asked about a named chat and told, whether or not it has a card on
+          // it. The frontend caches "this chat has no name" off this flag, so
+          // a lookup that threw before getting here must not look like one.
+          resolved = true;
         } else if (spindle.chats && typeof spindle.chats.getActive === 'function') {
           chat = await spindle.chats.getActive(userId);
           chatId = (chat && chat.id) || null;

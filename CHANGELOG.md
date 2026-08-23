@@ -8,6 +8,16 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 4.18.4
+
+_2026-08-23_
+
+### Fixed
+
+- **On Safari below 16.4 the extension did not load at all.** One of the cut-off checks added in 4.18.3 used a pattern those versions cannot even read. A pattern that cannot be read is not a check that quietly fails, it stops the whole file loading, so Auto Retry was simply absent there with nothing on screen to say why. The check does the same job written a way every browser understands.
+- **The This chat row could stay nameless for the rest of the page.** Asking who a chat is with is asked once per chat, which is right when there is an answer. An ask that went out while the extension's backend was still starting up got no answer, and that silence was filed as "this chat has no name" and never revisited, so opening the panel at the wrong moment left the row blank until you reloaded. Only a real answer is kept now. A chat that genuinely has no character on it is still only asked about once.
+- **A word swap could land after the extension was switched off.** Pressing a swap button asks which chat you are in before it does anything. Switching Auto Retry off in that gap left the request still on its way, so the swap went through after it had stopped. It is dropped instead.
+
 ## 4.18.3
 
 _2026-08-21_

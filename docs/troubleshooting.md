@@ -24,6 +24,12 @@ Reload the page and try again. If it keeps happening, the backend part of the ex
 
 A long chat is not the cause. The backend says it has the request as soon as it gets it, before it starts any work, so a swap that simply takes a while never shows this message.
 
+## "No chat is open"
+
+The swap buttons live in the Extras menu or the floating button's menu, and both are reachable from the chat list with nothing open. Pressing one there says **No chat is open. Open a chat and try again.** It asks Lumiverse which chat you are in first, so with the `chats` permission granted it knows the difference between the home screen and a chat, and will not edit the chat you were last in by mistake.
+
+Without that permission it cannot ask, and falls back to the last chat it saw you in. That is the one case where a swap from the home screen still lands somewhere, and it is the same fallback the rest of the extension runs on when it is not allowed to look.
+
 ## The on-screen panel
 
 For watching it work live, turn on **Show the on-screen panel** under Basics, and pick where it goes with the row underneath: floating over the chat, or in Lumiverse's sidebar drawer. It is useful on a phone, where the browser console is out of reach.
