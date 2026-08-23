@@ -771,8 +771,18 @@ const SCHEMA = [
 // between an opening and a closing tag are the reply and stay exactly as they
 // are. Kept narrow on purpose so a stray "<" typed in a scene is left alone:
 // it has to look like a real tag, name and all, before anything is dropped.
+// A quoted attribute value may itself contain ">". Skipping over quoted runs
+// rather than stopping at the first ">" is what keeps <span title="a > b"> one
+// tag: read the naive way it ended early, and the leftover ' b">' carried a
+// stray quotation mark into the reply, which the check for dialogue opened and
+// never closed then counted as a cut-off reply.
+//
+// The three branches cannot match the same first character, so there is nothing
+// for the engine to backtrack between, and the count is capped for the same
+// reason the old one was.
+const HTML_TAG = /<\/?[a-zA-Z][a-zA-Z0-9-]*(?:"[^"]*"|'[^']*'|[^'">]){0,400}>/g;
 function stripMarkup(text) {
-    return String(text == null ? "" : text).replace(/<\/?[a-zA-Z][^>]{0,400}>/g, "");
+    return String(text == null ? "" : text).replace(HTML_TAG, "");
 }
 // Containers whose closing tag is not optional, and which a model only ever
 // writes as a matched pair. A tracker is built out of these. The ones with an
@@ -1976,7 +1986,7 @@ function stripThinking(text, cfg) {
 // so a length test set for prose is measuring the tags as well as the words. A
 // reply of three short lines can clear a hundred characters while saying forty.
 function withoutMarkup(text) {
-    return String(text == null ? "" : text).replace(/<\/?[a-zA-Z][^>]*>/g, "");
+    return stripMarkup(text);
 }
 function stripThinkingAlways(text, cfg) {
     return stripThinking(text, { refusalThinkTags: cfg && cfg.refusalThinkTags });

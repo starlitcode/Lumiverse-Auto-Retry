@@ -505,7 +505,12 @@ function thinkSpans(text) {
 // collide with ordinary vocabulary: color, font, span, small, big, center.
 //
 // Opened by a letter, so "a < b" and a lone "<3" are prose and stay swappable.
-const MARKUP = /<\/?[a-zA-Z][^>]*>/g;
+// Quoted attribute values may contain ">", so a run inside quotes is skipped
+// rather than ending the tag. Read the naive way, <span title="a > b"> stops
+// early and the tail of the tag is treated as prose a rule may rewrite, which
+// is the corruption this protection exists to prevent. The branches share no
+// first character, so there is nothing to backtrack between.
+const MARKUP = /<\/?[a-zA-Z][a-zA-Z0-9-]*(?:"[^"]*"|'[^']*'|[^'">]){0,400}>/g;
 function markupSpans(text) {
     const out = [];
     MARKUP.lastIndex = 0;
