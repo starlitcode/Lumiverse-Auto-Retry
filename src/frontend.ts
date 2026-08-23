@@ -1204,7 +1204,7 @@ function looksTruncated(
     return true;
   // The channel form has no closing tag of its own: the block ends at the next
   // control token, so an analysis channel with none after it was cut off.
-  if (/<\|channel\|>\s*(?:analysis|thinking|thought|reasoning)\b/i.test(raw) &&
+  if (new RegExp("<\\|channel\\|>\\s*(?:" + THINK_CHANNELS + ")\\b", "i").test(raw) &&
       !/<\|(?:end|return|start)\|>/i.test(raw))
     return true;
 
@@ -2010,6 +2010,13 @@ const REFUSAL_SOFT: RegExp[] = [
 // reply that is nothing but an inline think block; the truncation and length
 // checks still see the raw output.
 const THINK_TAGS = ["think", "thinking", "thought", "thoughts", "reasoning", "reflection", "scratchpad", "analysis"];
+// The Harmony channels that carry thinking rather than the reply. The final
+// channel is the reply itself and must never be treated as thinking. One
+// constant because three places ask this question, and the cut-off check used
+// to ask it with a shorter list: a reply cut off inside a commentary channel
+// was not recognised as cut off, while the stripper had already decided that
+// channel was thinking.
+const THINK_CHANNELS = "analysis|thinking|thought|reasoning|commentary";
 
 // The built-in names plus whatever is in Extra thinking tag names. One place,
 // so the stripper and the cut-off check cannot end up knowing different sets.
@@ -2037,7 +2044,7 @@ function stripThinking(text: string, cfg?: any): string {
   // final channel is the reply and has to survive, so this names the channels
   // it removes rather than removing every block it finds.
   t = t.replace(
-    /<\|channel\|>\s*(?:analysis|thinking|thought|reasoning|commentary)\b[\s\S]*?(?:<\|(?:end|return|start)\|>|$)/gi,
+    new RegExp("<\\|channel\\|>\\s*(?:" + THINK_CHANNELS + ")\\b[\\s\\S]*?(?:<\\|(?:end|return|start)\\|>|$)", "gi"),
     " ",
   );
 

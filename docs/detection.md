@@ -180,7 +180,9 @@ Only the final reply is ever checked for a refusal, never the model's thinking. 
 | Pipes | `<\|think\|>` … `<\|/think\|>`, and `<\|think>` … `<think\|>` |
 | Channels | `<\|channel\|>analysis<\|message\|>` … `<\|end\|>` |
 
-The channel form is the one models trained on the Harmony format use. It has no closing tag of its own: the reasoning runs until the next control token. Only the thinking channels are removed. The `final` channel is the visible reply and is kept, along with anything outside a block.
+The channel form is the one models trained on the Harmony format use. It has no closing tag of its own: the reasoning runs until the next control token. The channels treated as thinking are `analysis`, `thinking`, `thought`, `reasoning` and `commentary`. The `final` channel is the visible reply and is kept, along with anything outside a block.
+
+Some providers hand their reasoning back separately rather than inside the reply. Nothing above applies to that: it never reaches the reply text in the first place, so there is nothing to strip and the checks only ever see what you read. Word swaps leave it alone for the same reason, which [Word swaps](word-swaps.md#the-models-thinking) covers.
 
 So if a model weighs a refusal while reasoning but then writes a normal reply, nothing is re-rolled. If a refusal ends up in the actual reply, it is caught as usual, and if the model reasons and then produces nothing, that is handled by the empty-reply retry instead.
 

@@ -427,6 +427,8 @@ function applyRules(text, seen) {
 // The tag list matches the frontend's. Both read the same user setting, so the
 // two cannot end up knowing different sets.
 const THINK_TAGS = ['think', 'thinking', 'thought', 'thoughts', 'reasoning', 'reflection', 'scratchpad', 'analysis'];
+// Matches the frontend's list. The final channel is the reply, never thinking.
+const THINK_CHANNELS = 'analysis|thinking|thought|reasoning|commentary';
 let extraThinkTags = [];
 function thinkSpans(text) {
     const alt = THINK_TAGS.concat(extraThinkTags).join('|');
@@ -463,7 +465,7 @@ function thinkSpans(text) {
     };
     // The channel form first: a channel block contains the other shapes. Only the
     // thinking channels count, since the final channel is the reply itself.
-    take(/<\|channel\|>\s*(?:analysis|thinking|thought|reasoning|commentary)\b[\s\S]*?(?:<\|(?:end|return|start)\|>|$)/gi);
+    take(new RegExp('<\\|channel\\|>\\s*(?:' + THINK_CHANNELS + ')\\b[\\s\\S]*?(?:<\\|(?:end|return|start)\\|>|$)', 'gi'));
     // Then the closed pairs. The indexOf guards are the frontend's: with no
     // closer anywhere, every opener would scan to the end looking for one, which
     // is quadratic on a reply that is all openers.

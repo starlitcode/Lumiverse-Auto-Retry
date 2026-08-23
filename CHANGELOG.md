@@ -16,6 +16,10 @@ _2026-08-23_
 
 - **Word swaps now leave the model's thinking alone, with a setting to include it.** A reasoning model writes its working-out before the reply, and when it writes that as tags inside the reply it is part of the stored message, so swap rules were rewriting it. Lumiverse shows reasoning in its own block, so nothing about that was visible: a rule aimed at your prose was also editing what the model worked out, somewhere you would never look. Reasoning that a provider returns separately was never swapped, so the same rule behaved differently depending on who was serving the model. Only the reply you read is swapped now, and **Also swap inside the thinking** under Find and replace turns the old behaviour back on. The common wrappers are recognised, along with any name in Extra thinking tag names.
 
+### Fixed
+
+- **A reply cut off inside a commentary block was not recognised as cut off.** Models using the channel format put their reasoning in one of several named channels, and the cut-off check knew four of the five names while the part that strips thinking knew all five. A reply cut short inside a `commentary` channel therefore fell through to the empty-reply check, so it was retried for the wrong reason, and not retried at all by anyone who has that check switched off. All three places that ask which channels are thinking now read the same list.
+
 ## 4.18.4
 
 _2026-08-23_
