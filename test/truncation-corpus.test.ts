@@ -68,6 +68,23 @@ const FINISHED: Array<[string, string]> = [
   ["ends on a closing bracket after dialogue", 'She shrugged. "Suit yourself." (He did not.)'],
   ["price with a decimal", "The room cost 12.50 a night, and she paid in coins."],
   ["ratio with asterisk emphasis", "It was *two* against *five*, and she liked those odds."],
+  ["closed details block then prose", "<details><summary>Scene logic</summary>\nShe wants to leave.\n</details>\n\nShe stood up and left."],
+  ["reply ending on a closed details block", "She stood up.\n\n<details><summary>Notes</summary>\nbeat two\n</details>"],
+  ["markdown table then prose", "| Who | Feels |\n| --- | --- |\n| Her | tired |\n\nShe sighed."],
+  ["reply ending on a table row", "She sighed.\n\n| Who | Feels |\n| --- | --- |\n| Her | tired |"],
+  ["html comment then prose", "<!-- beat: she leaves -->\nShe walked out into the rain."],
+  ["self-closing break", "First line.<br/>Second line finished properly."],
+  ["opening tag split over lines", '<font\n  color="#ffff00">"Careful."</font> She stepped back.'],
+  ["nested tags", "<b><i>She ran.</i></b> Then she stopped."],
+  ["blockquote then prose", "> She said it was fine.\n\nIt was not fine."],
+  ["heading then prose", "## The kitchen\n\nHe put the kettle on and waited."],
+  ["nested list, finished", "- one\n  - one a\n  - one b\n- two"],
+  // A ">" inside a quoted attribute used to end the tag early for the check
+  // that removes markup, and the leftover quotation mark then read as dialogue
+  // opened and never closed.
+  ["a bracket inside a quoted attribute", '<span title="a > b">She smiled.</span> It was warm.'],
+  ["structured thinking then a reply", "<think>\nBeats:\n1. he panics\n2. she softens\n</think>She reached for his hand."],
+  ["a table inside the thinking", "<think>\n| beat | who |\n| --- | --- |\n| 1 | him |\n</think>He exhaled."],
 ];
 
 describe("a finished reply is never called cut off", () => {
@@ -98,6 +115,12 @@ const CUT: Array<[string, string]> = [
   ["stops on a letter with no punctuation", "She walked to the window and looked out at the empty street below and then she"],
   ["list then cut mid-item", "Supplies:\n- rope\n- water\n- a map she could not"],
   ["multiplication then cut open action", "Two rooms, 2*3 ways out. *She counted them again"],
+  ["details block left open", "<details><summary>Notes</summary>\nbeat two"],
+  ["table cut mid-row", "| Who | Feels |\n| --- | --- |\n| Her | ti"],
+  ["reply ending on a heading", "He left.\n\n## The kitchen"],
+  ["list cut after a joining word", "- lock the door\n- draw the curtains and"],
+  ["list cut after an article", "- lock the door\n- draw the"],
+  ["thinking cut mid-structure", "<think>\nBeats:\n1. he panics\n2. she sof"],
 ];
 
 describe("a reply that was cut off is still caught", () => {

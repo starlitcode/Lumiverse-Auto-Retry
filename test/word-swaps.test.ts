@@ -713,4 +713,13 @@ describe("markup is left alone unless asked for", () => {
       await swap('<think>the color matters</think><i>color</i> and color', "color => colour"),
     ).toBe("<think>the color matters</think><i>colour</i> and colour");
   });
+
+  test("a bracket inside a quoted attribute keeps the tag whole", async () => {
+    // Read naively the tag ends at the ">" inside the quotes, and the tail of
+    // it becomes prose a rule may rewrite, which is the corruption this
+    // protection exists to prevent.
+    expect(
+      await swap('<span title="a > b">She was scared.</span> He was scared.', "b => B\nscared => afraid"),
+    ).toBe('<span title="a > b">She was afraid.</span> He was afraid.');
+  });
 });
