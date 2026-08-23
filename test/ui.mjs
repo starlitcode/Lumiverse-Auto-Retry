@@ -4913,7 +4913,7 @@ console.log("\nthe chat row names the character");
             if (m && m.type === "get_active_chat") {
               asks.push(m.chatId);
               setTimeout(() => send({ type: "active_chat", requestId: m.requestId,
-                chatId: m.chatId || "chat-A", character: NAMES[m.chatId || "chat-A"] || null, resolved: !m.chatId }), 0);
+                chatId: m.chatId || "chat-A", character: NAMES[m.chatId || "chat-A"] || null, resolved: true }), 0);
             }
           },
           onBackendMessage: (cb) => { listeners.push(cb); return () => { listeners = listeners.filter((x) => x !== cb); }; },
@@ -4944,6 +4944,78 @@ console.log("\nthe chat row names the character");
     check(name + ": the row names the character", out.text.indexOf("This chat, with " + who) === 0, out.text.slice(0, 60));
     if (mode !== "startup")
       check(name + ": and asked for that name once, not on every repaint", out.asked === 1, out);
+    check(name + ": no console errors", errors.length === 0, errors);
+  }
+}
+
+// ---- an answer that names nobody is not always the same answer ----
+// A backend that looked and found no card has answered: that chat has no name,
+// caching it stops the question repeating. A backend that could not look has
+// not answered, and caching that would leave the row nameless for the rest of
+// the page over a lookup that would have worked a second later. That is what
+// the missing name was: a backend still loading when the first ask went out.
+console.log("\nno name and could not look are different answers");
+{
+  // [name, how the backend answers a named ask, asked once only, ends up named]
+  const WAYS = [
+    ["looked and found no card", "nocard", true, false],
+    ["could not look at all", "blind", false, false],
+    ["could not look, then could", "waking", false, true],
+  ];
+  for (const [name, mode, askedOnce, endsNamed] of WAYS) {
+    const page = await browser.newPage();
+    const errors = [];
+    page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
+    page.on("console", (m) => { if (m.type() === "error") errors.push("console: " + m.text()); });
+    await stage(page, "<div id=modal></div>");
+    await page.addStyleTag({ content: THEME });
+    await page.addScriptTag({ content: SOURCE, type: "module" });
+    await page.waitForFunction(() => !!window.__setup);
+    const out = await page.evaluate(async (arg) => {
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      const handlers = {}, acts = {}, asks = [];
+      let listeners = [];
+      const send = (m) => { for (const cb of listeners.slice()) { try { cb(m); } catch (_) {} } };
+      window.__setup(
+        { events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
+          sendToBackend: (m) => {
+            if (!m || m.type !== "get_active_chat") return;
+            if (m.chatId) asks.push(m.chatId);
+            // The startup ask names chat-A, so chat-B's name has to be asked
+            // for separately. That named ask is the one under test.
+            const named = !!m.chatId;
+            // "waking" is a backend still loading: the first named ask finds
+            // nothing to ask, the next one lands.
+            const looked = arg.mode === "nocard" || (arg.mode === "waking" && asks.length > 1);
+            setTimeout(() => send({ type: "active_chat", requestId: m.requestId,
+              chatId: m.chatId || "chat-A",
+              character: !named ? "Wren" : (arg.mode === "waking" && looked ? "Tobias" : null),
+              resolved: named ? looked : true }), 0);
+          },
+          onBackendMessage: (cb) => { listeners.push(cb); return () => { listeners = listeners.filter((x) => x !== cb); }; },
+          ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+                registerInputBarAction: (o) => { const a = { onClick: (cb) => { a.cb = cb; return () => {}; }, destroy: () => {} }; acts[o.id] = a; return a; } } },
+        { toast: false },
+      );
+      await wait(80);
+      // Switched away and back, the way you would while it stayed nameless.
+      for (let i = 0; i < 4; i++) {
+        handlers.CHAT_CHANGED({ chatId: i % 2 ? "chat-A" : "chat-B" });
+        await wait(30);
+      }
+      handlers.CHAT_CHANGED({ chatId: "chat-B" });
+      await wait(60);
+      acts["auto-retry-settings"].cb();
+      await wait(100);
+      const row = document.querySelector("[data-ar-chat-switch]");
+      return { text: row ? (row.textContent || "") : "", asked: asks.filter((x) => x === "chat-B").length };
+    }, { mode });
+    await page.close();
+    const named = out.text.indexOf("This chat, with Tobias") === 0;
+    check(name + ": " + (endsNamed ? "the name arrives once it can" : "the row stays nameless"),
+      named === endsNamed, out.text.slice(0, 60));
+    check(name + ": asked " + (askedOnce ? "once and left alone" : "again rather than given up on"),
+      askedOnce ? out.asked === 1 : out.asked > 1, out);
     check(name + ": no console errors", errors.length === 0, errors);
   }
 }

@@ -100,7 +100,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "4.18.3";
+const VERSION = "4.18.4";
 // The one address the extension ever points at, used by the warning in front of
 // the crisis-support check. Pinned to the released branch rather than to a tag,
 // so an old install still opens the page as it stands today.
@@ -1154,7 +1154,14 @@ function looksTruncated(text, retryOnNoPunct, cfg) {
         // Emphasis wraps what it marks, so it always has a boundary on one side:
         // *He nods* and **bold** keep both of theirs. "2*3 = 6" has neither, and
         // counting that one asterisk read a finished reply as an opened action.
-        .replace(/(?<=\w)\*+(?=\w)/g, "");
+        //
+        // Written with the leading word character captured rather than as a
+        // lookbehind. A lookbehind in a regex literal is a parse error on an engine
+        // that does not support one, which takes the whole file with it rather than
+        // this one line, and Safari had none until 16.4. The two lookbehinds
+        // elsewhere in the extension are built with new RegExp inside a try for
+        // exactly that reason, and fall back when it throws.
+        .replace(/(\w)\*+(?=\w)/g, "$1");
     if ((emphasis.match(/\*/g) || []).length % 2 === 1)
         return true; // open emphasis / RP action
     // An odd number of straight quotes means dialogue was opened and never
@@ -2714,6 +2721,12 @@ export function setup(ctx, opts) {
     // what happens next arrives as a message from the backend, or as the timeout
     // saying nothing did.
     function sendSwapRequest(payload) {
+        // A swap waits on the answer to "which chat is open", and the extension can
+        // be closed while it waits. Teardown releases that wait rather than leaving
+        // it hanging, so without this the press carried on afterwards and edited a
+        // reply on behalf of an extension that was no longer running.
+        if (tornDown)
+            return;
         const requestId = String(payload.requestId);
         try {
             ctx.sendToBackend(payload);
@@ -3087,7 +3100,17 @@ export function setup(ctx, opts) {
         if (chatNames.has(key) || namesAsked.has(key))
             return;
         namesAsked.add(key);
-        askActiveChat(key);
+        // An ask that timed out, or came back from a backend that could not look,
+        // is not an answer. Holding the key on one would mean this chat never gets
+        // a name again for the life of the page, which is what the missing name
+        // looked like: a backend still loading at startup answers nothing, and
+        // nothing is what the row showed from then on. Released, so the next
+        // message or chat switch asks again. A backend that looked and found no
+        // card is an answer, keeps the key, and stops the question repeating.
+        askActiveChat(key, (r) => {
+            if (!r.answered || !r.resolved)
+                namesAsked.delete(key);
+        });
     }
     // The host's own token count for the last prompt, when it will give one. The
     // panel falls back to its own estimate, which is characters over four.
@@ -6777,14 +6800,19 @@ export function setup(ctx, opts) {
                 }
                 if (!msg.chatId)
                     return;
-                // An empty answer is still an answer, and caching it stops the same
-                // question going out again every time you switch back to that chat.
-                chatNames.set(String(msg.chatId), msg.character ? String(msg.character) : "");
-                if (chatSwitchPaint) {
-                    try {
-                        chatSwitchPaint();
+                // An empty answer from a backend that looked is still an answer, and
+                // caching it stops the same question going out again every time you
+                // switch back to that chat. One from a backend that could not look is
+                // not, and caching it would fix "no name" in place for the rest of the
+                // page over a lookup that would have worked a second later.
+                if (resolved || msg.character) {
+                    chatNames.set(String(msg.chatId), msg.character ? String(msg.character) : "");
+                    if (chatSwitchPaint) {
+                        try {
+                            chatSwitchPaint();
+                        }
+                        catch (_) { }
                     }
-                    catch (_) { }
                 }
                 // Only the question that asked "which chat is open" may answer that.
                 // A reply about a named chat is just its name arriving, and acting on
