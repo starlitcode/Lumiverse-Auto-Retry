@@ -8,6 +8,14 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 4.19.0
+
+_2026-08-23_
+
+### Added
+
+- **Word swaps now leave the model's thinking alone, with a setting to include it.** A reasoning model writes its working-out before the reply, and when it writes that as tags inside the reply it is part of the stored message, so swap rules were rewriting it. Lumiverse shows reasoning in its own block, so nothing about that was visible: a rule aimed at your prose was also editing what the model worked out, somewhere you would never look. Reasoning that a provider returns separately was never swapped, so the same rule behaved differently depending on who was serving the model. Only the reply you read is swapped now, and **Also swap inside the thinking** under Find and replace turns the old behaviour back on. The common wrappers are recognised, along with any name in Extra thinking tag names.
+
 ## 4.18.4
 
 _2026-08-23_

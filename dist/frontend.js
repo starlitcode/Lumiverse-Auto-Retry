@@ -100,7 +100,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "4.18.4";
+const VERSION = "4.19.0";
 // The one address the extension ever points at, used by the warning in front of
 // the crisis-support check. Pinned to the released branch rather than to a tag,
 // so an old install still opens the page as it stands today.
@@ -205,6 +205,7 @@ const CONFIG = {
     showReplaceButton: false, // optional button in the input's Extras menu that applies the word swaps to the latest reply on demand.
     showSwapAllButton: false, // adds an Extras button that swaps every generated reply in the chat once.
     allowReSwap: false, // let that button swap a reply again even if it was already swapped this session (can stack swaps).
+    swapThinking: false, // also swap inside the model's thinking. Off = only the visible reply is swapped, and any reasoning block is left exactly as it was.
     confirmBeforeEdit: false, // ask for confirmation before any word-swap edit (automatic or manual); the user can cancel.
     swapWaitForEdits: false, // wait for another extension to finish editing a reply before swapping it.
     // How long to give it, in seconds. Only used when the above is on.
@@ -682,6 +683,12 @@ const SCHEMA = [
                 label: "Allow swapping a reply again",
                 type: "bool",
                 hint: "Off by default. Normally a reply is swapped at most once per session, so swaps don't stack. Turn this on to let the button swap a reply again even if it was already swapped, for example after you change your rules. This can apply your rules on top of an earlier swap.",
+            },
+            {
+                key: "swapThinking",
+                label: "Also swap inside the thinking",
+                type: "bool",
+                hint: "Off by default, so only the reply you read is swapped and the model's thinking is left exactly as it was. Lumiverse shows reasoning in its own block, so a swap there changes nothing you see while still rewriting what the model worked out. Turn it on to swap the thinking too. Reasoning your provider returns separately, rather than in the reply, is never swapped either way.",
             },
             {
                 key: "confirmBeforeEdit",
@@ -5068,6 +5075,7 @@ export function setup(ctx, opts) {
                 "showReplaceButton",
                 "showSwapAllButton",
                 "allowReSwap",
+                "swapThinking",
                 "confirmBeforeEdit",
                 "swapWaitForEdits",
                 "swapWaitSecs",
@@ -5208,6 +5216,7 @@ export function setup(ctx, opts) {
                 "showReplaceButton",
                 "showSwapAllButton",
                 "allowReSwap",
+                "swapThinking",
                 "confirmBeforeEdit",
                 "swapWaitForEdits",
                 "swapWaitSecs",

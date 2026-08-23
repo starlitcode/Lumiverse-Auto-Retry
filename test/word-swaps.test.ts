@@ -614,3 +614,59 @@ describe("settings survive a restart", () => {
     expect(m.presets).toEqual(presets);
   });
 });
+
+// The model's thinking is not the prose anyone is reading. Lumiverse shows it
+// in its own block, so a swap there rewrites what the model worked out while
+// changing nothing on screen. Reasoning the provider hands back in its own
+// field was never swapped, because only content is patched, so before this the
+// same rule behaved differently depending on the provider.
+describe("the thinking is left alone unless asked for", () => {
+  const RULE = "scared => afraid";
+
+  test("a reasoning block written inline is not swapped", async () => {
+    expect(await swap("<think>She is clearly scared.</think>She smiles.", RULE)).toBe(
+      "<think>She is clearly scared.</think>She smiles.",
+    );
+  });
+
+  test("but the visible reply beside it still is", async () => {
+    expect(await swap("<think>She is clearly scared.</think>He looks scared.", RULE)).toBe(
+      "<think>She is clearly scared.</think>He looks afraid.",
+    );
+  });
+
+  test("turning the option on swaps the thinking too", async () => {
+    expect(
+      await swap("<think>She is clearly scared.</think>He looks scared.", RULE, { swapThinking: true }),
+    ).toBe("<think>She is clearly afraid.</think>He looks afraid.");
+  });
+
+  test("the other wrappers are recognised", async () => {
+    expect(await swap("[thinking]she is scared[/thinking]ok", RULE)).toBe(
+      "[thinking]she is scared[/thinking]ok",
+    );
+    expect(await swap("<|reasoning|>she is scared<|/reasoning|>ok", RULE)).toBe(
+      "<|reasoning|>she is scared<|/reasoning|>ok",
+    );
+  });
+
+  test("a thinking block cut off before the reply is still protected", async () => {
+    expect(await swap("<think>she is scared and", RULE)).toBe("<think>she is scared and");
+  });
+
+  test("an extra tag name the user added counts as thinking", async () => {
+    expect(await swap("<mythink>she is scared</mythink>ok", RULE, { refusalThinkTags: "mythink" })).toBe(
+      "<mythink>she is scared</mythink>ok",
+    );
+  });
+
+  test("text before and after a block is swapped, and the block is byte for byte", async () => {
+    expect(await swap("He was scared. <think>note: scared</think> She was scared.", RULE)).toBe(
+      "He was afraid. <think>note: scared</think> She was afraid.",
+    );
+  });
+
+  test("a reply with no thinking is unaffected by any of this", async () => {
+    expect(await swap("He was scared.", RULE)).toBe("He was afraid.");
+  });
+});
