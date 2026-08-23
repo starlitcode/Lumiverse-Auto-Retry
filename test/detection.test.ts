@@ -1646,3 +1646,32 @@ describe("the model leaving the scene to offer support", () => {
     expect(v.reason).toContain("You deserve support");
   });
 });
+
+// Three places in the two modules decide which Harmony channels carry thinking
+// rather than the reply. The cut-off check used to ask with a shorter list than
+// the stripper used, so a reply cut off inside a commentary channel was not
+// recognised as cut off, while the stripper had already treated that channel as
+// thinking. They read one constant each now, and bridge.test.ts holds the two
+// modules to the same list.
+describe("every thinking channel counts as thinking, in every check", () => {
+  const cfg: any = { refusalStripThinking: true, refusalThinkTags: "" };
+  const CHANNELS = ["analysis", "thinking", "thought", "reasoning", "commentary"];
+
+  for (const name of CHANNELS) {
+    test(name + ": cut off before any control token reads as cut off", () => {
+      expect(
+        __testing.looksTruncated("<|channel|>" + name + "<|message|>I should describe the", cfg),
+      ).toBe(true);
+    });
+  }
+
+  test("a finished reply behind a thinking channel is not cut off", () => {
+    expect(
+      __testing.looksTruncated(
+        "<|channel|>analysis<|message|>weighing it up<|end|>" +
+          "<|channel|>final<|message|>She smiles at you warmly.",
+        cfg,
+      ),
+    ).toBe(false);
+  });
+});

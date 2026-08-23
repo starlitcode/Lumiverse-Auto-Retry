@@ -76,3 +76,46 @@ describe("no storage file is written and never read, or read and never written",
     expect(orphans).toEqual([]);
   });
 });
+
+// Both modules decide for themselves what counts as the model's thinking: the
+// frontend to keep a refusal inside it from causing a retry, the backend to
+// keep a word swap out of it. They are separate runtimes with no shared import,
+// so the lists are duplicated, and nothing but this notices when one grows a
+// tag the other has never heard of. The result of that drift is quiet: a swap
+// rewrites a reasoning block the refusal check knows to skip, or the other way
+// round, and both files look perfectly correct on their own.
+describe("both modules agree on what thinking looks like", () => {
+  const tagList = (src: string, label: string): string[] => {
+    const m = src.match(/const THINK_TAGS = \[([^\]]+)\]/);
+    if (!m) throw new Error("no THINK_TAGS in " + label);
+    return m[1].split(",").map((s) => s.trim().replace(/^['"]|['"]$/g, ""));
+  };
+
+  test("the built-in tag names are the same list, in the same order", () => {
+    expect(tagList(BACK, "backend")).toEqual(tagList(FRONT, "frontend"));
+  });
+
+  test("the channel names they treat as thinking match", () => {
+    const chan = (src: string, label: string) => {
+      const m = src.match(/const THINK_CHANNELS = ['"]([^'"]+)['"]/);
+      if (!m) throw new Error("no THINK_CHANNELS in " + label);
+      return m[1];
+    };
+    expect(chan(BACK, "backend")).toBe(chan(FRONT, "frontend"));
+  });
+
+  test("each module states its channel list once, so no copy can go stale", () => {
+    for (const [src, label] of [[FRONT, "frontend"], [BACK, "backend"]] as const) {
+      // A second spelling of the list means somebody wrote it out by hand
+      // instead of using the constant, which is how the cut-off check ended up
+      // asking with a shorter list than the stripper used.
+      const spelled = [...src.matchAll(/analysis\|thinking/g)].length;
+      expect([label, spelled]).toEqual([label, 1]);
+    }
+  });
+
+  test("both read the same setting for extra tag names", () => {
+    expect(/refusalThinkTags/.test(FRONT)).toBe(true);
+    expect(/refusalThinkTags/.test(BACK)).toBe(true);
+  });
+});
