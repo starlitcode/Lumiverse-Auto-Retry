@@ -8,6 +8,14 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 4.18.4
+
+_2026-08-23_
+
+### Changed
+
+- **The warning on the support-message setting is written more plainly.** It says the same things in the same order and asks the same question. The wording leaned on implication in a few places, which is the wrong way to write the one box in the extension you have to answer before you can go on. What the setting does, what it cannot tell, and what to keep in mind are each stated outright now.
+
 ## 4.18.3
 
 _2026-08-21_

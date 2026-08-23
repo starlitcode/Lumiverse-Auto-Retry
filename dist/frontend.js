@@ -100,7 +100,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "4.18.3";
+const VERSION = "4.18.4";
 // The one address the extension ever points at, used by the warning in front of
 // the crisis-support check. Pinned to the released branch rather than to a tag,
 // so an old install still opens the page as it stands today.
@@ -10355,10 +10355,10 @@ export function setup(ctx, opts) {
         body.style.cssText =
             "flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:8px;font-size:13px;line-height:1.5";
         for (const para of [
-            "This throws away a reply where the model stops the story to talk to you about your safety, and asks for a new reply instead. In a dark or intense scene that is usually the model misreading the fiction, and you get your scene back.",
-            "Sometimes it is not misreading. The same message is sent to people who need it, and this extension cannot tell the two apart. It only reads the reply. It has no idea how you are.",
-            "So the one thing to keep in mind: if a chat is making you feel worse, that is worth paying attention to. This setting takes away the one message that would have said so out loud.",
-            "It changes nothing else, it stays off unless you turn it on, and you can switch it off again whenever you like.",
+            "This setting throws away a reply when the model stops the story to talk to you about your safety, then asks for a new reply instead. In a dark or intense scene, this may simply be the model misreading your fiction.",
+            "Sometimes the message may be appropriate. The extension cannot tell the difference because it only reads the reply. It does not know anything about you or your situation.",
+            "Keep that limitation in mind. If a chat is making you feel worse, do not rely on this setting to remove messages that might be useful to you. Turning it on means those replies can be discarded automatically.",
+            "The setting changes nothing else. It stays off unless you turn it on, and you can switch it off again at any time.",
         ]) {
             const p = document.createElement("div");
             p.textContent = para;
@@ -10371,7 +10371,7 @@ export function setup(ctx, opts) {
         // drawing this. It opens a tab if it is tapped, and not otherwise.
         {
             const p = document.createElement("div");
-            p.appendChild(document.createTextNode("There is more about this, and about looking after yourself while using this extension, on "));
+            p.appendChild(document.createTextNode("There is more information about this setting and its risks on "));
             const a = document.createElement("a");
             a.href = SAFETY_URL;
             a.target = "_blank";
