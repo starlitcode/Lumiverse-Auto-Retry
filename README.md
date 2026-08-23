@@ -50,6 +50,7 @@ To switch it off for one chat, or everywhere, see [Turning it off](docs/settings
 - [Privacy](docs/privacy.md) - what the extension can and can't reach, what it keeps, and how to check any of it
 - [Security policy](SECURITY.md) - how to report a security problem
 - [Changelog](CHANGELOG.md) - what changed in every version
+- [Working on it](CONTRIBUTING.md) - building, testing, and why `dist/` is committed
 
 ## How it works
 
@@ -60,18 +61,6 @@ Find and replace works separately, since editing a saved reply is a backend job.
 It makes no external network calls. [Privacy](docs/privacy.md) has the detail, including the six permissions it declares, what still works without each of them, and why `chats` and `characters` grant more than the extension uses.
 
 Auditing it, or pointing a scanner at it? The two files Lumiverse loads are `dist/frontend.js` and `dist/backend.js`, named in `spindle.json`. They are committed as plain readable JavaScript, not minified or bundled. Everything else in the repo is for working on it, and [Privacy](docs/privacy.md#checking-any-of-this-yourself) goes through it file by file.
-
-## Working on it
-
-`src/` is the TypeScript, `dist/` is what Lumiverse loads, and `dist/` is committed so the extension installs without a build step. That means the two can drift, and a change made in `src/` alone would review as correct and ship doing nothing, so:
-
-```
-bun run build     # regenerate dist/ from src/
-bun run check     # types and tests
-bun run test:ui   # panel checks in a browser, needs Playwright
-```
-
-Run `bun run check` before committing, and commit `dist/` with `src/`. CI runs both tiers on every pull request, rebuilds `dist/` and fails if it differs from what you committed. Playwright is not a dependency, since it pulls a few hundred megabytes of browsers: `bun add -d playwright && bunx playwright install chromium`. Without it `test:ui` says so and exits cleanly on your machine, and counts as a failure on CI.
 
 ## Credits
 
