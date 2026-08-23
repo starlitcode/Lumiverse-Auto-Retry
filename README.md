@@ -50,7 +50,6 @@ To switch it off for one chat, or everywhere, see [Turning it off](docs/settings
 - [Privacy](docs/privacy.md) - what the extension can and can't reach, what it keeps, and how to check any of it
 - [Security policy](SECURITY.md) - how to report a security problem
 - [Changelog](CHANGELOG.md) - what changed in every version
-- [Working on it](CONTRIBUTING.md) - building, testing, and why `dist/` is committed
 
 ## How it works
 
