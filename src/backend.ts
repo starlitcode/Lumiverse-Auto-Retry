@@ -49,6 +49,8 @@ let random = false;
 let caseSensitive = false;
 let rulesText = '';
 let allowReSwap = false;
+// Off: a swap leaves the model's thinking exactly as it was.
+let swapThinking = false;
 let confirmBeforeEdit = false;
 let waitForOtherEdits = false;
 let waitStartMs = 85000;   // matches the panel's default until settings arrive
@@ -410,6 +412,99 @@ function applyRules(text: string, seen?: Array<[string, string]>): string {
   });
 }
 
+// ---- the model's thinking ----
+//
+// Lumiverse shows reasoning in its own block rather than in the reply bubble,
+// but when the model writes it as inline tags it is still part of the saved
+// message content, which is what a swap rewrites. So a rule aimed at the prose
+// was also quietly editing the model's working-out, where nobody would see it.
+// Reasoning that arrives as the host's own field is never touched, because only
+// content is patched, so the same rule behaved differently depending on the
+// provider. These are ranges rather than a stripper: a swap has to put the
+// thinking back exactly as it was.
+//
+// The tag list matches the frontend's. Both read the same user setting, so the
+// two cannot end up knowing different sets.
+const THINK_TAGS = ['think', 'thinking', 'thought', 'thoughts', 'reasoning', 'reflection', 'scratchpad', 'analysis'];
+let extraThinkTags: string[] = [];
+
+function thinkSpans(text: string): Array<[number, number]> {
+  const alt = THINK_TAGS.concat(extraThinkTags).join('|');
+  const found: Array<[number, number]> = [];
+  // Each match is blanked out of the working copy before the next pattern runs,
+  // with the length kept so offsets still point into the original. The order
+  // matters for the same reason it does in the frontend's stripper: the
+  // run-to-the-end patterns exist for an opener with no closer, and if they can
+  // still see an opener that was closed, they swallow the whole rest of the
+  // reply and everything after the block stops being swapped.
+  let work = text;
+  const take = (re: RegExp) => {
+    re.lastIndex = 0;
+    const hits: Array<[number, number]> = [];
+    let m: any;
+    if (re.global) {
+      while ((m = re.exec(work)) !== null) {
+        if (m[0]) hits.push([m.index, m.index + m[0].length]);
+        // A zero-length match would spin here for ever.
+        if (m.index === re.lastIndex) re.lastIndex++;
+      }
+    } else {
+      m = re.exec(work);
+      if (m && m[0]) hits.push([m.index, m.index + m[0].length]);
+    }
+    for (const h of hits) {
+      found.push(h);
+      work = work.slice(0, h[0]) + ' '.repeat(h[1] - h[0]) + work.slice(h[1]);
+    }
+  };
+
+  // The channel form first: a channel block contains the other shapes. Only the
+  // thinking channels count, since the final channel is the reply itself.
+  take(/<\|channel\|>\s*(?:analysis|thinking|thought|reasoning|commentary)\b[\s\S]*?(?:<\|(?:end|return|start)\|>|$)/gi);
+  // Then the closed pairs. The indexOf guards are the frontend's: with no
+  // closer anywhere, every opener would scan to the end looking for one, which
+  // is quadratic on a reply that is all openers.
+  if (work.indexOf('</') >= 0)
+    take(new RegExp('<(' + alt + ')(?:\\s[^>]*)?>[\\s\\S]*?<\\/\\1\\s*>', 'gi'));
+  if (work.indexOf('[/') >= 0)
+    take(new RegExp('\\[(' + alt + ')(?:\\s[^\\]]*)?\\][\\s\\S]*?\\[\\/\\1\\s*\\]', 'gi'));
+  if (work.indexOf('|>') >= 0 || work.indexOf('</') >= 0)
+    take(new RegExp('<\\|(' + alt + ')\\|?>[\\s\\S]*?<\\|?\\/?(?:' + alt + ')\\|?>', 'gi'));
+  // Last, an opener that never closes: the reply was cut off inside the
+  // thinking, so everything from there on is thinking too.
+  take(new RegExp('<\\|(?:' + alt + ')\\|?>[\\s\\S]*$', 'i'));
+  take(new RegExp('<(?:' + alt + ')(?:\\s[^>]*)?>[\\s\\S]*$', 'i'));
+  take(new RegExp('\\[(?:' + alt + ')(?:\\s[^\\]]*)?\\][\\s\\S]*$', 'i'));
+
+  if (!found.length) return found;
+  found.sort((a, b) => a[0] - b[0]);
+  const out: Array<[number, number]> = [found[0]];
+  for (let i = 1; i < found.length; i++) {
+    const last = out[out.length - 1];
+    if (found[i][0] <= last[1]) last[1] = Math.max(last[1], found[i][1]);
+    else out.push(found[i]);
+  }
+  return out;
+}
+
+// Swaps the parts of a reply the reader actually sees, leaving any thinking
+// untouched unless the user has asked for it to be included.
+function applyRulesVisible(text: string, seen?: Array<[string, string]>): string {
+  const src = String(text == null ? '' : text);
+  if (swapThinking) return applyRules(src, seen);
+  const spans = thinkSpans(src);
+  if (!spans.length) return applyRules(src, seen);
+  let out = '';
+  let at = 0;
+  for (const [s, e] of spans) {
+    if (s > at) out += applyRules(src.slice(at, s), seen);
+    out += src.slice(s, e);
+    at = e;
+  }
+  if (at < src.length) out += applyRules(src.slice(at), seen);
+  return out;
+}
+
 // Writes swapped text back. The chat view redraws on SWIPE_EDITED and not on
 // MESSAGE_EDITED, and the host emits SWIPE_EDITED when the patch names any one
 // of swipes, swipe_id or swipe_dates. A message carrying a usable swipe array
@@ -449,6 +544,15 @@ function applyReplaceFromSettings(s: any) {
   caseSensitive = !!s.replaceCaseSensitive;
   rulesText = String(s.replaceRules == null ? '' : s.replaceRules);
   allowReSwap = !!s.allowReSwap;
+  // Off means the model's thinking is left alone, which is the default: it is
+  // not the prose anyone is reading, and Lumiverse shows it in its own block.
+  swapThinking = !!s.swapThinking;
+  // The same extra tag names the refusal check uses. Read from the one setting
+  // so the two modules cannot disagree about what counts as thinking.
+  extraThinkTags = String(s.refusalThinkTags == null ? '' : s.refusalThinkTags)
+    .split(/\r?\n/)
+    .map((x: string) => x.replace(/[^\w-]/g, '').toLowerCase())
+    .filter(Boolean);
   confirmBeforeEdit = !!s.confirmBeforeEdit;
   waitForOtherEdits = !!s.swapWaitForEdits;
   const secs = Number(s.swapWaitSecs);
@@ -508,7 +612,7 @@ async function swapMessageNow(chatId: string, messageId: any, userId?: string): 
   if (!m) return;
   const content = String(m.content == null ? '' : m.content);
   const pairs: Array<[string, string]> = [];
-  const next = applyRules(content, pairs);
+  const next = applyRulesVisible(content, pairs);
   if (next === content) return;
   if (confirmBeforeEdit) {
     // Ask first; the frontend sends apply_replace_now for this reply if the user agrees.
@@ -792,7 +896,7 @@ spindle.onFrontendMessage(async (payload: any, userId?: string) => {
             // Skip replies already swapped this session unless re-swapping is allowed.
             if (!allowReSwap && swappedIds.has(m.id)) { skipped++; continue; }
             const content = String(m.content == null ? '' : m.content);
-            const next = applyRules(content, pairs);
+            const next = applyRulesVisible(content, pairs);
             if (next !== content) {
               rememberWrite(swapKey(chatId, m.id), next);
               await writeSwapped(chatId, m, next);

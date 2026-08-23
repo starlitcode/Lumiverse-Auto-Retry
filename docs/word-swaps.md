@@ -10,6 +10,16 @@ It never changes what the model generated. Because it edits the stored reply rat
 
 Only generated assistant replies are swapped, by either the automatic mode or the button. The opening greeting is authored, not generated, so it is never swapped, and your own messages are never touched.
 
+## The model's thinking
+
+A reasoning model writes its working-out before the reply. Lumiverse shows that in its own block rather than in the message bubble, but when the model writes it as tags inside the reply it is still part of the stored message, which is the thing a swap rewrites.
+
+Swaps leave it alone. Only the reply you read is swapped, and the thinking is put back exactly as it was, so your rules cannot quietly edit what the model worked out in a place you would not think to check. **Also swap inside the thinking**, under Find and replace, turns that off if you want the whole thing swapped.
+
+The common wrappers are recognised, including `<think>`, `[thinking]` and the pipe and channel forms, along with any name you have added under **Extra thinking tag names**. Thinking that got cut off before the reply started counts too.
+
+If your provider returns reasoning separately rather than inside the reply, it is never swapped either way, because the extension only ever writes to the reply itself.
+
 ## Swapping by hand
 
 If you would rather apply swaps by hand than have them run on every reply, turn on **Show a 'swap words now' button** under Find and replace. That adds a button that applies your swaps on demand: in the chat input's Extras menu, next to the settings button, or in the floating on/off button's own menu while that button is showing. It only ever edits assistant replies, never your own messages.

@@ -192,6 +192,7 @@ The same options live in the CONFIG block at the top of `src/frontend.ts` and `d
 | showReplaceButton | false | Add a button that applies your word swaps to the latest reply on demand. In the Extras menu, or the floating button's menu while that button is showing. |
 | showSwapAllButton | false | Add a button that swaps every generated reply in the chat once. Sits wherever the one above does. |
 | allowReSwap | false | Let either swap button swap a reply again even if it was already swapped (can stack swaps). Applies to both the swap-this-reply and swap-whole-chat buttons. Shown only while one of those two buttons is switched on. |
+| swapThinking | false | Also swap inside the model's thinking. Off means only the visible reply is swapped and any reasoning block is left exactly as it was. Reasoning your provider returns in its own field, rather than inline in the reply, is never swapped either way. |
 | confirmBeforeEdit | false | Ask you to confirm before any word-swap edit (automatic or manual); you can cancel. |
 | swapWaitForEdits | false | Wait for another extension to finish editing a reply before swapping it. For running alongside Hone with auto-refine on. |
 | swapWaitSecs | 85 | How long to wait for that, in seconds (1-300). A refinement pass is a whole generation, so how long it takes depends on the model, the prompt and how much it has to read. Each edit restarts the clock. Shown only while `swapWaitForEdits` is on. |
