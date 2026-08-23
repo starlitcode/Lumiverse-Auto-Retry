@@ -18,7 +18,7 @@ Sometimes it is not a misunderstanding. The same kind of message can be appropri
 
 So you are deciding whether you want this type of reply to trigger another generation. That decision is yours to make. I want the setting to make that choice clear instead of enabling it without telling you.
 
-If you turn it on and later change your mind, you can turn it off using the same setting. This does not restore replies that were already discarded, so if a scene behaved differently while it was enabled, keep that in mind.
+If you turn it on and later change your mind, you can turn it off using the same setting. Turning it off does not undo what happened while it was on, so if a scene behaved differently while it was enabled, keep that in mind.
 
 ## What the retry loop can turn into
 
