@@ -670,3 +670,47 @@ describe("the thinking is left alone unless asked for", () => {
     expect(await swap("He was scared.", RULE)).toBe("He was afraid.");
   });
 });
+
+// Markup in a reply is not prose. A rule written for words was reaching tag
+// and attribute names, so "color => colour" turned <font color="..."> into
+// <font colour="...">, which does not read differently, it just stops being
+// coloured, and nothing says so.
+describe("markup is left alone unless asked for", () => {
+  test("a rule matching an attribute name does not touch the tag", async () => {
+    expect(
+      await swap('<font color="#ffff00">"Careful."</font> The colour drained from her face.', "color => colour"),
+    ).toBe('<font color="#ffff00">"Careful."</font> The colour drained from her face.');
+  });
+
+  test("but the same rule still changes the prose around it", async () => {
+    expect(await swap('She liked the color. <b>A lot.</b>', "color => colour")).toBe(
+      "She liked the colour. <b>A lot.</b>",
+    );
+  });
+
+  test("a rule matching a tag name leaves the tag standing", async () => {
+    expect(await swap("<small>a note</small> in small print", "small => tiny")).toBe(
+      "<small>a note</small> in tiny print",
+    );
+  });
+
+  test("turning the option on lets rules reach the markup", async () => {
+    expect(
+      await swap('<font color="#ffff00">hi</font>', "#ffff00 => #00ffff", { swapMarkup: true }),
+    ).toBe('<font color="#00ffff">hi</font>');
+  });
+
+  test("prose that merely looks like a tag is still swapped", async () => {
+    expect(await swap("she was 3 < 4 and scared", "scared => afraid")).toBe(
+      "she was 3 < 4 and afraid",
+    );
+  });
+
+  test("markup and thinking are both protected at once", async () => {
+    // The tags are markup and stay; the word between them is prose the reader
+    // sees, so it swaps like any other word.
+    expect(
+      await swap('<think>the color matters</think><i>color</i> and color', "color => colour"),
+    ).toBe("<think>the color matters</think><i>colour</i> and colour");
+  });
+});

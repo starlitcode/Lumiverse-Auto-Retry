@@ -1221,6 +1221,7 @@ console.log("\npreset split");
     "Show a swap-whole-chat button",
     "Allow swapping a reply again",
     "Also swap inside the thinking",
+    "Also swap inside HTML tags",
     "Ask before editing a reply",
     "Wait for other extensions to finish",
     "How long to wait (seconds)",

@@ -40,6 +40,8 @@ let rulesText = '';
 let allowReSwap = false;
 // Off: a swap leaves the model's thinking exactly as it was.
 let swapThinking = false;
+// Off: a swap leaves HTML tags in a reply alone, so a rule cannot break markup.
+let swapMarkup = false;
 let confirmBeforeEdit = false;
 let waitForOtherEdits = false;
 let waitStartMs = 85000; // matches the panel's default until settings arrive
@@ -495,11 +497,45 @@ function thinkSpans(text) {
 }
 // Swaps the parts of a reply the reader actually sees, leaving any thinking
 // untouched unless the user has asked for it to be included.
+// Markup inside a reply: <font color="#ff0">, </i>, <br>. It is not prose, and
+// a rule written for prose has no business reaching it. A rule of
+// "color => colour" turned <font color="..."> into <font colour="...">, which
+// is not a wording change, it is broken markup, and the only sign is that the
+// text stops being coloured. Tag names and attribute names are the words that
+// collide with ordinary vocabulary: color, font, span, small, big, center.
+//
+// Opened by a letter, so "a < b" and a lone "<3" are prose and stay swappable.
+const MARKUP = /<\/?[a-zA-Z][^>]*>/g;
+function markupSpans(text) {
+    const out = [];
+    MARKUP.lastIndex = 0;
+    let m;
+    while ((m = MARKUP.exec(text)) !== null)
+        out.push([m.index, m.index + m[0].length]);
+    return out;
+}
+// Merged so the two protections cannot interleave badly: a thinking block is
+// full of tags, and a tag can sit either side of one.
+function protectedSpans(text) {
+    const all = (swapThinking ? [] : thinkSpans(text)).concat(swapMarkup ? [] : markupSpans(text));
+    if (all.length < 2)
+        return all;
+    all.sort((a, b) => a[0] - b[0]);
+    const out = [all[0]];
+    for (let i = 1; i < all.length; i++) {
+        const last = out[out.length - 1];
+        if (all[i][0] <= last[1])
+            last[1] = Math.max(last[1], all[i][1]);
+        else
+            out.push(all[i]);
+    }
+    return out;
+}
 function applyRulesVisible(text, seen) {
     const src = String(text == null ? '' : text);
-    if (swapThinking)
+    if (swapThinking && swapMarkup)
         return applyRules(src, seen);
-    const spans = thinkSpans(src);
+    const spans = protectedSpans(src);
     if (!spans.length)
         return applyRules(src, seen);
     let out = '';
@@ -555,6 +591,7 @@ function applyReplaceFromSettings(s) {
     // Off means the model's thinking is left alone, which is the default: it is
     // not the prose anyone is reading, and Lumiverse shows it in its own block.
     swapThinking = !!s.swapThinking;
+    swapMarkup = !!s.swapMarkup;
     // The same extra tag names the refusal check uses. Read from the one setting
     // so the two modules cannot disagree about what counts as thinking.
     extraThinkTags = String(s.refusalThinkTags == null ? '' : s.refusalThinkTags)

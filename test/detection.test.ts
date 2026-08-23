@@ -1675,3 +1675,36 @@ describe("every thinking channel counts as thinking, in every check", () => {
     ).toBe(false);
   });
 });
+
+// The refusal side of thinking, across every wrapper, in both directions. The
+// setting governs refusal matching alone, so each wrapper has to hide a refusal
+// when it is on and expose the same refusal when it is off. A wrapper the
+// stripper does not recognise passes the first half of this by accident, which
+// is why the second half is here.
+describe("a refusal inside thinking, in every wrapper", () => {
+  const on: any = { refusalEnabled: true, refusalUseBuiltins: true, refusalStripThinking: true, refusalThinkTags: "", refusalMaxChars: 0 };
+  const off: any = Object.assign({}, on, { refusalStripThinking: false });
+  const REFUSAL = "I'm sorry, but I can't continue with this request as an AI.";
+  const REPLY = "She pushed the door open and stepped into the rain.";
+
+  const WRAPPERS: Array<[string, (r: string) => string]> = [
+    ["angle tags", (r) => "<think>" + r + "</think>" + REPLY],
+    ["square brackets", (r) => "[reasoning]" + r + "[/reasoning]" + REPLY],
+    ["pipes", (r) => "<|think|>" + r + "<|/think|>" + REPLY],
+    ["analysis channel", (r) => "<|channel|>analysis<|message|>" + r + "<|end|>" + REPLY],
+    ["commentary channel", (r) => "<|channel|>commentary<|message|>" + r + "<|end|>" + REPLY],
+  ];
+
+  for (const [name, wrap] of WRAPPERS) {
+    test(name + ": the refusal is ignored while the option is on", () => {
+      expect(refusalVerdict(wrap(REFUSAL), on).refusal).toBe(false);
+    });
+    test(name + ": and is caught once the option is off", () => {
+      expect(refusalVerdict(wrap(REFUSAL), off).refusal).toBe(true);
+    });
+  }
+
+  test("a refusal in the reply itself is caught with thinking ignored", () => {
+    expect(refusalVerdict("<think>weighing it up</think>" + REFUSAL, on).refusal).toBe(true);
+  });
+});

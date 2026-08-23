@@ -14,6 +14,7 @@ _2026-08-23_
 
 ### Added
 
+- **Word swaps now leave HTML tags in a reply alone, with a setting to include them.** A reply that uses markup for colour or emphasis carries words inside the tags, and those words are the ordinary ones: color, font, small, center. A rule of `color => colour` was rewriting `<font color="#ffff00">` into `<font colour="#ffff00">`, which changes no wording at all, it just stops the text being coloured, with nothing to say why. Tags are skipped now, while words between them swap as they always did. **Also swap inside HTML tags** under Find and replace turns that off, for a rule aimed at the markup on purpose such as recolouring every line at once.
 - **Word swaps now leave the model's thinking alone, with a setting to include it.** A reasoning model writes its working-out before the reply, and when it writes that as tags inside the reply it is part of the stored message, so swap rules were rewriting it. Lumiverse shows reasoning in its own block, so nothing about that was visible: a rule aimed at your prose was also editing what the model worked out, somewhere you would never look. Reasoning that a provider returns separately was never swapped, so the same rule behaved differently depending on who was serving the model. Only the reply you read is swapped now, and **Also swap inside the thinking** under Find and replace turns the old behaviour back on. The common wrappers are recognised, along with any name in Extra thinking tag names.
 
 ### Fixed
