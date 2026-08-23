@@ -19,6 +19,7 @@ _2026-08-23_
 
 ### Fixed
 
+- **A very short reply wrapped in markup is no longer measured by its tags.** The too-short check is meant to catch a reply that says almost nothing, but it counted the whole stored text, and a line of dialogue wrapped in something like `<font color="#ffff00">` carries about thirty characters of tags around it. Three short lines could therefore clear a threshold set for prose while saying almost nothing. It counts the words now, the same way it already left reasoning out.
 - **A reply cut off inside a commentary block was not recognised as cut off.** Models using the channel format put their reasoning in one of several named channels, and the cut-off check knew four of the five names while the part that strips thinking knew all five. A reply cut short inside a `commentary` channel therefore fell through to the empty-reply check, so it was retried for the wrong reason, and not retried at all by anyone who has that check switched off. All three places that ask which channels are thinking now read the same list.
 
 ## 4.18.4

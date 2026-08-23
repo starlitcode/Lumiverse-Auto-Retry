@@ -9,6 +9,7 @@
 
 import { expect, test, describe } from "bun:test";
 import { readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { __testing } from "../src/frontend";
 
 const {
@@ -1706,5 +1707,45 @@ describe("a refusal inside thinking, in every wrapper", () => {
 
   test("a refusal in the reply itself is caught with thinking ignored", () => {
     expect(refusalVerdict("<think>weighing it up</think>" + REFUSAL, on).refusal).toBe(true);
+  });
+});
+
+// The too-short check exists to catch a reply that says almost nothing. Markup
+// is not something anybody reads, and a line of dialogue wrapped in tags
+// carries about thirty characters of them, so counting the tags let a very
+// short reply clear a threshold set for prose.
+describe("a short reply is measured by its words, not its tags", () => {
+  const T: any = __testing;
+
+  test("tags are not part of the reply's length", () => {
+    expect(T.withoutMarkup('<font color="#ffff00">"Hi."</font>')).toBe('"Hi."');
+  });
+
+  test("the words between tags survive", () => {
+    expect(T.withoutMarkup("He froze. <i>Then</i> he ran.")).toBe("He froze. Then he ran.");
+  });
+
+  test("prose that merely looks like a tag is kept", () => {
+    expect(T.withoutMarkup("she was 3 < 4 and glad")).toBe("she was 3 < 4 and glad");
+  });
+
+  test("the short check actually measures that way", () => {
+    // The cases above drive the helper. This one holds the call site, which is
+    // inside the generation handler and out of reach of this tier: without it,
+    // deleting withoutMarkup from that line breaks nothing here.
+    const src = readFileSync(new URL("../src/frontend.ts", import.meta.url), "utf8");
+    const branch = src.match(/cfg\.retryOnShort &&[\s\S]{0,160}?cfg\.minChars/);
+    expect(branch).toBeTruthy();
+    expect(branch![0]).toContain("withoutMarkup");
+    expect(branch![0]).toContain("stripThinkingAlways");
+  });
+
+  test("three tag-wrapped lines are measured by what they say", () => {
+    const reply =
+      '<font color="#ffff00">"No."</font>\n' +
+      '<font color="#ffff00">"Wait."</font>\n' +
+      '<font color="#ffff00">"Please."</font>';
+    expect(reply.length).toBeGreaterThan(100);
+    expect(T.withoutMarkup(reply).trim().length).toBeLessThan(30);
   });
 });
