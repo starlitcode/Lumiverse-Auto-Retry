@@ -783,6 +783,54 @@ console.log("\nthe live status moves while the model is thinking");
   }
 }
 
+// ---- the line says the right thing when streaming is off ----
+// With streaming on, tokens arrive and the count climbs. With it off, nothing
+// arrives until the reply is finished, so "waiting for the reply to start" is
+// wrong twice over: it has started, and nothing will turn up before it is done.
+// Nothing exposes the setting, so this is learned from what happens: a token
+// proves streaming is on, a reply that finished with text and never sent one
+// proves it is off, and until a whole generation has gone by neither is known.
+console.log("\nthe live line knows whether the build streams");
+{
+  const run = (label, body) =>
+    inPanel(browser, { settings: { liveLog: true, panelHome: "float" } }, (page) => page.evaluate(body));
+
+  const { out: off, errors: offErrors } = await run("off", async () => {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const read = () => (document.getElementById("__lvRetryStatus") || {}).textContent?.trim() || "";
+    const h = window.__handlers;
+    h.GENERATION_STARTED({ chatId: "c1", generationId: "g1", messageId: "m1" });
+    await wait(1200);
+    const first = read();
+    h.GENERATION_ENDED({ chatId: "c1", generationId: "g1", messageId: "m1", content: "She stepped into the rain." });
+    await wait(300);
+    h.GENERATION_STARTED({ chatId: "c1", generationId: "g2", messageId: "m2" });
+    await wait(1200);
+    return { first, second: read() };
+  });
+  check("before anything is known it does not guess", /waiting for the reply to start/i.test(off.first), off);
+  check("after a whole reply arrives at once it says generating", /generating the reply/i.test(off.second), off);
+  check("and still says how long", /\d+s/.test(off.second), off.second);
+  check("streaming off: no console errors", offErrors.length === 0, offErrors);
+
+  const { out: on, errors: onErrors } = await run("on", async () => {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const read = () => (document.getElementById("__lvRetryStatus") || {}).textContent?.trim() || "";
+    const h = window.__handlers;
+    h.GENERATION_STARTED({ chatId: "c1", generationId: "g1", messageId: "m1" });
+    h.STREAM_TOKEN_RECEIVED({ chatId: "c1", generationId: "g1", token: "She ", type: "content", seq: 0 });
+    await wait(300);
+    h.GENERATION_ENDED({ chatId: "c1", generationId: "g1", messageId: "m1", content: "She stepped into the rain." });
+    await wait(300);
+    h.GENERATION_STARTED({ chatId: "c1", generationId: "g2", messageId: "m2" });
+    await wait(1200);
+    return { after: read() };
+  });
+  check("a build that streams is never called generating", !/generating the reply/i.test(on.after), on);
+  check("it waits for the reply to start instead", /waiting for the reply to start/i.test(on.after), on);
+  check("streaming on: no console errors", onErrors.length === 0, onErrors);
+}
+
 // ---- the panel survives everything that re-syncs it ----
 // Putting the panel in two possible homes gave each of them a teardown, and
 // both were run on every sync: the one being kept was told to take itself

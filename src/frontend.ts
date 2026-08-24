@@ -111,7 +111,7 @@ const STREAM_BUF_MAX = 200000;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "4.19.1";
+const VERSION = "4.20.0";
 
 // The one address the extension ever points at, used by the warning in front of
 // the crisis-support check. Pinned to the released branch rather than to a tag,
@@ -5634,6 +5634,14 @@ export function setup(ctx: Ctx, opts?: any) {
     evictIdleChats();
     return s;
   };
+  // Whether this build streams. Nothing exposes the setting, so it is learned
+  // from what arrives: one token proves streaming is on, and a generation that
+  // finished with text while never sending one proves it is off. Until a whole
+  // generation has gone by, neither is known, and the line says the careful
+  // thing rather than guessing.
+  let sawStreaming = false;
+  let sawWholeReplyAtOnce = false;
+
   // Circuit breaker. Whole runs that gave up, back to back. Three in a row means
   // the provider is down rather than one reply being unlucky, so retrying again
   // on every message just spends tokens for nothing.
@@ -5722,7 +5730,18 @@ export function setup(ctx: Ctx, opts?: any) {
     const forMs = s.liveSince ? Date.now() - s.liveSince : 0;
     const so_far = forMs >= 1000 ? ", " + sayTime(forMs) : "";
     if (s.live && s.sawReasoning) return { text: "Model is thinking" + so_far, busy: true };
-    if (s.live) return { text: "Waiting for the reply to start" + so_far, busy: true };
+    // With streaming off the reply arrives in one piece at the end, so there is
+    // nothing to count and nothing on the way. "Waiting for the reply to start"
+    // is then wrong twice over: it has started, and nothing is going to arrive
+    // before it is finished.
+    if (s.live)
+      return {
+        text:
+          (!sawStreaming && sawWholeReplyAtOnce
+            ? "Generating the reply"
+            : "Waiting for the reply to start") + so_far,
+        busy: true,
+      };
     return null;
   }
 
@@ -6964,6 +6983,7 @@ export function setup(ctx: Ctx, opts?: any) {
     s.live = true;
     // Matched by shape, not an exact string, so a build that labels these
     // "reasoning_content" or "thinking" is not counted as visible reply text.
+    sawStreaming = true;
     if (REASONING_TOKEN.test(String((p && p.type) || ""))) s.sawReasoning = true;
     else {
       s.sawContent = true;
@@ -7011,6 +7031,12 @@ export function setup(ctx: Ctx, opts?: any) {
     lastChatId = chatId;
     ensureChatName(chatId);
     lastMessageId = p.messageId;
+    // Text that turned up without a single token behind it is a build that
+    // does not stream, which is the other half of what the live line needs to
+    // know. An empty or failed reply proves nothing, so it has to have text.
+    if (!s.sawContent && !s.sawReasoning && !p.error &&
+        String(p.content == null ? "" : p.content).trim())
+      sawWholeReplyAtOnce = true;
     s.live = false;
     // A generation has now been all the way through with the view open and
     // asking, so a prompt that has still not arrived is not going to.
