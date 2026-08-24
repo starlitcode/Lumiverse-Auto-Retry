@@ -1749,3 +1749,40 @@ describe("a short reply is measured by its words, not its tags", () => {
     expect(T.stripMarkup(reply).trim().length).toBeLessThan(30);
   });
 });
+
+// What a name typed into Extra thinking tag names may contain. The box accepts
+// anything, and what it does with the rest is not obvious: a space is not part
+// of a tag name in any markup, so it is dropped rather than refused, and typing
+// one is read as the name without it.
+describe("the shapes a custom thinking tag name can take", () => {
+  const REPLY = "She stepped into the rain.";
+  const INNER = "weighing up whether to answer";
+  const cfg = (tags: string): any => ({ refusalStripThinking: true, refusalThinkTags: tags });
+  const left = (tags: string, text: string) => __testing.stripThinking(text, cfg(tags)).trim();
+
+  test("an underscore is part of the name", () => {
+    expect(left("my_think", "<my_think>" + INNER + "</my_think>" + REPLY)).toBe(REPLY);
+  });
+
+  test("and works in the bracket form too", () => {
+    expect(left("my_think", "[my_think]" + INNER + "[/my_think]" + REPLY)).toBe(REPLY);
+  });
+
+  test("a hyphen is part of the name", () => {
+    expect(left("my-think", "<my-think>" + INNER + "</my-think>" + REPLY)).toBe(REPLY);
+  });
+
+  test("capitals in the typed name do not matter", () => {
+    expect(left("My_Think", "<my_think>" + INNER + "</my_think>" + REPLY)).toBe(REPLY);
+  });
+
+  test("a typed space is dropped, so it names the tag without one", () => {
+    expect(left("my think", "<mythink>" + INNER + "</mythink>" + REPLY)).toBe(REPLY);
+  });
+
+  test("a word after a space in the tag itself reads as an attribute", () => {
+    // <name extra> is the tag "name" carrying "extra", which is what markup
+    // means by it, so listing the first word is enough.
+    expect(left("mythink", "<mythink extra>" + INNER + "</mythink>" + REPLY)).toBe(REPLY);
+  });
+});

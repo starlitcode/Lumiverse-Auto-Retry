@@ -68,7 +68,7 @@ const FINISHED: Array<[string, string]> = [
   ["ends on a closing bracket after dialogue", 'She shrugged. "Suit yourself." (He did not.)'],
   ["price with a decimal", "The room cost 12.50 a night, and she paid in coins."],
   ["ratio with asterisk emphasis", "It was *two* against *five*, and she liked those odds."],
-  ["closed details block then prose", "<details><summary>Scene logic</summary>\nShe wants to leave.\n</details>\n\nShe stood up and left."],
+  ["closed details block then prose", "<details><summary>Aside</summary>\nShe wants to leave.\n</details>\n\nShe stood up and left."],
   ["reply ending on a closed details block", "She stood up.\n\n<details><summary>Notes</summary>\nbeat two\n</details>"],
   ["markdown table then prose", "| Who | Feels |\n| --- | --- |\n| Her | tired |\n\nShe sighed."],
   ["reply ending on a table row", "She sighed.\n\n| Who | Feels |\n| --- | --- |\n| Her | tired |"],

@@ -696,7 +696,7 @@ const SCHEMA: Group[] = [
         key: "refusalThinkTags",
         label: "Extra thinking tag names",
         type: "text",
-        hint: "Optional, one per line. The common reasoning tags are already handled. Add a tag name only if your model wraps its thinking in an unusual one (for example: mythink). Just the name, no brackets or pipes. A name you add is recognised in all four wrappers: <name>, [name], <|name|> and the <|channel|> form some models use.",
+        hint: "Optional, one per line. The common reasoning tags are already handled. Add a tag name only if your model wraps its thinking in an unusual one (for example: mythink). Just the name, no brackets or pipes. Letters, digits, underscores and hyphens all work, so my_think and my-think are both fine. A space is not part of a tag name and is dropped, so my think is read as mythink. A name you add is recognised in all four wrappers: <name>, [name], <|name|> and the <|channel|> form some models use, and it covers the word swaps and the length checks as well as refusals.",
       },
       {
         key: "refusalNote",
