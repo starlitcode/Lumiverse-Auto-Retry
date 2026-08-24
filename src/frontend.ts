@@ -339,12 +339,12 @@ interface Field {
   // More than one means any of them is enough, which is the case for a setting
   // two different buttons both read.
   //
-  // Only listed where the code genuinely ignores the value. Several settings
-  // look dependent and are not: refusalThinkTags is still used to find the
-  // reply when refusalStripThinking is off, ignoreHardErrors is checked before
-  // retryOnError rather than under it, and the word swap rules are read by the
-  // manual buttons whether or not replaceEnabled is on. Hiding those would
-  // hide a setting that was still doing something.
+  // Only list one where the code genuinely ignores the value. Several settings
+  // look dependent and are not: refusalThinkTags still finds the reply when
+  // refusalStripThinking is off, ignoreHardErrors is checked before
+  // retryOnError rather than under it, and the manual swap buttons read the
+  // rules whether or not replaceEnabled is on. Listing those would hide a
+  // setting that is still doing something.
   needs?: string[];
 }
 interface Group {
@@ -354,19 +354,15 @@ interface Group {
   // Same idea as a field's, for a whole section: while every switch named here
   // is off, nothing under this heading does anything, so the heading goes too.
   needs?: string[];
-  // Starts shut, with a caret to open it. Said here rather than worked out
-  // from the title starting with "Advanced", which is what it used to be:
-  // the two were the same thing by accident, so a section could not start shut
-  // without calling itself advanced, and renaming a heading changed how it
-  // behaved. Most of them were not advanced anyway. Backing up your settings
-  // and building a bug report are things anyone might do; they are down there
-  // because nobody needs them to use the extension, which is a different
-  // claim, and the caret is the one making it.
+  // Starts shut, with a caret to open it. A flag rather than something derived
+  // from the heading text, so renaming a heading cannot change how a section
+  // behaves. Shut does not mean advanced: backing up settings and building a
+  // bug report are things anyone might do, they are just not needed to use the
+  // extension.
   collapsed?: boolean;
   // Something built by hand that belongs under this heading, after its rows.
-  // Named here for the same reason: these used to be picked out by matching
-  // the title text, so the tester and the preset bar were one rename away
-  // from silently not being built.
+  // Named here rather than matched on the title, so a rename cannot leave the
+  // tester or the preset bar silently unbuilt.
   extra?: "refusalTester" | "swapPresets";
   // Splits this section's rows by whether a preset carries them. Only find
   // and replace has presets, and the split is worked out from the preset
@@ -872,15 +868,14 @@ const SCHEMA: Group[] = [
 // between an opening and a closing tag are the reply and stay exactly as they
 // are. Kept narrow on purpose so a stray "<" typed in a scene is left alone:
 // it has to look like a real tag, name and all, before anything is dropped.
-// A quoted attribute value may itself contain ">". Skipping over quoted runs
-// rather than stopping at the first ">" is what keeps <span title="a > b"> one
-// tag: read the naive way it ended early, and the leftover ' b">' carried a
-// stray quotation mark into the reply, which the check for dialogue opened and
-// never closed then counted as a cut-off reply.
+// A quoted attribute value may itself contain ">", so quoted runs are skipped
+// rather than ending the tag at the first ">". Stopping early leaves the tail
+// of the tag behind, and a stray quotation mark in it reads as dialogue opened
+// and never closed.
 //
 // The three branches cannot match the same first character, so there is nothing
-// for the engine to backtrack between, and the count is capped for the same
-// reason the old one was.
+// to backtrack between, and the repetition is capped against pathological
+// input.
 const HTML_TAG = /<\/?[a-zA-Z][a-zA-Z0-9-]*(?:"[^"]*"|'[^']*'|[^'">]){0,400}>/g;
 
 // Also what a length check measures: a line of dialogue wrapped in
@@ -1160,10 +1155,9 @@ function sayTime(ms: number): string {
 // model's thinking.
 //
 // The names come from the same place the stripper's do, so the built-in set and
-// whatever is in Extra thinking tag names are both covered. Written out by hand
-// here before, which meant it knew five of the eight built-in names and none of
-// the ones anybody had added, so a reply cut off inside a block the extension
-// had been told about was read as finished.
+// anything in Extra thinking tag names are both covered. A second hand-written
+// list here would drift, and a block the extension knows about would then read
+// as finished when it was cut off inside.
 function thinkOpenedNeverClosed(raw: string, cfg?: any): boolean {
   const alt = thinkTagNames(cfg).join("|");
   if (!alt) return false;
@@ -1177,11 +1171,10 @@ function thinkOpenedNeverClosed(raw: string, cfg?: any): boolean {
 
 // Does the reply end on something that can end a reply?
 //
-// This used to be a list of Latin characters, which meant a scene closing on
-// an emoji, or on a Japanese, Chinese, Greek or Arabic full stop, was read as
-// having no ending at all. Punctuation and symbols in any script count now, so
-// the only thing left that reads as unfinished is a reply that stops on a
-// letter or a digit, which is what being cut off mid-word actually looks like.
+// Punctuation and symbols in any script count, so a scene closing on an emoji
+// or on a Japanese, Chinese, Greek or Arabic full stop is an ending. What is
+// left reading as unfinished is a reply stopping on a letter or a digit, which
+// is what being cut off mid-word looks like.
 function endsOnPunctuation(t: string): boolean {
   const cps = Array.from(t);
   let last = "";
@@ -1203,8 +1196,8 @@ function endsOnPunctuation(t: string): boolean {
     // emoji. A reply ending on either has an ending.
     return /[\p{P}\p{S}]/u.test(last);
   } catch (_) {
-    // No Unicode property escapes on this engine. Falls back to the Latin set
-    // this check used to have, which is worse but never worse than before.
+    // No Unicode property escapes on this engine, so fall back to the Latin
+    // set. Narrower, but it still answers for most replies.
     return /[.!?\u2026"'*)\]}\u201D~>\-\u2014:]/.test(last);
   }
 }
@@ -2134,12 +2127,11 @@ function stripThinkingAlways(text: string, cfg?: any): string {
 // the match is inside it. An even number means every quotation before it on
 // that line has been closed and the match is outside them all.
 //
-// It used to look for the nearest mark behind the match and then any mark ahead
-// of it, which is the same answer on a line with one piece of speech and the
-// wrong answer on a line with two. A refusal standing between them, as in
-// `"Go on," he said. I can't help with that. "Please," she said.`, found the
-// closing mark of the first speech behind it and the opening mark of the second
-// ahead of it, and was read as dialogue while being nothing of the kind.
+// Parity rather than looking for the nearest mark on each side. With two
+// pieces of speech on one line, as in
+// `"Go on," he said. I can't help with that. "Please," she said.`, the nearest
+// marks are the close of the first and the open of the second, and anything
+// between them reads as dialogue when it is not.
 //
 // A line break ends every quotation, because a reply is checked as it was
 // written and dialogue does not run across a paragraph break unclosed.
@@ -2183,10 +2175,9 @@ function refusalVerdict(text: string, cfg?: any): RefusalVerdict {
   // never puts its refusal in quotes, and a character declining almost always
   // is in them, so this is the single cheapest way to tell the two apart.
   //
-  // It used to apply only to the "I am an AI" patterns, which left every other
-  // built-in matching dialogue: '"I can\'t help with that," she said' was
-  // counted as a refusal and the reply was thrown away. It now covers every
-  // built-in tier, and the user can switch it off.
+  // It covers every built-in tier rather than the "I am an AI" patterns alone,
+  // or '"I can\'t help with that," she said' counts as a refusal and the reply
+  // is thrown away. The user can switch it off.
   //
   // lower is only index-compatible with norm while the two are the same length.
   // Lowercasing grows a handful of letters (Turkish dotted I among them), and a
@@ -2651,12 +2642,11 @@ function paintsText(el: any): boolean {
     const n: any = kids[i];
     if (n && n.nodeType === 3 && String(n.nodeValue || "").trim()) return true;
   }
-  // An element that has been given a colour of its own but is empty right now
-  // is a status line waiting for something to say. The sweep runs once, while
-  // they are all still empty, so on the old rule it walked past every one of
-  // them and they were never checked against the surface they sit on. The
-  // colour does not change when the text arrives, so checking it now is the
-  // same answer, arrived at before anyone has to read it.
+  // An element with a colour of its own but no text yet is a status line
+  // waiting for something to say. The sweep runs once, while they are all still
+  // empty, so skipping them means they are never checked at all. Their colour
+  // does not change when the text arrives, so checking now gives the same
+  // answer, earlier.
   try {
     if (el && el.style && String(el.style.color || "")) return true;
   } catch (_) {}
@@ -2875,10 +2865,9 @@ export function setup(ctx: Ctx, opts?: any) {
   // what happens next arrives as a message from the backend, or as the timeout
   // saying nothing did.
   function sendSwapRequest(payload: any) {
-    // A swap waits on the answer to "which chat is open", and the extension can
-    // be closed while it waits. Teardown releases that wait rather than leaving
-    // it hanging, so without this the press carried on afterwards and edited a
-    // reply on behalf of an extension that was no longer running.
+    // A swap waits on the answer to "which chat is open", and teardown releases
+    // that wait rather than leaving it hanging. Without this flag the awaiting
+    // code carries on and edits a reply for an extension that has stopped.
     if (tornDown) return;
     const requestId = String(payload.requestId);
     try {
@@ -3244,10 +3233,9 @@ export function setup(ctx: Ctx, opts?: any) {
   // Ask who a chat is with, once. Called from every path that makes a chat the
   // current one, and from the row that shows the name.
   //
-  // It used to be asked only where a chat id arrived through noteChat, which is
-  // a message rendering. Switching chats and starting a generation both set the
-  // current chat without going near it, so the two most ordinary ways of ending
-  // up in a chat left the row reading "This chat" with no name on it.
+  // Every one of those paths, not just a message rendering: switching chats and
+  // starting a generation also make a chat current, and asking from only one of
+  // them leaves the row reading "This chat" with no name.
   function ensureChatName(id: any) {
     if (id == null || id === "") return;
     const key = String(id);
@@ -3281,9 +3269,9 @@ export function setup(ctx: Ctx, opts?: any) {
   }
 
   const rough = (n: number) => (n < 1000 ? String(n) : Math.round(n / 100) / 10 + "k");
-  // The host's own count when it gave one, and the old estimate otherwise. Said
-  // in words rather than left for the reader to guess which they are looking at,
-  // because a count and a guess are different things to act on.
+  // The host's own count when it gives one, and an estimate otherwise. Which
+  // of the two it is gets said in words, since a count and a guess are
+  // different things to act on.
   const sayTokens = (chars: number): string =>
     lastPromptTokens
       ? rough(lastPromptTokens) + " tokens"
@@ -3537,9 +3525,9 @@ export function setup(ctx: Ctx, opts?: any) {
     body.replaceChildren();
     body.style.whiteSpace = "normal";
     if (!lastPrompt) {
-      // The panel used to guess at this, and a guess about a permission is the
-      // one thing a reader cannot check from here. It is asked for now, so a
-      // denial is stated and a grant is not blamed.
+      // Asked for rather than guessed at. A guess about a permission is the one
+      // thing a reader cannot check from this panel, so a denial is stated
+      // plainly and a grant is not blamed for something else.
       const interceptor = permIs("interceptor");
       body.textContent =
         interceptor === false
@@ -4381,17 +4369,14 @@ export function setup(ctx: Ctx, opts?: any) {
 
   // Focus something without marking it as keyboard focus.
   //
-  // :focus-visible is a guess, not a rule. The browser remembers the last kind
-  // of input it saw and answers from that, so focusing a menu entry from a
-  // thumb still counted as keyboard if a key had been pressed anywhere on the
-  // page beforehand, and the menu came up with its top entry lit. That is why
-  // it only happened sometimes: it depended on whether you had typed in the
-  // chat before holding the button.
+  // :focus-visible is a guess. The browser answers from the last kind of input
+  // it saw anywhere on the page, so a menu opened with a thumb comes up with
+  // its top entry lit if a key was pressed in the chat beforehand.
   //
-  // The attribute below says this focus was ours rather than yours, and it
-  // beats the guess. It comes off at the first key pressed on the element, and
-  // when focus moves off it, so tabbing and the arrow keys mark as they always
-  // did.
+  // The attribute below says this focus came from us rather than from the
+  // reader, and it beats the guess. It comes off at the first key pressed on
+  // the element and when focus leaves it, so tabbing and the arrow keys still
+  // mark.
   const QUIET_ATTR = "data-ar-quiet";
 
   const focusQuietly = (el: any): void => {
@@ -4474,10 +4459,9 @@ export function setup(ctx: Ctx, opts?: any) {
       if (mark && mark.style) mark.style.animation = "lvRetryFloatMark 180ms ease";
     }
     // Tapping is always the master switch, whatever is showing, so the label
-    // says which switch a tap reaches rather than leaving somebody to find out
-    // by pressing it. It used to offer the per-chat switch on a hold as well.
-    // That entry left the hold menu and the label kept promising it, which on a
-    // screen reader is the only description of the button there is.
+    // names the switch a tap reaches rather than leaving somebody to find out
+    // by pressing it. It describes only what this button does: on a screen
+    // reader the label is the entire description of the button.
     const label = onlyHere
       ? "Auto Retry is on, but off in this chat. Tap to turn it off everywhere"
       : on
@@ -4497,13 +4481,12 @@ export function setup(ctx: Ctx, opts?: any) {
   let floatSettle: any = null;
 
   // Where this extension last put the button, and the size it put it there at.
-  // Kept because a resize has to rebuild the widget, and the position handed to
-  // a rebuild used to be read back off the screen. That made every resize
+  // A resize rebuilds the widget, and the rebuild is handed these figures
+  // rather than a reading off the screen. Measuring would make every resize
   // depend on the host reporting a rect the size of the button, and a host
   // whose root does not carry that size reports a middle that is too high, so
-  // each resize placed the button a little above the last one and enough of
-  // them walked it to the top of the screen. Nothing here is measured, so a
-  // hundred resizes land in exactly the same place as one.
+  // each resize would nudge the button upward until it reached the top.
+  // Nothing here is measured, so a hundred resizes land where one does.
   let floatAt: { x: number; y: number } | null = null;
 
   function showFloat(at?: { x: number; y: number } | null) {
@@ -4716,9 +4699,8 @@ export function setup(ctx: Ctx, opts?: any) {
       return;
     // One at a time. Android raises contextmenu on a long press as well as
     // running the timer below, so this is asked for twice on the way to one
-    // gesture. Ours used to be removed and rebuilt on the second call; the
-    // host's cannot be, so the second call is dropped instead of stacking a
-    // second menu on top of the first.
+    // gesture. The host's menu cannot be taken down and rebuilt, so the second
+    // call is dropped rather than stacking a menu on the first.
     if (floatMenuToken) return;
 
     // Anchored to the middle of the button. Not to the pointer: the menu is
@@ -4758,9 +4740,9 @@ export function setup(ctx: Ctx, opts?: any) {
           // extension; a per-chat switch among them reads as clutter every time
           // you open it for something else.
           //
-          // It was also never reliably here. The entry was drawn only once a
-          // chat id had been seen, and that only happens on a generation event,
-          // so on a fresh page load it was missing until the first reply came.
+          // It could not sit here reliably in any case: the entry needs a chat
+          // id, which arrives on a generation event, so on a fresh page load it
+          // would be missing until the first reply.
           { key: "hide", label: "Hide this button" },
         ],
       });
@@ -4828,10 +4810,9 @@ export function setup(ctx: Ctx, opts?: any) {
   }
 
   // Where the button is sitting right now, read off the screen. Used after a
-  // drag, which is the one time the button moves without this extension being
-  // told where to. Not used to carry the position across a rebuild: doing that
-  // fed the reading back in on every size change and walked the button up the
-  // screen.
+  // drag, which is the one time it moves without this extension placing it.
+  // Not for carrying the position across a rebuild: feeding a reading back in
+  // on every size change walks the button up the screen.
   function floatPos(): { x: number; y: number } | null {
     try {
       const root = floatWidget && floatWidget.root;
@@ -4857,13 +4838,12 @@ export function setup(ctx: Ctx, opts?: any) {
     // Width and height are set when the widget is created, so a size change
     // means building it again rather than restyling it.
     //
-    // Rebuilding used to start the new one at the default corner, so changing
-    // the size threw away wherever the button had been dragged to. The place it
-    // was last put is carried across instead, held in floatAt rather than read
-    // back off the screen, and taken from the middle so the button grows around
-    // where it sits instead of away from its corner. showFloat still clamps: a
-    // button against an edge that gets bigger has to come back on screen, and
-    // against the edge is where a snapped button belongs anyway.
+    // The place it was last put is carried across in floatAt rather than read
+    // back off the screen, or a resize would drop the button at the default
+    // corner and lose wherever it had been dragged to. Taken from the middle,
+    // so it grows around where it sits rather than away from its corner.
+    // showFloat still clamps: a button against an edge that gets bigger has to
+    // come back on screen, which is where a snapped button belongs anyway.
     if (floatWidget && floatWidgetSize !== floatSize()) {
       const was = floatAt;
       const d = floatSize();
@@ -4950,13 +4930,11 @@ export function setup(ctx: Ctx, opts?: any) {
 
   // Whether the Prompt tab has been opened while this panel has been up.
   //
-  // Capture used to follow the tab itself, which meant switching to the log for
-  // a moment and back lost the prompt sent in between, and that is most of what
-  // anybody does with the panel open. It follows the panel now, but only once
-  // you have asked for a prompt at least once: somebody who opens the panel for
-  // the log and never goes near this tab has nothing kept for them, which is
-  // the whole reason it was tied to the tab in the first place. Closing the
-  // panel forgets it, so the asking starts over next time.
+  // Tied to the panel rather than to the tab, or switching to the log for a
+  // moment loses the prompt sent in between, which is most of what anybody does
+  // with the panel open. It still takes one visit to the tab to arm: somebody
+  // who opens the panel for the log alone has nothing captured for them.
+  // Closing the panel forgets it, so the asking starts over next time.
   let promptTabSeen = false;
 
   // The backend captures a prompt only while somebody is looking at one. Told
@@ -4999,11 +4977,10 @@ export function setup(ctx: Ctx, opts?: any) {
           refusalNotes: [{ text: text, role: String(parsed.refusalNoteRole || "system") }],
         });
     }
-    // The extra dialog labels used to be a box on its own, always read. Now a
-    // switch decides whether it is read, and the switch is off by default, so
-    // anyone who had labels typed would have found them quietly stopped
-    // working. Labels present and no switch saved means they came from before
-    // the switch existed, and they keep working.
+    // The switch that gates the extra dialog labels is off by default, so a
+    // saved set of labels with no switch beside it predates the switch. Turning
+    // it on for them keeps those labels working rather than quietly dropping
+    // them.
     if (
       parsed.confirmButtonsCustom == null &&
       String(parsed.confirmButtonLabels || "").trim()
@@ -5013,10 +4990,9 @@ export function setup(ctx: Ctx, opts?: any) {
       for (const f of g.fields) {
         if (!(f.key in parsed)) continue;
         // The field itself goes through, not just its type. A "pick" is checked
-        // against the values it is allowed to hold, and those live on the field,
-        // so without it every saved choice failed that check and fell back to
-        // the first option: "Where the note goes" read back as "after" however
-        // it had been set, on every load, in every browser.
+        // against the values it may hold and those live on the field, so
+        // without it every saved choice fails that check and falls back to the
+        // first option on every load.
         out[f.key] =
           f.type === "num"
             ? clampField(f, parsed[f.key])
@@ -5071,8 +5047,8 @@ export function setup(ctx: Ctx, opts?: any) {
       for (const item of list.slice(0, MAX_NOTES)) {
         const text = item && item.text != null ? String(item.text) : "";
         const role = item && NOTE_ROLES.indexOf(String(item.role)) >= 0 ? String(item.role) : "system";
-        // fallback carries the value the old single setting held, so a list
-        // saved before notes had their own first try keeps behaving the same.
+        // fallback carries the value from the single-note setting, so a list
+        // saved before notes had their own first try behaves the same.
         const raw = item && item.fromTry != null ? Number(item.fromTry) : Number(fallback);
         const fromTry = Number.isFinite(raw)
           ? Math.min(NOTE_FROM_TRY_MAX, Math.max(1, Math.round(raw)))
@@ -5200,9 +5176,9 @@ export function setup(ctx: Ctx, opts?: any) {
   const fieldByKey: Record<string, Field> = {};
   for (const g of SCHEMA) for (const f of g.fields) fieldByKey[f.key] = f;
   // Safety net for the lists above. A setting added to SCHEMA but forgotten in
-  // EXPORT_CATEGORIES used to be silently dropped from every export and backup,
-  // which is invisible until someone restores a file and finds a setting missing.
-  // Anything unaccounted for is folded into the retry category rather than lost.
+  // EXPORT_CATEGORIES would otherwise be dropped from every export, which shows
+  // up only when somebody restores a backup and finds it missing. Anything
+  // unaccounted for is folded into the retry category rather than lost.
   {
     const covered = new Set<string>();
     for (const c of EXPORT_CATEGORIES) for (const k of c.keys) covered.add(k);
@@ -5510,12 +5486,11 @@ export function setup(ctx: Ctx, opts?: any) {
     tellBackendChatsOff();
     // Anything already in flight for that chat goes with it.
     if (off) standDown(id, false);
-    // Every one of these describes the chat this just changed, so all of them
-    // are repainted here rather than by whoever called. The row used to repaint
-    // itself from its own click handler, which left the line at the top of the
-    // panel as the one way to change this that did not touch the row: pressing
-    // "Turn it back on here" turned the chat back on and left the row below
-    // still offering to turn it on, and pressing that switched it off again.
+    // Every one of these describes the chat that just changed, so they are all
+    // repainted here rather than by whoever called. Repainting from a click
+    // handler instead would leave any other way in stale: the line at the top
+    // of the panel changes the same thing and does not touch the row, so the
+    // row would go on offering a switch that had already been flipped.
     if (chatSwitchPaint) {
       try { chatSwitchPaint(); } catch (_) {}
     }
@@ -5677,15 +5652,11 @@ export function setup(ctx: Ctx, opts?: any) {
   };
   // ---- what it is doing, right now ----
   //
-  // Everything that says what the extension is up to used to be written once,
-  // at the moment it happened, and then sat there going stale. The retry
-  // message was the worst of it: it said "in 47.3s" and kept saying that for
-  // the next forty-seven seconds, so the one number anyone actually watches was
-  // the one number that never moved. Waits are up to a minute on the current
-  // defaults, which made a frozen countdown look like a frozen extension.
-  //
-  // So the state is worked out on demand instead, from the timers that are
-  // actually running, and one clock repaints whoever is showing it.
+  // Worked out on demand from the timers that are actually running, with one
+  // clock repainting whoever is showing it. Writing a line once, at the moment
+  // something happens, leaves it stale: "in 47.3s" would say that for the next
+  // forty-seven seconds, and a countdown that does not move looks like an
+  // extension that has stopped.
 
 
   // The one line that says what is happening. Read fresh every tick.
@@ -5929,10 +5900,9 @@ export function setup(ctx: Ctx, opts?: any) {
     }
   };
 
-  // Which control a retry clicks. retryByNewReroll picks the preferred one; the
-  // other is the fallback. The choice is made at click time from what is on
-  // screen and clickable, so the reason for the retry (empty, error, cut off)
-  // no longer forces a particular control.
+  // Which control a retry clicks. retryByNewReroll picks the preferred one and
+  // the other is the fallback, chosen at click time from what is on screen and
+  // clickable. The reason for the retry does not come into it.
   const pickRetryControl = (): { btn: any; via: string } | null => {
     const swipeFirst = !!cfg.retryByNewReroll;
     const order = swipeFirst
@@ -6805,8 +6775,8 @@ export function setup(ctx: Ctx, opts?: any) {
   // Ask the backend which chat is open. Everything else that sets the chat id
   // waits for something to happen in the chat, which leaves the per-chat switch
   // greyed out after an update: nothing re-renders, so nothing announces where
-  // you are. This asks outright. Answers null without the chats permission, in
-  // which case nothing changes and the old waiting behaviour stands.
+  // you are. This asks outright. Without the chats permission it answers null
+  // and the waiting behaviour stands.
   //
   // Handlers waiting on an answer that may never come. Held so teardown can
   // drop them, and so one is never left listening for a reply to a question
@@ -6911,13 +6881,12 @@ export function setup(ctx: Ctx, opts?: any) {
   // Where every chat id the extension learns arrives, whatever carried it, and
   // not only the events that announce a change.
   //
-  // The manual swap buttons need a chat id, and generation events were the only
-  // thing setting one, so opening an older chat and pressing swap reported that
-  // there was no reply to swap until something had been generated in it. The
-  // per-chat switch had the same gap from the other side: on a fresh page load,
-  // sitting in a chat, the row stayed greyed out until the user left and came
-  // back or sent a message. A message rendering is what actually happens when a
-  // chat opens, and it carries the id, so it is enough on its own.
+  // Generation events alone are not enough. The manual swap buttons need a chat
+  // id, so with only those an older chat reports nothing to swap until
+  // something has been generated in it, and the per-chat switch stays greyed
+  // out on a fresh page load until the user leaves and comes back. A message
+  // rendering is what happens when a chat opens and it carries the id, so it is
+  // enough on its own.
   function noteChat(id: any) {
     const next = id == null ? null : id;
     if (next == null || next === lastChatId) return;
@@ -7053,11 +7022,9 @@ export function setup(ctx: Ctx, opts?: any) {
       if (liveTab === "prompt") renderLiveLog();
     }
     // The streamed copy has done its job the moment the reply ends, so it is
-    // taken now and the chat's own copy dropped. It used to be dropped only
-    // when the next reply started, which meant the text of a finished reply
-    // stayed in memory for as long as you left the chat alone, and the text of
-    // a stopped one stayed until you sent something else. Nothing below reads
-    // s.buf, so taking it here loses nothing.
+    // taken here and the chat's own copy dropped. Waiting for the next reply to
+    // start would keep a finished reply in memory for as long as the chat sits
+    // idle. Nothing below reads s.buf, so taking it here loses nothing.
     const streamed = String(s.buf || "");
     s.buf = "";
     paintNow();
@@ -7175,38 +7142,30 @@ export function setup(ctx: Ctx, opts?: any) {
   // itself on exactly one occurrence here, taken from the end of the page
   // backwards, which is the newest text first.
   //
-  // It used to take the last matching node and rewrite every occurrence inside
-  // it, which does not add up: a reply matching twice in one paragraph had both
-  // done by the first pair, and the second pair then went looking further up
-  // and rewrote an older message the backend had never touched. The whole-chat
-  // path replaced every occurrence everywhere, which caught the user's own
-  // messages, and the backend only ever edits replies. Both left the screen
-  // saying something the stored chat did not, until it was next reopened.
+  // One pair must not rewrite more than its own occurrence. Spending a pair on
+  // every match inside a node would use up the later pairs on text the backend
+  // never touched, and the screen would then disagree with the stored chat
+  // until the view was rebuilt.
   //
-  // Counting from the end is right for one reply and close for a whole chat.
-  // A whole-chat swap changes every reply, so the occurrences to change are not
-  // guaranteed to be the last N on the page: a message of the user's sitting
-  // between two replies can still be caught. Fixing that needs knowing which
-  // element is which message, which is the host dependency this extension is
-  // built to avoid, so this stays a heuristic and stays honest about it.
+  // Counting from the end is exact for one reply and approximate for a whole
+  // chat, where a message of the user's can sit between two replies and be
+  // caught. Being exact needs knowing which element is which message, which is
+  // the host dependency this extension avoids, so this stays a heuristic.
   function applySwapsToView(pairs: Array<[string, string]>): number {
     if (typeof document === "undefined" || !pairs || !pairs.length) return 0;
     const SKIP = /^(SCRIPT|STYLE|TEXTAREA|INPUT|SELECT|OPTION)$/;
     let done = 0;
 
-    // The page is walked once, not once per rule. This used to build a fresh
-    // TreeWalker inside the loop below, so a chat swapped with forty rules made
-    // forty full passes over every text node on the page. The candidate list is
-    // the same for every rule, so it is gathered here and reused.
+    // The candidate list is the same for every rule, so the page is walked once
+    // and the list reused. Building a TreeWalker inside the loop below would
+    // mean one full pass over every text node per rule.
     // Only the rendered replies, not the whole page. The host marks each one
     // with data-component="MessageContent", so the walk starts there.
     //
-    // It used to start at document.body, which meant every text node on the
-    // page was a candidate: another extension's panel, a menu, a tooltip, the
-    // character list. A rule of "cat => dog" would rewrite the word wherever it
-    // appeared, in somebody else's interface, and that extension had no idea
-    // its own text had been edited underneath it. Nothing outside a message is
-    // ours to touch.
+    // Starting at document.body would make every text node a candidate:
+    // another extension's panel, a menu, a tooltip, the character list. A rule
+    // of "cat => dog" would then rewrite the word inside somebody else's
+    // interface. Nothing outside a message is ours to touch.
     //
     // If the host ever renames that attribute this finds nothing and falls back
     // to the old behaviour, which is worth having: a swap that reaches too far
@@ -7414,11 +7373,9 @@ export function setup(ctx: Ctx, opts?: any) {
   }
 
   // ---- hint popover ----
-  // A setting's description used to expand inline, which pushed every option
-  // below it down the list. On a phone one tap could shove the next two options
-  // off the screen, and opening a second description moved everything again, so
-  // reading two descriptions meant losing your place twice. This floats the text
-  // over the panel instead, so the list never moves.
+  // The description floats over the panel rather than expanding inline, so the
+  // list never moves. Expanding in place pushes every option below it down, and
+  // on a phone one tap can shove the next two off the screen.
   //
   // Fixed position, parented to the page rather than the row: the options list
   // is a scroll container, and anything inside it would be clipped at its edges.
@@ -7487,10 +7444,9 @@ export function setup(ctx: Ctx, opts?: any) {
     // reads as belonging to the row, and nudged back inside a narrow screen.
     const left = Math.max(EDGE, Math.min(r.left, vw - w - EDGE));
     // Below the row it belongs to unless the field asked otherwise, and never
-    // flipped between the two on the fly. It used to flip whenever there was no
-    // room below, which meant a long description opened somewhere none of the
-    // others do. Where it opens is now a property of the setting, so it is the
-    // same place every time for a given row.
+    // flipped between the two on the fly. Flipping on available room means a
+    // long description opens somewhere none of the others do. Where it opens is
+    // a property of the setting, so a given row is consistent.
     //
     // Above is for a row tall enough that below it is a long way from the "?"
     // that was pressed. Whichever side it is on, a description too tall for the
@@ -7685,10 +7641,10 @@ export function setup(ctx: Ctx, opts?: any) {
     toastTick = () => {
       // This message exists to count one wait down, and it is sticky, so
       // nothing takes it away on its own. When the wait ends it has to go.
-      // Before this it stopped only once the chat had nothing to say at all,
-      // and a retry that fired successfully does have something to say: the
-      // reply it started. So the box stayed up narrating that reply, and then
-      // the next one, with a Cancel button for a retry that was long over.
+      // Waiting for the chat to have nothing to say is not enough: a retry that
+      // fired successfully does have something to say, the reply it started, so
+      // the box would stay up narrating that reply and the next one, offering
+      // Cancel for a retry that was long over.
       if (!s.retryAt || Date.now() >= s.retryAt) {
         hideToast();
         return;
@@ -7733,9 +7689,9 @@ export function setup(ctx: Ctx, opts?: any) {
           // changes nothing when they work. It is here for when one does not:
           // pressing Cancel and watching the box sit there is the one outcome
           // this button must never have, and a missed case anywhere in a
-          // cancel action used to produce exactly that. Hiding first also
-          // leaves an action free to put its own message up afterwards, which
-          // the button picker does.
+          // cancel action would produce exactly that. Hiding first also leaves
+          // an action free to put its own message up afterwards, which the
+          // button picker does.
           hideToast();
           try {
             opts.cancel && opts.cancel();
@@ -8025,8 +7981,8 @@ export function setup(ctx: Ctx, opts?: any) {
     root.innerHTML = "";
     fieldSetters = {};
     chatSwitchPaint = null;
-    // The rows the old one closed over have just been thrown away with the
-    // panel, so it is put back to doing nothing until the new one assigns it.
+    // The rows the previous one closed over went with the panel, so it is put
+    // back to doing nothing until the next build assigns it.
     applyDeps = () => {};
     permPaint = null;
     presetBarRefreshers = [];
@@ -9060,12 +9016,11 @@ export function setup(ctx: Ctx, opts?: any) {
     // leave alone. Someone who switched a chat off and forgot has no way to
     // tell that from the extension having broken, so the panel says which.
     //
-    // Words only. It used to carry its own "Turn it back on here", which put
-    // two buttons for one switch in a panel where they were not even next to
-    // each other, and left a reader working out whether they did the same
-    // thing. Both switches this line describes have their own row below it,
-    // and each of those says what it will do. This says what is true. With the
-    // button went the reason this was a flex row wrapping a span.
+    // Words only, no button. Both switches this line describes have their own
+    // row below it, and each of those says what it will do. A button here would
+    // be a second control for the same switch, far enough from the first that a
+    // reader has to work out whether they do the same thing. This says what is
+    // true and leaves the doing to the rows.
     const masterNote = document.createElement("div");
     masterNote.style.cssText =
       "display:none;flex:none;margin:0 0 10px;font-size:12px;line-height:1.45;" +
@@ -9261,10 +9216,10 @@ export function setup(ctx: Ctx, opts?: any) {
       act.style.opacity = known ? "1" : "0.45";
       act.style.cursor = known ? "pointer" : "not-allowed";
       note.textContent = !known
-        // Not "open a chat", which is what this used to say and is wrong when
-        // you already have. This is the state with the chats permission refused
-        // or not yet approved, since with it granted the question above answers
-        // itself a moment after the panel opens. Without it, anything happening
+        // Not "open a chat", which is wrong when you already have. This is the
+        // state with the chats permission refused or not yet approved, since
+        // with it granted the question above answers itself a moment after the
+        // panel opens. Without it, anything happening
         // in a chat tells it. A reply arriving does, and so does sending a
         // message or switching away and back. Updating the extension while
         // sitting in a chat is the case that leaves it waiting, because nothing
@@ -9767,11 +9722,11 @@ export function setup(ctx: Ctx, opts?: any) {
   // Two layers rather than one because a single large blur reads as a smudge
   // and a single tight band reads as a second border. Together they give the
   // edge somewhere to fall off to.
-  // Kept tight on purpose. The halo used to be blurred 16 with 2 of spread,
-  // which paints 18 past the edge, and the rows in this panel are nowhere near
-  // 18 apart: it washed over whatever sat above and below and read as the glow
-  // belonging to the row rather than to the box. Eight is far enough to be a
-  // halo and short enough to stay inside the field's own gap.
+  // Kept tight on purpose. A blur of 16 with 2 of spread paints 18 past the
+  // edge, and the rows in this panel are nowhere near 18 apart, so it washes
+  // over whatever sits above and below and reads as belonging to the row rather
+  // than the box. Eight is far enough to be a halo and short enough to stay
+  // inside the field's own gap.
   const FOCUS_RING =
     "0 0 0 2px var(--lumiverse-primary-020,rgba(147,112,219,.2))," +
     "0 0 8px 0 var(--lumiverse-primary-020,rgba(147,112,219,.2))";
@@ -9850,10 +9805,8 @@ export function setup(ctx: Ctx, opts?: any) {
     b.style.cssText =
       "min-height:36px;padding:8px 14px;border-radius:var(--lumiverse-radius,8px);cursor:pointer;" +
       "font:13px var(--lumiverse-font-family,system-ui);" +
-      // Only the hover colour. This used to animate filter as well, from back
-      // when hovering brightened the button instead of recolouring it; nothing
-      // has set filter since, and animating it is what forces a button onto its
-      // own compositing layer for no benefit.
+      // Only the hover colour. Nothing here sets filter, and animating it is
+      // what forces a button onto its own compositing layer for no benefit.
       "transition:background-color var(--lumiverse-transition-fast,150ms ease)," +
       "box-shadow var(--lumiverse-transition-fast,150ms ease);" +
       (primary
@@ -9935,13 +9888,12 @@ export function setup(ctx: Ctx, opts?: any) {
   }
 
   // ---- reset ----
-  // Reset used to be one button that put every setting back at once. That is
-  // the rarest thing anyone actually wants: the usual case is one part having
+  // A picker rather than one button that puts every setting back at once,
+  // which is the rarest thing anyone wants. The usual case is one part having
   // been fiddled into a mess, most often the button selectors, since Pick it
-  // for me makes those easy to overwrite with the wrong element. Undoing that
-  // meant losing your word swaps, your refusal phrases and your note along with
-  // it, so there was a second button for selectors alone and nothing for
-  // anything else.
+  // for me makes those easy to overwrite with the wrong element. Resetting
+  // everything to undo that costs the word swaps, the refusal phrases and the
+  // notes as well.
   //
   // The parts are the same ones import and export already use, so there is one
   // definition of what a part is and the names match between the two panels.
@@ -9981,7 +9933,7 @@ export function setup(ctx: Ctx, opts?: any) {
 
   // Puts the chosen parts back to what the extension shipped with, in the panel
   // only. Save keeps it, closing the panel discards it, which is the same deal
-  // import already offers and the same one the old selector-only reset offered.
+  // import already offers.
   // Presets are the exception and are called out as such in the picker: they
   // live outside the settings object and are deleted for real.
   function applyReset(ids: string[], alsoPresets: boolean): { settings: number; presets: number } {
@@ -10170,11 +10122,11 @@ export function setup(ctx: Ctx, opts?: any) {
     // ---- the confirmation step ----
     // Pressing Reset ticked asks before it does anything, and the asking is
     // done here rather than through the host's confirm dialog. Two reasons.
-    // The host may not offer one, and the old all-or-nothing reset treated a
-    // missing dialog as a yes, which is the wrong way round for the one control
-    // that throws settings away. And a host dialog can only be handed a fixed
-    // sentence, where this one names the parts, counts the settings in them,
-    // and says which of the two things about to happen can be undone.
+    // The host may not offer one, and a missing dialog must not count as a yes
+    // for the one control that throws settings away. A host dialog can only be
+    // handed a fixed sentence, where this one names the parts, counts the
+    // settings in them, and says which of the two things about to happen can be
+    // undone.
     //
     // The boxes are frozen while it is up, so what the summary says and what
     // the button does cannot come apart.
@@ -10907,9 +10859,8 @@ export function setup(ctx: Ctx, opts?: any) {
     }
   } catch (_) {}
   // Every Extras button the extension can add is removed here, by walking the
-  // map instead of naming them one at a time. The swap-whole-chat one used to
-  // be left off a list like that, so it survived a reload and a duplicate
-  // piled up each time.
+  // map instead of naming them one at a time, so a new entry cannot be left off
+  // and survive a reload, piling up a duplicate each time.
   disposers.push(() => dropBarEntries());
   disposers.push(() => dropToggleAction());
   // A swap timer left running would show a message about a backend nobody is
@@ -11047,8 +10998,8 @@ export const __testing = {
   withLongForms,
   REFUSAL_PHRASES,
   // The defaults block and the form built from it, so a check can hold the two
-  // against each other. Hints used to spell their default out by hand and went
-  // stale every time one was retuned, with nothing to catch it.
+  // against each other. A hint spelling its default out by hand goes stale the
+  // first time that value is retuned, with nothing to catch it.
   CONFIG,
   SCHEMA,
 };

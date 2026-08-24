@@ -36,10 +36,9 @@ declare function setTimeout(fn: () => void, ms: number): any;
 declare function clearTimeout(handle: any): void;
 
 const SETTINGS_FILE = 'settings.json';
-// Word-swap presets. These lived only in the browser's local storage, so a
-// user's settings followed them to a new device and their presets silently did
-// not. Kept in account storage alongside the settings, with the browser copy
-// still acting as the fast local cache.
+// Word-swap presets, kept in account storage next to the settings so they
+// follow the user between devices. The browser copy is a fast local cache, not
+// the only copy.
 const PRESETS_FILE = 'presets.json';
 
 interface Group { tos: string[]; from: string; isWord: boolean; }
@@ -122,17 +121,15 @@ function replyTo(userId: string | undefined, msg: any): void {
 // was armed for never started anything, so the window between arming and
 // collection is the length of one click, not the age limit below.
 //
-// The one thing that no longer guards this is what the host calls the
-// generation. It used to require context.generationType to read "regenerate"
-// or "swipe". Builds that report "normal" for every generation, which is most
-// of them, therefore never sent the note at all: it was armed, the retry ran
-// without it, and the only sign was a line in the log. The type is now only
-// consulted when the user asks for it, through strictType below.
+// What the host calls the generation is deliberately not one of the guards.
+// Most builds report "normal" for everything, including a regenerate, so
+// requiring "regenerate" or "swipe" would mean no note ever goes out. Users who
+// know their build reports it properly can ask for that check with strictType.
 interface RefusalNote { chatId: string; notes: Array<{ text: string; role: string }>; placement: string; at: number; strictType: boolean; }
 let refusalNote: RefusalNote | null = null;
-// The extension's master switch, and the chats it has been switched off in.
-// Both belong to the frontend, and both have to reach here because swapping
-// runs on this side and would otherwise ignore them.
+// The extension's master switch, and the chats it is switched off in. Both are
+// the frontend's, and both have to be sent here because swapping runs on this
+// side and would otherwise ignore them.
 let masterOn = true;
 let chatsOff: Set<string> = new Set();
 // Long enough to cover prompt assembly on a busy server, short enough that a
@@ -189,10 +186,9 @@ function promptWatcherFor(userId?: string): string | null {
   return k === '' || only === '' ? only : null;
 }
 // The whole prompt goes to the panel, every message and every character of it.
-// This used to be capped, which kept the cost of a generation down and left the
-// view saying a message was longer than what it was showing, which is the one
-// thing somebody opening this view cannot work around. A prompt is only sent
-// while the Prompt tab is actually open, and that is where the cost is kept.
+// Truncating here would leave the view claiming a message is longer than what
+// it shows, which is the one thing a reader cannot work around. The cost is
+// kept down by only sending a prompt while the Prompt tab is open.
 
 // The tokeniser the host actually uses, when it will tell us. The panel's own
 // figure is characters divided by four, which is a serviceable guess and wrong
@@ -242,7 +238,6 @@ function snapshotPrompt(messages: any[], context: any, userId?: string, noteAt?:
     // holding is for the chat you are actually looking at. Snapshots are
     // addressed to a person, not to a window, so somebody with two chats open
     // in two tabs has both of them receiving every prompt either one produces.
-    // The generation type used to ride along here too and nothing ever read it.
     replyTo(to, {
       type: 'prompt_snapshot',
       at: at,
@@ -576,10 +571,9 @@ function rebuild(): void {
 
 // Pull the find-and-replace fields out of a full settings object.
 function applyReplaceFromSettings(s: any) {
-  // The extension's own master switch, not the swap one. Its description says
-  // "turn it off and it does nothing", and rewriting somebody's saved replies
-  // while it is off is emphatically something. Absent means on, so a settings
-  // object from before this was read does not switch swapping off by surprise.
+  // The extension's own master switch, not the swap one. Off means it does
+  // nothing, and rewriting saved replies is emphatically something. Absent
+  // counts as on, so an older settings object does not switch swapping off.
   masterOn = s.enabled !== false;
   enabled = !!s.replaceEnabled;
   random = !!s.replaceRandom;
@@ -748,10 +742,10 @@ spindle.onFrontendMessage(async (payload: any, userId?: string) => {
     if (!payload) return;
     if (payload.type === 'save_settings' && payload.settings && typeof payload.settings === 'object') {
       applyReplaceFromSettings(payload.settings);
-      // A failed write here is the account copy, which is what carries settings
-      // between a user's devices. It used to throw into the catch at the bottom
-      // and be logged on the server, where nobody it affects can read it, while
-      // the panel said the settings were saved.
+      // This write is the account copy, the one that carries settings between
+      // devices. It is caught here rather than falling to the catch at the
+      // bottom, which logs on the server where the affected user cannot see it
+      // while the panel claims the save worked.
       try {
         await writeUserJson(SETTINGS_FILE, payload.settings, userId);
       } catch (e) {
@@ -771,9 +765,8 @@ spindle.onFrontendMessage(async (payload: any, userId?: string) => {
       // swapping did nothing while the manual buttons worked, because those
       // only ask whether there are rules and never look at the switch.
       //
-      // On a multi-account install this is still one rule set for the whole
-      // process, which it always was. What changes is which user sets it: it
-      // was whoever saved first, and it is now whoever loaded or saved last.
+      // On a multi-account install this is one rule set for the whole process,
+      // belonging to whichever user loaded or saved last.
       if (settings && typeof settings === 'object') applyReplaceFromSettings(settings);
       replyTo(userId, { type: 'loaded_settings', requestId: payload.requestId, settings: settings });
       return;
@@ -1112,8 +1105,8 @@ function tryRegisterInterceptor(): void {
   if (interceptorOn) return;
   try {
     const perms: any = (spindle as any).permissions;
-    // A build too old to have permissions.has gets the old behaviour, which is
-    // to register and let the host decide.
+    // A build without permissions.has cannot be asked, so register and let the
+    // host decide.
     if (perms && typeof perms.has === 'function' && !perms.has('interceptor')) return;
   } catch (_) {}
   try {
