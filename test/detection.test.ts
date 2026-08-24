@@ -1786,3 +1786,24 @@ describe("the shapes a custom thinking tag name can take", () => {
     expect(left("mythink", "<mythink extra>" + INNER + "</mythink>" + REPLY)).toBe(REPLY);
   });
 });
+
+// A streamed token says what it is, and builds do not agree on the word. A
+// name this misses is not cosmetic: the token is filed as reply text, so it
+// goes into the buffer that stands in for the reply when the end event carries
+// none, and the panel reports the model's working-out as the reply arriving.
+describe("which streamed tokens count as the model working", () => {
+  const T: any = __testing;
+  const THINKING = ["reasoning", "reasoning_content", "thinking", "think", "thought", "thoughts", "analysis", "commentary", "cot", "Reasoning"];
+  const REPLY = ["content", "text", "message", "delta", "final", "answer", "output", ""];
+
+  for (const t of THINKING) {
+    test(JSON.stringify(t) + " is the model working", () => {
+      expect(T.REASONING_TOKEN.test(t)).toBe(true);
+    });
+  }
+  for (const t of REPLY) {
+    test(JSON.stringify(t) + " is reply text", () => {
+      expect(T.REASONING_TOKEN.test(t)).toBe(false);
+    });
+  }
+});

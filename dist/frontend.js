@@ -1919,6 +1919,14 @@ const THINK_TAGS = ["think", "thinking", "thought", "thoughts", "reasoning", "re
 // was not recognised as cut off, while the stripper had already decided that
 // channel was thinking.
 const THINK_CHANNELS = "analysis|thinking|thought|reasoning|commentary";
+// What a streamed token calls itself when it is the model working rather than
+// the reply. A different vocabulary from the channel names above and matched
+// loosely, since builds differ: "reasoning_content" and "thinking" both appear.
+// A name missed here is not a cosmetic problem. The token is filed as reply
+// text, so it lands in the buffer that stands in for the reply when the end
+// event carries none, and the panel reports the model's working-out as the
+// reply arriving.
+const REASONING_TOKEN = /reason|think|thought|analysis|commentary|\bcot\b/i;
 // The built-in names plus whatever is in Extra thinking tag names. One place,
 // so the stripper and the cut-off check cannot end up knowing different sets.
 function thinkTagNames(cfg) {
@@ -5586,6 +5594,7 @@ export function setup(ctx, opts) {
             retryAt: 0, // when the pending retry fires, for the live countdown
             retryReason: "",
             live: false, // a reply is in the air right now
+            liveSince: 0, // when it went live, so a state with no number of its own has one
             sawReasoning: false,
             sawContent: false,
             buf: "", // streamed reply text, used when the end event carries no content
@@ -5667,10 +5676,17 @@ export function setup(ctx, opts) {
             return { text: "Waiting for the retry to start", busy: true };
         if (s.live && s.sawContent)
             return { text: "Reply arriving, " + rough(String(s.buf || "").length) + " characters", busy: true };
+        // These two are the only busy states with no figure of their own. A reply
+        // arriving counts characters and a retry counts down, so both visibly move;
+        // these said one fixed sentence for as long as they lasted, which on a
+        // model that thinks for a minute is indistinguishable from the panel having
+        // frozen. How long it has been going is the number they were missing.
+        const forMs = s.liveSince ? Date.now() - s.liveSince : 0;
+        const so_far = forMs >= 1000 ? ", " + sayTime(forMs) : "";
         if (s.live && s.sawReasoning)
-            return { text: "Model is thinking", busy: true };
+            return { text: "Model is thinking" + so_far, busy: true };
         if (s.live)
-            return { text: "Waiting for the reply to start", busy: true };
+            return { text: "Waiting for the reply to start" + so_far, busy: true };
         return null;
     }
     function liveStatus() {
@@ -6734,6 +6750,8 @@ export function setup(ctx, opts) {
         // genId is never cleared, because the ids of generations already dealt with
         // are wanted afterwards, so it cannot answer this and the status line read
         // "waiting for the reply to start" long after one had finished.
+        if (!s.live)
+            s.liveSince = Date.now();
         s.live = true;
         // A reply starting is a change, so the line says so at once rather than up
         // to a quarter of a second later. The character count inside one is not a
@@ -6950,10 +6968,12 @@ export function setup(ctx, opts) {
         const s = st(p.chatId);
         // Text arriving is the only proof that beats every guess: if anything above
         // decided this reply was over and it was not, this puts it right.
+        if (!s.live)
+            s.liveSince = Date.now();
         s.live = true;
         // Matched by shape, not an exact string, so a build that labels these
         // "reasoning_content" or "thinking" is not counted as visible reply text.
-        if (/reason|think/i.test(String((p && p.type) || "")))
+        if (REASONING_TOKEN.test(String((p && p.type) || "")))
             s.sawReasoning = true;
         else {
             s.sawContent = true;
@@ -11065,6 +11085,7 @@ export const __testing = {
     parseSubs,
     applySubs,
     stripThinking,
+    REASONING_TOKEN,
     stripMarkup,
     splitSelectorList,
     withLongForms,

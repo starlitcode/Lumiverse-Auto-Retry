@@ -107,9 +107,19 @@ async function inPanel(browser, { css = "", viewport, touch = false, settings = 
   await page.waitForFunction(() => !!window.__setup);
   await page.evaluate(async (over) => {
     window.__acts = {};
+    // Recorded rather than discarded, so a check can drive the lifecycle the
+    // host would drive: a generation starting, tokens arriving, one ending.
+    window.__handlers = {};
     window.__setup(
       {
-        events: { on: () => () => {} },
+        events: {
+          on: (name, fn) => {
+            window.__handlers[name] = fn;
+            return () => {
+              delete window.__handlers[name];
+            };
+          },
+        },
         ui: {
           showModal: () => ({
             root: document.getElementById("modal"),
@@ -720,6 +730,57 @@ console.log("\nthe panel in the drawer");
   check("and switching back takes the floating one down",
     out.back.drawer && out.back.floatingGone && out.back.bodies === 1, out.back);
   check("no console errors", errors.length === 0, errors);
+}
+
+// ---- the live status keeps moving while the model thinks ----
+// Every other busy state carries a figure of its own: a reply arriving counts
+// characters, a retry counts down. Thinking and waiting said one fixed sentence
+// for as long as they lasted, so on a model that thinks for a minute the panel
+// was indistinguishable from one that had frozen.
+//
+// The second half matters more than the first. A token says what it is, builds
+// do not agree on the word, and a label this does not recognise is filed as
+// reply text: it lands in the buffer that stands in for the reply when the end
+// event carries none, and the panel calls the model's working-out a reply.
+console.log("\nthe live status moves while the model is thinking");
+{
+  for (const label of ["reasoning", "thought", "cot"]) {
+    const { out, errors } = await inPanel(
+      browser,
+      { settings: { liveLog: true, panelHome: "float" } },
+      (page) =>
+        page.evaluate(async (label) => {
+          const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+          const read = () => {
+            const e = document.getElementById("__lvRetryStatus");
+            return e ? e.textContent.trim() : "";
+          };
+          window.__handlers.GENERATION_STARTED({ chatId: "c1", generationId: "g1", messageId: "m1" });
+          await wait(60);
+          const atStart = read();
+          for (let i = 0; i < 9; i++) {
+            window.__handlers.STREAM_TOKEN_RECEIVED({ chatId: "c1", generationId: "g1", token: "weighing ", type: label, seq: i });
+            await wait(250);
+          }
+          const thinking = read();
+          for (let i = 0; i < 3; i++) {
+            window.__handlers.STREAM_TOKEN_RECEIVED({ chatId: "c1", generationId: "g1", token: "0123456789", type: "content", seq: 90 + i });
+            await wait(120);
+          }
+          // The line repaints on a shared quarter-second clock, so a read taken
+          // straight after the last token is a tick behind it.
+          await wait(400);
+          return { atStart, thinking, arriving: read() };
+        }, label),
+    );
+    check(label + ": the model working is not called a reply arriving",
+      /thinking/i.test(out.thinking), out);
+    check(label + ": and the line carries how long it has been going",
+      /\d+s/.test(out.thinking), out.thinking);
+    check(label + ": those tokens are not counted as reply text",
+      / 30 characters/.test(out.arriving), out.arriving);
+    check(label + ": no console errors", errors.length === 0, errors);
+  }
 }
 
 // ---- the panel survives everything that re-syncs it ----
