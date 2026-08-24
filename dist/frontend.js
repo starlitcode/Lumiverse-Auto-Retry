@@ -556,7 +556,7 @@ const SCHEMA = [
                 key: "refusalIgnoreQuoted",
                 label: "Ignore refusals inside quotation marks",
                 type: "bool",
-                hint: "On by default. A line inside quotation marks is a character speaking, so it is not counted as the model refusing. This is what keeps \"I can't help with that,\" said the innkeeper from being thrown away. Turn it off only if your model puts its own refusals in quotes. Two things ignore this setting. Your own phrases are always counted, on or off. So is the support check above, which always skips quoted lines: no model puts that kind of message in quotation marks, so turning this off there would only make a character in the scene harder to tell apart from it.",
+                hint: "On by default. A line inside quotation marks is a character speaking, so it is not counted as the model refusing. This is what keeps \"I can't help with that,\" said the innkeeper from being thrown away. Turn it off only if your model puts its own refusals in quotes. Your own phrases are always counted either way, and the support check above always skips quoted lines.",
             },
             {
                 key: "refusalExtraPhrases",
@@ -596,7 +596,7 @@ const SCHEMA = [
                 key: "refusalThinkTags",
                 label: "Extra thinking tag names",
                 type: "text",
-                hint: "Optional, one per line. The common reasoning tags are already handled. Add a tag name only if your model wraps its thinking in an unusual one (for example: mythink). Just the name, no brackets or pipes. Letters, digits, underscores and hyphens all work, so my_think and my-think are both fine. A space is not part of a tag name and is dropped, so my think is read as mythink. A name you add is recognised in all four wrappers: <name>, [name], <|name|> and the <|channel|> form some models use, and it covers the word swaps and the length checks as well as refusals.",
+                hint: "Optional, one per line. The common reasoning tags are already handled. Add a tag name only if your model wraps its thinking in an unusual one (for example: mythink). Just the name, no brackets or pipes; underscores and hyphens are part of a name, spaces are not. A name you add is recognised in all four wrappers, and it covers the word swaps and the length checks as well as refusals.",
             },
             {
                 key: "refusalNote",
@@ -652,7 +652,7 @@ const SCHEMA = [
                 key: "replaceRules",
                 label: "Word swaps (old => new)",
                 type: "text",
-                hint: 'Rules are "old => new", one per line. The left side can be a single word, a phrase, or a whole sentence, and commas inside it are fine. A single word matches whole words only (so cat won\'t touch category), while a phrase or sentence matches exactly as you type it. Leave the right side empty to delete it. Put the same left side on more than one line (like sky => blue on one line and sky => aqua on another) to give it options for the random toggle below. All rules are applied in a single pass, so a rule never acts on what another rule just wrote: cat => dog and dog => wolf turns cats into dogs and dogs into wolves, and hot => cold with cold => hot swaps the two rather than making everything one of them. Where two rules could match the same spot, the longer left side wins.',
+                hint: 'Rules are "old => new", one per line. A single word matches whole words only, so cat will not touch category, while a phrase or sentence matches exactly as you type it. Leave the right side empty to delete it. All rules run in one pass, so no rule ever acts on what another just wrote. The Word swaps page in the docs covers the rest.',
             },
             {
                 key: "replaceRandom",
