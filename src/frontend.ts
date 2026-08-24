@@ -5701,7 +5701,17 @@ export function setup(ctx: Ctx, opts?: any) {
           " (try " + s.attempts + " of " + cfg.maxRetries + ")",
         busy: true,
       };
-    if (s.expectingStart) return { text: "Waiting for the retry to start", busy: true };
+    // Same reasoning as the two below, and this one already holds the moment it
+    // began. A click that has not turned into a generation yet can sit here for
+    // a while on a slow provider, and it is the state somebody is most likely
+    // to be staring at, having just pressed something.
+    if (s.expectingStart) {
+      const waiting = Date.now() - s.expectingStart;
+      return {
+        text: "Waiting for the retry to start" + (waiting >= 1000 ? ", " + sayTime(waiting) : ""),
+        busy: true,
+      };
+    }
     if (s.live && s.sawContent)
       return { text: "Reply arriving, " + rough(String(s.buf || "").length) + " characters", busy: true };
     // These two are the only busy states with no figure of their own. A reply

@@ -1807,3 +1807,27 @@ describe("which streamed tokens count as the model working", () => {
     });
   }
 });
+
+// A busy state with nothing moving in it is indistinguishable from a panel
+// that has stopped working. Three of these said one fixed sentence for as long
+// as they lasted, and on a model that thinks for a minute that reads as frozen.
+// Written against the source because the branches live inside the generation
+// handler, out of reach of this tier, and because the fault this guards is a
+// branch added later without a figure in it.
+describe("no busy status sits still", () => {
+  const src = readFileSync(new URL("../src/frontend.ts", import.meta.url), "utf8");
+  const fn = src.slice(src.indexOf("function chatStatus"), src.indexOf("function liveStatus"));
+
+  test("chatStatus was found", () => {
+    expect(fn.length).toBeGreaterThan(200);
+  });
+
+  test("every busy branch carries something that changes", () => {
+    // Anything that moves on its own: a countdown, an elapsed time, a count.
+    const moves = /sayTime|rough\(|so_far|waiting|retryAt/;
+    const branches = fn.split(/return\s*\{/).slice(1).filter((b) => /busy:\s*true/.test(b));
+    expect(branches.length).toBeGreaterThanOrEqual(5);
+    const still = branches.filter((b) => !moves.test(b.slice(0, b.indexOf("busy:"))));
+    expect(still).toEqual([]);
+  });
+});
