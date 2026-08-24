@@ -1718,25 +1718,25 @@ describe("a short reply is measured by its words, not its tags", () => {
   const T: any = __testing;
 
   test("tags are not part of the reply's length", () => {
-    expect(T.withoutMarkup('<font color="#ffff00">"Hi."</font>')).toBe('"Hi."');
+    expect(T.stripMarkup('<font color="#ffff00">"Hi."</font>')).toBe('"Hi."');
   });
 
   test("the words between tags survive", () => {
-    expect(T.withoutMarkup("He froze. <i>Then</i> he ran.")).toBe("He froze. Then he ran.");
+    expect(T.stripMarkup("He froze. <i>Then</i> he ran.")).toBe("He froze. Then he ran.");
   });
 
   test("prose that merely looks like a tag is kept", () => {
-    expect(T.withoutMarkup("she was 3 < 4 and glad")).toBe("she was 3 < 4 and glad");
+    expect(T.stripMarkup("she was 3 < 4 and glad")).toBe("she was 3 < 4 and glad");
   });
 
   test("the short check actually measures that way", () => {
     // The cases above drive the helper. This one holds the call site, which is
     // inside the generation handler and out of reach of this tier: without it,
-    // deleting withoutMarkup from that line breaks nothing here.
+    // deleting stripMarkup from that line breaks nothing here.
     const src = readFileSync(new URL("../src/frontend.ts", import.meta.url), "utf8");
     const branch = src.match(/cfg\.retryOnShort &&[\s\S]{0,160}?cfg\.minChars/);
     expect(branch).toBeTruthy();
-    expect(branch![0]).toContain("withoutMarkup");
+    expect(branch![0]).toContain("stripMarkup");
     expect(branch![0]).toContain("stripThinkingAlways");
   });
 
@@ -1746,6 +1746,6 @@ describe("a short reply is measured by its words, not its tags", () => {
       '<font color="#ffff00">"Wait."</font>\n' +
       '<font color="#ffff00">"Please."</font>';
     expect(reply.length).toBeGreaterThan(100);
-    expect(T.withoutMarkup(reply).trim().length).toBeLessThan(30);
+    expect(T.stripMarkup(reply).trim().length).toBeLessThan(30);
   });
 });

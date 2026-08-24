@@ -883,6 +883,9 @@ const SCHEMA: Group[] = [
 // reason the old one was.
 const HTML_TAG = /<\/?[a-zA-Z][a-zA-Z0-9-]*(?:"[^"]*"|'[^']*'|[^'">]){0,400}>/g;
 
+// Also what a length check measures: a line of dialogue wrapped in
+// <font color="#ffff00"> carries about thirty characters of markup around what
+// was actually said, so counting the tags measures the wrong thing.
 function stripMarkup(text: string): string {
   return String(text == null ? "" : text).replace(HTML_TAG, "");
 }
@@ -2109,14 +2112,6 @@ function stripThinking(text: string, cfg?: any): string {
 // counts. Asking whether a reply is empty, or whether it was cut off, is a
 // different question, and the answer is always no when the only thing there is
 // a think block.
-// Tags are not reply text. A line of dialogue wrapped in <font color="#ffff00">
-// carries twenty-nine characters of markup around whatever was actually said,
-// so a length test set for prose is measuring the tags as well as the words. A
-// reply of three short lines can clear a hundred characters while saying forty.
-function withoutMarkup(text: string): string {
-  return stripMarkup(text);
-}
-
 function stripThinkingAlways(text: string, cfg?: any): string {
   return stripThinking(text, { refusalThinkTags: cfg && cfg.refusalThinkTags });
 }
@@ -7094,7 +7089,7 @@ export function setup(ctx: Ctx, opts?: any) {
     // either would let a two-word reply pass a length test set for prose.
     if (
       cfg.retryOnShort &&
-      withoutMarkup(stripThinkingAlways(content, cfg)).trim().length < cfg.minChars
+      stripMarkup(stripThinkingAlways(content, cfg)).trim().length < cfg.minChars
     ) {
       scheduleRetry(chatId, "short");
       return;
@@ -10991,7 +10986,7 @@ export const __testing = {
   parseSubs,
   applySubs,
   stripThinking,
-  withoutMarkup,
+  stripMarkup,
   splitSelectorList,
   withLongForms,
   REFUSAL_PHRASES,
