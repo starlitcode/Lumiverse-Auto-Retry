@@ -207,6 +207,8 @@ The same options live in the CONFIG block at the top of `src/frontend.ts` and `d
 
 The two watchdog waits (`stuckTimeoutMs`, `idleTimeoutMs`) are long, and the defaults assume a slow model rather than a fast one. A watchdog that fires early on a model that is slow but healthy is worse than one that fires late: it throws away a reply that was still arriving, and the replacement comes from the same slow model, so it fires again on that one too. If your provider is fast and you want quicker recovery, lower them.
 
+`idleTimeoutMs` needs streaming to be on. It watches for text that was arriving and then stopped, so with streaming off there is nothing arriving to go quiet and a stall cannot be seen at all. A reply that hangs is then caught by `stuckTimeoutMs`, which covers a generation that produces neither text nor an ending. Everything else works the same either way: the checks for an error, an empty reply, a cut-off reply and a refusal all read the finished reply, which arrives whether or not it streamed.
+
 These defaults only apply to a fresh install. Settings already saved to your account keep the values they had, so if you have been using an earlier version and want the new timings, open **Reset…** and tick **Retry behavior**.
 
 ---
