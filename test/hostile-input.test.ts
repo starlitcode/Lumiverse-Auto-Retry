@@ -29,6 +29,7 @@ const TAKES_ANYTHING = [
   "looksLikeRefusalError",
   "normalizeForMatch",
   "stripThinking",
+  "stripMarkup",
   "splitPhrases",
   "parseSubs",
   "splitSelectorList",
