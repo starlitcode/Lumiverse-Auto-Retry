@@ -1,10 +1,9 @@
 // How the settings panel is divided up. A section's heading, whether it starts
-// shut, and anything hand-built underneath it used to be one thing: the panel
-// worked out all three by matching the title text, so the word "Advanced" in a
-// heading was what made a section collapse, and a rename could silently stop
-// the refusal tester or the preset bar from being built at all. They are
-// separate fields now, which is safer but lets them drift apart instead. These
-// read the schema and check they still agree.
+// shut, and anything hand-built underneath it are three separate fields rather
+// than one thing derived from the title text. Deriving them means the word
+// "Advanced" in a heading decides whether a section collapses, and a rename can
+// stop the refusal tester or the preset bar being built at all. Separate fields
+// can drift apart instead, so these read the schema and check they agree.
 import { expect, test, describe } from "bun:test";
 import { readFileSync } from "node:fs";
 
@@ -54,13 +53,12 @@ describe("the sections of the settings panel", () => {
   });
 
   test("the sections that start shut are named, not guessed at", () => {
-    // These used to be worked out from the title starting with "Advanced",
-    // which was wrong twice over: it made the name decide the behaviour, and
-    // most of them are not advanced. Saving your settings to a file and
-    // building a bug report are ordinary things. They start shut because
-    // nothing in them is needed to use the extension, which is a different
-    // claim, and the caret is the one making it. Listed here so adding a
-    // section to that set is a decision someone made on purpose.
+    // A flag rather than a title starting with "Advanced", which would make the
+    // name decide the behaviour and label things that are not advanced. Saving
+    // settings to a file and building a bug report are ordinary. They start
+    // shut because nothing in them is needed to use the extension, which is a
+    // different claim, and the caret is the one making it. Listed here so
+    // adding a section to that set is a deliberate decision.
     const shut = secs.filter((s) => /\n\s*collapsed: true,/.test(s.body)).map((s) => s.title);
     expect(shut).toEqual([
       "Refusal tuning",
@@ -73,9 +71,9 @@ describe("the sections of the settings panel", () => {
 
   test("the switch you reach for first is in the first section", () => {
     // Basics holds the master switch and every way of reaching or watching it.
-    // The on-screen panel used to have a closed section to itself, so turning
-    // it on meant opening one to find a switch people are told to reach for
-    // the moment they want to report a bug.
+    // A closed section of its own for the on-screen panel would mean opening
+    // one to find a switch people are told to reach for the moment they want to
+    // report a bug.
     expect(secs[0].title).toBe("Basics");
     for (const key of ["enabled", "toast", "liveLog"]) expect(secs[0].fields).toContain(key);
   });

@@ -86,11 +86,11 @@ describe("nothing hangs on a pathological reply", () => {
     );
   }
 
-  // The shape that made this file worth writing. Stripping reasoning walks
+  // The shape that makes this file worth having. Stripping reasoning walks
   // forward from every opener looking for its closer, so a reply that is
-  // nothing but openers used to make each one scan the whole remainder: 5k
-  // openers took 96ms, 20k took 1.5s and 40k took 6s. Doubling the input has to
-  // roughly double the work, not quadruple it.
+  // nothing but openers can make each one scan the whole remainder: 5k openers
+  // at 96ms, 20k at 1.5s, 40k at 6s. Doubling the input has to roughly double
+  // the work, not quadruple it.
   test("the work grows with the input, not with its square", () => {
     const cost = (n: number) => {
       const text = "<think>".repeat(n);
@@ -108,12 +108,11 @@ describe("nothing hangs on a pathological reply", () => {
     expect(large).toBeLessThanOrEqual(Math.max(60, small * 8));
   });
 
-  // The same shape, one check along. Looking for a tag with no closing bracket
-  // used to walk to the end of the reply from every "<" it found, so a reply
-  // made of half-written tags cost the square of its length: 50k of them took
-  // 48 seconds, which is a locked tab on somebody's longest scene. Only the
-  // last "<" can be unclosed, so there is one scan to do and this holds it to
-  // one.
+  // The same shape, one check along. Walking to the end of the reply from every
+  // "<" costs the square of the length on a reply made of half-written tags:
+  // 50k of them takes 48 seconds, which is a locked tab on somebody's longest
+  // scene. Only the last "<" can be unclosed, so one scan is enough and this
+  // holds it to one.
   test("looking for an unclosed tag grows with the input too", () => {
     const cost = (n: number) => {
       const text = "<div class=".repeat(n);

@@ -84,9 +84,9 @@ describe("refusal detection leaves in-character writing alone", () => {
   }
 });
 
-// The list the built-ins were rebuilt against. Every wording here is one a
-// model actually declines with, and every one of them used to have at least one
-// spelling the extension walked straight past.
+// The list the built-ins are held to. Every wording here is one a model
+// actually declines with, and each has at least one spelling that a narrower
+// pattern walks straight past.
 describe("refusal detection covers the wordings models actually use", () => {
   const refusals = [
     "I am unable to help with that.",
@@ -175,11 +175,10 @@ describe("refusal detection catches the model breaking off", () => {
 // marks between the start of the line and the match: an odd number means one
 // was opened and not closed, so the match is inside it.
 //
-// It used to look for the nearest mark behind the match and any mark ahead of
-// it, which gives the same answer on a line carrying one piece of speech and
-// the wrong answer on a line carrying two. The refusal between them found the
-// closing mark of the first and the opening mark of the second and was read as
-// dialogue.
+// Looking for the nearest mark behind the match and any mark ahead of it gives
+// the same answer on a line carrying one piece of speech and the wrong answer
+// on a line carrying two: a refusal between them sits after the close of the
+// first and before the open of the second, and reads as dialogue.
 describe("what the quotation rule counts as inside", () => {
   const inside = [
     ['plain dialogue', '"I can\'t help with that," the innkeeper said.'],
@@ -215,7 +214,7 @@ describe("what the quotation rule counts as inside", () => {
 // What "Ignore refusals inside quotation marks" reaches when it is switched
 // off, and what it does not. The reason to switch it off is a model that wraps
 // its own refusals in quotation marks, and that has to keep working. Two other
-// rules used to go off with it, and neither is about quotation marks.
+// rules must not go off with it, since neither is about quotation marks.
 describe("switching the quotation rule off", () => {
   const loud = withCfg({ refusalIgnoreQuoted: false });
 
@@ -1649,11 +1648,10 @@ describe("the model leaving the scene to offer support", () => {
 });
 
 // Three places in the two modules decide which Harmony channels carry thinking
-// rather than the reply. The cut-off check used to ask with a shorter list than
-// the stripper used, so a reply cut off inside a commentary channel was not
-// recognised as cut off, while the stripper had already treated that channel as
-// thinking. They read one constant each now, and bridge.test.ts holds the two
-// modules to the same list.
+// rather than the reply. If the cut-off check asks with a shorter list than the
+// stripper uses, a reply cut off inside a commentary channel reads as finished
+// while the stripper has already treated that channel as thinking. They read
+// one constant each, and bridge.test.ts holds the two modules to one list.
 describe("every thinking channel counts as thinking, in every check", () => {
   const cfg: any = { refusalStripThinking: true, refusalThinkTags: "" };
   const CHANNELS = ["analysis", "thinking", "thought", "reasoning", "commentary"];
