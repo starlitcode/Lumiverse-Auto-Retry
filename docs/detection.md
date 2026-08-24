@@ -17,19 +17,19 @@ The checks:
 - it ends on a comma or semicolon, cut mid-clause
 - it stops on a word with nothing after it (`retryOnNoPunct`, on by default)
 
-Inline HTML is removed before any of this is counted. Models colour their dialogue with a raw `<span style="...">`, and the two quotes around that style value used to be counted alongside the two around the speech, so a reply whose dialogue was genuinely cut open still came out even and was passed as finished. A trailing `</span>` was also being read as end punctuation, which hid the same fault from the last check.
+Inline HTML is removed before any of this is counted. Models colour their dialogue with a raw `<span style="...">`, and the two quotes around that style value would otherwise be counted alongside the two around the speech, so a reply whose dialogue was genuinely cut open comes out even and reads as finished. A trailing `</span>` would also read as end punctuation, hiding the same fault from the last check.
 
 ### Code and trackers
 
 Every check above the last one is about prose: dialogue left open, a sentence stopping on a comma, an emphasis run with no partner. Two things are not prose and are left out of that counting.
 
-The first is code, which is full of the same characters meaning something else, so what is inside a code fence or an inline backtick span is not counted. One `const a = b * 2;` in a snippet used to read as an opened emphasis run and re-roll a finished answer.
+The first is code, which is full of the same characters meaning something else, so what is inside a code fence or an inline backtick span is not counted. One `const a = b * 2;` in a snippet otherwise reads as an opened emphasis run and re-rolls a finished answer.
 
 The fences and the backticks themselves are counted first, while they are still there, so a reply cut off inside a code block is still caught. A reply that is nothing but a code block is a finished reply.
 
 The second is anything inside an HTML container that closed. The model reached the closing tag, so nothing in there was cut off and none of it can say whether the reply was.
 
-Cards that render a whole interface every reply, like a chat window or a profile card, put dozens of nested `div`s of text into the reply. That text is not written like prose. A height written `6'2"` is a single unpaired quotation mark, and it used to flip the count for every properly closed piece of dialogue around it.
+Cards that render a whole interface every reply, like a chat window or a profile card, put dozens of nested `div`s of text into the reply. That text is not written like prose. A height written `6'2"` is a single unpaired quotation mark, and it would flip the count for every properly closed piece of dialogue around it.
 
 Nothing is lost by trusting a closing tag, because a reply cut off inside a widget never reaches one, which leaves the container open and is read as cut off below. Prose after a widget is still prose, so a reply that renders its card and then stops mid-sentence is still caught.
 
@@ -77,7 +77,7 @@ Such a tag counts when it is alone on its line and its name is not one HTML has:
 
 An unclosed reasoning block counts too, and it reads the same list of names as the stripper, so the built-in set and anything you add under **Extra thinking tag names** are both covered.
 
-That last check reads punctuation in any script, and treats an emoji as an ending too, so a scene closing on `。`, `؟`, `!` or `👋` is left alone. What it fires on is a reply that stops mid-word. It was off by default in earlier versions because the test for an ending was a list of Latin characters, which made it wrong too often to leave on.
+That last check reads punctuation in any script, and treats an emoji as an ending too, so a scene closing on `。`, `؟`, `!` or `👋` is left alone. What it fires on is a reply that stops mid-word. A test for an ending built from a list of Latin characters would be wrong too often to leave on, which is why this one reads any script.
 
 These are kept careful so a reply that legitimately ends on `...`, an action, or a closed quote is left alone.
 
@@ -221,7 +221,7 @@ Two things belong to each note on its own, set on its row:
 - **Who it comes from.** Which role it is sent under. **System** puts it alongside the instructions your setup already sends. **You** puts it in the same role as your own messages. **The character** puts it in the same role as the replies. Models treat the three differently, so which one works best depends on your model and your setup.
 - **From try.** Which retry that note joins on. At 2, the first retry re-sends unchanged and the note joins from the second onward; at 1 it goes on every refusal retry. This is per note, which is what lets a list escalate: give a gentle note 2 and a firmer one 4, and the firmer one is only ever sent if the gentle one did not work. Each retry carries whichever notes have come due, in the order you wrote them.
 
-Two things belong to the list as a whole, and apply to every note in it rather than to any one of them:
+Two things belong to the list as a whole, and apply to every note in it:
 
 - **Where the notes go.** Whichever notes are going are inserted together as one block, which is what lets one answer the one before it. **After the last message** puts them at the end, right before the point the reply continues from. **Before the last message** puts them one place earlier, so the newest line is still last. **At the very start** puts them ahead of everything, with the setup.
 - **Only send them on a regenerate or a swipe.** Whether any note is sent at all, rather than which. Off by default, for the reason below.

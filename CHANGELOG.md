@@ -8,6 +8,14 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 4.20.1
+
+_2026-08-24_
+
+### Changed
+
+- **Two settings descriptions were still carrying material the docs already cover.** A description is read while you are looking at the control it belongs to, so what belongs there is the shape of the setting and anything that would surprise you. The note list drops the worked example of how From try counts, which the detection page explains better, and keeps what you cannot get anywhere else: that notes reach the model rather than your chat, the cap, and one line each on Role and From try.
+
 ## 4.20.0
 
 _2026-08-24_
