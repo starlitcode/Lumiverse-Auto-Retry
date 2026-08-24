@@ -79,8 +79,8 @@ const FINISHED: Array<[string, string]> = [
   ["blockquote then prose", "> She said it was fine.\n\nIt was not fine."],
   ["heading then prose", "## The kitchen\n\nHe put the kettle on and waited."],
   ["nested list, finished", "- one\n  - one a\n  - one b\n- two"],
-  // A ">" inside a quoted attribute used to end the tag early for the check
-  // that removes markup, and the leftover quotation mark then read as dialogue
+  // A ">" inside a quoted attribute ends the tag early for anything reading
+  // markup naively, and the leftover quotation mark then reads as dialogue
   // opened and never closed.
   ["a bracket inside a quoted attribute", '<span title="a > b">She smiled.</span> It was warm.'],
   ["structured thinking then a reply", "<think>\nBeats:\n1. he panics\n2. she softens\n</think>She reached for his hand."],

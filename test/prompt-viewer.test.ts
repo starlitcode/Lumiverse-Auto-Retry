@@ -211,12 +211,10 @@ describe("a note comes back marked and in its place", () => {
 });
 
 // A prompt can be enormous, and it crosses the bridge on every generation.
-// The view used to be capped: 200 messages, 4000 characters each, 300000 in
-// total, with the rest reported as missing. It was the one thing somebody
-// reading this view could not work around, since what was cut only ever existed
-// on the server and was thrown away as the snapshot was built. It now goes
-// whole. A prompt is only captured while the Prompt tab is actually open, which
-// is where the cost is kept.
+// It goes whole. Capping it, by messages or characters, is the one thing
+// somebody reading this view cannot work around: what is cut only ever existed
+// on the server and is gone once the snapshot is built. The cost is kept down
+// by capturing only while the Prompt tab is open.
 describe("the whole prompt reaches the panel", () => {
   const huge = () =>
     Array.from({ length: 500 }, () => ({

@@ -495,16 +495,16 @@ console.log("\nhints");
 }
 
 // ---- a hint must never cover the setting it explains ----
-// It used to hang off the "?" button, which is 18px tall and sits partway down
-// a row that can be two lines high, so the description landed on top of the
-// very setting being asked about. Measuring the row instead also makes this
-// hold at any scale the host applies, since it reads what was actually painted.
+// Measured against the row, not the "?" button. That button is 18px tall and
+// sits partway down a row that can be two lines high, so anchoring to it drops
+// the description on top of the setting being asked about. Reading the row also
+// holds at any scale the host applies, since it reads what was painted.
 console.log("\nhints do not cover their own row");
 // The scales below are the range of Lumiverse's own UI Scale slider, which
 // runs 0.8 to 1.5. It applies as a zoom on the page, and the popover is
-// parented to the page so it gets zoomed too: an earlier version of this check
-// zoomed only #modal, which left the popover and the row in one coordinate
-// space and passed while the real thing was broken at 0.9.
+// parented to the page so it gets zoomed too. Zooming only #modal leaves the
+// popover and the row in one coordinate space, which passes while the real
+// thing is broken at 0.9, so the zoom goes on the page.
 for (const [label, css] of [
   ["normal", ""],
   ["UI Scale 0.8", "body{zoom:0.8}"],
@@ -622,10 +622,9 @@ console.log("\nkeyboard and search");
 }
 
 // ---- what is reachable without opening anything ----
-// The panel used to open on five headings, two of them over a single row, and
-// the switch for the on-screen panel sat behind a collapsed "Advanced" heading
-// of its own. Everything checked here has to be readable the moment the panel
-// opens, with nothing clicked.
+// Everything checked here has to be readable the moment the panel opens, with
+// nothing clicked. Headings over a single row, and a switch behind a collapsed
+// heading of its own, both fail that.
 console.log("\nwhat is on screen straight away");
 {
   const { out, errors } = await inPanel(browser, {}, (page) =>
@@ -927,9 +926,9 @@ console.log("\nthe panel survives a re-sync");
 
 // ---- and it is still live after a re-sync ----
 // The tabs switching again is not the whole of it: the Log appends as things
-// happen and the status line counts down, and both go through the same handles
-// the sync used to null. This fires real generations after the sync rather
-// than reading the panel as it was left.
+// happen and the status line counts down, and both go through the handles a
+// sync can null. This fires real generations after the sync rather than reading
+// the panel as it was left.
 console.log("\nthe panel is still live after a re-sync");
 {
   for (const home of ["float", "drawer"]) {
@@ -971,7 +970,7 @@ console.log("\nthe panel is still live after a re-sync");
       const body = () => document.getElementById("__lvRetryLogBody");
       const status = () => document.getElementById("__lvRetryStatus");
 
-      // The sync that used to kill it: open the settings and close them again.
+      // The sync most likely to kill it: open the settings and close them.
       acts["auto-retry-settings"].cb();
       await frame();
       [...document.getElementById("modal").querySelectorAll("button")]
@@ -1323,8 +1322,8 @@ console.log("\npreset split");
     "Match case exactly",
   ];
   // Everything in the find-and-replace group that a preset does not carry.
-  // Two settings were added to this run and this list was not updated with
-  // them, so the check had been failing on a correct panel.
+  // Add a new setting here when one joins that group, or this fails on a panel
+  // that is perfectly correct.
   const expectYours = [
     'Show a "swap words now" button',
     "Show a swap-whole-chat button",
@@ -1801,10 +1800,10 @@ console.log("\nregeneration feedback");
 }
 
 // ---- the mark is drawn, not typed ----
-// The float button used to carry a Unicode character, which meant its shape was
-// whatever font the device happened to pick. These check it is an actual
-// drawing, that on and off are told apart by more than colour, and that the
-// drawing scales with the button instead of staying one size.
+// A Unicode character would leave the button's shape to whatever font the
+// device picks. These check it is an actual drawing, that on and off are told
+// apart by more than colour, and that the drawing scales with the button
+// instead of staying one size.
 console.log("\nicons");
 {
   const page = await browser.newPage();
@@ -1877,11 +1876,10 @@ console.log("\nicons");
 }
 
 // ---- nothing moves, and nothing needs to ----
-// The float button used to carry transitions on four colour properties and a
-// scale dip on every press, which is a compositing layer and four
-// interpolations for a control whose whole job is to flip between two states.
-// It flips instantly now. This is the check that keeps it that way, since a
-// transition is one line to add back and costs a frame every time it runs.
+// The button flips between two states instantly. Transitions on four colour
+// properties and a scale dip on every press mean a compositing layer and four
+// interpolations for a control that only has to flip. A transition is one line
+// to add, and costs a frame every time it runs, so this keeps them out.
 {
   const press = async (reducedMotion) => {
     const page = await browser.newPage({ reducedMotion });
@@ -2022,10 +2020,10 @@ console.log("\nfloat button menu");
     const afterDrag = shown() > beforeDrag;
     up(btn());
 
-    // Resizing rebuilds the widget, and the rebuild used to start where a fresh
-    // one starts, so wherever the button had been dragged to was thrown away.
-    // Driven through the panel, which is the path a person takes and the one
-    // that exercises the live preview at the same time.
+    // Resizing rebuilds the widget, and a rebuild that starts where a fresh one
+    // starts throws away wherever the button was dragged to. Driven through the
+    // panel, which is the path a person takes and exercises the live preview at
+    // the same time.
     host.style.left = "300px";
     host.style.top = "260px";
     // Let the settle read record it. Moving the element is not something the
@@ -2109,9 +2107,9 @@ console.log("\nfloat button menu");
   // across button around that middle starts at 286,246.
   check("and keeps the middle of the button where it was, rather than its corner",
     !!out.resize.at && out.resize.at.x === 286 && out.resize.at.y === 246, out.resize);
-  // The button on the chat is the preview. A circle beside the box used to be
-  // one too, and it reserved a box as wide as the largest size the setting
-  // allows in every panel, switched on or not.
+  // The button on the chat is the preview. A second one beside the box would
+  // reserve space as wide as the largest size the setting allows, in every
+  // panel, whether the button is switched on or not.
   check("no preview circle is drawn beside the box", out.resize.noCircle, out.resize);
   check("dismissing it changes nothing", out.afterDismiss.button, out.afterDismiss);
   check("answering hide removes the button", out.gone.button, out.gone);
@@ -2120,10 +2118,10 @@ console.log("\nfloat button menu");
 }
 
 // ---- the countdown actually counts ----
-// It used to say "in 47.3s" once and keep saying it for the next forty-seven
-// seconds, so the one number anyone watches was the one that never moved. On
-// the current defaults a wait can be a minute, which made a frozen number look
-// like a frozen extension.
+// Written once, "in 47.3s" would say that for the next forty-seven seconds, so
+// the one number anyone watches is the one that never moves. A wait can be a
+// minute on the current defaults, and a frozen number reads as a frozen
+// extension.
 console.log("\nlive countdown");
 {
   const page = await browser.newPage();
@@ -2213,10 +2211,10 @@ console.log("\nlive countdown");
 }
 
 // ---- the panel is where you left it ----
-// Updating the extension reloads it, and the panel used to come back in the
-// default corner at the default size every time. Dragging it clear of your
-// chat and sizing it to what you want to read is work, and having to redo it
-// on every update is what makes a panel not worth opening.
+// Updating the extension reloads it, and coming back in the default corner at
+// the default size every time undoes whatever the reader set up. Dragging it
+// clear of the chat and sizing it is work, and redoing that on every update is
+// what makes a panel not worth opening.
 console.log("\nlayout is remembered");
 {
   const page = await browser.newPage();
@@ -2681,7 +2679,7 @@ console.log("\npop-up goes away");
     for (let i = 0; i < 40 && !/Retrying in/.test(says()); i++) await wait(50);
     const whileWaiting = { up: up(), text: says() };
 
-    // The retry fires and a reply starts. This is where it used to stay up and
+    // The retry fires and a reply starts. This is where the box can stay up and
     // start describing the new generation instead of leaving.
     await wait(700);
     handlers.GENERATION_STARTED({ chatId: "c", generationId: "g2" });
@@ -3343,12 +3341,11 @@ console.log("\non-screen swap");
       ),
       // The backend only ever edits replies, never anything the user wrote, so
       // a swap must not touch their messages on screen either. The whole-chat
-      // path used to replace every occurrence everywhere and caught them.
+      // path is the one that can reach past replies and catch them.
       //
-      // Sent with the wholeChat flag the backend used to set, even though
-      // nothing reads it now. That flag is what chose the path this went wrong
-      // on, so a check that leaves it out passes against the old code and
-      // guards nothing.
+      // Sent with the wholeChat flag, which is what selects that path. Leaving
+      // it out would exercise the single-reply path instead and guard
+      // nothing.
       userMessage: await (async () => {
         chat.innerHTML = "<div>I like cat.</div><div>A cat.</div>";
         onMsg({ type: "swapped", pairs: [["cat", "dog"]], wholeChat: true });
@@ -3913,10 +3910,10 @@ console.log("\nrefusal note");
       // A note is armed just before the click, because some builds start the
       // generation off the click itself. When there is no control to click
       // there is no generation to attach one to, so nothing is armed at all.
-      // This used to arm and then take it back, which was correct but spent the
-      // whole acknowledgement wait getting there, and for the length of that
-      // wait the backend held a note for a generation that never came. Runs
-      // last, since it takes the button off the page.
+      // Arming and then taking it back is also correct, but it spends the whole
+      // acknowledgement wait getting there, and for that long the backend holds
+      // a note for a generation that never comes. Runs last, since it takes the
+      // button off the page.
       // Each note carries its own first try, so a list can escalate: a gentle
       // note on the first retry and a firmer one only if that did not work.
       // Three rounds are driven, so the second note is due on the last of them.
@@ -4260,10 +4257,10 @@ console.log("\ntwo menus, one press");
 
 // ---- the quick toggle syncs like every other change ----
 // Saving the panel sends the settings to the account and to the backend. The
-// floating button and the Extras entry flip the same switch and did neither, so
-// the setting people change most often, from the controls built for changing
-// it, stayed in one browser. Word swapping reads that switch from the backend,
-// so it also never heard the extension had been switched off.
+// floating button and the Extras entry flip the same switch, so they have to do
+// the same, or the setting people change most often stays in one browser. Word
+// swapping reads that switch from the backend, so it would not hear about the
+// extension being switched off either.
 console.log("\nthe quick toggle syncs");
 {
   const page = await browser.newPage();
@@ -4381,11 +4378,10 @@ console.log("\nretries are tallied per chat, not per label");
 }
 
 // ---- the per-chat switch knows which chat you are in ----
-// It was reachable only once a chat id had been seen, and the only events
-// carrying one were a chat change and a generation. Load the page sitting in a
-// chat and neither has happened, so the button stayed greyed out until the user
-// left the chat and came back, or sent a message. A message rendering is what
-// actually happens when a chat opens, and it carries the id.
+// The switch needs a chat id. Taking one only from a chat change or a
+// generation leaves the button greyed out when the page loads with a chat
+// already open, until the reader leaves and comes back or sends a message. A
+// message rendering is what happens when a chat opens, and it carries the id.
 console.log("\nthe per-chat switch finds the chat");
 {
   const page = await browser.newPage();
@@ -4423,7 +4419,7 @@ console.log("\nthe per-chat switch finds the chat");
     const cold = state();
 
     // A message renders, which is what happens when a chat is simply open.
-    // No CHAT_CHANGED, no generation: this is the case that used to stay grey.
+    // No CHAT_CHANGED, no generation: this is the case that can stay grey.
     handlers.CHARACTER_MESSAGE_RENDERED &&
       handlers.CHARACTER_MESSAGE_RENDERED({ chatId: "chat-a", messageId: "m1" });
     await frame();
@@ -4738,9 +4734,8 @@ console.log("\nthe focus ring");
 }
 
 // ---- what the floating button takes over ----
-// The ways into the extension used to sit in the Extras menu whatever else was
-// on screen. The floating button's own menu holds them now, and the Extras menu
-// keeps them only when there is no floating button.
+// The floating button's own menu holds the ways into the extension, and the
+// Extras menu keeps them only when there is no floating button.
 //
 // Three cases. The middle one is the one that catches mistakes: a Lumiverse
 // with no showContextMenu has a button with no menu, so nothing may hide for
@@ -4912,9 +4907,9 @@ console.log("\nthe description button is sized for what is pointing at it");
       const hints = [...document.querySelectorAll("button[data-ar-hint]")]
         .filter((e) => e.getBoundingClientRect().width);
       const sizes = [...new Set(hints.map((e) => Math.round(e.getBoundingClientRect().width)))];
-      // It still does its job at either size, by the gesture that device makes:
-      // a mouse reveals on hover, a finger on tap. Reading the wrong one here
-      // would say the button was broken when it was only never pointed at.
+      // It does its job at either size, by the gesture that device makes: a
+      // mouse reveals on hover, a finger on tap. Reading the wrong one reports
+      // a broken button that was only never pointed at.
       if (matchMedia("(pointer: coarse)").matches) {
         hints[0].dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerType: "touch" }));
         hints[0].click();
@@ -5449,11 +5444,11 @@ console.log("\nSave tells the truth about the browser copy");
 }
 
 // ---- a swap that nobody answers says so ----
-// Pressing a swap button used to be able to do nothing at all, and say nothing
-// about it. If the host would not send the message, or the backend was not
-// running, the request went out and no answer ever came back. That looks
-// exactly like the extension being broken, which is the one impression it must
-// never give when somebody has just pressed a button.
+// A swap button can press and do nothing at all: the host may refuse to send
+// the message, or the backend may not be running, and the request goes out with
+// no answer behind it. Silence there looks exactly like a broken extension,
+// which is the one impression it must not give to somebody who just pressed a
+// button.
 //
 // Three cases: an answer arrives, no answer arrives, and the send itself throws.
 console.log("\na swap request with no answer");
@@ -5604,9 +5599,9 @@ console.log("\nturning the floating button on and off");
 
 // ---- one menu per gesture, even when Android asks twice ----
 // A long press on Android runs our hold timer and raises contextmenu as well,
-// so the menu gets asked for twice on the way to one gesture. Ours used to be
-// removed and rebuilt on the second ask. The host's cannot be taken back, so a
-// second ask would leave two menus stacked.
+// so the menu gets asked for twice on the way to one gesture. The host's menu
+// cannot be taken back once opened, so acting on the second ask leaves two
+// stacked.
 console.log("\nAndroid asking for the menu twice");
 {
   const page = await browser.newPage({ viewport: { width: 412, height: 800 } });
@@ -6336,14 +6331,13 @@ console.log("\nthe Prompt tab has a rendered and a raw view");
 }
 
 // ---- the panel asks for prompts again when the backend comes back ----
-// Asking the backend to capture prompts is a live request, and it used to be
-// sent only when the answer changed. The two sides have separate lifetimes, so
-// a backend that was not listening yet, or that restarted afterwards, knows
-// nothing while the panel is certain it has already asked. Nothing re-sent it,
-// so the Prompt tab stayed empty until the view happened to be toggled off and
-// on, which is why leaving the chat and coming back looked like the fix.
+// Asking the backend to capture prompts is a live request, and the two sides
+// have separate lifetimes. Sending it only when the answer changes leaves a
+// backend that was not listening yet, or that restarted, knowing nothing while
+// the panel is certain it has asked, and the Prompt tab stays empty until the
+// view is toggled off and on.
 //
-// The backend now says when it has started, and this is the panel hearing it.
+// The backend says when it has started, and this is the panel hearing it.
 console.log("\nthe Prompt tab re-arms when the backend restarts");
 {
   const page = await browser.newPage();
@@ -6682,9 +6676,9 @@ console.log("\nprompt viewer");
       type: "prompt_snapshot",
       at: Date.now(),
       chatId: "c1",
-      // Whole messages, since that is what the backend now sends. The last one
-      // is long on purpose: it used to arrive capped at 4000 characters with a
-      // line under it saying how much was missing.
+      // Whole messages, since that is what the backend sends. The last one is
+      // long on purpose: a cap would show here as a truncated message with a
+      // line under it saying how much is missing.
       messages: [
         { role: "system", content: "You are a tavern keeper.", history: false },
         { role: "user", content: "I sat down by the fire.", history: true },
@@ -6707,17 +6701,15 @@ console.log("\nprompt viewer");
           return /note/i.test(label) ? "note" : /chat/.test(label) ? "chat" : "added";
         })
       : [];
-    // Nothing is trimmed any more, so nothing in the view talks about trimming.
-    // The panel used to cap a message and say how much of it was missing, which
-    // was the one thing a reader could not work around: what was cut only ever
-    // existed on the server and was thrown away as the view was built.
+    // Nothing is trimmed, so nothing in the view talks about trimming. Capping
+    // a message and saying how much is missing is the one thing a reader cannot
+    // work around: what was cut only ever existed on the server.
     const saysNothingAboutTrimming =
       !/more characters were sent to the model/.test(shown) &&
       !/only this view is shortened/i.test(shown) &&
       !/cut for display/i.test(shown) &&
       !/not listed below/i.test(shown);
-    // Every message whole, as sent. The long one is the test: it used to arrive
-    // capped at 4000.
+    // Every message whole, as sent. The long one is the test.
     const wholeLongMessage = shown.indexOf("q".repeat(6000)) >= 0;
 
     // Where the note went is the question this view is opened for.
@@ -6924,9 +6916,9 @@ console.log("\nbutton edges");
 // shrink. Ten is the ceiling and one is the floor: removing the last note would
 // leave nothing to type into.
 // ---- a description opens under the setting it describes ----
-// It used to flip above the row when there was no room below, so a long
-// description opened somewhere none of the others do: you look under the
-// setting and the text is over it instead. It stays below now and scrolls.
+// Flipping above the row when there is no room below opens a long description
+// somewhere none of the others do: you look under the setting and the text is
+// over it instead. It stays below and scrolls.
 console.log("\nhint placement");
 {
   // A short viewport with a scrolling panel, so a row can be pushed low enough
@@ -6936,15 +6928,11 @@ console.log("\nhint placement");
   const want = longestHintKey();
   // The long one, on a viewport too short to fit it under the row.
   {
-    // A long description on a row of ordinary height. Which row that is used to
-    // be written in here by name, and it went stale twice: once when the row
-    // moved behind a switch and stopped being on screen at all, and once when
-    // its description was shortened and no longer overflowed. What this is
-    // about is the longest description, whichever setting carries it, so it is
-    // worked out from the schema rather than written down. Rows that need a
-    // switch are skipped because they are not on screen by default, and the
-    // note list because it opens above on purpose, which is the one case this
-    // is not testing.
+    // A long description on a row of ordinary height. Naming the row here goes
+    // stale as soon as that row moves behind a switch or its description is
+    // shortened, so the longest one is worked out from the schema instead.
+    // Rows behind a switch are skipped, since they are not on screen by
+    // default, and so is the note list, which opens above on purpose.
     const { out, errors } = await inPanel(
       browser, { css: PANEL, viewport: { width: 393, height: 460 }, settings: { refusalNote: true } },
       async (page) => page.evaluate(async (want) => {
@@ -7149,8 +7137,8 @@ console.log("\nhint placement");
   // row it belongs to. Measured at a row top of -5, covering it from 12 to 273.
   {
     // Pushed far enough up that the row genuinely has nothing above it. The
-    // panel carries more fixed chrome above its scroll area than it used to
-    // (the quick setup row), so -70px no longer reaches.
+    // fixed chrome above the scroll area, the quick setup row included, means
+    // -70px does not reach.
     const OFFSET = "#modal{position:fixed;left:0;right:0;top:-260px;bottom:0;overflow:auto;background:rgb(24,20,34);box-sizing:border-box}";
     const { out, errors } = await inPanel(
       browser, { css: OFFSET, viewport: { width: 393, height: 800 }, settings: { refusalNote: true } },
@@ -7333,12 +7321,11 @@ console.log("\ndependent rows");
 }
 
 // ---- the lines that only appear once something happens ----
-// The panel-wide contrast sweep runs once, at build, and used to look only at
-// elements that were painting text right then. Every status line in the panel
-// is empty at that moment and fills in later, so not one of them was ever
-// checked. On a light page whose theme variables are all dark they came out
-// white on white: the search count, the reset note, and the line that confirms
-// a save, which is the one that tells you your settings were kept.
+// The panel-wide contrast sweep runs once, at build. Looking only at elements
+// painting text right then skips every status line in the panel, since they are
+// all empty at that moment and fill in later. On a light page whose theme
+// variables are all dark they come out white on white: the search count, the
+// reset note, and the line confirming a save.
 console.log("\nlines that fill in later");
 {
   for (const [themeName, themeCss] of [["dark", ""], ["light", LIGHT], ["dark variables on a light page", LIGHT_PAGE]]) {
@@ -7874,11 +7861,10 @@ console.log("\npainted surfaces");
 }
 
 // ---- resetting one part leaves the others alone ----
-// Reset used to be all or nothing, plus a second button for the button
-// selectors on their own, because putting those back was the case that came up
-// and doing it cost you your word swaps and your refusal phrases. The picker
-// replaces both. The thing worth holding down is the promise it makes on
-// screen: what you do not tick is not touched.
+// The picker exists because all or nothing is the wrong shape: putting the
+// button selectors back is the case that comes up, and doing it should not cost
+// the word swaps and refusal phrases. What is worth holding down is the promise
+// it makes on screen: what you do not tick is not touched.
 console.log("\nreset picker");
 {
   const openPicker = async (page) =>

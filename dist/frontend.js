@@ -610,7 +610,7 @@ const SCHEMA = [
                 hintAbove: true,
                 label: "What the notes say",
                 type: "notes",
-                hint: "Your notes go to the model, not into your chat, and exactly as you typed them. Nothing is added, removed or checked. You can have up to ten, and empty ones are skipped. Each note has its own Role and its own From try. Role decides where the note sits: with the instructions your setup already sends (system), with your own messages (you), or with the replies (the character). From try decides which retry it joins in on. 1 sends it on every refusal retry. 2 lets the first retry go out unchanged and sends the note from the second try onward, so you can start gentle and get firmer further down the list. Notes that are due go out together, in the order you wrote them, so one can answer another.",
+                hint: "Your notes go to the model, not into your chat, and exactly as you typed them. Nothing is added, removed or checked. You can have up to ten, and empty ones are skipped. Each note carries its own Role, which decides whether it sits with your setup's instructions, your own messages or the replies, and its own From try, which decides which retry it joins on. Notes that are due go out together, in the order you wrote them.",
             },
             {
                 key: "refusalNotePlacement",
@@ -707,7 +707,7 @@ const SCHEMA = [
                 key: "swapWaitForEdits",
                 label: "Wait for other extensions to finish",
                 type: "bool",
-                hint: "Off by default. Turn this on if another extension also rewrites replies, like Hone with auto-refine on. Normally a swap is applied the moment a reply lands, and the other extension's rewrite then arrives on top and undoes it. With this on, the swap waits for the reply to stop changing and then applies to whatever the text has become, so both survive. If a later edit undoes a swap anyway, it is applied again, up to three times per reply. Leave it off if nothing else edits your replies: it only adds a delay.",
+                hint: "Off by default. Turn this on if another extension also rewrites replies, like Hone with auto-refine on. A swap normally applies the moment a reply lands, and the other extension's rewrite then arrives on top and undoes it. With this on, the swap waits for the reply to stop changing first, so both survive, and it reapplies up to three times if a later edit undoes it. Leave it off if nothing else edits your replies: it only adds a delay.",
             },
             {
                 key: "swapWaitSecs",
