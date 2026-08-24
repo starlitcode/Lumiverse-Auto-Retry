@@ -18,7 +18,7 @@ _2026-08-24_
 
 ### Fixed
 
-- **The on-screen panel looked frozen while a reasoning model was thinking.** Every other busy state carries a figure that moves: a reply arriving counts characters, a retry counts down. Thinking, and waiting for a reply to start, said one fixed sentence for as long as they lasted, which on a model that thinks for a minute is hard to tell from the panel having stopped working. Both now say how long it has been going.
+- **The on-screen panel looked frozen while it was waiting on the model.** Some busy states carried a figure that moves: a reply arriving counts characters, a retry counts down. The three that cover waiting, the model thinking, waiting for a reply to start, and waiting for a retry to start, each said one fixed sentence for as long as they lasted, which on a model that thinks for a minute is hard to tell from the panel having stopped working. All three now say how long they have been going.
 - **Some models had their thinking counted as the reply.** A streamed token says what it is, and builds do not agree on the word. Three that mean thinking were not recognised, so that text was filed as reply text: the panel called the model's working-out a reply arriving, and the text was counted toward the length checks.
 
 ## 4.19.0
