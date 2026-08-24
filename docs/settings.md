@@ -18,7 +18,7 @@ It shows that option's description in a small popover just below it, floating ov
 
 Where it opens is fixed per setting rather than decided as you go, so a description is always in the same place. The one exception is **What the notes say**, which opens above: that row holds the whole note list, its roles, its buttons and its counter, so below it would be a long way from the **?** you pressed.
 
-A description too long for the room on its side scrolls inside itself rather than jumping to the other side. Only one shows at a time. Tap the description, tap the **?** again, tap elsewhere, scroll the panel, or press Esc to close it.
+A description too long for the room on its side scrolls inside itself, and never jumps to the other side. Only one shows at a time. Tap the description, tap the **?** again, tap elsewhere, scroll the panel, or press Esc to close it.
 
 ## Rows that come and go
 
@@ -139,9 +139,9 @@ What it shows is the prompt for the chat you are in. A captured prompt goes to y
 
 Nothing is captured until you open this tab. Once you have, it keeps up for as long as the panel stays open, including while you are reading one of the other views, so a reply sent while you were on Log is waiting for you when you come back. Close the panel and nothing is captured at all, and the next time you open it, it waits to be asked again. That is why there is no separate switch for it: a setting left on would go on paying for itself in every chat long after you looked once.
 
-Reading the prompt is the one thing in the panel that needs a permission. The assembled prompt is only visible to an extension through the `interceptor`, which is privileged, so an admin has to approve it. Without it the tab stays empty and says so after your next reply, rather than going on telling you to send one. It only says that about a reply the tab was open for from the start: a prompt is assembled as a reply begins, so opening the tab partway through a reply cannot catch that one, and the tab asks for another rather than blaming the permission.
+Reading the prompt is the one thing in the panel that needs a permission. The assembled prompt is only visible to an extension through the `interceptor`, which is privileged, so an admin has to approve it. Without it the tab stays empty and says so after your next reply, instead of going on telling you to send one. It only says that about a reply the tab was open for from the start: a prompt is assembled as a reply begins, so opening the tab partway through cannot catch that one, and the tab asks for another instead of blaming the permission.
 
-What is captured is captured on your device and shown to you. Nothing is sent anywhere, nothing is written to disk, and it goes when you close the tab. A very long prompt is trimmed for display and says so rather than showing you part of it silently.
+What is captured is captured on your device and shown to you. Nothing is sent anywhere, nothing is written to disk, and it goes when you close the tab. A very long prompt is trimmed for display and says so, so you are never shown part of one silently.
 
 The same options live in the CONFIG block at the top of `src/frontend.ts` and `dist/frontend.js`. `dist/frontend.js` is the file the host actually loads, so editing CONFIG there takes effect with no rebuild; editing `src/frontend.ts` needs a `bun run build`.
 
