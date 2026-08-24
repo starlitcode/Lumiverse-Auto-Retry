@@ -18,7 +18,7 @@ None of the six is required for the extension to start, which is why each one be
 
 ### `chat_mutation`
 
-Granted on install, so no admin is involved. It lets the extension read the text of a reply, which is how it decides whether that reply failed, and rewrite a reply, which is how the word-swap feature saves a change. Rewriting is the part worth thinking twice about, which is why word swaps are off by default and marked beta.
+Granted on install, so no admin is involved. It lets the extension read a saved reply and rewrite it, and the word-swap feature is the only thing that uses it. Deciding whether a reply failed does not: that reads the text the `generation` permission already delivers, so retrying works with this one refused. Rewriting is the part worth thinking twice about, which is why word swaps are off by default and marked beta.
 
 **Refuse it** and the retry side works exactly as it should. Only find and replace does nothing.
 
