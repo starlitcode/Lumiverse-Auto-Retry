@@ -8,9 +8,13 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
-## 4.19.1
+## 4.20.0
 
 _2026-08-24_
+
+### Added
+
+- **The live line now knows whether your build streams.** With streaming on, a reply arriving counts its characters up as it lands. With it off, nothing arrives until the reply is finished, and the line sat on "waiting for the reply to start" for the whole generation, which is wrong twice over: it had started, and nothing was going to turn up before it was done. It says "Generating the reply" instead, with the time so far. Nothing exposes the setting, so this is worked out from what happens rather than asked: one token proves streaming is on, and a reply that finished with text having never sent one proves it is off. Until a whole reply has gone by it does not guess.
 
 ### Changed
 
