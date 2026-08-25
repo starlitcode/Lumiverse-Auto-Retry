@@ -81,6 +81,8 @@ In short: longest match is about the left side of your rules, random is about th
 
 Swapping follows the extension's own switches. With Auto Retry switched off, or switched off in the chat you are in, nothing is swapped automatically there. The two buttons are the exception: pressing one is you asking for a swap then and there, so they act whatever the switches say.
 
+That includes the waiting settings. **Wait for other extensions to finish** and its delay hold up automatic swapping only, and the panel shows them only while **Swap words in replies** is on. A button applies your swaps straight away and never waits.
+
 Editing a saved reply needs the `chat_mutation` permission, which is [covered on the privacy page](privacy.md#what-it-can-reach-and-why-it-needs-to). If nothing in your rules matches a reply, that reply is left untouched.
 
 ## A swap is permanent

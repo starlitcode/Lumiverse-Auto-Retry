@@ -1815,6 +1815,79 @@ console.log("\nswitching off a temporary chat");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- a setting that cannot do anything is not shown ----
+// The wait-for-other-extensions delay only ever gates automatic swapping: the
+// swap buttons apply straight away and never consult it. With automatic
+// swapping off it is a dead control, so it comes off the panel.
+//
+// Its companion row has to come off with it. That row hangs off the wait
+// switch, and the wait switch can be on while hidden, which would leave "how
+// long to wait" on screen with nothing above it saying what is being waited
+// for. That is the case the third row here covers.
+console.log("\nsettings that hang off automatic swapping");
+{
+  const errors = [];
+  const rows = async (settings) => {
+    const page = await browser.newPage();
+    page.on("pageerror", (e) => errors.push(e.message));
+    await stage(page, '<div id=modal style="height:900px;overflow:auto"></div>');
+    await page.addScriptTag({ content: SOURCE, type: "module" });
+    await page.waitForFunction(() => !!window.__setup);
+    const out = await page.evaluate(async (settings) => {
+      window.__acts = {};
+      window.__setup({
+        events: { on: () => () => {} }, sendToBackend: () => {}, onBackendMessage: () => () => {},
+        ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+              registerInputBarAction: (o) => { const a = { onClick: (cb) => { a.cb = cb; return () => {}; }, destroy: () => {} }; window.__acts[o.id] = a; return a; } },
+      }, settings);
+      window.__acts["auto-retry-settings"].cb();
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const root = document.getElementById("modal");
+      // Opened the way a person would, since the section starts shut and
+      // everything inside it reads as hidden until it is opened.
+      const head = [...root.querySelectorAll("*")].find(
+        (e) => /^Find and replace/.test(e.textContent.trim()) && e.children.length <= 2);
+      for (let p = head; p && p !== root; p = p.parentElement) {
+        if (p.tagName === "BUTTON" || p.getAttribute("role") === "button" ||
+            getComputedStyle(p).cursor === "pointer") { p.click(); break; }
+      }
+      await new Promise((r) => setTimeout(r, 200));
+      // offsetParent, not a walk up the tree: it is the browser's own answer to
+      // whether the row is rendered, and it does not depend on guessing which
+      // ancestor carries the display the panel set.
+      const seen = (label) => {
+        const el = [...root.querySelectorAll("*")].find(
+          (e) => e.children.length === 0 && e.textContent.trim() === label);
+        return el ? el.offsetParent !== null : "missing";
+      };
+      return { ctrl: seen("Swap words in replies"),
+               wait: seen("Wait for other extensions to finish"),
+               secs: seen("How long to wait (seconds)") };
+    }, settings);
+    await page.close();
+    return out;
+  };
+
+  const offOff = await rows({ replaceEnabled: false, swapWaitForEdits: false });
+  const offOn = await rows({ replaceEnabled: false, swapWaitForEdits: true });
+  const onOff = await rows({ replaceEnabled: true, swapWaitForEdits: false });
+  const onOn = await rows({ replaceEnabled: true, swapWaitForEdits: true });
+
+  // The switch that governs them all is never hidden, or there would be no way
+  // to turn any of it back on.
+  check("the automatic swap switch is always on the panel",
+    offOff.ctrl === true && onOn.ctrl === true, { offOff, onOn });
+  check("the wait setting is hidden while automatic swapping is off",
+    offOff.wait === false && offOn.wait === false, { offOff, offOn });
+  check("and shown once it is on", onOff.wait === true && onOn.wait === true, { onOff, onOn });
+  check("the delay is hidden until the wait setting is on", onOff.secs === false, onOff);
+  check("and shown alongside it", onOn.secs === true, onOn);
+  // The one needsAll exists for: wait left on from before, automatic off.
+  check("the delay does not outlive the switch it hangs off",
+    offOn.secs === false, offOn);
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- the box between the click and the reply ----
 // With Regeneration Feedback on, pressing regenerate opens a box asking for
 // guidance, and the reply only starts once that box is dealt with. An
