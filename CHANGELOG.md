@@ -8,6 +8,14 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 4.21.1
+
+_2026-08-25_
+
+### Fixed
+
+- **Two word swap settings were on the panel while they could not do anything.** **Wait for other extensions to finish** and its delay only ever hold up automatic swapping, so with **Swap words in replies** off they did nothing at all. They now appear only when automatic swapping is on. The swap buttons never waited on them and still do not, which the setting's own description now says.
+
 ## 4.21.0
 
 _2026-08-25_
