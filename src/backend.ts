@@ -651,7 +651,7 @@ function warnUnreadableChat(e?: any): void {
   try {
     spindle.log.warn(
       'auto-retry: could not read a chat to swap its words' + why +
-      ' (said once. A chat the host does not keep cannot be read back, so its replies are left as they are. Retrying is unaffected.)',
+      ' (said once. Its replies are left as they are. Retrying is unaffected.)',
     );
   } catch (__) {}
 }
