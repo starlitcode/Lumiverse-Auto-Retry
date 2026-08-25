@@ -12,15 +12,15 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 _2026-08-25_
 
-### Changed
-
-- **Switching off a temporary chat no longer leaves a note in your browser that can never apply again.** A temporary chat is the mode for talking to the model with no character, and Lumiverse discards it when you leave. **Turn off here** still works there, and it is the place you are most likely to want it, since a retry re-rolls the reply you were trying to look at. The difference is that it is now kept only for as long as that chat is open. Remembering it was pointless: the chat is gone and the next one is a different chat, so nothing would ever match it. The row tells you this while you are in one.
-
 ### Added
 
 - **Replies are retried even when Lumiverse does not say which chat they came from.** Auto Retry files everything by chat, so a reply arriving without one used to be dropped before anything looked at it, and nothing was retried. Lumiverse normally names the chat, so this is a guard against a case you are unlikely to meet rather than something you have been running into.
 
   Three things need a chat by name and are skipped when there is not one, listed on the [troubleshooting page](docs/troubleshooting.md#when-lumiverse-does-not-say-which-chat-you-are-in). **Turn off here** is greyed out, the retry note is not added, and swapping words by hand says no chat is open. Retrying itself, and swaps that run automatically on each reply, carry on.
+
+### Changed
+
+- **Switching off a temporary chat no longer leaves a note in your browser that can never apply again.** A temporary chat is the mode for talking to the model with no character, and Lumiverse discards it when you leave. **Turn off here** still works there, and it is the place you are most likely to want it, since a retry re-rolls the reply you were trying to look at. The difference is that it is now kept only for as long as that chat is open. Remembering it was pointless: the chat is gone and the next one is a different chat, so nothing would ever match it. The row tells you this while you are in one.
 
 ## 4.20.1
 
