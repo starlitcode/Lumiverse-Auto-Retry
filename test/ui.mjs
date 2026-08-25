@@ -8594,9 +8594,10 @@ console.log("\nreset confirmation");
   // A fixed sentence cannot say this, which is why the picker asks for itself
   // rather than handing the question to the host.
   check("it names the part and counts what would change",
-    // The part's name is read up to its count, rather than written out here,
-    // so rewording a tick box does not fail a check about counting.
-    /Retry behavior[^)]*\(\d+ settings?\)/.test(out.summary), out.summary);
+    // The ticked part is the one holding maxRetries, matched on its stem and
+    // read up to its count rather than written out in full, so rewording a
+    // tick box does not fail a check about counting.
+    /retr[a-z]*[^)]*\(\d+ settings?\)/i.test(out.summary), out.summary);
   check("and says that closing the panel undoes it",
     /closing the panel/i.test(out.summary), out.summary);
   check("the ticks are held while it asks", out.boxesHeld === true, out);

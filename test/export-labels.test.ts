@@ -80,18 +80,18 @@ describe("every tick box is named after what it carries", () => {
     });
   }
 
-  test("the preset part names every kind of preset there is", () => {
-    // Presets are one store holding several kinds, and all of them move
+  test("the preset part never names one kind and moves them all", () => {
+    // Presets are one store holding several kinds and all of them move
     // together, so a name mentioning one kind reads as a promise about that
-    // kind alone. Driven off PRESET_KINDS, so a third kind fails this until
-    // the label is updated too.
+    // kind alone. Either name every kind or name none of them. Driven off
+    // PRESET_KINDS, so a third kind added later is covered without edits here.
     const kinds = SRC.slice(SRC.indexOf("const PRESET_KINDS"), SRC.indexOf("function keysForKind"));
     const labels = [...kinds.matchAll(/^\s{6}label: "([^"]+)",$/gm)].map((m) => m[1]);
     expect(labels.length).toBeGreaterThanOrEqual(2);
-    const presets = all.find((p) => p.id === "presets") as Part;
-    for (const l of labels)
-      expect({ kind: l, named: presets.label.toLowerCase().indexOf(l.toLowerCase()) >= 0 })
-        .toEqual({ kind: l, named: true });
+    const presets = (all.find((p) => p.id === "presets") as Part).label.toLowerCase();
+    const named = labels.filter((l) => presets.indexOf(l.toLowerCase()) >= 0);
+    expect({ label: presets, named: named.length })
+      .toEqual({ label: presets, named: named.length === 0 ? 0 : labels.length });
   });
 
   test("no two parts have the same name", () => {
