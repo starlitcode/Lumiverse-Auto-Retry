@@ -722,3 +722,59 @@ describe("markup is left alone unless asked for", () => {
     ).toBe('<span title="a > b">She was afraid.</span> He was afraid.');
   });
 });
+
+// A swap that cannot read the chat used to return in silence, which is
+// indistinguishable from having no rule that matched. Reaching that code means
+// there are rules, so the swap was wanted and did not happen.
+//
+// Read from the source rather than run, because the backend is a classic script
+// that wants a host global at load. What matters is that no path out of the
+// read reports nothing, and that is a property of the text.
+describe("a chat that cannot be read says so", () => {
+  const BACK = readFileSync(new URL("../src/backend.ts", import.meta.url), "utf8");
+  const body = (() => {
+    const at = BACK.indexOf("async function swapMessageNow");
+    expect(at).toBeGreaterThan(-1);
+    // As far as the first statement after the read, which is where the
+    // reporting has to have happened by.
+    const end = BACK.indexOf("if (!m) return;", at);
+    expect(end).toBeGreaterThan(at);
+    return BACK.slice(at, end);
+  })();
+
+  test("the empty answer from the host is reported, not swallowed", () => {
+    // The guard on the message list has to report before it returns.
+    expect(/!msgs\.length\)\s*\{\s*warnUnreadableChat\(\);\s*return;\s*\}/.test(body)).toBe(true);
+  });
+
+  test("a throw while reading is reported too, and carries the reason", () => {
+    expect(/catch\s*\(e: any\)\s*\{\s*warnUnreadableChat\(e\);\s*return;\s*\}/.test(body)).toBe(true);
+  });
+
+  test("no bare return is left between the read and the message being found", () => {
+    // From the read onwards only. The no-rules guard sits above it and is a
+    // legitimate bare return: nothing was wanted, so nothing is worth saying.
+    const afterRead = body.slice(body.indexOf("getMessages"));
+    // The greeting skip is the other legitimate one: a message the extension
+    // found and chose to leave alone is not a failure to read anything.
+    const bare = afterRead
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => /(^|[^a-zA-Z])return;$/.test(l))
+      .filter((l) => !/warnUnreadableChat/.test(l))
+      .filter((l) => !/greetingId/.test(l));
+    expect(bare).toEqual([]);
+  });
+
+  test("it is said once, so a chat that stays unreadable does not fill the log", () => {
+    expect(/if \(warnedUnreadableChat\) return;/.test(BACK)).toBe(true);
+    expect(/warnedUnreadableChat = true;/.test(BACK)).toBe(true);
+  });
+
+  test("and only when there are rules, so a quiet setup stays quiet", () => {
+    // The guard sits above the read, so no rules means no warning at all.
+    expect(body.indexOf("if (!groups.length) return;")).toBeGreaterThan(-1);
+    expect(body.indexOf("if (!groups.length) return;"))
+      .toBeLessThan(body.indexOf("getMessages"));
+  });
+});

@@ -50,6 +50,10 @@ let groups = [];
 let combined = null;
 let combinedOrder = [];
 let warnedEditError = false;
+// Per process, not per user, like the flag above it. One warning for the whole
+// server is the point: this fires on every reply that cannot be read, and the
+// reason is the same one every time.
+let warnedUnreadableChat = false;
 // ---- per-user storage ----
 // One backend process can serve every account on the server. spindle.storage
 // resolves to a single shared directory in that case, so settings and presets
@@ -640,21 +644,43 @@ function rememberWrite(k, text) {
 // person's "apply your word swaps?" prompt reached everybody, and so did the
 // text of the swap. It is undefined on a user-scoped install, where the host
 // ignores the argument, so this costs nothing there.
+// A chat that cannot be read back cannot have its words swapped. Reaching here
+// means there are rules to apply, so the swap was wanted and did not happen,
+// and without a word said that is indistinguishable from rules that matched
+// nothing. Said once, because this runs on every reply and the reason does not
+// change between them.
+function warnUnreadableChat(e) {
+    if (warnedUnreadableChat)
+        return;
+    warnedUnreadableChat = true;
+    const why = e && e.message ? ': ' + e.message : '';
+    try {
+        spindle.log.warn('auto-retry: could not read a chat to swap its words' + why +
+            ' (said once. A chat the host does not keep cannot be read back, so its replies are left as they are. Retrying is unaffected.)');
+    }
+    catch (__) { }
+}
 async function swapMessageNow(chatId, messageId, userId) {
     if (!groups.length)
         return;
     let m = null;
     try {
         const msgs = await spindle.chat.getMessages(chatId);
-        if (!Array.isArray(msgs) || !msgs.length)
+        // An empty answer here is the host declining to give the chat back, not a
+        // chat with nothing in it: a reply just ended in it, so it has at least one
+        // message. Told apart from the throw below only by which line reports it.
+        if (!Array.isArray(msgs) || !msgs.length) {
+            warnUnreadableChat();
             return;
+        }
         // The opening message is authored, not generated, so it is never swapped.
         const greetingId = (msgs[0] && msgs[0].role === 'assistant') ? msgs[0].id : null;
         if (messageId != null && greetingId != null && messageId === greetingId)
             return;
         m = msgs.find((x) => x && x.id === messageId && x.role === 'assistant') || null;
     }
-    catch (_) {
+    catch (e) {
+        warnUnreadableChat(e);
         return;
     }
     if (!m)
