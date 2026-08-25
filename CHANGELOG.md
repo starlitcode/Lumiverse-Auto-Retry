@@ -14,9 +14,9 @@ _2026-08-25_
 
 ### Added
 
-- **Auto Retry now works in a temporary chat**, the disposable one you start from the model picker that is thrown away when you go home. Empty, cut-off, refused and failed replies get retried there the same as anywhere else, the try limit applies as usual, and pressing Stop calls it off.
+- **Replies are retried even when Lumiverse does not say which chat they came from.** Auto Retry files everything by chat, so a reply that arrived without one used to be dropped before anything looked at it, and nothing was retried. This mostly matters on builds that report a temporary chat this way. If yours names the chat, as most do, nothing changes for you and temporary chats already worked.
 
-  Three things stay off in a temporary chat, and the [troubleshooting page](docs/troubleshooting.md#temporary-chats) says why. **Turn off here** is greyed out, the retry note is not added, and swapping words by hand says no chat is open. Swaps that run automatically on each reply still work.
+  Three things need a chat by name and are skipped when there is not one, listed on the [troubleshooting page](docs/troubleshooting.md#when-lumiverse-does-not-say-which-chat-you-are-in). **Turn off here** is greyed out, the retry note is not added, and swapping words by hand says no chat is open. Retrying itself, and swaps that run automatically on each reply, carry on.
 
 ## 4.20.1
 
