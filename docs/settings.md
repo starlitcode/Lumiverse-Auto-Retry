@@ -73,7 +73,7 @@ The question is asked by the extension rather than handed to Lumiverse's own con
 
 A reset fills the settings in behind the box without saving them, the same as an import does, so you can look at what it did first. Press **Save** to keep it, or close the panel to discard it. If you press Reset by mistake, closing the panel undoes it.
 
-**Delete saved word swap presets** sits below a rule of its own, and it is the one thing in the picker that is not undone by closing the panel: presets are stored separately from your settings, so deleting them happens straight away. **Tick every setting** never ticks it.
+**Delete saved presets** sits below a rule of its own, and it is the one thing in the picker that is not undone by closing the panel: presets are stored separately from your settings, so deleting them happens straight away. It covers both kinds, word swap and refusal note. **Tick every setting** never ticks it.
 
 Nothing a reset does goes near your chats, your replies or your characters. Auto Retry only ever reads replies, and a reset does not touch them at all.
 
