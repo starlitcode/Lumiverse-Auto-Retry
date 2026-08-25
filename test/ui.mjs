@@ -797,6 +797,21 @@ console.log("\nthe live line knows whether the build streams");
   const { out: off, errors: offErrors } = await run("off", async () => {
     const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     const read = () => (document.getElementById("__lvRetryStatus") || {}).textContent?.trim() || "";
+    // The line holds whatever the last repaint wrote, and the elapsed figure
+    // only joins it once a second has gone by, so reading at a fixed moment
+    // asks whether a tick happened to land in a particular window. On a loaded
+    // machine it does not, and the check fails for a reason that has nothing to
+    // do with what it is guarding. Waits for the figure instead, with a
+    // deadline: a line that never grows one still fails, which is the point.
+    const until = async (re, ms) => {
+      const stop = Date.now() + ms;
+      let seen = read();
+      while (Date.now() < stop && !re.test(seen)) {
+        await wait(80);
+        seen = read();
+      }
+      return seen;
+    };
     const h = window.__handlers;
     h.GENERATION_STARTED({ chatId: "c1", generationId: "g1", messageId: "m1" });
     await wait(1200);
@@ -804,8 +819,8 @@ console.log("\nthe live line knows whether the build streams");
     h.GENERATION_ENDED({ chatId: "c1", generationId: "g1", messageId: "m1", content: "She stepped into the rain." });
     await wait(300);
     h.GENERATION_STARTED({ chatId: "c1", generationId: "g2", messageId: "m2" });
-    await wait(1200);
-    return { first, second: read() };
+    const second = await until(/generating the reply.*\d+s/i, 4000);
+    return { first, second };
   });
   check("before anything is known it does not guess", /waiting for the reply to start/i.test(off.first), off);
   check("after a whole reply arrives at once it says generating", /generating the reply/i.test(off.second), off);
