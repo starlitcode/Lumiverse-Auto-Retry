@@ -43,6 +43,34 @@ describe("the debug report and the Stats tab agree", () => {
     expect(missing).toEqual([]);
   });
 
+  test("each tick box names everything its section prints", () => {
+    // Same rule the import and export parts follow. The tick boxes are what
+    // somebody reads when deciding what to leave out of a report they are
+    // about to paste in public, so a section carrying something its name does
+    // not mention gets unticked, or kept, for the wrong reason.
+    const list = between("const sections: Array<{", "\n      ];");
+    const labels: Record<string, string> = {};
+    for (const m of list.matchAll(/\{ id: "([a-z]+)", label: "([^"]+)" \}/g))
+      labels[m[1]] = m[2];
+    expect(Object.keys(labels).sort()).toEqual(["activity", "buttons", "environment", "settings"]);
+
+    // What each section actually prints, and the word its name has to carry.
+    const rules: Array<{ id: string; prints: string; word: RegExp }> = [
+      { id: "environment", prints: 'lines.push("permissions:")', word: /permission/i },
+      { id: "buttons", prints: "regenerateSelector = ", word: /selector/i },
+      { id: "activity", prints: "recent activity (oldest first)", word: /activity/i },
+      { id: "settings", prints: 'lines.push("settings:")', word: /setting/i },
+    ];
+    for (const r of rules) {
+      // The section really does print it, so the rule cannot pass by being
+      // written about something the report stopped carrying.
+      expect({ id: r.id, prints: report.indexOf(r.prints) >= 0 })
+        .toEqual({ id: r.id, prints: true });
+      expect({ id: r.id, label: labels[r.id] })
+        .toEqual({ id: r.id, label: r.word.test(labels[r.id]) ? labels[r.id] : "MISSING THE WORD" });
+    }
+  });
+
   test("the count of words swapped is in both, on the same terms", () => {
     // A swap leaves nothing on screen once it lands, so this is the only
     // evidence a report can carry that swapping ran at all. Both work out the

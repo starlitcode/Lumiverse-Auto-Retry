@@ -8971,10 +8971,17 @@ export function setup(ctx, opts) {
             const body = document.createElement("div");
             body.style.cssText = "display:none;flex-direction:column;gap:10px";
             body.appendChild(sectionDesc("A snapshot for your own debugging or a bug report. Tick the parts to include, build a preview, edit out anything you would rather not share, then copy. Nothing leaves your device until you paste it somewhere.", false));
+            // Named after everything in the section, the same rule the import and
+            // export parts follow. Two of these carried something their name did not
+            // mention, and both were the part somebody would untick: the selectors
+            // you wrote sit with whether they match, and your permissions sit with
+            // the browser string. A permission missing is the one line that explains
+            // a report where nothing happened at all, so it must not be dropped by
+            // someone who thought they were only leaving out their screen size.
             const sections = [
                 { id: "settings", label: "Your settings" },
-                { id: "buttons", label: "Button match status" },
-                { id: "environment", label: "Browser and screen" },
+                { id: "buttons", label: "Buttons and selectors" },
+                { id: "environment", label: "Permissions, browser and screen" },
                 { id: "activity", label: "Session totals and recent activity" },
             ];
             const { wrap: dWrap, checks: dchecks } = buildCheckList(sections);

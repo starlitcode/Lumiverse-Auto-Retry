@@ -8999,13 +8999,20 @@ export function setup(ctx: Ctx, opts?: any) {
         ),
       );
 
+      // Named after everything in the section, the same rule the import and
+      // export parts follow. Two of these carried something their name did not
+      // mention, and both were the part somebody would untick: the selectors
+      // you wrote sit with whether they match, and your permissions sit with
+      // the browser string. A permission missing is the one line that explains
+      // a report where nothing happened at all, so it must not be dropped by
+      // someone who thought they were only leaving out their screen size.
       const sections: Array<{
         id: "settings" | "buttons" | "environment" | "activity";
         label: string;
       }> = [
         { id: "settings", label: "Your settings" },
-        { id: "buttons", label: "Button match status" },
-        { id: "environment", label: "Browser and screen" },
+        { id: "buttons", label: "Buttons and selectors" },
+        { id: "environment", label: "Permissions, browser and screen" },
         { id: "activity", label: "Session totals and recent activity" },
       ];
       const { wrap: dWrap, checks: dchecks } = buildCheckList(sections);
