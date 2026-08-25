@@ -111,7 +111,7 @@ const STREAM_BUF_MAX = 200000;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "4.20.1";
+const VERSION = "4.21.0";
 
 // The one address the extension ever points at, used by the warning in front of
 // the crisis-support check. Pinned to the released branch rather than to a tag,
@@ -3448,7 +3448,12 @@ export function setup(ctx: Ctx, opts?: any) {
       const order: string[] = [];
       for (const id of chatIds) {
         const name = chatNames.get(id);
-        let label = name ? "With " + name : "Chat " + id.slice(0, 8);
+        // Retries the host named no chat for, which is what a temporary chat
+        // looks like on builds that give it no id. They are all one row because
+        // there is nothing to tell them apart by.
+        let label = id === NO_CHAT
+          ? "Chats without an id"
+          : name ? "With " + name : "Chat " + id.slice(0, 8);
         // Two chats with the same card would otherwise land on one row.
         if (labelled[label] != null) label += " (" + id.slice(0, 4) + ")";
         labelled[label] = stats.byChat[id];
@@ -5539,6 +5544,27 @@ export function setup(ctx: Ctx, opts?: any) {
   // re-rolled it as stalled. Every lookup goes through here so that cannot
   // happen again, whatever a build sends.
   const chatKey = (chatId: any): string => String(chatId == null ? "" : chatId);
+  // The key a generation is filed under when the host names no chat for it.
+  //
+  // A temporary chat is the case that matters: it is thrown away when the user
+  // goes home, and on builds where it has no id of its own the generation
+  // events carry no chatId at all. Everything here is keyed by chat, so those
+  // replies used to fall out of every handler and the extension did nothing in
+  // a temporary chat, silently and with no way to tell from the panel.
+  //
+  // A sentinel rather than an empty string, because an empty string is what
+  // chatKey already produces for null, and the end event tells "the chat this
+  // generation started in" from "nothing was remembered" by that emptiness.
+  // Real ids are host uuids, so nothing can collide with this.
+  //
+  // Only the internal state is keyed on it. Anything the user acts on through
+  // a chat id, the per-chat switch and the swap buttons, keeps refusing when
+  // there is no real id to act on, since there is nothing for them to name.
+  const NO_CHAT = "lv-no-chat";
+  const chatOf = (p: any): string => {
+    const id = p && p.chatId;
+    return id == null || id === "" ? NO_CHAT : String(id);
+  };
   // Which chat each generation was started in. A watchdog is armed for one
   // generation but can only be called off through its chat's state, so an end
   // event that cannot find that state leaves the watchdog running. This answers
@@ -6502,6 +6528,15 @@ export function setup(ctx: Ctx, opts?: any) {
     return new Promise((resolve) => {
       try {
         if (!cfg.refusalNote || !isRefusalReason(reason)) return resolve(false);
+        // A note is armed on the backend and collected by the interceptor for
+        // one named chat. With no id there is nothing to scope it to, and the
+        // interceptor's scope check only bites when both sides carry an id, so
+        // an unscoped note would attach itself to whichever generation ran
+        // next, in any chat. The retry itself still goes ahead without it.
+        if (chatId === NO_CHAT) {
+          log("no note this time: the host did not say which chat this is, and a note has to belong to one");
+          return resolve(false);
+        }
         // An empty note is skipped rather than sent blank, so a half-filled list
         // is not a trap. Nothing is armed when they are all empty.
         //
@@ -6717,8 +6752,9 @@ export function setup(ctx: Ctx, opts?: any) {
   }
 
   function onStart(p: any) {
-    if (!p || !p.chatId) return;
-    const s = st(p.chatId);
+    if (!p) return;
+    const chatId = chatOf(p);
+    const s = st(chatId);
     if (s.startWatchdog) {
       clearTimeout(s.startWatchdog);
       s.startWatchdog = null;
@@ -6729,8 +6765,12 @@ export function setup(ctx: Ctx, opts?: any) {
     // runs and the only chance there is to capture it, so arming the tab any
     // later cannot produce one for this generation however long it runs.
     s.watchedFromStart = promptsAsked;
-    const switched = lastChatId !== p.chatId;
-    lastChatId = p.chatId;
+    // The id the rest of the panel shows, which stays null when the host named
+    // no chat. The per-chat switch and the swap buttons read this, and all of
+    // them need a real id to be honest about what they would act on.
+    const realId = p.chatId == null || p.chatId === "" ? null : p.chatId;
+    const switched = lastChatId !== realId;
+    lastChatId = realId;
     lastMessageId = p.messageId;
     if (switched) {
       paintFloat();
@@ -6747,8 +6787,8 @@ export function setup(ctx: Ctx, opts?: any) {
     } // fresh, user-initiated generation
     s.selfTriggered = false;
     s.genId = p.generationId;
-    rememberGeneration(p.generationId, p.chatId);
-    ensureChatName(p.chatId);
+    rememberGeneration(p.generationId, chatId);
+    ensureChatName(realId);
     // Whether a reply is in the air, as opposed to which one was last seen.
     // genId is never cleared, because the ids of generations already dealt with
     // are wanted afterwards, so it cannot answer this and the status line read
@@ -6766,7 +6806,7 @@ export function setup(ctx: Ctx, opts?: any) {
     clearTimers(s);
     if (cfg.enabled && cfg.stuckTimeoutMs > 0) {
       s.startTimer = setTimeout(
-        () => abortAndRetry(p.chatId, "stuck"),
+        () => abortAndRetry(chatId, "stuck"),
         cfg.stuckTimeoutMs,
       );
     }
@@ -6944,8 +6984,9 @@ export function setup(ctx: Ctx, opts?: any) {
   }
 
   function onToken(p: any) {
-    if (!p || !p.chatId) return;
-    const s = st(p.chatId);
+    if (!p) return;
+    const chatId = chatOf(p);
+    const s = st(chatId);
     // Text arriving is the only proof that beats every guess: if anything above
     // decided this reply was over and it was not, this puts it right.
     if (!s.live) s.liveSince = Date.now();
@@ -6971,7 +7012,7 @@ export function setup(ctx: Ctx, opts?: any) {
     if (cfg.enabled && cfg.idleTimeoutMs > 0) {
       if (s.idleTimer) clearTimeout(s.idleTimer);
       s.idleTimer = setTimeout(
-        () => abortAndRetry(p.chatId, "stalled"),
+        () => abortAndRetry(chatId, "stalled"),
         cfg.idleTimeoutMs,
       );
     }
@@ -6994,11 +7035,15 @@ export function setup(ctx: Ctx, opts?: any) {
     const chatId =
       remembered != null && remembered !== ""
         ? remembered
-        : p.chatId;
-    if (chatId == null || chatId === "") return;
+        : chatOf(p);
     const s = st(chatId);
-    lastChatId = chatId;
-    ensureChatName(chatId);
+    // Only a real id goes on the panel. A generation the host named no chat for
+    // still gets its state and its retry above, and leaves what the panel says
+    // about "this chat" alone rather than claiming the sentinel is a chat.
+    if (chatId !== NO_CHAT) {
+      lastChatId = chatId;
+      ensureChatName(chatId);
+    }
     lastMessageId = p.messageId;
     // Text that turned up without a single token behind it is a build that
     // does not stream, which is the other half of what the live line needs to
@@ -7125,11 +7170,16 @@ export function setup(ctx: Ctx, opts?: any) {
   }
 
   function onStop(p: any) {
-    if (!p || !p.chatId) return;
-    const s = st(p.chatId);
+    if (!p) return;
+    // Resolved the same way the start was, so a stop in a chat the host does
+    // not name still calls off that chat's retries. Reading this handler alone
+    // makes the guard look harmless; it is not, because standing down is the
+    // one thing that must never be the part that fails to find the state.
+    const chatId = chatOf(p);
+    const s = st(chatId);
     if (s.ignored.has(p.generationId)) return; // our own abort, not a user stop
     log("user stop", p.generationId);
-    standDown(p.chatId, true); // genuine user stop: stand down, don't fight them
+    standDown(chatId, true); // genuine user stop: stand down, don't fight them
   }
 
   // The host saves a swapped reply without redrawing the chat, so the old words

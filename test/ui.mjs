@@ -1639,6 +1639,89 @@ console.log("\nretrying");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- a chat the host does not name ----
+// A temporary chat is thrown away when the user goes home, and on builds where
+// it has no id of its own the generation events carry no chatId. Everything
+// here is keyed by chat, so those replies used to fall out of every handler and
+// the extension did nothing at all in a temporary chat, with nothing in the
+// panel to say why.
+//
+// Each case gets its own page. Sharing one would share the retry budget, and
+// the later cases would read as failures for a reason that has nothing to do
+// with what they are checking.
+console.log("\nchats with no id of their own");
+{
+  const errors = [];
+  const runOne = async (startP, endP, opts = {}) => {
+    const page = await browser.newPage();
+    page.on("pageerror", (e) => errors.push(e.message));
+    await stage(page, '<div id=modal></div><button data-testid="regenerate">Regenerate</button>');
+    await page.addScriptTag({ content: SOURCE, type: "module" });
+    await page.waitForFunction(() => !!window.__setup);
+    const res = await page.evaluate(async ([startP, endP, opts]) => {
+      const handlers = {};
+      const sent = [];
+      let clicks = 0;
+      document.querySelector("[data-testid=regenerate]").addEventListener("click", () => clicks++);
+      window.__setup(
+        {
+          events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
+          sendToBackend: (m) => sent.push(m),
+          onBackendMessage: () => () => {},
+          ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+                registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) },
+        },
+        Object.assign({ retryDelayMs: 10, backoffFactor: 1, maxDelayMs: 10, jitter: false,
+          maxRetries: 2, toast: false, stuckTimeoutMs: 0, idleTimeoutMs: 0, pauseWhenFailing: false }, opts),
+      );
+      handlers.GENERATION_STARTED(startP);
+      handlers.GENERATION_ENDED(endP);
+      if (opts.__stop) handlers.GENERATION_STOPPED(startP);
+      await new Promise((r) => setTimeout(r, 120));
+      return { clicks, armed: sent.filter((m) => m && m.type === "arm_refusal_note").length };
+    }, [startP, endP, opts]);
+    await page.close();
+    return res;
+  };
+  const empty = (extra) => Object.assign({ generationId: "g", content: "" }, extra);
+  const noteOn = { refusalNote: true, refusalNotes: [{ text: "stay in character", role: "system", fromTry: 1 }] };
+
+  // The three shapes a build can leave a chat id in. All of them mean the same
+  // thing to a reader and used to mean "drop this reply" to the code.
+  const absent = await runOne({ generationId: "g" }, empty());
+  const isNull = await runOne({ chatId: null, generationId: "g" }, empty({ chatId: null }));
+  const isEmpty = await runOne({ chatId: "", generationId: "g" }, empty({ chatId: "" }));
+  check("a chat with no id retries when the id is absent", absent.clicks === 1, absent);
+  check("a chat with no id retries when the id is null", isNull.clicks === 1, isNull);
+  check("a chat with no id retries when the id is an empty string", isEmpty.clicks === 1, isEmpty);
+
+  // Retrying everywhere is not the goal; retrying the same things everywhere
+  // is. A version that clicked on any reply at all would pass the three above.
+  const good = await runOne({ generationId: "g" },
+    { generationId: "g", content: "She opened the door and stepped inside." });
+  check("a good reply in a chat with no id is still left alone", good.clicks === 0, good);
+
+  // The one that must not be left behind: standing down is what stops the
+  // extension fighting the user, so it has to find the state the retry used.
+  const stopped = await runOne({ generationId: "g" }, empty(), { __stop: true });
+  check("a user stop in a chat with no id cancels the pending retry", stopped.clicks === 0, stopped);
+
+  // A note is collected by the interceptor for one named chat, and the scope
+  // check only bites when both sides carry an id. Arming one with no chat to
+  // scope it to would attach it to whichever generation ran next, in any chat.
+  const refusal = "I'm sorry, but I can't create that content.";
+  const noteNoId = await runOne({ generationId: "g" }, { generationId: "g", content: refusal }, noteOn);
+  check("no refusal note is armed for a chat with no id",
+    noteNoId.armed === 0, noteNoId);
+  check("the retry still happens without the note", noteNoId.clicks === 1, noteNoId);
+  const noteWithId = await runOne({ chatId: "c9", generationId: "g" },
+    { chatId: "c9", generationId: "g", content: refusal }, noteOn);
+  check("a refusal note is still armed for a chat that has one",
+    noteWithId.armed === 1, noteWithId);
+
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- the box between the click and the reply ----
 // With Regeneration Feedback on, pressing regenerate opens a box asking for
 // guidance, and the reply only starts once that box is dealt with. An

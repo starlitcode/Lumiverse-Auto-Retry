@@ -30,6 +30,18 @@ The swap buttons live in the Extras menu or the floating button's menu, and both
 
 Without that permission it cannot ask, and falls back to the last chat it saw you in. That is the one case where a swap from the home screen still lands somewhere, and it is the same fallback the rest of the extension runs on when it is not allowed to look.
 
+## Temporary chats
+
+Retrying works in a temporary chat the same way it works anywhere else. An empty reply, a cut-off reply, a refusal, or an error gets retried, the try limit applies as usual, and pressing Stop calls it off.
+
+Three things work differently there, because a temporary chat is thrown away when you go home and on some versions of Lumiverse it has no id for the extension to refer to:
+
+- **Turn off here** is greyed out. There is no id to remember the exclusion against, and one that stopped applying the moment the chat was discarded would be worse than none. Use the main **Auto Retry** switch to turn it off while you are testing.
+- **The retry note is not added.** The note is held for one named chat and collected when the next reply is built. With no chat to attach it to, it could land on a reply in a different chat, so it is left out. The retry itself still happens, and the log says so.
+- **Swapping words by hand** says **No chat is open**, since those buttons edit saved replies and there is nothing for them to name. Swaps that run automatically on each reply are unaffected.
+
+In the Stats tab, retries from these chats are counted together on a row called **Chats without an id**.
+
 ## The on-screen panel
 
 For watching it work live, turn on **Show the on-screen panel** under Basics, and pick where it goes with the row underneath: floating over the chat, or in Lumiverse's sidebar drawer. It is useful on a phone, where the browser console is out of reach.
