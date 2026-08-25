@@ -630,7 +630,7 @@ const SCHEMA: Group[] = [
   {
     title: "Refusal tuning",
     collapsed: true,
-    extra: ["refusalTester", "notePresets"],
+    extra: ["notePresets", "refusalTester"],
     // Every setting under here feeds refusalVerdict, and all three places
     // that call it sit behind retryOnRefusal, so with that off the section is
     // inert. One exception: refusalThinkTags is still read by the empty and
@@ -8894,13 +8894,15 @@ export function setup(ctx: Ctx, opts?: any) {
         body.style.cssText = "display:none;flex-direction:column;gap:10px";
         if (group.desc) body.appendChild(sectionDesc(group.desc, false));
         emitFields(body);
-        // The refusal tuning options are all guesswork without a way to try
-        // them, so the section carries its own tester.
         const hasExtra = (n: string) =>
           Array.isArray(group.extra) ? group.extra.indexOf(n as any) >= 0 : group.extra === n;
-        if (hasExtra("refusalTester")) body.appendChild(buildRefusalTester());
-        // Word swap presets sit at the end of the group, since they save and
-        // switch the settings above.
+        // Two kinds of thing hang off the end of a section, in this order.
+        //
+        // A preset bar comes first, straight under the settings it saves, so
+        // it sits next to what it acts on.
+        //
+        // A tester comes last. It is not a setting and saves nothing, it is
+        // somewhere to try the settings out, so it goes after all of them.
         if (hasExtra("swapPresets")) {
           body.appendChild(hairline());
           body.appendChild(runHeading("Presets"));
@@ -8923,6 +8925,7 @@ export function setup(ctx: Ctx, opts?: any) {
           );
           body.appendChild(buildPresetBar("notes"));
         }
+        if (hasExtra("refusalTester")) body.appendChild(buildRefusalTester());
         sec.appendChild(body);
 
         handle.setOpen = makeCollapsible(header, body, caret, group.title);
