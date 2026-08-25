@@ -3330,9 +3330,8 @@ export function setup(ctx, opts) {
             const order = [];
             for (const id of chatIds) {
                 const name = chatNames.get(id);
-                // Retries the host named no chat for, which is what a temporary chat
-                // looks like on builds that give it no id. They are all one row because
-                // there is nothing to tell them apart by.
+                // Retries the host named no chat for. They share one row because there
+                // is nothing to tell them apart by.
                 let label = id === NO_CHAT
                     ? "Chats without an id"
                     : name ? "With " + name : "Chat " + id.slice(0, 8);
@@ -5522,11 +5521,11 @@ export function setup(ctx, opts) {
     const chatKey = (chatId) => String(chatId == null ? "" : chatId);
     // The key a generation is filed under when the host names no chat for it.
     //
-    // A temporary chat is the case that matters: it is thrown away when the user
-    // goes home, and on builds where it has no id of its own the generation
-    // events carry no chatId at all. Everything here is keyed by chat, so those
-    // replies used to fall out of every handler and the extension did nothing in
-    // a temporary chat, silently and with no way to tell from the panel.
+    // Everything here is keyed by chat, so a reply arriving with no chatId used
+    // to fall out of every handler: no retry, no watchdog, no line in the log,
+    // and nothing on the panel to say why. The host names the chat on every
+    // build seen so far, which makes this a guard rather than a fix for a known
+    // case, and the reason it is worth having is that the failure was silent.
     //
     // A sentinel rather than an empty string, because an empty string is what
     // chatKey already produces for null, and the end event tells "the chat this
