@@ -14,7 +14,7 @@ _2026-08-25_
 
 ### Added
 
-- **Replies are retried even when Lumiverse does not say which chat they came from.** Auto Retry files everything by chat, so a reply that arrived without one used to be dropped before anything looked at it, and nothing was retried. This mostly matters on builds that report a temporary chat this way. If yours names the chat, as most do, nothing changes for you and temporary chats already worked.
+- **Replies are retried even when Lumiverse does not say which chat they came from.** Auto Retry files everything by chat, so a reply arriving without one used to be dropped before anything looked at it, and nothing was retried. Lumiverse normally names the chat, so this is a guard against a case you are unlikely to meet rather than something you have been running into.
 
   Three things need a chat by name and are skipped when there is not one, listed on the [troubleshooting page](docs/troubleshooting.md#when-lumiverse-does-not-say-which-chat-you-are-in). **Turn off here** is greyed out, the retry note is not added, and swapping words by hand says no chat is open. Retrying itself, and swaps that run automatically on each reply, carry on.
 

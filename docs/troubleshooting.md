@@ -30,10 +30,6 @@ The swap buttons live in the Extras menu or the floating button's menu, and both
 
 Without that permission it cannot ask, and falls back to the last chat it saw you in. That is the one case where a swap from the home screen still lands somewhere, and it is the same fallback the rest of the extension runs on when it is not allowed to look.
 
-## Temporary chats
-
-A temporary chat, the disposable one you start from the model picker, works like any other chat. Replies are retried there as usual, the try limit applies, **Turn off here** works, and so do the word swaps.
-
 ## When Lumiverse does not say which chat you are in
 
 Rarely, Lumiverse reports a reply without saying which chat it belongs to. Retrying still works, and three things that need a chat by name do not:

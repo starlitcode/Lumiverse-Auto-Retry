@@ -1640,11 +1640,11 @@ console.log("\nretrying");
 }
 
 // ---- a chat the host does not name ----
-// A temporary chat is thrown away when the user goes home, and on builds where
-// it has no id of its own the generation events carry no chatId. Everything
-// here is keyed by chat, so those replies used to fall out of every handler and
-// the extension did nothing at all in a temporary chat, with nothing in the
-// panel to say why.
+// Everything in the extension is keyed by chat, so a reply arriving with no
+// chatId used to fall out of every handler: no retry, no watchdog, nothing in
+// the log. The host names the chat on every build seen so far, so this guards
+// a case nobody has reported. It is checked anyway because the failure was
+// silent, which is the kind that reaches users unnoticed.
 //
 // Each case gets its own page. Sharing one would share the retry budget, and
 // the later cases would read as failures for a reason that has nothing to do
