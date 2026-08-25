@@ -1737,6 +1737,63 @@ console.log("\nchats with no id of their own");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- a reply that is streaming is not stuck ----
+// The watchdog that waits for a reply to start is armed against the chat the
+// start event named, and only text arriving calls it off. A build whose token
+// events carry a different chat id than the start, or none at all, used to
+// leave that watchdog armed on a chat nobody was going to reach, so it fired
+// mid-stream and re-rolled a reply that was writing itself out fine.
+//
+// The three token shapes are the point of this section. A version that reads
+// the token's own chat id passes the first and fails the other two.
+console.log("\na reply that is streaming is not stuck");
+{
+  const errors = [];
+  const runOne = async (tokenP) => {
+    const page = await browser.newPage();
+    page.on("pageerror", (e) => errors.push(e.message));
+    await stage(page, '<div id=modal></div><button data-testid="regenerate">R</button>');
+    await page.addScriptTag({ content: SOURCE, type: "module" });
+    await page.waitForFunction(() => !!window.__setup);
+    const res = await page.evaluate(async (tokenP) => {
+      const handlers = {};
+      let clicks = 0;
+      document.querySelector("[data-testid=regenerate]").addEventListener("click", () => clicks++);
+      window.__setup(
+        {
+          events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
+          sendToBackend: () => {},
+          onBackendMessage: () => () => {},
+          ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+                registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) },
+        },
+        { retryDelayMs: 10, backoffFactor: 1, maxDelayMs: 10, jitter: false, maxRetries: 2,
+          toast: false, stuckTimeoutMs: 80, idleTimeoutMs: 0, pauseWhenFailing: false },
+      );
+      handlers.GENERATION_STARTED({ chatId: "c1", generationId: "g" });
+      await new Promise((r) => setTimeout(r, 30));
+      handlers.STREAM_TOKEN_RECEIVED(tokenP);
+      // Past the point the start watchdog would have fired.
+      await new Promise((r) => setTimeout(r, 160));
+      return { retriedWhileStreaming: clicks };
+    }, tokenP);
+    await page.close();
+    return res;
+  };
+
+  const named = await runOne({ chatId: "c1", generationId: "g", content: "She " });
+  const noId = await runOne({ generationId: "g", content: "She " });
+  const other = await runOne({ chatId: "c2", generationId: "g", content: "She " });
+  check("a token that names the chat calls off the start watchdog",
+    named.retriedWhileStreaming === 0, named);
+  check("a token that names no chat calls off the start watchdog",
+    noId.retriedWhileStreaming === 0, noId);
+  check("a token that names a different chat calls off the start watchdog",
+    other.retriedWhileStreaming === 0, other);
+
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- switching off a chat that will not exist tomorrow ----
 // A temporary chat has no character card and is discarded on the way out, and
 // the next one carries a different id. Remembering an exclusion against it

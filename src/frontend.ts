@@ -5667,6 +5667,19 @@ export function setup(ctx: Ctx, opts?: any) {
     while (genChats.size > GEN_MEMORY_MAX)
       genChats.delete(genChats.keys().next().value as string);
   }
+  // Which chat an event that follows a start belongs to. The start is what
+  // decides where a generation's state lives, so every later event for that
+  // generation is answered from what the start wrote down, and falls back to
+  // the event's own chatId only when nothing was remembered for it.
+  //
+  // Reading the payload first is not the same thing. A build that names the
+  // chat differently on a token than it did on the start, or leaves it off,
+  // sends the handler to a state the start armed nothing on, and a watchdog
+  // nothing can reach re-rolls a reply that is streaming or already finished.
+  const chatForGeneration = (p: any): string => {
+    const remembered = genChats.get(genKey(p && p.generationId));
+    return remembered != null && remembered !== "" ? remembered : chatOf(p);
+  };
   const CHATS_MAX = 24; // chats kept before the quietest are let go
   // Anything mid-flight has to stay: dropping it would strand a running
   // watchdog and lose the budget for a retry that is already in the air.
@@ -7097,7 +7110,11 @@ export function setup(ctx: Ctx, opts?: any) {
 
   function onToken(p: any) {
     if (!p) return;
-    const chatId = chatOf(p);
+    // Text arriving is what calls off the watchdog that waits for a reply to
+    // start, so this has to land on the state that armed it. Token events carry
+    // less than the start does on some builds, which is why the generation
+    // decides the chat here rather than whatever the token itself says.
+    const chatId = chatForGeneration(p);
     const s = st(chatId);
     // Text arriving is the only proof that beats every guess: if anything above
     // decided this reply was over and it was not, this puts it right.
@@ -7132,22 +7149,12 @@ export function setup(ctx: Ctx, opts?: any) {
 
   function onEnd(p: any) {
     if (!p) return;
-    // Which chat it belongs to. The chat this generation started in is what
-    // counts, and it was written down then, so it is preferred over whatever
-    // the end event says: the generation id identifies the work, the chat id is
-    // only context, and where the two disagree the remembered one is right.
-    //
-    // This is what a build gets wrong. Leaving the chat id off the end event,
-    // or sending it in a different shape than the start did, sent this handler
-    // to a different chat's state or straight out of the function. Either way
-    // the watchdogs were left armed on the real state and one of them re-rolled
-    // a reply that had finished, and the text streamed so far was looked for on
-    // a state that had never seen any, so a good reply could read as empty.
-    const remembered = genChats.get(genKey(p.generationId));
-    const chatId =
-      remembered != null && remembered !== ""
-        ? remembered
-        : chatOf(p);
+    // The generation id identifies the work, the chat id is only context, and
+    // where the two disagree the chat the generation started in is right. An
+    // end event landing on the wrong state leaves the watchdogs armed on the
+    // real one, and the text streamed so far is then looked for on a state that
+    // never saw any, so a good reply reads as empty.
+    const chatId = chatForGeneration(p);
     const s = st(chatId);
     // Only a real id goes on the panel. A generation the host named no chat for
     // still gets its state and its retry above, and leaves what the panel says
@@ -7283,11 +7290,11 @@ export function setup(ctx: Ctx, opts?: any) {
 
   function onStop(p: any) {
     if (!p) return;
-    // Resolved the same way the start was, so a stop in a chat the host does
-    // not name still calls off that chat's retries. Reading this handler alone
-    // makes the guard look harmless; it is not, because standing down is the
-    // one thing that must never be the part that fails to find the state.
-    const chatId = chatOf(p);
+    // Resolved through the generation like the rest, so a stop still calls off
+    // the retries in the chat the reply actually started in. Reading this
+    // handler alone makes that look like a detail; it is not, because standing
+    // down is the one thing that must never fail to find the state.
+    const chatId = chatForGeneration(p);
     const s = st(chatId);
     if (s.ignored.has(p.generationId)) return; // our own abort, not a user stop
     log("user stop", p.generationId);
