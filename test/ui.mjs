@@ -1722,6 +1722,99 @@ console.log("\nchats with no id of their own");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- switching off a chat that will not exist tomorrow ----
+// A temporary chat has no character card and is discarded on the way out, and
+// the next one carries a different id. Remembering an exclusion against it
+// would put a line in storage that can never match anything again, so the
+// switch works for as long as the chat is open and is not written down.
+//
+// The stub answers get_active_chat by echoing the requestId it was sent, and
+// holds its backend listeners in a list. A single slot drops all but the newest
+// and an unmatched requestId is ignored, either of which makes this read as a
+// product failure when the fault is in the harness.
+console.log("\nswitching off a temporary chat");
+{
+  const page = await browser.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await stage(page, '<div id=modal></div><button data-testid="regenerate">R</button>');
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  const out = await page.evaluate(async () => {
+    const KEY = "lv-auto-retry:chats-off:v1";
+    localStorage.removeItem(KEY);
+    window.__acts = {}; window.__handlers = {};
+    const sent = [], listeners = [];
+    const deliver = (m) => listeners.slice().forEach((f) => { try { f(m); } catch (_) {} });
+    const cards = { temp1: false, real1: true };
+    const names = { temp1: null, real1: "Wren" };
+    window.__setup({
+      events: { on: (n, f) => { window.__handlers[n] = f; return () => {}; } },
+      sendToBackend: (m) => {
+        sent.push(m);
+        if (m && m.type === "get_active_chat") {
+          const id = m.chatId || window.__cur;
+          setTimeout(() => deliver({ type: "active_chat", requestId: m.requestId, chatId: id,
+            character: names[id] || null, resolved: true, hasCharacter: !!cards[id] }), 0);
+        }
+      },
+      onBackendMessage: (cb) => {
+        listeners.push(cb);
+        return () => { const i = listeners.indexOf(cb); if (i >= 0) listeners.splice(i, 1); };
+      },
+      ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+            registerInputBarAction: (o) => { const a = { onClick: (cb) => { a.cb = cb; return () => {}; }, destroy: () => {} }; window.__acts[o.id] = a; return a; } },
+    }, { toast: false, stuckTimeoutMs: 0, idleTimeoutMs: 0 });
+
+    const tick = () => new Promise((r) => setTimeout(r, 80));
+    const enter = async (id) => {
+      window.__cur = id;
+      window.__handlers.GENERATION_STARTED({ chatId: id, generationId: "g-" + id });
+      window.__handlers.GENERATION_ENDED({ chatId: id, generationId: "g-" + id, content: "ok reply here." });
+      await tick(); await tick();
+    };
+    const root = () => document.getElementById("modal");
+    const btn = () => [...root().querySelectorAll("button")].find((x) => /Turn (off|on) here/.test(x.textContent));
+    const note = () => { const w = root().querySelector("[data-ar-chat-switch]"); return w ? w.innerText.split("\n").pop() : ""; };
+
+    await enter("temp1");
+    window.__acts["auto-retry-settings"].cb();
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    await tick();
+
+    const res = {};
+    res.enabled = !btn().disabled;
+    res.noteSaysTemporary = /temporary chat/i.test(note());
+    btn().click(); await tick();
+    res.flipped = /Turn on here/.test(btn().textContent);
+    res.storedAfterTemp = localStorage.getItem(KEY);
+    res.backendToldTemp = (sent.filter((m) => m.type === "set_chats_off").pop() || {}).chats;
+
+    await enter("real1"); await tick();
+    res.realNoteIsOrdinary = !/temporary chat/i.test(note());
+    btn().click(); await tick();
+    res.storedAfterReal = localStorage.getItem(KEY);
+    return res;
+  });
+  await page.close();
+  // The switch is real. A temporary chat is exactly where somebody watching raw
+  // model behaviour wants nothing re-rolling it, so this must not be disabled.
+  check("the switch still works in a temporary chat", out.enabled && out.flipped, out);
+  check("and says it lasts only while that chat is open", out.noteSaysTemporary, out);
+  check("an ordinary chat keeps the ordinary wording", out.realNoteIsOrdinary, out);
+  // The point of the whole thing.
+  check("nothing is written to storage for a temporary chat",
+    out.storedAfterTemp === "[]", out.storedAfterTemp);
+  // Switched off for the session, so backend word swaps leave it alone too.
+  check("the backend is still told, so word swaps skip it",
+    Array.isArray(out.backendToldTemp) && out.backendToldTemp.indexOf("temp1") >= 0, out.backendToldTemp);
+  // Filtering at the point of writing, not at the point of the change: a later
+  // switch in an ordinary chat must not carry the temporary one into storage.
+  check("and a later ordinary chat does not drag it into storage",
+    out.storedAfterReal === '["real1"]', out.storedAfterReal);
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- the box between the click and the reply ----
 // With Regeneration Feedback on, pressing regenerate opens a box asking for
 // guidance, and the reply only starts once that box is dealt with. An
