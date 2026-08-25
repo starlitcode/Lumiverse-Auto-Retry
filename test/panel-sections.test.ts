@@ -87,11 +87,16 @@ describe("the sections of the settings panel", () => {
   });
 
   test("everything built by hand is asked for by name, exactly once", () => {
-    const asked = [...SCHEMA.matchAll(/^ {4}extra: "([A-Za-z]+)",$/gm)].map((m) => m[1]);
-    expect(asked.sort()).toEqual(["refusalTester", "swapPresets"]);
-    // And the panel builds each of them off that field, not off the title.
-    for (const name of asked)
-      expect(SRC).toContain('group.extra === "' + name + '"');
+    // A section may name one extra or a list of them, so both forms are read.
+    const asked = [...SCHEMA.matchAll(/^ {4}extra: (.+),$/gm)].flatMap((m) =>
+      [...m[1].matchAll(/"([A-Za-z]+)"/g)].map((x) => x[1]),
+    );
+    expect(asked.sort()).toEqual(["notePresets", "refusalTester", "swapPresets"]);
+    // No name is built twice, which a list form makes easy to do by accident.
+    expect(asked.length).toBe(new Set(asked).size);
+    // And the panel builds each of them off that field, not off the title. The
+    // lookup goes through one helper now, since a section can name several.
+    for (const name of asked) expect(SRC).toContain('hasExtra("' + name + '")');
   });
 
   test("the preset split is asked for by name too, and only where presets exist", () => {
@@ -184,5 +189,34 @@ describe("applying a setting as it is edited", () => {
     expect(handled.length).toBeGreaterThan(0);
     const asking = liveFields().map((f) => f.key);
     for (const k of handled) expect(asking).toContain(k);
+  });
+
+  test("refusal notes have their own preset kind, holding only the notes", () => {
+    // The category it reads from is mostly refusal detection, so this is a keep
+    // list rather than an omit list: a refusal setting added later must not
+    // land in note presets because nobody remembered to exclude it.
+    const kinds = SRC.slice(SRC.indexOf("const PRESET_KINDS"), SRC.indexOf("function keysForKind"));
+    expect(kinds).toContain("notes: {");
+    expect(kinds).toContain('catId: "refusal"');
+    const only = /only: \[([^\]]*)\]/.exec(kinds);
+    expect(only).not.toBeNull();
+    const keys = (only as RegExpExecArray)[1].split(",").map((s) => s.trim().replace(/"/g, "")).filter(Boolean);
+    expect(keys.sort()).toEqual(["refusalNotePlacement", "refusalNotes"]);
+  });
+
+  test("loading a note preset cannot start sending notes", () => {
+    // The on and off switch is the one key that must never be in a preset: a
+    // saved set of wording should not decide whether notes go to the model.
+    const kinds = SRC.slice(SRC.indexOf("const PRESET_KINDS"), SRC.indexOf("function keysForKind"));
+    const only = /only: \[([^\]]*)\]/.exec(kinds) as RegExpExecArray;
+    expect(only[1]).not.toContain('"refusalNote"');
+  });
+
+  test("both preset kinds exist in the store from the start", () => {
+    // A kind missing from the seed is never read back, so presets saved under it
+    // vanish on reload with nothing to say why.
+    const seed = /const out: Record<string, Preset\[\]> = \{([^}]*)\}/.exec(SRC);
+    expect(seed).not.toBeNull();
+    for (const kind of ["swap", "notes"]) expect((seed as RegExpExecArray)[1]).toContain(kind + ":");
   });
 });

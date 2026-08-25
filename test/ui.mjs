@@ -1888,6 +1888,76 @@ console.log("\nsettings that hang off automatic swapping");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- counting what the swaps actually did ----
+// A swap leaves nothing behind to look at once it lands: the reply reads as
+// though the model wrote it that way. So without a count there is no answer to
+// "is that rule doing anything", which is the question somebody asks before
+// deciding their rules are broken.
+//
+// The stats live in the on-screen panel, not the settings modal, so this drives
+// that surface. A fresh context keeps another check's storage out of it.
+console.log("\ncounting word swaps");
+{
+  const ctx = await browser.newContext();
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.route("**/*", (r) => r.fulfill({ contentType: "text/html",
+    body: "<!doctype html><meta charset=utf-8><div id=modal></div>" }));
+  await page.goto("http://lumiverse.test/");
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  const out = await page.evaluate(async () => {
+    localStorage.clear();
+    window.__handlers = {};
+    const listeners = [];
+    const deliver = (m) => listeners.slice().forEach((f) => { try { f(m); } catch (_) {} });
+    window.__setup({
+      events: { on: (n, f) => { window.__handlers[n] = f; return () => {}; } },
+      sendToBackend: () => {}, onBackendMessage: (cb) => { listeners.push(cb); return () => {}; },
+      ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+            registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) },
+    }, { liveLog: true, toast: false, stuckTimeoutMs: 0, idleTimeoutMs: 0 });
+    const tick = (n) => new Promise((r) => setTimeout(r, n || 90));
+    const tab = (name) =>
+      [...document.querySelectorAll('#__lvRetryLog [role="tab"], #__lvRetryLog button')]
+        .find((x) => (x.textContent || "").trim() === name);
+    const body = () => { const el = document.getElementById("__lvRetryLogBody"); return el ? el.textContent || "" : ""; };
+
+    window.__handlers.GENERATION_STARTED({ chatId: "c1", generationId: "g1" });
+    window.__handlers.GENERATION_ENDED({ chatId: "c1", generationId: "g1", content: "The cat sat down here." });
+    await tick();
+    deliver({ type: "swapped", chatId: "c1", before: "a", after: "b", pairs: [["cat", "dog"]] });
+    deliver({ type: "swapped", chatId: "c1", before: "c", after: "d", pairs: [["x", "y"], ["p", "q"]] });
+    // A swap in a chat the user is not looking at. It still happened, so it is
+    // still counted, just not against this chat.
+    deliver({ type: "swapped", chatId: "other", before: "e", after: "f", pairs: [["m", "n"]] });
+    await tick();
+    const logText = body();
+    const st = tab("Stats");
+    if (st) st.click();
+    await tick(150);
+    const statsText = body();
+    return {
+      one: /swapped 1 word \(1 in this chat\)/.test(logText),
+      two: /swapped 2 words \(3 in this chat\)/.test(logText),
+      heading: /Words swapped/.test(statsText),
+      figures: (statsText.match(/Words swapped[\s\S]{0,80}/) || [""])[0].replace(/\s+/g, " "),
+    };
+  });
+  await page.close();
+  await ctx.close();
+  // Singular and plural, and a running total rather than each swap on its own.
+  check("the log says what one swap changed", out.one, out);
+  check("and counts up as more land", out.two, out);
+  check("the stats tab shows a swap total", out.heading, out);
+  // Three in this chat, one elsewhere: the fourth swap must not join the total
+  // for the chat on screen.
+  check("split by whether it happened in the chat on screen",
+    /This chat ?3/.test(out.figures) && /Everywhere else ?1/.test(out.figures), out.figures);
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- the box between the click and the reply ----
 // With Regeneration Feedback on, pressing regenerate opens a box asking for
 // guidance, and the reply only starts once that box is dealt with. An
@@ -3471,6 +3541,56 @@ console.log("\npreset controls");
 // take away the confirmation step, or move buttons around in your Extras menu.
 // This drives a real save and a real load to prove it, which was not possible
 // until these checks had working storage.
+// Two preset bars now, identical to look at and driving different stores. The
+// risk is that they are wired to the same one, which would look completely
+// normal until somebody loaded a note set and found their word swaps replaced.
+console.log("\ntwo preset bars, two stores");
+{
+  const { out, errors } = await inPanel(browser, {}, async (page) =>
+    page.evaluate(async () => {
+      const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      await frame();
+      const bar = (kind) => document.querySelector('[data-ar-presets="' + kind + '"]');
+      const press = (b, label) =>
+        [...b.querySelectorAll("button")].find((x) => x.textContent.trim() === label).click();
+      const saveInto = async (kind, name) => {
+        const b = bar(kind);
+        b.querySelector('input[placeholder="Preset name"]').value = name;
+        press(b, "Save as new");
+        await frame();
+      };
+      const rules = document.querySelector('[data-ar-row="replaceRules"] textarea');
+      rules.value = "cat => dog";
+      rules.dispatchEvent(new Event("change", { bubbles: true }));
+      // A preset saves what has been saved, not what is typed, so the panel's
+      // own Save goes first. It is not inside either bar.
+      [...document.querySelectorAll("button")].find((x) => x.textContent.trim() === "Save").click();
+      await frame();
+      await saveInto("swap", "swapset");
+      await saveInto("notes", "noteset");
+      const store = JSON.parse(localStorage.getItem("lv-auto-retry:presets:v1"));
+      return {
+        bothBarsExist: !!bar("swap") && !!bar("notes"),
+        swapNames: (store.swap || []).map((p) => p.name),
+        noteNames: (store.notes || []).map((p) => p.name),
+        // What each kind actually carries, which is the other half of keeping
+        // them apart: a note set must not be holding word swap rules.
+        swapKeys: Object.keys(((store.swap || [])[0] || {}).values || {}).sort(),
+        noteKeys: Object.keys(((store.notes || [])[0] || {}).values || {}).sort(),
+      };
+    }),
+  );
+  check("both preset bars are on the panel", out.bothBarsExist, out);
+  check("each saves into its own store",
+    out.swapNames.join() === "swapset" && out.noteNames.join() === "noteset", out);
+  check("a word swap preset carries the rules and how they match",
+    out.swapKeys.join() === "replaceCaseSensitive,replaceRandom,replaceRules", out.swapKeys);
+  check("a note preset carries the notes and where they go, and nothing else",
+    out.noteKeys.join() === "refusalNotePlacement,refusalNotes", out.noteKeys);
+  check("no console errors", errors.length === 0, errors);
+}
+
 console.log("\npreset boundary");
 {
   const { out, errors } = await inPanel(browser, {}, async (page) =>
@@ -3478,7 +3598,13 @@ console.log("\npreset boundary");
       const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
       await frame();
+      // The panel carries two identical preset bars now, and the note one sits
+      // in an earlier section, so anything reaching for a preset button by
+      // position drives the wrong bar. The panel's own Save is not inside
+      // either bar, so it stays an unscoped lookup.
+      const bar = document.querySelector('[data-ar-presets="swap"]');
       const by = (t) => [...document.querySelectorAll("button")].find((x) => x.textContent.trim() === t);
+      const inBar = (t) => [...bar.querySelectorAll("button")].find((x) => x.textContent.trim() === t);
       const ctl = (k) => {
         const r = document.querySelector('[data-ar-row="' + k + '"]');
         return r && (r.querySelector("textarea") || r.querySelector("input"));
@@ -3498,8 +3624,8 @@ console.log("\npreset boundary");
       set("replaceRules", "cat => dog");
       for (const k of OWNED.slice(1).concat(YOURS)) set(k, true);
       by("Save").click(); await frame();
-      document.querySelector('input[placeholder="Preset name"]').value = "A";
-      by("Save as new").click(); await frame();
+      bar.querySelector('input[placeholder="Preset name"]').value = "A";
+      inBar("Save as new").click(); await frame();
 
       // Everything off, saved.
       set("replaceRules", "hot => cold");
@@ -3507,10 +3633,10 @@ console.log("\npreset boundary");
       by("Save").click(); await frame();
 
       // Load the preset back.
-      const sel = document.querySelector("select");
+      const sel = bar.querySelector("select");
       sel.value = "A";
       sel.dispatchEvent(new Event("change", { bubbles: true }));
-      by("Load").click(); await frame();
+      inBar("Load").click(); await frame();
 
       const owned = {}; for (const k of OWNED) owned[k] = get(k);
       const yours = {}; for (const k of YOURS) yours[k] = get(k);
@@ -8326,8 +8452,10 @@ console.log("\nreset confirmation");
       document.querySelector('[data-ar-row="replaceRules"] textarea').value = "cat => dog";
       document.querySelector('[data-ar-row="replaceRules"] textarea')
         .dispatchEvent(new Event("change", { bubbles: true }));
-      document.querySelector('input[placeholder="Preset name"]').value = "trial";
-      [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === "Save as new").click();
+      // Scoped: the note preset bar is identical and sits in an earlier section.
+      const swapBar = document.querySelector('[data-ar-presets="swap"]');
+      swapBar.querySelector('input[placeholder="Preset name"]').value = "trial";
+      [...swapBar.querySelectorAll("button")].find((b) => b.textContent.trim() === "Save as new").click();
       await frame();
       [...document.querySelectorAll("button")].find((b) => /^Reset/.test(b.textContent.trim())).click();
       await frame();
@@ -8365,8 +8493,10 @@ console.log("\nreset confirmation");
       document.querySelector('[data-ar-row="replaceRules"] textarea').value = "cat => dog";
       document.querySelector('[data-ar-row="replaceRules"] textarea')
         .dispatchEvent(new Event("change", { bubbles: true }));
-      document.querySelector('input[placeholder="Preset name"]').value = "trial";
-      [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === "Save as new").click();
+      // Scoped: the note preset bar is identical and sits in an earlier section.
+      const swapBar = document.querySelector('[data-ar-presets="swap"]');
+      swapBar.querySelector('input[placeholder="Preset name"]').value = "trial";
+      [...swapBar.querySelectorAll("button")].find((b) => b.textContent.trim() === "Save as new").click();
       await frame();
       const before = JSON.parse(localStorage.getItem("lv-auto-retry:presets:v1")).swap.length;
       [...document.querySelectorAll("button")].find((b) => /^Reset/.test(b.textContent.trim())).click();
@@ -8416,8 +8546,10 @@ console.log("\nreset urgency");
       document.querySelector('[data-ar-row="replaceRules"] textarea').value = "cat => dog";
       document.querySelector('[data-ar-row="replaceRules"] textarea')
         .dispatchEvent(new Event("change", { bubbles: true }));
-      document.querySelector('input[placeholder="Preset name"]').value = "trial";
-      [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === "Save as new").click();
+      // Scoped: the note preset bar is identical and sits in an earlier section.
+      const swapBar = document.querySelector('[data-ar-presets="swap"]');
+      swapBar.querySelector('input[placeholder="Preset name"]').value = "trial";
+      [...swapBar.querySelectorAll("button")].find((b) => b.textContent.trim() === "Save as new").click();
       await frame();
 
       const inBox = (re) => [...document.querySelectorAll("#__lvRetryReset button")]

@@ -100,7 +100,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "4.21.1";
+const VERSION = "4.22.0";
 // The one address the extension ever points at, used by the warning in front of
 // the crisis-support check. Pinned to the released branch rather than to a tag,
 // so an old install still opens the page as it stands today.
@@ -523,7 +523,7 @@ const SCHEMA = [
     {
         title: "Refusal tuning",
         collapsed: true,
-        extra: "refusalTester",
+        extra: ["refusalTester", "notePresets"],
         // Every setting under here feeds refusalVerdict, and all three places
         // that call it sit behind retryOnRefusal, so with that off the section is
         // inert. One exception: refusalThinkTags is still read by the empty and
@@ -3344,6 +3344,24 @@ export function setup(ctx, opts) {
             }
             body.appendChild(barBlock("Which chats it retried in", labelled, order));
         }
+        // Word swaps, for the chat on screen. A swap leaves nothing behind to look
+        // at once it lands, since the reply reads as though the model wrote it that
+        // way, so this is the only answer to "is that rule doing anything".
+        const swapKeyNow = lastChatId == null ? NO_CHAT : String(lastChatId);
+        const swapsHere = stats.swapsByChat[swapKeyNow] || 0;
+        const swapsAll = Object.keys(stats.swapsByChat)
+            .reduce((n, k) => n + stats.swapsByChat[k], 0);
+        if (swapsAll > 0) {
+            const rows = {};
+            const order2 = [];
+            rows["This chat"] = swapsHere;
+            order2.push("This chat");
+            if (swapsAll !== swapsHere) {
+                rows["Everywhere else"] = swapsAll - swapsHere;
+                order2.push("Everywhere else");
+            }
+            body.appendChild(barBlock("Words swapped", rows, order2));
+        }
         try {
             ensureReadableTree(body);
         }
@@ -5244,6 +5262,21 @@ export function setup(ctx, opts) {
                 "swapWaitSecs",
             ],
         },
+        notes: {
+            catId: "refusal",
+            // Named by what is in it, not by the section it comes from, since the
+            // refusal category also carries the detection settings.
+            label: "Refusal note",
+            // Listed as what to keep rather than what to leave out. The category this
+            // reads from is mostly detection tuning, so an omit list would be twelve
+            // keys to hold two, and a refusal setting added later would land in note
+            // presets without anyone deciding it should.
+            //
+            // The on and off switch is deliberately not here. Loading a preset would
+            // otherwise start sending notes to the model for somebody who had turned
+            // that off, which is not a thing a saved set of wording should decide.
+            only: ["refusalNotes", "refusalNotePlacement"],
+        },
     };
     // Derived from the export category so the two stay in step, minus whatever
     // that kind omits. Load walks this list rather than the stored values, so a
@@ -5255,14 +5288,16 @@ export function setup(ctx, opts) {
         const omit = k.omit || [];
         for (const c of EXPORT_CATEGORIES)
             if (c.id === k.catId)
-                return c.keys.filter((key) => omit.indexOf(key) < 0);
+                return k.only && k.only.length
+                    ? c.keys.filter((key) => k.only.indexOf(key) >= 0)
+                    : c.keys.filter((key) => omit.indexOf(key) < 0);
         return [];
     }
     // Keep only what a preset is allowed to be, whatever the source. The same
     // check runs on the local copy and on anything the account hands back, so a
     // malformed or hand-edited store cannot put junk into the dropdown.
     function coercePresets(data) {
-        const out = { swap: [] };
+        const out = { swap: [], notes: [] };
         if (!data || typeof data !== "object")
             return out;
         for (const kind of Object.keys(out)) {
@@ -5662,6 +5697,11 @@ export function setup(ctx, opts) {
         // thing this answers, and a count across every chat cannot show it. Ids
         // rather than names, because a name can arrive later than the first retry.
         byChat: {},
+        // Words swapped per chat id, counted the same way. A swap leaves no trace
+        // in the chat once it has landed, since the reply simply reads as though
+        // the model wrote it that way, so without a count there is nothing to look
+        // at to answer "is this rule doing anything".
+        swapsByChat: {},
         // So a count can be read as a rate rather than as a bare number. Twelve
         // retries in ten minutes and twelve in a whole day are different problems.
         since: Date.now(),
@@ -6961,6 +7001,19 @@ export function setup(ctx, opts) {
     // out on a fresh page load until the user leaves and comes back. A message
     // rendering is what happens when a chat opens and it carries the id, so it is
     // enough on its own.
+    // A swap that landed, counted against the chat it happened in and said out
+    // loud. Both are here rather than at each call site so the automatic path and
+    // the two buttons cannot end up counting differently, or one of them staying
+    // silent. n is the number of words changed, which is what the backend reports
+    // one entry per.
+    function noteSwaps(chatId, n) {
+        if (!(n > 0))
+            return;
+        const key = chatId == null || chatId === "" ? NO_CHAT : String(chatId);
+        stats.swapsByChat[key] = (stats.swapsByChat[key] || 0) + n;
+        log("swapped " + n + (n === 1 ? " word" : " words") +
+            " (" + stats.swapsByChat[key] + " in this chat)");
+    }
     function noteChat(id) {
         const next = id == null ? null : id;
         if (next == null || next === lastChatId)
@@ -8136,6 +8189,10 @@ export function setup(ctx, opts) {
         // place (no rebuild), so it never jumps the scroll or closes open sections.
         function buildPresetBar(kind) {
             const wrap = document.createElement("div");
+            // Which set of presets this bar drives. There is more than one bar on the
+            // panel now, and they are identical to look at, so anything reaching for
+            // one by position finds whichever section happens to come first.
+            wrap.setAttribute("data-ar-presets", kind);
             wrap.style.cssText = "display:flex;flex-direction:column;gap:8px";
             const smallBtn = (b) => {
                 b.style.cssText += "min-height:0;padding:7px 12px";
@@ -8184,6 +8241,16 @@ export function setup(ctx, opts) {
                 "font-size:12px;line-height:1.4;color:var(--lumiverse-text-muted,rgba(255,255,255,.65));min-height:1em";
             const presets = loadPresets();
             const list = () => presets[kind] || [];
+            // Only this bar's own kind is this bar's to write. The store holds every
+            // kind together, and each bar took its copy when the panel was built, so
+            // writing that whole copy back would undo anything another bar has saved
+            // since. Re-read, replace one key, write: that also survives another tab
+            // saving between this panel opening and somebody pressing a button here.
+            const persist = () => {
+                const all = loadPresets();
+                all[kind] = list();
+                return savePresets(all);
+            };
             // A control that cannot do anything yet should look that way, rather than
             // sitting there fully lit and then telling you off when you press it.
             // With nothing saved, Load, Update, Delete and Rename all had a live
@@ -8264,7 +8331,7 @@ export function setup(ctx, opts) {
                 }
                 commit();
                 presets[kind] = list().concat([{ name, values: snapshotKind(kind) }]);
-                if (!savePresets(presets)) {
+                if (!persist()) {
                     status.textContent = "Couldn't save the preset on this browser.";
                     return;
                 }
@@ -8300,7 +8367,7 @@ export function setup(ctx, opts) {
                 // Keep the saved values, change only the name.
                 arr[i] = { name: newName, values: arr[i].values };
                 presets[kind] = arr;
-                if (!savePresets(presets)) {
+                if (!persist()) {
                     status.textContent = "Couldn't save on this browser.";
                     return;
                 }
@@ -8323,7 +8390,7 @@ export function setup(ctx, opts) {
                 commit();
                 arr[i] = { name, values: snapshotKind(kind) };
                 presets[kind] = arr;
-                if (!savePresets(presets)) {
+                if (!persist()) {
                     status.textContent = "Couldn't save on this browser.";
                     return;
                 }
@@ -8352,7 +8419,7 @@ export function setup(ctx, opts) {
                 if (!ok)
                     return;
                 presets[kind] = list().filter((x) => x.name !== name);
-                if (!savePresets(presets)) {
+                if (!persist()) {
                     status.textContent = "Couldn't save on this browser.";
                     return;
                 }
@@ -8773,15 +8840,22 @@ export function setup(ctx, opts) {
                 emitFields(body);
                 // The refusal tuning options are all guesswork without a way to try
                 // them, so the section carries its own tester.
-                if (group.extra === "refusalTester")
+                const hasExtra = (n) => Array.isArray(group.extra) ? group.extra.indexOf(n) >= 0 : group.extra === n;
+                if (hasExtra("refusalTester"))
                     body.appendChild(buildRefusalTester());
                 // Word swap presets sit at the end of the group, since they save and
                 // switch the settings above.
-                if (group.extra === "swapPresets") {
+                if (hasExtra("swapPresets")) {
                     body.appendChild(hairline());
                     body.appendChild(runHeading("Presets"));
                     body.appendChild(sectionDesc("Save your current word swaps as a named setup and switch between them. Applying takes effect right away. Saved to your account, so they follow you to other devices.", false));
                     body.appendChild(buildPresetBar("swap"));
+                }
+                if (hasExtra("notePresets")) {
+                    body.appendChild(hairline());
+                    body.appendChild(runHeading("Note presets"));
+                    body.appendChild(sectionDesc("Save the notes above as a named set and switch between them. A set carries the notes and where they go, and nothing else: loading one never turns notes on or off. Saved to your account, so they follow you to other devices.", false));
+                    body.appendChild(buildPresetBar("notes"));
                 }
                 sec.appendChild(body);
                 handle.setOpen = makeCollapsible(header, body, caret, group.title);
@@ -10959,6 +11033,9 @@ export function setup(ctx, opts) {
                         // Remembered whatever chat it was for. The edit box for a message in
                         // another chat can still be opened after switching back to it.
                         rememberSwap(msg.before, msg.after);
+                        // Counted before the check below, which returns early for a swap that
+                        // happened in a chat the user has since left. It still happened.
+                        noteSwaps(msg.chatId, (msg.pairs || []).length);
                         if (msg.chatId && lastChatId && String(msg.chatId) !== String(lastChatId))
                             return;
                         applySwapsToView(msg.pairs || []);
@@ -10987,6 +11064,8 @@ export function setup(ctx, opts) {
                     clearSwapWait(msg.requestId);
                     for (const e of msg.edits || [])
                         rememberSwap(e && e.before, e && e.after);
+                    if (msg.ok)
+                        noteSwaps(msg.chatId, (msg.pairs || []).length);
                     if (msg.ok) {
                         applySwapsToView(msg.pairs || []);
                         repairEditBox();
