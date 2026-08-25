@@ -58,7 +58,7 @@ describe("the sections of the settings panel", () => {
     // settings to a file and building a bug report are ordinary. They start
     // shut because nothing in them is needed to use the extension, which is a
     // different claim, and the caret is the one making it. Listed here so
-    // adding a section to that set is a deliberate decision.
+    // adding a section to that set has to be decided, not drifted into.
     const shut = secs.filter((s) => /\n\s*collapsed: true,/.test(s.body)).map((s) => s.title);
     expect(shut).toEqual([
       "Refusal tuning",

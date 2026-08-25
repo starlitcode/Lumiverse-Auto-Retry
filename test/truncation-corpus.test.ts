@@ -1,8 +1,8 @@
 // Two corpora of whole replies, run through the real cut-off check.
 //
 // One is finished replies, which it must never call cut off. One is replies
-// that really were cut, which it must still catch. They are in one file
-// deliberately: every fix on the first side loosens a check, and the cost of
+// that really were cut, which it must still catch. They share one file for a
+// reason: every fix on the first side loosens a check, and the cost of
 // loosening one too far is a cut reply passing as complete, which is the whole
 // point of the second side.
 //

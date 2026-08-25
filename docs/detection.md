@@ -252,7 +252,7 @@ Do not expect to find it in **Prompt Breakdown**. The note is not a message in y
 
 Under the notes is a **Note presets** bar. Once you have wording that works, save it under a name and switch between sets without retyping them, the same way word swap presets work. This is worth doing before you start changing notes that already work, since the tester below encourages exactly that kind of experimenting.
 
-A set carries the notes themselves and **Where the notes go**, and nothing else. It deliberately does not carry **Send a note with a refusal retry**, so loading a set never starts sending notes to the model on your behalf. Everything else about how refusals are detected stays as you have it.
+A set carries the notes themselves and **Where the notes go**, and nothing else. It does not carry **Send a note with a refusal retry**, so loading a set never starts sending notes to the model on your behalf. Everything else about how refusals are detected stays as you have it.
 
 Presets are saved to your account, so they follow you to other devices.
 

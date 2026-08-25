@@ -1,6 +1,6 @@
 // The word-swap engine, driven through the file Lumiverse actually loads.
 //
-// This is the most intricate logic in the extension and the only part that
+// This is the hardest logic in the extension to get right, and the only part that
 // rewrites a user's saved writing, which cannot be undone. It also had no
 // tests: the rules in docs/word-swaps.md (single pass, longest match wins,
 // whole-word matching, capitalisation, the greeting exemption) were promises

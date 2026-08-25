@@ -125,7 +125,7 @@ function replyTo(userId: string | undefined, msg: any): void {
 // was armed for never started anything, so the window between arming and
 // collection is the length of one click, not the age limit below.
 //
-// What the host calls the generation is deliberately not one of the guards.
+// What the host calls the generation is not one of the guards, on purpose.
 // Most builds report "normal" for everything, including a regenerate, so
 // requiring "regenerate" or "swipe" would mean no note ever goes out. Users who
 // know their build reports it properly can ask for that check with strictType.

@@ -5359,7 +5359,7 @@ export function setup(ctx: Ctx, opts?: any) {
       // keys to hold two, and a refusal setting added later would land in note
       // presets without anyone deciding it should.
       //
-      // The on and off switch is deliberately not here. Loading a preset would
+      // The on and off switch is kept out. Loading a preset would
       // otherwise start sending notes to the model for somebody who had turned
       // that off, which is not a thing a saved set of wording should decide.
       only: ["refusalNotes", "refusalNotePlacement"],
@@ -5542,8 +5542,8 @@ export function setup(ctx: Ctx, opts?: any) {
 
   // Chats the host says have no character card on them, which is the temporary
   // chat: a scratch conversation with the model itself, discarded on the way
-  // out. Switching one off works for as long as it is open and is deliberately
-  // not written down, because the chat is thrown away and the next one carries
+  // out. Switching one off works for as long as it is open and is not written
+  // down, because the chat is thrown away and the next one carries
   // a different id, so a remembered entry could never match anything again. It
   // would sit in storage looking like a setting and doing nothing.
   const cardless = new Set<string>();

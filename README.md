@@ -29,7 +29,7 @@ In Lumiverse, open Extensions and install from the repository URL:
 https://github.com/starlitcode/Lumiverse-Auto-Retry
 ```
 
-Then open the chat input bar, tap the **Extras** popover, and choose **Auto Retry settings**. It works out of the box; everything below is optional.
+Then open the chat input bar, tap the **Extras** popover, and choose **Auto Retry settings**. It works with no setup; everything below is optional.
 
 ## You are always in charge
 
