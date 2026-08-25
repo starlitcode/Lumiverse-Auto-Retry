@@ -1054,7 +1054,7 @@ spindle.onFrontendMessage(async (payload, userId) => {
             catch (_) {
                 ok = false;
             }
-            replyTo(userId, { type: 'replace_now_result', requestId: payload.requestId, ok: ok, hasRules: groups.length > 0, found: found, changed: changed, skipped: skipped, pairs: pairs, edits: edits });
+            replyTo(userId, { type: 'replace_now_result', requestId: payload.requestId, chatId: payload.chatId, ok: ok, hasRules: groups.length > 0, found: found, changed: changed, skipped: skipped, pairs: pairs, edits: edits });
             return;
         }
     }
