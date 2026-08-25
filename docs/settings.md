@@ -211,7 +211,7 @@ The two watchdog waits (`stuckTimeoutMs`, `idleTimeoutMs`) are long, and the def
 
 `idleTimeoutMs` needs streaming to be on. It watches for text that was arriving and then stopped, so with streaming off there is nothing arriving to go quiet and a stall cannot be seen at all. A reply that hangs is then caught by `stuckTimeoutMs`, which covers a generation that produces neither text nor an ending. Everything else works the same either way: the checks for an error, an empty reply, a cut-off reply and a refusal all read the finished reply, which arrives whether or not it streamed.
 
-These defaults only apply to a fresh install. Settings already saved to your account keep the values they had, so if you have been using an earlier version and want the new timings, open **Reset…** and tick **Retry behavior and the on/off buttons**.
+These defaults only apply to a fresh install. Settings already saved to your account keep the values they had, so if you have been using an earlier version and want the new timings, open **Reset…** and tick **Retrying and its buttons**.
 
 ---
 

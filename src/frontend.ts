@@ -5132,10 +5132,10 @@ export function setup(ctx: Ctx, opts?: any) {
   // ticked by somebody expecting it to cover more than it does. Both read as
   // the export having gone wrong.
   //
-  // So "Retry behavior" also says the on/off buttons, since it carries whether
-  // they are shown; "Refusal detection" also says notes, since the note wording
-  // rides with it; and the preset entry names every kind in PRESET_KINDS rather
-  // than calling itself saved presets and leaving which ones to be guessed at.
+  // So retrying also says buttons, since it carries whether they are shown, and
+  // refusals also says notes, since the note wording rides with it. The preset
+  // entry says all, because it moves every kind at once and naming one kind
+  // reads as a promise about that kind alone.
   const EXPORT_CATEGORIES: Array<{
     id: string;
     label: string;
@@ -5143,7 +5143,7 @@ export function setup(ctx: Ctx, opts?: any) {
   }> = [
     {
       id: "retry",
-      label: "Retry behavior and the on/off buttons",
+      label: "Retrying and its buttons",
       keys: [
         "enabled",
         "showFloatingToggle",
@@ -5172,7 +5172,7 @@ export function setup(ctx: Ctx, opts?: any) {
     },
     {
       id: "refusal",
-      label: "Refusal detection and notes",
+      label: "Refusals and notes",
       keys: [
         "retryOnRefusal",
         "refusalUseBuiltins",
@@ -5220,11 +5220,11 @@ export function setup(ctx: Ctx, opts?: any) {
         "confirmButtonLabels",
       ],
     },
-    { id: "notifications", label: "The pop-up and the on-screen panel", keys: ["toast", "liveLog", "panelHome"] },
+    { id: "notifications", label: "Panel and pop-up", keys: ["toast", "liveLog", "panelHome"] },
     // Special entry: carried outside cfg. buildExport and the import handler
     // treat it as the whole preset store, every kind of preset in it, rather
     // than as settings keys, which is why the label names every kind.
-    { id: "presets", label: "Word swap and refusal note presets", keys: [] },
+    { id: "presets", label: "All presets", keys: [] },
   ];
   const fieldByKey: Record<string, Field> = {};
   for (const g of SCHEMA) for (const f of g.fields) fieldByKey[f.key] = f;
