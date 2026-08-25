@@ -523,7 +523,7 @@ const SCHEMA = [
     {
         title: "Refusal tuning",
         collapsed: true,
-        extra: ["refusalTester", "notePresets"],
+        extra: ["notePresets", "refusalTester"],
         // Every setting under here feeds refusalVerdict, and all three places
         // that call it sit behind retryOnRefusal, so with that off the section is
         // inert. One exception: refusalThinkTags is still read by the empty and
@@ -8883,13 +8883,14 @@ export function setup(ctx, opts) {
                 if (group.desc)
                     body.appendChild(sectionDesc(group.desc, false));
                 emitFields(body);
-                // The refusal tuning options are all guesswork without a way to try
-                // them, so the section carries its own tester.
                 const hasExtra = (n) => Array.isArray(group.extra) ? group.extra.indexOf(n) >= 0 : group.extra === n;
-                if (hasExtra("refusalTester"))
-                    body.appendChild(buildRefusalTester());
-                // Word swap presets sit at the end of the group, since they save and
-                // switch the settings above.
+                // Two kinds of thing hang off the end of a section, in this order.
+                //
+                // A preset bar comes first, straight under the settings it saves, so
+                // it sits next to what it acts on.
+                //
+                // A tester comes last. It is not a setting and saves nothing, it is
+                // somewhere to try the settings out, so it goes after all of them.
                 if (hasExtra("swapPresets")) {
                     body.appendChild(hairline());
                     body.appendChild(runHeading("Presets"));
@@ -8902,6 +8903,8 @@ export function setup(ctx, opts) {
                     body.appendChild(sectionDesc("Save the notes above as a named set and switch between them. A set carries the notes and where they go, and nothing else: loading one never turns notes on or off. Saved to your account, so they follow you to other devices.", false));
                     body.appendChild(buildPresetBar("notes"));
                 }
+                if (hasExtra("refusalTester"))
+                    body.appendChild(buildRefusalTester());
                 sec.appendChild(body);
                 handle.setOpen = makeCollapsible(header, body, caret, group.title);
             }

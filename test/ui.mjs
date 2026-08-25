@@ -3650,6 +3650,15 @@ console.log("\ntwo preset bars, two stores");
         // them apart: a note set must not be holding word swap rules.
         swapKeys: Object.keys(((store.swap || [])[0] || {}).values || {}).sort(),
         noteKeys: Object.keys(((store.notes || [])[0] || {}).values || {}).sort(),
+        // Where the two things at the end of the refusal section sit relative
+        // to each other. The bar saves the settings above it and reads as part
+        // of them; the tester is a place to try them and belongs after the lot.
+        notesBeforeTester: (() => {
+          const tester = document.querySelector('textarea[placeholder="Paste a reply here"]');
+          const notes = bar("notes");
+          if (!tester || !notes) return null;
+          return !!(notes.compareDocumentPosition(tester) & Node.DOCUMENT_POSITION_FOLLOWING);
+        })(),
       };
     }),
   );
@@ -3660,6 +3669,8 @@ console.log("\ntwo preset bars, two stores");
     out.swapKeys.join() === "replaceCaseSensitive,replaceRandom,replaceRules", out.swapKeys);
   check("a note preset carries the notes and where they go, and nothing else",
     out.noteKeys.join() === "refusalNotePlacement,refusalNotes", out.noteKeys);
+  check("the note preset bar is above the tester, not below it",
+    out.notesBeforeTester === true, out.notesBeforeTester);
   check("no console errors", errors.length === 0, errors);
 }
 
