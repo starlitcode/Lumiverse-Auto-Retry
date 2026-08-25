@@ -10,10 +10,13 @@ import { readFileSync } from "node:fs";
 
 const SRC = readFileSync(new URL("../src/frontend.ts", import.meta.url), "utf8");
 
-// Every `needs: [...]` in the schema, with the key of the field it sits under.
+// Every `needs: [...]` and `needsAll: [...]` in the schema, with the key of the
+// field it sits under. Both are wiring made of strings that nothing else
+// checks, so both get the same treatment: a typo in either leaves a row hidden
+// forever, or shown forever, with no error anywhere.
 function dependencies(): Array<{ key: string; needs: string[] }> {
   const out: Array<{ key: string; needs: string[] }> = [];
-  const re = /key:\s*"([A-Za-z0-9_]+)",\s*\n\s*needs:\s*\[([^\]]*)\]/g;
+  const re = /key:\s*"([A-Za-z0-9_]+)",\s*\n\s*needs(?:All)?:\s*\[([^\]]*)\]/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(SRC))) {
     out.push({
@@ -114,14 +117,34 @@ describe("a row that hangs off a switch", () => {
     expect(deps.filter((d) => d.needs.indexOf(d.key) >= 0)).toEqual([]);
   });
 
-  test("and no switch is itself hidden behind another one", () => {
-    // A chain would mean a row that cannot be reached: turning the outer switch
-    // on would reveal a switch that is itself still hidden.
-    const dependent = new Set(deps.map((d) => d.key));
-    const chained = deps.flatMap((d) =>
-      d.needs.filter((n) => dependent.has(n)).map((n) => d.key + " -> " + n),
-    );
-    expect(chained).toEqual([]);
+  test("a row hanging off a hidden switch names that switch's switches too", () => {
+    // A chain is only safe when the child cannot outlive its parent. If a row
+    // hangs off a switch that is itself hidden, and the row does not also
+    // require whatever hides that switch, there is a state where the row is on
+    // screen describing a switch that is not: how long to wait, with nothing
+    // above it saying what is being waited for.
+    //
+    // Requiring the parent's switches as well closes that, which is what
+    // needsAll is for. Banning chains outright would too, and would also ban
+    // the honest ones.
+    const required = new Map<string, Set<string>>();
+    for (const d of deps) {
+      const s = required.get(d.key) || new Set<string>();
+      for (const n of d.needs) s.add(n);
+      required.set(d.key, s);
+    }
+    const bad: string[] = [];
+    for (const d of deps) {
+      const mine = required.get(d.key) as Set<string>;
+      for (const n of d.needs) {
+        const parent = required.get(n);
+        if (!parent) continue; // the switch is always on screen, so nothing to inherit
+        for (const p of parent) {
+          if (!mine.has(p)) bad.push(d.key + " hangs off " + n + " but does not require " + p);
+        }
+      }
+    }
+    expect(bad).toEqual([]);
   });
 
   test("the notes rows hang off the note switch", () => {

@@ -100,7 +100,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "4.21.0";
+const VERSION = "4.21.1";
 // The one address the extension ever points at, used by the warning in front of
 // the crisis-support check. Pinned to the released branch rather than to a tag,
 // so an old install still opens the page as it stands today.
@@ -705,13 +705,14 @@ const SCHEMA = [
             },
             {
                 key: "swapWaitForEdits",
+                needs: ["replaceEnabled"],
                 label: "Wait for other extensions to finish",
                 type: "bool",
-                hint: "Off by default. Turn this on if another extension also rewrites replies, like Hone with auto-refine on. A swap normally applies the moment a reply lands, and the other extension's rewrite then arrives on top and undoes it. With this on, the swap waits for the reply to stop changing first, so both survive, and it reapplies up to three times if a later edit undoes it. Leave it off if nothing else edits your replies: it only adds a delay.",
+                hint: "Off by default. Turn this on if another extension also rewrites replies, like Hone with auto-refine on. A swap normally applies the moment a reply lands, and the other extension's rewrite then arrives on top and undoes it. With this on, the swap waits for the reply to stop changing first, so both survive, and it reapplies up to three times if a later edit undoes it. Leave it off if nothing else edits your replies: it only adds a delay. The swap buttons are not affected and always apply straight away.",
             },
             {
                 key: "swapWaitSecs",
-                needs: ["swapWaitForEdits"],
+                needsAll: ["replaceEnabled", "swapWaitForEdits"],
                 label: "How long to wait (seconds)",
                 type: "num",
                 int: true,
@@ -8495,6 +8496,8 @@ export function setup(ctx, opts) {
         const subRuns = [];
         // Rows that only mean something while some switch is on. Kept out of the
         // panel while it is off, so what is on screen is what is in use.
+        // Groups rather than a flat list, matching depNotes below: any switch
+        // inside a group is enough, and every group has to be satisfied.
         const depRows = [];
         const depSections = [];
         // A row found by searching while the switch it hangs off is still off. The
@@ -8551,7 +8554,7 @@ export function setup(ctx, opts) {
                 return;
             }
             for (const d of depRows) {
-                const on = d.needs.some((k) => !!cfg[k]);
+                const on = d.groups.every((g) => g.some((k) => !!cfg[k]));
                 d.row.style.display = on ? "flex" : "none";
             }
             for (const d of depSections) {
@@ -8686,13 +8689,19 @@ export function setup(ctx, opts) {
                     text: searchText(f.label, f.hint, f.key, group.title),
                     section: handle,
                 });
+                // The row's own switches, then its section's. Each entry in needsAll
+                // is its own group, which is what makes them all required.
+                const own = [];
                 if (f.needs && f.needs.length)
-                    depRows.push({ row: row, needs: f.needs });
-                const groups = [];
+                    own.push(f.needs);
+                if (f.needsAll && f.needsAll.length)
+                    for (const k of f.needsAll)
+                        own.push([k]);
+                if (own.length)
+                    depRows.push({ row: row, groups: own });
+                const groups = own.slice();
                 if (group.needs && group.needs.length)
                     groups.push(group.needs);
-                if (f.needs && f.needs.length)
-                    groups.push(f.needs);
                 if (groups.length) {
                     const note = document.createElement("div");
                     note.style.cssText =
