@@ -5211,8 +5211,10 @@ export function setup(ctx: Ctx, opts?: any) {
     },
     { id: "notifications", label: "On-screen", keys: ["toast", "liveLog", "panelHome"] },
     // Special entry: carried outside cfg. buildExport and the import handler
-    // treat it as the saved word-swap presets, not settings keys.
-    { id: "presets", label: "Word swap presets", keys: [] },
+    // treat it as the whole preset store, every kind of preset in it, rather
+    // than as settings keys. The label has to say so: ticking something that
+    // names one kind and moving both is how a backup loses the other.
+    { id: "presets", label: "Saved presets", keys: [] },
   ];
   const fieldByKey: Record<string, Field> = {};
   for (const g of SCHEMA) for (const f of g.fields) fieldByKey[f.key] = f;
@@ -5305,7 +5307,11 @@ export function setup(ctx: Ctx, opts?: any) {
   }
 
   // ---- presets ----
-  // Named word-swap snapshots the user can switch between, stored per browser.
+  // Named snapshots of part of the settings, which the user switches between.
+  // One store holding every kind, keyed by kind, kept in this browser and on
+  // the account so they follow the user to another device. What each kind
+  // covers is PRESET_KINDS below; the bars that drive them are all one
+  // function, so a kind added there needs no new UI code.
   const PRESETS_KEY = "lv-auto-retry:presets:v1";
   const PRESET_KINDS: Record<
     string,
@@ -5827,8 +5833,8 @@ export function setup(ctx: Ctx, opts?: any) {
     // model that thinks for a minute is indistinguishable from the panel having
     // frozen. How long it has been going is the number they were missing.
     const forMs = s.liveSince ? Date.now() - s.liveSince : 0;
-    const so_far = forMs >= 1000 ? ", " + sayTime(forMs) : "";
-    if (s.live && s.sawReasoning) return { text: "Model is thinking" + so_far, busy: true };
+    const soFar = forMs >= 1000 ? ", " + sayTime(forMs) : "";
+    if (s.live && s.sawReasoning) return { text: "Model is thinking" + soFar, busy: true };
     // With streaming off the reply arrives in one piece at the end, so there is
     // nothing to count and nothing on the way. "Waiting for the reply to start"
     // is then wrong twice over: it has started, and nothing is going to arrive
@@ -5838,7 +5844,7 @@ export function setup(ctx: Ctx, opts?: any) {
         text:
           (!sawStreaming && sawWholeReplyAtOnce
             ? "Generating the reply"
-            : "Waiting for the reply to start") + so_far,
+            : "Waiting for the reply to start") + soFar,
         busy: true,
       };
     return null;
@@ -8010,6 +8016,10 @@ export function setup(ctx: Ctx, opts?: any) {
     if (inc(o.activity)) {
       lines.push("");
       lines.push("this session:");
+      // How long the counters below have been running. Without it they cannot
+      // be read: no retries after two minutes and no retries after four hours
+      // are the same three zeroes and mean opposite things.
+      lines.push("  watching for: " + sayTime(Date.now() - stats.since));
       lines.push("  replies that came back fine: " + stats.good);
       lines.push("  retries fired: " + stats.retries);
       lines.push("  messages it gave up on: " + stats.gaveUp);
@@ -8019,6 +8029,17 @@ export function setup(ctx: Ctx, opts?: any) {
         lines.push("  refusal notes sent: " + stats.notesSent);
         lines.push("  refusal notes skipped: " + stats.notesSkipped +
           (stats.lastNoteSkip ? " (last: " + stats.lastNoteSkip + ")" : ""));
+      }
+      // Same figure the Stats tab shows, on the same terms. A swap leaves
+      // nothing on screen to look at, so a report about swaps that did not
+      // happen is unanswerable without it: zero here separates a rule that
+      // never matched from swapping that never ran.
+      const swapsAll = Object.keys(stats.swapsByChat)
+        .reduce((n, k) => n + stats.swapsByChat[k], 0);
+      if (cfg.replaceEnabled || swapsAll) {
+        const here =
+          stats.swapsByChat[lastChatId == null ? NO_CHAT : String(lastChatId)] || 0;
+        lines.push("  words swapped: " + swapsAll + " (" + here + " in this chat)");
       }
       const reasons = Object.keys(stats.reasons).sort(
         (a, b) => stats.reasons[b] - stats.reasons[a],

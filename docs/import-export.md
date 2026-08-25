@@ -2,7 +2,7 @@
 
 You can save your settings to a file and load them back later. In the settings modal, open **Import / export**. Tick the parts you want, then either **Export to file** to save them as a small `.json` file, or **Import from file** to load one.
 
-Your settings and your word swap presets already follow your Lumiverse account across browsers on their own, so this is mainly for keeping a backup, sharing a setup with someone else, or copying between accounts.
+Your settings and your saved presets already follow your Lumiverse account across browsers on their own, so this is mainly for keeping a backup, sharing a setup with someone else, or copying between accounts.
 
 ## What you can tick
 
@@ -13,7 +13,7 @@ The parts are grouped so you only move what you mean to:
 - Word swaps
 - Button selectors
 - On-screen (the pop-up and live log)
-- Word swap presets, which puts your saved presets in the file
+- Saved presets, which puts both kinds in the file: your word swap presets and your refusal note presets
 
 For sharing phrase and swap setups, tick just refusal detection and word swaps and leave the rest, since button selectors in particular are tied to one person's Lumiverse build.
 

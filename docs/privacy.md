@@ -102,7 +102,7 @@ It reads a reply only to run its checks on the one that just arrived, and it doe
 
 ## What it keeps
 
-Your settings and your word-swap presets are saved twice over: once in your browser's local storage, and once in Lumiverse's own per-user storage so they follow your account between devices. That is the only thing that reaches your account.
+Your settings and your saved presets are saved twice over: once in your browser's local storage, and once in Lumiverse's own per-user storage so they follow your account between devices. That is the only thing that reaches your account.
 
 Two more things are written, and both stay in this browser:
 
@@ -111,7 +111,7 @@ Two more things are written, and both stay in this browser:
 
 Neither is synced and neither is included in an export, since a position on one screen and an id on one account mean nothing on another. That is everything written anywhere.
 
-Separately it keeps the last twenty lines of what it did, and a few counters for the session: replies that came back fine, retries fired, what they fired for, and how many happened in each chat, named where a name was available. That is all in memory, so the Copy debug info button has something to report. Both die with the tab. Neither is written to disk and neither leaves your device.
+Separately it keeps the last twenty lines of what it did, and a few counters for the session: replies that came back fine, retries fired, what they fired for, how many happened in each chat, named where a name was available, refusal notes sent and skipped, and how many words your swaps changed in each chat. The per-chat counts are kept against the chat id, never the words themselves. That is all in memory, so the Copy debug info button has something to report. Both die with the tab. Neither is written to disk and neither leaves your device.
 
 The on-screen panel's **Prompt** tab is the one part that holds more than that, and only once you have asked it to. Opening that tab asks the extension to keep a copy of the prompt on its way to the model, which is the text of your chat, so that it can show it to you. Until you open it, nothing is kept: someone who uses the panel for its log and never goes near this tab is not paying for it.
 

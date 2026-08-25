@@ -1822,7 +1822,7 @@ describe("no busy status sits still", () => {
 
   test("every busy branch carries something that changes", () => {
     // Anything that moves on its own: a countdown, an elapsed time, a count.
-    const moves = /sayTime|rough\(|so_far|waiting|retryAt/;
+    const moves = /sayTime|rough\(|soFar|waiting|retryAt/;
     const branches = fn.split(/return\s*\{/).slice(1).filter((b) => /busy:\s*true/.test(b));
     expect(branches.length).toBeGreaterThanOrEqual(5);
     const still = branches.filter((b) => !moves.test(b.slice(0, b.indexOf("busy:"))));
