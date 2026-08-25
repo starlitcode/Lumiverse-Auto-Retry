@@ -57,6 +57,8 @@ If the button is greyed out while you are in a chat, it has not been told which 
 
 It is written down in your browser, so it survives a reload. It is not a setting: it is a list of chat ids, which would mean nothing on another account, so it is not synced and not included in an export.
 
+A temporary chat is the exception. Switching one off works the same way, and it is the one place you are most likely to want it, since you are watching what the model does and a retry re-rolls the thing you were looking at. It is not written down, because a temporary chat is discarded when you leave it and the next one is a different chat: a remembered entry could never apply to anything again. The row says so while you are in one, and the switch lasts as long as the chat does.
+
 While you are in a chat that is switched off, a line at the top of the settings panel says so. It is there because a chat you switched off weeks ago and forgot about looks exactly like the extension having stopped working. It is words only, and the **This chat** row is where you change it back.
 
 ## Resetting

@@ -5455,6 +5455,16 @@ export function setup(ctx: Ctx, opts?: any) {
   const chatIsOff = (chatId: any): boolean =>
     chatId != null && chatsOff.indexOf(String(chatId)) >= 0;
 
+  // Chats the host says have no character card on them, which is the temporary
+  // chat: a scratch conversation with the model itself, discarded on the way
+  // out. Switching one off works for as long as it is open and is deliberately
+  // not written down, because the chat is thrown away and the next one carries
+  // a different id, so a remembered entry could never match anything again. It
+  // would sit in storage looking like a setting and doing nothing.
+  const cardless = new Set<string>();
+  const isCardless = (chatId: any): boolean =>
+    chatId != null && cardless.has(String(chatId));
+
   // The off list lives in this browser and is not a setting, so it is not in
   // what gets saved to the account and the backend cannot read it. Word swaps
   // run on the backend, so without this a chat you switched off carried on
@@ -5481,10 +5491,16 @@ export function setup(ctx: Ctx, opts?: any) {
     // that blocks site data just forgets it. The docs say this is remembered,
     // so a browser that will not remember it has to say so.
     let remembered = false;
+    // Temporary chats are filtered out of what gets written, not out of the
+    // list itself: the switch has to hold for the chat that is open, and the
+    // backend still needs to be told so its word swaps leave that chat alone.
+    // Filtering here rather than at the point of the change also keeps a later
+    // switch in an ordinary chat from writing the temporary one down with it.
+    const keep = chatsOff.filter((c) => !cardless.has(c));
     try {
       if (typeof localStorage !== "undefined") {
-        localStorage.setItem(CHATS_OFF_KEY, JSON.stringify(chatsOff));
-        remembered = true;
+        localStorage.setItem(CHATS_OFF_KEY, JSON.stringify(keep));
+        remembered = !cardless.has(id);
       }
     } catch (_) {}
     tellBackendChatsOff();
@@ -6895,6 +6911,14 @@ export function setup(ctx: Ctx, opts?: any) {
         // page over a lookup that would have worked a second later.
         if (resolved || msg.character) {
           chatNames.set(String(msg.chatId), msg.character ? String(msg.character) : "");
+          // A chat with no card is a temporary one, the mode for talking to the
+          // model with no character in front of it. Recorded from the chat
+          // itself rather than from a missing name, which can also mean the
+          // characters permission was refused.
+          if (resolved) {
+            if (msg.hasCharacter) cardless.delete(String(msg.chatId));
+            else cardless.add(String(msg.chatId));
+          }
           if (chatSwitchPaint) {
             try { chatSwitchPaint(); } catch (_) {}
           }
@@ -9274,14 +9298,23 @@ export function setup(ctx: Ctx, opts?: any) {
         // sitting in a chat is the case that leaves it waiting, because nothing
         // re-renders and so nothing announces which chat you are in.
         ? "Waiting to find out which chat this is. Send a message, or switch to another chat and back, and this is ready. Every other chat carries on as it is."
-        : off
-          ? "Auto Retry is switched off in this chat. Every other chat carries on as it is. This is remembered, and it is kept in this browser rather than in your settings."
-          : "Switch Auto Retry off in this chat alone, for a scene where the model is meant to refuse. Every other chat carries on as it is.";
+        : isCardless(lastChatId)
+          // A temporary chat, so the switch is real but lasts only as long as
+          // the chat does. Said plainly, since the wording for an ordinary chat
+          // promises it is remembered and here it is not.
+          ? off
+            ? "Auto Retry is off in this temporary chat. Every other chat carries on as it is. This lasts while the chat is open and is not remembered, since the chat itself is not kept."
+            : "Switch Auto Retry off for this temporary chat, to watch what the model does without anything re-rolling it. This lasts while the chat is open and is not remembered, since the chat itself is not kept."
+          : off
+            ? "Auto Retry is switched off in this chat. Every other chat carries on as it is. This is remembered, and it is kept in this browser rather than in your settings."
+            : "Switch Auto Retry off in this chat alone, for a scene where the model is meant to refuse. Every other chat carries on as it is.";
     };
     act.addEventListener("click", () => {
       const off = chatIsOff(lastChatId);
       // setChatOff repaints this row along with everything else that describes
       // the chat, so there is nothing to do here but say what happened.
+      // Read before the change, since the row repaints during it.
+      const temporary = isCardless(lastChatId);
       const remembered = setChatOff(lastChatId, !off);
       const said = off
         ? "Auto Retry is back on in this chat."
@@ -9289,7 +9322,11 @@ export function setup(ctx: Ctx, opts?: any) {
       showToast(
         remembered
           ? said
-          : said + " This browser will not remember it after a reload.",
+          : temporary
+            // Not a failure to save, which is what the other wording means. A
+            // temporary chat is not kept, so neither is anything about it.
+            ? said + " It lasts while this temporary chat is open."
+            : said + " This browser will not remember it after a reload.",
         { force: true },
       );
     });

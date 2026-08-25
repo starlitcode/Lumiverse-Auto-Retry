@@ -784,6 +784,7 @@ spindle.onFrontendMessage(async (payload: any, userId?: string) => {
       // "I could not look", and the frontend has to tell them apart: it refuses
       // to swap on the first and must not on the second.
       let resolved = false;
+      let hasCharacter = false;
       try {
         let chat: any = null;
         if (chatId && spindle.chats && typeof spindle.chats.get === 'function') {
@@ -802,6 +803,13 @@ spindle.onFrontendMessage(async (payload: any, userId?: string) => {
         // belongs to. The primary is the useful answer here: the panel wants a
         // word for which chat this is, not a cast list.
         const cardId = chat && chat.character_id;
+        // Whether the chat has a card at all, which is not the same question as
+        // what it is called. The name needs the characters permission and the
+        // lookup below can come back empty for want of it, so a missing name
+        // cannot tell a chat with no card from one nobody was allowed to name.
+        // This reads the chat itself and so answers whenever the chat did.
+        const cards = chat && chat.metadata && chat.metadata.character_ids;
+        hasCharacter = !!cardId || (Array.isArray(cards) && cards.length > 0);
         if (cardId && spindle.characters && typeof spindle.characters.get === 'function') {
           const card = await spindle.characters.get(cardId, userId);
           const name = card && card.name;
@@ -814,6 +822,7 @@ spindle.onFrontendMessage(async (payload: any, userId?: string) => {
         chatId: chatId,
         character: character,
         resolved: resolved,
+        hasCharacter: hasCharacter,
       });
       return;
     }
