@@ -5057,10 +5057,21 @@ export function setup(ctx, opts) {
     // only the parts they want. Import runs every value back through the same
     // coerce/clamp as saved settings, so an imported file can only set known keys to
     // safe values; anything unrecognised is ignored.
+    // The parts import, export and reset are all divided into. A label has to
+    // name everything in its own list, not the heading the list grew out of: a
+    // part that sounds narrower than it is gets ticked by somebody who then loses
+    // what they did not know was in it, and one that sounds broader gets left
+    // ticked by somebody expecting it to cover more than it does. Both read as
+    // the export having gone wrong.
+    //
+    // So "Retry behavior" also says the on/off buttons, since it carries whether
+    // they are shown; "Refusal detection" also says notes, since the note wording
+    // rides with it; and the preset entry names every kind in PRESET_KINDS rather
+    // than calling itself saved presets and leaving which ones to be guessed at.
     const EXPORT_CATEGORIES = [
         {
             id: "retry",
-            label: "Retry behavior",
+            label: "Retry behavior and the on/off buttons",
             keys: [
                 "enabled",
                 "showFloatingToggle",
@@ -5089,7 +5100,7 @@ export function setup(ctx, opts) {
         },
         {
             id: "refusal",
-            label: "Refusal detection",
+            label: "Refusal detection and notes",
             keys: [
                 "retryOnRefusal",
                 "refusalUseBuiltins",
@@ -5137,12 +5148,11 @@ export function setup(ctx, opts) {
                 "confirmButtonLabels",
             ],
         },
-        { id: "notifications", label: "On-screen", keys: ["toast", "liveLog", "panelHome"] },
+        { id: "notifications", label: "The pop-up and the on-screen panel", keys: ["toast", "liveLog", "panelHome"] },
         // Special entry: carried outside cfg. buildExport and the import handler
         // treat it as the whole preset store, every kind of preset in it, rather
-        // than as settings keys. The label has to say so: ticking something that
-        // names one kind and moving both is how a backup loses the other.
-        { id: "presets", label: "Saved presets", keys: [] },
+        // than as settings keys, which is why the label names every kind.
+        { id: "presets", label: "Word swap and refusal note presets", keys: [] },
     ];
     const fieldByKey = {};
     for (const g of SCHEMA)
