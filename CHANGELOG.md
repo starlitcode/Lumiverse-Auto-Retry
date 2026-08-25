@@ -19,6 +19,9 @@ _2026-08-25_
 
 ### Fixed
 
+- **Saved presets are counted, deleted and synced as one set.** Three places reached past the store into the word swap presets alone. Refusal note presets did not follow your account to another device, the count offered before deleting left them out, and deleting what the panel called word swap presets took them with it anyway. All three now cover both kinds, and the line in the reset picker says **Delete saved presets**.
+- **The log records what you do with presets.** Saving, loading, renaming, updating and deleting one each write a line naming which set it was, so a settings change that came from loading a preset is visible afterwards rather than having to be remembered.
+
 - **Two word swap settings were on the panel while they could not do anything.** **Wait for other extensions to finish** and its delay only ever hold up automatic swapping, so with **Swap words in replies** off they did nothing at all. They now appear only when automatic swapping is on. The swap buttons never waited on them and still do not, which the setting's own description now says.
 
 ## 4.21.0

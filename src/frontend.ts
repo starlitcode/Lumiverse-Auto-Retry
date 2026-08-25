@@ -3828,6 +3828,12 @@ export function setup(ctx: Ctx, opts?: any) {
         lines.push("Refusal notes sent: " + stats.notesSent);
         if (stats.notesSkipped) lines.push("Notes not sent: " + stats.notesSkipped);
       }
+      const swapsAll = Object.keys(stats.swapsByChat)
+        .reduce((n, k) => n + stats.swapsByChat[k], 0);
+      if (cfg.replaceEnabled || swapsAll) {
+        const here = stats.swapsByChat[lastChatId == null ? NO_CHAT : String(lastChatId)] || 0;
+        lines.push("Words swapped: " + swapsAll + " (" + here + " in this chat)");
+      }
       lines.push("Watching for: " + sayTime(Date.now() - stats.since));
       const total = stats.good + stats.retries;
       if (total)
@@ -5420,17 +5426,31 @@ export function setup(ctx: Ctx, opts?: any) {
         if (!msg || msg.type !== "loaded_presets" || msg.requestId !== reqId) return;
         try { off && off(); } catch (_) {}
         const incoming = coercePresets(msg.presets);
-        const localCount = loadPresets().swap.length;
-        if (incoming.swap.length) {
+        const local = loadPresets();
+        // Per kind, not all or nothing. The account winning outright would drop
+        // a kind it has none of, which is exactly what happens the first time
+        // somebody saves a note set on a device whose account only knows about
+        // word swaps.
+        const merged: Record<string, Preset[]> = {};
+        let took = 0, kept = 0;
+        for (const kind of Object.keys(local)) {
+          const there = incoming[kind] || [];
+          if (there.length) { merged[kind] = there; took += there.length; }
+          else { merged[kind] = local[kind] || []; kept += merged[kind].length; }
+        }
+        if (took) {
           try {
             if (typeof localStorage !== "undefined")
-              localStorage.setItem(PRESETS_KEY, JSON.stringify(incoming));
+              localStorage.setItem(PRESETS_KEY, JSON.stringify(merged));
           } catch (_) {}
           for (const r of presetBarRefreshers) r();
-          log("word swap presets loaded from account");
-        } else if (localCount) {
-          savePresetsToAccount(loadPresets());
-          log("word swap presets migrated to account");
+          log("brought " + took + (took === 1 ? " preset" : " presets") + " down from the account");
+        }
+        // Anything the account did not have goes up, so the two agree either
+        // way round rather than only when the account was already ahead.
+        if (kept) {
+          savePresetsToAccount(merged);
+          log("sent " + kept + (kept === 1 ? " preset" : " presets") + " up to the account");
         }
       });
       disposers.push(() => { try { off && off(); } catch (_) {} });
@@ -8225,6 +8245,13 @@ export function setup(ctx: Ctx, opts?: any) {
       // writing that whole copy back would undo anything another bar has saved
       // since. Re-read, replace one key, write: that also survives another tab
       // saving between this panel opening and somebody pressing a button here.
+      // What this bar's presets are called, for the log. Two bars write the
+      // same kinds of line, so a line that did not say which would be worse
+      // than none: loading a set changes settings, and reading back later that
+      // "a preset was loaded" leaves you guessing which half of the panel moved.
+      const kindLabel = (PRESET_KINDS[kind] && PRESET_KINDS[kind].label
+        ? PRESET_KINDS[kind].label
+        : kind).toLowerCase();
       const persist = () => {
         const all = loadPresets();
         all[kind] = list();
@@ -8295,6 +8322,7 @@ export function setup(ctx: Ctx, opts?: any) {
         applyDeps();
         applyAndSave();
         status.textContent = "Loaded preset: " + name + ". It's in effect now.";
+        log("loaded the " + kindLabel + " preset " + JSON.stringify(name));
       });
 
       saveNew.addEventListener("click", () => {
@@ -8317,6 +8345,7 @@ export function setup(ctx: Ctx, opts?: any) {
         nameInput.value = "";
         refreshSelect(name);
         status.textContent = "Saved current settings as: " + name + ".";
+        log("saved a " + kindLabel + " preset called " + JSON.stringify(name));
       });
 
       rename.addEventListener("click", () => {
@@ -8354,6 +8383,7 @@ export function setup(ctx: Ctx, opts?: any) {
         nameInput.value = "";
         refreshSelect(newName);
         status.textContent = "Renamed " + cur + " to " + newName + ".";
+        log("renamed a " + kindLabel + " preset to " + JSON.stringify(newName));
       });
 
       update.addEventListener("click", () => {
@@ -8377,6 +8407,7 @@ export function setup(ctx: Ctx, opts?: any) {
         }
         status.textContent =
           "Updated " + name + " to your current settings.";
+        log("updated the " + kindLabel + " preset " + JSON.stringify(name));
       });
 
       del.addEventListener("click", async () => {
@@ -8405,6 +8436,7 @@ export function setup(ctx: Ctx, opts?: any) {
         }
         refreshSelect();
         status.textContent = "Deleted preset: " + name + ".";
+        log("deleted the " + kindLabel + " preset " + JSON.stringify(name));
       });
 
       wrap.appendChild(miniLabel("Saved presets"));
@@ -9075,7 +9107,7 @@ export function setup(ctx: Ctx, opts?: any) {
               (msg ? " " : "") +
               "Also brought in " +
               presetCount +
-              " word swap preset" +
+              " preset" +
               (presetCount === 1 ? "" : "s") +
               ", saved already.";
           status.textContent = msg;
@@ -10142,8 +10174,15 @@ export function setup(ctx: Ctx, opts?: any) {
     let presets = 0;
     if (alsoPresets) {
       const stored = loadPresets();
-      presets = (stored.swap || []).length;
-      if (presets) savePresets({ swap: [] });
+      // Every kind, counted and cleared. Writing { swap: [] } here dropped the
+      // note presets as a side effect of the key being absent, while the line
+      // the user ticked named word swaps.
+      presets = Object.keys(stored).reduce((n, k) => n + (stored[k] || []).length, 0);
+      if (presets) {
+        const cleared: Record<string, Preset[]> = {};
+        for (const k of Object.keys(stored)) cleared[k] = [];
+        savePresets(cleared);
+      }
       for (const r of presetBarRefreshers) {
         try { r(); } catch (_) {}
       }
@@ -10230,7 +10269,9 @@ export function setup(ctx: Ctx, opts?: any) {
     const rule = document.createElement("div");
     rule.style.cssText =
       "flex:none;height:1px;background:var(--lumiverse-border,rgba(255,255,255,.08));margin:2px 0";
-    const presetCount = (loadPresets().swap || []).length;
+    const presetStore = loadPresets();
+    const presetCount = Object.keys(presetStore)
+      .reduce((n, k) => n + (presetStore[k] || []).length, 0);
     const presetRow = document.createElement("label");
     presetRow.setAttribute("data-ar-reset", "presets");
     presetRow.style.cssText =
@@ -10246,7 +10287,7 @@ export function setup(ctx: Ctx, opts?: any) {
     // so it is the one line that does not look like the others.
     presetTxt.innerHTML = "";
     const presetStrong = document.createElement("strong");
-    presetStrong.textContent = "Delete saved word swap presets";
+    presetStrong.textContent = "Delete saved presets";
     presetStrong.style.cssText =
       "color:var(--lumiverse-danger,#ef4444);font-weight:600";
     presetTxt.appendChild(presetStrong);
@@ -10269,7 +10310,7 @@ export function setup(ctx: Ctx, opts?: any) {
     keeps.textContent =
       "Never touched by any of this: your chats, your replies and your characters. " +
       "Auto Retry only ever reads replies, and a reset does not go near them. " +
-      "Your saved word swap presets are kept too unless you tick the box above, and that one deletes them straight away rather than waiting for Save.";
+      "Your saved presets, both word swap and refusal note, are kept too unless you tick the box above, and that one deletes them straight away rather than waiting for Save.";
 
     const status = document.createElement("div");
     status.style.cssText =
@@ -10412,7 +10453,7 @@ export function setup(ctx: Ctx, opts?: any) {
         lines.push(
           "Delete " +
             presetCount +
-            (presetCount === 1 ? " saved word swap preset" : " saved word swap presets") +
+            (presetCount === 1 ? " saved preset" : " saved presets") +
             ". This one happens straight away and closing the panel will not bring them back.",
         );
       return lines.join(" ");
