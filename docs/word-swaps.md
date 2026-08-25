@@ -91,6 +91,8 @@ Once a swap lands, the reply reads as though the model wrote it that way, so the
 
 Turn on the on-screen panel (**Basics**, **Show the on-screen panel**) and it writes a line for each swap saying how many words it changed and the running total for that chat. The **Stats** tab shows the total, split between the chat you are in and everywhere else. Both count words changed rather than replies touched, so one reply with three matches counts as three.
 
+The same figure goes into **Copy debug info**, so a bug report about swaps that did not happen carries the answer without anyone having to ask for it.
+
 The counts start fresh each time the page loads. They are there to answer "is this rule doing anything", not to keep a history.
 
 ## A swap is permanent
