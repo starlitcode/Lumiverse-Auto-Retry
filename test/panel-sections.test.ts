@@ -212,6 +212,26 @@ describe("applying a setting as it is edited", () => {
     expect(only[1]).not.toContain('"refusalNote"');
   });
 
+  test("a preset bar is built before a tester, in every section that has both", () => {
+    // Order on screen is the order these are appended, and one section holds a
+    // preset bar and a tester. The bar saves the settings above it and belongs
+    // against them; the tester saves nothing and is where you go once there is
+    // something to try, so it reads wrong anywhere but last.
+    const at = (name: string) => SRC.indexOf('hasExtra("' + name + '")');
+    for (const bar of ["swapPresets", "notePresets"]) {
+      expect(at(bar)).toBeGreaterThan(-1);
+      expect(at(bar)).toBeLessThan(at("refusalTester"));
+    }
+    // And the section that names both lists them in that order too, so what
+    // the schema reads like and what the panel draws do not drift apart.
+    const refusal = sections().find((s) => /refusal tuning/i.test(s.title));
+    expect(refusal).toBeDefined();
+    const extra = /extra: \[([^\]]*)\]/.exec((refusal as Section).body) as RegExpExecArray;
+    expect(extra).not.toBeNull();
+    const names = [...extra[1].matchAll(/"([A-Za-z]+)"/g)].map((m) => m[1]);
+    expect(names).toEqual(["notePresets", "refusalTester"]);
+  });
+
   test("both preset kinds exist in the store from the start", () => {
     // A kind missing from the seed is never read back, so presets saved under it
     // vanish on reload with nothing to say why.
