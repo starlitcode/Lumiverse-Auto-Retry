@@ -32,15 +32,17 @@ Without that permission it cannot ask, and falls back to the last chat it saw yo
 
 ## Temporary chats
 
-Retrying works in a temporary chat the same way it works anywhere else. An empty reply, a cut-off reply, a refusal, or an error gets retried, the try limit applies as usual, and pressing Stop calls it off.
+A temporary chat, the disposable one you start from the model picker, works like any other chat. Replies are retried there as usual, the try limit applies, **Turn off here** works, and so do the word swaps.
 
-Three things work differently there, because a temporary chat is thrown away when you go home and on some versions of Lumiverse it has no id for the extension to refer to:
+## When Lumiverse does not say which chat you are in
 
-- **Turn off here** is greyed out. There is no id to remember the exclusion against, and one that stopped applying the moment the chat was discarded would be worse than none. Use the main **Auto Retry** switch to turn it off while you are testing.
-- **The retry note is not added.** The note is held for one named chat and collected when the next reply is built. With no chat to attach it to, it could land on a reply in a different chat, so it is left out. The retry itself still happens, and the log says so.
-- **Swapping words by hand** says **No chat is open**, since those buttons edit saved replies and there is nothing for them to name. Swaps that run automatically on each reply are unaffected.
+Rarely, Lumiverse reports a reply without saying which chat it belongs to. Retrying still works, and three things that need a chat by name do not:
 
-In the Stats tab, retries from these chats are counted together on a row called **Chats without an id**.
+- **Turn off here** is greyed out, with a note saying it is waiting to find out which chat this is. Sending a message, or switching to another chat and back, is usually enough. Use the main **Auto Retry** switch in the meantime.
+- **The retry note is not added.** The note is held for one named chat and collected when the next reply is built, so with no chat to attach it to it could land on a reply somewhere else. The retry still happens, and the log says why the note was left out.
+- **Swapping words by hand** says **No chat is open**, since those buttons edit saved replies and have nothing to name. Swaps that run automatically on each reply are unaffected.
+
+In the Stats tab, any retries from this state are counted together on a row called **Chats without an id**.
 
 ## The on-screen panel
 
