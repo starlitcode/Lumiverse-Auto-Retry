@@ -8,12 +8,14 @@ Your settings and your saved presets already follow your Lumiverse account acros
 
 The parts are grouped so you only move what you mean to:
 
-- Retry behavior
-- Refusal detection
-- Word swaps
-- Button selectors
-- On-screen (the pop-up and live log)
-- Saved presets, which puts both kinds in the file: your word swap presets and your refusal note presets
+- **Retry behavior and the on/off buttons**, which is when and how it retries, plus whether the floating button and the Extras entry are shown
+- **Refusal detection and notes**, which is everything that decides a reply was a refusal, and the note wording sent on the retry
+- **Word swaps**, the rules and how they match
+- **Button selectors**, the ones it clicks and the confirm dialog labels
+- **The pop-up and the on-screen panel**, which is the retry pop-up, the panel and where it sits
+- **Word swap and refusal note presets**, which puts every saved preset of both kinds in the file
+
+Each name says everything that part carries, so nothing rides along unnamed. The two that pick up more than their heading suggests are the first two: the on/off buttons travel with retry behavior, and your note wording travels with refusal detection.
 
 For sharing phrase and swap setups, tick just refusal detection and word swaps and leave the rest, since button selectors in particular are tied to one person's Lumiverse build.
 
