@@ -8,6 +8,16 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 4.21.0
+
+_2026-08-25_
+
+### Added
+
+- **Auto Retry now works in a temporary chat.** A temporary chat is the disposable one you start from the model picker, thrown away when you go home. On builds where it has no id of its own, Lumiverse reports its replies without saying which chat they belong to, and every part of Auto Retry is organised by chat, so those replies were dropped before anything looked at them. It did nothing there at all: no retry on an empty or cut-off reply, no live line, and nothing in the panel to say why. Retrying now works there the same as anywhere else, including the try limit and standing down when you press Stop.
+
+  Three things stay off in a chat with no id, and the [troubleshooting page](docs/troubleshooting.md#temporary-chats) says so. **Turn off here** is greyed out, because an exclusion remembered against a chat that is about to be discarded would stop applying without telling you. The retry note is left out, because it is held for one named chat and would otherwise attach itself to a reply somewhere else. Swapping words by hand says no chat is open, since those buttons edit saved replies and have nothing to name. Swaps that run automatically on each reply are unaffected.
+
 ## 4.20.1
 
 _2026-08-24_
