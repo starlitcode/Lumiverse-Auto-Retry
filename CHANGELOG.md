@@ -8,9 +8,14 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
-## 4.21.1
+## 4.22.0
 
 _2026-08-25_
+
+### Added
+
+- **Refusal notes have presets, the way word swaps do.** Save the notes you have tuned as a named set and switch between them, under Refusal tuning. A set carries the notes and where they go, and nothing else, so loading one never turns notes on or off for you. Saved to your account, so they follow you to other devices.
+- **The panel counts the words your swaps changed.** A swap leaves nothing behind to look at once it lands, since the reply reads as though the model wrote it that way, so there was no way to tell a rule that never matched from a rule that was not running. The log says what each swap changed and the running total for that chat, and the Stats tab splits the total between the chat you are in and everywhere else.
 
 ### Fixed
 

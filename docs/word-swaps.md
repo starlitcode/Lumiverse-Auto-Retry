@@ -85,6 +85,14 @@ That includes the waiting settings. **Wait for other extensions to finish** and 
 
 Editing a saved reply needs the `chat_mutation` permission, which is [covered on the privacy page](privacy.md#what-it-can-reach-and-why-it-needs-to). If nothing in your rules matches a reply, that reply is left untouched.
 
+## Seeing what your swaps did
+
+Once a swap lands, the reply reads as though the model wrote it that way, so there is nothing left to look at. That makes a rule that never matched look exactly like a rule that is not running.
+
+Turn on the on-screen panel (**Basics**, **Show the on-screen panel**) and it writes a line for each swap saying how many words it changed and the running total for that chat. The **Stats** tab shows the total, split between the chat you are in and everywhere else. Both count words changed rather than replies touched, so one reply with three matches counts as three.
+
+The counts start fresh each time the page loads. They are there to answer "is this rule doing anything", not to keep a history.
+
 ## A swap is permanent
 
 There is no undo. A swap rewrites the saved reply, and the wording it replaced is not kept anywhere, so the only way back is to edit the reply yourself in Lumiverse. Rules cannot simply be run backwards either: two of them can map onto the same word, a random rule has no single answer, and a rule that deletes a word leaves nothing to match.

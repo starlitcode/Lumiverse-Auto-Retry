@@ -248,6 +248,14 @@ Turn on the on-screen panel (**Basics**, **Show the on-screen panel**) and it wr
 
 Do not expect to find it in **Prompt Breakdown**. The note is not a message in your chat: it is added to the prompt for one generation and thrown away, and the breakdown lists the things your chat is built from. The extension does label the note for the breakdown, so it may show up depending on your Lumiverse build, but it not being there does not mean the note was not sent. The log line is what tells you.
 
+### Saving a set of notes
+
+Under the notes is a **Note presets** bar. Once you have wording that works, save it under a name and switch between sets without retyping them, the same way word swap presets work. This is worth doing before you start changing notes that already work, since the tester below encourages exactly that kind of experimenting.
+
+A set carries the notes themselves and **Where the notes go**, and nothing else. It deliberately does not carry **Send a note with a refusal retry**, so loading a set never starts sending notes to the model on your behalf. Everything else about how refusals are detected stays as you have it.
+
+Presets are saved to your account, so they follow you to other devices.
+
 ## Trying it on a reply
 
 At the bottom of the refusal tuning section there is a box to paste a reply into, and a **Check this text** button. It tells you whether that reply would count as a refusal and what decided it: which phrase list matched, which built-in pattern fired, or why it was passed over (too long, on your whitelist, the built-ins switched off).
