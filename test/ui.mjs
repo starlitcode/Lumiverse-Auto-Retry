@@ -3606,6 +3606,88 @@ console.log("\ntwo preset bars, two stores");
   check("no console errors", errors.length === 0, errors);
 }
 
+// Presets are stored as one object holding every kind, and three places used
+// to reach past that into one key. With a second kind that meant note presets
+// never followed the account, and the reset that names word swaps deleted them
+// as a side effect of writing an object without their key.
+console.log("\npresets across both kinds");
+{
+  const errors = [];
+  const fresh = async (fn, arg) => {
+    const c = await browser.newContext();
+    const page = await c.newPage();
+    page.on("pageerror", (e) => errors.push(e.message));
+    await page.route("**/*", (r) => r.fulfill({ contentType: "text/html",
+      body: '<!doctype html><meta charset=utf-8><div id=modal style="height:900px;overflow:auto"></div>' }));
+    await page.goto("http://lumiverse.test/");
+    await page.addScriptTag({ content: SOURCE, type: "module" });
+    await page.waitForFunction(() => !!window.__setup);
+    const out = await page.evaluate(fn, arg);
+    await page.close();
+    await c.close();
+    return out;
+  };
+
+  // The account knows about one kind, the browser about the other. Whichever
+  // way round, both have to survive.
+  const sync = await fresh(async (account) => {
+    const KEY = "lv-auto-retry:presets:v1";
+    localStorage.setItem(KEY, JSON.stringify({ swap: [{ name: "localswap", values: {} }], notes: [] }));
+    const listeners = [];
+    window.__setup({
+      events: { on: () => () => {} },
+      sendToBackend: (m) => {
+        if (m && m.type === "load_presets")
+          setTimeout(() => listeners.forEach((f) =>
+            f({ type: "loaded_presets", requestId: m.requestId, presets: account })), 0);
+      },
+      onBackendMessage: (cb) => { listeners.push(cb); return () => {}; },
+      ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+            registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) },
+    }, { toast: false });
+    await new Promise((r) => setTimeout(r, 250));
+    const s = JSON.parse(localStorage.getItem(KEY));
+    return { swap: (s.swap || []).map((p) => p.name), notes: (s.notes || []).map((p) => p.name) };
+  }, { swap: [], notes: [{ name: "accountnote", values: {} }] });
+  check("a kind the account has arrives", sync.notes.join() === "accountnote", sync);
+  check("and a kind only this browser has is not dropped", sync.swap.join() === "localswap", sync);
+
+  // The reset line names presets, so it has to mean all of them: counted,
+  // cleared, and with no key left missing for the next read to trip over.
+  const del = await fresh(async () => {
+    const KEY = "lv-auto-retry:presets:v1";
+    localStorage.setItem(KEY, JSON.stringify({
+      swap: [{ name: "s", values: {} }], notes: [{ name: "n", values: {} }] }));
+    window.__acts = {};
+    window.__setup({ events: { on: () => () => {} }, sendToBackend: () => {}, onBackendMessage: () => () => {},
+      ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+            registerInputBarAction: (o) => { const a = { onClick: (cb) => { a.cb = cb; return () => {}; }, destroy: () => {} }; window.__acts[o.id] = a; return a; } },
+    }, { toast: false });
+    window.__acts["auto-retry-settings"].cb();
+    const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    await frame();
+    [...document.querySelectorAll("button")].find((x) => /^Reset/.test(x.textContent.trim())).click();
+    await frame();
+    const line = document.querySelector('[data-ar-reset="presets"]');
+    const shown = line.textContent.replace(/\s+/g, " ").trim();
+    line.querySelector("input").checked = true;
+    [...document.querySelectorAll("#__lvRetryReset button")]
+      .find((x) => /^Reset ticked/.test(x.textContent.trim())).click();
+    await frame();
+    [...document.querySelectorAll("#__lvRetryReset button")]
+      .find((x) => /^Yes/.test(x.textContent.trim())).click();
+    await frame();
+    const s = JSON.parse(localStorage.getItem(KEY));
+    return { shown, keys: Object.keys(s).sort(), swap: (s.swap || []).length, notes: (s.notes || []).length };
+  });
+  check("the count offered covers every kind", /2 saved/.test(del.shown), del.shown);
+  check("and deleting clears every kind", del.swap === 0 && del.notes === 0, del);
+  // A cleared store that dropped a key reads back as a store with that kind
+  // missing, which is how the note presets vanished in the first place.
+  check("leaving no kind missing from the store", del.keys.join() === "notes,swap", del.keys);
+  check("no console errors", errors.length === 0, errors);
+}
+
 console.log("\npreset boundary");
 {
   const { out, errors } = await inPanel(browser, {}, async (page) =>
@@ -8485,7 +8567,7 @@ console.log("\nreset confirmation");
     }),
   );
   check("deleting presets is spelled out before it happens",
-    /Delete 1 saved word swap preset\b/.test(out.summary), out.summary);
+    /Delete 1 saved preset\b/.test(out.summary), out.summary);
   check("and it says that one is not undone by closing the panel",
     /will not bring them back/i.test(out.summary), out.summary);
   check("nothing is deleted until Yes", out.stillThere === 1, out);
