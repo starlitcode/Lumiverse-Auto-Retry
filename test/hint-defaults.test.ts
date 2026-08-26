@@ -221,7 +221,7 @@ describe("every setting is one the reader can reach", () => {
   // Empty on purpose: nothing is hidden today, and adding to this list is how
   // hiding something becomes a decision somebody wrote down rather than an
   // oversight.
-  const DELIBERATELY_HIDDEN: string[] = [];
+  const INTENTIONALLY_HIDDEN: string[] = [];
 
   test("the lists were really read", () => {
     expect(keys.length).toBeGreaterThan(20);
@@ -229,7 +229,7 @@ describe("every setting is one the reader can reach", () => {
   });
 
   test("no setting is missing from the panel", () => {
-    const missing = keys.filter((k) => !rows.has(k) && DELIBERATELY_HIDDEN.indexOf(k) < 0);
+    const missing = keys.filter((k) => !rows.has(k) && INTENTIONALLY_HIDDEN.indexOf(k) < 0);
     expect(missing).toEqual([]);
   });
 
@@ -239,6 +239,6 @@ describe("every setting is one the reader can reach", () => {
   });
 
   test("nothing on the hidden list has a row, which would make it a lie", () => {
-    expect(DELIBERATELY_HIDDEN.filter((k) => rows.has(k))).toEqual([]);
+    expect(INTENTIONALLY_HIDDEN.filter((k) => rows.has(k))).toEqual([]);
   });
 });
