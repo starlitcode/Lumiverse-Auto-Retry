@@ -5757,6 +5757,12 @@ export function setup(ctx: Ctx, opts?: any) {
       sawContent: false,
       buf: "", // streamed reply text, used when the end event carries no content
       ignored: new Set(),
+      // Generations whose ending has already been judged. A build that reports
+      // one generation as ended twice used to get two verdicts out of it, and
+      // the second landed after the extension had given up, which hands back a
+      // fresh budget: the cap said two tries and the reply was re-rolled until
+      // something else stopped it. One ending, one verdict.
+      judged: new Set(),
       suppressUntil: 0,
       startWatchdog: null,
       expectingStart: 0,
@@ -7237,6 +7243,25 @@ export function setup(ctx: Ctx, opts?: any) {
     // never saw any, so a good reply reads as empty.
     const chatId = chatForGeneration(p);
     const s = st(chatId);
+    // One ending, one verdict. A build that reports the same generation as
+    // ended twice was getting two, and the second arrived after the extension
+    // had already given up on that reply, which hands the budget back: "most
+    // tries" said two and the reply was re-rolled until something else stopped
+    // it, taking whatever was there with it each time.
+    //
+    // Only when there is an id to go on. Without one there is nothing to tell
+    // a repeat from the next reply, and dropping a real ending is worse than
+    // judging a repeat.
+    const genId = genKey(p.generationId);
+    if (genId) {
+      if (s.judged.has(genId)) {
+        log("that reply had already been dealt with, so this ending was ignored");
+        return;
+      }
+      s.judged.add(genId);
+      while (s.judged.size > IGNORE_MAX)
+        s.judged.delete(s.judged.values().next().value as string);
+    }
     // Only a real id goes on the panel. A generation the host named no chat for
     // still gets its state and its retry above, and leaves what the panel says
     // about "this chat" alone rather than claiming the sentinel is a chat.
@@ -7301,11 +7326,18 @@ export function setup(ctx: Ctx, opts?: any) {
       }
       return;
     }
-    // Not every build puts the finished text on the end event. When it is
-    // missing, what actually streamed stands in for it, so a good reply is not
+    // Not every build puts the finished text on the end event. When there is
+    // none, what actually streamed stands in for it, so a good reply is not
     // read as empty and every check below still has real text to work with.
+    //
+    // An empty string counts as none. A build reporting one for a reply that
+    // really streamed is contradicting the screen, and the text watched
+    // arriving is the better evidence, because it is what the reader is
+    // looking at. Trusting the field over it re-rolled whole replies that were
+    // sitting there finished.
     const hasContentField = typeof p.content === "string";
-    const content = (hasContentField ? p.content : streamed).trim();
+    const ended = hasContentField ? String(p.content).trim() : "";
+    const content = ended.length ? ended : streamed.trim();
     // Empty only when the payload says so, or when nothing streamed either. A
     // missing field plus tokens that carried no readable text is not a verdict,
     // so it is left alone rather than re-rolled on a guess.

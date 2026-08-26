@@ -5003,6 +5003,107 @@ console.log("\nthe per-chat switch finds the chat");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- a good reply is never re-rolled out from under the reader ----
+// Everything here is a way a finished reply that was fine got thrown away. A
+// reader lost one after nineteen tries, on a cap set far below that, so these
+// cover both halves: not re-rolling what is fine, and not letting the count of
+// tries come loose from what it is supposed to limit.
+console.log("\nkeeping a reply that was fine");
+{
+  const errors = [];
+  const REPLY = "She set the lantern down on the step and looked back at the road, and the dog followed her in.";
+
+  // A generation runs because something clicked, and comes back the way the
+  // host would report it. Nothing is fed in that a real build would not send.
+  const loop = async (mode) => {
+    const page = await browser.newPage();
+    page.on("pageerror", (e) => errors.push(e.message));
+    await stage(page, '<div id=modal></div><button data-testid="regenerate">R</button>');
+    await page.addScriptTag({ content: SOURCE, type: "module" });
+    await page.waitForFunction(() => !!window.__setup);
+    const res = await page.evaluate(async (mode) => {
+      const h = {}; let clicks = 0, gen = 0;
+      const bad = (id) => h.GENERATION_ENDED({ chatId: "c1", generationId: id, error: "boom" });
+      document.querySelector('[data-testid="regenerate"]').addEventListener("click", () => {
+        clicks++;
+        if (clicks > 40) return; // the harness's own runaway guard
+        const id = "g" + (++gen);
+        setTimeout(() => {
+          h.GENERATION_STARTED({ chatId: "c1", generationId: id });
+          setTimeout(() => {
+            bad(id);
+            if (mode === "doubleEnd") setTimeout(() => bad(id), 5);
+          }, 5);
+        }, 5);
+      });
+      window.__setup(
+        { events: { on: (n, f) => { h[n] = f; return () => {}; } },
+          ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+                registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) } },
+        { toast: false, retryDelayMs: 5, backoffFactor: 1, maxDelayMs: 5, jitter: false,
+          maxRetries: 2, stuckTimeoutMs: 0, idleTimeoutMs: 0, pauseWhenFailing: false },
+      );
+      h.GENERATION_STARTED({ chatId: "c1", generationId: "g0" });
+      bad("g0");
+      await new Promise((r) => setTimeout(r, 1500));
+      return { clicks };
+    }, mode);
+    await page.close();
+    return res;
+  };
+
+  const plain = await loop("ordinary");
+  const twice = await loop("doubleEnd");
+  check("two tries means two tries", plain.clicks === 2, plain);
+  // Giving up hands the budget back so the reader's next reply starts fresh.
+  // A second ending for the same generation landed after that and took the
+  // fresh budget with it, so the cap never held and it ran until something
+  // else stopped it.
+  check("and still two when the host reports one ending twice",
+    twice.clicks === 2, twice);
+
+  // A reply that streamed and is sitting there finished, described three ways
+  // by the ending that follows it.
+  const ending = async (endPayload) => {
+    const page = await browser.newPage();
+    page.on("pageerror", (e) => errors.push(e.message));
+    await stage(page, '<div id=modal></div><button data-testid="regenerate">R</button><button data-testid="swipe-right">S</button>');
+    await page.addScriptTag({ content: SOURCE, type: "module" });
+    await page.waitForFunction(() => !!window.__setup);
+    const res = await page.evaluate(async ([endPayload, REPLY]) => {
+      const h = {}; let clicks = 0;
+      for (const id of ["regenerate", "swipe-right"])
+        document.querySelector("[data-testid=" + id + "]").addEventListener("click", () => clicks++);
+      window.__setup(
+        { events: { on: (n, f) => { h[n] = f; return () => {}; } },
+          ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+                registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) } },
+        { toast: false, retryDelayMs: 5, backoffFactor: 1, maxDelayMs: 5, jitter: false,
+          maxRetries: 2, stuckTimeoutMs: 0, idleTimeoutMs: 0, pauseWhenFailing: false },
+      );
+      h.GENERATION_STARTED({ chatId: "c1", generationId: "g1" });
+      h.STREAM_TOKEN_RECEIVED({ chatId: "c1", generationId: "g1", content: REPLY });
+      h.GENERATION_ENDED(Object.assign({ chatId: "c1", generationId: "g1" }, endPayload));
+      await new Promise((r) => setTimeout(r, 250));
+      return { clicks };
+    }, [endPayload, REPLY]);
+    await page.close();
+    return res;
+  };
+
+  const carried = await ending({ content: REPLY });
+  const silent = await ending({});
+  const blank = await ending({ content: "" });
+  check("an ending that carries the reply leaves it alone", carried.clicks === 0, carried);
+  check("an ending that carries no text at all leaves it alone", silent.clicks === 0, silent);
+  // The one that bit. An empty string is a build saying nothing useful, not a
+  // build saying the reply was empty, and the reader is looking at the text.
+  check("an ending that reports an empty string leaves it alone too",
+    blank.clicks === 0, blank);
+
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- a retry never clicks the extension's own panel ----
 // The button selectors are patterns, not addresses, and the extension's own
 // settings are called things like "Retry by adding a new reroll", so its own
@@ -6046,7 +6147,7 @@ console.log("\na finished reply is not re-rolled, a stalled one still is");
     ["never produced a token", "never-started", true],
     ["streamed then went silent", "went-silent", true],
     ["finished with an error", "error", true],
-    ["finished empty", "empty", true],
+    ["finished empty, and nothing streamed either", "empty", true],
     ["finished cut off mid-sentence", "truncated", true],
   ];
   for (const [name, mode, wantRetry] of CASES) {
@@ -6079,7 +6180,10 @@ console.log("\na finished reply is not re-rolled, a stalled one still is");
       handlers.GENERATION_STARTED({ chatId: startId, generationId: GID });
       await wait(20);
       if (mode !== "never-started") {
-        const streamed = mode === "empty-no-id" ? "" : done;
+        // An empty reply has to have streamed nothing, or it is not an
+        // empty reply: it is a reply the ending described wrongly, and
+        // that one is left alone on purpose.
+        const streamed = mode === "empty-no-id" || mode === "empty" ? "" : done;
         if (streamed || mode !== "empty-no-id")
           handlers.STREAM_TOKEN_RECEIVED({ chatId: tokenId, generationId: GID, token: streamed });
         await wait(20);
