@@ -53,6 +53,8 @@ In the settings panel, under **Basics**, the **This chat** row has a **Turn off 
 
 Everything that shows whether Auto Retry is running says so together: that button, the line under the panel's tabs, and whichever of the floating button and the Extras entry you have on. All of them follow you between chats, so none reads "on" in a chat you have switched off.
 
+Outside a chat, on the home screen or the character browser, the button is greyed out and the row says **No chat is open**. There is nothing to switch there, and the row will not go on naming the last chat you were in.
+
 If the button is greyed out while you are in a chat, it has not been told which chat that is yet. With the `chats` permission granted it asks outright and this clears on its own. Without it, it waits to be told: a reply arriving, a message sent, or switching away and back all do it. The case where you will see it waiting is updating the extension without leaving the chat, since nothing re-renders and so nothing announces where you are.
 
 It is written down in your browser, so it survives a reload. It is not a setting: it is a list of chat ids, which would mean nothing on another account, so it is not synced and not included in an export.

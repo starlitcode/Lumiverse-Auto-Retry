@@ -100,7 +100,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "4.22.0";
+const VERSION = "4.22.1";
 // The one address the extension ever points at, used by the warning in front of
 // the crisis-support check. Pinned to the released branch rather than to a tag,
 // so an old install still opens the page as it stands today.
@@ -2689,6 +2689,12 @@ export function setup(ctx, opts) {
         catch (_) { }
     }
     let lastChatId = null;
+    // Told outright that no chat is open, as opposed to not having been told
+    // anything yet. Both leave lastChatId null and the per-chat switch greyed
+    // out, and they are not the same thing to read: one is the home screen, the
+    // other is the extension waiting to be told where it is. Only a backend that
+    // could actually look sets this.
+    let noChatOpen = false;
     let lastMessageId = null;
     // Every Extras button that can come and go, keyed by name. Each one is stored
     // as its registration plus the function that removes its click handler.
@@ -6879,6 +6885,8 @@ export function setup(ctx, opts) {
         const realId = p.chatId == null || p.chatId === "" ? null : p.chatId;
         const switched = lastChatId !== realId;
         lastChatId = realId;
+        if (realId != null)
+            noChatOpen = false;
         lastMessageId = p.messageId;
         if (switched) {
             paintFloat();
@@ -6989,7 +6997,8 @@ export function setup(ctx, opts) {
                 // actually look, means the user has left the chat. Some builds never
                 // say so on their own, and the id we were holding is now the chat they
                 // walked away from.
-                if (!forChat && resolved && !chatId && lastChatId != null) {
+                if (!forChat && resolved && !chatId) {
+                    noChatOpen = true;
                     lastChatId = null;
                     lastMessageId = null;
                     if (chatSwitchPaint) {
@@ -7070,7 +7079,10 @@ export function setup(ctx, opts) {
     }
     function noteChat(id) {
         const next = id == null ? null : id;
-        if (next == null || next === lastChatId)
+        if (next == null)
+            return;
+        noChatOpen = false;
+        if (next === lastChatId)
             return;
         lastChatId = next;
         // The last reply seen belonged to the chat just left, so it is not the last
@@ -7101,6 +7113,7 @@ export function setup(ctx, opts) {
         // Set directly rather than through noteChat, because this is the one event
         // that can also mean "no chat any more", which noteChat ignores on purpose.
         lastChatId = p.chatId || null;
+        noChatOpen = lastChatId == null;
         lastMessageId = null;
         ensureChatName(lastChatId);
         // The prompt on screen belongs to the chat that was just left, so the tab
@@ -9427,15 +9440,21 @@ export function setup(ctx, opts) {
             act.style.opacity = known ? "1" : "0.45";
             act.style.cursor = known ? "pointer" : "not-allowed";
             note.textContent = !known
-                // Not "open a chat", which is wrong when you already have. This is the
-                // state with the chats permission refused or not yet approved, since
-                // with it granted the question above answers itself a moment after the
-                // panel opens. Without it, anything happening
-                // in a chat tells it. A reply arriving does, and so does sending a
-                // message or switching away and back. Updating the extension while
-                // sitting in a chat is the case that leaves it waiting, because nothing
-                // re-renders and so nothing announces which chat you are in.
-                ? "Waiting to find out which chat this is. Send a message, or switch to another chat and back, and this is ready. Every other chat carries on as it is."
+                // Two ways to have no chat to act on, and they read as different
+                // things. Being told there is none is the home screen, or anywhere else
+                // outside a chat, and "open a chat" is the right thing to say there.
+                //
+                // Not being told anything is the chats permission refused or not yet
+                // approved, since with it granted the question above answers itself a
+                // moment after the panel opens. Saying "open a chat" there would be
+                // wrong in front of somebody sitting in one. Anything happening in a
+                // chat tells it: a reply arriving does, and so does sending a message
+                // or switching away and back. Updating the extension while sitting in a
+                // chat is the case that leaves it waiting, because nothing re-renders
+                // and so nothing announces which chat you are in.
+                ? noChatOpen
+                    ? "No chat is open, so there is nothing to switch off here. Open a chat and this is ready. Every chat carries on as it is."
+                    : "Waiting to find out which chat this is. Send a message, or switch to another chat and back, and this is ready. Every other chat carries on as it is."
                 : isCardless(lastChatId)
                     // A temporary chat, so the switch is real but lasts only as long as
                     // the chat does. Said plainly, since the wording for an ordinary chat
@@ -9470,9 +9489,15 @@ export function setup(ctx, opts) {
         // panel opens, and the chat it describes can be learned a moment later.
         chatSwitchPaint = paint;
         // Opening the panel is the moment somebody wants to use this row, so it is
-        // worth asking again rather than leaving it waiting for a reply to arrive.
-        if (lastChatId == null)
-            askActiveChat();
+        // worth asking outright rather than showing whatever was learned last.
+        //
+        // Asked every time, not only when there is nothing to show. The id here is
+        // learned from things happening in a chat, and leaving one for the home
+        // screen is not a thing happening in a chat: on a build that says nothing
+        // when you walk away, the row went on naming the chat you had left and
+        // offered to switch Auto Retry off in it. The answer to this clears it when
+        // the backend can see that no chat is open.
+        askActiveChat();
         top.appendChild(label);
         top.appendChild(act);
         row.appendChild(top);

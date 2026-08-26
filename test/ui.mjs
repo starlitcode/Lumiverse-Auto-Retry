@@ -4999,6 +4999,133 @@ console.log("\nthe per-chat switch finds the chat");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- walking out of a chat without the host saying so ----
+// The id the row shows is learned from things happening in a chat: a reply, a
+// message rendering, a switch event. Going to the home screen is none of those,
+// and on a build that says nothing when you leave, the row went on naming the
+// chat you had walked away from and offering to switch Auto Retry off in it.
+//
+// Opening the panel asks outright now, so the answer is what the row shows.
+// The stub answers from __cur, which is what the host would be asked, and
+// resolved stays true throughout: a backend that could look and found no chat
+// open is a different answer from one that could not look, and only the first
+// may clear anything.
+console.log("\nleaving a chat with nothing said about it");
+{
+  const page = await browser.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  page.on("console", (m) => { if (m.type() === "error") errors.push("console: " + m.text()); });
+  await stage(page, '<div id=modal></div><button data-testid="regenerate">R</button>');
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  const out = await page.evaluate(async () => {
+    window.__acts = {}; window.__handlers = {};
+    const sent = [], listeners = [];
+    const deliver = (m) => listeners.slice().forEach((f) => { try { f(m); } catch (_) {} });
+    window.__cur = null;
+    window.__canLook = true;
+    window.__setup({
+      events: { on: (n, f) => { window.__handlers[n] = f; return () => {}; } },
+      sendToBackend: (m) => {
+        sent.push(m);
+        if (m && m.type === "get_active_chat") {
+          const id = m.chatId || window.__cur;
+          setTimeout(() => deliver({ type: "active_chat", requestId: m.requestId,
+            chatId: id, character: id === "c-open" ? "Marisol" : null,
+            resolved: window.__canLook, hasCharacter: id === "c-open" }), 0);
+        }
+      },
+      onBackendMessage: (cb) => {
+        listeners.push(cb);
+        return () => { const i = listeners.indexOf(cb); if (i >= 0) listeners.splice(i, 1); };
+      },
+      ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+            registerInputBarAction: (o) => { const a = { onClick: (cb) => { a.cb = cb; return () => {}; }, destroy: () => {} }; window.__acts[o.id] = a; return a; } },
+    }, { toast: false, stuckTimeoutMs: 0, idleTimeoutMs: 0 });
+
+    const tick = () => new Promise((r) => setTimeout(r, 80));
+    const root = () => document.getElementById("modal");
+    const row = () => root().querySelector("[data-ar-chat-switch]");
+    const act = () => row() && row().querySelector("button");
+    const state = () => ({
+      disabled: act() ? !!act().disabled : null,
+      label: act() ? act().textContent.trim() : "",
+      note: row() ? (row().innerText || "") : "",
+    });
+    const openPanel = async () => {
+      window.__acts["auto-retry-settings"].cb();
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      await tick(); await tick();
+    };
+    const shutPanel = () => {
+      const x = [...root().querySelectorAll("button")].find((b) => /^(Close|Done)$/i.test(b.textContent.trim()));
+      if (x) x.click();
+      root().innerHTML = "";
+    };
+
+    const res = {};
+    // Nothing known yet, which is a fresh load with the chats permission not
+    // answering. Kept apart from the home screen below on purpose.
+    window.__canLook = false;
+    await openPanel();
+    res.cold = state();
+    shutPanel();
+    window.__canLook = true;
+
+    // In a chat, reached the way a reader reaches one.
+    window.__cur = "c-open";
+    window.__handlers.CHARACTER_MESSAGE_RENDERED({ chatId: "c-open", messageId: "m1" });
+    await tick();
+    await openPanel();
+    res.inChat = state();
+    res.namesTheChat = /Marisol/.test(row() ? row().innerText : "");
+    shutPanel();
+
+    // Gone to the home screen. The host says nothing at all about it, which is
+    // the whole point: no CHAT_CHANGED, no CHAT_SWITCHED, no generation.
+    window.__cur = null;
+    const before = sent.filter((m) => m.type === "get_active_chat").length;
+    await openPanel();
+    res.asked = sent.filter((m) => m.type === "get_active_chat").length > before;
+    res.homeScreen = state();
+    shutPanel();
+
+    // And the other answer: a backend that could not look must change nothing,
+    // or a refused chats permission would grey the row out for everybody.
+    window.__cur = "c-open";
+    window.__handlers.CHARACTER_MESSAGE_RENDERED({ chatId: "c-open", messageId: "m2" });
+    await tick();
+    window.__canLook = false;
+    window.__cur = null;
+    await openPanel();
+    res.cannotLook = state();
+    return res;
+  });
+  await page.close();
+  check("in a chat the row is live and names it",
+    out.inChat.disabled === false && /turn off here/i.test(out.inChat.label) && out.namesTheChat, out.inChat);
+  check("opening the panel asks which chat is open, even knowing one already",
+    out.asked === true, out.asked);
+  check("on the home screen the row has nothing to switch",
+    out.homeScreen.disabled === true, out.homeScreen);
+  check("and it stops naming the chat you left",
+    !/Marisol/.test(out.homeScreen.note), out.homeScreen.note);
+  // Being told there is no chat and never having been told anything both grey
+  // the row out, and they are not the same thing to read. "Waiting to find out
+  // which chat this is" in front of somebody on the home screen describes a
+  // fault that is not happening.
+  check("and says there is no chat rather than that it is still working it out",
+    /no chat is open/i.test(out.homeScreen.note) &&
+      !/waiting to find out/i.test(out.homeScreen.note), out.homeScreen.note);
+  // The guard on the whole thing. "I could not look" is not "no chat".
+  check("a backend that cannot look changes nothing",
+    out.cannotLook.disabled === false && /turn off here/i.test(out.cannotLook.label), out.cannotLook);
+  check("and having been told nothing still says it is working it out",
+    /waiting to find out/i.test(out.cold.note) && !/no chat is open/i.test(out.cold.note), out.cold.note);
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- an answer that lands after you have moved on ----
 // Asking which chat is open and asking who a named chat is with are the same
 // question over the bridge, told apart by what was asked for. Acting on both
@@ -5555,13 +5682,20 @@ console.log("\nthe chat row names the character");
       const send = (m) => { for (const cb of listeners.slice()) { try { cb(m); } catch (_) {} } };
       // Fixture names, picked to be nobody's: this is test data, not a persona.
       const NAMES = { "chat-A": "Wren", "chat-B": "Tobias" };
+      // Which chat the host would name if asked outright, as opposed to the
+      // chat whose name is being asked for. The panel asks this every time it
+      // opens, so a fixture that always answered the same chat would walk the
+      // row back to it. Startup is in chat-A; the other three ways start
+      // nowhere and arrive in chat-B through the event under test.
+      let here = mode === "startup" ? "chat-A" : null;
       window.__setup(
         { events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
           sendToBackend: (m) => {
             if (m && m.type === "get_active_chat") {
               asks.push(m.chatId);
+              const about = m.chatId || here;
               setTimeout(() => send({ type: "active_chat", requestId: m.requestId,
-                chatId: m.chatId || "chat-A", character: NAMES[m.chatId || "chat-A"] || null, resolved: true }), 0);
+                chatId: about, character: NAMES[about] || null, resolved: true }), 0);
             }
           },
           onBackendMessage: (cb) => { listeners.push(cb); return () => { listeners = listeners.filter((x) => x !== cb); }; },
@@ -5572,6 +5706,7 @@ console.log("\nthe chat row names the character");
       await wait(80);
       // Reached several times over, so asking once can be told from asking each
       // time something repaints.
+      if (mode !== "startup") here = "chat-B";
       for (let i = 0; i < 4; i++) {
         if (mode === "rendered") handlers.CHARACTER_MESSAGE_RENDERED({ chatId: "chat-B", messageId: "m" + i });
         else if (mode === "switched") handlers.CHAT_CHANGED({ chatId: "chat-B" });
@@ -5581,7 +5716,6 @@ console.log("\nthe chat row names the character");
       acts["auto-retry-settings"].cb();
       await wait(100);
       const row = document.querySelector("[data-ar-chat-switch]");
-      const want = mode === "startup" ? "chat-A" : "chat-B";
       return {
         text: row ? (row.textContent || "") : "",
         asked: asks.filter((x) => x === (mode === "startup" ? null : "chat-B")).length,
@@ -5624,21 +5758,33 @@ console.log("\nno name and could not look are different answers");
       const handlers = {}, acts = {}, asks = [];
       let listeners = [];
       const send = (m) => { for (const cb of listeners.slice()) { try { cb(m); } catch (_) {} } };
+      // The chat the reader is in, which the switching below moves.
+      let here = "chat-A";
       window.__setup(
         { events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
           sendToBackend: (m) => {
             if (!m || m.type !== "get_active_chat") return;
             if (m.chatId) asks.push(m.chatId);
-            // The startup ask names chat-A, so chat-B's name has to be asked
-            // for separately. That named ask is the one under test.
-            const named = !!m.chatId;
+            // Which chat is being answered about: the one named in the ask, or
+            // the one the reader is in when the ask names none. The panel asks
+            // outright every time it opens, so answering that with a fixed chat
+            // would walk the row out of the chat under test.
+            const about = m.chatId || here;
+            // chat-A is the fixture's known-good chat and always answers. What
+            // is under test is chat-B, which is the one the backend struggles
+            // with.
+            if (about === "chat-A") {
+              setTimeout(() => send({ type: "active_chat", requestId: m.requestId,
+                chatId: "chat-A", character: "Wren", resolved: true }), 0);
+              return;
+            }
             // "waking" is a backend still loading: the first named ask finds
             // nothing to ask, the next one lands.
             const looked = arg.mode === "nocard" || (arg.mode === "waking" && asks.length > 1);
             setTimeout(() => send({ type: "active_chat", requestId: m.requestId,
-              chatId: m.chatId || "chat-A",
-              character: !named ? "Wren" : (arg.mode === "waking" && looked ? "Tobias" : null),
-              resolved: named ? looked : true }), 0);
+              chatId: "chat-B",
+              character: arg.mode === "waking" && looked ? "Tobias" : null,
+              resolved: looked }), 0);
           },
           onBackendMessage: (cb) => { listeners.push(cb); return () => { listeners = listeners.filter((x) => x !== cb); }; },
           ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
@@ -5648,9 +5794,11 @@ console.log("\nno name and could not look are different answers");
       await wait(80);
       // Switched away and back, the way you would while it stayed nameless.
       for (let i = 0; i < 4; i++) {
-        handlers.CHAT_CHANGED({ chatId: i % 2 ? "chat-A" : "chat-B" });
+        here = i % 2 ? "chat-A" : "chat-B";
+        handlers.CHAT_CHANGED({ chatId: here });
         await wait(30);
       }
+      here = "chat-B";
       handlers.CHAT_CHANGED({ chatId: "chat-B" });
       await wait(60);
       acts["auto-retry-settings"].cb();

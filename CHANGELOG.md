@@ -8,6 +8,14 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 4.22.1
+
+_2026-08-26_
+
+### Fixed
+
+- **The per-chat switch went on naming a chat you had left.** On the home screen, or anywhere else outside a chat, **Turn off here** stayed live and named the last chat you were in, offering to switch Auto Retry off in a chat you were not looking at. The chat it shows is learned from things happening in a chat, and walking away from one is not a thing happening in a chat, so on a build that says nothing when you leave, nothing corrected it. Opening the settings panel now asks outright which chat is open. The row also says **No chat is open** in that state rather than that it is still working out which chat you are in, which is a different thing and was the wrong thing to read on the home screen.
+
 ## 4.22.0
 
 _2026-08-25_
