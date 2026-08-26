@@ -164,7 +164,7 @@ The same options live in the CONFIG block at the top of `src/frontend.ts` and `d
 | maxDelayMs | 60000 | Longest it will ever wait. |
 | jitter | true | Nudges each wait randomly so retries don't all land at once. |
 | rateLimitDelayMs | 15000 | Floor wait when the server says it's busy. Most shared tiers meter per minute, so a shorter wait usually spends a try hitting the same limit. |
-| retryByNewReroll | false | Off: a retry redoes the reply in place via the regenerate button. On: a retry clicks the next / swipe button, adding a new reroll and keeping the existing ones. Applies to every retry reason. The other button is the fallback. |
+| retryByNewReroll | true | On: a retry clicks the next / swipe button, adding a new reroll and keeping the existing ones, so a reply it was wrong to retry can be swiped back to. Off: a retry redoes the reply in place via the regenerate button, which on some builds clears the other rerolls. Applies to every retry reason. The other button is the fallback. |
 | stuckTimeoutMs | 180000 | Started, then nothing arrived and it never finished, within this. 0 disables. |
 | idleTimeoutMs | 90000 | Tokens flowed then stopped for this long. 0 disables. |
 | retryOnError | true | Retry provider errors. |

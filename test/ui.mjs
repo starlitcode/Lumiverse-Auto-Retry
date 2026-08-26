@@ -5003,6 +5003,135 @@ console.log("\nthe per-chat switch finds the chat");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- a retry never clicks the extension's own panel ----
+// The button selectors are patterns, not addresses, and the extension's own
+// settings are called things like "Retry by adding a new reroll", so its own
+// description button for that row matches the built-in swipe pattern exactly.
+// With the panel open a retry opened a description instead of retrying, and
+// the reader watching the log saw the extension do nothing at all.
+//
+// Three guards were written for this already, all keyed on an id nothing ever
+// set, so all three were doing nothing. The panel is opened here and left
+// open, which is what somebody watching the log does.
+console.log("\na retry never clicks the extension's own panel");
+{
+  const page = await browser.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await stage(page, '<div id=modal></div><button data-testid="regenerate">Regenerate</button>');
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  const out = await page.evaluate(async () => {
+    const h = {}, acts = {};
+    let clicks = 0;
+    document.querySelector('[data-testid="regenerate"]').addEventListener("click", () => clicks++);
+    window.__setup(
+      { events: { on: (n, f) => { h[n] = f; return () => {}; } },
+        ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+              registerInputBarAction: (o) => { const a = { onClick: (cb) => { a.cb = cb; return () => {}; }, destroy: () => {} }; acts[o.id] = a; return a; } } },
+      { toast: false, retryDelayMs: 10, backoffFactor: 1, maxDelayMs: 10, jitter: false,
+        maxRetries: 4, stuckTimeoutMs: 0, idleTimeoutMs: 0, pauseWhenFailing: false },
+    );
+    acts["auto-retry-settings"].cb();
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    for (const hdr of document.querySelectorAll('[role="button"][aria-expanded="false"]')) hdr.click();
+    await new Promise((r) => setTimeout(r, 60));
+
+    // The panel really does hold something the built-in swipe pattern matches,
+    // so this cannot pass by the trap having quietly gone away.
+    const SWIPE = '[aria-label="Next swipe"], [data-action="swipe-right"], [data-testid="swipe-right"], ' +
+      'button[aria-label*="next swipe" i], button[aria-label*="swipe right" i], ' +
+      'button[aria-label*="reroll" i], button[title*="swipe" i]';
+    const trap = [...document.querySelectorAll(SWIPE)].filter((e) => e.closest("#modal")).length;
+
+    const before = clicks;
+    h.GENERATION_STARTED({ chatId: "B", generationId: "b1" });
+    await new Promise((r) => setTimeout(r, 10));
+    h.GENERATION_ENDED({ chatId: "B", generationId: "b1", error: "boom" });
+    await new Promise((r) => setTimeout(r, 250));
+    return { trap, retried: clicks > before, ownUiMarked: !!document.querySelector("[data-ar-ui]") };
+  });
+  await page.close();
+  check("the panel holds something the swipe pattern matches",
+    out.trap > 0, out.trap);
+  check("and the retry goes to the host's button, not that one",
+    out.retried === true, out);
+  check("the extension marks what it owns", out.ownUiMarked === true, out);
+  check("no console errors", errors.length === 0, errors);
+}
+
+// ---- a reply that stopped partway is a cut-off reply ----
+// Two different things look like "words were appearing and then stopped", and
+// only one of them belongs to the watchdog that watches for it.
+//
+// Nothing readable arrived: the generation died on its way out, there is
+// nothing to lose, and re-rolling it is the whole point of the watchdog.
+//
+// Real text arrived and then stopped: what the reader has is a reply cut off
+// partway, and whether to re-roll one of those is already a setting. Aborting
+// regardless went over that setting's head and threw away writing that was
+// really there, which is what a reader hit after switching off the one option
+// that named what they were seeing.
+console.log("\na reply that stopped partway with text in it");
+{
+  const errors = [];
+  const run = async (opts, streamText) => {
+    const page = await browser.newPage();
+    page.on("pageerror", (e) => errors.push(e.message));
+    await stage(page,
+      '<div id=modal></div><button data-testid="regenerate">R</button>' +
+      '<button data-testid="swipe-right">S</button><button data-testid="stop">X</button>');
+    await page.addScriptTag({ content: SOURCE, type: "module" });
+    await page.waitForFunction(() => !!window.__setup);
+    const res = await page.evaluate(async ([opts, streamText]) => {
+      const h = {};
+      const clicks = [];
+      for (const id of ["regenerate", "swipe-right", "stop"])
+        document.querySelector("[data-testid=" + id + "]")
+          .addEventListener("click", () => clicks.push(id));
+      window.__setup(
+        { events: { on: (n, fn) => { h[n] = fn; return () => {}; } },
+          sendToBackend: () => {},
+          onBackendMessage: () => () => {},
+          ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+                registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) } },
+        Object.assign({ retryDelayMs: 10, backoffFactor: 1, maxDelayMs: 10, jitter: false,
+          maxRetries: 4, toast: false, pauseWhenFailing: false,
+          stuckTimeoutMs: 0, idleTimeoutMs: 120 }, opts),
+      );
+      h.GENERATION_STARTED({ chatId: "c1", generationId: "g1" });
+      // Text arrives, then the stream goes quiet without ever ending.
+      h.STREAM_TOKEN_RECEIVED({ chatId: "c1", generationId: "g1", content: streamText });
+      await new Promise((r) => setTimeout(r, 400));
+      return { clicks };
+    }, [opts, streamText]);
+    await page.close();
+    return res;
+  };
+
+  const REAL = "She set the lantern down on the step and looked back at the road, half expecting";
+  const withText = await run({ retryOnTruncated: false }, REAL);
+  const withTextOn = await run({ retryOnTruncated: true }, REAL);
+  // Content-shaped events that carried nothing. sawContent is true for these
+  // too, so reading the flag rather than the text would call this a cut-off
+  // reply and leave a dead generation sitting there.
+  const noText = await run({ retryOnTruncated: false }, "");
+
+  check("with cut-off replies switched off, a reply that stopped partway is left alone",
+    withText.clicks.length === 0, withText);
+  check("with them switched on it is still re-rolled",
+    withTextOn.clicks.indexOf("stop") >= 0 && withTextOn.clicks.length > 1, withTextOn);
+  check("and a generation that produced nothing readable is re-rolled either way",
+    noText.clicks.indexOf("stop") >= 0 && noText.clicks.length > 1, noText);
+  // What the reader loses if this is wrong. A swipe keeps the reply that was
+  // there; a regenerate is the one that can take it away.
+  check("a retry adds a reroll rather than redoing the reply in place",
+    withTextOn.clicks.indexOf("swipe-right") >= 0 &&
+      withTextOn.clicks.indexOf("regenerate") < 0, withTextOn);
+
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- walking out of a chat without the host saying so ----
 // The id the row shows is learned from things happening in a chat: a reply, a
 // message rendering, a switch event. Going to the home screen is none of those,

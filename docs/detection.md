@@ -8,6 +8,8 @@ A reply that streams real text and then gets chopped off mid-sentence is easy to
 
 Reasoning blocks are removed before these are counted, so punctuation inside a model's thinking cannot unbalance them. A reasoning block left open with no close still counts as cut off. This does not depend on the **Ignore the thinking / reasoning** option, which applies to refusal matching only.
 
+Switching this off also covers a reply that stops mid-stream. **Give up on a reply that froze** watches for words that were appearing and then stopped, and a reply that stopped with real text already in it is a cut-off reply by another route, so with cut-off detection off it is left alone rather than stopped and re-rolled. A generation that produced nothing readable is still re-rolled: there is nothing there to keep, and rescuing that is what the freeze watchdog is for.
+
 The checks:
 
 - an unclosed code block or inline backtick

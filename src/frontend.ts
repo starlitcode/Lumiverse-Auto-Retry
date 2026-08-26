@@ -111,7 +111,7 @@ const STREAM_BUF_MAX = 200000;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "4.22.1";
+const VERSION = "4.23.0";
 
 // The one address the extension ever points at, used by the warning in front of
 // the crisis-support check. Pinned to the released branch rather than to a tag,
@@ -154,7 +154,12 @@ const CONFIG = {
   // reroll and leaves the existing rerolls in place. Either way the other
   // control is the fallback, picked at click time from what is actually on
   // screen and clickable, and used again if the first click starts nothing.
-  retryByNewReroll: false,
+  // On by default, because of what the two do to a reply that was fine. A
+  // regenerate redoes the reply in place and on some builds clears the other
+  // rerolls with it, so a retry the extension should not have made takes the
+  // good reply with it and there is no way back. A swipe adds a reroll beside
+  // it, so the reply it was wrong about is still there to swipe back to.
+  retryByNewReroll: true,
 
   // watchdogs. Both are set long. A watchdog that fires early on a slow but
   // healthy model is worse than one that fires late: it throws away a reply
@@ -545,7 +550,7 @@ const SCHEMA: Group[] = [
         key: "retryByNewReroll",
         label: "Retry by adding a new reroll",
         type: "bool",
-        hint: "Off: a retry redoes the reply in place with your regenerate button. On some setups that clears the other rerolls on that message. On: a retry clicks your next / swipe button, which adds a new reroll and keeps the existing ones. Either way, if that button isn't on screen or the click starts nothing, it uses the other one, so set both selectors in the buttons section below.",
+        hint: "On, the default: a retry clicks your next / swipe button, which adds a new reroll and keeps the existing ones, so a reply it was wrong to retry is still there to swipe back to. Off: a retry redoes the reply in place with your regenerate button, and on some setups that clears the other rerolls on that message, which means a retry it should not have made cannot be undone. Either way, if that button isn't on screen or the click starts nothing, it uses the other one, so set both selectors in the buttons section below.",
       },
     ],
   },
@@ -4602,6 +4607,7 @@ export function setup(ctx: Ctx, opts?: any) {
     // between two states; a press is also how the menu is opened, so dipping on
     // the way in makes a hold look like a tap that took.
     el.setAttribute("data-ar-float", "1");
+    markOwnUI(el);
     ensureFloatStyle();
 
     // A press held down opens the menu instead of toggling. Right-click does the
@@ -5998,9 +6004,26 @@ export function setup(ctx: Ctx, opts?: any) {
   // A control only does something when it is enabled and actually laid out.
   // A hidden or disabled button accepts .click() and silently does nothing,
   // which would otherwise be counted as a retry that fired.
+  // Everything the extension itself puts on the page carries this, and nothing
+  // it clicks may sit inside one.
+  //
+  // The button selectors are patterns, not addresses, and the extension's own
+  // panel is full of buttons with words like reroll and swipe on them because
+  // that is what its settings are called. Its own description button for
+  // "Retry by adding a new reroll" matches the built-in swipe pattern exactly,
+  // so with the panel open a retry opened a description instead of retrying,
+  // and the reader watching the log saw the extension do nothing.
+  //
+  // Three guards were already written for this, all of them keyed on an id
+  // nothing ever set, so all three were doing nothing.
+  const OWN_UI = "[data-ar-ui]";
+  const markOwnUI = (el: any) => {
+    try { el && el.setAttribute && el.setAttribute("data-ar-ui", "1"); } catch (_) {}
+  };
   const clickable = (el: any): boolean => {
     if (!el) return false;
     try {
+      if (el.closest && el.closest(OWN_UI)) return false;
       if (el.disabled) return false;
       if (el.getAttribute && el.getAttribute("aria-disabled") === "true")
         return false;
@@ -6284,7 +6307,7 @@ export function setup(ctx: Ctx, opts?: any) {
       if (!clickable(el)) continue;
       try {
         // Never our own panels.
-        if (el.closest && el.closest("#__lvRetryToast,#__lvRetrySettings")) continue;
+        if (el.closest && el.closest("[data-ar-ui]")) continue;
       } catch (_) {}
       fresh.push(el);
     }
@@ -6465,7 +6488,7 @@ export function setup(ctx: Ctx, opts?: any) {
       if (before.has(el)) continue; // was already on screen, not ours
       if (hidden.indexOf(el) >= 0) continue;
       try {
-        if (el.closest && el.closest("#__lvRetryToast,#__lvRetrySettings")) continue;
+        if (el.closest && el.closest("[data-ar-ui]")) continue;
       } catch (_) {}
       try {
         ensureHideStyle();
@@ -6868,6 +6891,32 @@ export function setup(ctx: Ctx, opts?: any) {
   // Any terminal events the dead generation fires next (a stop, then maybe an
   // end) are swallowed by remembering its id, so a late one can't be mistaken
   // for a user stop or a fresh result even after the next generation begins.
+  // A reply that was writing itself out and then went quiet. Two different
+  // things wear that description, and only one of them is this watchdog's.
+  //
+  // Nothing usable arrived: the generation died on its way out and there is
+  // nothing to lose by re-rolling it, which is what this is for.
+  //
+  // Real reply text arrived and then stopped: what the reader has is a reply
+  // cut off partway. Whether to re-roll one of those is already a setting, and
+  // it is the setting they would go looking for, so this asks it rather than
+  // going over its head. Aborting anyway threw away writing that was really
+  // there, on a build where the reply had in fact finished, and the reader had
+  // switched off the one option that named what they were seeing.
+  function onFrozen(chatId: string) {
+    const s = st(chatId);
+    // What actually streamed, not that a content-shaped event went past.
+    // sawContent is true for an empty content token as well, and a generation
+    // that died after nothing but those is the case this watchdog exists for.
+    const gotText = String(s.buf || "").trim().length > 0;
+    if (gotText && !cfg.retryOnTruncated) {
+      clearTimers(s);
+      log("a reply stopped partway and was left alone: cut-off replies are switched off");
+      return;
+    }
+    abortAndRetry(chatId, "stalled");
+  }
+
   function abortAndRetry(chatId: string, reason: string) {
     const s = st(chatId);
     clearTimers(s);
@@ -7173,7 +7222,7 @@ export function setup(ctx: Ctx, opts?: any) {
     if (cfg.enabled && cfg.idleTimeoutMs > 0) {
       if (s.idleTimer) clearTimeout(s.idleTimer);
       s.idleTimer = setTimeout(
-        () => abortAndRetry(chatId, "stalled"),
+        () => onFrozen(chatId),
         cfg.idleTimeoutMs,
       );
     }
@@ -7392,8 +7441,7 @@ export function setup(ctx: Ctx, opts?: any) {
           if (!skip && parent.closest) {
             try {
               skip = !!parent.closest(
-                "#__lvRetryToast,#__lvRetrySettings,#__lvRetryReset,#__lvRetryLog," +
-                  "[contenteditable='true'],[role='dialog'],[role='menu'],[role='tooltip']",
+                "[data-ar-ui],[contenteditable='true'],[role='dialog'],[role='menu'],[role='tooltip']",
               );
             } catch (__) {}
           }
@@ -7602,6 +7650,7 @@ export function setup(ctx: Ctx, opts?: any) {
     if (typeof document === "undefined" || !anchor || !anchor.getBoundingClientRect) return;
     const el = document.createElement("div");
     el.setAttribute("role", "tooltip");
+    markOwnUI(el);
     el.textContent = text;
     el.style.cssText =
       "position:fixed;z-index:" + Z_HINT + ";box-sizing:border-box;padding:8px 10px;" +
@@ -7774,6 +7823,7 @@ export function setup(ctx: Ctx, opts?: any) {
     if (!t) {
       t = document.createElement("div");
       t.id = "__lvRetryToast";
+      markOwnUI(t);
       // Below the hint popover and the float menu, not above them. This appears
       // on its own; those are opened by the user, and a notification landing on
       // top of a menu turns a tap on "Hide this button" into a tap on Cancel.
@@ -10282,6 +10332,7 @@ export function setup(ctx: Ctx, opts?: any) {
     const parts = resetPartsFor();
     const overlay = document.createElement("div");
     overlay.id = "__lvRetryReset";
+    markOwnUI(overlay);
     overlay.style.cssText =
       "position:fixed;inset:0;z-index:" + Z_OVERLAY + ";display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;background:var(--lumiverse-modal-backdrop,rgba(0,0,0,.6));font-family:var(--lumiverse-font-family,system-ui)";
     const box = document.createElement("div");
@@ -10688,6 +10739,7 @@ export function setup(ctx: Ctx, opts?: any) {
     let answered = false;
     const overlay = document.createElement("div");
     overlay.id = "__lvRetryCrisisNotice";
+    markOwnUI(overlay);
     overlay.style.cssText =
       "position:fixed;inset:0;z-index:" + Z_OVERLAY + ";display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;background:var(--lumiverse-modal-backdrop,rgba(0,0,0,.6));font-family:var(--lumiverse-font-family,system-ui)";
     const box = document.createElement("div");
@@ -10909,6 +10961,8 @@ export function setup(ctx: Ctx, opts?: any) {
       });
       modalHandle = modal;
       modalRoot = modal.root;
+      // The host owns this element, so it is marked rather than renamed.
+      markOwnUI(modal.root);
 
       // Baseline of every saved setting at open. Edits below change cfg live, but
       // closing the modal with X or tapping outside restores this baseline, so

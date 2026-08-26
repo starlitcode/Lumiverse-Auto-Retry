@@ -8,6 +8,19 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 4.23.0
+
+_2026-08-26_
+
+### Changed
+
+- **A retry now adds a reroll instead of redoing the reply in place.** **Retry by adding a new reroll** is on by default. The two differ in what they cost when a retry was wrong: a regenerate redoes the reply where it stands and on some builds clears the other rerolls with it, so a good reply it should not have touched is gone for good, while a swipe puts the new attempt beside the old one and the reply it was wrong about is still there to swipe back to. If your build has no next / swipe button the regenerate button is still used, and either one falls back to the other. This applies to new installs; if you have used Auto Retry before, turn it on yourself at the end of **How it retries**.
+
+### Fixed
+
+- **A retry could click the extension's own settings panel instead of your regenerate button.** The button selectors are patterns rather than addresses, and the panel's own description button for **Retry by adding a new reroll** matches the built-in swipe pattern word for word. With the panel open, a retry opened that description and did nothing else, which is worst for the person most likely to hit it: the one watching the log to see what the extension is doing. Nothing the extension puts on the page can be clicked by a retry now.
+- **A reply that stopped partway was re-rolled even with cut-off retries switched off.** **Give up on a reply that froze** watches for words that were appearing and then stopped, and it was stopping and re-rolling the reply whatever else you had turned off. With **It cut off mid-sentence** off, a reply that stopped with real text already in it is now left alone: it is a cut-off reply by another route, and that switch is the one you would go looking for. A generation that produced nothing readable is still re-rolled, which is what the freeze watchdog is for.
+
 ## 4.22.1
 
 _2026-08-26_
