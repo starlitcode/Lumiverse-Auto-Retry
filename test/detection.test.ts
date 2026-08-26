@@ -1246,7 +1246,7 @@ describe("the same words, written as a scene", () => {
 });
 
 // Refusal openings from the same published sources. Ordinary refusals, so no
-// switch is involved: these are on out of the box.
+// switch is involved: these are on with nothing turned on.
 // Which tier decided a refusal, and what the retry is then counted as. All four
 // take the same retry and the same note; the name only decides which line they
 // land on in Stats, and that is the whole point of having four.

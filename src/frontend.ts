@@ -2814,9 +2814,14 @@ export function setup(ctx: Ctx, opts?: any) {
   // Told outright that no chat is open, as opposed to not having been told
   // anything yet. Both leave lastChatId null and the per-chat switch greyed
   // out, and they are not the same thing to read: one is the home screen, the
-  // other is the extension waiting to be told where it is. Only a backend that
+  // other is the extension waiting to be told where it is. Only something that
   // could actually look sets this.
   let noChatOpen = false;
+  // Always read through here, never the flag on its own. The chat id is set in
+  // five places, and a flag that had to be cleared in all five would miss one
+  // eventually. Pairing the two at the point of reading means "no chat is open"
+  // cannot be believed while a chat is known, whoever forgot to clear it.
+  const outsideAnyChat = (): boolean => noChatOpen && lastChatId == null;
   let lastMessageId: any = null;
   // Every Extras button that can come and go, keyed by name. Each one is stored
   // as its registration plus the function that removes its click handler.
@@ -6895,7 +6900,6 @@ export function setup(ctx: Ctx, opts?: any) {
     const realId = p.chatId == null || p.chatId === "" ? null : p.chatId;
     const switched = lastChatId !== realId;
     lastChatId = realId;
-    if (realId != null) noChatOpen = false;
     lastMessageId = p.messageId;
     if (switched) {
       paintFloat();
@@ -7078,9 +7082,7 @@ export function setup(ctx: Ctx, opts?: any) {
 
   function noteChat(id: any) {
     const next = id == null ? null : id;
-    if (next == null) return;
-    noChatOpen = false;
-    if (next === lastChatId) return;
+    if (next == null || next === lastChatId) return;
     lastChatId = next;
     // The last reply seen belonged to the chat just left, so it is not the last
     // reply here. onChatSwitched has always cleared this and noteChat never
@@ -7107,6 +7109,9 @@ export function setup(ctx: Ctx, opts?: any) {
     // Set directly rather than through noteChat, because this is the one event
     // that can also mean "no chat any more", which noteChat ignores on purpose.
     lastChatId = p.chatId || null;
+    // The host saying "no chat now" is as good an answer as the backend's, so
+    // the row says there is no chat rather than that it is still working out
+    // which one you are in.
     noChatOpen = lastChatId == null;
     lastMessageId = null;
     ensureChatName(lastChatId);
@@ -9494,7 +9499,7 @@ export function setup(ctx: Ctx, opts?: any) {
         // or switching away and back. Updating the extension while sitting in a
         // chat is the case that leaves it waiting, because nothing re-renders
         // and so nothing announces which chat you are in.
-        ? noChatOpen
+        ? outsideAnyChat()
           ? "No chat is open, so there is nothing to switch off here. Open a chat and this is ready. Every chat carries on as it is."
           : "Waiting to find out which chat this is. Send a message, or switch to another chat and back, and this is ready. Every other chat carries on as it is."
         : isCardless(lastChatId)

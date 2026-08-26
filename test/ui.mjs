@@ -4996,6 +4996,10 @@ console.log("\nthe per-chat switch finds the chat");
     out.otherChat.disabled === false && /turn off here/i.test(out.otherChat.label), out.otherChat);
   check("and the home screen has nothing to switch",
     out.noChat.disabled === true, out.noChat);
+  // No backend in this fixture at all, so this is the host's own word for it.
+  // It is as good an answer as the backend's and reads the same way.
+  check("and the host saying so is enough for it to say there is no chat",
+    /no chat is open/i.test(out.noChat.note), out.noChat.note);
   check("no console errors", errors.length === 0, errors);
 }
 

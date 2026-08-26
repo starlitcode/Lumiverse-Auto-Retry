@@ -30,6 +30,8 @@ The swap buttons live in the Extras menu or the floating button's menu, and both
 
 Without that permission it cannot ask, and falls back to the last chat it saw you in. That is the one case where a swap from the home screen still lands somewhere, and it is the same fallback the rest of the extension runs on when it is not allowed to look.
 
+The **Turn off here** row says the same thing for the same reason. Outside a chat it is greyed out and reads **No chat is open**, and with the `chats` permission granted that is checked each time the settings panel opens rather than taken from the last chat you were in.
+
 ## When Lumiverse does not say which chat you are in
 
 Rarely, Lumiverse reports a reply without saying which chat it belongs to. Retrying still works, and three things that need a chat by name do not:
