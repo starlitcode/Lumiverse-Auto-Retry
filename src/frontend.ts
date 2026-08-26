@@ -556,6 +556,12 @@ const SCHEMA: Group[] = [
         type: "bool",
         hint: "Nudges each wait by a random amount so retries don't all hit the server at the same instant. Best left on.",
       },
+      {
+        key: "retryByNewReroll",
+        label: "Retry by adding a new reroll",
+        type: "bool",
+        hint: "On, the default: a retry clicks your next / swipe button, which adds a reroll and keeps the existing ones, so a reply it was wrong to retry is still there to swipe back to. Off: a retry redoes the reply in place with your regenerate button, and on some setups that clears the other rerolls, which means a retry it should not have made cannot be undone. Either way, if the button it wants is not on screen it uses the other one, so both selectors are worth filling in.",
+      },
     ],
   },
   {
@@ -858,6 +864,13 @@ const SCHEMA: Group[] = [
         hint: "The one it falls back to, and the one it clicks first if you turn the setting at the bottom off. It redoes the reply where it stands, so what was there is replaced.",
       },
       {
+        key: "stopSelector",
+        label: "Your stop button",
+        type: "text",
+        selector: true,
+        hint: "The stop button, so it can halt a frozen reply before retrying.",
+      },
+      {
         key: "confirmButtonsCustom",
         label: "My dialog's button says something else",
         type: "bool",
@@ -869,19 +882,6 @@ const SCHEMA: Group[] = [
         label: "Extra dialog buttons it may press",
         type: "text",
         hint: "Type the button's text exactly as it appears, one per line. Capitals are ignored. Anything you add here is tried before the built-in list, which is still used as well. Nothing here is read while the switch above is off.",
-      },
-      {
-        key: "stopSelector",
-        label: "Your stop button",
-        type: "text",
-        selector: true,
-        hint: "The stop button, so it can halt a frozen reply before retrying.",
-      },
-      {
-        key: "retryByNewReroll",
-        label: "Retry by adding a new reroll",
-        type: "bool",
-        hint: "On, the default: a retry clicks your next / swipe button, which adds a reroll and keeps the existing ones, so a reply it was wrong to retry is still there to swipe back to. Off: a retry redoes the reply in place with your regenerate button, and on some setups that clears the other rerolls, which means a retry it should not have made cannot be undone. Either way, if the button it wants is not on screen it uses the other one, which is why both boxes above are worth filling in.",
       },
     ],
   },

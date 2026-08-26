@@ -203,3 +203,42 @@ describe("defaults quoted in the docs", () => {
     expect(wrong).toEqual([]);
   });
 });
+
+// Everything the extension does that a reader might reasonably want to change
+// has to be in the panel. A setting that exists in the defaults block but never
+// gets a row is one the reader cannot reach: it still changes what the
+// extension does, it still rides along in an export, and the only way to find
+// it is to read the source.
+//
+// The other direction matters too. A row for a key with no default has nothing
+// to fall back to when a saved copy does not carry it.
+describe("every setting is one the reader can reach", () => {
+  const rows = new Set<string>();
+  for (const g of SCHEMA) for (const f of g.fields) rows.add(f.key);
+  const keys = Object.keys(CONFIG);
+
+  // Anything intentionally kept out of the panel goes here with the reason.
+  // Empty on purpose: nothing is hidden today, and adding to this list is how
+  // hiding something becomes a decision somebody wrote down rather than an
+  // oversight.
+  const DELIBERATELY_HIDDEN: string[] = [];
+
+  test("the lists were really read", () => {
+    expect(keys.length).toBeGreaterThan(20);
+    expect(rows.size).toBeGreaterThan(20);
+  });
+
+  test("no setting is missing from the panel", () => {
+    const missing = keys.filter((k) => !rows.has(k) && DELIBERATELY_HIDDEN.indexOf(k) < 0);
+    expect(missing).toEqual([]);
+  });
+
+  test("no row is for a setting with no default", () => {
+    const orphans = [...rows].filter((k) => !(k in (CONFIG as any)));
+    expect(orphans).toEqual([]);
+  });
+
+  test("nothing on the hidden list has a row, which would make it a lie", () => {
+    expect(DELIBERATELY_HIDDEN.filter((k) => rows.has(k))).toEqual([]);
+  });
+});

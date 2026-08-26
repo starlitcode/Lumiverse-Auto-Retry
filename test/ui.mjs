@@ -650,13 +650,7 @@ console.log("\nwhat is on screen straight away");
     }),
   );
   check("the on-screen panel switch needs no digging", out.panelSwitch, out);
-  // The reroll choice sits with the three buttons it decides between, at the
-  // bottom of "Buttons it clicks", which is one of the sections that starts
-  // shut. It reads as one of those buttons' settings rather than as a retry
-  // option, and the cost is a click to reach it. Asserted rather than dropped,
-  // so moving it back is a decision somebody makes on purpose.
-  check("the reroll choice sits with the buttons, a section down",
-    out.rerollSwitch === false, out);
+  check("and neither does the reroll choice", out.rerollSwitch, out);
   check("the frozen-reply rows are under their own heading", out.frozenRun && out.frozenRow, out);
   check(
     "three headings are open and five are shut",
