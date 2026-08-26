@@ -650,7 +650,13 @@ console.log("\nwhat is on screen straight away");
     }),
   );
   check("the on-screen panel switch needs no digging", out.panelSwitch, out);
-  check("and neither does the reroll choice", out.rerollSwitch, out);
+  // The reroll choice sits with the three buttons it decides between, at the
+  // bottom of "Buttons it clicks", which is one of the sections that starts
+  // shut. It reads as one of those buttons' settings rather than as a retry
+  // option, and the cost is a click to reach it. Asserted rather than dropped,
+  // so moving it back is a decision somebody makes on purpose.
+  check("the reroll choice sits with the buttons, a section down",
+    out.rerollSwitch === false, out);
   check("the frozen-reply rows are under their own heading", out.frozenRun && out.frozenRow, out);
   check(
     "three headings are open and five are shut",
@@ -5000,6 +5006,70 @@ console.log("\nthe per-chat switch finds the chat");
   // It is as good an answer as the backend's and reads the same way.
   check("and the host saying so is enough for it to say there is no chat",
     /no chat is open/i.test(out.noChat.note), out.noChat.note);
+  check("no console errors", errors.length === 0, errors);
+}
+
+// ---- the swipe default reaches people who already had settings ----
+// Saving writes every setting, at its default or not, so a copy saved before
+// swiping became the preferred retry pins the old behaviour. Anyone who had
+// ever pressed Save would have gone on regenerating, which is the one that can
+// take a good reply away, and would never have seen the change.
+//
+// Turned on once, and once only: turning it back off afterwards has to stick.
+// Read off which button a retry actually clicks, because the switch is applied
+// to the settings in memory and the stored copy only changes when Save is
+// pressed, so reading storage back would prove nothing either way.
+console.log("\nturning swiping on for people who already had settings");
+{
+  const errors = [];
+  const OLD = { retryByNewReroll: false, maxRetries: 4, minChars: 24 };
+  const run = async (seed, clearMark) => {
+    const c = await browser.newContext();
+    const page = await c.newPage();
+    page.on("pageerror", (e) => errors.push(e.message));
+    await page.route("**/*", (r) => r.fulfill({ contentType: "text/html", body:
+      '<!doctype html><meta charset=utf-8><div id=modal></div>' +
+      '<button data-testid="regenerate">R</button><button data-testid="swipe-right">S</button>' }));
+    await page.goto("http://lumiverse.test/");
+    await page.addScriptTag({ content: SOURCE, type: "module" });
+    await page.waitForFunction(() => !!window.__setup);
+    const res = await page.evaluate(async ([seed, clearMark]) => {
+      const KEY = "lv-auto-retry:settings:v1", MARK = "lv-auto-retry:swipe-first:v1";
+      if (clearMark) localStorage.removeItem(MARK);
+      else localStorage.setItem(MARK, "1");
+      localStorage.setItem(KEY, JSON.stringify(seed));
+      const h = {}; const hits = [];
+      for (const id of ["regenerate", "swipe-right"])
+        document.querySelector("[data-testid=" + id + "]").addEventListener("click", () => hits.push(id));
+      window.__setup(
+        { events: { on: (n, f) => { h[n] = f; return () => {}; } },
+          ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+                registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) } },
+        { toast: false, retryDelayMs: 5, backoffFactor: 1, maxDelayMs: 5, jitter: false,
+          stuckTimeoutMs: 0, idleTimeoutMs: 0, pauseWhenFailing: false },
+      );
+      h.GENERATION_STARTED({ chatId: "c1", generationId: "g1" });
+      h.GENERATION_ENDED({ chatId: "c1", generationId: "g1", error: "boom" });
+      await new Promise((r) => setTimeout(r, 200));
+      return { clicked: hits[0] || null, marked: !!localStorage.getItem(MARK),
+               stillStored: JSON.parse(localStorage.getItem(KEY)).minChars };
+    }, [seed, clearMark]);
+    await c.close();
+    return res;
+  };
+
+  const migrated = await run(OLD, true);
+  const chosen = await run(OLD, false);
+  check("an old saved copy retries by swiping now", migrated.clicked === "swipe-right", migrated);
+  check("and the once is written down", migrated.marked === true, migrated);
+  // Without the marker this would turn itself back on at every reload and the
+  // setting would be unusable for anyone who wants the old behaviour.
+  check("turning it back off sticks", chosen.clicked === "regenerate", chosen);
+  // The settings are read before most of the extension exists. A key declared
+  // too late throws in there, and the catch around it hands back an empty
+  // object, which loses every saved setting without a word.
+  check("and the rest of the saved settings survived being read",
+    migrated.stillStored === 24 && chosen.stillStored === 24, [migrated, chosen]);
   check("no console errors", errors.length === 0, errors);
 }
 

@@ -2,15 +2,15 @@
 
 Lumiverse has no built-in way for an extension to regenerate a reply, so the re-fire clicks your own on-screen regenerate or swipe button. The defaults match common Lumiverse builds, but a future update could rename those buttons.
 
-There are three button fields: **regenerate** (redo a reply), **next / swipe** (a backup if your build retries by swiping), and **stop** (to halt a frozen reply). Each takes one CSS selector, the kind you'd pass to `document.querySelector`, and you can list several separated by commas as fallbacks. The extension checks these in the exact order you write them, so put your most specific selectors first (like data attributes) and broader ones last (like aria-label or title).
+There are three button fields, listed the way a retry tries them: **next / swipe** (add a reroll, which is what it reaches for first), **regenerate** (redo the reply where it stands, the fallback), and **stop** (to halt a frozen reply). Each takes one CSS selector, the kind you'd pass to `document.querySelector`, and you can list several separated by commas as fallbacks. The extension checks these in the exact order you write them, so put your most specific selectors first (like data attributes) and broader ones last (like aria-label or title).
 
-By default a retry clicks the next / swipe button, which adds a new reroll and leaves the existing ones in place. That way a retry the extension should not have made can be undone: the reply it re-rolled is still there to swipe back to. This is **Retry by adding a new reroll**, at the end of "How it retries" in settings.
+By default a retry clicks the next / swipe button, which adds a new reroll and leaves the existing ones in place. That way a retry the extension should not have made can be undone: the reply it re-rolled is still there to swipe back to. This is **Retry by adding a new reroll**, at the bottom of this section in settings, under the three boxes it decides between.
 
 Turn it off and a retry uses the regenerate button instead, which redoes the reply in place and on some builds clears the other rerolls on that message. It is the faster of the two and the one to pick if your build has no swipe button worth clicking, but a reply it takes away is gone.
 
 Whichever button the toggle prefers, the other one is the fallback, and the choice is made at the moment of the click from what is on screen and actually clickable. A button that is present but disabled or hidden is skipped rather than clicked, since clicking one of those does nothing and would burn a retry.
 
-This applies to every reason a retry fires, including empty replies and errors, so the toggle does what it says on all of them. Set the **next / swipe** selector below if retries stop happening after you turn it on.
+This applies to every reason a retry fires, including empty replies and errors, so the toggle does what it says on all of them. If your build has no next / swipe button, fill in the **regenerate** box: a retry falls back to it and writes a line in the log saying it had to, so a reroll that goes missing is not a mystery.
 
 ## Setting the buttons without writing a selector
 

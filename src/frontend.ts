@@ -35,6 +35,11 @@ const Z_HINT = 2147483300;
 const Z_OVERLAY = 2147483600;
 
 const STORE_KEY = "lv-auto-retry:settings:v1";
+// Written the first time this version runs, so the one-time switch to
+// swiping happens once. Up here with the other keys because the settings are
+// read before most of setup() exists, and a const declared further down is
+// not initialised yet when that happens.
+const SWIPE_FIRST_KEY = "lv-auto-retry:swipe-first:v1";
 // The settings search field. It needs an id because the browser's own clear
 // button inside it can only be reached from a stylesheet, not inline.
 const SEARCH_ID = "__lvRetrySearch";
@@ -53,6 +58,11 @@ const IGNORE_MAX = 16; // most aborted-generation ids kept around to swallow the
 // six seconds ran out while the generation was still coming, so the extension
 // decided its own click had failed and pressed the other control on top of it.
 const START_GRACE_MS = 15000;
+// How long after a retry click a generation is still taken to be that
+// click's. Covers the whole grace above and its extra rounds, so a host
+// that takes its time announcing a start does not get the reply counted as
+// one the reader asked for, which would hand back the tries.
+const OURS_WINDOW_MS = 90000;
 // The retry reason that carries the optional note. Named once so the arming
 // check below cannot drift away from the callers that raise it.
 const REFUSAL_REASON = "looks like an accidental refusal";
@@ -546,12 +556,6 @@ const SCHEMA: Group[] = [
         type: "bool",
         hint: "Nudges each wait by a random amount so retries don't all hit the server at the same instant. Best left on.",
       },
-      {
-        key: "retryByNewReroll",
-        label: "Retry by adding a new reroll",
-        type: "bool",
-        hint: "On, the default: a retry clicks your next / swipe button, which adds a new reroll and keeps the existing ones, so a reply it was wrong to retry is still there to swipe back to. Off: a retry redoes the reply in place with your regenerate button, and on some setups that clears the other rerolls on that message, which means a retry it should not have made cannot be undone. Either way, if that button isn't on screen or the click starts nothing, it uses the other one, so set both selectors in the buttons section below.",
-      },
     ],
   },
   {
@@ -840,18 +844,18 @@ const SCHEMA: Group[] = [
     desc: "It retries by clicking your own on-screen buttons, so you only need this if retries aren't happening. The quickest fix is Pick it for me: press it, then click the real button. Otherwise paste a CSS selector and press Test until it says match found, with that button on screen. The stop button only appears while a reply is generating. The README covers fallback lists and selector syntax.",
     fields: [
       {
-        key: "regenerateSelector",
-        label: "Your regenerate button",
-        type: "text",
-        selector: true,
-        hint: "The retry button it clicks to redo a reply.",
-      },
-      {
         key: "swipeNextSelector",
         label: "Your next / swipe button",
         type: "text",
         selector: true,
-        hint: "A backup it clicks if your setup retries by swiping to a new reply instead.",
+        hint: "The button it clicks first, because a swipe adds a reroll and leaves the reply that was there. Set this one even if you never swipe by hand: it is what keeps a retry from overwriting a reply it should not have touched.",
+      },
+      {
+        key: "regenerateSelector",
+        label: "Your regenerate button",
+        type: "text",
+        selector: true,
+        hint: "The one it falls back to, and the one it clicks first if you turn the setting at the bottom off. It redoes the reply where it stands, so what was there is replaced.",
       },
       {
         key: "confirmButtonsCustom",
@@ -872,6 +876,12 @@ const SCHEMA: Group[] = [
         type: "text",
         selector: true,
         hint: "The stop button, so it can halt a frozen reply before retrying.",
+      },
+      {
+        key: "retryByNewReroll",
+        label: "Retry by adding a new reroll",
+        type: "bool",
+        hint: "On, the default: a retry clicks your next / swipe button, which adds a reroll and keeps the existing ones, so a reply it was wrong to retry is still there to swipe back to. Off: a retry redoes the reply in place with your regenerate button, and on some setups that clears the other rerolls, which means a retry it should not have made cannot be undone. Either way, if the button it wants is not on screen it uses the other one, which is why both boxes above are worth filling in.",
       },
     ],
   },
@@ -5023,6 +5033,29 @@ export function setup(ctx: Ctx, opts?: any) {
 
   // Coerce a raw saved object (local cache or account storage) into a clean
   // partial config: keep only known fields, run each through its type.
+  // Saving writes every setting, at its default or not, so a saved copy from
+  // before swiping became the preferred retry pins the old behaviour: a reader
+  // who has ever pressed Save keeps regenerating, which is the one that can
+  // take a good reply away, and would never see the change.
+  //
+  // Nobody can have chosen the old value on purpose in a way this could tell
+  // apart, because it was the default: leaving it alone and picking it look the
+  // same in storage. So it is turned on once, and once only. The marker is its
+  // own key rather than a setting, so turning it back off afterwards sticks.
+  // Runs once ever, whether or not anything was saved. Setting the marker on a
+  // fresh install too is what makes it once: without that, someone installing
+  // this version and turning it straight back off would have it turned on again
+  // on their next reload, for ever. No logging from here, because this runs
+  // while the settings are being read and the log does not exist yet.
+  function swipeFirstOnce(parsed: any): void {
+    try {
+      if (typeof localStorage === "undefined") return;
+      if (localStorage.getItem(SWIPE_FIRST_KEY)) return;
+      localStorage.setItem(SWIPE_FIRST_KEY, "1");
+      if (parsed && typeof parsed === "object" && parsed.retryByNewReroll === false)
+        parsed.retryByNewReroll = true;
+    } catch (_) {}
+  }
   function coerceSaved(parsed: any): any {
     const out: any = {};
     if (!parsed || typeof parsed !== "object") return out;
@@ -5072,8 +5105,12 @@ export function setup(ctx: Ctx, opts?: any) {
     try {
       if (typeof localStorage === "undefined") return {};
       const raw = localStorage.getItem(STORE_KEY);
-      if (!raw) return {};
-      return coerceSaved(JSON.parse(raw));
+      const parsed = raw ? JSON.parse(raw) : null;
+      // Before the early return, so a first run with nothing saved still counts
+      // as the one run this gets.
+      swipeFirstOnce(parsed);
+      if (!parsed) return {};
+      return coerceSaved(parsed);
     } catch (_) {
       return {};
     }
@@ -5745,6 +5782,13 @@ export function setup(ctx: Ctx, opts?: any) {
       attempts: 0,
       pending: false,
       selfTriggered: false,
+      // When this chat's last retry click went out. selfTriggered says a click
+      // is waiting for its start; this says one was made recently, and it is
+      // still true after the wait has been given up on. A host slow to announce
+      // a start would otherwise have its generation counted as one the reader
+      // asked for, which clears the tries and lets the same reply be re-rolled
+      // past the cap.
+      retryClickAt: 0,
       genId: null,
       startTimer: null,
       idleTimer: null,
@@ -6108,6 +6152,17 @@ export function setup(ctx: Ctx, opts?: any) {
   // Returns which control it clicked, or null if nothing was clicked.
   const fireRetry = (): string | null => {
     const picked = pickRetryControl();
+    // Said out loud when the button it wanted was not there. With swiping
+    // preferred, a build whose swipe selector matches nothing quietly retries
+    // by regenerating instead, which is the one that can take the old reply
+    // with it. That is worth knowing from the log rather than working out from
+    // a reroll that went missing.
+    if (picked && picked.via !== (cfg.retryByNewReroll ? "swipe" : "regenerate"))
+      log(
+        "no " + (cfg.retryByNewReroll ? "next / swipe" : "regenerate") +
+        " button on screen, so this retry used " + picked.via +
+        " instead; set both selectors in the buttons section",
+      );
     if (!picked) {
       log("no retry control found, set the button selectors in settings");
       showToast(
@@ -6137,6 +6192,10 @@ export function setup(ctx: Ctx, opts?: any) {
     clearConfirmWatch();
     clearTimers(s);
     s.attempts = 0;
+    // The reader has taken over, so the next generation is theirs whatever this
+    // chat was in the middle of.
+    s.retryClickAt = 0;
+    s.selfTriggered = false;
     // Nothing is in the air once we have stood down. Without this the status
     // line went on saying the model was thinking after a reply was stopped,
     // because the flag was only ever cleared when a generation ended and a stop
@@ -6645,7 +6704,12 @@ export function setup(ctx: Ctx, opts?: any) {
       log("retry click produced no generation; resetting stale state", chatId);
       disarmRefusalNote(chatId);
       s.selfTriggered = false;
-      s.attempts = 0;
+      // The try is not handed back. A click that worked on a host slow to
+      // announce it looks exactly like one that did nothing, and refunding on
+      // that guess let the reply arrive later and be judged on a full budget
+      // again: "most tries" said two and the reply was re-rolled five times
+      // and counting. Nothing is lost by keeping it spent, because a reply the
+      // reader asks for themselves clears the count on its own.
     }, START_GRACE_MS);
   }
 
@@ -6855,6 +6919,7 @@ export function setup(ctx: Ctx, opts?: any) {
       s.retryAt = 0;
       s.pending = false;
       s.selfTriggered = true;
+      s.retryClickAt = Date.now();
       // Before the click, and awaited, so the note is in place by the time the
       // generation starts rather than racing it.
       //
@@ -6960,16 +7025,25 @@ export function setup(ctx: Ctx, opts?: any) {
       paintFloat();
       syncMasterNote();
     }
+    // Ours if a click is still waiting for its start, and also if one went out
+    // recently enough that this is almost certainly it. The wait is given up on
+    // after a minute; a start arriving after that on the back of our own click
+    // used to read as the reader asking for a reply themselves, which hands the
+    // tries back and lets the same reply be re-rolled past the cap.
+    const ours =
+      s.selfTriggered ||
+      (s.retryClickAt > 0 && Date.now() - s.retryClickAt < OURS_WINDOW_MS);
     log(
       "gen start",
       p.generationId,
-      s.selfTriggered ? "(auto-retry)" : "(user)",
+      ours ? "(auto-retry)" : "(user)",
     );
-    if (!s.selfTriggered) {
+    if (!ours) {
       s.attempts = 0;
       s.suppressUntil = 0;
     } // fresh, user-initiated generation
     s.selfTriggered = false;
+    s.retryClickAt = 0;
     s.genId = p.generationId;
     rememberGeneration(p.generationId, chatId);
     ensureChatName(realId);
@@ -8080,18 +8154,22 @@ export function setup(ctx: Ctx, opts?: any) {
     if (inc(o.buttons)) {
       lines.push("");
       lines.push("buttons (checked right now):");
+      // Swipe first, the way the panel lists them and the way a retry tries
+      // them, so what this reports and what it does read in the same order.
+      lines.push("  swipeNext:  " + selectorState(cfg.swipeNextSelector));
+      lines.push("  regenerate: " + selectorState(cfg.regenerateSelector));
+      lines.push("  stop:       " + selectorState(cfg.stopSelector));
+      lines.push("  swipeNextSelector  = " + cfg.swipeNextSelector);
+      lines.push("  regenerateSelector = " + cfg.regenerateSelector);
+      lines.push("  stopSelector       = " + cfg.stopSelector);
+      // Last, because it is the setting that decides what the three above are
+      // for, and it reads as a summary of them rather than another selector.
       lines.push(
         "  retry mode: " +
           (cfg.retryByNewReroll
             ? "new reroll (swipe first, regenerate as fallback)"
             : "regenerate (swipe as fallback)"),
       );
-      lines.push("  regenerate: " + selectorState(cfg.regenerateSelector));
-      lines.push("  swipeNext:  " + selectorState(cfg.swipeNextSelector));
-      lines.push("  stop:       " + selectorState(cfg.stopSelector));
-      lines.push("  regenerateSelector = " + cfg.regenerateSelector);
-      lines.push("  swipeNextSelector  = " + cfg.swipeNextSelector);
-      lines.push("  stopSelector       = " + cfg.stopSelector);
     }
     if (inc(o.environment)) {
       // First in this section, because it is the one line that explains a
