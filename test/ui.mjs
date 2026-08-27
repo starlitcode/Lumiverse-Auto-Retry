@@ -5109,7 +5109,46 @@ console.log("\nthe reply a retry threw away");
   check("it was holding the reply first", dropped.held.indexOf(REPLY) >= 0, dropped.held.slice(0, 120));
   check("and switching it off drops what was already held",
     dropped.after.indexOf(REPLY) < 0, dropped.after.slice(0, 160));
+  // A generation Lumiverse names no chat for still has its reply kept, and kept
+  // somewhere the tab can find again. The store was filed under the sentinel
+  // and read back under the empty string, so this was the one case where the
+  // reply went in and never came out.
+  const noChat = await page2NoChat(browser, REPLY, errors);
+  check("a chat with no id of its own keeps its reply too", noChat === true, noChat);
+
   check("no console errors", errors.length === 0, errors);
+}
+
+// One page, one generation carrying no chatId anywhere.
+async function page2NoChat(browser, REPLY, errors) {
+  const page = await browser.newPage();
+  page.on("pageerror", (e) => errors.push(e.message));
+  await stage(page, '<div id=modal></div><button data-testid="regenerate">R</button><button data-testid="swipe-right">S</button>');
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  const out = await page.evaluate(async (REPLY) => {
+    const h = {}, acts = {};
+    window.__setup(
+      { events: { on: (n, f) => { h[n] = f; return () => {}; } },
+        ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+              registerInputBarAction: (o) => { const a = { onClick: (cb) => { a.cb = cb; return () => {}; }, destroy: () => {} }; acts[o.id] = a; return a; } } },
+      { toast: false, retryDelayMs: 5, backoffFactor: 1, maxDelayMs: 5, jitter: false, maxRetries: 4,
+        stuckTimeoutMs: 0, idleTimeoutMs: 0, pauseWhenFailing: false, liveLog: true,
+        retryOnShort: true, minChars: 4000 },
+    );
+    h.GENERATION_STARTED({ generationId: "g1" });
+    h.STREAM_TOKEN_RECEIVED({ generationId: "g1", content: REPLY });
+    h.GENERATION_ENDED({ generationId: "g1", content: REPLY });
+    await new Promise((r) => setTimeout(r, 150));
+    const panel = document.getElementById("__lvRetryLog");
+    const tab = panel && [...panel.querySelectorAll('[role="tab"]')]
+      .find((b) => b.textContent.trim() === "Replaced");
+    if (tab) tab.click();
+    const body = document.getElementById("__lvRetryLogBody");
+    return (body ? body.innerText : "").indexOf(REPLY) >= 0;
+  }, REPLY);
+  await page.close();
+  return out;
 }
 
 // ---- the swipe default reaches people who already had settings ----

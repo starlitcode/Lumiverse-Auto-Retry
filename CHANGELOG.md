@@ -8,6 +8,19 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 4.24.1
+
+_2026-08-27_
+
+### Fixed
+
+- **The Replaced tab could not show a reply from a chat Lumiverse names no chat for.** It was filed under the extension's own name for that case and looked up under a different one, so what it kept could never be found again. Everything keyed by chat now goes through one place, which is also where the five hand-written copies of that rule went.
+- **Two things holding reply text had no size limit.** The kept reply was capped and the field feeding it was not, which only moved where the memory went.
+
+### Changed
+
+- **The troubleshooting page covers a reply you wanted that got retried.** Where to find it, and which switch to change so it does not happen again, listed by the reason the Replaced tab gives.
+
 ## 4.24.0
 
 _2026-08-26_

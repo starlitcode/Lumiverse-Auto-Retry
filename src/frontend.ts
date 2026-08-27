@@ -121,7 +121,7 @@ const STREAM_BUF_MAX = 200000;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "4.24.0";
+const VERSION = "4.24.1";
 
 // The one address the extension ever points at, used by the warning in front of
 // the crisis-support check. Pinned to the released branch rather than to a tag,
@@ -3289,7 +3289,7 @@ export function setup(ctx: Ctx, opts?: any) {
     // halves would have disagreed about how much a reply can be.
     const body = String(text || "").trim().slice(-STREAM_BUF_MAX);
     if (!body) return;
-    const key = chatKey(chatId);
+    const key = chatSlot(chatId);
     replaced.set(key, { text: body, reason: reason, at: Date.now() });
     while (replaced.size > REPLACED_MAX)
       replaced.delete(replaced.keys().next().value as string);
@@ -3534,7 +3534,7 @@ export function setup(ctx: Ctx, opts?: any) {
     // Word swaps, for the chat on screen. A swap leaves nothing behind to look
     // at once it lands, since the reply reads as though the model wrote it that
     // way, so this is the only answer to "is that rule doing anything".
-    const swapKeyNow = lastChatId == null ? NO_CHAT : String(lastChatId);
+    const swapKeyNow = chatSlot(lastChatId);
     const swapsHere = stats.swapsByChat[swapKeyNow] || 0;
     const swapsAll = Object.keys(stats.swapsByChat)
       .reduce((n, k) => n + stats.swapsByChat[k], 0);
@@ -3616,7 +3616,7 @@ export function setup(ctx: Ctx, opts?: any) {
   // the one thing here a reader might want back rather than want to read: the
   // log says what happened, this says what it cost.
   function replacedHere(): { text: string; reason: string; at: number } | null {
-    return replaced.get(chatKey(lastChatId)) || null;
+    return replaced.get(chatSlot(lastChatId)) || null;
   }
   function replacedAsText(): string {
     const r = replacedHere();
@@ -3933,7 +3933,7 @@ export function setup(ctx: Ctx, opts?: any) {
       const swapsAll = Object.keys(stats.swapsByChat)
         .reduce((n, k) => n + stats.swapsByChat[k], 0);
       if (cfg.replaceEnabled || swapsAll) {
-        const here = stats.swapsByChat[lastChatId == null ? NO_CHAT : String(lastChatId)] || 0;
+        const here = stats.swapsByChat[chatSlot(lastChatId)] || 0;
         lines.push("Words swapped: " + swapsAll + " (" + here + " in this chat)");
       }
       lines.push("Watching for: " + sayTime(Date.now() - stats.since));
@@ -4028,7 +4028,7 @@ export function setup(ctx: Ctx, opts?: any) {
         // permission was missing, about a reply you had just discarded.
         promptNeverArrived = false;
       }
-      else if (liveTab === "replaced") replaced.delete(chatKey(lastChatId));
+      else if (liveTab === "replaced") replaced.delete(chatSlot(lastChatId));
       else if (liveTab === "stats") {
         // Counting starts again from now, so the clock resets with the counts
         // or the rate below them would be measured against the wrong window.
@@ -5795,10 +5795,15 @@ export function setup(ctx: Ctx, opts?: any) {
   // a chat id, the per-chat switch and the swap buttons, keeps refusing when
   // there is no real id to act on, since there is nothing for them to name.
   const NO_CHAT = "lv-no-chat";
-  const chatOf = (p: any): string => {
-    const id = p && p.chatId;
-    return id == null || id === "" ? NO_CHAT : String(id);
-  };
+  // Which slot a chat's own state is filed under. Everything keyed by chat goes
+  // through this, so a chat with no id of its own lands in the same place
+  // whichever side is asking. Written out by hand in five places before, and
+  // the sixth used a different mapping: it filed a chat with no id under the
+  // sentinel and looked it up under the empty string, so what it stored could
+  // never be found again.
+  const chatSlot = (chatId: any): string =>
+    chatId == null || chatId === "" ? NO_CHAT : String(chatId);
+  const chatOf = (p: any): string => chatSlot(p && p.chatId);
   // Which chat each generation was started in. A watchdog is armed for one
   // generation but can only be called off through its chat's state, so an end
   // event that cannot find that state leaves the watchdog running. This answers
@@ -7292,7 +7297,7 @@ export function setup(ctx: Ctx, opts?: any) {
   // one entry per.
   function noteSwaps(chatId: any, n: number) {
     if (!(n > 0)) return;
-    const key = chatId == null || chatId === "" ? NO_CHAT : String(chatId);
+    const key = chatSlot(chatId);
     stats.swapsByChat[key] = (stats.swapsByChat[key] || 0) + n;
     log(
       "swapped " + n + (n === 1 ? " word" : " words") +
@@ -7503,7 +7508,10 @@ export function setup(ctx: Ctx, opts?: any) {
     const hasContentField = typeof p.content === "string";
     const ended = hasContentField ? String(p.content).trim() : "";
     const content = ended.length ? ended : streamed.trim();
-    s.lastText = content;
+    // Capped like everything else that holds reply text. Up to two dozen chats
+    // keep one of these, so leaving this one uncapped while the store it feeds
+    // is capped only moves where the memory goes.
+    s.lastText = content.slice(-STREAM_BUF_MAX);
     // Empty only when the payload says so, or when nothing streamed either. A
     // missing field plus tokens that carried no readable text is not a verdict,
     // so it is left alone rather than re-rolled on a guess.
@@ -8316,7 +8324,7 @@ export function setup(ctx: Ctx, opts?: any) {
         .reduce((n, k) => n + stats.swapsByChat[k], 0);
       if (cfg.replaceEnabled || swapsAll) {
         const here =
-          stats.swapsByChat[lastChatId == null ? NO_CHAT : String(lastChatId)] || 0;
+          stats.swapsByChat[chatSlot(lastChatId)] || 0;
         lines.push("  words swapped: " + swapsAll + " (" + here + " in this chat)");
       }
       const reasons = Object.keys(stats.reasons).sort(

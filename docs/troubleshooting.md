@@ -16,6 +16,19 @@ The settings it reports come straight from the option list, so every setting is 
 
 Under that is the **activity timeline**, the last twenty things it did, kept whether or not console logging is on.
 
+## It retried a reply you wanted to keep
+
+Open the on-screen panel and go to the **Replaced** tab. The reply it threw away is there, with what it was thrown away for. Press **Copy** to take it back.
+
+That covers the one reply. To stop it happening again, the reason on that tab is what to act on, because each one has its own switch under **When to count a reply as bad**:
+
+- **cut off** or **stalled**: turn off **It cut off mid-sentence**. That one switch covers both, since a reply that stops partway with text already in it is a cut-off reply whichever way it stopped.
+- **short**: turn off **It was very short**, or lower **What counts as "very short"**.
+- **refusal**, **breaking off** or **crisis**: the [refusal tuning](detection.md) page covers narrowing these. Adding the wording it caught to **Never treat these as a refusal** is usually the quickest fix.
+- **empty**, **cut off mid-reasoning** or **thinking only, no reply**: turn off **It came back blank**, which governs all three. Worth checking your model is not being cut short by a token limit first.
+
+The Stats tab shows the same reasons as a tally, so if this keeps happening it says which check is responsible over a whole session rather than one reply.
+
 ## "No answer from the word swapper"
 
 You get this after pressing **Swap words in the last reply** or **Swap words in every reply**, when nothing answers within a few seconds. The swap runs in the extension's backend, so this means the backend is not running, or the message never reached it.
