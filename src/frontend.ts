@@ -3283,7 +3283,11 @@ export function setup(ctx: Ctx, opts?: any) {
   const REPLACED_MAX = 8;
   function rememberReplaced(chatId: any, text: string, reason: string) {
     if (!cfg.keepReplaced) return;
-    const body = String(text || "").trim();
+    // Capped the same way the streamed copy is. Eight chats holding whatever a
+    // model felt like producing is a tab's memory spent on something nobody
+    // asked for, and the streamed half of this was already bounded, so the two
+    // halves would have disagreed about how much a reply can be.
+    const body = String(text || "").trim().slice(-STREAM_BUF_MAX);
     if (!body) return;
     const key = chatKey(chatId);
     replaced.set(key, { text: body, reason: reason, at: Date.now() });
@@ -8472,6 +8476,9 @@ export function setup(ctx: Ctx, opts?: any) {
     // preset both end here, and missing one line is a surface left stale.
     const applyAndSave = (): boolean => {
       const storedHere = saveSaved();
+      // Switching it off has to drop what is already held, or "turn it off and
+      // nothing is kept" is only true of replies that had not happened yet.
+      if (!cfg.keepReplaced) replaced.clear();
       saveToAccount();
       syncLiveLog();
       syncFloat();

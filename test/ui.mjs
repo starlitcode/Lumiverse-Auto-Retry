@@ -5060,6 +5060,55 @@ console.log("\nthe reply a retry threw away");
   check("and what it was thrown away for", /short/i.test(kept.shown), kept.shown.slice(0, 120));
   check("switched off, it keeps nothing and says so",
     off.shown.indexOf(REPLY) < 0 && /switched off/i.test(off.shown), off.shown.slice(0, 160));
+
+  // Switching it off after something is already held has to drop that too, or
+  // the promise is only about replies that had not happened yet.
+  const page = await browser.newPage();
+  page.on("pageerror", (e) => errors.push(e.message));
+  await stage(page, '<div id=modal></div><button data-testid="regenerate">R</button><button data-testid="swipe-right">S</button>');
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  const dropped = await page.evaluate(async (REPLY) => {
+    const h = {}, acts = {};
+    window.__setup(
+      { events: { on: (n, f) => { h[n] = f; return () => {}; } },
+        ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+              registerInputBarAction: (o) => { const a = { onClick: (cb) => { a.cb = cb; return () => {}; }, destroy: () => {} }; acts[o.id] = a; return a; } } },
+      { toast: false, retryDelayMs: 5, backoffFactor: 1, maxDelayMs: 5, jitter: false,
+        maxRetries: 4, stuckTimeoutMs: 0, idleTimeoutMs: 0, pauseWhenFailing: false,
+        liveLog: true, retryOnShort: true, minChars: 4000 },
+    );
+    h.GENERATION_STARTED({ chatId: "c1", generationId: "g1" });
+    h.STREAM_TOKEN_RECEIVED({ chatId: "c1", generationId: "g1", content: REPLY });
+    h.GENERATION_ENDED({ chatId: "c1", generationId: "g1", content: REPLY });
+    await new Promise((r) => setTimeout(r, 120));
+    const show = () => {
+      const panel = document.getElementById("__lvRetryLog");
+      const tab = panel && [...panel.querySelectorAll('[role="tab"]')]
+        .find((b) => b.textContent.trim() === "Replaced");
+      if (tab) tab.click();
+      const body = document.getElementById("__lvRetryLogBody");
+      return body ? body.innerText : "";
+    };
+    const held = show();
+    // Turn it off in the panel and press Save, the way a reader would.
+    acts["auto-retry-settings"].cb();
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const row = document.querySelector('[data-ar-row="keepReplaced"]');
+    const box = row && row.querySelector('input[type="checkbox"]');
+    if (box && box.checked) box.click();
+    const save = [...document.querySelectorAll("button")]
+      .find((b) => b.textContent.trim() === "Save");
+    if (save) save.click();
+    await new Promise((r) => setTimeout(r, 80));
+    return { held, after: show(), flipped: !!box && !box.checked, saved: !!save };
+  }, REPLY);
+  await page.close();
+  check("the check really turned it off and saved",
+    dropped.flipped && dropped.saved, dropped);
+  check("it was holding the reply first", dropped.held.indexOf(REPLY) >= 0, dropped.held.slice(0, 120));
+  check("and switching it off drops what was already held",
+    dropped.after.indexOf(REPLY) < 0, dropped.after.slice(0, 160));
   check("no console errors", errors.length === 0, errors);
 }
 
