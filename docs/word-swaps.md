@@ -101,6 +101,12 @@ There is no undo. A swap rewrites the saved reply, and the wording it replaced i
 
 That is worth knowing before you turn automatic swapping on. If you would rather see each edit coming, turn on **Ask before editing a reply**, which puts a confirmation in front of every swap. Trying your rules on one reply with the **swap words now** button, rather than switching automatic swapping on straight away, is the easy way to check a new rule does what you meant.
 
+## Swaps and prompt caching
+
+A swap rewrites a message that is saved in your chat, so it is part of every prompt built from that chat afterwards. If your provider caches prompts, it reuses everything up to the first thing that changed, which means a swapped message makes itself and everything after it count as new, once.
+
+Swapping the newest reply costs almost nothing, since there is nothing after it yet. **Swap words in every reply** over a long chat is the expensive one: it changes the earliest reply it matches, so the reuse starts from there instead. It is a one-off, not a per-turn cost, and it does not apply at all if your provider does not cache.
+
 ## Working alongside other extensions
 
 If another extension also rewrites replies, the two can undo each other. [Hone](https://github.com/AMousePad/Hone) with **Auto-Refine AI** on is the case this was built for: it runs a second pass over each reply and saves the result a few seconds after the reply lands.

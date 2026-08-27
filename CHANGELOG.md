@@ -8,6 +8,14 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 4.24.2
+
+_2026-08-27_
+
+### Changed
+
+- **Where a refusal note goes says what it costs if your provider caches prompts.** Caching works from the front, so a note added at the very start makes the whole chat count as new for that turn, while the default, after the last message, leaves the cached part alone. The option's description says so now, and the [refusal detection](docs/detection.md) and [word swaps](docs/word-swaps.md) pages cover it, including the one thing that carries a lasting cost: a swap rewrites a saved message, so a whole-chat swap moves where the reuse starts, once.
+
 ## 4.24.1
 
 _2026-08-27_

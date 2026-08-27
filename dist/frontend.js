@@ -110,7 +110,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "4.24.1";
+const VERSION = "4.24.2";
 // The one address the extension ever points at, used by the warning in front of
 // the crisis-support check. Pinned to the released branch rather than to a tag,
 // so an old install still opens the page as it stands today.
@@ -649,7 +649,7 @@ const SCHEMA = [
                     { value: "before", label: "Before the last message" },
                     { value: "start", label: "At the very start" },
                 ],
-                hint: "Whichever notes are due go in together as one block. After the last message puts it at the end, right before the point the reply continues from. Before the last message puts it one place earlier, so the newest line is still last. At the very start puts it ahead of everything, with the setup.",
+                hint: "Whichever notes are due go in together as one block. After the last message puts it at the end, right before the point the reply continues from. Before the last message puts it one place earlier, so the newest line is still last. At the very start puts it ahead of everything, with the setup, and is the one to avoid if your provider caches prompts: caching works from the front, so anything added at the start makes the whole chat count as new that turn, while a note at the end leaves the cached part alone.",
             },
             {
                 key: "refusalNoteStrictType",

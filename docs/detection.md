@@ -258,6 +258,18 @@ A set carries the notes themselves and **Where the notes go**, and nothing else.
 
 Presets are saved to your account, so they follow you to other devices.
 
+### Where the note goes, and prompt caching
+
+If your provider caches prompts, it caches from the front: it reuses everything up to the first thing that changed, and anything after that counts as new. Where a note goes decides how much of that reuse survives.
+
+- **After the last message**, the default, adds the note at the very end. Everything before it is unchanged, so the cached part is still cached. This costs nothing.
+- **Before the last message** puts it one place earlier, so the last message and the note count as new. That is one message's worth.
+- **At the very start** puts it ahead of everything, so the whole chat counts as new for that turn.
+
+The note is only there for the one retry and is thrown away afterwards, so the turn after it is back to the prompt your provider already has. That holds whichever placement you pick.
+
+Retrying on its own is the cheap case: the same request goes out again unchanged, which is exactly what a cache is for.
+
 ## Trying it on a reply
 
 At the bottom of the refusal tuning section there is a box to paste a reply into, and a **Check this text** button. It tells you whether that reply would count as a refusal and what decided it: which phrase list matched, which built-in pattern fired, or why it was passed over (too long, on your whitelist, the built-ins switched off).
