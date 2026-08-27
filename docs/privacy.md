@@ -111,7 +111,9 @@ Two more things are written, and both stay in this browser:
 
 Neither is synced and neither is included in an export, since a position on one screen and an id on one account mean nothing on another. That is everything written anywhere.
 
-Separately it keeps the last twenty lines of what it did, and a few counters for the session: replies that came back fine, retries fired, what they fired for, how many happened in each chat, named where a name was available, refusal notes sent and skipped, and how many words your swaps changed in each chat. The per-chat counts are kept against the chat id, never the words themselves. That is all in memory, so the Copy debug info button has something to report. Both die with the tab. Neither is written to disk and neither leaves your device.
+Separately it keeps the last twenty lines of what it did, and a few counters for the session: replies that came back fine, retries fired, what they fired for, how many happened in each chat, named where a name was available, refusal notes sent and skipped, and how many words your swaps changed in each chat. The per-chat counts are kept against the chat id, never the words themselves. That is all in memory, so the Copy debug info button has something to report. Both die with the tab.
+
+**Keep the reply a retry replaced** adds one more thing to that list, and it is the only one that holds a whole reply. When a retry throws a reply away, the text of that reply is kept for the chat it came from, so you can read it back on the **Replaced** tab if the retry was a mistake. At most eight chats' worth is kept, the newest replacing the oldest. It is never written to disk, never synced, never sent anywhere, and it goes when the tab closes. Turn it off under **How it retries** and nothing is kept. Neither is written to disk and neither leaves your device.
 
 The on-screen panel's **Prompt** tab is the one part that holds more than that, and only once you have asked it to. Opening that tab asks the extension to keep a copy of the prompt on its way to the model, which is the text of your chat, so that it can show it to you. Until you open it, nothing is kept: someone who uses the panel for its log and never goes near this tab is not paying for it.
 
@@ -123,7 +125,7 @@ Nothing in this section leaves your device by itself. All three are buttons that
 
 The Copy debug info button gathers your settings, your button selectors, your browser string, the session counters, and that recent activity log. The activity log records what the extension saw, so it can contain short fragments of a reply. Read what you copied before pasting it somewhere public, and untick any section you would rather keep to yourself. The tick boxes are there for exactly that.
 
-The **Copy** button on the on-screen panel is the same thing in miniature, and it takes everything the tab is showing. On the Log tab that is the whole activity log in one tap, fragments included, and on the Prompt tab the entire prompt, which is most of your chat. The Stats tab is the safe one: counters and the names of what it retried for, no text from any reply.
+The **Copy** button on the on-screen panel is the same thing in miniature, and it takes everything the tab is showing. On the **Replaced** tab that is a whole reply. On the Log tab that is the whole activity log in one tap, fragments included, and on the Prompt tab the entire prompt, which is most of your chat. The Stats tab is the safe one: counters and the names of what it retried for, no text from any reply.
 
 It is there because selecting text by hand on a phone is awkward, and the same advice applies before you paste any of it anywhere.
 

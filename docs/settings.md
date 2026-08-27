@@ -89,7 +89,7 @@ Every section header is a proper button, so the closed sections open with Enter 
 
 ## The on-screen panel
 
-One switch, **Show the on-screen panel**, turns it on. It has three tabs, and **Where that panel goes** decides where it appears. Both choices are the same panel with the same tabs; only the frame around it differs.
+One switch, **Show the on-screen panel**, turns it on. It has four tabs, and **Where that panel goes** decides where it appears. Both choices are the same panel with the same tabs; only the frame around it differs.
 
 **Floating over the chat** is the original: a small box in the corner. Drag the header to move it, drag the bottom-right corner to resize it. Both work with a mouse and with a finger.
 
@@ -103,9 +103,17 @@ Changing this moves the panel as you pick, before you save. Closing the settings
 
 To open it: hold the floating button and choose **Open the Auto Retry panel**. With the floating button turned off, that button is in the **Extras** menu instead, next to the settings button, so there is always exactly one way in. On a computer, **Ctrl+K** and typing `Auto Retry` does the same. None of them is offered while the panel is floating, because it is already on screen. If your version of Lumiverse is too old to open the floating button's menu, the button stays in the Extras menu, since there would be no menu to put it in.
 
+### The Replaced tab
+
+The reply the last retry in this chat threw away, with what it was thrown away for and how long ago. It is there for the case where the retry was a mistake and you want the old reply back: read it, or press **Copy** to take it.
+
+Retrying by adding a reroll already leaves the old reply in the chat to swipe back to, but a reroll is not a safe place to leave it. You can tidy your rerolls away, and an extension whose job is tidying them will. [Swipe Scrubber](https://codeberg.org/targren/SwipeScrubber) is the case this was built for: it removes every reroll but the current one, and its per-message button and **Scrub all** take the newest message too. This tab is the copy nothing outside your browser tab can reach.
+
+It holds one reply per chat, for the last eight chats. **Press Clear** to drop the one you are looking at. Turn the whole thing off with **Keep the reply a retry replaced**, under How it retries.
+
 ### The line under the tabs
 
-It says what is happening this second, with a dot beside it. It sits above all three tabs because the answer is the same whichever one you are reading, and because none of them answered it: the Log says what already happened, the Stats say what has happened overall.
+It says what is happening this second, with a dot beside it. It sits above all four tabs because the answer is the same whichever one you are reading, and because none of them answered it: the Log says what already happened, the Stats say what has happened overall.
 
 The dot is dim and flat when Auto Retry is off or paused, lit and still when it is on with nothing to do, and pulsing while something is actually happening, so a glance at the corner answers the question without reading the line. The pulse is dropped if your system asks for less movement; the glow stays.
 
@@ -165,6 +173,7 @@ The same options live in the CONFIG block at the top of `src/frontend.ts` and `d
 | jitter | true | Nudges each wait randomly so retries don't all land at once. |
 | rateLimitDelayMs | 15000 | Floor wait when the server says it's busy. Most shared tiers meter per minute, so a shorter wait usually spends a try hitting the same limit. |
 | retryByNewReroll | true | On: a retry clicks the next / swipe button, adding a new reroll and keeping the existing ones, so a reply it was wrong to retry can be swiped back to. Off: a retry redoes the reply in place via the regenerate button, which on some builds clears the other rerolls. Applies to every retry reason. The other button is the fallback. |
+| keepReplaced | true | Keep the last reply a retry threw away in this chat, so it can be read back or copied from the Replaced tab of the on-screen panel. Held in the tab's memory only: never written down, never sent anywhere, gone when the tab closes. |
 | stuckTimeoutMs | 180000 | Started, then nothing arrived and it never finished, within this. 0 disables. |
 | idleTimeoutMs | 90000 | Tokens flowed then stopped for this long. 0 disables. |
 | retryOnError | true | Retry provider errors. |

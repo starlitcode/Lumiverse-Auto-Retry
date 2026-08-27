@@ -8,6 +8,15 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 4.24.0
+
+_2026-08-26_
+
+### Added
+
+- **The reply a retry threw away is kept, so you can get it back.** A new **Replaced** tab on the on-screen panel holds the last reply a retry replaced in this chat, with what it was replaced for and how long ago. Read it, or press Copy to take it. Retrying by adding a reroll leaves the old reply in the chat to swipe back to, but a reroll is not a safe place to leave it: you can tidy your rerolls away, and an extension whose job is tidying them will, including on the newest message. This copy is the extension's own. It is held in your browser tab and nowhere else, never written down and never sent anywhere, and it goes when you close the tab. One reply per chat for the last eight chats. Turn it off with **Keep the reply a retry replaced**, under How it retries.
+- **The panel's header wraps instead of overflowing.** Three tabs plus Copy and Clear fitted the narrowest a panel can be, and a fourth does not. On a narrow sidebar or a phone the header now becomes two rows rather than pushing Clear off the edge with nothing to scroll it back.
+
 ## 4.23.0
 
 _2026-08-26_

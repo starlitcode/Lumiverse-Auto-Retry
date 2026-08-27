@@ -719,8 +719,8 @@ console.log("\nthe panel in the drawer");
   check("it registers a drawer tab", out.inDrawer.registered && out.inDrawer.id === "auto-retry-panel", out.inDrawer);
   check("with a name, and words to find it by in the palette",
     out.inDrawer.named && out.inDrawer.findable && out.inDrawer.hasIcon, out.inDrawer);
-  check("the three tabs are in it",
-    JSON.stringify(out.inDrawer.tabs) === JSON.stringify(["Log", "Prompt", "Stats"]), out.inDrawer);
+  check("every tab is in it",
+    JSON.stringify(out.inDrawer.tabs) === JSON.stringify(["Log", "Prompt", "Stats", "Replaced"]), out.inDrawer);
   check("with the status line and the body", out.inDrawer.hasStatus && out.inDrawer.hasBody, out.inDrawer);
   check("its header does not offer to be dragged", out.inDrawer.draggableHeader === false, out.inDrawer);
   check("and nothing is floating over the chat as well", out.inDrawer.floatingToo === false, out.inDrawer);
@@ -5003,6 +5003,66 @@ console.log("\nthe per-chat switch finds the chat");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- the reply a retry threw away is still gettable ----
+// Keeping the old reply as a reroll is protection that something else can
+// undo: the reader can tidy their rerolls away, and an extension whose whole
+// job is tidying them will. So the extension keeps its own copy, which nothing
+// outside this tab can reach, and puts it on a tab of its own.
+console.log("\nthe reply a retry threw away");
+{
+  const errors = [];
+  const REPLY = "She set the lantern down on the step and looked back at the road one last time.";
+  const run = async (opts) => {
+    const page = await browser.newPage();
+    page.on("pageerror", (e) => errors.push(e.message));
+    await stage(page, '<div id=modal></div><button data-testid="regenerate">R</button><button data-testid="swipe-right">S</button>');
+    await page.addScriptTag({ content: SOURCE, type: "module" });
+    await page.waitForFunction(() => !!window.__setup);
+    const res = await page.evaluate(async ([opts, REPLY]) => {
+      const h = {}, acts = {};
+      window.__setup(
+        { events: { on: (n, f) => { h[n] = f; return () => {}; } },
+          ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+                registerInputBarAction: (o) => { const a = { onClick: (cb) => { a.cb = cb; return () => {}; }, destroy: () => {} }; acts[o.id] = a; return a; } } },
+        Object.assign({ toast: false, retryDelayMs: 5, backoffFactor: 1, maxDelayMs: 5, jitter: false,
+          maxRetries: 4, stuckTimeoutMs: 0, idleTimeoutMs: 0, pauseWhenFailing: false,
+          liveLog: true, retryOnShort: true, minChars: 4000 }, opts),
+      );
+      // A reply that is fine to read but too short for the reader's setting, so
+      // it is thrown away for a reason that names itself.
+      h.GENERATION_STARTED({ chatId: "c1", generationId: "g1" });
+      h.STREAM_TOKEN_RECEIVED({ chatId: "c1", generationId: "g1", content: REPLY });
+      h.GENERATION_ENDED({ chatId: "c1", generationId: "g1", content: REPLY });
+      await new Promise((r) => setTimeout(r, 120));
+
+      const panel = document.getElementById("__lvRetryLog");
+      const tab = panel && [...panel.querySelectorAll('[role="tab"]')]
+        .find((b) => b.textContent.trim() === "Replaced");
+      if (tab) tab.click();
+      await new Promise((r) => setTimeout(r, 60));
+      const body = document.getElementById("__lvRetryLogBody");
+      return {
+        hasTab: !!tab,
+        shown: body ? body.innerText : "",
+      };
+    }, [opts, REPLY]);
+    await page.close();
+    return res;
+  };
+
+  const kept = await run({});
+  const off = await run({ keepReplaced: false });
+
+  check("the panel has a tab for it", kept.hasTab === true, kept);
+  check("the reply that was thrown away is on it", kept.shown.indexOf(REPLY) >= 0, kept.shown.slice(0, 120));
+  // Why it went, so a reader deciding whether they want it back can see what
+  // the extension objected to.
+  check("and what it was thrown away for", /short/i.test(kept.shown), kept.shown.slice(0, 120));
+  check("switched off, it keeps nothing and says so",
+    off.shown.indexOf(REPLY) < 0 && /switched off/i.test(off.shown), off.shown.slice(0, 160));
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- the swipe default reaches people who already had settings ----
 // Saving writes every setting, at its default or not, so a copy saved before
 // swiping became the preferred retry pins the old behaviour. Anyone who had
@@ -7734,7 +7794,7 @@ console.log("\nprompt viewer");
   });
   await page.close();
   check("one switch opens the panel", out.opened, out);
-  check("with all three views in it", out.tabs.join(",") === "Log,Prompt,Stats", out.tabs);
+  check("with every view in it", out.tabs.join(",") === "Log,Prompt,Stats,Replaced", out.tabs);
   check("and it opens on the log", out.landedOn === "true", out.landedOn);
   // The reason there is no second setting: the cost is only paid while somebody
   // is actually looking at a prompt.

@@ -121,7 +121,7 @@ const STREAM_BUF_MAX = 200000;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "4.23.0";
+const VERSION = "4.24.0";
 
 // The one address the extension ever points at, used by the warning in front of
 // the crisis-support check. Pinned to the released branch rather than to a tag,
@@ -170,6 +170,11 @@ const CONFIG = {
   // good reply with it and there is no way back. A swipe adds a reroll beside
   // it, so the reply it was wrong about is still there to swipe back to.
   retryByNewReroll: true,
+  // Kept because the reroll is not a safe place to leave it. Anything that
+  // tidies a chat can remove a reroll, and one tap on a housekeeping
+  // extension's button takes the reply Auto Retry was holding on to with it.
+  // This copy is the extension's own, in memory, and nothing else can reach it.
+  keepReplaced: true,
 
   // watchdogs. Both are set long. A watchdog that fires early on a slow but
   // healthy model is worse than one that fires late: it throws away a reply
@@ -280,7 +285,7 @@ const CONFIG = {
 
   toast: true,
   // The on-screen panel: what the extension did, what went to the model, and
-  // what it has been doing overall, as three tabs of one thing. Handy on
+  // what it has been doing overall, as four tabs of one thing. Handy on
   // mobile, where there is no console to open. Off by default.
   //
   // One setting, not two. The prompt is only captured while its tab is actually
@@ -454,7 +459,7 @@ const SCHEMA: Group[] = [
         key: "liveLog",
         label: "Show the on-screen panel",
         type: "bool",
-        hint: "A panel with three tabs. Log shows what the extension is doing as it happens: generations, retries and why, finishes. Prompt shows the whole prompt that went to the model, every message in order, with your notes marked where they were inserted. Stats shows what it has been doing overall and what it keeps retrying for. Useful without opening the console, especially on a phone. The prompt is only captured while its tab is open, and only ever on your device.",
+        hint: "A panel with four tabs. Log shows what the extension is doing as it happens: generations, retries and why, finishes. Prompt shows the whole prompt that went to the model, every message in order, with your notes marked where they were inserted. Stats shows what it has been doing overall and what it keeps retrying for. Replaced holds the last reply a retry threw away in this chat, in case it was a mistake. Useful without opening the console, especially on a phone. The prompt is only captured while its tab is open, and only ever on your device.",
       },
       {
         key: "panelHome",
@@ -555,6 +560,12 @@ const SCHEMA: Group[] = [
         label: "Add a little randomness to waits",
         type: "bool",
         hint: "Nudges each wait by a random amount so retries don't all hit the server at the same instant. Best left on.",
+      },
+      {
+        key: "keepReplaced",
+        label: "Keep the reply a retry replaced",
+        type: "bool",
+        hint: "Holds on to the last reply a retry threw away in this chat, so you can read it back or copy it from the Replaced tab of the on-screen panel if the retry was a mistake. Kept in this tab's memory only: never written down, never sent anywhere, and gone when you close the tab. A reroll can be tidied away by you or by another extension, so this is the copy nothing else can reach.",
       },
       {
         key: "retryByNewReroll",
@@ -3247,8 +3258,8 @@ export function setup(ctx: Ctx, opts?: any) {
     } catch (_) { /* storage full or blocked: the position is not worth an error */ }
   }
 
-  let liveTab: "log" | "prompt" | "stats" =
-    (layout.tab as "log" | "prompt" | "stats") || "log";
+  let liveTab: "log" | "prompt" | "stats" | "replaced" =
+    (layout.tab as "log" | "prompt" | "stats" | "replaced") || "log";
   // How the Prompt tab draws the prompt. Rendered is the panel as it has always
   // looked: a row per message, its role, its size, and whether it came from the
   // chat or was wrapped around it. Raw is the same prompt with all of that taken
@@ -3263,6 +3274,22 @@ export function setup(ctx: Ctx, opts?: any) {
   // more than an id on a row that asks you to switch something off: "this chat"
   // is right but says nothing, and on a phone you may not have the header in
   // view. Empty until the chats and characters permissions are both granted.
+  // The last reply a retry threw away, per chat. Held here rather than trusted
+  // to the reroll it was left on: a reroll can be tidied away, by the reader or
+  // by an extension whose job is tidying them, and then the reply a retry was
+  // wrong about is gone for good. In memory, never written down, and dropped
+  // with the chat it belongs to.
+  const replaced = new Map<string, { text: string; reason: string; at: number }>();
+  const REPLACED_MAX = 8;
+  function rememberReplaced(chatId: any, text: string, reason: string) {
+    if (!cfg.keepReplaced) return;
+    const body = String(text || "").trim();
+    if (!body) return;
+    const key = chatKey(chatId);
+    replaced.set(key, { text: body, reason: reason, at: Date.now() });
+    while (replaced.size > REPLACED_MAX)
+      replaced.delete(replaced.keys().next().value as string);
+  }
   const chatNames = new Map<string, string>();
   // Chats the name has already been asked for, whether or not an answer came
   // back. A host that will not name a chat answers with nothing, and without
@@ -3298,7 +3325,7 @@ export function setup(ctx: Ctx, opts?: any) {
 
   // The one place the tab changes, so what is on screen and what the backend
   // has been asked for cannot come apart.
-  function showTab(id: "log" | "prompt" | "stats") {
+  function showTab(id: "log" | "prompt" | "stats" | "replaced") {
     liveTab = id;
     layout.tab = id;
     saveLayout();
@@ -3333,6 +3360,7 @@ export function setup(ctx: Ctx, opts?: any) {
     }
     if (liveTab === "prompt") return renderPromptView();
     if (liveTab === "stats") return renderStatsView();
+    if (liveTab === "replaced") return renderReplacedView();
     liveLogBody.style.whiteSpace = "pre-wrap";
     liveLogBody.textContent = eventLog.length
       ? eventLog.join("\n")
@@ -3580,6 +3608,45 @@ export function setup(ctx: Ctx, opts?: any) {
     }
   }
 
+  // The reply the last retry in this chat threw away. Its own tab because it is
+  // the one thing here a reader might want back rather than want to read: the
+  // log says what happened, this says what it cost.
+  function replacedHere(): { text: string; reason: string; at: number } | null {
+    return replaced.get(chatKey(lastChatId)) || null;
+  }
+  function replacedAsText(): string {
+    const r = replacedHere();
+    return r ? r.text : "(nothing replaced yet)";
+  }
+  function renderReplacedView() {
+    const body = liveLogBody;
+    if (!body) return;
+    body.replaceChildren();
+    body.style.whiteSpace = "pre-wrap";
+    if (!cfg.keepReplaced) {
+      body.textContent =
+        "Keeping replaced replies is switched off, under How it retries. With it on, the reply a retry throws away is kept here until the tab is closed.";
+      return;
+    }
+    const r = replacedHere();
+    if (!r) {
+      body.textContent =
+        "Nothing has been replaced in this chat yet. When a retry throws a reply away, it turns up here so you can read it back or copy it.";
+      return;
+    }
+    const head = document.createElement("div");
+    head.style.cssText =
+      "font-size:12px;margin-bottom:6px;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+    // Why it went and how long ago, because a reply you are deciding whether to
+    // put back is easier to judge knowing what the extension objected to.
+    head.textContent =
+      "Replaced " + sayTime(Date.now() - r.at) + " ago, for: " + r.reason;
+    const text = document.createElement("div");
+    text.textContent = r.text;
+    body.appendChild(head);
+    body.appendChild(text);
+  }
+
   function renderPromptView() {
     const body = liveLogBody;
     if (!body) return;
@@ -3759,12 +3826,13 @@ export function setup(ctx: Ctx, opts?: any) {
   } {
     const head = document.createElement("div");
     head.style.cssText =
-      // One row, not a wrapping one. Measured rather than assumed: the tabs,
-      // Copy and Clear need 195px between them, and that does not move with the
-      // host's text size because everything in here sets its own in pixels. The
-      // floating panel cannot be resized below 200, so the row always fits, and
-      // a wrap that never happens is a rule that reads as if it might.
-      "display:flex;align-items:center;gap:8px;padding:7px 9px;border-bottom:1px solid var(--lumiverse-border,rgba(255,255,255,.12));font-weight:600;user-select:none;" +
+      // Wraps rather than overflowing. Three tabs plus Copy and Clear fitted
+      // the 200px a floating panel can be shrunk to, and a fourth does not, so
+      // the row that was always one row is now a row that becomes two when it
+      // has to. Overflowing instead would push Clear off the edge of a phone
+      // with nothing to scroll it back into view, and the panel exists for the
+      // phone. The body below gives up the height.
+      "display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:7px 9px;border-bottom:1px solid var(--lumiverse-border,rgba(255,255,255,.12));font-weight:600;user-select:none;" +
       // The move cursor and the pointer-event opt-out are the drag handle's,
       // and the drawer's header is not one: the host places that panel, so a
       // header offering to be dragged there would be a lie.
@@ -3774,10 +3842,13 @@ export function setup(ctx: Ctx, opts?: any) {
     // both are wanted in the same place.
     const tabs = document.createElement("div");
     tabs.setAttribute("role", "tablist");
-    tabs.style.cssText = "display:flex;gap:4px;flex:1;min-width:0";
-    const ORDER: Array<"log" | "prompt" | "stats"> = ["log", "prompt", "stats"];
+    // Wraps too. The header wrapping does nothing on its own while the strip
+    // inside it is one unbreakable row: the tabs would overflow this box rather
+    // than the header, and the last one would sit off the edge.
+    tabs.style.cssText = "display:flex;flex-wrap:wrap;gap:4px;flex:1;min-width:0";
+    const ORDER: Array<"log" | "prompt" | "stats" | "replaced"> = ["log", "prompt", "stats", "replaced"];
     const tabBtns: Record<string, HTMLButtonElement> = {};
-    const mkTab = (id: "log" | "prompt" | "stats", label: string) => {
+    const mkTab = (id: "log" | "prompt" | "stats" | "replaced", label: string) => {
       const b = document.createElement("button");
       b.type = "button";
       b.textContent = label;
@@ -3801,6 +3872,7 @@ export function setup(ctx: Ctx, opts?: any) {
     mkTab("log", "Log");
     mkTab("prompt", "Prompt");
     mkTab("stats", "Stats");
+    mkTab("replaced", "Replaced");
     // Left and right move between tabs, which is how a tab strip is expected to
     // behave for anyone driving this from a keyboard.
     tabs.addEventListener("keydown", (e: any) => {
@@ -3932,9 +4004,11 @@ export function setup(ctx: Ctx, opts?: any) {
           ? promptAsText()
           : liveTab === "stats"
             ? statsAsText()
-            : eventLog.length
-              ? eventLog.join("\n")
-              : "(nothing yet)",
+            : liveTab === "replaced"
+              ? replacedAsText()
+              : eventLog.length
+                ? eventLog.join("\n")
+                : "(nothing yet)",
       );
       copyBtn.textContent = ok ? "Copied" : "Can't";
       setTimeout(() => {
@@ -3950,6 +4024,7 @@ export function setup(ctx: Ctx, opts?: any) {
         // permission was missing, about a reply you had just discarded.
         promptNeverArrived = false;
       }
+      else if (liveTab === "replaced") replaced.delete(chatKey(lastChatId));
       else if (liveTab === "stats") {
         // Counting starts again from now, so the clock resets with the counts
         // or the rate below them would be measured against the wrong window.
@@ -3966,7 +4041,7 @@ export function setup(ctx: Ctx, opts?: any) {
     });
     head.appendChild(copyBtn);
     head.appendChild(clearBtn);
-    // A line saying what is happening this second, above all three tabs
+    // A line saying what is happening this second, above all four tabs
     // because the answer is the same whichever one you are reading. The Log
     // tells you what already happened and the Stats tell you what has happened
     // overall; neither answers "is it doing something right now", which is the
@@ -5213,6 +5288,7 @@ export function setup(ctx: Ctx, opts?: any) {
         "jitter",
         "rateLimitDelayMs",
         "retryByNewReroll",
+        "keepReplaced",
         "stuckTimeoutMs",
         "idleTimeoutMs",
         "retryOnError",
@@ -5789,6 +5865,10 @@ export function setup(ctx: Ctx, opts?: any) {
       // asked for, which clears the tries and lets the same reply be re-rolled
       // past the cap.
       retryClickAt: 0,
+      // The text of the reply this chat is about to have re-rolled, so the one
+      // place that commits to a retry can keep a copy without every reason for
+      // retrying having to pass it along.
+      lastText: "",
       genId: null,
       startTimer: null,
       idleTimer: null,
@@ -6879,6 +6959,10 @@ export function setup(ctx: Ctx, opts?: any) {
       }
       return;
     }
+    // Past every guard, so this is a retry that is really happening and the
+    // reply on screen is really being replaced. Recorded here rather than at
+    // each reason for retrying, so a reason added later cannot forget to.
+    rememberReplaced(chatId, s.lastText, reason);
     s.attempts += 1;
     stats.retries += 1;
     stats.reasons[reason] = (stats.reasons[reason] || 0) + 1;
@@ -6990,6 +7074,9 @@ export function setup(ctx: Ctx, opts?: any) {
 
   function abortAndRetry(chatId: string, reason: string) {
     const s = st(chatId);
+    // Whatever had streamed before it went quiet, which is what the reader is
+    // looking at and what stopping the generation is about to leave behind.
+    s.lastText = String(s.buf || "");
     clearTimers(s);
     if (s.genId != null) {
       s.ignored.add(s.genId);
@@ -7412,6 +7499,7 @@ export function setup(ctx: Ctx, opts?: any) {
     const hasContentField = typeof p.content === "string";
     const ended = hasContentField ? String(p.content).trim() : "";
     const content = ended.length ? ended : streamed.trim();
+    s.lastText = content;
     // Empty only when the payload says so, or when nothing streamed either. A
     // missing field plus tokens that carried no readable text is not a verdict,
     // so it is left alone rather than re-rolled on a guess.
