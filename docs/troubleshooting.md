@@ -39,11 +39,13 @@ A long chat is not the cause. The backend says it has the request as soon as it 
 
 ## "No chat is open"
 
-The swap buttons live in the Extras menu or the floating button's menu, and both are reachable from the chat list with nothing open. Pressing one there says **No chat is open. Open a chat and try again.** It asks Lumiverse which chat you are in first, so with the `chats` permission granted it knows the difference between the home screen and a chat, and will not edit the chat you were last in by mistake.
+The swap buttons live in the Extras menu or the floating button's menu, and both are reachable from the chat list with nothing open. Pressing one there says **No chat is open. Open a chat and try again.**, and will not edit the chat you were last in by mistake.
 
-Without that permission it cannot ask, and falls back to the last chat it saw you in. That is the one case where a swap from the home screen still lands somewhere, and it is the same fallback the rest of the extension runs on when it is not allowed to look.
+How it knows is worth saying, because one of the two answers is not as good as it looks. Lumiverse can be asked which chat is open, but that question is answered on the server, and what comes back is the most recent chat on your account rather than the page in front of you. On the home screen it names the chat you just left. What actually tells the two apart is the address in your browser: while you are in a chat, the address carries that chat's id, and when it stops carrying it you are somewhere else. Auto Retry checks that a few times a second while it is holding a chat, and stops as soon as it is not.
 
-The **Turn off here** row says the same thing for the same reason. Outside a chat it is greyed out and reads **No chat is open**, and with the `chats` permission granted that is checked each time the settings panel opens rather than taken from the last chat you were in.
+If your Lumiverse uses addresses that do not carry the chat id, that signal is not there and nothing tries to guess. The extension then falls back to the last chat it saw you in, which is what it has always done when it cannot look.
+
+The **Turn off here** row works from the same answer. Outside a chat it is greyed out and reads **No chat is open**, rather than going on naming the chat you left.
 
 ## When Lumiverse does not say which chat you are in
 

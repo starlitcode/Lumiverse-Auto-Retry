@@ -55,6 +55,8 @@ Everything that shows whether Auto Retry is running says so together: that butto
 
 Outside a chat, on the home screen or the character browser, the button is greyed out and the row says **No chat is open**. There is nothing to switch there, and the row will not go on naming the last chat you were in.
 
+Walking out of a chat is noticed from your browser's address, which carries the chat's id while you are in one. Lumiverse can also be asked outright, but that question is answered on the server and comes back with the most recent chat on your account, which on the home screen is the chat you just left, so the address gets the last word. On a Lumiverse whose addresses do not carry the chat id, the row waits to be told instead, as below.
+
 If the button is greyed out while you are in a chat, it has not been told which chat that is yet. With the `chats` permission granted it asks outright and this clears on its own. Without it, it waits to be told: a reply arriving, a message sent, or switching away and back all do it. The case where you will see it waiting is updating the extension without leaving the chat, since nothing re-renders and so nothing announces where you are.
 
 It is written down in your browser, so it survives a reload. It is not a setting: it is a list of chat ids, which would mean nothing on another account, so it is not synced and not included in an export.

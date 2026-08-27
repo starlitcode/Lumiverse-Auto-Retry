@@ -121,7 +121,7 @@ const STREAM_BUF_MAX = 200000;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "4.24.3";
+const VERSION = "4.24.4";
 
 // The one address the extension ever points at, used by the warning in front of
 // the crisis-support check. Pinned to the released branch rather than to a tag,
@@ -2849,6 +2849,95 @@ export function setup(ctx: Ctx, opts?: any) {
   // cannot be believed while a chat is known, whoever forgot to clear it.
   const outsideAnyChat = (): boolean => noChatOpen && lastChatId == null;
   let lastMessageId: any = null;
+
+  // ---- knowing when the chat has been left ----
+  // Walking out to the home screen is the one move nothing reliably announces.
+  // CHAT_SWITCHED carries a null id for it, but a build that emits only
+  // CHAT_CHANGED never says anything, and asking the backend does not help:
+  // spindle.chats.getActive answers with the account's most recent chat, which
+  // on the home screen is the chat just left. So the panel went on naming that
+  // chat and its character, and stayed that way until the user walked back in.
+  //
+  // The address bar is the only thing in reach that knows, and it is read
+  // rather than parsed: no assumption about the shape of a Lumiverse URL, only
+  // whether the id being held appears in it. A build whose addresses never
+  // carry the id leaves urlNamesChats false and nothing here does anything.
+  const URL_TICK_MS = 700;
+  // An id short enough to turn up inside an unrelated address by accident is
+  // not evidence of anything, and a wrong answer here throws away the chat the
+  // user is sitting in. Chat ids are long; a counter is not.
+  const URL_ID_MIN = 8;
+  // Set the first time the address is seen carrying the chat the extension is
+  // holding, which is what earns the address the right to say the chat is gone.
+  // Sticky, because the answer is about the build rather than the moment.
+  let urlNamesChats = false;
+  let chatUrlTimer: any = null;
+  const hereUrl = (): string => {
+    try {
+      return String(location.href || "");
+    } catch (_) {
+      return "";
+    }
+  };
+  const urlHolds = (id: any): boolean => {
+    const s = id == null ? "" : String(id);
+    if (s.length < URL_ID_MIN) return false;
+    return hereUrl().indexOf(s) >= 0;
+  };
+  // The address bar naming a different chat than the one in hand. Anything
+  // acting on an id it did not get from the browser asks this first, since the
+  // wrong answer edits or describes a chat nobody is looking at.
+  const urlSaysGone = (id: any): boolean => urlNamesChats && !urlHolds(id);
+  // Everything that describes the chat you are in, told that you are not in one
+  // any more. Both the backend answering "none" and the address bar losing the
+  // id come through here, so the two cannot end up clearing different things.
+  function leftTheChat() {
+    noChatOpen = true;
+    lastChatId = null;
+    lastMessageId = null;
+    stopChatUrlWatch();
+    if (chatSwitchPaint) {
+      try {
+        chatSwitchPaint();
+      } catch (_) {}
+    }
+    paintFloat();
+    syncMasterNote();
+    syncToggleAction();
+    paintNow();
+  }
+  // Runs only while a chat is being held, which is the only time there is
+  // anything to go stale. Two string comparisons a tick, and it stops itself
+  // the moment the chat is gone.
+  function startChatUrlWatch() {
+    // Read here and not only on the tick. This runs the moment the browser
+    // says which chat is open, which is the one moment the address is certain
+    // to agree; the first tick can land after the user has already moved on,
+    // and by then an address without the id proves nothing.
+    if (urlHolds(lastChatId)) urlNamesChats = true;
+    if (chatUrlTimer) return;
+    chatUrlTimer = setInterval(() => {
+      if (lastChatId == null) {
+        stopChatUrlWatch();
+        return;
+      }
+      if (urlHolds(lastChatId)) {
+        urlNamesChats = true;
+        return;
+      }
+      if (!urlNamesChats) return;
+      leftTheChat();
+      // Moving from one chat straight to another looks the same from here as
+      // walking out, so this asks where we ended up. A stale answer is turned
+      // away by urlSaysGone where it arrives.
+      askActiveChat();
+    }, URL_TICK_MS);
+  }
+  function stopChatUrlWatch() {
+    if (!chatUrlTimer) return;
+    clearInterval(chatUrlTimer);
+    chatUrlTimer = null;
+  }
   // Every Extras button that can come and go, keyed by name. Each one is stored
   // as its registration plus the function that removes its click handler.
   //
@@ -2954,8 +3043,15 @@ export function setup(ctx: Ctx, opts?: any) {
       showToast("No chat is open. Open a chat and try again.");
       return null;
     }
-    // It looked and named one. Fresher than anything held here.
-    if (open.answered && open.resolved && open.chatId) return open.chatId;
+    // It looked and named one. Fresher than anything held here, unless the
+    // address bar says that chat is behind us: the backend is answering with
+    // the account's most recent chat, and on the home screen that is the one
+    // just left. Swapping there edits saved replies nobody is looking at.
+    if (open.answered && open.resolved && open.chatId) {
+      if (!urlSaysGone(open.chatId)) return open.chatId;
+      showToast("No chat is open. Open a chat and try again.");
+      return null;
+    }
     // It could not look, which is what a build without the chats permission
     // does. Fall back to the last chat seen, which is all there has ever been.
     if (lastChatId != null && lastChatId !== "") return String(lastChatId);
@@ -7117,6 +7213,7 @@ export function setup(ctx: Ctx, opts?: any) {
     const switched = lastChatId !== realId;
     lastChatId = realId;
     lastMessageId = p.messageId;
+    if (realId != null) startChatUrlWatch();
     if (switched) {
       paintFloat();
       syncMasterNote();
@@ -7233,16 +7330,7 @@ export function setup(ctx: Ctx, opts?: any) {
         // actually look, means the user has left the chat. Some builds never
         // say so on their own, and the id we were holding is now the chat they
         // walked away from.
-        if (!forChat && resolved && !chatId) {
-          noChatOpen = true;
-          lastChatId = null;
-          lastMessageId = null;
-          if (chatSwitchPaint) {
-            try { chatSwitchPaint(); } catch (_) {}
-          }
-          syncMasterNote();
-          paintNow();
-        }
+        if (!forChat && resolved && !chatId) leftTheChat();
         if (!msg.chatId) return;
         // An empty answer from a backend that looked is still an answer, and
         // caching it stops the same question going out again every time you
@@ -7267,7 +7355,11 @@ export function setup(ctx: Ctx, opts?: any) {
         // A reply about a named chat is just its name arriving, and acting on
         // it would drag the panel back to a chat the user has since left, since
         // an answer can land after they have moved on.
-        if (!forChat) noteChat(msg.chatId);
+        //
+        // The backend answers with the account's most recent chat, which is not
+        // the same question as which page is open. On the home screen it names
+        // the chat just left, so the address bar gets the last word.
+        if (!forChat && !urlSaysGone(msg.chatId)) noteChat(msg.chatId);
       });
       chatAsks.add(finish);
       timer = setTimeout(finish, CHAT_ASK_MS);
@@ -7319,6 +7411,9 @@ export function setup(ctx: Ctx, opts?: any) {
     // is the moment to find out whose it is. Asked once per chat: the answer
     // does not change while you are in it.
     ensureChatName(next);
+    // There is a chat to lose track of again, so the address bar is worth
+    // watching from here until there is not.
+    startChatUrlWatch();
     // Anything that describes the chat you are in is now out of date.
     if (chatSwitchPaint) {
       try { chatSwitchPaint(); } catch (_) {}
@@ -7340,6 +7435,8 @@ export function setup(ctx: Ctx, opts?: any) {
     noChatOpen = lastChatId == null;
     lastMessageId = null;
     ensureChatName(lastChatId);
+    if (lastChatId == null) stopChatUrlWatch();
+    else startChatUrlWatch();
     // The prompt on screen belongs to the chat that was just left, so the tab
     // has to be told. It is the one thing here that describes a chat and is not
     // repainted by paintNow below.
@@ -7438,6 +7535,7 @@ export function setup(ctx: Ctx, opts?: any) {
     if (chatId !== NO_CHAT) {
       lastChatId = chatId;
       ensureChatName(chatId);
+      startChatUrlWatch();
     }
     lastMessageId = p.messageId;
     // Text that turned up without a single token behind it is a build that
@@ -11452,6 +11550,7 @@ export function setup(ctx: Ctx, opts?: any) {
   // Every Extras button the extension can add is removed here, by walking the
   // map instead of naming them one at a time, so a new entry cannot be left off
   // and survive a reload, piling up a duplicate each time.
+  disposers.push(() => stopChatUrlWatch());
   disposers.push(() => dropBarEntries());
   disposers.push(() => dropToggleAction());
   // A swap timer left running would show a message about a backend nobody is

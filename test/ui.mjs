@@ -3674,6 +3674,111 @@ console.log("\ntwo preset bars, two stores");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- walking out to the home screen ----
+// Nothing announces that reliably. CHAT_SWITCHED carries a null id for it, but
+// a build that emits only CHAT_CHANGED says nothing, and the backend answers
+// with the account's most recent chat, which on the home screen is the chat
+// just left. So the per-chat row went on naming that chat and offering to
+// switch Auto Retry off in it, until the user walked back in or reloaded.
+// The address bar is what tells them apart, and this drives a real one.
+console.log("\nleaving a chat for the home screen");
+{
+  const CHAT = "b7c41e02-9a3d-4f18-8e55-0d216ac9f730";
+  const { out, errors } = await inPanel(browser, {}, async (page) =>
+    page.evaluate(async (chat) => {
+      const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      const row = () => document.querySelector("[data-ar-chat-switch]");
+      const state = () => {
+        const r = row();
+        return {
+          button: r.querySelector("button").textContent.trim(),
+          off: r.querySelector("button").disabled,
+          note: r.querySelector("div + div").textContent.trim().slice(0, 40),
+        };
+      };
+      // In a chat, with the address naming it the way a Lumiverse chat URL does.
+      history.pushState({}, "", "/chat/" + chat);
+      window.__handlers.CHARACTER_MESSAGE_RENDERED({ chatId: chat, messageId: "m1" });
+      await frame();
+      const inChat = state();
+      // Out to the home screen, with nothing said about it.
+      history.pushState({}, "", "/");
+      await wait(1200);
+      const atHome = state();
+      // And back in, which is the path that used to be the only way out of it.
+      history.pushState({}, "", "/chat/" + chat);
+      window.__handlers.CHARACTER_MESSAGE_RENDERED({ chatId: chat, messageId: "m2" });
+      await frame();
+      const backIn = state();
+      return { inChat, atHome, backIn };
+    }, CHAT),
+  );
+  check("in a chat the switch is live", out.inChat.off === false, out.inChat);
+  check("on the home screen it is not", out.atHome.off === true, out.atHome);
+  check("and it says no chat is open rather than waiting to find out",
+    /^No chat is open/.test(out.atHome.note), out.atHome.note);
+  check("walking back in makes it live again", out.backIn.off === false, out.backIn);
+  check("no console errors", errors.length === 0, errors);
+}
+
+// The live line reads the same held id, so a chat switched off kept the panel
+// saying "Off in this chat" on the home screen, where there is no this chat.
+console.log("\nthe live line after walking out");
+{
+  const CHAT = "4f8a1d63-77be-4c20-9351-ea0b5d94c187";
+  const { out, errors } = await inPanel(
+    browser,
+    { settings: { liveLog: true, panelHome: "float", toast: false } },
+    async (page) =>
+      page.evaluate(async (chat) => {
+        const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+        const read = () =>
+          (document.getElementById("__lvRetryStatus") || {}).textContent?.trim() || "";
+        history.pushState({}, "", "/chat/" + chat);
+        window.__handlers.CHARACTER_MESSAGE_RENDERED({ chatId: chat, messageId: "m1" });
+        await wait(400);
+        // Switched off for this chat alone, from the panel's own row.
+        document.querySelector("[data-ar-chat-switch] button").click();
+        await wait(400);
+        const inChat = read();
+        history.pushState({}, "", "/");
+        await wait(1400);
+        return { inChat: inChat, atHome: read() };
+      }, CHAT),
+  );
+  check("in the chat the line says it is off there",
+    /off in this chat/i.test(out.inChat), out.inChat);
+  check("on the home screen it does not", !/off in this chat/i.test(out.atHome), out.atHome);
+  check("no console errors", errors.length === 0, errors);
+}
+
+// ---- an address that never names the chat ----
+// The whole check above rests on the id turning up in the address. A build
+// whose addresses do not carry it must be left exactly as it was, rather than
+// having its chat thrown away every time anything else moves.
+console.log("\nan address that never names the chat");
+{
+  const { out, errors } = await inPanel(browser, {}, async (page) =>
+    page.evaluate(async () => {
+      const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      const row = () => document.querySelector("[data-ar-chat-switch]");
+      const live = () => !row().querySelector("button").disabled;
+      history.pushState({}, "", "/app");
+      window.__handlers.CHARACTER_MESSAGE_RENDERED({ chatId: "c-9931", messageId: "m1" });
+      await frame();
+      const before = live();
+      history.pushState({}, "", "/app/settings");
+      await wait(1200);
+      return { before: before, after: live() };
+    }),
+  );
+  check("the chat is still known", out.before === true, out);
+  check("and moving around does not throw it away", out.after === true, out);
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- a preset bar with nothing to save ----
 // The note boxes are hidden while the switch that sends notes is off. The bar
 // that saves those boxes was not, so it sat under a heading with nothing to act

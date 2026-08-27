@@ -8,6 +8,14 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 4.24.4
+
+_2026-08-27_
+
+### Fixed
+
+- **The panel went on naming a chat after you had gone back to the home screen.** It stayed on that chat and its character until you walked back in or reloaded the tab, so the per-chat row offered to switch Auto Retry off in a chat that was not open, the live line still read **Off in this chat**, and a swap pressed from the floating button's menu could have landed there. Nothing announced the move: `CHAT_SWITCHED` reports it but a build emitting only `CHAT_CHANGED` says nothing, and asking Lumiverse is answered on the server with the most recent chat on the account, which on the home screen is the chat just left. Your browser's address is what tells them apart, since it carries the chat id while you are in one, so that is what is read now. A Lumiverse whose addresses do not carry the id is left exactly as it was.
+
 ## 4.24.3
 
 _2026-08-27_

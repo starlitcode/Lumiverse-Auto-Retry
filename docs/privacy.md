@@ -100,6 +100,8 @@ Your API keys, passwords, and account details are not available to it. Lumiverse
 
 It reads a reply only to run its checks on the one that just arrived, and it does not keep a copy. While a reply is streaming it does hold the text arriving so far, because some Lumiverse builds do not put the finished reply on the event that says it ended, and then what streamed is the only thing there is to check. That copy is dropped the moment the reply ends, and the moment you stop one partway.
 
+It also reads the address in your browser's bar, and asks it one question: does the address still contain the id of the chat it thinks you are in. That is how it notices you have gone back to the home screen, which Lumiverse does not always say. The answer is a yes or a no. The address is not stored, not sent anywhere, and not looked at for anything else.
+
 ## What it keeps
 
 Your settings and your saved presets are saved twice over: once in your browser's local storage, and once in Lumiverse's own per-user storage so they follow your account between devices. That is the only thing that reaches your account.
