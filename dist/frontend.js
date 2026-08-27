@@ -110,7 +110,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "4.24.2";
+const VERSION = "4.24.3";
 // The one address the extension ever points at, used by the warning in front of
 // the crisis-support check. Pinned to the released branch rather than to a tag,
 // so an old install still opens the page as it stands today.
@@ -8926,6 +8926,9 @@ export function setup(ctx, opts) {
         // panel while it is off, so what is on screen is what is in use.
         // Groups rather than a flat list, matching depNotes below: any switch
         // inside a group is enough, and every group has to be satisfied.
+        // Not only rows: a block at the end of a section can be listed here too, as
+        // long as it lays out as a flex column, since that is what the shown state
+        // sets it back to.
         const depRows = [];
         const depSections = [];
         // A row found by searching while the switch it hangs off is still off. The
@@ -9207,17 +9210,28 @@ export function setup(ctx, opts) {
                 //
                 // A tester comes last. It is not a setting and saves nothing, it is
                 // somewhere to try the settings out, so it goes after all of them.
+                // A preset bar and everything labelling it, as one block, so a switch
+                // it hangs off takes the heading and the description with it rather
+                // than leaving a heading standing over nothing.
+                const presetBlock = (kind, heading, desc) => {
+                    const wrap = document.createElement("div");
+                    wrap.style.cssText = "display:flex;flex-direction:column;gap:10px";
+                    wrap.appendChild(hairline());
+                    wrap.appendChild(runHeading(heading));
+                    wrap.appendChild(sectionDesc(desc, false));
+                    wrap.appendChild(buildPresetBar(kind));
+                    return wrap;
+                };
                 if (hasExtra("swapPresets")) {
-                    body.appendChild(hairline());
-                    body.appendChild(runHeading("Presets"));
-                    body.appendChild(sectionDesc("Save your current word swaps as a named setup and switch between them. Applying takes effect right away. Saved to your account, so they follow you to other devices.", false));
-                    body.appendChild(buildPresetBar("swap"));
+                    body.appendChild(presetBlock("swap", "Word presets", "Save your current word swaps as a named setup and switch between them. Applying takes effect right away. Saved to your account, so they follow you to other devices."));
                 }
                 if (hasExtra("notePresets")) {
-                    body.appendChild(hairline());
-                    body.appendChild(runHeading("Note presets"));
-                    body.appendChild(sectionDesc("Save the notes above as a named set and switch between them. A set carries the notes and where they go, and nothing else: loading one never turns notes on or off. Saved to your account, so they follow you to other devices.", false));
-                    body.appendChild(buildPresetBar("notes"));
+                    const block = presetBlock("notes", "Note presets", "Save the notes above as a named set and switch between them. A set carries the notes and where they go, and nothing else: loading one never turns notes on or off. Saved to your account, so they follow you to other devices.");
+                    // Same switch the note boxes above hang off. With notes off there is
+                    // nothing here to save and nothing a loaded set would reach, so the
+                    // block goes with them.
+                    depRows.push({ row: block, groups: [["refusalNote"]] });
+                    body.appendChild(block);
                 }
                 if (hasExtra("refusalTester"))
                     body.appendChild(buildRefusalTester());

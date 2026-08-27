@@ -8,6 +8,18 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 4.24.3
+
+_2026-08-27_
+
+### Fixed
+
+- **The Note presets bar stayed on screen with notes switched off.** The boxes it saves are hidden while **Send a note with a refusal retry** is off, so the bar was left sitting under a heading with nothing to act on. It now goes with them, heading and description included.
+
+### Changed
+
+- **The word swap preset bar is called Word presets.** It was **Presets**, which said nothing about what it carries next to **Note presets** in the section above it.
+
 ## 4.24.2
 
 _2026-08-27_

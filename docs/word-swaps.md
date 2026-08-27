@@ -117,9 +117,9 @@ If another extension also rewrites replies, the two can undo each other. [Hone](
 
 Leave it off if nothing else edits your replies. Auto Retry cannot tell whether Hone's auto-refine is on, since Hone exposes no state to other extensions, so this is a switch rather than something detected. With it off, swaps are instant, which is what you want with Hone set to manual.
 
-## Presets
+## Word presets
 
-At the bottom of the find-and-replace settings you can save your word-swap setups as named presets and switch between them without copying rules by hand.
+At the bottom of the find-and-replace settings, under **Word presets**, you can save your word-swap setups as named presets and switch between them without copying rules by hand.
 
 The find-and-replace settings are split into two runs so you can see this at a glance. Under **Saved in a preset** are your rules and the two options that decide how they match, **Pick a swap at random** and **Match case exactly**. Rules saved without those behave differently when loaded, which defeats the point of a preset.
 

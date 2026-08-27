@@ -3674,6 +3674,63 @@ console.log("\ntwo preset bars, two stores");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- a preset bar with nothing to save ----
+// The note boxes are hidden while the switch that sends notes is off. The bar
+// that saves those boxes was not, so it sat under a heading with nothing to act
+// on, and loading a set there would have written wording nobody could see. Both
+// headings are checked here too: two bars that look the same need names that
+// say which settings each one carries.
+console.log("\nthe note preset bar follows the notes switch");
+{
+  const { out, errors } = await inPanel(browser, { settings: { retryOnRefusal: true } }, async (page) =>
+    page.evaluate(async () => {
+      const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      await frame();
+      const root = document.getElementById("modal");
+      // The block is the bar's parent: hairline, heading, description and bar.
+      const block = (kind) => {
+        const bar = root.querySelector('[data-ar-presets="' + kind + '"]');
+        return bar && bar.parentElement;
+      };
+      const shown = (el) => !!el && el.style.display !== "none";
+      const headingOf = (kind) => {
+        const b = block(kind);
+        if (!b) return null;
+        // hairline first, heading second.
+        return b.children[1] ? b.children[1].textContent.trim() : null;
+      };
+      const off = shown(block("notes"));
+      const swapAlways = shown(block("swap"));
+      let flipped = false;
+      for (const box of root.querySelectorAll("input[type=checkbox]")) {
+        const row = box.closest("[data-ar-row]");
+        if (row && /Send a note with a refusal retry/.test(row.textContent)) {
+          box.click();
+          flipped = true;
+          break;
+        }
+      }
+      await frame();
+      return {
+        off: off,
+        on: shown(block("notes")),
+        flipped: flipped,
+        swapAlways: swapAlways,
+        noteHeading: headingOf("notes"),
+        swapHeading: headingOf("swap"),
+      };
+    }),
+  );
+  check("the switch was found and flipped", out.flipped, out);
+  check("with notes off the bar is not on screen", out.off === false, out.off);
+  check("turning notes on brings it back", out.on === true, out.on);
+  check("the word swap bar is not affected by it", out.swapAlways === true, out.swapAlways);
+  check("the note bar says what it saves", out.noteHeading === "Note presets", out.noteHeading);
+  check("and so does the word swap bar", out.swapHeading === "Word presets", out.swapHeading);
+  check("no console errors", errors.length === 0, errors);
+}
+
 // Presets are stored as one object holding every kind, and three places used
 // to reach past that into one key. With a second kind that meant note presets
 // never followed the account, and the reset that names word swaps deleted them
