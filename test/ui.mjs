@@ -5607,6 +5607,95 @@ console.log("\na reply that stopped partway with text in it");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- a reply that finished while the tab was asleep ----
+// A watchdog measures a silence, and it can only do that while the page is
+// running. A background tab has its timers held back, and a tab the browser
+// freezes runs nothing at all and then delivers everything at once when the
+// reader comes back. The watchdog then comes due on a generation whose ending
+// is still queued behind it, halts a reply that had finished, and re-rolls it.
+// Leaving the tab and coming back was enough to lose one.
+//
+// A frozen tab cannot be staged here, but what it looks like from inside the
+// page can: the clock jumps forward while a timer is pending, so the timer
+// comes back long after it asked to. That is the whole signal the guard reads.
+console.log("\na reply that finished while the tab was asleep");
+{
+  const errors = [];
+  // jumpMs is how far the clock moves while the stuck watchdog is pending.
+  // endAfter, when set, is a reply arriving normally once the page is running
+  // again, which is the case the reader hit.
+  const run = async ({ jumpMs, endAfter }) => {
+    const page = await browser.newPage();
+    page.on("pageerror", (e) => errors.push(e.message));
+    await stage(page,
+      '<div id=modal></div><button data-testid="regenerate">R</button>' +
+      '<button data-testid="swipe-right">S</button><button data-testid="stop">X</button>');
+    await page.addScriptTag({ content: SOURCE, type: "module" });
+    await page.waitForFunction(() => !!window.__setup);
+    const res = await page.evaluate(async ([jumpMs, endAfter]) => {
+      const h = {};
+      const clicks = [];
+      const lines = [];
+      for (const id of ["regenerate", "swipe-right", "stop"])
+        document.querySelector("[data-testid=" + id + "]")
+          .addEventListener("click", () => clicks.push(id));
+      window.__setup(
+        { events: { on: (n, fn) => { h[n] = fn; return () => {}; } },
+          sendToBackend: () => {},
+          onBackendMessage: () => () => {},
+          ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+                registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) } },
+        { retryDelayMs: 10, backoffFactor: 1, maxDelayMs: 10, jitter: false,
+          maxRetries: 4, toast: false, pauseWhenFailing: false, liveLog: true,
+          stuckTimeoutMs: 400, idleTimeoutMs: 0 },
+      );
+      const readLog = () => {
+        const el = document.getElementById("__lvRetryLog");
+        return el ? el.textContent || "" : "";
+      };
+      h.GENERATION_STARTED({ chatId: "c1", generationId: "g1", messageId: "m1" });
+      // The page stops running here. From inside, that is the clock moving on
+      // while nothing of ours got to run.
+      const realNow = Date.now;
+      if (jumpMs) Date.now = () => realNow.call(Date) + jumpMs;
+      // Long enough for the watchdog to come due late, and short of the fresh
+      // wait it starts in place of judging.
+      await new Promise((r) => setTimeout(r, 500));
+      Date.now = realNow;
+      lines.push(readLog());
+      const afterSleep = clicks.slice();
+      if (endAfter) {
+        // Awake again, and the ending that was queued behind the watchdog
+        // finally arrives, well inside the fresh wait.
+        h.GENERATION_ENDED({ chatId: "c1", generationId: "g1", messageId: "m1",
+          content: "Marisol pushed the door open and the cold came in with her." });
+      }
+      // Past the point the fresh wait would have run out, so a watchdog still
+      // armed on a reply that has ended would have shown itself by now.
+      await new Promise((r) => setTimeout(r, 600));
+      return { afterSleep, clicks, log: lines.join(" ") };
+    }, [jumpMs, endAfter]);
+    await page.close();
+    return res;
+  };
+
+  const slept = await run({ jumpMs: 60000, endAfter: true });
+  const awake = await run({ jumpMs: 0, endAfter: false });
+
+  check("a reply is not halted over a wait the page slept through",
+    slept.afterSleep.length === 0, slept.afterSleep);
+  check("and the ending that was queued behind it is taken normally",
+    slept.clicks.length === 0, slept.clicks);
+  check("the panel says why the wait started again",
+    /not running for part of the wait/i.test(slept.log), slept.log);
+  // The other half. A guard that simply switched the watchdog off would pass
+  // both checks above and leave a genuinely stuck reply sitting there.
+  check("a page that stayed awake still catches a stuck reply",
+    awake.clicks.indexOf("stop") >= 0 && awake.clicks.length > 1, awake.clicks);
+
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- walking out of a chat without the host saying so ----
 // The id the row shows is learned from things happening in a chat: a reply, a
 // message rendering, a switch event. Going to the home screen is none of those,

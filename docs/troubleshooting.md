@@ -29,6 +29,14 @@ That covers the one reply. To stop it happening again, the reason on that tab is
 
 The Stats tab shows the same reasons as a tally, so if this keeps happening it says which check is responsible over a whole session rather than one reply.
 
+## It called a reply stuck after you came back to the tab
+
+Two of the checks are waits: **Give up waiting for it to start** and **Give up on a reply that froze**. A wait can only be measured while the page is running, and a background tab often is not. Its timers are held back, and a tab the browser freezes runs nothing at all and then delivers everything at once when you come back.
+
+That used to mean a reply that finished while you were in another tab could be halted and re-rolled the moment you returned, because the wait came due before the reply's own ending had been read.
+
+The waits no longer judge a stretch the page slept through. Coming back starts the wait again from that moment rather than counting the time you were away, and the panel writes a line saying so. A reply that really is stuck is still caught, one full wait after the page starts running again. Nothing needs setting for this and there is no option to change: a page that was not running has no opinion worth acting on.
+
 ## "No answer from the word swapper"
 
 You get this after pressing **Swap words in the last reply** or **Swap words in every reply**, when nothing answers within a few seconds. The swap runs in the extension's backend, so this means the backend is not running, or the message never reached it.

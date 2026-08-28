@@ -8,6 +8,14 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 4.24.6
+
+_2026-08-28_
+
+### Fixed
+
+- **A reply that finished while you were in another tab was called stuck and re-rolled.** The two waits, stuck and frozen, measure a silence, and they can only do that while the page is running. A background tab has its timers held back, and a tab the browser freezes runs nothing at all and then hands everything over at once when you come back. The wait then came due on a reply whose ending was still queued behind it, so it was halted and retried a moment before its own ending was read, and leaving the tab and coming back was enough to lose a good reply. A wait that comes back far later than it asked for now starts again rather than reaching a verdict. One that really is stuck is still caught, a full wait after the page starts running again, and the panel says why the wait restarted.
+
 ## 4.24.5
 
 _2026-08-27_

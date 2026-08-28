@@ -121,7 +121,7 @@ const STREAM_BUF_MAX = 200000;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "4.24.5";
+const VERSION = "4.24.6";
 
 // The one address the extension ever points at, used by the warning in front of
 // the crisis-support check. Pinned to the released branch rather than to a tag,
@@ -6190,6 +6190,59 @@ export function setup(ctx: Ctx, opts?: any) {
     return Number.isFinite(v) && v >= 1 ? v * 60000 : BREAKER_PAUSE_DEFAULT_MS;
   };
 
+  // ---- watchdogs and a page that was not running ----
+  // A watchdog measures a silence: nothing arrived for this long, so something
+  // went wrong. It can only measure that while the page is actually running,
+  // and a background tab often is not. Its timers are held back, and a tab the
+  // browser freezes outright runs nothing at all and then delivers everything
+  // at once when the reader comes back.
+  //
+  // A watchdog coming due during that lands on a generation whose ending is
+  // still queued behind it, so a reply that finished while the reader was in
+  // another tab was judged stuck, halted and re-rolled a moment before its own
+  // ending was read. Leaving the tab and coming back was enough to lose one.
+  //
+  // So a watchdog that comes back far later than it asked for does not judge.
+  // The page was not watching, and the generation gets the full wait again
+  // instead of a verdict, which still catches one that really is stuck a window
+  // after the page starts running again. Jitter on a running page is
+  // milliseconds; a page that stopped running shows up in seconds.
+  const WATCHDOG_SLACK_MS = 3000;
+  // One line per waking, not one per watchdog. All of them come due together
+  // when the page starts running again, and three lines saying the same thing
+  // about one reply is two more than it takes.
+  let saidPageSlept = 0;
+  function pageSlept(due: number): boolean {
+    if (Date.now() - due <= WATCHDOG_SLACK_MS) return false;
+    if (Date.now() - saidPageSlept > 1000) {
+      saidPageSlept = Date.now();
+      log(
+        "this page was not running for part of the wait, so the reply gets the " +
+        "full wait again rather than being counted as stuck",
+      );
+    }
+    return true;
+  }
+  // Arms one of the two waiting watchdogs and re-arms it, rather than firing,
+  // when the page was not running for the wait it was measuring.
+  function armWatchdog(
+    s: any,
+    field: "startTimer" | "idleTimer",
+    delay: number,
+    fire: () => void,
+  ) {
+    if (s[field]) clearTimeout(s[field]);
+    const due = Date.now() + delay;
+    s[field] = setTimeout(() => {
+      s[field] = null;
+      if (pageSlept(due)) {
+        armWatchdog(s, field, delay, fire);
+        return;
+      }
+      fire();
+    }, delay);
+  }
+
   const clearTimers = (s: any) => {
     if (s.startTimer) {
       clearTimeout(s.startTimer);
@@ -6857,9 +6910,17 @@ export function setup(ctx: Ctx, opts?: any) {
     if (!s.expectingStart) return;
     const left = typeof waits === "number" ? waits : START_WAIT_ROUNDS;
     if (s.startWatchdog) clearTimeout(s.startWatchdog);
+    const due = Date.now() + START_GRACE_MS;
     s.startWatchdog = setTimeout(() => {
       s.startWatchdog = null;
       if (!s.expectingStart) return; // a generation started, nothing to do
+      // Same reason as the two above, and here it also costs a click: giving up
+      // on a page that was asleep clicks the other control, or resets state a
+      // generation is still using. The round is not spent either.
+      if (pageSlept(due)) {
+        armStartWatchdog(chatId, via, allowFallback, left);
+        return;
+      }
       // The stop control being on screen means something is generating and the
       // start event is just slow. Clicking again here would stack a second
       // generation, so this waits a few more rounds before deciding.
@@ -7255,12 +7316,10 @@ export function setup(ctx: Ctx, opts?: any) {
     s.sawContent = false;
     s.buf = "";
     clearTimers(s);
-    if (cfg.enabled && cfg.stuckTimeoutMs > 0) {
-      s.startTimer = setTimeout(
-        () => abortAndRetry(chatId, "stuck"),
-        cfg.stuckTimeoutMs,
+    if (cfg.enabled && cfg.stuckTimeoutMs > 0)
+      armWatchdog(s, "startTimer", cfg.stuckTimeoutMs, () =>
+        abortAndRetry(chatId, "stuck"),
       );
-    }
   }
 
   // Ask the backend which chat is open. Everything else that sets the chat id
@@ -7492,13 +7551,8 @@ export function setup(ctx: Ctx, opts?: any) {
       clearTimeout(s.startTimer);
       s.startTimer = null;
     }
-    if (cfg.enabled && cfg.idleTimeoutMs > 0) {
-      if (s.idleTimer) clearTimeout(s.idleTimer);
-      s.idleTimer = setTimeout(
-        () => onFrozen(chatId),
-        cfg.idleTimeoutMs,
-      );
-    }
+    if (cfg.enabled && cfg.idleTimeoutMs > 0)
+      armWatchdog(s, "idleTimer", cfg.idleTimeoutMs, () => onFrozen(chatId));
   }
 
   function onEnd(p: any) {
