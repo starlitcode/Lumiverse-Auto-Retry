@@ -5652,7 +5652,12 @@ console.log("\na reply that arrived with none of its events");
         // be told, and nothing repeats it afterwards.
         const el = document.createElement("div");
         el.setAttribute("data-component", "MessageContent");
-        el.textContent = "She pushed the gate open and the dogs came running.";
+        el.textContent = landed === "placeholder"
+          // What a build that fills the bubble while it waits puts there. Not
+          // a reply, and counting it as one would stand the watchdog down on
+          // every generation.
+          ? "..."
+          : "She pushed the gate open and the dogs came running.";
         document.getElementById("chat").appendChild(el);
       }
       await new Promise((r) => setTimeout(r, 600));
@@ -5665,6 +5670,7 @@ console.log("\na reply that arrived with none of its events");
 
   const arrived = await run({ landed: true });
   const nothing = await run({ landed: false });
+  const holding = await run({ landed: "placeholder" });
 
   check("a reply the tab was never told about is not re-rolled",
     arrived.clicks.length === 0, arrived.clicks);
@@ -5673,6 +5679,8 @@ console.log("\na reply that arrived with none of its events");
   // The other half, or the guard would just be the stuck watchdog switched off.
   check("a generation that really produced nothing is still re-rolled",
     nothing.clicks.indexOf("stop") >= 0 && nothing.clicks.length > 1, nothing.clicks);
+  check("and a bubble holding a placeholder is not mistaken for a reply",
+    holding.clicks.indexOf("stop") >= 0 && holding.clicks.length > 1, holding.clicks);
 
   check("no console errors", errors.length === 0, errors);
 }

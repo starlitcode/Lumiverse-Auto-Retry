@@ -6240,6 +6240,19 @@ export function setup(ctx, opts) {
         catch (_) { }
         return "";
     };
+    // A fingerprint of the reply on screen, not the reply. This is held for the
+    // length of a generation, and holding reply text that long is not something
+    // the extension does anywhere else, so it does not start here. Length and a
+    // rolling hash answer the only question asked of it, which is whether what is
+    // on screen has changed.
+    const screenMark = (t) => {
+        if (!t)
+            return "";
+        let h = 0;
+        for (let i = 0; i < t.length; i++)
+            h = (h * 31 + t.charCodeAt(i)) | 0;
+        return t.length + ":" + h;
+    };
     // ---- events that never reached the tab ----
     // Everything the extension knows about a generation arrives over Lumiverse's
     // socket, and a tab in the background can miss those outright. They are not
@@ -6252,25 +6265,21 @@ export function setup(ctx, opts) {
     // a reply on screen that has changed means words arrived, whatever the socket
     // did or did not deliver. A build this cannot read answers with nothing, and
     // then it decides nothing either.
-    // A fingerprint of the reply on screen, not the reply. This is held for the
-    // length of a generation, and holding reply text that long is not something
-    // the extension does anywhere else, so it does not start here. Length and a
-    // rolling hash answer the only question asked of it, which is whether what is
-    // on screen has changed.
-    const screenMark = () => {
-        const t = lastRenderedReply();
-        if (!t)
-            return "";
-        let h = 0;
-        for (let i = 0; i < t.length; i++)
-            h = (h * 31 + t.charCodeAt(i)) | 0;
-        return t.length + ":" + h;
-    };
+    //
+    // Enough of a reply to be one. A build that puts a placeholder in the message
+    // while it waits, an ellipsis or a name, would otherwise count as the reply
+    // having arrived on every generation, and quietly stand the whole watchdog
+    // down. Anything the reader would call a reply clears this; a spinner does
+    // not. It only has to hold where the events went missing, since a reply the
+    // events did arrive for is judged properly on its own ending.
+    const SCREEN_REPLY_MIN = 40;
     function repliedWithoutUs(s) {
-        const now = screenMark();
-        if (!now)
+        if (!s.screenAtStart)
             return false;
-        return !!s.screenAtStart && now !== s.screenAtStart;
+        const now = lastRenderedReply();
+        if (now.length < SCREEN_REPLY_MIN)
+            return false;
+        return screenMark(now) !== s.screenAtStart;
     }
     const clearTimers = (s) => {
         if (s.startTimer) {
@@ -7379,7 +7388,7 @@ export function setup(ctx, opts) {
         s.buf = "";
         // The page as it stands before this reply writes anything, which is what a
         // watchdog compares against rather than trusting that silence means silence.
-        s.screenAtStart = screenMark();
+        s.screenAtStart = screenMark(lastRenderedReply());
         clearTimers(s);
         if (cfg.enabled && cfg.stuckTimeoutMs > 0)
             armWatchdog(s, "startTimer", cfg.stuckTimeoutMs, () => abortAndRetry(chatId, "stuck"));
