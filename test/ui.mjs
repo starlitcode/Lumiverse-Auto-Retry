@@ -5607,6 +5607,76 @@ console.log("\na reply that stopped partway with text in it");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- a reply that arrived with none of its events ----
+// Everything the extension knows about a generation comes over Lumiverse's
+// socket, and a tab in the background can miss those outright. They are not
+// held and redelivered, they are gone. A real report: the generation started,
+// nothing else ever arrived, and 180 seconds later it was re-rolled as stuck
+// while the finished reply sat on the page.
+//
+// So the page is checked before a watchdog acts. Staged the way it happened:
+// a start event, then silence, while the reply appears in the chat behind it.
+console.log("\na reply that arrived with none of its events");
+{
+  const errors = [];
+  // landed is the reply turning up on the page during the silence, which is
+  // what a backgrounded tab comes back to.
+  const run = async ({ landed }) => {
+    const page = await browser.newPage();
+    page.on("pageerror", (e) => errors.push(e.message));
+    await stage(page,
+      '<div id=modal></div><button data-testid="regenerate">R</button>' +
+      '<button data-testid="swipe-right">S</button><button data-testid="stop">X</button>' +
+      '<div id=chat><div data-component="MessageContent">Marisol waited by the gate.</div></div>');
+    await page.addScriptTag({ content: SOURCE, type: "module" });
+    await page.waitForFunction(() => !!window.__setup);
+    const res = await page.evaluate(async (landed) => {
+      const h = {};
+      const clicks = [];
+      for (const id of ["regenerate", "swipe-right", "stop"])
+        document.querySelector("[data-testid=" + id + "]")
+          .addEventListener("click", () => clicks.push(id));
+      window.__setup(
+        { events: { on: (n, fn) => { h[n] = fn; return () => {}; } },
+          sendToBackend: () => {},
+          onBackendMessage: () => () => {},
+          ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+                registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) } },
+        { retryDelayMs: 10, backoffFactor: 1, maxDelayMs: 10, jitter: false,
+          maxRetries: 5, toast: false, pauseWhenFailing: false, liveLog: true,
+          stuckTimeoutMs: 300, idleTimeoutMs: 0 },
+      );
+      h.GENERATION_STARTED({ chatId: "c1", generationId: "g1" });
+      if (landed) {
+        // The reply lands. No token event, no ending: the tab was not there to
+        // be told, and nothing repeats it afterwards.
+        const el = document.createElement("div");
+        el.setAttribute("data-component", "MessageContent");
+        el.textContent = "She pushed the gate open and the dogs came running.";
+        document.getElementById("chat").appendChild(el);
+      }
+      await new Promise((r) => setTimeout(r, 600));
+      const log = document.getElementById("__lvRetryLog");
+      return { clicks, log: log ? log.textContent || "" : "" };
+    }, landed);
+    await page.close();
+    return res;
+  };
+
+  const arrived = await run({ landed: true });
+  const nothing = await run({ landed: false });
+
+  check("a reply the tab was never told about is not re-rolled",
+    arrived.clicks.length === 0, arrived.clicks);
+  check("and the panel says what happened",
+    /without the tab being told/i.test(arrived.log), arrived.log);
+  // The other half, or the guard would just be the stuck watchdog switched off.
+  check("a generation that really produced nothing is still re-rolled",
+    nothing.clicks.indexOf("stop") >= 0 && nothing.clicks.length > 1, nothing.clicks);
+
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- a reply that finished while the tab was asleep ----
 // A watchdog measures a silence, and it can only do that while the page is
 // running. A background tab has its timers held back, and a tab the browser

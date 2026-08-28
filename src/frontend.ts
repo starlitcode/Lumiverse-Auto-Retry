@@ -5985,6 +5985,10 @@ export function setup(ctx: Ctx, opts?: any) {
       sawReasoning: false,
       sawContent: false,
       buf: "", // streamed reply text, used when the end event carries no content
+      // A fingerprint of the reply the page was showing when this generation
+      // began, never the reply itself. Empty means there is nothing to compare
+      // against, and no conclusion is drawn from it.
+      screenAtStart: "",
       ignored: new Set(),
       // Generations whose ending has already been judged. A build that reports
       // one generation as ended twice used to get two verdicts out of it, and
@@ -6241,6 +6245,52 @@ export function setup(ctx: Ctx, opts?: any) {
       }
       fire();
     }, delay);
+  }
+
+  // The last reply as the page is showing it, read off the page rather than out
+  // of any copy the extension kept. Nothing is held between replies: it is read
+  // at the moment somebody asks. SECURITY.md says a reply is read to check it
+  // and no copy is kept, and that stays true.
+  const lastRenderedReply = (): string => {
+    try {
+      if (typeof document === "undefined") return "";
+      const all = document.querySelectorAll('[data-component="MessageContent"]');
+      for (let i = all.length - 1; i >= 0; i--) {
+        const t = String((all[i] as any).innerText || all[i].textContent || "").trim();
+        if (t) return t;
+      }
+    } catch (_) {}
+    return "";
+  };
+
+  // ---- events that never reached the tab ----
+  // Everything the extension knows about a generation arrives over Lumiverse's
+  // socket, and a tab in the background can miss those outright. They are not
+  // held and handed over later, they are gone. So a reply that finished while
+  // the reader was in another tab left the extension still waiting for its
+  // first word, and the wait ran out on a reply sitting there finished.
+  //
+  // The page is the one witness that cannot be missed. What it was showing when
+  // the generation started is kept, and a watchdog looks again before it acts:
+  // a reply on screen that has changed means words arrived, whatever the socket
+  // did or did not deliver. A build this cannot read answers with nothing, and
+  // then it decides nothing either.
+  // A fingerprint of the reply on screen, not the reply. This is held for the
+  // length of a generation, and holding reply text that long is not something
+  // the extension does anywhere else, so it does not start here. Length and a
+  // rolling hash answer the only question asked of it, which is whether what is
+  // on screen has changed.
+  const screenMark = (): string => {
+    const t = lastRenderedReply();
+    if (!t) return "";
+    let h = 0;
+    for (let i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) | 0;
+    return t.length + ":" + h;
+  };
+  function repliedWithoutUs(s: any): boolean {
+    const now = screenMark();
+    if (!now) return false;
+    return !!s.screenAtStart && now !== s.screenAtStart;
   }
 
   const clearTimers = (s: any) => {
@@ -7240,6 +7290,22 @@ export function setup(ctx: Ctx, opts?: any) {
 
   function abortAndRetry(chatId: string, reason: string) {
     const s = st(chatId);
+    // The page says a reply arrived, whatever the socket managed to deliver.
+    // Halting and re-rolling here is what threw away a reply that finished
+    // while the reader was in another tab, so it stands down instead. It is not
+    // counted as a reply that came back fine, because it was never checked:
+    // nothing about it reached the tab to check.
+    if (repliedWithoutUs(s)) {
+      clearTimers(s);
+      s.live = false;
+      s.screenAtStart = "";
+      log(
+        "a reply arrived on this page without the tab being told, so it was " +
+        "left alone rather than counted as " + reason,
+      );
+      paintNow();
+      return;
+    }
     // Whatever had streamed before it went quiet, which is what the reader is
     // looking at and what stopping the generation is about to leave behind.
     s.lastText = String(s.buf || "");
@@ -7315,6 +7381,9 @@ export function setup(ctx: Ctx, opts?: any) {
     s.sawReasoning = false;
     s.sawContent = false;
     s.buf = "";
+    // The page as it stands before this reply writes anything, which is what a
+    // watchdog compares against rather than trusting that silence means silence.
+    s.screenAtStart = screenMark();
     clearTimers(s);
     if (cfg.enabled && cfg.stuckTimeoutMs > 0)
       armWatchdog(s, "startTimer", cfg.stuckTimeoutMs, () =>
@@ -8949,23 +9018,6 @@ export function setup(ctx: Ctx, opts?: any) {
       const out = document.createElement("div");
       out.style.cssText =
         "font-size:12px;line-height:1.45;min-height:1em;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
-
-      // Read off the page rather than out of a copy the extension kept. The
-      // last reply is already on screen behind this panel, and reading it at
-      // the moment the button is pressed means nothing has to be held onto
-      // between replies. SECURITY.md says a reply is read to check it and no
-      // copy is kept; a convenience button is not worth making that untrue.
-      const lastRenderedReply = (): string => {
-        try {
-          if (typeof document === "undefined") return "";
-          const all = document.querySelectorAll('[data-component="MessageContent"]');
-          for (let i = all.length - 1; i >= 0; i--) {
-            const t = String((all[i] as any).innerText || all[i].textContent || "").trim();
-            if (t) return t;
-          }
-        } catch (_) {}
-        return "";
-      };
 
       const bar = document.createElement("div");
       bar.style.cssText = "display:flex;flex-wrap:wrap;gap:8px;align-items:center";

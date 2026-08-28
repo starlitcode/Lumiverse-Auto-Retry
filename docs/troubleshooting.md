@@ -31,11 +31,15 @@ The Stats tab shows the same reasons as a tally, so if this keeps happening it s
 
 ## It called a reply stuck after you came back to the tab
 
-Two of the checks are waits: **Give up waiting for it to start** and **Give up on a reply that froze**. A wait can only be measured while the page is running, and a background tab often is not. Its timers are held back, and a tab the browser freezes runs nothing at all and then delivers everything at once when you come back.
+Everything the extension knows about a generation arrives over Lumiverse's socket. A tab in the background can miss those events outright, and they are not held and handed over later, they are gone. So the extension went on waiting for a first word that had already come and gone, and **Give up waiting for it to start** ran out on a reply sitting in the chat finished.
 
-That used to mean a reply that finished while you were in another tab could be halted and re-rolled the moment you returned, because the wait came due before the reply's own ending had been read.
+Two things stop that now, and neither needs setting.
 
-The waits no longer judge a stretch the page slept through. Coming back starts the wait again from that moment rather than counting the time you were away, and the panel writes a line saying so. A reply that really is stuck is still caught, one full wait after the page starts running again. Nothing needs setting for this and there is no option to change: a page that was not running has no opinion worth acting on.
+Before either wait acts, it looks at the page. The reply on screen when the generation started is remembered, and if what is on screen has changed, words arrived, whatever reached the tab. It stands down and writes a line saying so. It is not counted as a reply that came back fine, because it was never checked: nothing about it reached the tab to check.
+
+A wait is also not judged over time the page spent asleep. A background tab has its timers held back, and one the browser freezes runs nothing at all and then delivers everything at once when you come back, so a wait coming due then is measuring the time you were away. Coming back starts the wait again from that moment, and the panel says why.
+
+A generation that really produced nothing is still re-rolled either way.
 
 ## "No answer from the word swapper"
 

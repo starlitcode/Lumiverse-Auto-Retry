@@ -14,7 +14,8 @@ _2026-08-28_
 
 ### Fixed
 
-- **A reply that finished while you were in another tab was called stuck and re-rolled.** The two waits, stuck and frozen, measure a silence, and they can only do that while the page is running. A background tab has its timers held back, and a tab the browser freezes runs nothing at all and then hands everything over at once when you come back. The wait then came due on a reply whose ending was still queued behind it, so it was halted and retried a moment before its own ending was read, and leaving the tab and coming back was enough to lose a good reply. A wait that comes back far later than it asked for now starts again rather than reaching a verdict. One that really is stuck is still caught, a full wait after the page starts running again, and the panel says why the wait restarted.
+- **A reply that finished while you were in another tab was called stuck and re-rolled.** Everything the extension knows about a generation arrives over Lumiverse's socket, and a tab in the background can miss those events outright: they are not held and handed over later, they are gone. So the extension sat waiting for a first word that had already come and gone, and the wait ran out on a reply sitting there finished. A watchdog now looks at the page before it acts. The reply on screen when a generation starts is remembered, and if what is on screen has changed, words arrived, whatever the socket did or did not deliver, so it stands down and says so. A generation that really produced nothing is still re-rolled.
+- **The same waits could also be judged over time the page spent asleep.** A background tab has its timers held back, and one the browser freezes runs nothing at all and then hands everything over at once. A wait that comes back far later than it asked for now starts again rather than reaching a verdict, and the panel says why.
 
 ## 4.24.5
 
