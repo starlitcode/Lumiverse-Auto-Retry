@@ -121,7 +121,7 @@ const STREAM_BUF_MAX = 200000;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "4.24.6";
+const VERSION = "4.24.5";
 
 // The one address the extension ever points at, used by the warning in front of
 // the crisis-support check. Pinned to the released branch rather than to a tag,
@@ -3071,7 +3071,7 @@ export function setup(ctx: Ctx, opts?: any) {
     if (cfg.confirmBeforeEdit) {
       if (!(await confirmEdit("Apply your word swaps to the latest reply?"))) return;
     }
-    sendSwapRequest({ type: "apply_replace_now", chatId: chatId, messageId: lastMessageId, requestId: "ar-rep-" + Date.now() });
+    sendSwapRequest({ type: "apply_replace_now", chatId: chatId, byHand: true, messageId: lastMessageId, requestId: "ar-rep-" + Date.now() });
   }
   // Swap every generated reply in the current chat, once, on request.
   async function applyReplaceAllNow() {
@@ -3084,7 +3084,7 @@ export function setup(ctx: Ctx, opts?: any) {
     if (cfg.confirmBeforeEdit) {
       if (!(await confirmEdit("Apply your word swaps to every reply in this chat?"))) return;
     }
-    sendSwapRequest({ type: "apply_replace_now", chatId: chatId, wholeChat: true, requestId: "ar-rep-all-" + Date.now() });
+    sendSwapRequest({ type: "apply_replace_now", chatId: chatId, byHand: true, wholeChat: true, requestId: "ar-rep-all-" + Date.now() });
   }
   // The Extras-menu on/off entry. Its label and icon carry the current state,
   // and the host offers no way to relabel an action once it is registered, so a
@@ -11431,6 +11431,9 @@ export function setup(ctx: Ctx, opts?: any) {
           }
           const yes = await confirmEdit("Apply your word swaps to this reply?");
           if (yes && ctx && typeof (ctx as any).sendToBackend === "function") {
+            // No byHand here. Saying yes to one automatic swap is not the same
+            // as reaching for a button, and it must not end the wait on some
+            // other reply that is still settling in this chat.
             sendSwapRequest({ type: "apply_replace_now", chatId: msg.chatId, messageId: msg.messageId, requestId: "ar-rep-" + Date.now() });
           }
           return;

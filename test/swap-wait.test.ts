@@ -151,7 +151,7 @@ describe("the wait for another extension", () => {
     const h = await armed();
     await h.ended({ chatId: "c1", messageId: "m2" });
     await wait(150);
-    await h.front({ type: "apply_replace_now", chatId: "c1", messageId: "m2", requestId: "r" });
+    await h.front({ type: "apply_replace_now", chatId: "c1", byHand: true, messageId: "m2", requestId: "r" });
     expect(h.body("m2")).toBe("Marisol set the lamp down.");
     // And nothing lands a second time once the wait would have been up.
     await wait(WAIT_MS + 500);
@@ -162,14 +162,14 @@ describe("the wait for another extension", () => {
   test("it says how many waits it ended", async () => {
     const h = await armed();
     await h.ended({ chatId: "c1", messageId: "m2" });
-    await h.front({ type: "apply_replace_now", chatId: "c1", messageId: "m2", requestId: "r" });
+    await h.front({ type: "apply_replace_now", chatId: "c1", byHand: true, messageId: "m2", requestId: "r" });
     const done = h.sent.find((m) => m.type === "replace_now_result");
     expect(done.waitsEnded).toBe(1);
   });
 
   test("with nothing waiting it says so rather than nothing", async () => {
     const h = await armed();
-    await h.front({ type: "apply_replace_now", chatId: "c1", messageId: "m2", requestId: "r" });
+    await h.front({ type: "apply_replace_now", chatId: "c1", byHand: true, messageId: "m2", requestId: "r" });
     const done = h.sent.find((m) => m.type === "replace_now_result");
     expect(done.waitsEnded).toBe(0);
   });
@@ -186,7 +186,7 @@ describe("the wait for another extension", () => {
     await h.ended({ chatId: "c1", messageId: "m2" });
     await h.ended({ chatId: "c1", messageId: "m4" });
     await wait(150);
-    await h.front({ type: "apply_replace_now", chatId: "c1", messageId: "m4", requestId: "r" });
+    await h.front({ type: "apply_replace_now", chatId: "c1", byHand: true, messageId: "m4", requestId: "r" });
     const done = h.sent.find((m) => m.type === "replace_now_result");
     expect(done.waitsEnded).toBe(2);
     expect(h.body("m4")).toBe("She lit the lamp again.");
@@ -203,17 +203,37 @@ describe("the wait for another extension", () => {
     // this arms the wait with the id the host supplied.
     await h.ended({ chatId: "c1", messageId: "m2" });
     await wait(150);
-    await h.front({ type: "apply_replace_now", chatId: "c1", messageId: "m2", requestId: "r" });
+    await h.front({ type: "apply_replace_now", chatId: "c1", byHand: true, messageId: "m2", requestId: "r" });
     const done = h.sent.find((m) => m.type === "replace_now_result");
     expect(done.waitsEnded).toBe(1);
     expect(done.ok).toBe(false);
+  });
+
+  test("saying yes to an automatic swap does not end anyone else's wait", async () => {
+    // The confirmation sends the same request a button does. Agreeing to one
+    // swap is not the reader saying they will not wait for the rest, so a
+    // reply still settling in the chat keeps its timer.
+    const two = chat().concat([
+      { id: "m3", role: "user", content: "and then" },
+      { id: "m4", role: "assistant", content: "She lit the lantern again." },
+    ]);
+    const h = await armed(two);
+    await h.ended({ chatId: "c1", messageId: "m2" });
+    await h.ended({ chatId: "c1", messageId: "m4" });
+    await wait(150);
+    await h.front({ type: "apply_replace_now", chatId: "c1", messageId: "m4", requestId: "r" });
+    const done = h.sent.find((m) => m.type === "replace_now_result");
+    expect(done.waitsEnded).toBe(0);
+    await wait(WAIT_MS + 500);
+    // The other reply's own wait ran out and swapped it, as it should have.
+    expect(h.body("m2")).toBe("Marisol set the lamp down.");
   });
 
   test("a swap button in one chat leaves another chat's wait alone", async () => {
     const h = await armed();
     await h.ended({ chatId: "c1", messageId: "m2" });
     await wait(150);
-    await h.front({ type: "apply_replace_now", chatId: "c2", messageId: "m9", requestId: "r" });
+    await h.front({ type: "apply_replace_now", chatId: "c2", byHand: true, messageId: "m9", requestId: "r" });
     const done = h.sent.find((m) => m.type === "replace_now_result");
     expect(done.waitsEnded).toBe(0);
     // The first chat's wait was never anybody else's to cancel.
@@ -228,7 +248,7 @@ describe("the wait for another extension", () => {
     const h = await armed();
     await h.ended({ chatId: "c1", messageId: "m2" });
     await wait(150);
-    await h.front({ type: "apply_replace_now", chatId: "c1", messageId: "m2", requestId: "r" });
+    await h.front({ type: "apply_replace_now", chatId: "c1", byHand: true, messageId: "m2", requestId: "r" });
     expect(h.body("m2")).toBe("Marisol set the lamp down.");
     h.foreignEdit("c1", "m2", "Marisol set the lantern down on the step.");
     await wait(2200);

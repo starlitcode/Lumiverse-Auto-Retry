@@ -1019,7 +1019,11 @@ spindle.onFrontendMessage(async (payload, userId) => {
             replyTo(userId, { type: 'replace_now_ack', requestId: payload.requestId });
             // Ahead of any reading, so a chat the host will not hand back still ends
             // the wait rather than leaving a swap to arrive on its own later.
-            const waitsEnded = payload.chatId ? clearPendingInChat(payload.chatId) : 0;
+            //
+            // Only for a button. The same request also carries a yes to an automatic
+            // swap's confirmation, and agreeing to one swap says nothing about
+            // whether another reply in the chat should still be waiting.
+            const waitsEnded = payload.byHand && payload.chatId ? clearPendingInChat(payload.chatId) : 0;
             let ok = true, found = false, changed = 0, skipped = 0;
             // Literal substitutions made, passed back so the frontend can update the
             // rendered text. The host saves the message without redrawing the chat.

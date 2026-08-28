@@ -8,14 +8,6 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
-## 4.24.6
-
-_2026-08-27_
-
-### Changed
-
-- **A swap that another extension made unnecessary says so.** If the other extension's rewrite takes your words out of the reply, the swap drops itself and nothing is written, which it always did: the rules run against the reply as it is when the swap fires, not against the text it had when the wait started. What it did not do was say anything, so a wait you turned on could spend a minute and finish in silence. The panel now writes a line for that one case. A reply that never had a matching word in it is still not reported, since nothing was lost there.
-
 ## 4.24.5
 
 _2026-08-27_
@@ -23,6 +15,7 @@ _2026-08-27_
 ### Changed
 
 - **A swap button ends the wait for other extensions, in that whole chat.** With **Wait for other extensions to finish** on, a swap can be held back for up to five minutes. Pressing **swap words now** or **swap words in every reply** is you saying you are not waiting, so nothing in that chat stays on a timer: the one you swapped already stopped, and now so does every other reply waiting in it, rather than being rewritten minutes later with nothing on screen to say why. The panel writes a line saying how many waits it ended. A chat the host will not hand back stops waiting too, which it did not before. This ends the wait, not the reply: an extension that rewrites your reply afterwards still gets the swap put back on top of it.
+- **A swap that another extension made unnecessary says so.** If the other extension's rewrite takes your words out of the reply, the swap drops itself and nothing is written, which it always did: the rules run against the reply as it is when the swap fires, not against the text it had when the wait started. What it did not do was say anything, so a wait you turned on could spend a minute and finish in silence. The panel writes a line for that one case now. A reply that never had a matching word in it is still not reported, since nothing was lost there.
 
 ## 4.24.4
 
