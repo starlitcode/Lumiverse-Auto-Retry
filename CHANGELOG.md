@@ -8,6 +8,14 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 4.24.6
+
+_2026-08-27_
+
+### Changed
+
+- **A swap that another extension made unnecessary says so.** If the other extension's rewrite takes your words out of the reply, the swap drops itself and nothing is written, which it always did: the rules run against the reply as it is when the swap fires, not against the text it had when the wait started. What it did not do was say anything, so a wait you turned on could spend a minute and finish in silence. The panel now writes a line for that one case. A reply that never had a matching word in it is still not reported, since nothing was lost there.
+
 ## 4.24.5
 
 _2026-08-27_

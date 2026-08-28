@@ -660,7 +660,9 @@ function warnUnreadableChat(e) {
     }
     catch (__) { }
 }
-async function swapMessageNow(chatId, messageId, userId) {
+// wasRewritten says something else edited this reply while the swap waited on
+// it, which is the one case where finding nothing to swap is worth reporting.
+async function swapMessageNow(chatId, messageId, userId, wasRewritten) {
     if (!groups.length)
         return;
     let m = null;
@@ -688,8 +690,16 @@ async function swapMessageNow(chatId, messageId, userId) {
     const content = String(m.content == null ? '' : m.content);
     const pairs = [];
     const next = applyRulesVisible(content, pairs);
-    if (next === content)
+    if (next === content) {
+        // Nothing of yours is left in the reply, so there is nothing to do and the
+        // swap drops itself. Said out loud only when something else rewrote the
+        // reply while the swap waited: the reader turned that wait on and then
+        // watched a long minute of nothing, and silence there reads the same as
+        // broken. A reply that never had a matching word in it is not news.
+        if (wasRewritten)
+            replyTo(userId, { type: 'nothing_left_to_swap', chatId: chatId, messageId: messageId });
         return;
+    }
     if (confirmBeforeEdit) {
         // Ask first; the frontend sends apply_replace_now for this reply if the user agrees.
         replyTo(userId, { type: 'confirm_edit', chatId: chatId, messageId: messageId, requestId: 'ar-auto-' + Date.now() });
@@ -726,11 +736,15 @@ function scheduleSwap(chatId, messageId, sawEdit, userId) {
     // deferred swap still replies to that user and not to everyone.
     if (userId != null)
         p.userId = userId;
+    // Sticky: one rewrite is enough to make "nothing to swap" worth reporting at
+    // the end, and a later edit that settles must not quietly unset it.
+    if (sawEdit)
+        p.rewritten = true;
     const want = sawEdit ? SETTLE_MS : waitStartMs;
     const left = Math.max(0, p.capAt - Date.now());
     p.timer = setTimeout(() => {
         pendingSwaps.delete(k);
-        swapMessageNow(chatId, messageId, p.userId).catch(() => { });
+        swapMessageNow(chatId, messageId, p.userId, !!p.rewritten).catch(() => { });
     }, Math.max(0, Math.min(want, left)));
 }
 // Every deferred swap in one chat, dropped, and how many there were.

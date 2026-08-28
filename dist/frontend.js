@@ -110,7 +110,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "4.24.5";
+const VERSION = "4.24.6";
 // The one address the extension ever points at, used by the warning in front of
 // the crisis-support check. Pinned to the released branch rather than to a tag,
 // so an old install still opens the page as it stands today.
@@ -11469,6 +11469,11 @@ export function setup(ctx, opts) {
                         if (yes && ctx && typeof ctx.sendToBackend === "function") {
                             sendSwapRequest({ type: "apply_replace_now", chatId: msg.chatId, messageId: msg.messageId, requestId: "ar-rep-" + Date.now() });
                         }
+                        return;
+                    }
+                    if (msg.type === "nothing_left_to_swap") {
+                        log("another extension rewrote a reply while the swap waited on it, " +
+                            "and none of your words are left in it, so nothing was changed");
                         return;
                     }
                     // The backend has just come up, so whatever it was told before is gone.

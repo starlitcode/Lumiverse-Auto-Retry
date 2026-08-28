@@ -123,6 +123,12 @@ The wait can be up to five minutes, and sometimes you would rather have the swap
 
 That ends the wait, not the reply. If another extension rewrites the reply after you swapped it by hand, your swap still goes back on top, the same three times as before.
 
+### When the swap turns out not to be needed
+
+If the other extension's rewrite happens to take your words out of the reply, the swap drops itself. Nothing is written. The rules run against the reply as it is when the swap fires, not against the text it had when the wait started, so a swap can only ever change words that are actually there.
+
+The wait is not cancelled early when that happens, on purpose. A rewrite is not always the last one, and a later pass can put the word back; the timer still running is what catches it. Since the swap you were waiting for silently does nothing, the panel says so instead: **another extension rewrote a reply while the swap waited on it, and none of your words are left in it**. A reply that never had a matching word in it is not reported, because nothing was lost there.
+
 ## Word presets
 
 At the bottom of the find-and-replace settings, under **Word presets**, you can save your word-swap setups as named presets and switch between them without copying rules by hand.

@@ -235,3 +235,46 @@ describe("the wait for another extension", () => {
     expect(h.body("m2")).toBe("Marisol set the lamp down on the step.");
   });
 });
+
+describe("when another extension takes the words away", () => {
+  test("nothing is written, because the rules run on the reply as it is now", async () => {
+    const h = await armed();
+    await h.ended({ chatId: "c1", messageId: "m2" });
+    // The other extension rewrites the reply and its rewrite happens not to
+    // contain anything the rules match.
+    h.foreignEdit("c1", "m2", "Marisol set the candle down.");
+    await wait(WAIT_MS + 2500);
+    expect(h.body("m2")).toBe("Marisol set the candle down.");
+    expect(h.writes.length).toBe(0);
+  });
+
+  test("and it says so, since the reader was watching that wait", async () => {
+    const h = await armed();
+    await h.ended({ chatId: "c1", messageId: "m2" });
+    h.foreignEdit("c1", "m2", "Marisol set the candle down.");
+    await wait(WAIT_MS + 2500);
+    expect(h.sent.some((m) => m.type === "nothing_left_to_swap")).toBe(true);
+  });
+
+  test("a reply nothing ever matched in is not reported", async () => {
+    // Silence is right here. Nothing rewrote it and nothing was lost: the
+    // rules simply do not apply to this reply, which is true of most of them.
+    const none = chat();
+    none[2].content = "Marisol set the candle down.";
+    const h = await armed(none);
+    await h.ended({ chatId: "c1", messageId: "m2" });
+    await wait(WAIT_MS + 500);
+    expect(h.sent.some((m) => m.type === "nothing_left_to_swap")).toBe(false);
+    expect(h.writes.length).toBe(0);
+  });
+
+  test("but the word coming back in a later pass is still caught", async () => {
+    const h = await armed();
+    await h.ended({ chatId: "c1", messageId: "m2" });
+    h.foreignEdit("c1", "m2", "Marisol set the candle down.");
+    await wait(300);
+    h.foreignEdit("c1", "m2", "Marisol set the lantern down again.");
+    await wait(WAIT_MS + 2500);
+    expect(h.body("m2")).toBe("Marisol set the lamp down again.");
+  });
+});
