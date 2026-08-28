@@ -117,6 +117,12 @@ If another extension also rewrites replies, the two can undo each other. [Hone](
 
 Leave it off if nothing else edits your replies. Auto Retry cannot tell whether Hone's auto-refine is on, since Hone exposes no state to other extensions, so this is a switch rather than something detected. With it off, swaps are instant, which is what you want with Hone set to manual.
 
+### Not waiting
+
+The wait can be up to five minutes, and sometimes you would rather have the swap now. Pressing **swap words now** or **swap words in every reply** does it immediately, and ends every wait running in that chat: pressing the button is you saying you are not waiting, and a timer left running would rewrite a reply you had scrolled past, minutes later, with nothing on screen to say why. The panel writes a line saying how many waits it ended.
+
+That ends the wait, not the reply. If another extension rewrites the reply after you swapped it by hand, your swap still goes back on top, the same three times as before.
+
 ## Word presets
 
 At the bottom of the find-and-replace settings, under **Word presets**, you can save your word-swap setups as named presets and switch between them without copying rules by hand.

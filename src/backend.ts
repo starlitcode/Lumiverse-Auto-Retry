@@ -700,7 +700,9 @@ async function swapMessageNow(chatId: string, messageId: any, userId?: string): 
 function scheduleSwap(chatId: string, messageId: any, sawEdit: boolean, userId?: string) {
   const k = swapKey(chatId, messageId);
   let p = pendingSwaps.get(k);
-  if (!p) { p = { capAt: Date.now() + MAX_WAIT_MS, timer: null }; pendingSwaps.set(k, p); }
+  // The chat is kept on the entry rather than read back out of the key, so
+  // ending every wait in one chat is an exact match and not a prefix one.
+  if (!p) { p = { chatId: String(chatId), capAt: Date.now() + MAX_WAIT_MS, timer: null }; pendingSwaps.set(k, p); }
   if (p.timer) clearTimeout(p.timer);
   // The owner is remembered from whichever event scheduled the swap first, so a
   // deferred swap still replies to that user and not to everyone.
@@ -713,10 +715,24 @@ function scheduleSwap(chatId: string, messageId: any, sawEdit: boolean, userId?:
   }, Math.max(0, Math.min(want, left)));
 }
 
-function clearPending(chatId: any, messageId: any) {
-  const k = swapKey(chatId, messageId);
-  const p = pendingSwaps.get(k);
-  if (p) { if (p.timer) clearTimeout(p.timer); pendingSwaps.delete(k); }
+// Every deferred swap in one chat, dropped, and how many there were.
+//
+// Pressing a swap button is the reader saying they are not waiting. Keeping a
+// timer running past that has nothing to recommend it: the wait exists to let
+// another extension finish first, and someone who reaches for the button has
+// decided that is not worth the seconds. A leftover timer also lands minutes
+// later, on a reply that has been scrolled past, with nothing on screen to say
+// why the words changed again.
+function clearPendingInChat(chatId: any): number {
+  const want = String(chatId);
+  let n = 0;
+  for (const [k, p] of Array.from(pendingSwaps)) {
+    if (!p || String(p.chatId) !== want) continue;
+    if (p.timer) clearTimeout(p.timer);
+    pendingSwaps.delete(k);
+    n++;
+  }
+  return n;
 }
 
 // An edit by anything other than us. While a swap is pending this pushes it
@@ -930,6 +946,9 @@ spindle.onFrontendMessage(async (payload: any, userId?: string) => {
       // chat can take a while to swap, and without this the only way to tell a
       // long job from a backend that is not running is to wait and see.
       replyTo(userId, { type: 'replace_now_ack', requestId: payload.requestId });
+      // Ahead of any reading, so a chat the host will not hand back still ends
+      // the wait rather than leaving a swap to arrive on its own later.
+      const waitsEnded = payload.chatId ? clearPendingInChat(payload.chatId) : 0;
       let ok = true, found = false, changed = 0, skipped = 0;
       // Literal substitutions made, passed back so the frontend can update the
       // rendered text. The host saves the message without redrawing the chat.
@@ -959,9 +978,6 @@ spindle.onFrontendMessage(async (payload: any, userId?: string) => {
           }
           found = targets.length > 0;
           for (const m of targets) {
-            // A deferred swap waiting on this same reply is dropped, so the two
-            // cannot both fire and stack.
-            clearPending(chatId, m.id);
             // Skip replies already swapped this session unless re-swapping is allowed.
             if (!allowReSwap && swappedIds.has(m.id)) { skipped++; continue; }
             const content = String(m.content == null ? '' : m.content);
@@ -976,7 +992,7 @@ spindle.onFrontendMessage(async (payload: any, userId?: string) => {
           }
         }
       } catch (_) { ok = false; }
-      replyTo(userId, { type: 'replace_now_result', requestId: payload.requestId, chatId: payload.chatId, ok: ok, hasRules: groups.length > 0, found: found, changed: changed, skipped: skipped, pairs: pairs, edits: edits });
+      replyTo(userId, { type: 'replace_now_result', requestId: payload.requestId, chatId: payload.chatId, ok: ok, hasRules: groups.length > 0, found: found, changed: changed, skipped: skipped, pairs: pairs, edits: edits, waitsEnded: waitsEnded });
       return;
     }
   } catch (_) {

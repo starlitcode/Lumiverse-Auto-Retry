@@ -8,6 +8,14 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 4.24.5
+
+_2026-08-27_
+
+### Changed
+
+- **A swap button ends the wait for other extensions, in that whole chat.** With **Wait for other extensions to finish** on, a swap can be held back for up to five minutes. Pressing **swap words now** or **swap words in every reply** is you saying you are not waiting, so nothing in that chat stays on a timer: the one you swapped already stopped, and now so does every other reply waiting in it, rather than being rewritten minutes later with nothing on screen to say why. The panel writes a line saying how many waits it ended. A chat the host will not hand back stops waiting too, which it did not before. This ends the wait, not the reply: an extension that rewrites your reply afterwards still gets the swap put back on top of it.
+
 ## 4.24.4
 
 _2026-08-27_
