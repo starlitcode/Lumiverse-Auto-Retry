@@ -12,6 +12,8 @@ There are eight sections. Three are open when the panel opens:
 
 Five start shut, each with a **▸** to open it: **Refusal tuning**, **Find and replace**, **Buttons it clicks**, **Debug info** and **Import / export**. They are closed because nothing in them is needed to use the extension, not because they are difficult.
 
+The longer sections are split under headings, so you can find the part you want without reading every row. **How it retries** runs from the cap on one message through **When it gives up** and **How long it waits between tries**. **When to count a reply as bad** ends with **Replies that freeze**. **Refusal tuning** goes **What counts as one**, **Wording you supply**, **How far it looks**, then the note rows. Each heading carries a line saying what its rows have in common.
+
 ## The **?** on each option
 
 It shows that option's description in a small popover just below it, floating over the panel, so the rows stay where they are and the setting you are reading about is never hidden.

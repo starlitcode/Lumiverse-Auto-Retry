@@ -110,7 +110,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "4.24.6";
+const VERSION = "4.24.7";
 // The one address the extension ever points at, used by the warning in front of
 // the crisis-support check. Pinned to the released branch rather than to a tag,
 // so an old install still opens the page as it stands today.
@@ -303,6 +303,26 @@ const RUNS = {
         title: "For the whole list",
         note: "These two are set once and apply to every note. What each note sets for itself, its role and the try it starts on, is on its own row in the list above.",
     },
+    givingUp: {
+        title: "When it gives up",
+        note: "The cap on one message, and the brake that stops the whole thing after a run of failures. Nothing here changes what counts as a bad reply, only how long it keeps trying.",
+    },
+    waits: {
+        title: "How long it waits between tries",
+        note: "The first wait, and how it grows from there. These only matter once a retry has been decided on. The defaults suit most providers; raise them if yours rate-limits you.",
+    },
+    whatCounts: {
+        title: "What counts as one",
+        note: "The built-in wording list and the two extra shapes it can catch. These decide what the check looks for before any of your own wording is added.",
+    },
+    yourWords: {
+        title: "Wording you supply",
+        note: "Your own lines, one per line. The first two add to what counts and the third overrules everything, so a phrase listed there is never a refusal however it matched.",
+    },
+    howFar: {
+        title: "How far it looks",
+        note: "What the check is allowed to read. A long reply is real writing rather than a refusal, and the model's own reasoning is not the reply, so neither is treated as one by default.",
+    },
     frozen: {
         title: "Replies that freeze",
         note: "The rows above are about a reply that arrived and was no good. These two are about one that never finished. Both are waits in milliseconds, and both lean long so a slow connection is not read as a freeze. Lower them for quicker retries on a fast provider, or set either to 0 to switch that one off.",
@@ -389,12 +409,14 @@ const SCHEMA = [
             },
             {
                 key: "pauseWhenFailing",
+                run: "givingUp",
                 label: "Pause when everything is failing",
                 type: "bool",
                 hint: "On by default. If several whole runs give up in a row, the provider is probably down, so Auto Retry stops for a while instead of retrying on every message you send. The next reply that works clears it, and you can still send and regenerate by hand while it's paused. The two boxes below set how many runs and how long.",
             },
             {
                 key: "breakerRuns",
+                run: "givingUp",
                 needs: ["pauseWhenFailing"],
                 label: "Failed runs before pausing",
                 type: "num",
@@ -405,6 +427,7 @@ const SCHEMA = [
             },
             {
                 key: "breakerPauseMins",
+                run: "givingUp",
                 needs: ["pauseWhenFailing"],
                 label: "How long to pause (minutes)",
                 type: "num",
@@ -415,6 +438,7 @@ const SCHEMA = [
             },
             {
                 key: "retryDelayMs",
+                run: "waits",
                 label: "Wait before the first retry (ms)",
                 type: "num",
                 int: true,
@@ -424,6 +448,7 @@ const SCHEMA = [
             },
             {
                 key: "backoffFactor",
+                run: "waits",
                 label: "How much longer each wait gets",
                 type: "num",
                 min: 1,
@@ -432,6 +457,7 @@ const SCHEMA = [
             },
             {
                 key: "maxDelayMs",
+                run: "waits",
                 label: "Longest it will ever wait (ms)",
                 type: "num",
                 int: true,
@@ -441,6 +467,7 @@ const SCHEMA = [
             },
             {
                 key: "rateLimitDelayMs",
+                run: "waits",
                 label: "Wait when the server is busy (ms)",
                 type: "num",
                 int: true,
@@ -450,6 +477,7 @@ const SCHEMA = [
             },
             {
                 key: "jitter",
+                run: "waits",
                 label: "Add a little randomness to waits",
                 type: "bool",
                 hint: "Nudges each wait by a random amount so retries don't all hit the server at the same instant. Best left on.",
@@ -560,12 +588,14 @@ const SCHEMA = [
         fields: [
             {
                 key: "refusalUseBuiltins",
+                run: "whatCounts",
                 label: "Use the built-in phrase list",
                 type: "bool",
                 hint: "On by default. This only controls the built-in list. Your own phrases below are always used either way. On, the built-in list is used together with your own phrases. Off, only your own phrases are used.",
             },
             {
                 key: "refusalCatchDisengage",
+                run: "whatCounts",
                 needs: ["refusalUseBuiltins"],
                 label: "Also catch the model breaking off",
                 type: "bool",
@@ -573,6 +603,7 @@ const SCHEMA = [
             },
             {
                 key: "refusalCatchCrisis",
+                run: "whatCounts",
                 needs: ["refusalUseBuiltins"],
                 label: "Also catch it stopping to offer support",
                 type: "bool",
@@ -580,18 +611,21 @@ const SCHEMA = [
             },
             {
                 key: "refusalIgnoreQuoted",
+                run: "whatCounts",
                 label: "Ignore refusals inside quotation marks",
                 type: "bool",
                 hint: "On by default. A line inside quotation marks is a character speaking, so it is not counted as the model refusing. This is what keeps \"I can't help with that,\" said the innkeeper from being thrown away. Turn it off only if your model puts its own refusals in quotes. Your own phrases are always counted either way, and the support check above always skips quoted lines.",
             },
             {
                 key: "refusalExtraPhrases",
+                run: "yourWords",
                 label: "Your own refusal phrases",
                 type: "text",
                 hint: "Optional. Extra phrases that should also count as a refusal, one per line. These are always used, whether or not the built-in list above is on. Upper or lower case doesn't matter. Paste the exact wording your model refuses with.",
             },
             {
                 key: "refusalPhraseSubs",
+                run: "yourWords",
                 needs: ["refusalUseBuiltins"],
                 label: "Reword the built-in phrases",
                 type: "text",
@@ -599,12 +633,14 @@ const SCHEMA = [
             },
             {
                 key: "refusalIgnorePhrases",
+                run: "yourWords",
                 label: "Never treat these as a refusal",
                 type: "text",
                 hint: "Optional. If a reply contains any of these phrases, one per line, it's never counted as a refusal. This wins over everything else.",
             },
             {
                 key: "refusalMaxChars",
+                run: "howFar",
                 label: "Longest reply to treat as a refusal",
                 type: "num",
                 int: true,
@@ -614,12 +650,14 @@ const SCHEMA = [
             },
             {
                 key: "refusalStripThinking",
+                run: "howFar",
                 label: "Ignore the thinking / reasoning",
                 type: "bool",
                 hint: "On by default. Only the final reply is checked for a refusal, never the model's thinking, so a refusal it weighs up while reasoning but leaves out of the reply won't cause a retry. Turn it off to check the whole raw output. This affects refusal matching only: the empty and cut-off checks always look past the thinking.",
             },
             {
                 key: "refusalThinkTags",
+                run: "howFar",
                 label: "Extra thinking tag names",
                 type: "text",
                 hint: "Optional, one per line. The common reasoning tags are already handled. Add a tag name only if your model wraps its thinking in an unusual one (for example: mythink). Just the name, no brackets or pipes; underscores and hyphens are part of a name, spaces are not. A name you add is recognised in all four wrappers, and it covers the word swaps and the length checks as well as refusals.",

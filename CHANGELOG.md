@@ -8,6 +8,14 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 4.24.7
+
+_2026-08-28_
+
+### Changed
+
+- **The two longest sections of the panel are split under headings.** **How it retries** was eleven rows in a row and **Refusal tuning** was eleven, both flat, so everything in them looked equally important and nothing said which rows belonged together. They now read **When it gives up** and **How long it waits between tries**, and **What counts as one**, **Wording you supply** and **How far it looks**, each with a line saying what its rows have in common. Nothing moved section and no setting changed. A check holds the panel to this, so a section cannot drift back into a wall of rows.
+
 ## 4.24.6
 
 _2026-08-28_

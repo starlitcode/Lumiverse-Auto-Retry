@@ -52,6 +52,46 @@ describe("the sections of the settings panel", () => {
     expect(lonely).toEqual([]);
   });
 
+  test("no section is a wall of rows with nothing breaking it up", () => {
+    // A long unbroken list is the thing that makes a settings panel read as
+    // messy: everything looks equally important and nothing says which rows
+    // belong together. The runs mechanism is the answer and it is already used,
+    // so this is only here to stop a section drifting back past the point where
+    // it needed one. Counted as rows in a row without a heading between them,
+    // since a section can be long and still be easy to read once it is
+    // grouped. Eight is the longest stretch anything has now.
+    const MOST = 8;
+    const bad: string[] = [];
+    const seen: number[] = [];
+    for (const sec of secs) {
+      // Find and replace is grouped too, by the other mechanism: splitByPreset
+      // draws its two headings from what a preset carries rather than from a
+      // run tag, so its rows carry none and there is nothing here to count.
+      if (/\n\s*splitByPreset: true,/.test(sec.body)) continue;
+      // Rows in order, each either naming a run or not. A row with no run ends
+      // whatever run was open, which is what the panel does when it draws them.
+      const rows = [...sec.body.matchAll(/^ {8}key: "([A-Za-z]+)",$\n(?:^ {8}.*$\n)*?(?=^ {6}\}|^ {8}key:)/gm)];
+      let open: string | null = null;
+      let streak = 0;
+      let worst = 0;
+      for (const r of rows) {
+        const m = r[0].match(/^ {8}run: "([A-Za-z]+)",$/m);
+        const run = m ? m[1] : null;
+        if (run && run !== open) { open = run; streak = 0; continue; }
+        if (run) continue;
+        open = null;
+        streak++;
+        if (streak > worst) worst = streak;
+      }
+      if (worst > MOST) bad.push(sec.title + " (" + worst + " in a row)");
+      seen.push(worst);
+    }
+    expect(bad).toEqual([]);
+    // Proof this read the rows at all rather than finding nothing to count.
+    expect(seen.length).toBeGreaterThan(3);
+    expect(Math.max(...seen)).toBeGreaterThan(3);
+  });
+
   test("the sections that start shut are named, not guessed at", () => {
     // A flag rather than a title starting with "Advanced", which would make the
     // name decide the behaviour and label things that are not advanced. Saving
@@ -59,6 +99,11 @@ describe("the sections of the settings panel", () => {
     // shut because nothing in them is needed to use the extension, which is a
     // different claim, and the caret is the one making it. Listed here so
     // adding a section to that set has to be decided, not drifted into.
+    //
+    // "How it retries" is a long section of timing nobody usually changes, so
+    // it looks like the next candidate. It is not one: the choice between a
+    // reroll and a regenerate lives in it, that choice decides whether a retry
+    // keeps the reply it replaces, and the check below holds it on screen.
     const shut = secs.filter((s) => /\n\s*collapsed: true,/.test(s.body)).map((s) => s.title);
     expect(shut).toEqual([
       "Refusal tuning",
