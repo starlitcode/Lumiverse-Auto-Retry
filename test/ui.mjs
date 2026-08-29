@@ -88,7 +88,13 @@ const THEME = `:root{
 --lumiverse-fill:rgba(0,0,0,.15);--lumiverse-transition:200ms ease;
 --lumiverse-transition-fast:150ms ease;--lumiverse-font-family:system-ui,sans-serif;
 --lumiverse-font-mono:ui-monospace,monospace;--lumiverse-font-scale:1;--lumiverse-ui-scale:1;}
-body{background:rgb(10,8,18);margin:0}#modal{background:rgb(35,30,48);padding:0;width:456px}`;
+body{background:rgb(10,8,18);margin:0}#modal{background:rgb(35,30,48);padding:0;width:456px;max-width:100%}`;
+// The width above stands in for the modal Lumiverse hands the panel, and the
+// cap is what makes a narrow viewport mean anything: pinned at 456px, a check
+// that set a 320px phone still measured a 456px panel and the page scrolled
+// sideways to hold it. Anything that has to be true on a phone is true at the
+// width a phone actually gives.
+
 
 // Boots the extension in a page with the settings panel open, and hands the
 // callback the same helpers every check needs.
@@ -255,7 +261,17 @@ function crossOnField(buf) {
 const ORIGIN = "http://lumiverse.test/";
 async function stage(page, body) {
   await page.route("**/*", (route) =>
-    route.fulfill({ contentType: "text/html", body: "<!doctype html><meta charset=utf-8>" + body }),
+    route.fulfill({
+      contentType: "text/html",
+      // The viewport meta is not decoration. Chromium lays a page out at 980px
+      // wide when isMobile is set and the page does not ask for the device
+      // width, so a check that sets a 360px phone and forgets this measures a
+      // desktop layout shrunk to fit and finds nothing a phone would.
+      body:
+        '<!doctype html><meta charset=utf-8>' +
+        '<meta name="viewport" content="width=device-width, initial-scale=1">' +
+        body,
+    }),
   );
   await page.goto(ORIGIN);
 }
@@ -5605,6 +5621,99 @@ console.log("\na reply that stopped partway with text in it");
       withTextOn.clicks.indexOf("regenerate") < 0, withTextOn);
 
   check("no console errors", errors.length === 0, errors);
+}
+
+// ---- the sub-headings on a small phone ----
+// The headings that break the long sections up are 11px uppercase with letter
+// spacing, which is the widest way to set a short line. On a narrow screen a
+// heading that wraps to two lines reads as two headings, and one that runs off
+// the side takes the panel's scrollbar sideways with it. Measured at 320px,
+// which is the narrowest phone still in use, with every section opened so the
+// ones inside a shut section are measured too.
+console.log("\nthe sub-headings on a small phone");
+{
+  const HEADINGS = [
+    "When it gives up",
+    "How long it waits between tries",
+    "Replies that freeze",
+    "What counts as one",
+    "Wording you supply",
+    "How far it looks",
+    "For the whole list",
+  ];
+  const at = async (viewport, touch) => {
+    const { out, errors } = await inPanel(
+      browser,
+      // Both switches on, or the rows these headings cover are hidden and a
+      // heading with nothing under it measures zero high and proves nothing.
+      { viewport, touch, settings: { retryOnRefusal: true, refusalNote: true } },
+      (page) =>
+        page.evaluate(async (wanted) => {
+          const frame = () =>
+            new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+          for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]'))
+            h.click();
+          await frame();
+          const root = document.getElementById("modal");
+          const scroller = root.querySelector("div[style*='overflow-y']");
+          const right = scroller.getBoundingClientRect().right;
+          const rows = [];
+          root.querySelectorAll("div").forEach((d) => {
+            const t = (d.textContent || "").trim();
+            if (wanted.indexOf(t) < 0 || rows.some((r) => r.text === t)) return;
+            const cs = getComputedStyle(d);
+            const r = d.getBoundingClientRect();
+            const note = d.nextElementSibling;
+            const nr = note ? note.getBoundingClientRect() : null;
+            rows.push({
+              text: t,
+              lines: Math.round(r.height / parseFloat(cs.lineHeight || cs.fontSize)),
+              size: parseFloat(cs.fontSize),
+              over: Math.round(Math.max(r.right - right, nr ? nr.right - right : 0)),
+            });
+          });
+          const label = root.querySelector("[data-ar-row] span");
+          return {
+            rows,
+            panel: Math.round(scroller.getBoundingClientRect().width),
+            sideways: scroller.scrollWidth - scroller.clientWidth,
+            page: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+            labelSize: label ? parseFloat(getComputedStyle(label).fontSize) : 0,
+          };
+        }, HEADINGS),
+    );
+    return { ...out, errors };
+  };
+
+  const phone = await at({ width: 320, height: 568 }, true);
+  const desk = await at({ width: 1280, height: 900 }, false);
+
+  // If this ever reads near 980 the page has lost its viewport meta and the
+  // rest of this block is measuring a desktop layout.
+  check("the phone really is laid out as a phone", phone.panel < 340, phone.panel);
+  check("every heading is there to measure",
+    phone.rows.length === HEADINGS.length,
+    phone.rows.map((r) => r.text));
+  check("none of them wraps to a second line",
+    phone.rows.every((r) => r.lines === 1),
+    phone.rows.filter((r) => r.lines !== 1));
+  check("none of them runs off the side",
+    phone.rows.every((r) => r.over <= 0),
+    phone.rows.filter((r) => r.over > 0));
+  check("and the panel does not scroll sideways",
+    phone.sideways === 0 && phone.page === 0, [phone.sideways, phone.page]);
+  // A heading that reads the same size as the rows under it is not a heading.
+  check("a heading is smaller than the rows it covers",
+    phone.rows.every((r) => r.size < phone.labelSize),
+    [phone.rows[0] && phone.rows[0].size, phone.labelSize]);
+  check("the same holds on a desktop",
+    desk.rows.length === HEADINGS.length &&
+      desk.rows.every((r) => r.lines === 1 && r.over <= 0) &&
+      desk.sideways === 0,
+    desk);
+  check("no console errors",
+    phone.errors.length === 0 && desk.errors.length === 0,
+    phone.errors.concat(desk.errors));
 }
 
 // ---- a reply that arrived with none of its events ----
