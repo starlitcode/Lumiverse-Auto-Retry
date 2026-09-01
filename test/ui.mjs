@@ -5643,12 +5643,16 @@ console.log("\ntelling the backend again after it restarts");
   await page.waitForFunction(() => !!window.__setup);
   const out = await page.evaluate(async () => {
     const sent = [];
-    let onBack = null;
+    const backs = [];
+    const onBack = (m) => { for (const fn of backs.slice()) fn(m); };
     window.__setup(
       {
         events: { on: () => () => {} },
         sendToBackend: (m) => sent.push(m),
-        onBackendMessage: (fn) => { onBack = fn; return () => {}; },
+        // Every listener, not the last one. The extension registers several and
+        // opening the panel adds more, so keeping one drops the handler under
+        // test. The host delivers to all of them, and so does this.
+        onBackendMessage: (fn) => { backs.push(fn); return () => {}; },
         ui: {
           showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
           registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }),
@@ -5688,6 +5692,71 @@ console.log("\ntelling the backend again after it restarts");
   // already right, and another device may be saving over it at the same moment.
   check("nothing is written to the account over it",
     out.afterRestart.indexOf("save_settings") < 0, out.afterRestart);
+  check("no console errors", errors.length === 0, errors);
+}
+
+// An edit in the open panel changes the settings as it is typed and is rolled
+// back if the panel is dismissed. A restart landing in the middle of that would
+// hand the backend the edit, which then runs on a setting nobody saved, and
+// goes on running on it after the reader closes the panel on it.
+console.log("\na restart while the panel has unsaved edits");
+{
+  const page = await browser.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await stage(page, "<div id=modal></div>");
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  const out = await page.evaluate(async () => {
+    const frame = () =>
+      new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const sent = [];
+    const backs = [];
+    const onBack = (m) => { for (const fn of backs.slice()) fn(m); };
+    let openPanel = null;
+    window.__setup(
+      {
+        events: { on: () => () => {} },
+        sendToBackend: (m) => sent.push(m),
+        // Every listener, not the last one. The extension registers several and
+        // opening the panel adds more, so keeping one drops the handler under
+        // test. The host delivers to all of them, and so does this.
+        onBackendMessage: (fn) => { backs.push(fn); return () => {}; },
+        ui: {
+          showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+          registerInputBarAction: () => {
+            const a = { onClick: (cb) => { openPanel = cb; return () => {}; }, destroy: () => {} };
+            return a;
+          },
+        },
+      },
+      { replaceEnabled: false, replaceRules: "lantern => lamp", toast: false },
+    );
+    openPanel();
+    await frame();
+    // Tick "Swap words in replies" and do not press Save.
+    const root = document.getElementById("modal");
+    let ticked = false;
+    for (const box of root.querySelectorAll("input[type=checkbox]")) {
+      const row = box.closest("[data-ar-row]");
+      if (row && /Swap words in replies/.test(row.textContent)) {
+        box.click();
+        ticked = true;
+        break;
+      }
+    }
+    await frame();
+    sent.length = 0;
+    onBack({ type: "backend_ready" });
+    await frame();
+    const msg = sent.find((m) => m && m.type === "set_settings");
+    return { ticked, swapOn: msg ? msg.settings.replaceEnabled : "no message" };
+  });
+  await page.close();
+
+  check("the box really was ticked", out.ticked, out);
+  check("the backend is told what was saved, not what is being typed",
+    out.swapOn === false, out.swapOn);
   check("no console errors", errors.length === 0, errors);
 }
 

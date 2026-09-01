@@ -5837,10 +5837,19 @@ export function setup(ctx: Ctx, opts?: any) {
   // So the swaps quietly stopped after a restart, and a chat switched off
   // started being swapped again. Neither says anything, because from the
   // reader's side nothing happened: the tab was closed and opened again.
+  //
+  // The baseline while the settings panel is open, cfg otherwise. Edits in the
+  // panel change cfg as they are typed and are rolled back if the panel is
+  // dismissed, so sending cfg would hand the backend a setting nobody saved and
+  // leave it running on that after the reader closed the panel on it. The
+  // baseline is every saved value, which is what the backend had before.
   function armBackend() {
     try {
       if (ctx && typeof (ctx as any).sendToBackend === "function")
-        (ctx as any).sendToBackend({ type: "set_settings", settings: cfg });
+        (ctx as any).sendToBackend({
+          type: "set_settings",
+          settings: modalBaseline || cfg,
+        });
     } catch (_) {}
     tellBackendChatsOff();
   }
