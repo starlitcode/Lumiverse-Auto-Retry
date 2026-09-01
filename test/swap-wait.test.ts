@@ -256,6 +256,50 @@ describe("the wait for another extension", () => {
   });
 });
 
+describe("a backend that restarted", () => {
+  // Everything this module knows about swaps came over the bridge. Its own
+  // startup read happens before any user is known, so it finds nothing and
+  // stays at its defaults, and its default is swapping off. A tab closed and
+  // opened again is enough to bring the backend back on a fresh process, and
+  // the swaps then quietly stopped: no error, nothing in the log, just replies
+  // going by unswapped.
+  const noWait = { ...BASE, swapWaitForEdits: false };
+
+  test("a fresh backend swaps nothing until it is told to", async () => {
+    const h = host(chat());
+    await h.ended({ chatId: "c1", messageId: "m2" });
+    await wait(200);
+    expect(h.body("m2")).toBe("Marisol set the lantern down.");
+  });
+
+  test("and it says so, so the panel knows to tell it again", async () => {
+    const h = host(chat());
+    expect(h.sent.some((m) => m.type === "backend_ready")).toBe(true);
+  });
+
+  test("being told the settings again is enough, with nothing written", async () => {
+    const h = host(chat());
+    // What the panel sends when it hears the backend come back. No account
+    // write goes with it, which is the point: the stored copy is already right.
+    await h.front({ type: "set_settings", settings: noWait });
+    await h.ended({ chatId: "c1", messageId: "m2" });
+    await wait(200);
+    expect(h.body("m2")).toBe("Marisol set the lamp down.");
+  });
+
+  test("a chat switched off is still left alone after a restart", async () => {
+    // The other half, and the worse one: the list of chats the reader switched
+    // off lives in the backend too, so a restart used to start swapping in a
+    // chat they had turned it off in.
+    const h = host(chat());
+    await h.front({ type: "set_settings", settings: noWait });
+    await h.front({ type: "set_chats_off", chats: ["c1"] });
+    await h.ended({ chatId: "c1", messageId: "m2" });
+    await wait(200);
+    expect(h.body("m2")).toBe("Marisol set the lantern down.");
+  });
+});
+
 describe("when another extension takes the words away", () => {
   test("nothing is written, because the rules run on the reply as it is now", async () => {
     const h = await armed();

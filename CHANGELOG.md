@@ -8,6 +8,19 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 4.24.8
+
+_2026-08-29_
+
+### Fixed
+
+- **Word swaps stopped working after leaving the tab and coming back.** The rules, the on and off switch, and the list of chats you switched Auto Retry off in all live in the extension's backend, and all three got there over the bridge from the panel. A backend that comes back up, which a tab closed and opened again is enough to cause, comes back knowing none of it: its own read happens before it knows whose settings to read, so it finds nothing and sits at its defaults, and its default is swapping off. Nothing said so, because from your side nothing happened. The panel tells it again the moment it announces itself, and nothing is written to your account over it, since the stored copy was already right.
+- **A chat you had switched Auto Retry off in started being swapped again after that same restart.** Same cause, and it went with the same fix.
+
+### Changed
+
+- **Four lines in the panel's log say what happened in fewer words.** The ones about a tab that was asleep, a reply the tab never heard arrive, and a swap another extension made unnecessary. A heading in **How it retries** also stopped describing a setting as a brake and now says what it does.
+
 ## 4.24.7
 
 _2026-08-28_

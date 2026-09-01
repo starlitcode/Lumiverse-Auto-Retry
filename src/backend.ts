@@ -879,6 +879,13 @@ spindle.onFrontendMessage(async (payload: any, userId?: string) => {
       });
       return;
     }
+    if (payload.type === 'set_settings' && payload.settings && typeof payload.settings === 'object') {
+      // The panel handing back what this module knew before it restarted.
+      // Adopted and not written anywhere: the account copy is already right,
+      // and coming back up is not a reason to write over it.
+      applyReplaceFromSettings(payload.settings);
+      return;
+    }
     if (payload.type === 'set_chats_off') {
       const list = Array.isArray(payload.chats) ? payload.chats : [];
       chatsOff = new Set(list.slice(0, 500).map((c: any) => String(c)));

@@ -5623,6 +5623,74 @@ console.log("\na reply that stopped partway with text in it");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- telling the backend again after it restarts ----
+// The backend keeps the word swap rules, the on and off switch, and the list of
+// chats the reader turned Auto Retry off in. All three arrived over the bridge
+// and none of them survives the backend coming back, which happens on its own:
+// a tab closed and opened again is enough. It cannot look them up either, since
+// its own read runs before it knows whose settings to read.
+//
+// So the swaps stopped and nothing said why, and a chat switched off started
+// being swapped again. It says backend_ready when it comes up, and this is the
+// panel answering that.
+console.log("\ntelling the backend again after it restarts");
+{
+  const page = await browser.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await stage(page, "<div id=modal></div>");
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  const out = await page.evaluate(async () => {
+    const sent = [];
+    let onBack = null;
+    window.__setup(
+      {
+        events: { on: () => () => {} },
+        sendToBackend: (m) => sent.push(m),
+        onBackendMessage: (fn) => { onBack = fn; return () => {}; },
+        ui: {
+          showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+          registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }),
+        },
+      },
+      { replaceEnabled: true, replaceRules: "lantern => lamp", toast: false },
+    );
+    await new Promise((r) => setTimeout(r, 60));
+    const types = () => sent.map((m) => m && m.type);
+    const atStart = types();
+    sent.length = 0;
+    // The backend comes back up and announces itself.
+    onBack({ type: "backend_ready" });
+    await new Promise((r) => setTimeout(r, 60));
+    const afterRestart = types();
+    const settings = sent.find((m) => m && m.type === "set_settings");
+    return {
+      atStart,
+      afterRestart,
+      rulesSent: settings ? settings.settings.replaceRules : null,
+      swapOn: settings ? settings.settings.replaceEnabled : null,
+    };
+  });
+  await page.close();
+
+  check("the backend is armed when the panel starts",
+    out.atStart.indexOf("set_settings") >= 0 && out.atStart.indexOf("set_chats_off") >= 0,
+    out.atStart);
+  check("a restart gets the settings again",
+    out.afterRestart.indexOf("set_settings") >= 0, out.afterRestart);
+  check("and the chats switched off with them",
+    out.afterRestart.indexOf("set_chats_off") >= 0, out.afterRestart);
+  check("the rules really go, not an empty object",
+    out.rulesSent === "lantern => lamp" && out.swapOn === true,
+    [out.rulesSent, out.swapOn]);
+  // Coming back up is not a reason to write to the account: the stored copy is
+  // already right, and another device may be saving over it at the same moment.
+  check("nothing is written to the account over it",
+    out.afterRestart.indexOf("save_settings") < 0, out.afterRestart);
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- the sub-headings on a small phone ----
 // The headings that break the long sections up are 11px uppercase with letter
 // spacing, which is the widest way to set a short line. On a narrow screen a
@@ -5784,7 +5852,7 @@ console.log("\na reply that arrived with none of its events");
   check("a reply the tab was never told about is not re-rolled",
     arrived.clicks.length === 0, arrived.clicks);
   check("and the panel says what happened",
-    /without the tab being told/i.test(arrived.log), arrived.log);
+    /never heard it arrive/i.test(arrived.log), arrived.log);
   // The other half, or the guard would just be the stuck watchdog switched off.
   check("a generation that really produced nothing is still re-rolled",
     nothing.clicks.indexOf("stop") >= 0 && nothing.clicks.length > 1, nothing.clicks);
@@ -5874,7 +5942,7 @@ console.log("\na reply that finished while the tab was asleep");
   check("and the ending that was queued behind it is taken normally",
     slept.clicks.length === 0, slept.clicks);
   check("the panel says why the wait started again",
-    /not running for part of the wait/i.test(slept.log), slept.log);
+    /asleep for part of the wait/i.test(slept.log), slept.log);
   // The other half. A guard that simply switched the watchdog off would pass
   // both checks above and leave a genuinely stuck reply sitting there.
   check("a page that stayed awake still catches a stuck reply",

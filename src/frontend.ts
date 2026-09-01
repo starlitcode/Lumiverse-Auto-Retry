@@ -121,7 +121,7 @@ const STREAM_BUF_MAX = 200000;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "4.24.7";
+const VERSION = "4.24.8";
 
 // The one address the extension ever points at, used by the warning in front of
 // the crisis-support check. Pinned to the released branch rather than to a tag,
@@ -412,7 +412,7 @@ const RUNS: Record<string, { title: string; note: string }> = {
   },
   givingUp: {
     title: "When it gives up",
-    note: "The cap on one message, and the brake that stops the whole thing after a run of failures. Nothing here changes what counts as a bad reply, only how long it keeps trying.",
+    note: "The limit on one message, and the switch that stops it everywhere after a run of failures. Nothing here changes what counts as a bad reply, only how long it keeps trying.",
   },
   waits: {
     title: "How long it waits between tries",
@@ -420,7 +420,7 @@ const RUNS: Record<string, { title: string; note: string }> = {
   },
   whatCounts: {
     title: "What counts as one",
-    note: "The built-in wording list and the two extra shapes it can catch. These decide what the check looks for before any of your own wording is added.",
+    note: "The built-in wording list and the two extra kinds it can catch. These decide what the check looks for before any of your own wording is added.",
   },
   yourWords: {
     title: "Wording you supply",
@@ -5829,6 +5829,22 @@ export function setup(ctx: Ctx, opts?: any) {
     } catch (_) {}
   }
 
+  // Everything the backend knows about word swaps arrived over this bridge, and
+  // a backend that restarts comes back knowing none of it. It cannot look the
+  // settings up for itself either: that read happens before any user is known,
+  // so it finds nothing and stays at its own defaults, which have swapping off.
+  //
+  // So the swaps quietly stopped after a restart, and a chat switched off
+  // started being swapped again. Neither says anything, because from the
+  // reader's side nothing happened: the tab was closed and opened again.
+  function armBackend() {
+    try {
+      if (ctx && typeof (ctx as any).sendToBackend === "function")
+        (ctx as any).sendToBackend({ type: "set_settings", settings: cfg });
+    } catch (_) {}
+    tellBackendChatsOff();
+  }
+
   // Returns whether this browser will remember the change after a reload.
   function setChatOff(chatId: any, off: boolean): boolean {
     if (chatId == null) return false;
@@ -6259,8 +6275,8 @@ export function setup(ctx: Ctx, opts?: any) {
     if (Date.now() - saidPageSlept > 1000) {
       saidPageSlept = Date.now();
       log(
-        "this page was not running for part of the wait, so the reply gets the " +
-        "full wait again rather than being counted as stuck",
+        "this tab was asleep for part of the wait, so the reply starts its " +
+        "wait over rather than being counted as stuck",
       );
     }
     return true;
@@ -7347,8 +7363,8 @@ export function setup(ctx: Ctx, opts?: any) {
       s.live = false;
       s.screenAtStart = "";
       log(
-        "a reply arrived on this page without the tab being told, so it was " +
-        "left alone rather than counted as " + reason,
+        "the reply is on the page but this tab never heard it arrive, so it " +
+        "was left alone rather than counted as " + reason,
       );
       paintNow();
       return;
@@ -11565,7 +11581,7 @@ export function setup(ctx: Ctx, opts?: any) {
   }
   syncLiveLog();
   syncFloat();
-  tellBackendChatsOff();
+  armBackend();
   askActiveChat();
   loadFromAccount();
   loadPresetsFromAccount();
@@ -11593,8 +11609,8 @@ export function setup(ctx: Ctx, opts?: any) {
         }
         if (msg.type === "nothing_left_to_swap") {
           log(
-            "another extension rewrote a reply while the swap waited on it, " +
-            "and none of your words are left in it, so nothing was changed",
+            "another extension rewrote the reply while the swap waited, and " +
+            "none of your words are left in it, so nothing was swapped",
           );
           return;
         }
@@ -11602,6 +11618,7 @@ export function setup(ctx: Ctx, opts?: any) {
         // Only worth a message if this panel actually wants prompts; asking for
         // nothing is what it would already be getting.
         if (msg.type === "backend_ready") {
+          armBackend();
           askForPermissions();
           if (promptsAsked) {
             log("backend restarted, asking it for prompts again");
@@ -11701,9 +11718,9 @@ export function setup(ctx: Ctx, opts?: any) {
         // wait watching for a second swap that is never coming.
         if (msg.waitsEnded > 0)
           log(
-            "stopped waiting for another extension to finish editing, on " +
-            msg.waitsEnded + (msg.waitsEnded === 1 ? " reply" : " replies") +
-            ": you swapped by hand instead",
+            "you swapped by hand, so " + msg.waitsEnded +
+            (msg.waitsEnded === 1 ? " reply" : " replies") +
+            " stopped waiting for another extension to finish",
           );
         for (const e of msg.edits || []) rememberSwap(e && e.before, e && e.after);
         if (msg.ok) noteSwaps(msg.chatId, (msg.pairs || []).length);
