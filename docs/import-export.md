@@ -10,14 +10,13 @@ The parts are grouped so you only move what you mean to:
 
 - **Retrying and its buttons**, including whether the floating button and the Extras entry are shown
 - **Refusals and notes**, everything that decides a reply was a refusal, plus the note wording sent on the retry
-- **Word swaps**
 - **Button selectors**
 - **Panel and pop-up**
 - **All presets**, both kinds at once
 
 Each name covers everything in that part, so nothing rides along unnamed.
 
-For sharing phrase and swap setups, tick just refusal detection and word swaps and leave the rest, since button selectors in particular are tied to one person's Lumiverse build.
+For sharing a detection setup, tick just refusal detection and leave the rest, since button selectors in particular are tied to one person's Lumiverse build.
 
 Between them the groups cover every setting, so an export is a complete backup of your setup. Any setting that isn't in one of the named groups is carried with retry behavior rather than dropped, so a new option can never go missing from a backup made before it was added.
 

@@ -2,11 +2,24 @@
 
 Every released version of Auto Retry, newest first.
 
-**Two releases need a reinstall rather than an update: [4.0.0](#400) and [3.0.0](#300).** Both are marked below. Your settings, presets and word swap rules are stored separately and are not touched by reinstalling.
+**Two releases need a reinstall rather than an update: [4.0.0](#400) and [3.0.0](#300).** Both are marked below. Your settings and presets are stored separately and are not touched by reinstalling.
 
 Versions follow [Semantic Versioning](https://semver.org). A new major version means a reinstall rather than an update, a minor version adds something, and a patch version only fixes things.
 
 ---
+
+## Unreleased
+
+_On the testing branch._
+
+### Removed
+
+- **Find and replace is gone.** It swapped words in a reply after it arrived. It was copied from another extension without a use of its own, and rewriting a reply well is a different job from retrying one: Auto Refine does that job, and this extension is going back to retrying. Everything that went with it went too: the settings, the two Extras buttons, the word swap presets, the backend engine that did the swapping, and the edit watcher that waited for other extensions to finish.
+- **The `chat_mutation` permission is no longer asked for.** Word swaps were the only thing that used it. Auto Retry no longer writes to a saved reply at all, which is a smaller thing to have to trust.
+
+### Added
+
+- **A card in the panel for anyone who had word swaps**, offering a JSON file with their rules and their word swap presets in it. It reads them straight out of storage, including the copy that came down from the account, since the panel no longer has a field for them. It appears only for somebody who has some, and it goes for good once they say they have taken a copy.
 
 ## 4.24.8
 

@@ -8,19 +8,13 @@ Auto Retry has no networking in it at all. It never opens a connection, never co
 
 There is one link in it, in the warning that stands in front of the crisis-support check, and it points at the safety page in this repository. Drawing it fetches nothing. If you tap it your browser opens GitHub in a new tab, which is your browser going somewhere, not the extension sending anything, and if you never tap it nothing happens at all.
 
-It also never treats text as code. There is no `eval` and no `new Function` anywhere, so nothing in a reply, a character card, or your own settings can be run. Word swaps come closest to acting on what you typed, and they are plain text replacements: your rules are escaped before they are matched, so a rule cannot turn into a regular expression by accident, let alone anything worse.
+It also never treats text as code. There is no `eval` and no `new Function` anywhere, so nothing in a reply, a character card, or your own settings can be run.
 
 ## What it can reach, and why it needs to
 
 It asks Lumiverse for six permissions. Lumiverse sorts permissions into two tiers: some are granted the moment you install, and some are privileged and do nothing at all until an admin approves them. Four of these six are privileged, so on a shared instance they may sit inactive until someone with admin turns them on.
 
-None of the six is required for the extension to start, which is why each one below says what you still have if you refuse it.
-
-### `chat_mutation`
-
-Granted on install, so no admin is involved. It lets the extension read a saved reply and rewrite it, and the word-swap feature is the only thing that uses it. Deciding whether a reply failed does not: that reads the text the `generation` permission already delivers, so retrying works with this one refused. Rewriting is the part worth thinking twice about, which is why word swaps are off by default and marked beta.
-
-**Refuse it** and the retry side works exactly as it should. Only find and replace does nothing.
+None of the five is required for the extension to start, which is why each one below says what you still have if you refuse it.
 
 ### `generation`
 

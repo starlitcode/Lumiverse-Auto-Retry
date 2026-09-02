@@ -41,22 +41,6 @@ A wait is also not judged over time the page spent asleep. A background tab has 
 
 A generation that really produced nothing is still re-rolled either way.
 
-## Word swaps stopped working after you came back to the tab
-
-Your rules, whether swapping is on, and the list of chats you switched Auto Retry off in all live in the extension's backend rather than in the page. They get there from the settings panel.
-
-The backend can come back up on its own, and a tab closed and opened again is enough to cause it. When it does it comes back knowing none of that, and it cannot look it up for itself: that read happens before it knows whose settings to read, so it finds nothing and sits at its own defaults, which have swapping off. Nothing said so, because from your side nothing had happened.
-
-The panel now tells it again the moment the backend announces itself, so this fixes itself within a moment of coming back. Nothing is written to your account over it, since the stored copy was already right. Reloading the page also fixed it before, and still does.
-
-## "No answer from the word swapper"
-
-You get this after pressing **Swap words in the last reply** or **Swap words in every reply**, when nothing answers within a few seconds. The swap runs in the extension's backend, so this means the backend is not running, or the message never reached it.
-
-Reload the page and try again. If it keeps happening, the backend part of the extension is not loading, which is worth reporting. Everything else in Auto Retry works without it: only the word swaps need it.
-
-A long chat is not the cause. The backend says it has the request as soon as it gets it, before it starts any work, so a swap that simply takes a while never shows this message.
-
 ## "No chat is open"
 
 The swap buttons live in the Extras menu or the floating button's menu, and both are reachable from the chat list with nothing open. Pressing one there says **No chat is open. Open a chat and try again.**, and will not edit the chat you were last in by mistake.

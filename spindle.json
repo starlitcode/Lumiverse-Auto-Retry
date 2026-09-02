@@ -8,7 +8,6 @@
   "description": "Automatically retry failed, empty, stalled, or cut-off replies, with optional refusal detection and find-and-replace word swaps.",
   "permissions": [
     "generation",
-    "chat_mutation",
     "chats",
     "characters",
     "ui_panels",

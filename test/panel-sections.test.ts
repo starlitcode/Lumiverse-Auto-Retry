@@ -64,7 +64,6 @@ describe("the sections of the settings panel", () => {
     const bad: string[] = [];
     const seen: number[] = [];
     for (const sec of secs) {
-      // Find and replace is grouped too, by the other mechanism: splitByPreset
       // draws its two headings from what a preset carries rather than from a
       // run tag, so its rows carry none and there is nothing here to count.
       if (/\n\s*splitByPreset: true,/.test(sec.body)) continue;
@@ -107,7 +106,6 @@ describe("the sections of the settings panel", () => {
     const shut = secs.filter((s) => /\n\s*collapsed: true,/.test(s.body)).map((s) => s.title);
     expect(shut).toEqual([
       "Refusal tuning",
-      "Find and replace (beta)",
       "Buttons it clicks",
     ]);
     // And nothing calls itself advanced any more, in a heading or out of one.
@@ -136,19 +134,12 @@ describe("the sections of the settings panel", () => {
     const asked = [...SCHEMA.matchAll(/^ {4}extra: (.+),$/gm)].flatMap((m) =>
       [...m[1].matchAll(/"([A-Za-z]+)"/g)].map((x) => x[1]),
     );
-    expect(asked.sort()).toEqual(["notePresets", "refusalTester", "swapPresets"]);
+    expect(asked.sort()).toEqual(["notePresets", "refusalTester"]);
     // No name is built twice, which a list form makes easy to do by accident.
     expect(asked.length).toBe(new Set(asked).size);
     // And the panel builds each of them off that field, not off the title. The
     // lookup goes through one helper now, since a section can name several.
     for (const name of asked) expect(SRC).toContain('hasExtra("' + name + '")');
-  });
-
-  test("the preset split is asked for by name too, and only where presets exist", () => {
-    const split = secs.filter((s) => /\n\s*splitByPreset: true,/.test(s.body));
-    expect(split.length).toBe(1);
-    expect(split[0].fields).toContain("replaceEnabled");
-    expect(SRC).toContain("if (!group.splitByPreset)");
   });
 
   test("every labelled run inside a section names a run that exists", () => {
@@ -263,7 +254,7 @@ describe("applying a setting as it is edited", () => {
     // against them; the tester saves nothing and is where you go once there is
     // something to try, so it reads wrong anywhere but last.
     const at = (name: string) => SRC.indexOf('hasExtra("' + name + '")');
-    for (const bar of ["swapPresets", "notePresets"]) {
+    for (const bar of ["notePresets"]) {
       expect(at(bar)).toBeGreaterThan(-1);
       expect(at(bar)).toBeLessThan(at("refusalTester"));
     }
@@ -282,6 +273,6 @@ describe("applying a setting as it is edited", () => {
     // vanish on reload with nothing to say why.
     const seed = /const out: Record<string, Preset\[\]> = \{([^}]*)\}/.exec(SRC);
     expect(seed).not.toBeNull();
-    for (const kind of ["swap", "notes"]) expect((seed as RegExpExecArray)[1]).toContain(kind + ":");
+    for (const kind of ["notes"]) expect((seed as RegExpExecArray)[1]).toContain(kind + ":");
   });
 });

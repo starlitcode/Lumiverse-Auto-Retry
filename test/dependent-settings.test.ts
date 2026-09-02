@@ -93,7 +93,7 @@ describe("a row that hangs off a switch", () => {
   const CONFIG = defaults();
 
   test("there are some, so the rest of this is checking something", () => {
-    expect(deps.length).toBeGreaterThanOrEqual(9);
+    expect(deps.length).toBeGreaterThanOrEqual(7);
   });
 
   test("every switch named is a real setting", () => {

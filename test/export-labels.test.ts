@@ -37,7 +37,7 @@ describe("every tick box is named after what it carries", () => {
   const all = parts();
 
   test("the list was really parsed", () => {
-    expect(all.length).toBeGreaterThanOrEqual(6);
+    expect(all.length).toBeGreaterThanOrEqual(5);
     for (const p of all) expect(p.label.length).toBeGreaterThan(2);
     // The presets entry is the one with no settings keys of its own.
     expect(all.filter((p) => p.keys.length === 0).map((p) => p.id)).toEqual(["presets"]);
@@ -62,11 +62,6 @@ describe("every tick box is named after what it carries", () => {
       keys: ["liveLog", "panelHome", "toast"],
       why: "it carries the on-screen panel and the pop-up",
     },
-    {
-      word: /swap/i,
-      keys: ["replaceRules", "replaceRandom", "replaceCaseSensitive"],
-      why: "it carries the word swap rules",
-    },
   ];
 
   for (const r of rules) {
@@ -87,7 +82,10 @@ describe("every tick box is named after what it carries", () => {
     // PRESET_KINDS, so a third kind added later is covered without edits here.
     const kinds = SRC.slice(SRC.indexOf("const PRESET_KINDS"), SRC.indexOf("function keysForKind"));
     const labels = [...kinds.matchAll(/^\s{6}label: "([^"]+)",$/gm)].map((m) => m[1]);
-    expect(labels.length).toBeGreaterThanOrEqual(2);
+    expect(labels.length).toBeGreaterThanOrEqual(1);
+    // With one kind there is nothing to be uneven about. The rule is kept for
+    // the day a second one arrives.
+    if (labels.length < 2) return;
     const presets = (all.find((p) => p.id === "presets") as Part).label.toLowerCase();
     const named = labels.filter((l) => presets.indexOf(l.toLowerCase()) >= 0);
     expect({ label: presets, named: named.length })

@@ -10,7 +10,7 @@ There are eight sections. Three are open when the panel opens:
 - **How it retries** is how persistent it is, how long it waits between tries, when it pauses itself, and whether a retry redoes the reply in place or adds a new reroll.
 - **When to count a reply as bad** is which kinds of bad reply set off a retry, ending with the two waits for a reply that freezes or never arrives.
 
-Five start shut, each with a **▸** to open it: **Refusal tuning**, **Find and replace**, **Buttons it clicks**, **Debug info** and **Import / export**. They are closed because nothing in them is needed to use the extension, not because they are difficult.
+Four start shut, each with a **▸** to open it: **Refusal tuning**, **Buttons it clicks**, **Debug info** and **Import / export**. They are closed because nothing in them is needed to use the extension, not because they are difficult.
 
 The longer sections are split under headings, so you can find the part you want without reading every row. **How it retries** runs from the cap on one message through **When it gives up** and **How long it waits between tries**. **When to count a reply as bad** ends with **Replies that freeze**. **Refusal tuning** goes **What counts as one**, **Wording you supply**, **How far it looks**, then the note rows. Each heading carries a line saying what its rows have in common.
 
@@ -42,7 +42,7 @@ Two options in **Basics**, and you can use either or both:
 
 - **Floating on/off button** puts a small button over the chat that toggles it in one tap. Drag it anywhere; it snaps to the nearest edge and stays where you leave it, and you can set its size, which the button itself takes on as you type so you can see it before saving. Changing the size grows it around where it is sitting rather than moving it, though a button against an edge does come inward far enough for the bigger size to fit. Tapping it eases between on and off rather than flicking, and a device set to reduce motion gets the same change with nothing in between. Hold it, or right-click on a computer, for its menu. That menu is drawn by Lumiverse, so it arrives in your own theme and accent.
 
-  While this button is showing, its menu holds everything that would otherwise be in the **Extras** menu. In order: **Auto Retry settings**, then **Open the Auto Retry panel** if the panel is set to live in the sidebar, then the two word swap buttons if you have those turned on, then **Hide this button** at the bottom.
+  While this button is showing, its menu holds everything that would otherwise be in the **Extras** menu. In order: **Auto Retry settings**, then **Open the Auto Retry panel** if the panel is set to live in the sidebar, then **Hide this button** at the bottom.
 - **On/off button in the Extras menu** adds a button next to the settings button. Its label says whether Auto Retry is on or off, so you can check and change it without opening the settings. It takes up no room on the screen. In a chat you have switched off, it says so, because "on" would be true of everywhere except where you are. Tapping it always switches Auto Retry on or off everywhere, wherever you tap it from, and the label says so.
 
   This button is hidden while the floating button is on. The floating button is the same on/off switch and one tap does it, so having both would be two buttons for one thing. Turn the floating button off and this one comes back.
@@ -51,7 +51,7 @@ Two options in **Basics**, and you can use either or both:
 
 The master switch is all or nothing, which is the wrong shape for a scene where the model is meant to refuse, or a chat you are using to test something.
 
-In the settings panel, under **Basics**, the **This chat** row has a **Turn off here** button. That chat is left alone and every other chat carries on, and the button becomes **Turn on here**. Left alone covers word swaps too: nothing is swapped automatically in a chat you have switched off. This is the only place it is. It is not in the floating button's menu, which is kept to the settings, the panel, the swap buttons and hiding the button itself.
+In the settings panel, under **Basics**, the **This chat** row has a **Turn off here** button. That chat is left alone and every other chat carries on, and the button becomes **Turn on here**. This is the only place that switch lives. It is not in the floating button's menu, which is kept to the settings, the panel and hiding the button itself.
 
 Everything that shows whether Auto Retry is running says so together: that button, the line under the panel's tabs, and whichever of the floating button and the Extras entry you have on. All of them follow you between chats, so none reads "on" in a chat you have switched off.
 
@@ -79,11 +79,11 @@ The question is asked by the extension rather than handed to Lumiverse's own con
 
 A reset fills the settings in behind the box without saving them, the same as an import does, so you can look at what it did first. Press **Save** to keep it, or close the panel to discard it. If you press Reset by mistake, closing the panel undoes it.
 
-**Delete saved presets** sits below a rule of its own, and it is the one thing in the picker that is not undone by closing the panel: presets are stored separately from your settings, so deleting them happens straight away. It covers both kinds, word swap and refusal note. **Tick every setting** never ticks it.
+**Delete saved presets** sits below a rule of its own, and it is the one thing in the picker that is not undone by closing the panel: presets are stored separately from your settings, so deleting them happens straight away. **Tick every setting** never ticks it.
 
 Nothing a reset does goes near your chats, your replies or your characters. Auto Retry only ever reads replies, and a reset does not touch them at all.
 
-Only settings the extension genuinely ignores are hidden this way. Some options look dependent and are not: the word swap rules are still read by the two manual swap buttons whether or not automatic swapping is on, so they stay put.
+Only settings the extension genuinely ignores are hidden this way. Some options look dependent and are not: the extra thinking tag names still find the reply when stripping is off, so they stay put.
 
 One setting inside the refusal tuning section is an exception worth knowing about. `refusalThinkTags` goes away with the rest of that section, but it is still used with accidental-refusal retrying off: the blank-reply and short-reply checks read it to find where the reply starts. Search for it by name to reach it while the section is hidden.
 
@@ -202,18 +202,6 @@ The same options live in the CONFIG block at the top of `src/frontend.ts` and `d
 | refusalNotes | one empty note | The notes themselves. Each carries its own role (system, user or assistant) and its own first try, so notes can be set to escalate. Up to ten. Whichever have come due are sent together, in order. Empty ones are skipped, and nothing is sent while they all are. Shown only while `refusalNote` is on. |
 | refusalNotePlacement | after | For the whole list, not one note. Where the block of due notes goes: after the last message, before it, or at the very start. Shown only while `refusalNote` is on. |
 | refusalNoteStrictType | false | For the whole list, not one note: it decides whether any of them are sent at all. Only attach them when Lumiverse reports the generation as a regenerate or a swipe. Most builds report every generation as "normal", and on those this stops the note going out at all, which is why it is off. Shown only while `refusalNote` is on. |
-| replaceEnabled | false | (beta) Turn on find-and-replace on replies. Edits the saved message. |
-| replaceRules | (empty) | "old => new" word swaps, one per line. |
-| replaceRandom | false | When a word has more than one swap, pick one at random each time. |
-| replaceCaseSensitive | false | Match letter case exactly. Off = case-insensitive, capitalization kept. |
-| showReplaceButton | false | Add a button that applies your word swaps to the latest reply on demand. In the Extras menu, or the floating button's menu while that button is showing. |
-| showSwapAllButton | false | Add a button that swaps every generated reply in the chat once. Sits wherever the one above does. |
-| allowReSwap | false | Let either swap button swap a reply again even if it was already swapped (can stack swaps). Applies to both the swap-this-reply and swap-whole-chat buttons. Shown only while one of those two buttons is switched on. |
-| swapThinking | false | Also swap inside the model's thinking. Off means only the visible reply is swapped and any reasoning block is left exactly as it was. Reasoning your provider returns in its own field, rather than inline in the reply, is never swapped either way. |
-| swapMarkup | false | Also swap inside HTML tags in a reply. Off means tags like `<font color="#ffff00">` are left alone, so a rule such as color => colour cannot break the markup. Words between tags are prose and swap either way. |
-| confirmBeforeEdit | false | Ask you to confirm before any word-swap edit (automatic or manual); you can cancel. |
-| swapWaitForEdits | false | Wait for another extension to finish editing a reply before swapping it. For running alongside Hone with auto-refine on. |
-| swapWaitSecs | 85 | How long to wait for that, in seconds (1-300). A refinement pass is a whole generation, so how long it takes depends on the model, the prompt and how much it has to read. Each edit restarts the clock. Shown only while `swapWaitForEdits` is on. |
 | regenerateSelector | (see file) | Host button. See below. |
 | swipeNextSelector | (see file) | Backup button if your build retries by swiping. |
 | confirmButtonsCustom | false | Read the box below. Off, only the built-in dialog button list is used, and the box is not shown. |

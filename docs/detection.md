@@ -184,7 +184,7 @@ Only the final reply is ever checked for a refusal, never the model's thinking. 
 
 The channel form is the one models trained on the Harmony format use. It has no closing tag of its own: the reasoning runs until the next control token. The channels treated as thinking are `analysis`, `thinking`, `thought`, `reasoning` and `commentary`. The `final` channel is the visible reply and is kept, along with anything outside a block.
 
-Some providers hand their reasoning back separately rather than inside the reply. Nothing above applies to that: it never reaches the reply text in the first place, so there is nothing to strip and the checks only ever see what you read. Word swaps leave it alone for the same reason, which [Word swaps](word-swaps.md#the-models-thinking) covers.
+Some providers hand their reasoning back separately rather than inside the reply. Nothing above applies to that: it never reaches the reply text in the first place, so there is nothing to strip and the checks only ever see what you read.
 
 So if a model weighs a refusal while reasoning but then writes a normal reply, nothing is re-rolled. If a refusal ends up in the actual reply, it is caught as usual, and if the model reasons and then produces nothing, that is handled by the empty-reply retry instead.
 
@@ -252,7 +252,7 @@ Do not expect to find it in **Prompt Breakdown**. The note is not a message in y
 
 ### Saving a set of notes
 
-Under the notes is a **Note presets** bar, which appears once **Send a note with a refusal retry** is on. Once you have wording that works, save it under a name and switch between sets without retyping them, the same way **Word presets** work for word swaps. This is worth doing before you start changing notes that already work, since the tester below encourages exactly that kind of experimenting.
+Under the notes is a **Note presets** bar, which appears once **Send a note with a refusal retry** is on. Once you have wording that works, save it under a name and switch between sets without retyping them. This is worth doing before you start changing notes that already work, since the tester below encourages exactly that kind of experimenting.
 
 A set carries the notes themselves and **Where the notes go**, and nothing else. It does not carry **Send a note with a refusal retry**, so loading a set never starts sending notes to the model on your behalf. Everything else about how refusals are detected stays as you have it.
 

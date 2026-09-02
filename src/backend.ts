@@ -1,30 +1,24 @@
 /*
- * Auto Retry backend (find and replace in replies).
+ * Auto Retry backend.
  *
- * Applies the user's word swaps to each finished assistant reply and saves the
- * change through the Chat Mutation API, so the swapped wording sticks and is
- * what the model reads on later turns. It never changes what the model
- * generated; it edits the stored text afterward.
+ * Two jobs, now that word swaps are gone.
  *
- * A source word may have several replacements: list it on more than one line (e.g.
- * "sky => blue" then "sky => aqua").
- * With the random option on, each occurrence picks one of them at random; off,
- * it always uses the first one listed. A case-sensitive option controls whether
- * matching respects letter case.
+ * It keeps the whole settings object in per-user account storage, so somebody's
+ * settings follow them across browsers and devices instead of living in one
+ * browser. Settings arrive from the panel over the frontend message bridge and
+ * are persisted so they survive a restart.
  *
- * All rules run in a single pass over the text, so no rule ever acts on what
- * another rule just wrote. Where two rules could match the same spot, the one
- * with the longer left side wins.
+ * And it carries the refusal note: the wording the panel arms just before it
+ * clicks retry, collected by the prompt interceptor on the generation that
+ * click starts, then thrown away. One generation only.
  *
- * This backend also keeps the whole settings object in per-user account storage,
- * so the user's settings follow them across browsers and devices. Rules and
- * settings arrive from the UI over the frontend message bridge and are persisted
- * so they survive a restart. Editing a message emits MESSAGE_EDITED and
- * SWIPE_EDITED, neither of which is GENERATION_ENDED, and the edit watcher below
- * ignores text it wrote itself, so this cannot re-trigger itself.
+ * Find and replace lived here and has been retired. It rewrote a reply after it
+ * arrived, which is a different job from retrying one, and Auto Refine does
+ * that job properly. What is left of it is a card in the panel offering anybody
+ * who had rules a copy of them.
  *
- * Needs the `generation` permission (to hear GENERATION_ENDED) and
- * `chat_mutation` (to edit the saved message).
+ * Needs the `generation` permission to hear when a reply finishes, and
+ * `interceptor` for the refusal note.
  */
 
 declare const spindle: any;
@@ -41,26 +35,7 @@ const SETTINGS_FILE = 'settings.json';
 // the only copy.
 const PRESETS_FILE = 'presets.json';
 
-interface Group { tos: string[]; from: string; isWord: boolean; }
 
-let enabled = false;
-let random = false;
-let caseSensitive = false;
-let rulesText = '';
-let allowReSwap = false;
-// Off: a swap leaves the model's thinking exactly as it was.
-let swapThinking = false;
-// Off: a swap leaves HTML tags in a reply alone, so a rule cannot break markup.
-let swapMarkup = false;
-let confirmBeforeEdit = false;
-let waitForOtherEdits = false;
-let waitStartMs = 85000;   // matches the panel's default until settings arrive
-let groups: Group[] = [];
-// All rules compiled into one pattern, plus the group index each capture slot
-// belongs to. Built once per settings change, used for the single pass.
-let combined: RegExp | null = null;
-let combinedOrder: number[] = [];
-let warnedEditError = false;
 // Per process, not per user, like the flag above it. One warning for the whole
 // server is the point: this fires on every reply that cannot be read, and the
 // reason is the same one every time.
@@ -281,355 +256,28 @@ function placeNotes(messages: any[], notes: any[], placement: string): { list: a
   return { list: list, from: at };
 }
 
-// Messages a swap has already changed this session, so the manual button won't
-// compound swaps on a reply that auto-swap or an earlier tap already changed.
-const swappedIds = new Set<string>();
-const SWAPPED_CAP = 1000;
-function markSwapped(id: any) {
-  if (id == null) return;
-  swappedIds.add(id);
-  if (swappedIds.size > SWAPPED_CAP) swappedIds.delete(swappedIds.values().next().value as string);
-}
 
 function escapeRe(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-// Parse "old => new" rules into groups keyed by the source word, so the same
-// word listed more than once collects all its replacements. A single-token
-// source (letters/numbers only) matches whole words, so "cat => dog" doesn't
-// turn "category" into "dogegory"; anything with a space or punctuation is
-// matched literally.
-function buildGroups(raw: string, cs: boolean): Group[] {
-  const map = new Map<string, { from: string; tos: string[] }>();
-  const order: string[] = [];
-  for (const line of String(raw == null ? '' : raw).split(/\r?\n/)) {
-    const i = line.indexOf('=>');
-    if (i < 0) continue;
-    const from = line.slice(0, i).trim();
-    const to = line.slice(i + 2).trim();
-    if (!from) continue;
-    const key = cs ? from : from.toLowerCase();
-    if (!map.has(key)) { map.set(key, { from: from, tos: [] }); order.push(key); }
-    map.get(key)!.tos.push(to);
-  }
-  const out: Group[] = [];
-  for (const key of order) {
-    const g = map.get(key)!;
-    const isWord = /^[\p{L}\p{N}]+$/u.test(g.from);
-    try {
-      // Compiled here only to drop a source that can't form a valid pattern,
-      // so one bad rule can't take the combined pattern down with it.
-      new RegExp(escapeRe(g.from), cs ? 'gu' : 'giu');
-      out.push({ tos: g.tos, from: g.from, isWord: isWord });
-    } catch (_) { /* skip a rule that can't compile */ }
-  }
-  return out;
-}
 
-// Every rule joined into one alternation so the text is walked once and each
-// stretch of it is replaced at most once. Running rules one after another would
-// let a later rule act on what an earlier one just wrote, so "cat => dog"
-// followed by "dog => wolf" would turn cat into wolf.
-// Whole-word matching, without \b. JavaScript defines \b against \w, which is
-// [A-Za-z0-9_] and stays that way even under the u flag. So "\bcafé\b" never
-// matches anything: the boundary test fails at the é. Every single-word rule
-// whose source was not pure ASCII was therefore compiled and then silently
-// matched nothing, in French, Spanish, German, Polish, Turkish, Greek, Russian
-// and everything else outside plain English. Lookarounds over \p{L} and \p{N}
-// do what \b was meant to do here, and still refuse to fire inside a longer
-// word, so "cat" leaves "category" alone.
-const WORD_BEFORE = '(?<![\\p{L}\\p{N}_])';
-const WORD_AFTER = '(?![\\p{L}\\p{N}_])';
 
-function buildCombined(gs: Group[], cs: boolean): RegExp | null {
-  if (!gs.length) return null;
-  // Longest source first. A regex alternation takes the first branch that
-  // matches, so without this "cat" would win over "cat nap" and the longer
-  // rule would never fire. Equal lengths keep the order they were listed in.
-  combinedOrder = gs.map((_, i) => i).sort((a, b) =>
-    (gs[b].from.length - gs[a].from.length) || (a - b));
-  const assemble = (before: string, after: string) =>
-    '(?:' +
-    combinedOrder
-      .map((i) => {
-        const body = escapeRe(gs[i].from);
-        return '(' + (gs[i].isWord ? before + body + after : body) + ')';
-      })
-      .join('|') +
-    ')( ?)';
-  const flags = cs ? 'gu' : 'giu';
-  try {
-    return new RegExp(assemble(WORD_BEFORE, WORD_AFTER), flags);
-  } catch (_) { /* no lookbehind on this engine */ }
-  // A browser too old for lookbehind keeps the ASCII-only behaviour it had
-  // before, rather than losing word swaps altogether.
-  try {
-    return new RegExp(assemble('\\b', '\\b'), flags);
-  } catch (__) {
-    combinedOrder = [];
-    return null;
-  }
-}
 
-// Keep the replacement's capitalization roughly in line with the text it
-// replaced, so a swap at the start of a sentence still reads right. Only used
-// when matching is case-insensitive.
-function matchCase(sample: string, repl: string): string {
-  if (!repl) return repl;
-  if (sample.length > 1 && sample === sample.toUpperCase() && sample !== sample.toLowerCase()) return repl.toUpperCase();
-  // Any uppercase letter, not just the Latin-1 ones. Whole-word matching uses
-  // \p{L}, so a word in Cyrillic, Greek, Turkish, Polish, Czech or Vietnamese
-  // was matched and swapped and then quietly lost its capital, because the test
-  // for one stopped at \u00DE.
-  if (/^\p{Lu}/u.test(sample)) return repl.charAt(0).toUpperCase() + repl.slice(1);
-  return repl;
-}
 
-function applyRules(text: string, seen?: Array<[string, string]>): string {
-  const src = String(text == null ? '' : text);
-  if (!combined || !combinedOrder.length) return src;
-  combined.lastIndex = 0;
-  return src.replace(combined, (...args: any[]) => {
-    // args is: whole match, one slot per rule, the trailing space, offset, input.
-    const trail = String(args[combinedOrder.length + 1] || '');
-    let matched: string | null = null;
-    let g: Group | null = null;
-    for (let k = 0; k < combinedOrder.length; k++) {
-      if (args[k + 1] !== undefined) {
-        matched = String(args[k + 1]);
-        g = groups[combinedOrder[k]];
-        break;
-      }
-    }
-    if (!g || matched == null) return String(args[0]);
-    let repl = (random && g.tos.length > 1) ? g.tos[Math.floor(Math.random() * g.tos.length)] : g.tos[0];
-    if (!caseSensitive) repl = matchCase(matched, repl);
-    const out = repl === '' ? '' : repl + trail;   // deletion also drops one trailing space
-    // Recorded so the frontend can apply the same change to what is on screen.
-    // The host writes the message but does not redraw the chat view for it.
-    if (seen && matched + trail !== out) seen.push([matched + trail, out]);
-    return out;
-  });
-}
 
-// ---- the model's thinking ----
-//
-// Lumiverse shows reasoning in its own block rather than in the reply bubble,
-// but when the model writes it as inline tags it is still part of the saved
-// message content, which is what a swap rewrites. So a rule aimed at the prose
-// was also quietly editing the model's working-out, where nobody would see it.
-// Reasoning that arrives as the host's own field is never touched, because only
-// content is patched, so the same rule behaved differently depending on the
-// provider. These are ranges rather than a stripper: a swap has to put the
-// thinking back exactly as it was.
-//
-// The tag list matches the frontend's. Both read the same user setting, so the
-// two cannot end up knowing different sets.
-const THINK_TAGS = ['think', 'thinking', 'thought', 'thoughts', 'reasoning', 'reflection', 'scratchpad', 'analysis'];
-// Matches the frontend's list. The final channel is the reply, never thinking.
-const THINK_CHANNELS = 'analysis|thinking|thought|reasoning|commentary';
-let extraThinkTags: string[] = [];
 
-function thinkSpans(text: string): Array<[number, number]> {
-  const alt = THINK_TAGS.concat(extraThinkTags).join('|');
-  const found: Array<[number, number]> = [];
-  // Each match is blanked out of the working copy before the next pattern runs,
-  // with the length kept so offsets still point into the original. The order
-  // matters for the same reason it does in the frontend's stripper: the
-  // run-to-the-end patterns exist for an opener with no closer, and if they can
-  // still see an opener that was closed, they swallow the whole rest of the
-  // reply and everything after the block stops being swapped.
-  let work = text;
-  const take = (re: RegExp) => {
-    re.lastIndex = 0;
-    const hits: Array<[number, number]> = [];
-    let m: any;
-    if (re.global) {
-      while ((m = re.exec(work)) !== null) {
-        if (m[0]) hits.push([m.index, m.index + m[0].length]);
-        // A zero-length match would spin here for ever.
-        if (m.index === re.lastIndex) re.lastIndex++;
-      }
-    } else {
-      m = re.exec(work);
-      if (m && m[0]) hits.push([m.index, m.index + m[0].length]);
-    }
-    for (const h of hits) {
-      found.push(h);
-      work = work.slice(0, h[0]) + ' '.repeat(h[1] - h[0]) + work.slice(h[1]);
-    }
-  };
 
-  // The channel form first: a channel block contains the other shapes. Only the
-  // thinking channels count, since the final channel is the reply itself.
-  take(new RegExp('<\\|channel\\|>\\s*(?:' + THINK_CHANNELS + ')\\b[\\s\\S]*?(?:<\\|(?:end|return|start)\\|>|$)', 'gi'));
-  // Then the closed pairs. The indexOf guards are the frontend's: with no
-  // closer anywhere, every opener would scan to the end looking for one, which
-  // is quadratic on a reply that is all openers.
-  if (work.indexOf('</') >= 0)
-    take(new RegExp('<(' + alt + ')(?:\\s[^>]*)?>[\\s\\S]*?<\\/\\1\\s*>', 'gi'));
-  if (work.indexOf('[/') >= 0)
-    take(new RegExp('\\[(' + alt + ')(?:\\s[^\\]]*)?\\][\\s\\S]*?\\[\\/\\1\\s*\\]', 'gi'));
-  if (work.indexOf('|>') >= 0 || work.indexOf('</') >= 0)
-    take(new RegExp('<\\|(' + alt + ')\\|?>[\\s\\S]*?<\\|?\\/?(?:' + alt + ')\\|?>', 'gi'));
-  // Last, an opener that never closes: the reply was cut off inside the
-  // thinking, so everything from there on is thinking too.
-  take(new RegExp('<\\|(?:' + alt + ')\\|?>[\\s\\S]*$', 'i'));
-  take(new RegExp('<(?:' + alt + ')(?:\\s[^>]*)?>[\\s\\S]*$', 'i'));
-  take(new RegExp('\\[(?:' + alt + ')(?:\\s[^\\]]*)?\\][\\s\\S]*$', 'i'));
 
-  if (!found.length) return found;
-  found.sort((a, b) => a[0] - b[0]);
-  const out: Array<[number, number]> = [found[0]];
-  for (let i = 1; i < found.length; i++) {
-    const last = out[out.length - 1];
-    if (found[i][0] <= last[1]) last[1] = Math.max(last[1], found[i][1]);
-    else out.push(found[i]);
-  }
-  return out;
-}
 
-// Swaps the parts of a reply the reader actually sees, leaving any thinking
-// untouched unless the user has asked for it to be included.
-// Markup inside a reply: <font color="#ff0">, </i>, <br>. It is not prose, and
-// a rule written for prose has no business reaching it. A rule of
-// "color => colour" turned <font color="..."> into <font colour="...">, which
-// is not a wording change, it is broken markup, and the only sign is that the
-// text stops being coloured. Tag names and attribute names are the words that
-// collide with ordinary vocabulary: color, font, span, small, big, center.
-//
-// Opened by a letter, so "a < b" and a lone "<3" are prose and stay swappable.
-// Quoted attribute values may contain ">", so a run inside quotes is skipped
-// rather than ending the tag. Read the naive way, <span title="a > b"> stops
-// early and the tail of the tag is treated as prose a rule may rewrite, which
-// is the corruption this protection exists to prevent. The branches share no
-// first character, so there is nothing to backtrack between.
-const MARKUP = /<\/?[a-zA-Z][a-zA-Z0-9-]*(?:"[^"]*"|'[^']*'|[^'">]){0,400}>/g;
 
-function markupSpans(text: string): Array<[number, number]> {
-  const out: Array<[number, number]> = [];
-  MARKUP.lastIndex = 0;
-  let m: any;
-  while ((m = MARKUP.exec(text)) !== null) out.push([m.index, m.index + m[0].length]);
-  return out;
-}
 
-// Merged so the two protections cannot interleave badly: a thinking block is
-// full of tags, and a tag can sit either side of one.
-function protectedSpans(text: string): Array<[number, number]> {
-  const all = (swapThinking ? [] : thinkSpans(text)).concat(swapMarkup ? [] : markupSpans(text));
-  if (all.length < 2) return all;
-  all.sort((a, b) => a[0] - b[0]);
-  const out: Array<[number, number]> = [all[0]];
-  for (let i = 1; i < all.length; i++) {
-    const last = out[out.length - 1];
-    if (all[i][0] <= last[1]) last[1] = Math.max(last[1], all[i][1]);
-    else out.push(all[i]);
-  }
-  return out;
-}
 
-function applyRulesVisible(text: string, seen?: Array<[string, string]>): string {
-  const src = String(text == null ? '' : text);
-  if (swapThinking && swapMarkup) return applyRules(src, seen);
-  const spans = protectedSpans(src);
-  if (!spans.length) return applyRules(src, seen);
-  let out = '';
-  let at = 0;
-  for (const [s, e] of spans) {
-    if (s > at) out += applyRules(src.slice(at, s), seen);
-    out += src.slice(s, e);
-    at = e;
-  }
-  if (at < src.length) out += applyRules(src.slice(at), seen);
-  return out;
-}
 
-// Writes swapped text back. The chat view redraws on SWIPE_EDITED and not on
-// MESSAGE_EDITED, and the host emits SWIPE_EDITED when the patch names any one
-// of swipes, swipe_id or swipe_dates. A message carrying a usable swipe array
-// gets the active slot rewritten to the same text the content patch sets, so
-// the message is identical either way. A message without one still names its
-// active index, which is enough for the redraw and changes nothing: without it
-// the swap saved correctly and then sat unseen until the chat was reopened,
-// which is what made a swap look like it had not happened.
-async function writeSwapped(chatId: string, m: any, next: string): Promise<void> {
-  const patch: any = { content: next };
-  const swipes = m && Array.isArray(m.swipes) ? m.swipes.slice() : null;
-  const idx = m && typeof m.swipe_id === 'number' ? m.swipe_id : 0;
-  if (swipes && swipes.length > 0 && idx >= 0 && idx < swipes.length) {
-    swipes[idx] = next;
-    patch.swipes = swipes;
-    patch.swipe_id = idx;
-  } else {
-    patch.swipe_id = idx;
-  }
-  await spindle.chat.updateMessage(chatId, m.id, patch);
-}
 
-function rebuild(): void {
-  groups = buildGroups(rulesText, caseSensitive);
-  combined = buildCombined(groups, caseSensitive);
-}
 
-// Pull the find-and-replace fields out of a full settings object.
-function applyReplaceFromSettings(s: any) {
-  // The extension's own master switch, not the swap one. Off means it does
-  // nothing, and rewriting saved replies is emphatically something. Absent
-  // counts as on, so an older settings object does not switch swapping off.
-  masterOn = s.enabled !== false;
-  enabled = !!s.replaceEnabled;
-  random = !!s.replaceRandom;
-  caseSensitive = !!s.replaceCaseSensitive;
-  rulesText = String(s.replaceRules == null ? '' : s.replaceRules);
-  allowReSwap = !!s.allowReSwap;
-  // Off means the model's thinking is left alone, which is the default: it is
-  // not the prose anyone is reading, and Lumiverse shows it in its own block.
-  swapThinking = !!s.swapThinking;
-  swapMarkup = !!s.swapMarkup;
-  // The same extra tag names the refusal check uses. Read from the one setting
-  // so the two modules cannot disagree about what counts as thinking.
-  extraThinkTags = String(s.refusalThinkTags == null ? '' : s.refusalThinkTags)
-    .split(/\r?\n/)
-    .map((x: string) => x.replace(/[^\w-]/g, '').toLowerCase())
-    .filter(Boolean);
-  confirmBeforeEdit = !!s.confirmBeforeEdit;
-  waitForOtherEdits = !!s.swapWaitForEdits;
-  const secs = Number(s.swapWaitSecs);
-  // The clamp matches the panel's own range. It said 120 while the panel said
-  // 300, so anything above two minutes was quietly cut back to two.
-  waitStartMs = Number.isFinite(secs) && secs > 0
-    ? Math.min(300, Math.max(1, Math.round(secs))) * 1000
-    : 85000;
-  rebuild();
-}
 
-// ---- the settle gate ----
-// Another extension may rewrite the same reply asynchronously after it lands.
-// Hone's auto-refine is the case this exists for: it runs a second LLM pass off
-// GENERATION_ENDED and saves the result seconds later, so a swap applied the
-// instant the reply arrived was overwritten by that rewrite. Nothing about
-// another extension is detectable from here, so rather than trying to know who
-// else is editing, this waits for the message to stop changing.
-const SETTLE_MS = 1500;      // quiet period after an edit before swapping
-// Ceiling, so a reply that never settles is still swapped. It has to clear the
-// longest wait the panel offers plus a few settle rounds on top, or the ceiling
-// would cut a refinement short that the wait was set long enough for.
-const MAX_WAIT_MS = 420000;
-const RESWAP_CAP = 3;        // re-assertions per message, so two extensions cannot ping-pong
-const OURWRITES_CAP = 200;
 
-const pendingSwaps = new Map<string, any>();
-const ourWrites = new Map<string, string>();
-const reswapCount = new Map<string, number>();
-
-const swapKey = (c: any, m: any) => String(c) + ':' + String(m);
-
-function rememberWrite(k: string, text: string) {
-  ourWrites.set(k, text);
-  if (ourWrites.size > OURWRITES_CAP) ourWrites.delete(ourWrites.keys().next().value as string);
-}
 
 // Reads the message at the moment of the swap rather than using the text the
 // end event carried. That is what lets a deferred swap apply on top of another
@@ -656,77 +304,7 @@ function warnUnreadableChat(e?: any): void {
   } catch (__) {}
 }
 
-// wasRewritten says something else edited this reply while the swap waited on
-// it, which is the one case where finding nothing to swap is worth reporting.
-async function swapMessageNow(chatId: string, messageId: any, userId?: string, wasRewritten?: boolean): Promise<void> {
-  if (!groups.length) return;
-  let m: any = null;
-  try {
-    const msgs = await spindle.chat.getMessages(chatId);
-    // An empty answer here is the host declining to give the chat back, not a
-    // chat with nothing in it: a reply just ended in it, so it has at least one
-    // message. Told apart from the throw below only by which line reports it.
-    if (!Array.isArray(msgs) || !msgs.length) { warnUnreadableChat(); return; }
-    // The opening message is authored, not generated, so it is never swapped.
-    const greetingId = (msgs[0] && msgs[0].role === 'assistant') ? msgs[0].id : null;
-    if (messageId != null && greetingId != null && messageId === greetingId) return;
-    m = msgs.find((x: any) => x && x.id === messageId && x.role === 'assistant') || null;
-  } catch (e: any) { warnUnreadableChat(e); return; }
-  if (!m) return;
-  const content = String(m.content == null ? '' : m.content);
-  const pairs: Array<[string, string]> = [];
-  const next = applyRulesVisible(content, pairs);
-  if (next === content) {
-    // Nothing of yours is left in the reply, so there is nothing to do and the
-    // swap drops itself. Said out loud only when something else rewrote the
-    // reply while the swap waited: the reader turned that wait on and then
-    // watched a long minute of nothing, and silence there reads the same as
-    // broken. A reply that never had a matching word in it is not news.
-    if (wasRewritten) replyTo(userId, { type: 'nothing_left_to_swap', chatId: chatId, messageId: messageId });
-    return;
-  }
-  if (confirmBeforeEdit) {
-    // Ask first; the frontend sends apply_replace_now for this reply if the user agrees.
-    replyTo(userId, { type: 'confirm_edit', chatId: chatId, messageId: messageId, requestId: 'ar-auto-' + Date.now() });
-    return;
-  }
-  rememberWrite(swapKey(chatId, messageId), next);
-  await writeSwapped(chatId, m, next);
-  markSwapped(messageId);
-  // Both halves of the message go with the pairs. The pairs patch what is on
-  // screen; the halves let the frontend recognise the pre-swap text if the host
-  // puts it back in its edit box, which it does when its own copy of the
-  // message did not pick the change up.
-  replyTo(userId, {
-    type: 'swapped',
-    chatId: chatId,
-    messageId: messageId,
-    pairs: pairs,
-    before: content,
-    after: next,
-  });
-}
 
-function scheduleSwap(chatId: string, messageId: any, sawEdit: boolean, userId?: string) {
-  const k = swapKey(chatId, messageId);
-  let p = pendingSwaps.get(k);
-  // The chat is kept on the entry rather than read back out of the key, so
-  // ending every wait in one chat is an exact match and not a prefix one.
-  if (!p) { p = { chatId: String(chatId), capAt: Date.now() + MAX_WAIT_MS, timer: null }; pendingSwaps.set(k, p); }
-  if (p.timer) clearTimeout(p.timer);
-  // The owner is remembered from whichever event scheduled the swap first, so a
-  // deferred swap still replies to that user and not to everyone.
-  if (userId != null) p.userId = userId;
-  // Sticky: one rewrite is enough to make "nothing to swap" worth reporting at
-  // the end, and a later edit that settles must not quietly unset it.
-  if (sawEdit) p.rewritten = true;
-  const want = sawEdit ? SETTLE_MS : waitStartMs;
-  const left = Math.max(0, p.capAt - Date.now());
-  p.timer = setTimeout(() => {
-    pendingSwaps.delete(k);
-    swapMessageNow(chatId, messageId, p.userId, !!p.rewritten).catch(() => {});
-  }, Math.max(0, Math.min(want, left)));
-}
 
 // Every deferred swap in one chat, dropped, and how many there were.
 //
@@ -736,44 +314,6 @@ function scheduleSwap(chatId: string, messageId: any, sawEdit: boolean, userId?:
 // decided that is not worth the seconds. A leftover timer also lands minutes
 // later, on a reply that has been scrolled past, with nothing on screen to say
 // why the words changed again.
-function clearPendingInChat(chatId: any): number {
-  const want = String(chatId);
-  let n = 0;
-  for (const [k, p] of Array.from(pendingSwaps)) {
-    if (!p || String(p.chatId) !== want) continue;
-    if (p.timer) clearTimeout(p.timer);
-    pendingSwaps.delete(k);
-    n++;
-  }
-  return n;
-}
-
-// An edit by anything other than us. While a swap is pending this pushes it
-// back; after one has landed it re-asserts, capped, for the case where the
-// other extension finished later than the wait allowed for.
-function onForeignEdit(chatId: any, messageId: any, content: string, userId?: string) {
-  if (!enabled || !groups.length || !chatId || messageId == null) return;
-  const k = swapKey(chatId, messageId);
-  if (ourWrites.get(k) === content) return; // the event our own write raised
-  if (!pendingSwaps.has(k)) {
-    if (!waitForOtherEdits) return;
-    if (!swappedIds.has(messageId)) return; // never a message we have not touched
-    const n = (reswapCount.get(k) || 0) + 1;
-    if (n > RESWAP_CAP) return;
-    reswapCount.set(k, n);
-  }
-  scheduleSwap(chatId, messageId, true, userId);
-}
-
-const readEdit = (p: any) => {
-  try {
-    if (!p || !p.chatId || !p.message) return;
-    onForeignEdit(p.chatId, p.message.id, String(p.message.content == null ? '' : p.message.content), p.userId);
-  } catch (_) {}
-};
-try { spindle.on('MESSAGE_EDITED', readEdit); } catch (_) {}
-try { spindle.on('SWIPE_EDITED', readEdit); } catch (_) {}
-
 // Load persisted settings on startup. There is no userId here, so this only
 // resolves on a user-scoped install where userStorage can infer the owner.
 // Everywhere else it finds nothing and the state stays at its defaults until a
@@ -782,8 +322,7 @@ try { spindle.on('SWIPE_EDITED', readEdit); } catch (_) {}
 // multi-account install it belongs to whoever loaded or saved last.
 (async () => {
   try {
-    const s = await readUserJson(SETTINGS_FILE);
-    if (s && typeof s === 'object') applyReplaceFromSettings(s);
+    await readUserJson(SETTINGS_FILE);
   } catch (_) { /* no account settings yet */ }
 })();
 
@@ -794,7 +333,6 @@ spindle.onFrontendMessage(async (payload: any, userId?: string) => {
   try {
     if (!payload) return;
     if (payload.type === 'save_settings' && payload.settings && typeof payload.settings === 'object') {
-      applyReplaceFromSettings(payload.settings);
       // This write is the account copy, the one that carries settings between
       // devices. It is caught here rather than falling to the catch at the
       // bottom, which logs on the server where the affected user cannot see it
@@ -818,9 +356,6 @@ spindle.onFrontendMessage(async (payload: any, userId?: string) => {
       // swapping did nothing while the manual buttons worked, because those
       // only ask whether there are rules and never look at the switch.
       //
-      // On a multi-account install this is one rule set for the whole process,
-      // belonging to whichever user loaded or saved last.
-      if (settings && typeof settings === 'object') applyReplaceFromSettings(settings);
       replyTo(userId, { type: 'loaded_settings', requestId: payload.requestId, settings: settings });
       return;
     }
@@ -881,9 +416,6 @@ spindle.onFrontendMessage(async (payload: any, userId?: string) => {
     }
     if (payload.type === 'set_settings' && payload.settings && typeof payload.settings === 'object') {
       // The panel handing back what this module knew before it restarted.
-      // Adopted and not written anywhere: the account copy is already right,
-      // and coming back up is not a reason to write over it.
-      applyReplaceFromSettings(payload.settings);
       return;
     }
     if (payload.type === 'set_chats_off') {
@@ -961,99 +493,8 @@ spindle.onFrontendMessage(async (payload: any, userId?: string) => {
       replyTo(userId, { type: 'loaded_presets', requestId: payload.requestId, presets: presets });
       return;
     }
-    if (payload.type === 'apply_replace_now') {
-      // Said before any work, so the frontend knows the request landed. A whole
-      // chat can take a while to swap, and without this the only way to tell a
-      // long job from a backend that is not running is to wait and see.
-      replyTo(userId, { type: 'replace_now_ack', requestId: payload.requestId });
-      // Ahead of any reading, so a chat the host will not hand back still ends
-      // the wait rather than leaving a swap to arrive on its own later.
-      //
-      // Only for a button. The same request also carries a yes to an automatic
-      // swap's confirmation, and agreeing to one swap says nothing about
-      // whether another reply in the chat should still be waiting.
-      const waitsEnded = payload.byHand && payload.chatId ? clearPendingInChat(payload.chatId) : 0;
-      let ok = true, found = false, changed = 0, skipped = 0;
-      // Literal substitutions made, passed back so the frontend can update the
-      // rendered text. The host saves the message without redrawing the chat.
-      const pairs: Array<[string, string]> = [];
-      // One entry per reply actually rewritten, so the frontend can recognise
-      // the pre-swap text of any of them.
-      const edits: Array<{ messageId: any; before: string; after: string }> = [];
-      try {
-        const chatId = payload.chatId;
-        const wantId = payload.messageId;
-        if (chatId && groups.length) {
-          const msgs = await spindle.chat.getMessages(chatId);
-          const targets: any[] = [];
-          if (Array.isArray(msgs)) {
-            // The opening/greeting message is authored, not generated, so never swap it.
-            const greetingId = (msgs.length && msgs[0] && msgs[0].role === 'assistant') ? msgs[0].id : null;
-            if (payload.wholeChat) {
-              // Every generated assistant reply in the chat (never user messages or the greeting).
-              for (const x of msgs) { if (x && x.role === 'assistant' && x.id !== greetingId) targets.push(x); }
-            } else {
-              // The exact reply if we have it, else the latest assistant reply, never the greeting.
-              let m: any = null;
-              if (wantId != null) m = msgs.find((x: any) => x && x.id === wantId && x.role === 'assistant') || null;
-              if (!m) { for (let i = msgs.length - 1; i >= 0; i--) { if (msgs[i] && msgs[i].role === 'assistant' && msgs[i].id !== greetingId) { m = msgs[i]; break; } } }
-              if (m && m.id !== greetingId) targets.push(m);
-            }
-          }
-          found = targets.length > 0;
-          for (const m of targets) {
-            // Skip replies already swapped this session unless re-swapping is allowed.
-            if (!allowReSwap && swappedIds.has(m.id)) { skipped++; continue; }
-            const content = String(m.content == null ? '' : m.content);
-            const next = applyRulesVisible(content, pairs);
-            if (next !== content) {
-              rememberWrite(swapKey(chatId, m.id), next);
-              await writeSwapped(chatId, m, next);
-              changed++;
-              markSwapped(m.id);
-              edits.push({ messageId: m.id, before: content, after: next });
-            }
-          }
-        }
-      } catch (_) { ok = false; }
-      replyTo(userId, { type: 'replace_now_result', requestId: payload.requestId, chatId: payload.chatId, ok: ok, hasRules: groups.length > 0, found: found, changed: changed, skipped: skipped, pairs: pairs, edits: edits, waitsEnded: waitsEnded });
-      return;
-    }
   } catch (_) {
     try { spindle.log.warn('auto-retry: could not handle a settings message'); } catch (__) {}
-  }
-});
-
-// After each finished reply, apply the rules to the saved message, either now or
-// once the reply has stopped being edited by anything else.
-spindle.on('GENERATION_ENDED', async (p: any) => {
-  try {
-    if (!masterOn || !enabled || !groups.length) return;
-    if (!p || p.error || !p.chatId) return;
-    // Left alone means left alone, including by this.
-    if (chatsOff.has(String(p.chatId))) return;
-    const chatId = p.chatId;
-    let messageId = p.messageId;
-    if (!messageId) {
-      // Not every build puts the id on the end event, so the newest assistant
-      // reply stands in. swapMessageNow rules out the greeting either way.
-      try {
-        const msgs = await spindle.chat.getMessages(chatId);
-        if (Array.isArray(msgs)) {
-          for (let i = msgs.length - 1; i >= 0; i--) {
-            if (msgs[i] && msgs[i].role === 'assistant') { messageId = msgs[i].id; break; }
-          }
-        }
-      } catch (_) {}
-    }
-    if (!messageId) return;
-    if (waitForOtherEdits) { scheduleSwap(chatId, messageId, false, p.userId); return; }
-    await swapMessageNow(chatId, messageId, p.userId);
-  } catch (e: any) {
-    if (!warnedEditError) {
-      warnedEditError = true;
-      try { spindle.log.warn('auto-retry replace: ' + (e && e.message ? e.message : String(e)) + ' (further errors suppressed; if this is a permission error, grant chat editing)'); } catch (__) {}
-    }
   }
 });
 
@@ -1134,7 +575,6 @@ const promptInterceptor = async (messages: any[], context: any) => {
 const PERMISSIONS: Array<{ name: string; costs: string }> = [
   { name: 'generation', costs: 'Everything. Retries run off the generation events, and without this none of them arrive, so nothing is ever retried.' },
   { name: 'interceptor', costs: 'The refusal note, and the Prompt tab.' },
-  { name: 'chat_mutation', costs: 'Word swaps. Nothing can be written back to a reply.' },
   { name: 'chats', costs: 'The chat name in the log, and knowing which chat you are in without a reply first.' },
   { name: 'characters', costs: 'The character name in the log.' },
   { name: 'ui_panels', costs: 'The floating button. The on-screen panel falls back to its own window.' },

@@ -217,28 +217,6 @@ const CONFIG = {
     // "normal", and on those this stops the note going out at all, which is why
     // it is not the default.
     refusalNoteStrictType: false,
-    // Find and replace in replies (handled by the backend via the Chat Mutation API).
-    replaceEnabled: false, // off by default. When on, applies replaceRules to each finished reply and edits the saved message.
-    replaceRules: "", // "old => new" rules, one per line. A single word matches whole words; empty right side deletes it. Same word can appear more than once.
-    replaceCaseSensitive: false, // match letter case exactly. Off = case-insensitive with capitalization kept.
-    replaceRandom: false, // when a word has more than one replacement, pick one at random per occurrence. Off = always the first listed.
-    showReplaceButton: false, // optional button in the input's Extras menu that applies the word swaps to the latest reply on demand.
-    showSwapAllButton: false, // adds an Extras button that swaps every generated reply in the chat once.
-    allowReSwap: false, // let that button swap a reply again even if it was already swapped this session (can stack swaps).
-    swapThinking: false, // also swap inside the model's thinking. Off = only the visible reply is swapped, and any reasoning block is left exactly as it was.
-    swapMarkup: false, // also swap inside HTML tags in a reply. Off = tags like <font color="#ff0"> are left alone, so a rule cannot break the markup.
-    confirmBeforeEdit: false, // ask for confirmation before any word-swap edit (automatic or manual); the user can cancel.
-    swapWaitForEdits: false, // wait for another extension to finish editing a reply before swapping it.
-    // How long to give it, in seconds. Only used when the above is on.
-    //
-    // Hone refines reasoning and non-reasoning replies alike, and that second
-    // pass is a whole generation: how long it takes depends on the model, the
-    // prompt and how much it has to read. Fifteen seconds covered a fast model
-    // and nothing else, so on anything slower the swap landed first and the
-    // refinement arrived on top and wiped it, which is the exact failure this
-    // setting exists to prevent. Each edit restarts the clock, so a refinement
-    // that finishes early is not made to wait this out.
-    swapWaitSecs: 85,
     // host controls (the only DOM-dependent part). Use the Test buttons in settings.
     // Multiple patterns are listed so a Lumiverse build that renames one attribute
     // is still likely covered; if a build changes them all, fix it via the Test UI.
@@ -696,93 +674,6 @@ const SCHEMA = [
                 label: "Only send them on a regenerate or a swipe",
                 type: "bool",
                 hint: "Off by default, and best left off. Lumiverse says what kind of generation is running, and most builds call every one of them \"normal\", including a regenerate, so turning this on stops notes going out at all. Turn it on only if your build reports the kind properly and you want the extra check. Either way a note goes out once, to the chat it was armed in, on the retry that armed it.",
-            },
-        ],
-    },
-    {
-        title: "Find and replace (beta)",
-        collapsed: true,
-        splitByPreset: true,
-        extra: "swapPresets",
-        desc: "Swaps words in a reply after it arrives and saves the change, so the swap sticks and the model reads it on later turns. It never changes what the model generated, only the text afterward. Needs the chat editing permission. Off by default.",
-        fields: [
-            {
-                key: "replaceEnabled",
-                label: "Swap words in replies",
-                type: "bool",
-                hint: "When on, applies your swaps below to each new reply and edits the saved message. If nothing here matches, the reply is left untouched.",
-            },
-            {
-                key: "replaceRules",
-                label: "Word swaps (old => new)",
-                type: "text",
-                hint: 'Rules are "old => new", one per line. A single word matches whole words only, so cat will not touch category, while a phrase or sentence matches exactly as you type it. Leave the right side empty to delete it. All rules run in one pass, so no rule ever acts on what another just wrote. The Word swaps page in the docs covers the rest.',
-            },
-            {
-                key: "replaceRandom",
-                label: "Pick randomly when a word has more than one swap",
-                type: "bool",
-                hint: "Off by default. When the same word is listed on more than one line (like sky => blue on one line and sky => aqua on another), each time it appears one of its options is picked at random. Off, it always uses the first one you listed.",
-            },
-            {
-                key: "replaceCaseSensitive",
-                label: "Match case exactly",
-                type: "bool",
-                hint: "Off by default. When off, a swap matches any case and keeps the original capitalization. Turn on to swap only when the case matches your rule exactly, so sky and Sky can have different swaps.",
-            },
-            {
-                key: "showReplaceButton",
-                label: "Show a \"swap words now\" button",
-                type: "bool",
-                hint: "Off by default. Adds a button that applies your word swaps on demand to the latest reply, so you can swap without leaving the automatic swap on. It sits in the chat input's Extras menu, or in the floating button's own menu while that button is showing. Only assistant replies are swapped, never your own messages, and the same reply won't be swapped twice. Needs your swap rules set up.",
-            },
-            {
-                key: "showSwapAllButton",
-                label: "Show a swap-whole-chat button",
-                type: "bool",
-                hint: "Off by default. Adds a button that applies your rules once to every generated reply in the chat you're viewing. It sits in the chat input's Extras menu, or in the floating button's own menu while that button is showing. The greeting is never touched.",
-            },
-            {
-                key: "allowReSwap",
-                needs: ["showReplaceButton", "showSwapAllButton"],
-                label: "Allow swapping a reply again",
-                type: "bool",
-                hint: "Off by default. Normally a reply is swapped at most once per session, so swaps don't stack. Turn this on to let the button swap a reply again even if it was already swapped, for example after you change your rules. This can apply your rules on top of an earlier swap.",
-            },
-            {
-                key: "swapThinking",
-                label: "Also swap inside the thinking",
-                type: "bool",
-                hint: "Off by default, so only the reply you read is swapped and the model's thinking is left exactly as it was. Lumiverse shows reasoning in its own block, so a swap there changes nothing you see while still rewriting what the model worked out. Turn it on to swap the thinking too. Reasoning your provider returns separately, rather than in the reply, is never swapped either way.",
-            },
-            {
-                key: "swapMarkup",
-                label: "Also swap inside HTML tags",
-                type: "bool",
-                hint: "Off by default, so a rule only ever changes the words you read. Replies that use tags like <font color=\"#ffff00\"> carry words inside the markup, and a rule such as color => colour would rewrite the tag itself and quietly break it. Turn this on if you want your rules to reach the tags too, for example to change a colour everywhere at once.",
-            },
-            {
-                key: "confirmBeforeEdit",
-                label: "Ask before editing a reply",
-                type: "bool",
-                hint: "Off by default. When on, every word swap (automatic or from the button) asks you to confirm before it changes a reply, and you can cancel. This can get frequent if you use automatic swapping, but nothing is edited without your OK. Needs your Lumiverse to support confirm dialogs.",
-            },
-            {
-                key: "swapWaitForEdits",
-                needs: ["replaceEnabled"],
-                label: "Wait for other extensions to finish",
-                type: "bool",
-                hint: "Off by default. Turn this on if another extension also rewrites replies, like Hone with auto-refine on. A swap normally applies the moment a reply lands, and the other extension's rewrite then arrives on top and undoes it. With this on, the swap waits for the reply to stop changing first, so both survive, and it reapplies up to three times if a later edit undoes it. Leave it off if nothing else edits your replies: it only adds a delay. The swap buttons always apply straight away, and pressing one ends any wait running in that chat.",
-            },
-            {
-                key: "swapWaitSecs",
-                needsAll: ["replaceEnabled", "swapWaitForEdits"],
-                label: "How long to wait (seconds)",
-                type: "num",
-                int: true,
-                min: 1,
-                max: 300,
-                hint: "How long to give another extension to make its edit before swapping anyway. Each edit restarts the clock and the swap follows shortly after the last one, so this is only the full wait when nothing else edits at all. The default of " + def("swapWaitSecs") + " covers most models. The other extension is writing a whole new reply, so how long that takes depends on the model, the prompt and how much there is to read. Raise it if your swaps still get overwritten, lower it if you are only waiting on something quick.",
             },
         ],
     },
@@ -2718,6 +2609,13 @@ export function setup(ctx, opts) {
                 catch (_) { }
                 const s = msg.settings;
                 if (s && typeof s === "object" && Object.keys(s).length) {
+                    // Held before the coercion below, which walks the panel's own fields
+                    // and so drops anything no longer in it. Word swap rules are exactly
+                    // that now: somebody whose settings live in their account and not in
+                    // this browser would otherwise have theirs quietly disappear with
+                    // nothing offering them a copy.
+                    if (typeof s.replaceRules === "string" && s.replaceRules.trim())
+                        accountSwaps = s.replaceRules;
                     Object.assign(cfg, coerceSaved(s));
                     saveSaved();
                     syncLiveLog();
@@ -2924,96 +2822,6 @@ export function setup(ctx, opts) {
         }
         catch (_) { }
     }
-    // Sends one swap request and starts the timer above. Nothing is returned:
-    // what happens next arrives as a message from the backend, or as the timeout
-    // saying nothing did.
-    function sendSwapRequest(payload) {
-        // A swap waits on the answer to "which chat is open", and teardown releases
-        // that wait rather than leaving it hanging. Without this flag the awaiting
-        // code carries on and edits a reply for an extension that has stopped.
-        if (tornDown)
-            return;
-        const requestId = String(payload.requestId);
-        try {
-            ctx.sendToBackend(payload);
-        }
-        catch (e) {
-            // The host would not send the message. Saying nothing here is what made a
-            // pressed button look broken.
-            log("could not send the swap request", e);
-            showToast("Could not send that to the word swapper. Reload the page and try again.");
-            return;
-        }
-        swapWaits.set(requestId, setTimeout(() => {
-            swapWaits.delete(requestId);
-            log("no answer to the swap request");
-            showToast("No answer from the word swapper. Reload the page and try again.");
-        }, SWAP_ACK_MS));
-    }
-    // Which chat a swap should act on, asked fresh at the moment the button is
-    // pressed. Returns null when there is no chat to act on, and the caller has
-    // already said so by then.
-    //
-    // These buttons live in the floating button's menu, which is on screen on the
-    // home screen and everywhere else, so they can be pressed with no chat open
-    // at all. The id held from the last chat is no answer: some builds never say
-    // when you leave one, so it is still the chat you walked away from, and
-    // swapping there edits saved replies you are not looking at and cannot undo.
-    async function chatForSwap() {
-        const open = await whichChatIsOpen();
-        // The backend looked and there is no chat. This is the home screen.
-        if (open.answered && open.resolved && !open.chatId) {
-            showToast("No chat is open. Open a chat and try again.");
-            return null;
-        }
-        // It looked and named one. Fresher than anything held here, unless the
-        // address bar says that chat is behind us: the backend is answering with
-        // the account's most recent chat, and on the home screen that is the one
-        // just left. Swapping there edits saved replies nobody is looking at.
-        if (open.answered && open.resolved && open.chatId) {
-            if (!urlSaysGone(open.chatId))
-                return open.chatId;
-            showToast("No chat is open. Open a chat and try again.");
-            return null;
-        }
-        // It could not look, which is what a build without the chats permission
-        // does. Fall back to the last chat seen, which is all there has ever been.
-        if (lastChatId != null && lastChatId !== "")
-            return String(lastChatId);
-        showToast("No chat is open. Open a chat and try again.");
-        return null;
-    }
-    async function applyReplaceNow() {
-        if (!ctx || typeof ctx.sendToBackend !== "function") {
-            showToast("Word swaps need this extension's backend, which your Lumiverse has not loaded.");
-            return;
-        }
-        // Before the confirmation, not after: asking whether to swap every reply in
-        // a chat that is not open is a question with no right answer.
-        const chatId = await chatForSwap();
-        if (chatId == null)
-            return;
-        if (cfg.confirmBeforeEdit) {
-            if (!(await confirmEdit("Apply your word swaps to the latest reply?")))
-                return;
-        }
-        sendSwapRequest({ type: "apply_replace_now", chatId: chatId, byHand: true, messageId: lastMessageId, requestId: "ar-rep-" + Date.now() });
-    }
-    // Swap every generated reply in the current chat, once, on request.
-    async function applyReplaceAllNow() {
-        if (!ctx || typeof ctx.sendToBackend !== "function") {
-            showToast("Word swaps need this extension's backend, which your Lumiverse has not loaded.");
-            return;
-        }
-        const chatId = await chatForSwap();
-        if (chatId == null)
-            return;
-        if (cfg.confirmBeforeEdit) {
-            if (!(await confirmEdit("Apply your word swaps to every reply in this chat?")))
-                return;
-        }
-        sendSwapRequest({ type: "apply_replace_now", chatId: chatId, byHand: true, wholeChat: true, requestId: "ar-rep-all-" + Date.now() });
-    }
     // The Extras-menu on/off entry. Its label and icon carry the current state,
     // and the host offers no way to relabel an action once it is registered, so a
     // state change registers it again rather than editing it in place.
@@ -3139,8 +2947,6 @@ export function setup(ctx, opts) {
             // button hidden, or refused because ui_panels was not granted, the Extras
             // menu is the only way to reach these on a phone, so they come back.
             const inExtras = canReg && !floatCarriesEntries();
-            syncBarEntry("replaceNow", inExtras && !!cfg.showReplaceButton, { id: "auto-retry-replace-now", label: SWAP_ONE_LABEL, iconSvg: SWAP_ONE_ICON }, applyReplaceNow);
-            syncBarEntry("replaceAll", inExtras && !!cfg.showSwapAllButton, { id: "auto-retry-replace-all", label: SWAP_ALL_LABEL, iconSvg: SWAP_ALL_ICON }, applyReplaceAllNow);
             // Only while the panel is set to live in the drawer and the host gave us
             // a tab to bring forward. With the panel floating it is already on
             // screen, and an entry that opens what you can see is noise. Registering
@@ -3545,24 +3351,6 @@ export function setup(ctx, opts) {
             }
             body.appendChild(barBlock("Which chats it retried in", labelled, order));
         }
-        // Word swaps, for the chat on screen. A swap leaves nothing behind to look
-        // at once it lands, since the reply reads as though the model wrote it that
-        // way, so this is the only answer to "is that rule doing anything".
-        const swapKeyNow = chatSlot(lastChatId);
-        const swapsHere = stats.swapsByChat[swapKeyNow] || 0;
-        const swapsAll = Object.keys(stats.swapsByChat)
-            .reduce((n, k) => n + stats.swapsByChat[k], 0);
-        if (swapsAll > 0) {
-            const rows = {};
-            const order2 = [];
-            rows["This chat"] = swapsHere;
-            order2.push("This chat");
-            if (swapsAll !== swapsHere) {
-                rows["Everywhere else"] = swapsAll - swapsHere;
-                order2.push("Everywhere else");
-            }
-            body.appendChild(barBlock("Words swapped", rows, order2));
-        }
         try {
             ensureReadableTree(body);
         }
@@ -3947,12 +3735,6 @@ export function setup(ctx, opts) {
                 lines.push("Refusal notes sent: " + stats.notesSent);
                 if (stats.notesSkipped)
                     lines.push("Notes not sent: " + stats.notesSkipped);
-            }
-            const swapsAll = Object.keys(stats.swapsByChat)
-                .reduce((n, k) => n + stats.swapsByChat[k], 0);
-            if (cfg.replaceEnabled || swapsAll) {
-                const here = stats.swapsByChat[chatSlot(lastChatId)] || 0;
-                lines.push("Words swapped: " + swapsAll + " (" + here + " in this chat)");
             }
             lines.push("Watching for: " + sayTime(Date.now() - stats.since));
             const total = stats.good + stats.retries;
@@ -4919,11 +4701,6 @@ export function setup(ctx, opts) {
                     // panel floating it is already on screen, and an entry that opens
                     // what you can see is noise in a menu opened for something else.
                     ...(canOpenPanel() ? [{ key: "panel", label: OPEN_PANEL_LABEL }] : []),
-                    // The two word swap buttons, on the same terms as the panel one:
-                    // their setting puts them in the Extras menu, and this menu takes
-                    // them over while the floating button is on screen.
-                    ...(cfg.showReplaceButton ? [{ key: "swap", label: SWAP_ONE_LABEL }] : []),
-                    ...(cfg.showSwapAllButton ? [{ key: "swapAll", label: SWAP_ALL_LABEL }] : []),
                     // Last, under everything else, because it is the only entry here
                     // that closes this menu for good.
                     //
@@ -4958,12 +4735,6 @@ export function setup(ctx, opts) {
         }
         else if (selectedKey === "panel") {
             openDrawerPanel();
-        }
-        else if (selectedKey === "swap") {
-            applyReplaceNow();
-        }
-        else if (selectedKey === "swapAll") {
-            applyReplaceAllNow();
         }
         else if (selectedKey === "hide") {
             cfg.showFloatingToggle = false;
@@ -5401,24 +5172,6 @@ export function setup(ctx, opts) {
             ],
         },
         {
-            id: "replace",
-            label: "Word swaps",
-            keys: [
-                "replaceEnabled",
-                "replaceRules",
-                "replaceRandom",
-                "replaceCaseSensitive",
-                "showReplaceButton",
-                "showSwapAllButton",
-                "allowReSwap",
-                "swapThinking",
-                "swapMarkup",
-                "confirmBeforeEdit",
-                "swapWaitForEdits",
-                "swapWaitSecs",
-            ],
-        },
-        {
             id: "buttons",
             label: "Button selectors",
             keys: [
@@ -5543,28 +5296,6 @@ export function setup(ctx, opts) {
     // function, so a kind added there needs no new UI code.
     const PRESETS_KEY = "lv-auto-retry:presets:v1";
     const PRESET_KINDS = {
-        swap: {
-            catId: "replace",
-            label: "Word swap",
-            // A preset is the rules plus what decides how they match, and nothing
-            // else. Everything omitted here is about whether the feature runs and how
-            // careful it is, which belongs to the person loading the preset rather
-            // than the person who saved it. replaceEnabled would let a preset start
-            // rewriting replies unasked, and confirmBeforeEdit would let one remove a
-            // confirmation someone chose to turn on; those two matter most.
-            // Exporting still carries all of them.
-            omit: [
-                "replaceEnabled",
-                "showReplaceButton",
-                "showSwapAllButton",
-                "allowReSwap",
-                "swapThinking",
-                "swapMarkup",
-                "confirmBeforeEdit",
-                "swapWaitForEdits",
-                "swapWaitSecs",
-            ],
-        },
         notes: {
             catId: "refusal",
             // Named by what is in it, not by the section it comes from, since the
@@ -6086,7 +5817,6 @@ export function setup(ctx, opts) {
         // in the chat once it has landed, since the reply simply reads as though
         // the model wrote it that way, so without a count there is nothing to look
         // at to answer "is this rule doing anything".
-        swapsByChat: {},
         // So a count can be read as a rate rather than as a bare number. Twelve
         // retries in ten minutes and twelve in a whole day are different problems.
         since: Date.now(),
@@ -7583,28 +7313,6 @@ export function setup(ctx, opts) {
             reply({ answered: false, resolved: false, chatId: null });
         }
     }
-    // Where every chat id the extension learns arrives, whatever carried it, and
-    // not only the events that announce a change.
-    //
-    // Generation events alone are not enough. The manual swap buttons need a chat
-    // id, so with only those an older chat reports nothing to swap until
-    // something has been generated in it, and the per-chat switch stays greyed
-    // out on a fresh page load until the user leaves and comes back. A message
-    // rendering is what happens when a chat opens and it carries the id, so it is
-    // enough on its own.
-    // A swap that landed, counted against the chat it happened in and said out
-    // loud. Both are here rather than at each call site so the automatic path and
-    // the two buttons cannot end up counting differently, or one of them staying
-    // silent. n is the number of words changed, which is what the backend reports
-    // one entry per.
-    function noteSwaps(chatId, n) {
-        if (!(n > 0))
-            return;
-        const key = chatSlot(chatId);
-        stats.swapsByChat[key] = (stats.swapsByChat[key] || 0) + n;
-        log("swapped " + n + (n === 1 ? " word" : " words") +
-            " (" + stats.swapsByChat[key] + " in this chat)");
-    }
     function noteChat(id) {
         const next = id == null ? null : id;
         if (next == null || next === lastChatId)
@@ -8659,16 +8367,6 @@ export function setup(ctx, opts) {
                 lines.push("  refusal notes skipped: " + stats.notesSkipped +
                     (stats.lastNoteSkip ? " (last: " + stats.lastNoteSkip + ")" : ""));
             }
-            // Same figure the Stats tab shows, on the same terms. A swap leaves
-            // nothing on screen to look at, so a report about swaps that did not
-            // happen is unanswerable without it: zero here separates a rule that
-            // never matched from swapping that never ran.
-            const swapsAll = Object.keys(stats.swapsByChat)
-                .reduce((n, k) => n + stats.swapsByChat[k], 0);
-            if (cfg.replaceEnabled || swapsAll) {
-                const here = stats.swapsByChat[chatSlot(lastChatId)] || 0;
-                lines.push("  words swapped: " + swapsAll + " (" + here + " in this chat)");
-            }
             const reasons = Object.keys(stats.reasons).sort((a, b) => stats.reasons[b] - stats.reasons[a]);
             if (reasons.length) {
                 lines.push("  retries by reason:");
@@ -9434,45 +9132,21 @@ export function setup(ctx, opts) {
                 subRuns.push(wrap);
                 return wrap;
             };
-            // Find and replace is split by what a preset carries. Half these options
-            // change when you load a preset and half never do, and there was no way
-            // to tell which from looking. The split is worked out from the preset
-            // definition rather than written out a second time, so the headings
-            // cannot end up claiming something that is not true.
+            // Rows naming a run go under one heading together. Anything without a
+            // run goes straight into the group, and closes any run above it.
             const emitFields = (into) => {
-                if (!group.splitByPreset) {
-                    // Rows naming a run go under one heading together. Anything without
-                    // a run goes straight into the group, and closes any run above it.
-                    let open = null;
-                    for (const f of group.fields) {
-                        const key = f.run;
-                        if (!key || !RUNS[key]) {
-                            open = null;
-                            into.appendChild(addRow(buildRow(f), f));
-                            continue;
-                        }
-                        if (!open || open.key !== key)
-                            open = { key: key, el: subGroup(into, RUNS[key].title, RUNS[key].note) };
-                        open.el.appendChild(addRow(buildRow(f), f));
-                    }
-                    return;
-                }
-                const held = keysForKind("swap");
-                const isHeld = (f) => held.indexOf(f.key) >= 0;
-                // The main switch stays at the top on its own; it reads as the heading
-                // for the whole section rather than as one of the options below it.
-                for (const f of group.fields)
-                    if (f.key === "replaceEnabled")
+                let open = null;
+                for (const f of group.fields) {
+                    const key = f.run;
+                    if (!key || !RUNS[key]) {
+                        open = null;
                         into.appendChild(addRow(buildRow(f), f));
-                const rest = group.fields.filter((f) => f.key !== "replaceEnabled");
-                const a = subGroup(into, "Saved in a preset", "Loading a preset replaces these, and saving one stores them.");
-                for (const f of rest)
-                    if (isHeld(f))
-                        a.appendChild(addRow(buildRow(f), f));
-                const b = subGroup(into, "Yours, whatever preset you load", "No preset touches these. Loading a preset cannot switch swapping on for you, or take away the confirmation step.");
-                for (const f of rest)
-                    if (!isHeld(f))
-                        b.appendChild(addRow(buildRow(f), f));
+                        continue;
+                    }
+                    if (!open || open.key !== key)
+                        open = { key: key, el: subGroup(into, RUNS[key].title, RUNS[key].note) };
+                    open.el.appendChild(addRow(buildRow(f), f));
+                }
             };
             if (group.collapsed) {
                 const { header, caret } = sectionHeader(group.title, true);
@@ -9827,6 +9501,7 @@ export function setup(ctx, opts) {
         // Above the search box rather than below it. This is the panel's own state
         // and it stays put, while the line under the box is about the search and
         // comes and goes, so the lasting one reads first.
+        panel.appendChild(buildRetiredNotice());
         panel.appendChild(buildPermissionNotice());
         panel.appendChild(masterNote);
         masterNoteEl = masterNote;
@@ -9902,6 +9577,124 @@ export function setup(ctx, opts) {
     // registration silently does nothing. Every other fault in here reports
     // itself somewhere. This one leaves the extension installed and apparently
     // working while it does none of what it was asked to.
+    // ---- find and replace, retired ----
+    // The feature is gone. This card is the only thing left that knows it existed,
+    // and it exists to hand somebody's rules back to them rather than to argue
+    // about the removal.
+    //
+    // Read straight out of storage instead of out of cfg. The settings the panel
+    // holds no longer have a place for any of this, which is the point, so the
+    // stored blob is the only copy left.
+    const SWAPS_SEEN_KEY = "lv-auto-retry:swaps-retired:v1";
+    // Rules that came down from the account rather than out of this browser.
+    let accountSwaps = "";
+    function retiredSwaps() {
+        let rules = "";
+        let presets = [];
+        try {
+            if (typeof localStorage !== "undefined") {
+                const raw = JSON.parse(localStorage.getItem(STORE_KEY) || "{}");
+                if (raw && typeof raw.replaceRules === "string")
+                    rules = raw.replaceRules;
+                const all = JSON.parse(localStorage.getItem(PRESETS_KEY) || "{}");
+                if (all && Array.isArray(all.swap))
+                    presets = all.swap;
+            }
+        }
+        catch (_) { }
+        // Whichever copy has something in it. A browser that never saved them and
+        // an account that did are both somebody with rules to hand back.
+        if (!rules.trim() && accountSwaps.trim())
+            rules = accountSwaps;
+        return { rules: rules, presets: presets };
+    }
+    function swapsNoticeDone() {
+        try {
+            return typeof localStorage !== "undefined" && !!localStorage.getItem(SWAPS_SEEN_KEY);
+        }
+        catch (_) {
+            return false;
+        }
+    }
+    function buildRetiredNotice() {
+        const box = document.createElement("div");
+        box.setAttribute("data-ar-retired", "1");
+        const held = retiredSwaps();
+        const count = held.rules.split("\n").filter((l) => l.indexOf("=>") > 0).length;
+        // Nothing to hand back, or already handed back. Somebody who never used the
+        // feature should never learn it existed.
+        if ((!count && !held.presets.length) || swapsNoticeDone())
+            return box;
+        box.style.cssText =
+            "display:flex;flex-direction:column;gap:8px;flex:none;margin-bottom:12px;padding:12px;" +
+                "border-radius:var(--lumiverse-radius,8px);" +
+                "border:1px solid var(--lumiverse-warning,rgba(240,180,80,.45));" +
+                "background:var(--lumiverse-fill-subtle,rgba(0,0,0,.1))";
+        const title = document.createElement("div");
+        title.style.cssText = "font-weight:600;font-size:13px;color:var(--lumiverse-text,#eee)";
+        title.textContent = "Find and replace has been retired";
+        box.appendChild(title);
+        const body = document.createElement("div");
+        body.style.cssText =
+            "font-size:12px;line-height:1.5;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+        body.textContent =
+            "It swapped words in a reply after it arrived. That was copied from another " +
+                "extension without a use of its own, and rewriting a reply well is a different " +
+                "job from retrying one. Auto Refine does that job, and this one is going back to " +
+                "retrying. Nothing else here has changed.";
+        box.appendChild(body);
+        const what = document.createElement("div");
+        what.style.cssText =
+            "font-size:12px;line-height:1.5;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+        const bits = [];
+        if (count)
+            bits.push(count + (count === 1 ? " rule" : " rules"));
+        if (held.presets.length)
+            bits.push(held.presets.length + (held.presets.length === 1 ? " preset" : " presets"));
+        what.textContent =
+            "You have " + bits.join(" and ") + " saved. Take a copy before this card goes.";
+        box.appendChild(what);
+        const row = document.createElement("div");
+        row.style.cssText = "display:flex;flex-wrap:wrap;gap:8px;margin-top:2px";
+        const get = btn("Download my word swaps", true);
+        get.setAttribute("data-ar-retired-save", "1");
+        get.addEventListener("click", () => {
+            const body2 = {
+                extension: "auto-retry",
+                what: "word swaps, exported when find and replace was retired",
+                at: new Date().toISOString(),
+                rules: held.rules,
+                presets: held.presets,
+            };
+            const ok = downloadText("auto-retry-word-swaps.json", JSON.stringify(body2, null, 2));
+            showToast(ok
+                ? "Saved. The file holds your rules and your presets."
+                : "The browser would not save the file. Some private windows block downloads.", { force: true });
+        });
+        row.appendChild(get);
+        const gone = btn("I have it, hide this", false);
+        gone.setAttribute("data-ar-retired-hide", "1");
+        gone.addEventListener("click", () => {
+            try {
+                if (typeof localStorage !== "undefined")
+                    localStorage.setItem(SWAPS_SEEN_KEY, "1");
+            }
+            catch (_) { }
+            try {
+                box.remove();
+            }
+            catch (_) { }
+        });
+        row.appendChild(gone);
+        box.appendChild(row);
+        const where = document.createElement("div");
+        where.style.cssText =
+            "font-size:11px;line-height:1.5;color:var(--lumiverse-text-muted,rgba(255,255,255,.5))";
+        where.textContent =
+            "Auto Refine: github.com/starlitcode/Lumiverse-Auto-Refine";
+        box.appendChild(where);
+        return box;
+    }
     function buildPermissionNotice() {
         const box = document.createElement("div");
         box.setAttribute("data-ar-perms", "1");
@@ -11633,27 +11426,6 @@ export function setup(ctx, opts) {
                 try {
                     if (!msg)
                         return;
-                    if (msg.type === "confirm_edit") {
-                        // A confirmation about a message in a chat that is not open cannot be
-                        // acted on, so it is not raised.
-                        if (msg.chatId && lastChatId && String(msg.chatId) !== String(lastChatId)) {
-                            log("skipped a swap confirmation for a chat that is not open");
-                            return;
-                        }
-                        const yes = await confirmEdit("Apply your word swaps to this reply?");
-                        if (yes && ctx && typeof ctx.sendToBackend === "function") {
-                            // No byHand here. Saying yes to one automatic swap is not the same
-                            // as reaching for a button, and it must not end the wait on some
-                            // other reply that is still settling in this chat.
-                            sendSwapRequest({ type: "apply_replace_now", chatId: msg.chatId, messageId: msg.messageId, requestId: "ar-rep-" + Date.now() });
-                        }
-                        return;
-                    }
-                    if (msg.type === "nothing_left_to_swap") {
-                        log("another extension rewrote the reply while the swap waited, and " +
-                            "none of your words are left in it, so nothing was swapped");
-                        return;
-                    }
                     // The backend has just come up, so whatever it was told before is gone.
                     // Only worth a message if this panel actually wants prompts; asking for
                     // nothing is what it would already be getting.
@@ -11724,23 +11496,6 @@ export function setup(ctx, opts) {
                         log("refusal note sent with the retry (" + n + (n === 1 ? " note" : " notes") + ")");
                         return;
                     }
-                    // Sent after an automatic swap. The message is already saved; this only
-                    // brings what is on screen into line with it. A swap can now land well
-                    // after the reply did, so a result for a chat we are no longer looking
-                    // at must not rewrite the one we are.
-                    if (msg.type === "swapped") {
-                        // Remembered whatever chat it was for. The edit box for a message in
-                        // another chat can still be opened after switching back to it.
-                        rememberSwap(msg.before, msg.after);
-                        // Counted before the check below, which returns early for a swap that
-                        // happened in a chat the user has since left. It still happened.
-                        noteSwaps(msg.chatId, (msg.pairs || []).length);
-                        if (msg.chatId && lastChatId && String(msg.chatId) !== String(lastChatId))
-                            return;
-                        applySwapsToView(msg.pairs || []);
-                        repairEditBox();
-                        return;
-                    }
                     // The account copy could not be written. The browser copy may well have
                     // worked, so this does not say the settings are lost: it says the part
                     // that carries them to another device did not happen.
@@ -11750,44 +11505,6 @@ export function setup(ctx, opts) {
                         showToast("Your " + what + " are saved in this browser, but could not be saved to your account, so they will not follow you to another device.", { force: true });
                         return;
                     }
-                    // Said as soon as the backend has the request, before any work. It is
-                    // the only thing the timeout is waiting for.
-                    if (msg.type === "replace_now_ack") {
-                        clearSwapWait(msg.requestId);
-                        return;
-                    }
-                    if (msg.type !== "replace_now_result")
-                        return;
-                    // Also here, for a build whose acknowledgement never arrived: the
-                    // result answers the same question, later.
-                    clearSwapWait(msg.requestId);
-                    // Pressing a swap button ends any wait for another extension in that
-                    // chat. Said out loud, because the alternative is a reader who set that
-                    // wait watching for a second swap that is never coming.
-                    if (msg.waitsEnded > 0)
-                        log("you swapped by hand, so " + msg.waitsEnded +
-                            (msg.waitsEnded === 1 ? " reply" : " replies") +
-                            " stopped waiting for another extension to finish");
-                    for (const e of msg.edits || [])
-                        rememberSwap(e && e.before, e && e.after);
-                    if (msg.ok)
-                        noteSwaps(msg.chatId, (msg.pairs || []).length);
-                    if (msg.ok) {
-                        applySwapsToView(msg.pairs || []);
-                        repairEditBox();
-                    }
-                    if (!msg.ok)
-                        showToast("Could not swap words.");
-                    else if (!msg.hasRules)
-                        showToast("No word swaps are set up yet.");
-                    else if (!msg.found)
-                        showToast("No reply found to swap in this chat.");
-                    else if (msg.changed > 0)
-                        showToast("Swapped words in " + msg.changed + (msg.changed === 1 ? " reply." : " replies."));
-                    else if (msg.skipped > 0)
-                        showToast("Already swapped. Turn on re-swapping to redo it.");
-                    else
-                        showToast("No matching words to swap.");
                 }
                 catch (_) { }
             });

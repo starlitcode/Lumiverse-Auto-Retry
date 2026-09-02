@@ -71,15 +71,4 @@ describe("the debug report and the Stats tab agree", () => {
     }
   });
 
-  test("the count of words swapped is in both, on the same terms", () => {
-    // A swap leaves nothing on screen once it lands, so this is the only
-    // evidence a report can carry that swapping ran at all. Both work out the
-    // total the same way and both name the chat you are in, so the two cannot
-    // disagree in front of somebody trying to read them together.
-    for (const block of [statsTab, report]) {
-      expect(block).toContain("stats.swapsByChat");
-      expect(block).toContain("cfg.replaceEnabled || swapsAll");
-      expect(block).toContain("in this chat");
-    }
-  });
 });

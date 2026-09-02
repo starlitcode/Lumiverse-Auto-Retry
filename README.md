@@ -19,8 +19,6 @@ It watches each reply and re-fires when:
 
 Every retry waits a little longer than the last so it never hammers the server, and waits extra when the server says it is busy. All of the triggers share one retry limit, so no reply is ever retried more than you allow, and nothing can loop forever.
 
-It can also, optionally, run a find-and-replace on replies: swap words you don't like for ones you prefer, saved into the reply. See [Find and replace in replies](docs/word-swaps.md). This is off by default and is the only feature that edits a reply. A swap cannot be undone, so it is worth reading that page before switching it on.
-
 ## Install
 
 In Lumiverse, open Extensions and install from the repository URL:
@@ -41,7 +39,6 @@ To switch it off for one chat, or everywhere, see [Turning it off](docs/settings
 
 - [When it retries](docs/detection.md) - cut-off detection and accidental-refusal detection
 - [All settings](docs/settings.md) - every option with its default, the panel, and turning it off
-- [Word swaps](docs/word-swaps.md) - find and replace in finished replies, and presets
 - [Buttons it clicks](docs/buttons.md) - fixing the regenerate button, Regeneration Feedback, writing selectors
 - [The on-screen panel](docs/settings.md#the-on-screen-panel) - the log, the prompt viewer and the stats
 - [Import and export](docs/import-export.md) - moving your setup between devices
@@ -55,7 +52,7 @@ To switch it off for one chat, or everywhere, see [Turning it off](docs/settings
 
 Auto Retry listens to Lumiverse's own generation events. When a reply fails, comes back empty, stalls, or looks cut off or refused, it clicks your regenerate button to try again. That button click is the only part that depends on the page layout, so it is the one thing you may have to fix yourself if a Lumiverse update ever moves those buttons, which [Buttons it clicks](docs/buttons.md) covers.
 
-Find and replace works separately, since editing a saved reply is a backend job. A small backend module watches for finished replies and, when swaps are on, edits the saved message through Lumiverse's Chat Mutation API. That edit is treated as an edit rather than a new reply, so it cannot set itself off in a loop.
+A small backend module carries the settings, so they follow your account rather than living in one browser, and it holds the refusal note for the one generation the retry starts.
 
 It makes no external network calls. [Privacy](docs/privacy.md) has the detail, including the six permissions it declares, what still works without each of them, and why `chats` and `characters` grant more than the extension uses.
 

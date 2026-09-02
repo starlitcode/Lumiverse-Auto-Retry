@@ -624,10 +624,10 @@ console.log("\nkeyboard and search");
       };
     }),
   );
-  // Five sections start shut: refusal tuning, find and replace, buttons,
-  // debug info and import / export. The count is asserted exactly, so a
-  // section that quietly stops being collapsible is caught here.
-  check("every section header is focusable", out.focusable && out.sections === 5, out.sections);
+  // Four sections start shut: refusal tuning, buttons, debug info and
+  // import / export. The count is asserted exactly, so a section that quietly
+  // stops being collapsible is caught here.
+  check("every section header is focusable", out.focusable && out.sections === 4, out.sections);
   check("Enter opens a section", out.afterEnter.exp === "true" && out.afterEnter.vis === 1, out.afterEnter);
   check("Space closes it", out.afterSpace.exp === "false" && out.afterSpace.vis === 0, out.afterSpace);
   check("search filters", out.filtered.hit === 1 && out.filtered.miss === 0, out.filtered);
@@ -669,8 +669,8 @@ console.log("\nwhat is on screen straight away");
   check("and neither does the reroll choice", out.rerollSwitch, out);
   check("the frozen-reply rows are under their own heading", out.frozenRun && out.frozenRow, out);
   check(
-    "three headings are open and five are shut",
-    out.openHeadings.length === 3 && out.shutHeadings.length === 5,
+    "three headings are open and four are shut",
+    out.openHeadings.length === 3 && out.shutHeadings.length === 4,
     out,
   );
   check("no console errors", errors.length === 0, errors);
@@ -1303,84 +1303,6 @@ console.log("\nno drawer to put it in");
   check("no console errors", errors.length === 0, errors);
 }
 
-// ---- find and replace says what a preset carries ----
-// Half these options change when you load a preset and half never do, and there
-// was no way to tell which from looking. The lists below are the contract: if
-// the preset definition changes, this fails and the headings get updated with
-// it, rather than quietly starting to lie.
-console.log("\npreset split");
-{
-  const { out, errors } = await inPanel(browser, {}, (page) =>
-    page.evaluate(async () => {
-      const frame = () =>
-        new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-      const modal = document.getElementById("modal");
-      const head = [...modal.querySelectorAll('[role="button"][aria-expanded]')].find((h) =>
-        /find and replace/i.test(h.textContent || ""));
-      head.click();
-      await frame();
-      // A run's wrapper is the div whose first child is the heading itself.
-      const run = (t) =>
-        [...modal.querySelectorAll("div")].find(
-          (d) => d.firstElementChild && d.firstElementChild.textContent === t);
-      const inPreset = run("Saved in a preset");
-      const yours = run("Yours, whatever preset you load");
-      const labels = (e) =>
-        e ? [...e.querySelectorAll("[data-ar-row]")].map((r) => r.querySelector("span").textContent) : null;
-      const shown = (e) => !!e && e.offsetParent !== null;
-      const search = modal.querySelector("input[type=search]");
-      const filter = async (q) => {
-        search.value = q;
-        search.dispatchEvent(new Event("input"));
-        await frame();
-        return { inPreset: shown(inPreset), yours: shown(yours) };
-      };
-      const onlyPreset = await filter("match case");
-      const onlyYours = await filter("confirm");
-      const cleared = await filter("");
-      return {
-        presetLabels: labels(inPreset),
-        yoursLabels: labels(yours),
-        onlyPreset,
-        onlyYours,
-        cleared,
-      };
-    }),
-  );
-  const expectPreset = [
-    "Word swaps (old => new)",
-    "Pick randomly when a word has more than one swap",
-    "Match case exactly",
-  ];
-  // Everything in the find-and-replace group that a preset does not carry.
-  // Add a new setting here when one joins that group, or this fails on a panel
-  // that is perfectly correct.
-  const expectYours = [
-    'Show a "swap words now" button',
-    "Show a swap-whole-chat button",
-    "Allow swapping a reply again",
-    "Also swap inside the thinking",
-    "Also swap inside HTML tags",
-    "Ask before editing a reply",
-    "Wait for other extensions to finish",
-    "How long to wait (seconds)",
-  ];
-  const same = (a, b) => !!a && a.length === b.length && a.every((x, i) => x === b[i]);
-  check("the preset run holds exactly what a preset saves", same(out.presetLabels, expectPreset), out.presetLabels);
-  check("the other run holds everything a preset leaves alone", same(out.yoursLabels, expectYours), out.yoursLabels);
-  check("a search hides the run with no matches", out.onlyPreset.inPreset && !out.onlyPreset.yours, out.onlyPreset);
-  check("and the other way round", !out.onlyYours.inPreset && out.onlyYours.yours, out.onlyYours);
-  check("clearing brings both back", out.cleared.inPreset && out.cleared.yours, out.cleared);
-  check("no console errors", errors.length === 0, errors);
-}
-
-// ---- the note settings that are not per note say so ----
-// The note list gives every note a role and a try to start on, which made the
-// two settings underneath it read as more of the same, and the question came
-// back twice: does this change one note or all of them. It is all of them, and
-// a heading is where that gets said. This holds that the heading is over the
-// right two rows and no others, so it cannot end up standing over a per-note
-// setting and claiming the opposite of the truth.
 console.log("\nwhole-list note settings");
 {
   const { out, errors } = await inPanel(browser, {}, (page) =>
@@ -1903,155 +1825,6 @@ console.log("\nswitching off a temporary chat");
   check("no console errors", errors.length === 0, errors);
 }
 
-// ---- a setting that cannot do anything is not shown ----
-// The wait-for-other-extensions delay only ever gates automatic swapping: the
-// swap buttons apply straight away and never consult it. With automatic
-// swapping off it is a dead control, so it comes off the panel.
-//
-// Its companion row has to come off with it. That row hangs off the wait
-// switch, and the wait switch can be on while hidden, which would leave "how
-// long to wait" on screen with nothing above it saying what is being waited
-// for. That is the case the third row here covers.
-console.log("\nsettings that hang off automatic swapping");
-{
-  const errors = [];
-  const rows = async (settings) => {
-    const page = await browser.newPage();
-    page.on("pageerror", (e) => errors.push(e.message));
-    await stage(page, '<div id=modal style="height:900px;overflow:auto"></div>');
-    await page.addScriptTag({ content: SOURCE, type: "module" });
-    await page.waitForFunction(() => !!window.__setup);
-    const out = await page.evaluate(async (settings) => {
-      window.__acts = {};
-      window.__setup({
-        events: { on: () => () => {} }, sendToBackend: () => {}, onBackendMessage: () => () => {},
-        ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
-              registerInputBarAction: (o) => { const a = { onClick: (cb) => { a.cb = cb; return () => {}; }, destroy: () => {} }; window.__acts[o.id] = a; return a; } },
-      }, settings);
-      window.__acts["auto-retry-settings"].cb();
-      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-      const root = document.getElementById("modal");
-      // Opened the way a person would, since the section starts shut and
-      // everything inside it reads as hidden until it is opened.
-      const head = [...root.querySelectorAll("*")].find(
-        (e) => /^Find and replace/.test(e.textContent.trim()) && e.children.length <= 2);
-      for (let p = head; p && p !== root; p = p.parentElement) {
-        if (p.tagName === "BUTTON" || p.getAttribute("role") === "button" ||
-            getComputedStyle(p).cursor === "pointer") { p.click(); break; }
-      }
-      await new Promise((r) => setTimeout(r, 200));
-      // offsetParent, not a walk up the tree: it is the browser's own answer to
-      // whether the row is rendered, and it does not depend on guessing which
-      // ancestor carries the display the panel set.
-      const seen = (label) => {
-        const el = [...root.querySelectorAll("*")].find(
-          (e) => e.children.length === 0 && e.textContent.trim() === label);
-        return el ? el.offsetParent !== null : "missing";
-      };
-      return { ctrl: seen("Swap words in replies"),
-               wait: seen("Wait for other extensions to finish"),
-               secs: seen("How long to wait (seconds)") };
-    }, settings);
-    await page.close();
-    return out;
-  };
-
-  const offOff = await rows({ replaceEnabled: false, swapWaitForEdits: false });
-  const offOn = await rows({ replaceEnabled: false, swapWaitForEdits: true });
-  const onOff = await rows({ replaceEnabled: true, swapWaitForEdits: false });
-  const onOn = await rows({ replaceEnabled: true, swapWaitForEdits: true });
-
-  // The switch that governs them all is never hidden, or there would be no way
-  // to turn any of it back on.
-  check("the automatic swap switch is always on the panel",
-    offOff.ctrl === true && onOn.ctrl === true, { offOff, onOn });
-  check("the wait setting is hidden while automatic swapping is off",
-    offOff.wait === false && offOn.wait === false, { offOff, offOn });
-  check("and shown once it is on", onOff.wait === true && onOn.wait === true, { onOff, onOn });
-  check("the delay is hidden until the wait setting is on", onOff.secs === false, onOff);
-  check("and shown alongside it", onOn.secs === true, onOn);
-  // The one needsAll exists for: wait left on from before, automatic off.
-  check("the delay does not outlive the switch it hangs off",
-    offOn.secs === false, offOn);
-  check("no console errors", errors.length === 0, errors);
-}
-
-// ---- counting what the swaps actually did ----
-// A swap leaves nothing behind to look at once it lands: the reply reads as
-// though the model wrote it that way. So without a count there is no answer to
-// "is that rule doing anything", which is the question somebody asks before
-// deciding their rules are broken.
-//
-// The stats live in the on-screen panel, not the settings modal, so this drives
-// that surface. A fresh context keeps another check's storage out of it.
-console.log("\ncounting word swaps");
-{
-  const ctx = await browser.newContext();
-  const page = await ctx.newPage();
-  const errors = [];
-  page.on("pageerror", (e) => errors.push(e.message));
-  await page.route("**/*", (r) => r.fulfill({ contentType: "text/html",
-    body: "<!doctype html><meta charset=utf-8><div id=modal></div>" }));
-  await page.goto("http://lumiverse.test/");
-  await page.addScriptTag({ content: SOURCE, type: "module" });
-  await page.waitForFunction(() => !!window.__setup);
-  const out = await page.evaluate(async () => {
-    localStorage.clear();
-    window.__handlers = {};
-    const listeners = [];
-    const deliver = (m) => listeners.slice().forEach((f) => { try { f(m); } catch (_) {} });
-    window.__setup({
-      events: { on: (n, f) => { window.__handlers[n] = f; return () => {}; } },
-      sendToBackend: () => {}, onBackendMessage: (cb) => { listeners.push(cb); return () => {}; },
-      ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
-            registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) },
-    }, { liveLog: true, toast: false, stuckTimeoutMs: 0, idleTimeoutMs: 0 });
-    const tick = (n) => new Promise((r) => setTimeout(r, n || 90));
-    const tab = (name) =>
-      [...document.querySelectorAll('#__lvRetryLog [role="tab"], #__lvRetryLog button')]
-        .find((x) => (x.textContent || "").trim() === name);
-    const body = () => { const el = document.getElementById("__lvRetryLogBody"); return el ? el.textContent || "" : ""; };
-
-    window.__handlers.GENERATION_STARTED({ chatId: "c1", generationId: "g1" });
-    window.__handlers.GENERATION_ENDED({ chatId: "c1", generationId: "g1", content: "The cat sat down here." });
-    await tick();
-    deliver({ type: "swapped", chatId: "c1", before: "a", after: "b", pairs: [["cat", "dog"]] });
-    deliver({ type: "swapped", chatId: "c1", before: "c", after: "d", pairs: [["x", "y"], ["p", "q"]] });
-    // A swap in a chat the user is not looking at. It still happened, so it is
-    // still counted, just not against this chat.
-    deliver({ type: "swapped", chatId: "other", before: "e", after: "f", pairs: [["m", "n"]] });
-    await tick();
-    const logText = body();
-    const st = tab("Stats");
-    if (st) st.click();
-    await tick(150);
-    const statsText = body();
-    return {
-      one: /swapped 1 word \(1 in this chat\)/.test(logText),
-      two: /swapped 2 words \(3 in this chat\)/.test(logText),
-      heading: /Words swapped/.test(statsText),
-      figures: (statsText.match(/Words swapped[\s\S]{0,80}/) || [""])[0].replace(/\s+/g, " "),
-    };
-  });
-  await page.close();
-  await ctx.close();
-  // Singular and plural, and a running total rather than each swap on its own.
-  check("the log says what one swap changed", out.one, out);
-  check("and counts up as more land", out.two, out);
-  check("the stats tab shows a swap total", out.heading, out);
-  // Three in this chat, one elsewhere: the fourth swap must not join the total
-  // for the chat on screen.
-  check("split by whether it happened in the chat on screen",
-    /This chat ?3/.test(out.figures) && /Everywhere else ?1/.test(out.figures), out.figures);
-  check("no console errors", errors.length === 0, errors);
-}
-
-// ---- the box between the click and the reply ----
-// With Regeneration Feedback on, pressing regenerate opens a box asking for
-// guidance, and the reply only starts once that box is dealt with. An
-// unattended retry has to get past it on its own. This stands one in and
-// counts what gets pressed, since pressing the wrong thing there would throw
-// the reply away rather than re-roll it.
 console.log("\nregeneration feedback");
 {
   const page = await browser.newPage();
@@ -3632,7 +3405,7 @@ console.log("\npreset controls");
 // Two preset bars now, identical to look at and driving different stores. The
 // risk is that they are wired to the same one, which would look completely
 // normal until somebody loaded a note set and found their word swaps replaced.
-console.log("\ntwo preset bars, two stores");
+console.log("\none preset bar, holding only its own keys");
 {
   const { out, errors } = await inPanel(browser, {}, async (page) =>
     page.evaluate(async () => {
@@ -3642,50 +3415,44 @@ console.log("\ntwo preset bars, two stores");
       const bar = (kind) => document.querySelector('[data-ar-presets="' + kind + '"]');
       const press = (b, label) =>
         [...b.querySelectorAll("button")].find((x) => x.textContent.trim() === label).click();
-      const saveInto = async (kind, name) => {
-        const b = bar(kind);
-        b.querySelector('input[placeholder="Preset name"]').value = name;
-        press(b, "Save as new");
-        await frame();
-      };
-      const rules = document.querySelector('[data-ar-row="replaceRules"] textarea');
-      rules.value = "cat => dog";
-      rules.dispatchEvent(new Event("change", { bubbles: true }));
+      const notes = document.querySelector('[data-ar-row="refusalExtraPhrases"] textarea');
+      if (notes) {
+        notes.value = "try again";
+        notes.dispatchEvent(new Event("change", { bubbles: true }));
+      }
       // A preset saves what has been saved, not what is typed, so the panel's
-      // own Save goes first. It is not inside either bar.
+      // own Save goes first. It is not inside the bar.
       [...document.querySelectorAll("button")].find((x) => x.textContent.trim() === "Save").click();
       await frame();
-      await saveInto("swap", "swapset");
-      await saveInto("notes", "noteset");
+      const b = bar("notes");
+      b.querySelector('input[placeholder="Preset name"]').value = "noteset";
+      press(b, "Save as new");
+      await frame();
       const store = JSON.parse(localStorage.getItem("lv-auto-retry:presets:v1"));
       return {
-        bothBarsExist: !!bar("swap") && !!bar("notes"),
-        swapNames: (store.swap || []).map((p) => p.name),
+        barExists: !!b,
+        // The word swap bar went with the feature. Nothing should be left
+        // building one, and nothing should be left in the store under it.
+        swapBarGone: !bar("swap"),
+        swapStoreGone: !(store.swap && store.swap.length),
         noteNames: (store.notes || []).map((p) => p.name),
-        // What each kind actually carries, which is the other half of keeping
-        // them apart: a note set must not be holding word swap rules.
-        swapKeys: Object.keys(((store.swap || [])[0] || {}).values || {}).sort(),
         noteKeys: Object.keys(((store.notes || [])[0] || {}).values || {}).sort(),
-        // Where the two things at the end of the refusal section sit relative
-        // to each other. The bar saves the settings above it and reads as part
-        // of them; the tester is a place to try them and belongs after the lot.
+        // The bar saves the settings above it and reads as part of them; the
+        // tester is a place to try them and belongs after the lot.
         notesBeforeTester: (() => {
           const tester = document.querySelector('textarea[placeholder="Paste a reply here"]');
-          const notes = bar("notes");
-          if (!tester || !notes) return null;
-          return !!(notes.compareDocumentPosition(tester) & Node.DOCUMENT_POSITION_FOLLOWING);
+          if (!tester || !b) return null;
+          return !!(b.compareDocumentPosition(tester) & Node.DOCUMENT_POSITION_FOLLOWING);
         })(),
       };
     }),
   );
-  check("both preset bars are on the panel", out.bothBarsExist, out);
-  check("each saves into its own store",
-    out.swapNames.join() === "swapset" && out.noteNames.join() === "noteset", out);
-  check("a word swap preset carries the rules and how they match",
-    out.swapKeys.join() === "replaceCaseSensitive,replaceRandom,replaceRules", out.swapKeys);
+  check("the note preset bar is on the panel", out.barExists, out);
+  check("and the word swap bar is gone with the feature", out.swapBarGone && out.swapStoreGone, out);
+  check("it saves into its own store", out.noteNames.join() === "noteset", out);
   check("a note preset carries the notes and where they go, and nothing else",
     out.noteKeys.join() === "refusalNotePlacement,refusalNotes", out.noteKeys);
-  check("the note preset bar is above the tester, not below it",
+  check("the preset bar is above the tester, not below it",
     out.notesBeforeTester === true, out.notesBeforeTester);
   check("no console errors", errors.length === 0, errors);
 }
@@ -3822,7 +3589,6 @@ console.log("\nthe note preset bar follows the notes switch");
         return b.children[1] ? b.children[1].textContent.trim() : null;
       };
       const off = shown(block("notes"));
-      const swapAlways = shown(block("swap"));
       let flipped = false;
       for (const box of root.querySelectorAll("input[type=checkbox]")) {
         const row = box.closest("[data-ar-row]");
@@ -3837,18 +3603,14 @@ console.log("\nthe note preset bar follows the notes switch");
         off: off,
         on: shown(block("notes")),
         flipped: flipped,
-        swapAlways: swapAlways,
         noteHeading: headingOf("notes"),
-        swapHeading: headingOf("swap"),
       };
     }),
   );
   check("the switch was found and flipped", out.flipped, out);
   check("with notes off the bar is not on screen", out.off === false, out.off);
   check("turning notes on brings it back", out.on === true, out.on);
-  check("the word swap bar is not affected by it", out.swapAlways === true, out.swapAlways);
   check("the note bar says what it saves", out.noteHeading === "Note presets", out.noteHeading);
-  check("and so does the word swap bar", out.swapHeading === "Word presets", out.swapHeading);
   check("no console errors", errors.length === 0, errors);
 }
 
@@ -3936,21 +3698,20 @@ console.log("\npresets across both kinds");
 
 console.log("\npreset boundary");
 {
-  const { out, errors } = await inPanel(browser, {}, async (page) =>
+  // What a preset owns and what stays yours whatever you load. The word swap
+  // kind is gone; the note kind keeps the same contract, expressed the other
+  // way round, as a list of what it carries rather than what it leaves out.
+  const { out, errors } = await inPanel(browser, { settings: { retryOnRefusal: true, refusalNote: true } }, async (page) =>
     page.evaluate(async () => {
       const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
       await frame();
-      // The panel carries two identical preset bars now, and the note one sits
-      // in an earlier section, so anything reaching for a preset button by
-      // position drives the wrong bar. The panel's own Save is not inside
-      // either bar, so it stays an unscoped lookup.
-      const bar = document.querySelector('[data-ar-presets="swap"]');
+      const bar = document.querySelector('[data-ar-presets="notes"]');
       const by = (t) => [...document.querySelectorAll("button")].find((x) => x.textContent.trim() === t);
       const inBar = (t) => [...bar.querySelectorAll("button")].find((x) => x.textContent.trim() === t);
       const ctl = (k) => {
         const r = document.querySelector('[data-ar-row="' + k + '"]');
-        return r && (r.querySelector("textarea") || r.querySelector("input"));
+        return r && (r.querySelector("textarea") || r.querySelector("select") || r.querySelector("input"));
       };
       const set = (k, v) => {
         const i = ctl(k);
@@ -3960,151 +3721,32 @@ console.log("\npreset boundary");
       };
       const get = (k) => { const i = ctl(k); return i ? (i.type === "checkbox" ? i.checked : i.value) : "(missing)"; };
 
-      const OWNED = ["replaceRules", "replaceRandom", "replaceCaseSensitive"];
-      const YOURS = ["replaceEnabled", "showReplaceButton", "showSwapAllButton", "allowReSwap", "confirmBeforeEdit"];
-
-      // Everything on, saved into a preset.
-      set("replaceRules", "cat => dog");
-      for (const k of OWNED.slice(1).concat(YOURS)) set(k, true);
+      // Saved, and saved with wording that could not be mistaken for a default.
+      set("refusalNotes", "please try that again");
       by("Save").click(); await frame();
       bar.querySelector('input[placeholder="Preset name"]').value = "A";
       inBar("Save as new").click(); await frame();
 
-      // Everything off, saved.
-      set("replaceRules", "hot => cold");
-      for (const k of OWNED.slice(1).concat(YOURS)) set(k, false);
+      // Changed, and the switch that decides whether notes go at all turned off.
+      set("refusalNotes", "something else entirely");
+      set("refusalNote", false);
       by("Save").click(); await frame();
 
-      // Load the preset back.
       const sel = bar.querySelector("select");
       sel.value = "A";
       sel.dispatchEvent(new Event("change", { bubbles: true }));
       inBar("Load").click(); await frame();
 
-      const owned = {}; for (const k of OWNED) owned[k] = get(k);
-      const yours = {}; for (const k of YOURS) yours[k] = get(k);
-      return { owned, yours };
+      return { notes: get("refusalNotes"), sending: get("refusalNote") };
     }),
   );
-  check("a preset restores the rules it saved",
-    out.owned.replaceRules === "cat => dog", out.owned);
-  check("and the two options that decide how they match",
-    out.owned.replaceRandom === true && out.owned.replaceCaseSensitive === true, out.owned);
-  check("loading one cannot switch swapping on for you",
-    out.yours.replaceEnabled === false, out.yours);
-  check("cannot move buttons into your Extras menu",
-    out.yours.showReplaceButton === false && out.yours.showSwapAllButton === false, out.yours);
-  check("and cannot take away the confirmation step",
-    out.yours.confirmBeforeEdit === false && out.yours.allowReSwap === false, out.yours);
+  check("a preset restores the wording it saved", out.notes === "please try that again", out);
+  // The point of the contract: a saved set of wording decides the wording and
+  // nothing about whether the feature runs.
+  check("loading one cannot start sending notes for you", out.sending === false, out);
   check("no console errors", errors.length === 0, errors);
 }
 
-// ---- the swap has to show up on screen, not just in storage ----
-// The backend writes the swapped reply, but the host does not redraw the chat
-// for it, so the frontend rewrites the visible text itself. That path had no
-// coverage, and it is exactly where the 3.1.1 bug lived: the swap was saved
-// correctly and stayed invisible until the chat was reopened.
-console.log("\non-screen swap");
-{
-  const page = await browser.newPage();
-  const errors = [];
-  page.on("pageerror", (e) => errors.push(e.message));
-  await stage(page, '<div id=modal></div><div id=chat></div>');
-  await page.addStyleTag({ content: THEME });
-  await page.addScriptTag({ content: SOURCE, type: "module" });
-  await page.waitForFunction(() => !!window.__setup);
-  const out = await page.evaluate(async () => {
-    let msgCbs = [];
-      const onMsg = (m) => { for (const cb of msgCbs.slice()) { try { cb(m); } catch (_) {} } };
-    window.__setup(
-      {
-        events: { on: () => () => {} },
-        sendToBackend: () => {},
-        onBackendMessage: (cb) => { msgCbs.push(cb); return () => { msgCbs = msgCbs.filter((x) => x !== cb); }; },
-        ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
-              registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) },
-      },
-      { toast: false },
-    );
-    const chat = document.getElementById("chat");
-    const run = async (html, pairs) => {
-      chat.innerHTML = html;
-      onMsg({ type: "swapped", pairs });
-      await new Promise((r) => setTimeout(r, 30));
-      return chat.textContent;
-    };
-    return {
-      ascii: await run("<p>a cat here</p>", [["cat ", "dog "]]),
-      inside: await run("<p>category stays</p>", [["cat ", "dog "]]),
-      accent: await run("<p>a caf\u00e9 here</p>", [["caf\u00e9 ", "bar "]]),
-      accentInside: await run("<p>caf\u00e9teria stays</p>", [["caf\u00e9 ", "bar "]]),
-      cyrillic: await run("<p>\u043f\u0440\u0438\u0432\u0435\u0442 there</p>", [["\u043f\u0440\u0438\u0432\u0435\u0442 ", "hello "]]),
-      cyrillicInside: await run("<p>\u043f\u0440\u0438\u0432\u0435\u0442\u0441\u0442\u0432\u0438\u0435 stays</p>", [["\u043f\u0440\u0438\u0432\u0435\u0442 ", "hello "]]),
-      // The pairs above all carry the trailing space the backend captures, and
-      // that space alone keeps "cat " out of "category". A swap at the end of a
-      // sentence has no trailing space, and then only the boundary protects it.
-      noTrail: await run("<p>category stays</p>", [["cat", "dog"]]),
-      noTrailCyrillic: await run("<p>\u043f\u0440\u0438\u0432\u0435\u0442\u0441\u0442\u0432\u0438\u0435 stays</p>", [["\u043f\u0440\u0438\u0432\u0435\u0442", "hello"]]),
-      noTrailHit: await run("<p>one cat.</p>", [["cat", "dog"]]),
-      // The backend records one pair per match it made, so the pairs are the
-      // budget: two matches in the newest reply means two pairs and exactly two
-      // occurrences to change. Rewriting every occurrence in the last matching
-      // node spent both on the first pair, and the second then went hunting
-      // further up the page and rewrote an older message that had never been
-      // edited. Reproduced before it was fixed: the older line read "The dog sat
-      // here." while the stored chat still said cat.
-      bleed: await run(
-        "<div>The cat sat here.</div><div>A cat and a cat and more.</div>",
-        [["cat ", "dog "], ["cat ", "dog "]],
-      ),
-      // The backend only ever edits replies, never anything the user wrote, so
-      // a swap must not touch their messages on screen either. The whole-chat
-      // path is the one that can reach past replies and catch them.
-      //
-      // Sent with the wholeChat flag, which is what selects that path. Leaving
-      // it out would exercise the single-reply path instead and guard
-      // nothing.
-      userMessage: await (async () => {
-        chat.innerHTML = "<div>I like cat.</div><div>A cat.</div>";
-        onMsg({ type: "swapped", pairs: [["cat", "dog"]], wholeChat: true });
-        await new Promise((r) => setTimeout(r, 30));
-        return chat.textContent;
-      })(),
-      // A field the user is typing in must never be rewritten underneath them.
-      input: await (async () => {
-        chat.innerHTML = "<textarea>a cat here</textarea>";
-        onMsg({ type: "swapped", pairs: [["cat ", "dog "]] });
-        await new Promise((r) => setTimeout(r, 30));
-        return chat.querySelector("textarea").value;
-      })(),
-    };
-  });
-  await page.close();
-  check("an English word is rewritten on screen", out.ascii === "a dog here", out.ascii);
-  check("and not inside a longer word", out.inside === "category stays", out.inside);
-  check("an accented word is rewritten too", out.accent === "a bar here", out.accent);
-  check("and not inside a longer one", out.accentInside === "caf\u00e9teria stays", out.accentInside);
-  check("a Cyrillic word is rewritten too", out.cyrillic === "hello there", out.cyrillic);
-  check("and not inside a longer one", out.cyrillicInside === "\u043f\u0440\u0438\u0432\u0435\u0442\u0441\u0442\u0432\u0438\u0435 stays", out.cyrillicInside);
-  check("with no trailing space, a longer word is still safe",
-    out.noTrail === "category stays", out.noTrail);
-  check("in any script", out.noTrailCyrillic === "\u043f\u0440\u0438\u0432\u0435\u0442\u0441\u0442\u0432\u0438\u0435 stays", out.noTrailCyrillic);
-  check("while the real word at a sentence end still swaps",
-    out.noTrailHit === "one dog.", out.noTrailHit);
-  check("two matches in one reply are both rewritten, and no older message is",
-    out.bleed === "The cat sat here.A dog and a dog and more.", out.bleed);
-  check("a swap never rewrites one of your own messages",
-    out.userMessage === "I like cat.A dog.", out.userMessage);
-  check("a text box is left alone", out.input === "a cat here", out.input);
-  check("no console errors", errors.length === 0, errors);
-}
-
-// ---- a backup has to bring everything back ----
-// Settings have gone missing from exports before: four of them were absent from
-// every backup and nobody noticed until a restore came back short. There is a
-// safety net in the code that folds any unlisted setting into the retry
-// category, and until now nothing checked that it works. This changes every
-// setting in the panel, exports, resets, imports, and compares.
 console.log("\nbackup round trip");
 {
   const page = await browser.newPage({ acceptDownloads: true });
@@ -4281,7 +3923,7 @@ console.log("\nbackup restore");
     };
     // A starting point that the file will contradict.
     window.__ctl("enabled").click();
-    const r = window.__ctl("replaceRules");
+    const r = window.__ctl("refusalExtraPhrases");
     r.value = "cat => dog"; r.dispatchEvent(new Event("input", { bubbles: true })); r.dispatchEvent(new Event("change", { bubbles: true }));
     window.__by("Save").click();
     await frame();
@@ -4297,7 +3939,7 @@ console.log("\nbackup restore");
     page.evaluate(() => ({
       enabled: window.__get("enabled"),
       maxRetries: window.__get("maxRetries"),
-      rules: window.__get("replaceRules"),
+      rules: window.__get("refusalExtraPhrases"),
       status: window.__status(),
       stored: (() => { try { return JSON.parse(localStorage.getItem("lv-auto-retry:settings:v1")); } catch (_) { return null; } })(),
     }));
@@ -4323,7 +3965,7 @@ console.log("\nbackup restore");
     autoRetry: "test",
     settings: {
       retry: { enabled: true, maxRetries: 999999, notASetting: "ignore me" },
-      replace: { replaceRules: "hot => cold" },
+      refusal: { refusalExtraPhrases: "hot => cold" },
     },
   }));
   const afterGood = await read();
@@ -4407,11 +4049,11 @@ console.log("\nbackup restore");
   check("an unknown key in the file never reaches your saved settings",
     !afterSave.stored || !("notASetting" in afterSave.stored), afterSave.stored && Object.keys(afterSave.stored).length);
   check("an import is not kept until Save is pressed",
-    before.stored && before.stored.replaceRules === "cat => dog" &&
-    afterGood.stored && afterGood.stored.replaceRules === "cat => dog", {
-      beforeSave: afterGood.stored && afterGood.stored.replaceRules });
+    before.stored && before.stored.refusalExtraPhrases === "cat => dog" &&
+    afterGood.stored && afterGood.stored.refusalExtraPhrases === "cat => dog", {
+      beforeSave: afterGood.stored && afterGood.stored.refusalExtraPhrases });
   check("and is kept once it is",
-    afterSave.stored && afterSave.stored.replaceRules === "hot => cold", afterSave.stored && afterSave.stored.replaceRules);
+    afterSave.stored && afterSave.stored.refusalExtraPhrases === "hot => cold", afterSave.stored && afterSave.stored.refusalExtraPhrases);
   check("no console errors", errors.length === 0, errors);
 }
 
@@ -5658,7 +5300,7 @@ console.log("\ntelling the backend again after it restarts");
           registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }),
         },
       },
-      { replaceEnabled: true, replaceRules: "lantern => lamp", toast: false },
+      { refusalNote: true, refusalExtraPhrases: "lantern => lamp", toast: false },
     );
     await new Promise((r) => setTimeout(r, 60));
     const types = () => sent.map((m) => m && m.type);
@@ -5672,8 +5314,8 @@ console.log("\ntelling the backend again after it restarts");
     return {
       atStart,
       afterRestart,
-      rulesSent: settings ? settings.settings.replaceRules : null,
-      swapOn: settings ? settings.settings.replaceEnabled : null,
+      rulesSent: settings ? settings.settings.refusalExtraPhrases : null,
+      swapOn: settings ? settings.settings.refusalNote : null,
     };
   });
   await page.close();
@@ -5730,16 +5372,16 @@ console.log("\na restart while the panel has unsaved edits");
           },
         },
       },
-      { replaceEnabled: false, replaceRules: "lantern => lamp", toast: false },
+      { refusalNote: false, refusalExtraPhrases: "lantern => lamp", toast: false },
     );
     openPanel();
     await frame();
-    // Tick "Swap words in replies" and do not press Save.
+    // Tick "Send a note with a refusal retry" and do not press Save.
     const root = document.getElementById("modal");
     let ticked = false;
     for (const box of root.querySelectorAll("input[type=checkbox]")) {
       const row = box.closest("[data-ar-row]");
-      if (row && /Swap words in replies/.test(row.textContent)) {
+      if (row && /Send a note with a refusal retry/.test(row.textContent)) {
         box.click();
         ticked = true;
         break;
@@ -5750,7 +5392,7 @@ console.log("\na restart while the panel has unsaved edits");
     onBack({ type: "backend_ready" });
     await frame();
     const msg = sent.find((m) => m && m.type === "set_settings");
-    return { ticked, swapOn: msg ? msg.settings.replaceEnabled : "no message" };
+    return { ticked, swapOn: msg ? msg.settings.refusalNote : "no message" };
   });
   await page.close();
 
@@ -6433,7 +6075,7 @@ console.log("\nwhere the ways into the extension live");
   // The buttons the floating button's menu takes over. The settings one is
   // left out on purpose: it is the one way in that always works, so it stays in
   // the Extras menu in every case below.
-  const MOVABLE = ["auto-retry-open-panel", "auto-retry-replace-now", "auto-retry-replace-all"];
+  const MOVABLE = ["auto-retry-open-panel"];
   const CASES = [
     { name: "with the button on screen", button: true, menu: true },
     { name: "with a button but no menu API", button: true, menu: false },
@@ -6492,8 +6134,6 @@ console.log("\nwhere the ways into the extension live");
           liveLog: true,
           panelHome: "drawer",
           showFloatingToggle: mode.button,
-          showReplaceButton: true,
-          showSwapAllButton: true,
           showExtrasToggle: true,
           toast: false,
         },
@@ -6522,9 +6162,6 @@ console.log("\nwhere the ways into the extension live");
         const m = await hold("panel");
         res.menuKeys = (m && m.items.map((i) => i.key)) || [];
         res.opened = activated;
-        await hold("swapAll");
-        await wait(120);
-        res.swapped = sent.filter((x) => x && x.type === "apply_replace_now" && x.wholeChat).length;
       }
       return res;
     }, mode);
@@ -6542,8 +6179,8 @@ console.log("\nwhere the ways into the extension live");
     check(mode.name + ": the on/off entry is " + (mode.button ? "down for the button" : "in Extras"),
       (out.inExtras.indexOf("auto-retry-toggle") >= 0) === !mode.button, out.inExtras);
     if (carried) {
-      check(mode.name + ": the menu offers the panel and both swaps",
-        ["panel", "swap", "swapAll"].every((k) => out.menuKeys.indexOf(k) >= 0), out.menuKeys);
+      check(mode.name + ": the menu offers the panel",
+        out.menuKeys.indexOf("panel") >= 0, out.menuKeys);
       // The on/off button is the one that does not move into the menu. The
       // floating button is already that switch, in one tap.
       check(mode.name + ": and no on/off entry, which the button already is",
@@ -6551,7 +6188,6 @@ console.log("\nwhere the ways into the extension live");
       check(mode.name + ": hide sits last, under everything that opens or does",
         out.menuKeys[out.menuKeys.length - 1] === "hide", out.menuKeys);
       check(mode.name + ": the panel entry brings the tab forward", out.opened === 1, out);
-      check(mode.name + ": and swap-every-reply reaches the backend", out.swapped === 1, out);
     }
     check(mode.name + ": no console errors", errors.length === 0, errors);
   }
@@ -6837,91 +6473,6 @@ console.log("\nno name and could not look are different answers");
   }
 }
 
-// ---- a swap needs a chat to swap in ----
-// The swap buttons live in the floating button's menu, which is on screen on
-// the home screen too, so they can be pressed with no chat open at all.
-//
-// The id held from the last chat was no answer: some builds never say when you
-// leave one, so it was still the chat you walked away from, and pressing swap
-// there edited saved replies you were not looking at and cannot undo. Two of
-// the four ways of leaving a chat did exactly that.
-//
-// So the chat is asked for fresh at the moment the button is pressed. A backend
-// that looked and found none means the home screen, and nothing is sent. A
-// backend that could not look falls back to what was already known, because a
-// build without the chats permission has to keep working.
-console.log("\na swap needs a chat to swap in");
-{
-  const CASES = [
-    // hadChat, what the backend answers, the chat the swap should act on
-    ["never opened a chat", false, { chatId: null, resolved: true }, null],
-    ["left the chat, the build said nothing", true, { chatId: null, resolved: true }, null],
-    ["chat open, the backend names it", true, { chatId: "chat-A", resolved: true }, "chat-A"],
-    ["chat open, the backend names a newer one", true, { chatId: "chat-B", resolved: true }, "chat-B"],
-    ["chat open, the backend cannot look", true, { chatId: null, resolved: false }, "chat-A"],
-    ["no chat, the backend cannot look", false, { chatId: null, resolved: false }, null],
-  ];
-  for (const [name, hadChat, answer, want] of CASES) {
-    const page = await browser.newPage();
-    const errors = [];
-    page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
-    page.on("console", (m) => { if (m.type() === "error") errors.push("console: " + m.text()); });
-    await stage(page, "<div id=modal></div>");
-    await page.addStyleTag({ content: THEME });
-    await page.addScriptTag({ content: SOURCE, type: "module" });
-    await page.waitForFunction(() => !!window.__setup);
-    const out = await page.evaluate(async ([hadChat, answer]) => {
-      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-      const handlers = {}, acts = {}, sent = [];
-      let msgCbs = [];
-      const onMsg = (m) => { for (const cb of msgCbs.slice()) { try { cb(m); } catch (_) {} } };
-      window.__setup(
-        { events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
-          sendToBackend: (m) => {
-            sent.push(m);
-            if (m && m.type === "get_active_chat" && onMsg)
-              setTimeout(() => onMsg({ type: "active_chat", requestId: m.requestId, chatId: answer.chatId, character: null, resolved: answer.resolved }), 0);
-          },
-          onBackendMessage: (cb) => { msgCbs.push(cb); return () => { msgCbs = msgCbs.filter((x) => x !== cb); }; },
-          ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
-                registerInputBarAction: (o) => { const a = { onClick: (cb) => { a.cb = cb; return () => {}; }, destroy: () => {} }; acts[o.id] = a; return a; } } },
-        { toast: true, showReplaceButton: true, showSwapAllButton: true, swapAckMs: 30000 },
-      );
-      if (hadChat) { handlers.CHARACTER_MESSAGE_RENDERED({ chatId: "chat-A", messageId: "m1" }); await wait(40); }
-      sent.length = 0;
-      acts["auto-retry-replace-all"].cb();
-      await wait(200);
-      const req = sent.find((m) => m && m.type === "apply_replace_now");
-      const t = document.getElementById("__lvRetryToast");
-      return {
-        actedOn: req ? String(req.chatId) : null,
-        toast: t && t.style.opacity === "1" ? (t.textContent || "").trim() : "",
-      };
-    }, [hadChat, answer]);
-    await page.close();
-    if (want === null) {
-      check(name + ": nothing is swapped", out.actedOn === null, out);
-      check(name + ": and it says why", /no chat is open/i.test(out.toast), out.toast);
-    } else {
-      check(name + ": swaps in " + want, out.actedOn === want, out);
-      check(name + ": and says nothing about no chat", !/no chat is open/i.test(out.toast), out.toast);
-    }
-    check(name + ": no console errors", errors.length === 0, errors);
-  }
-}
-
-// ---- a reply that finished is never re-rolled as stalled ----
-// The watchdogs belong to a generation but could only ever be called off
-// through its chat's state, found by chat id. Any end event whose chat id did
-// not resolve to that state left the watchdog running, and it went on to
-// re-roll a reply that had finished perfectly.
-//
-// Two ways that happened, both real: an end event with no chat id on it at all,
-// and one whose chat id came back a different type than the start's, which put
-// the two events on two different state objects.
-//
-// The other half of this check matters just as much: a reply that really does
-// stall still has to be retried, or the fix would have turned the extension off.
 console.log("\na finished reply is not re-rolled, a stalled one still is");
 {
   const CASES = [
@@ -7155,117 +6706,6 @@ console.log("\nSave tells the truth about the browser copy");
   }
 }
 
-// ---- a swap that nobody answers says so ----
-// A swap button can press and do nothing at all: the host may refuse to send
-// the message, or the backend may not be running, and the request goes out with
-// no answer behind it. Silence there looks exactly like a broken extension,
-// which is the one impression it must not give to somebody who just pressed a
-// button.
-//
-// Three cases: an answer arrives, no answer arrives, and the send itself throws.
-console.log("\na swap request with no answer");
-{
-  const CASES = [
-    { name: "answered", answer: true, send: "ok", wantToast: false },
-    { name: "unanswered", answer: false, send: "ok", wantToast: true },
-    { name: "the send itself fails", answer: false, send: "throw", wantToast: true },
-  ];
-  for (const mode of CASES) {
-    const page = await browser.newPage();
-    const errors = [];
-    page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
-    page.on("console", (m) => { if (m.type() === "error") errors.push("console: " + m.text()); });
-    await stage(page, "<div id=modal></div>");
-    await page.addStyleTag({ content: THEME });
-    await page.addScriptTag({ content: SOURCE, type: "module" });
-    await page.waitForFunction(() => !!window.__setup);
-    const out = await page.evaluate(async (mode) => {
-      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-      const acts = {};
-      const handlers = {};
-      // As many listeners as are registered, which is what the real host does.
-      // Keeping only the last one meant the per-request handler that asks which
-      // chat is open replaced the main one, so the reply to the swap itself
-      // reached nobody.
-      let listeners = [];
-      const onMsg = (m) => { for (const cb of listeners.slice()) { try { cb(m); } catch (_) {} } };
-      const sent = [];
-      const teardown = window.__setup(
-        {
-          events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
-          // The backend the frontend is talking to. In the answered case it
-          // acknowledges, which is all the timer is waiting for.
-          sendToBackend: (m) => {
-            if (mode.send === "throw") throw new Error("host refused");
-            sent.push(m);
-            // Which chat is open is asked before any swap goes out. A stub that
-            // never answered it would leave the press waiting on a timeout and
-            // this check measuring nothing.
-            if (m.type === "get_active_chat")
-              setTimeout(() => onMsg({ type: "active_chat", requestId: m.requestId, chatId: "chat-A", character: null, resolved: true }), 0);
-            if (mode.answer && m.type === "apply_replace_now")
-              setTimeout(() => onMsg({ type: "replace_now_ack", requestId: m.requestId }), 0);
-          },
-          onBackendMessage: (cb) => { listeners.push(cb); return () => { listeners = listeners.filter((x) => x !== cb); }; },
-          ui: {
-            showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
-            registerInputBarAction: (o) => {
-              const a = { onClick: (cb) => { a.cb = cb; return () => {}; }, destroy: () => { delete acts[o.id]; } };
-              acts[o.id] = a;
-              return a;
-            },
-          },
-        },
-        { showReplaceButton: true, swapAckMs: 120, toast: true },
-      );
-      // A chat has to be open, or the press is refused before it can fail the
-      // way this check is about. With the send throwing there is no answering
-      // that question either, so this is what leaves a chat id behind.
-      if (handlers.CHARACTER_MESSAGE_RENDERED) handlers.CHARACTER_MESSAGE_RENDERED({ chatId: "chat-A", messageId: "m1" });
-      await wait(40);
-      const btn = acts["auto-retry-replace-now"];
-      const pressed = !!btn;
-      if (btn) btn.cb();
-      await wait(80);
-      const toastEarly = !!document.getElementById("__lvRetryToast");
-      await wait(220);
-      const el = document.getElementById("__lvRetryToast");
-      const res = {
-        pressed,
-        // Only the swap. Setup puts several other messages on the same bridge.
-        requests: sent.filter((m) => m && m.type === "apply_replace_now").length,
-        toastEarly,
-        toast: el ? (el.textContent || "") : "",
-      };
-      // Nothing may be left ticking behind a closed extension.
-      teardown();
-      await wait(220);
-      res.afterTeardown = !!document.getElementById("__lvRetryToast");
-      return res;
-    }, mode);
-    await page.close();
-    check(mode.name + ": the button was there to press", out.pressed, out);
-    check(mode.name + ": the request " + (mode.send === "throw" ? "could not go out" : "went out"),
-      out.requests === (mode.send === "throw" ? 0 : 1), out);
-    if (mode.send === "throw") {
-      // A send that throws is known to have failed at once, so there is nothing
-      // to wait for.
-      check(mode.name + ": and it says so straight away, without waiting", out.toastEarly, out);
-    }
-    check(mode.name + ": " + (mode.wantToast ? "it says so" : "it stays quiet"),
-      (out.toast.length > 0) === mode.wantToast, out);
-    if (mode.wantToast) {
-      check(mode.name + ": and the message names what to do about it",
-        /reload the page/i.test(out.toast), out.toast);
-    }
-    check(mode.name + ": nothing is left over after teardown", out.afterTeardown === false, out);
-    check(mode.name + ": no console errors", errors.length === 0, errors);
-  }
-}
-
-// ---- the mark fades in when the button is turned on or off ----
-// Only on a real change. The button repaints when the chat changes and after a
-// drag, and animating those would be movement saying nothing.
 console.log("\nturning the floating button on and off");
 {
   const page = await browser.newPage({ viewport: { width: 412, height: 800 } });
@@ -9641,14 +9081,15 @@ console.log("\nreset picker");
 
   const row = (id) => out.seen.find((r) => r.id === id);
   check("every part is offered, plus the presets line",
-    out.seen.length >= 6 && !!row("retry") && !!row("buttons") && !!row("refusal") && !!row("presets"),
+    out.seen.length >= 5 && !!row("retry") && !!row("buttons") && !!row("refusal") && !!row("presets"),
     out.seen.map((r) => r.id));
   check("a part that was changed says how many settings moved",
     /1 setting changed/.test(row("buttons").note), row("buttons").note);
   // Nothing to press is the honest state for a part still at its defaults, and
   // a tickable box that reports "nothing changed" afterwards is not that.
   check("a part still at its defaults cannot be ticked",
-    row("replace").disabled === true && /already default/.test(row("replace").note), row("replace"));
+    row("notifications").disabled === true && /already default/.test(row("notifications").note),
+    row("notifications"));
   check("with no presets saved, that line cannot be ticked either",
     row("presets").disabled === true, row("presets"));
   check("the picker closes when it has run", out.after.stillOpen === false, out.after);
@@ -9789,11 +9230,11 @@ console.log("\nreset confirmation");
       const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
       await frame();
-      document.querySelector('[data-ar-row="replaceRules"] textarea').value = "cat => dog";
-      document.querySelector('[data-ar-row="replaceRules"] textarea')
+      document.querySelector('[data-ar-row="refusalExtraPhrases"] textarea').value = "cat => dog";
+      document.querySelector('[data-ar-row="refusalExtraPhrases"] textarea')
         .dispatchEvent(new Event("change", { bubbles: true }));
       // Scoped: the note preset bar is identical and sits in an earlier section.
-      const swapBar = document.querySelector('[data-ar-presets="swap"]');
+      const swapBar = document.querySelector('[data-ar-presets="notes"]');
       swapBar.querySelector('input[placeholder="Preset name"]').value = "trial";
       [...swapBar.querySelectorAll("button")].find((b) => b.textContent.trim() === "Save as new").click();
       await frame();
@@ -9805,7 +9246,7 @@ console.log("\nreset confirmation");
       await frame();
       const el = document.querySelector("[data-ar-reset-confirm]");
       const summary = el ? el.textContent.trim() : "";
-      const stillThere = JSON.parse(localStorage.getItem("lv-auto-retry:presets:v1")).swap.length;
+      const stillThere = JSON.parse(localStorage.getItem("lv-auto-retry:presets:v1")).notes.length;
       return { summary, stillThere };
     }),
   );
@@ -9830,15 +9271,15 @@ console.log("\nreset confirmation");
       el.value = "9";
       el.dispatchEvent(new Event("change", { bubbles: true }));
       // Save a preset the way someone would.
-      document.querySelector('[data-ar-row="replaceRules"] textarea').value = "cat => dog";
-      document.querySelector('[data-ar-row="replaceRules"] textarea')
+      document.querySelector('[data-ar-row="refusalExtraPhrases"] textarea').value = "cat => dog";
+      document.querySelector('[data-ar-row="refusalExtraPhrases"] textarea')
         .dispatchEvent(new Event("change", { bubbles: true }));
       // Scoped: the note preset bar is identical and sits in an earlier section.
-      const swapBar = document.querySelector('[data-ar-presets="swap"]');
+      const swapBar = document.querySelector('[data-ar-presets="notes"]');
       swapBar.querySelector('input[placeholder="Preset name"]').value = "trial";
       [...swapBar.querySelectorAll("button")].find((b) => b.textContent.trim() === "Save as new").click();
       await frame();
-      const before = JSON.parse(localStorage.getItem("lv-auto-retry:presets:v1")).swap.length;
+      const before = JSON.parse(localStorage.getItem("lv-auto-retry:presets:v1")).notes.length;
       [...document.querySelectorAll("button")].find((b) => /^Reset/.test(b.textContent.trim())).click();
       await frame();
       const line = document.querySelector('[data-ar-reset="presets"]');
@@ -9857,7 +9298,7 @@ console.log("\nreset confirmation");
       return {
         before,
         wasDisabled,
-        after: JSON.parse(localStorage.getItem("lv-auto-retry:presets:v1")).swap.length,
+        after: JSON.parse(localStorage.getItem("lv-auto-retry:presets:v1")).notes.length,
         maxRetries: document.querySelector('[data-ar-row="maxRetries"] input').value,
       };
     }),
@@ -9883,11 +9324,11 @@ console.log("\nreset urgency");
       el.value = "9";
       el.dispatchEvent(new Event("change", { bubbles: true }));
       // Save a preset so its line can be ticked.
-      document.querySelector('[data-ar-row="replaceRules"] textarea').value = "cat => dog";
-      document.querySelector('[data-ar-row="replaceRules"] textarea')
+      document.querySelector('[data-ar-row="refusalExtraPhrases"] textarea').value = "cat => dog";
+      document.querySelector('[data-ar-row="refusalExtraPhrases"] textarea')
         .dispatchEvent(new Event("change", { bubbles: true }));
       // Scoped: the note preset bar is identical and sits in an earlier section.
-      const swapBar = document.querySelector('[data-ar-presets="swap"]');
+      const swapBar = document.querySelector('[data-ar-presets="notes"]');
       swapBar.querySelector('input[placeholder="Preset name"]').value = "trial";
       [...swapBar.querySelectorAll("button")].find((b) => b.textContent.trim() === "Save as new").click();
       await frame();
@@ -10014,6 +9455,66 @@ console.log("\nreset urgency");
 }
 
 // ---- nothing is left behind ----
+// ---- what is left of find and replace ----
+// The feature is gone. The one thing left is a card handing somebody's rules
+// back to them, and it has to be absent for everyone who never used it.
+console.log("\nfind and replace, retired");
+{
+  const { out, errors } = await inPanel(browser, {}, async (page) =>
+      page.evaluate(async () => {
+        const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        // Written the way a real install holds them: in the saved blob, not as
+        // a live setting, because the panel has no field for them any more.
+        const raw = JSON.parse(localStorage.getItem("lv-auto-retry:settings:v1") || "{}");
+        raw.replaceRules = "cat => dog\nhot => cold";
+        localStorage.setItem("lv-auto-retry:settings:v1", JSON.stringify(raw));
+        window.__acts["auto-retry-settings"].cb();
+        await frame();
+        const box = document.querySelector("[data-ar-retired]");
+        const saved = [];
+        // The download is a link click in a real browser, so it is watched for
+        // rather than followed.
+        const realCreate = URL.createObjectURL;
+        URL.createObjectURL = (b) => { saved.push(b); return realCreate.call(URL, b); };
+        const text = box ? box.textContent : "";
+        const get = box && box.querySelector('[data-ar-retired-save]');
+        if (get) get.click();
+        await frame();
+        const file = saved.length ? await saved[0].text() : "";
+        const hide = box && box.querySelector('[data-ar-retired-hide]');
+        if (hide) hide.click();
+        await frame();
+        URL.createObjectURL = realCreate;
+        return {
+          there: !!box && !!box.textContent.trim(),
+          saysWhy: /retired/i.test(text) && /Auto Refine/.test(text),
+          counted: /2 rules/.test(text),
+          file,
+          goneAfterHide: !document.querySelector("[data-ar-retired]") ||
+            !document.querySelector("[data-ar-retired]").textContent.trim(),
+          remembered: !!localStorage.getItem("lv-auto-retry:swaps-retired:v1"),
+        };
+      }),
+  );
+  check("somebody with rules is told the feature went", out.there && out.saysWhy, out);
+  check("and how much of theirs is still there", out.counted, out);
+  check("the download holds the rules themselves", /cat => dog/.test(out.file), out.file.slice(0, 120));
+  check("hiding it takes it away", out.goneAfterHide && out.remembered, out);
+  check("no console errors", errors.length === 0, errors);
+}
+
+// Somebody who never used it should never learn it existed.
+{
+  const { out, errors } = await inPanel(browser, {}, async (page) =>
+    page.evaluate(() => {
+      const box = document.querySelector("[data-ar-retired]");
+      return { empty: !box || !box.textContent.trim() };
+    }),
+  );
+  check("and somebody who never used it sees nothing", out.empty, out);
+  check("no console errors", errors.length === 0, errors);
+}
+
 console.log("\nteardown");
 {
   const page = await browser.newPage();
@@ -10083,7 +9584,7 @@ console.log("\nteardown");
     };
   });
   await page.close();
-  check("all four Extras entries register", out.registered.length === 4, out.registered);
+  check("both Extras entries register", out.registered.length === 2, out.registered);
   check("none register twice", !out.duplicate);
   check("teardown removes every one", out.left.length === 0, out.left);
   check("a hint, a toast and the full-size editor were actually up first",
