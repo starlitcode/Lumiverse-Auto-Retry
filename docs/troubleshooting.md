@@ -43,7 +43,7 @@ A generation that really produced nothing is still re-rolled either way.
 
 ## "No chat is open"
 
-The swap buttons live in the Extras menu or the floating button's menu, and both are reachable from the chat list with nothing open. Pressing one there says **No chat is open. Open a chat and try again.**, and will not edit the chat you were last in by mistake.
+Anything that acts on the chat you are in has to know which chat that is, and the Extras menu and the floating button are both reachable from the chat list with nothing open. Asked there, they say **No chat is open** rather than acting on the chat you were last in.
 
 How it knows is worth saying, because one of the two answers is not as good as it looks. Lumiverse can be asked which chat is open, but that question is answered on the server, and what comes back is the most recent chat on your account rather than the page in front of you. On the home screen it names the chat you just left. What actually tells the two apart is the address in your browser: while you are in a chat, the address carries that chat's id, and when it stops carrying it you are somewhere else. Auto Retry checks that a few times a second while it is holding a chat, and stops as soon as it is not.
 
@@ -57,7 +57,7 @@ Rarely, Lumiverse reports a reply without saying which chat it belongs to. Retry
 
 - **Turn off here** is greyed out, with a note saying it is waiting to find out which chat this is. Sending a message, or switching to another chat and back, is usually enough. Use the main **Auto Retry** switch in the meantime.
 - **The retry note is not added.** The note is held for one named chat and collected when the next reply is built, so with no chat to attach it to it could land on a reply somewhere else. The retry still happens, and the log says why the note was left out.
-- **Swapping words by hand** says **No chat is open**, since those buttons edit saved replies and have nothing to name. Swaps that run automatically on each reply are unaffected.
+- **Anything named for the chat you are in** says **No chat is open**, since there is nothing for it to name.
 
 In the Stats tab, any retries from this state are counted together on a row called **Chats without an id**.
 

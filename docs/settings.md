@@ -34,7 +34,7 @@ The search box ignores all of this and finds a setting whichever way its switch 
 
 Only **Save** keeps what you changed. Closing with the X or tapping outside discards it, so you can try things freely.
 
-Saved settings sync to your Lumiverse account, so they follow you to other browsers and devices, and they apply from the next reply onward. Long text boxes, like your word-swap rules, have an **Expand** button that opens a full-size editor.
+Saved settings sync to your Lumiverse account, so they follow you to other browsers and devices, and they apply from the next reply onward. Long text boxes, like your own refusal phrases, have an **Expand** button that opens a full-size editor.
 
 ## Turning it off everywhere
 

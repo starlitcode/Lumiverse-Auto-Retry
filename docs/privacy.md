@@ -109,7 +109,7 @@ Two more things are written, and both stay in this browser:
 
 Neither is synced and neither is included in an export, since a position on one screen and an id on one account mean nothing on another. That is everything written anywhere.
 
-Separately it keeps the last twenty lines of what it did, and a few counters for the session: replies that came back fine, retries fired, what they fired for, how many happened in each chat, named where a name was available, refusal notes sent and skipped, and how many words your swaps changed in each chat. The per-chat counts are kept against the chat id, never the words themselves. That is all in memory, so the Copy debug info button has something to report. Both die with the tab.
+Separately it keeps the last twenty lines of what it did, and a few counters for the session: replies that came back fine, retries fired, what they fired for, how many happened in each chat, named where a name was available, and refusal notes sent and skipped. The per-chat counts are kept against the chat id, never against anything a reply said. That is all in memory, so the Copy debug info button has something to report. Both die with the tab.
 
 **Keep the reply a retry replaced** adds one more thing to that list, and it is the only one that holds a whole reply. When a retry throws a reply away, the text of that reply is kept for the chat it came from, so you can read it back on the **Replaced** tab if the retry was a mistake. At most eight chats' worth is kept, the newest replacing the oldest. It is never written to disk, never synced, never sent anywhere, and it goes when the tab closes. Turn it off under **How it retries** and nothing is kept. Neither is written to disk and neither leaves your device.
 
