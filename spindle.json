@@ -5,7 +5,7 @@
   "author": "starlitcode",
   "github": "https://github.com/starlitcode/Lumiverse-Auto-Retry",
   "homepage": "https://github.com/starlitcode/Lumiverse-Auto-Retry",
-  "description": "Automatically retry failed, empty, stalled, or cut-off replies, with optional refusal detection and find-and-replace word swaps.",
+  "description": "Automatically retry failed, empty, stalled, or cut-off replies, with optional refusal detection.",
   "permissions": [
     "generation",
     "chats",

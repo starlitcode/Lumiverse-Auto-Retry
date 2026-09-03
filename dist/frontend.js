@@ -1144,6 +1144,17 @@ function looksTruncated(text, retryOnNoPunct, cfg) {
         .replace(/(\w)\*+(?=\w)/g, "$1");
     if ((emphasis.match(/\*/g) || []).length % 2 === 1)
         return true; // open emphasis / RP action
+    // Bold runs, counted as runs rather than as characters. Counting single
+    // asterisks reads an unclosed **bold** as balanced, because the two it left
+    // behind are an even number: "She read it twice. **This was not the plan."
+    // came back finished, full stop and all, with no setting that would catch it.
+    // Marker pairs are what emphasis is made of, so they are what gets counted.
+    //
+    // A run of three is one pair and one single, which is what ***both at once***
+    // is, and it stays even at both ends. A doubled marker standing on its own
+    // with space either side was already taken out above with the single ones.
+    if (((emphasis.match(/\*\*/g) || []).length) % 2 === 1)
+        return true; // open bold run
     // An odd number of straight quotes means dialogue was opened and never
     // closed. A measurement written with a quote is the exception: a height of
     // 6'2", or a gap 3" wide, puts one straight quote in ordinary prose and made
