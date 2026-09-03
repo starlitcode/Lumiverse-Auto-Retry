@@ -2022,6 +2022,16 @@ console.log("\nicons");
         text: btn ? btn.textContent.trim() : "(no button)",
         shapes: svg ? svg.querySelectorAll("rect,circle,line,path").length : 0,
         slashes: svg ? svg.querySelectorAll("line").length : 0,
+        // The slash is always in the drawing now and hidden by being drawn at
+        // zero length, which is what gives it something to animate along. So
+        // whether it shows is the dash offset, not whether the line is there.
+        slashShown: (() => {
+          const line = svg && svg.querySelector(".lv-ar-slash");
+          if (!line) return null;
+          const off = parseFloat(getComputedStyle(line).strokeDashoffset) || 0;
+          const len = parseFloat(getComputedStyle(line).strokeDasharray) || 0;
+          return len > 0 && off < len / 2;
+        })(),
         width: svg ? Number(svg.getAttribute("width")) : 0,
       };
     };
@@ -2045,8 +2055,10 @@ console.log("\nicons");
   await page.close();
   check("the float button holds a drawing", out.on.hasSvg && out.on.shapes >= 3, out.on);
   check("and no leftover text character", out.on.text === "", JSON.stringify(out.on.text));
-  check("off is marked by a slash, not just colour", out.off.slashes > out.on.slashes, {
-    on: out.on.slashes, off: out.off.slashes });
+  check("off is marked by a slash, not just colour", out.off.slashShown === true, {
+    on: out.on.slashShown, off: out.off.slashShown });
+  check("and on is not", out.on.slashShown === false, {
+    on: out.on.slashShown, off: out.off.slashShown });
   check("the drawing scales with the button", out.big.width > out.on.width, {
     at28: out.on.width, at96: out.big.width });
   check("it never scales below legible", out.on.width >= 14, out.on.width);
@@ -2576,11 +2588,13 @@ console.log("\nstatus after a stop");
   check("and it goes back to having nothing to do", /nothing to do/i.test(out.afterStop), out);
   check("a stop with no host event clears it too", !/thinking/i.test(out.afterClick), out);
   check("and that one settles as well", /nothing to do/i.test(out.afterClick), out.afterClick);
-  // The dot: dim and flat when off, lit when on, pulsing only while working.
+  // The dot: dim when off, the theme's own colour when on, breathing a ring
+  // outward only while working. The same dot as Auto Refine's, which is the
+  // point of it: somebody running both reads one panel and then the other.
   check("the dot is lit but still with nothing to do",
-    out.idleState === "idle" && out.idleAnim === "none" && out.idleGlow !== "none", out);
-  check("and pulses while something is happening",
-    out.busyState === "busy" && out.busyAnim === "lvRetryPulse", out);
+    out.idleState === "idle" && out.idleAnim === "none", out);
+  check("and breathes while something is happening",
+    out.busyState === "busy" && out.busyAnim === "lvRetryBreathe", out);
   check("it stops pulsing once the work does", out.afterStopState === "idle", out);
   check("switched off it is dim, flat and unlit",
     out.offState === "off" && out.offAnim === "none" && out.offGlow === "none", out);
@@ -6729,22 +6743,49 @@ console.log("\nturning the floating button on and off");
     );
     await wait(60);
     const b = host.querySelector("button");
-    const anim = () => { const s = b.querySelector("svg"); return s ? s.style.animation : "gone"; };
-    const first = anim();
+    const svgNow = () => b.querySelector("svg");
+    const slashOff = () => {
+      const line = b.querySelector(".lv-ar-slash");
+      return line ? getComputedStyle(line).strokeDashoffset : "gone";
+    };
+    const drawnFirst = svgNow();
+    const onBefore = b.getAttribute("data-ar-on");
+    const hiddenBefore = slashOff();
     b.click();
-    await wait(20);
-    const afterToggle = anim();
+    // Caught halfway, which is the animation actually running rather than the
+    // state being swapped.
+    await wait(60);
+    const midway = slashOff();
+    // And then settled.
+    await wait(400);
+    const onAfter = b.getAttribute("data-ar-on");
+    const shownAfter = slashOff();
+    // The element itself survives the switch, which is what lets the stroke
+    // move rather than the whole mark being thrown away and drawn again.
+    const sameNode = drawnFirst === svgNow();
     // A repaint that says nothing new: same state, different chat.
     handlers.GENERATION_STARTED && handlers.GENERATION_STARTED({ chatId: "z", generationId: "g" });
     await wait(40);
-    const afterIdlePaint = anim();
-    return { first, afterToggle, afterIdlePaint,
-             eases: getComputedStyle(b).transitionDuration };
+    const stillSame = drawnFirst === svgNow();
+    const line = b.querySelector(".lv-ar-slash");
+    return {
+      onBefore, onAfter, hiddenBefore, midway, shownAfter, sameNode, stillSame,
+      eases: getComputedStyle(b).transitionDuration,
+      slashEase: line ? getComputedStyle(line).transitionDuration : "gone",
+    };
   });
   await page.close();
-  check("the first paint does not animate", !out.first, out);
-  check("turning it off fades the new mark in", /lvRetryFloatMark/.test(out.afterToggle), out);
-  check("a repaint that changes nothing does not", !out.afterIdlePaint, out);
+  // A button that has just appeared is drawn already at rest, not caught
+  // partway through moving into its own state.
+  check("the first paint does not animate", parseFloat(out.hiddenBefore) === 26, out);
+  check("the switch is what changes, not the drawing", out.sameNode && out.stillSame, out);
+  check("turning it off draws the slash on", out.onBefore === "1" && out.onAfter === "0", out);
+  check("the slash is hidden while it is on",
+    parseFloat(out.hiddenBefore) > 0, out);
+  check("and drawn once it is off", parseFloat(out.shownAfter) === 0, out);
+  check("along its own length rather than popping in",
+    parseFloat(out.midway) > 0 && parseFloat(out.midway) < 26, out);
+  check("over a time somebody can see", !/^0s$/.test(String(out.slashEase).trim()), out);
   check("and the colours ease", !/^0s(,\s*0s)*$/.test(String(out.eases).trim()), out);
   check("no console errors", errors.length === 0, errors);
 }

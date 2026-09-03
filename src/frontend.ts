@@ -2669,7 +2669,12 @@ const MARK_BODY =
   '<polyline stroke-width="1.6" points="19.69 7.19 21.8 8.82 22.54 6.26"/>' +
   '<rect stroke-width="2" x="6" y="8.3" width="12" height="8.6" rx="2.8"/>' +
   '<path stroke-width="2" d="M 8.6 16.9 L 7.9 19.6 L 11.6 16.9"/>';
-const MARK_SLASH = '<line stroke-width="2" x1="3.5" y1="20.5" x2="20.5" y2="3.5"/>';
+// The slash is always drawn, and hidden by being drawn at zero length. Adding
+// and removing it meant the mark could only pop in and out; with the line
+// always there, switching Auto Retry off draws the stroke on across the icon
+// and switching it on wipes it back off, which is the movement a switch has.
+const MARK_SLASH =
+  '<line class="lv-ar-slash" stroke-width="2" x1="3.5" y1="20.5" x2="20.5" y2="3.5"/>';
 
 // size is passed only for the float widget, which owns its own element. The
 // Extras menu sizes the icon it is handed.
@@ -2681,6 +2686,20 @@ function markSvg(off?: boolean, size?: number): string {
     ">" +
     MARK_BODY +
     (off ? MARK_SLASH : "") +
+    "</svg>"
+  );
+}
+
+// The same mark for the widget, which owns its element and switches state in
+// place rather than being rebuilt. The slash is always in it; whether it is
+// drawn is a class on the svg.
+function markSvgLive(size: number): string {
+  return (
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"' +
+    ' stroke-linecap="round" stroke-linejoin="round"' +
+    ' width="' + size + '" height="' + size + '">' +
+    MARK_BODY +
+    MARK_SLASH +
     "</svg>"
   );
 }
@@ -3932,19 +3951,22 @@ export function setup(ctx: Ctx, opts?: any) {
     const paintStatus = () => {
       const st = liveStatus();
       if (words.textContent !== st.text) words.textContent = st.text;
-      // Off is dim and flat. On with nothing to do glows. Something actually
-      // happening pulses, so movement means movement rather than decoration.
+      // Off is dim and flat. On is the theme's own colour. Something actually
+      // happening breathes a ring outward, so movement means movement rather
+      // than decoration.
+      //
+      // The same dot as Auto Refine's, down to the timing: somebody running
+      // both reads one panel and then the other, and two dots that mean the
+      // same thing while moving differently is a difference that says nothing.
       if (dot.getAttribute("data-ar-state") !== st.state) {
         dot.setAttribute("data-ar-state", st.state);
         dot.style.background =
           st.state === "off"
-            ? "var(--lumiverse-text-muted,rgba(255,255,255,.45))"
+            ? "var(--lumiverse-text-dim,rgba(255,255,255,.4))"
             : "var(--lumiverse-primary,rgba(147,112,219,.9))";
-        dot.style.boxShadow =
-          st.state === "off"
-            ? "none"
-            : "0 0 6px 1px var(--lumiverse-primary-020,rgba(147,112,219,.45))";
-        dot.style.animation = st.state === "busy" ? "lvRetryPulse 1.6s ease-in-out infinite" : "none";
+        dot.style.boxShadow = "none";
+        dot.style.animation =
+          st.state === "busy" ? "lvRetryBreathe 1400ms ease-in-out infinite" : "none";
       }
     };
     paintStatus();
@@ -4457,14 +4479,32 @@ export function setup(ctx: Ctx, opts?: any) {
       ? "var(--lumiverse-primary-text,rgba(186,135,255,.95))"
       : "var(--lumiverse-text-muted,rgba(255,255,255,.65))";
     floatEl.style.opacity = on ? "1" : "0.75";
-    floatEl.innerHTML = markSvg(!on, glyph);
-    // A fresh element every paint, so the fade is put on the one just made and
-    // there is nothing to clear up afterwards.
-    floatShownOn = on;
-    if (wasOn !== null && wasOn !== on) {
-      const mark: any = floatEl.firstElementChild;
-      if (mark && mark.style) mark.style.animation = "lvRetryFloatMark 180ms ease";
+    // Drawn once and then left alone.
+    //
+    // It used to be rewritten on every paint, which throws the element away and
+    // starts any animation on it again from nothing. That is why switching the
+    // button could only ever pop: there was no element old enough to move.
+    // Written only when the size changes, and the state is a class, so the
+    // stroke has something continuous to animate along.
+    if (floatEl.getAttribute("data-ar-glyph") !== String(glyph)) {
+      floatEl.setAttribute("data-ar-glyph", String(glyph));
+      floatEl.innerHTML = markSvgLive(glyph);
     }
+    floatEl.setAttribute("data-ar-on", on ? "1" : "0");
+    // The first paint sets the state without moving: a button appearing already
+    // mid-animation reads as a glitch rather than as an answer to something.
+    if (wasOn === null) floatEl.setAttribute("data-ar-still", "1");
+    else if (floatEl.getAttribute("data-ar-still")) {
+      // Cleared a frame later, so the browser has the still state to move from.
+      try {
+        requestAnimationFrame(() => {
+          try { floatEl && floatEl.removeAttribute("data-ar-still"); } catch (_) {}
+        });
+      } catch (_) {
+        floatEl.removeAttribute("data-ar-still");
+      }
+    }
+    floatShownOn = on;
     // Tapping is always the master switch, whatever is showing, so the label
     // names the switch a tap reaches rather than leaving somebody to find out
     // by pressing it. It describes only what this button does: on a screen
@@ -6466,9 +6506,16 @@ export function setup(ctx: Ctx, opts?: any) {
       const el = document.createElement("style");
       el.id = "__lvRetryStatusStyle";
       el.textContent =
-        "@keyframes lvRetryPulse{0%,100%{opacity:1}50%{opacity:.45}}" +
+        // A ring growing out of the dot and fading, rather than the dot itself
+        // fading in and out. Auto Refine's dot has always done this; the two
+        // now match, keyframe for keyframe.
+        "@keyframes lvRetryBreathe{" +
+        "0%,100%{box-shadow:0 0 0 0 var(--lumiverse-primary-050,rgba(147,112,219,.5))}" +
+        "50%{box-shadow:0 0 0 5px rgba(0,0,0,0)}}" +
         "@media (prefers-reduced-motion:reduce){" +
-        "#__lvRetryStatus [data-ar-state]{animation:none !important}}";
+        "#__lvRetryStatus [data-ar-state]{animation:none !important}" +
+        "#__lvRetryStatus [data-ar-state=\"busy\"]{" +
+        "box-shadow:0 0 6px 1px var(--lumiverse-primary-020,rgba(147,112,219,.2)) !important}}";
       (document.head || document.documentElement).appendChild(el);
       statusStyleEl = el;
     } catch (_) {}
@@ -6481,14 +6528,39 @@ export function setup(ctx: Ctx, opts?: any) {
       const el = document.createElement("style");
       el.id = "__lvRetryFloatStyle";
       el.textContent =
-        "[data-ar-float]{transition:background-color var(--lumiverse-transition-fast,150ms ease)," +
-        "border-color var(--lumiverse-transition-fast,150ms ease)," +
-        "color var(--lumiverse-transition-fast,150ms ease)," +
-        "opacity var(--lumiverse-transition-fast,150ms ease)}" +
-        "[data-ar-float] svg{transform-origin:50% 50%}" +
-        "@keyframes lvRetryFloatMark{from{opacity:0;transform:scale(.72)}to{opacity:1;transform:scale(1)}}" +
+        // Everything that changes between on and off moves rather than
+        // switching: the fill, the edge, the ink and the ring around it. Longer
+        // than the 150ms a hover gets, because this is an answer to something
+        // you pressed and it should be seen, and eased so it settles rather
+        // than stopping dead.
+        "[data-ar-float]{transition:background-color 260ms cubic-bezier(.2,.7,.3,1)," +
+        "border-color 260ms cubic-bezier(.2,.7,.3,1)," +
+        "color 260ms cubic-bezier(.2,.7,.3,1)," +
+        "box-shadow 260ms cubic-bezier(.2,.7,.3,1)," +
+        "opacity 260ms cubic-bezier(.2,.7,.3,1)," +
+        "transform 260ms cubic-bezier(.2,.7,.3,1)}" +
+        "[data-ar-float] svg{transform-origin:50% 50%;overflow:visible}" +
+        // A ring while it is on, which is the panel dot's halo at button size.
+        // The two say on the same way.
+        '[data-ar-float][data-ar-on="1"]{' +
+        "box-shadow:0 0 0 3px var(--lumiverse-primary-020,rgba(147,112,219,.18))}" +
+        // A press dips the whole button, so a tap feels like a press whether or
+        // not it changes anything.
+        "[data-ar-float]:active{transform:scale(.94)}" +
+        // The slash draws itself on and wipes itself off along its own length.
+        // 24 is a comfortable over-estimate of the line's length in viewBox
+        // units, so the whole stroke is covered at either end.
+        "[data-ar-float] .lv-ar-slash{stroke-dasharray:26;" +
+        "transition:stroke-dashoffset 260ms cubic-bezier(.2,.7,.3,1)}" +
+        '[data-ar-float][data-ar-on="1"] .lv-ar-slash{stroke-dashoffset:26}' +
+        '[data-ar-float][data-ar-on="0"] .lv-ar-slash{stroke-dashoffset:0}' +
+        // The state the button is drawn in when it first appears, which must
+        // not animate: a button arriving mid-movement reads as a glitch.
+        "[data-ar-float][data-ar-still],[data-ar-float][data-ar-still] .lv-ar-slash{" +
+        "transition:none}" +
         "@media (prefers-reduced-motion:reduce){" +
-        "[data-ar-float]{transition:none}" +
+        "[data-ar-float],[data-ar-float] .lv-ar-slash{transition:none}" +
+        "[data-ar-float]:active{transform:none}" +
         "[data-ar-float] svg{animation:none !important}}";
       (document.head || document.documentElement).appendChild(el);
       floatStyleEl = el;
