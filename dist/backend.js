@@ -13,11 +13,6 @@
  * clicks retry, collected by the prompt interceptor on the generation that
  * click starts, then thrown away. One generation only.
  *
- * Find and replace lived here and has been retired. It rewrote a reply after it
- * arrived, which is a different job from retrying one, and Auto Refine does
- * that job properly. What is left of it is a card in the panel offering anybody
- * who had rules a copy of them.
- *
  * Needs the `generation` permission to hear when a reply finishes, and
  * `interceptor` for the refusal note.
  */
@@ -263,8 +258,7 @@ function escapeRe(s) {
     catch (_) { /* no account settings yet */ }
 })();
 // Settings bridge with the UI: save the whole settings object to per-user
-// account storage, send it back on request, and keep the find-and-replace state
-// in sync with it.
+// account storage and send it back on request.
 spindle.onFrontendMessage(async (payload, userId) => {
     try {
         if (!payload)
@@ -642,6 +636,6 @@ try {
 }
 catch (_) { }
 try {
-    spindle.log.info('Auto Retry backend loaded (find and replace in replies).');
+    spindle.log.info('Auto Retry backend loaded.');
 }
 catch (_) { }

@@ -14,7 +14,7 @@
 // Run with: bun test
 
 import { expect, test, describe } from "bun:test";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { __testing } from "../src/frontend";
 
 const { CONFIG, SCHEMA } = __testing as any;
@@ -168,10 +168,15 @@ describe("defaults quoted in the docs", () => {
   for (const f of FIELDS) byLabel[f.label] = f.key;
 
   const claims: Array<{ file: string; label: string; said: string }> = [];
-  for (const file of ["settings.md", "detection.md", "word-swaps.md", "buttons.md",
-                      "privacy.md", "safety.md", "import-export.md", "troubleshooting.md"]) {
-    let text = "";
-    try { text = readFileSync(new URL("../docs/" + file, import.meta.url), "utf8"); } catch (_) { continue; }
+  // Every page in docs, read off the folder rather than listed here. A written
+  // list skips what it does not name and says nothing about it: this one still
+  // held word-swaps.md long after that page was deleted, and would have gone on
+  // ignoring a new page just as quietly.
+  const docFiles = readdirSync(new URL("../docs/", import.meta.url))
+    .filter((f) => f.slice(-3) === ".md")
+    .sort();
+  for (const file of docFiles) {
+    const text = readFileSync(new URL("../docs/" + file, import.meta.url), "utf8");
     const re = /\*\*([^*]{3,60})\*\*[^.\n]{0,80}?\((on|off|\d+(?:\.\d+)?) by default\)/g;
     for (let m = re.exec(text); m; m = re.exec(text)) {
       claims.push({ file: file, label: m[1].trim().replace(/\.$/, ""), said: m[2] });

@@ -607,7 +607,7 @@ const SCHEMA = [
                 needs: ["refusalUseBuiltins"],
                 label: "Reword the built-in phrases",
                 type: "text",
-                hint: 'Optional. Swap wording inside the built-in list using "old => new" rules, one per line. Example: assist => help. It changes what the built-in list matches, so only swap for wording your model actually uses.',
+                hint: 'Optional. Reword the built-in phrases using "old => new" rules, one per line. Example: assist => help. This changes what the built-in list matches, so use wording your model actually refuses with. It never touches a reply.',
             },
             {
                 key: "refusalIgnorePhrases",
@@ -1180,7 +1180,7 @@ function looksTruncated(text, retryOnNoPunct, cfg) {
 // that," said the guard. On a match the caller re-fires the same request, capped
 // by maxRetries; a refusal that repeats keeps coming back across the tries and
 // stops at the cap. The request is sent unchanged: no prompt edits, no word
-// swaps, no message-role changes.
+// substitutions, no message-role changes.
 //
 // It's layered, since refusal wording drifts between models and over
 // time: tight regexes for the shapes that need context, a flat phrase list for
@@ -1216,9 +1216,10 @@ function splitPhrases(raw) {
         .map((p) => normalizeForMatch(p).toLowerCase())
         .filter((p) => p.length > 0);
 }
-// Reword rules: "old => new" pairs, one per line. Lets a user
-// swap a word or bit of phrasing in the built-in list for wording they prefer.
-// Empty "new" is allowed (deletes the old text).
+// Reword rules: "old => new" pairs, one per line. Lets a user change a word or
+// bit of phrasing in the built-in refusal list to wording their model actually
+// uses. This edits the list Auto Retry matches against and never the reply
+// itself. Empty "new" is allowed (deletes the old text).
 function parseSubs(raw) {
     const out = [];
     for (const rule of String(raw == null ? "" : raw).split(/\r?\n/)) {
@@ -2563,9 +2564,9 @@ export function setup(ctx, opts) {
     // cfg is mutable so the settings modal can change it live. Order: code
     // defaults, then GitHub opts, then whatever the user saved in the UI.
     const cfg = Object.assign({}, CONFIG, opts || {}, loadSaved());
-    // Persist the whole settings object to account storage (through the backend) so
-    // settings follow the user across browsers. The backend also derives its
-    // find-and-replace state from this. Safe to call with no backend bridge.
+    // Persist the whole settings object to account storage (through the backend)
+    // so settings follow the user across browsers, and so the backend knows
+    // whether the extension is switched on. Safe to call with no backend bridge.
     function saveToAccount() {
         try {
             if (ctx && typeof ctx.sendToBackend === "function") {
@@ -4787,7 +4788,7 @@ export function setup(ctx, opts) {
         // The panel's Save does this and the quick toggle did not, so the one
         // setting people flip most often, from the control built for flipping it,
         // was the one that stayed in this browser. It also never reached the
-        // backend, which is what word swapping reads to know the extension is off.
+        // backend, which is what tells it the extension is off.
         saveToAccount();
         // The settings panel can be open while this is flipped from somewhere else.
         // Its own checkbox and the "Auto Retry is off" line are brought into line,
@@ -5272,6 +5273,14 @@ export function setup(ctx, opts) {
     // check runs on the local copy and on anything the account hands back, so a
     // malformed or hand-edited store cannot put junk into the dropdown.
     function coercePresets(data) {
+        // swap is here on purpose and is not a leftover. Find and replace is gone
+        // and nothing offers a word preset any more, but somebody who had them
+        // still has them in this store, and the download in Import / export is the
+        // only way they get them back. This function decides what survives a load
+        // and a save: drop the key and the next save writes an object without it,
+        // which deletes the very thing that download exists to hand over.
+        //
+        // It goes when the download goes, and not before.
         const out = { swap: [], notes: [] };
         if (!data || typeof data !== "object")
             return out;
@@ -5460,9 +5469,8 @@ export function setup(ctx, opts) {
     const cardless = new Set();
     const isCardless = (chatId) => chatId != null && cardless.has(String(chatId));
     // The off list lives in this browser and is not a setting, so it is not in
-    // what gets saved to the account and the backend cannot read it. Word swaps
-    // run on the backend, so without this a chat you switched off carried on
-    // having its replies rewritten, which is not what "left alone" means.
+    // what gets saved to the account and the backend cannot read it, so it is
+    // sent over on its own.
     function tellBackendChatsOff() {
         try {
             if (ctx && typeof ctx.sendToBackend === "function")
@@ -5475,9 +5483,9 @@ export function setup(ctx, opts) {
     // itself either: that read happens before any user is known, so it finds
     // nothing and stays at its own defaults.
     //
-    // So the swaps quietly stopped after a restart, and a chat switched off
-    // started being swapped again. Neither says anything, because from the
-    // reader's side nothing happened: the tab was closed and opened again.
+    // So a chat switched off quietly started being acted on again after a
+    // restart, and nothing said so, because from the reader's side nothing
+    // happened: the tab was closed and opened again.
     //
     // The baseline while the settings panel is open, cfg otherwise. Edits in the
     // panel change cfg as they are typed and are rolled back if the panel is
@@ -5753,12 +5761,9 @@ export function setup(ctx, opts) {
         // thing this answers, and a count across every chat cannot show it. Ids
         // rather than names, because a name can arrive later than the first retry.
         byChat: {},
-        // Words swapped per chat id, counted the same way. A swap leaves no trace
-        // in the chat once it has landed, since the reply simply reads as though
-        // the model wrote it that way, so without a count there is nothing to look
-        // at to answer "is this rule doing anything".
-        // So a count can be read as a rate rather than as a bare number. Twelve
-        // retries in ten minutes and twelve in a whole day are different problems.
+        // When the counting started, so a count can be read as a rate rather than
+        // as a bare number. Twelve retries in ten minutes and twelve in a whole day
+        // are different problems.
         since: Date.now(),
     };
     // ---- what it is doing, right now ----
@@ -7235,7 +7240,7 @@ export function setup(ctx, opts) {
         }
         catch (_) {
             // A host that refuses to carry the question answers it by throwing. Left
-            // to the empty catch this never called back at all, so a swap waiting on
+            // to the empty catch this never called back at all, so anything waiting on
             // the answer waited for ever and the button did nothing, silently, which
             // is the exact fault this whole path exists to stop.
             reply({ answered: false, resolved: false, chatId: null });
@@ -7248,7 +7253,7 @@ export function setup(ctx, opts) {
         lastChatId = next;
         // The last reply seen belonged to the chat just left, so it is not the last
         // reply here. onChatSwitched has always cleared this and noteChat never
-        // did, which left the manual swap aiming at a message in another chat. The
+        // did, which left a manual action aiming at a message in another chat. The
         // backend falls back to the latest reply for an id it cannot find, so it
         // did no harm, but it was asking for the wrong thing.
         // A chat learned from an event arrives as an id and nothing else, so this
@@ -10252,8 +10257,7 @@ export function setup(ctx, opts) {
     // which is the rarest thing anyone wants. The usual case is one part having
     // been fiddled into a mess, most often the button selectors, since Pick it
     // for me makes those easy to overwrite with the wrong element. Resetting
-    // everything to undo that costs the word swaps, the refusal phrases and the
-    // notes as well.
+    // everything to undo that costs the refusal phrases and the notes as well.
     //
     // The parts are the same ones import and export already use, so there is one
     // definition of what a part is and the names match between the two panels.
@@ -10318,9 +10322,9 @@ export function setup(ctx, opts) {
         let presets = 0;
         if (alsoPresets) {
             const stored = loadPresets();
-            // Every kind, counted and cleared. Writing { swap: [] } here dropped the
-            // note presets as a side effect of the key being absent, while the line
-            // the user ticked named word swaps.
+            // Every kind, counted and cleared. Naming one kind here dropped the
+            // others as a side effect of their key being absent, while the line the
+            // reader ticked said presets.
             presets = Object.keys(stored).reduce((n, k) => n + (stored[k] || []).length, 0);
             if (presets) {
                 const cleared = {};
@@ -10457,7 +10461,7 @@ export function setup(ctx, opts) {
         keeps.textContent =
             "Never touched by any of this: your chats, your replies and your characters. " +
                 "Auto Retry only ever reads replies, and a reset does not go near them. " +
-                "Your saved presets, both word swap and refusal note, are kept too unless you tick the box above, and that one deletes them straight away rather than waiting for Save.";
+                "Your saved presets are kept too unless you tick the box above, and that one deletes them straight away rather than waiting for Save.";
         const status = document.createElement("div");
         status.style.cssText =
             "flex:none;font-size:12px;line-height:1.4;min-height:1em;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
@@ -11255,10 +11259,6 @@ export function setup(ctx, opts) {
     disposers.push(() => stopChatUrlWatch());
     disposers.push(() => dropBarEntries());
     disposers.push(() => dropToggleAction());
-    // A swap timer left running would show a message about a backend nobody is
-    // waiting on any more, from an extension that has already been closed.
-    disposers.push(() => {
-    });
     askForPermissions();
     log("ready v" + VERSION, cfg);
     return () => {
