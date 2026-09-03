@@ -121,7 +121,7 @@ const STREAM_BUF_MAX = 200000;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "4.24.8";
+const VERSION = "5.0.0";
 
 // The one address the extension ever points at, used by the warning in front of
 // the crisis-support check. Pinned to the released branch rather than to a tag,
@@ -352,7 +352,7 @@ interface Field {
   // with nothing above it, describing a setting that is not there.
   needsAll?: string[];
 }
-type ExtraKind = "refusalTester" | "swapPresets" | "notePresets";
+type ExtraKind = "refusalTester" | "notePresets";
 interface Group {
   title: string;
   desc?: string;
@@ -426,7 +426,7 @@ const SCHEMA: Group[] = [
         key: "showFloatingToggle",
         label: "Floating on/off button",
         type: "bool",
-        hint: "Off by default. Puts a small round button on top of the chat. Tap it to turn Auto Retry on or off. It shows which one it is, and you can drag it anywhere. Where you leave it is remembered. Hold the button, or right-click it, to open a menu with the settings, the panel and the swap buttons. While this button is on, those live in its menu instead of in the Extras menu. Useful if you switch Auto Retry on and off a lot.",
+        hint: "Off by default. Puts a small round button on top of the chat. Tap it to turn Auto Retry on or off. It shows which one it is, and you can drag it anywhere. Where you leave it is remembered. Hold the button, or right-click it, to open a menu with the settings and the panel. While this button is on, those live in its menu instead of in the Extras menu. Useful if you switch Auto Retry on and off a lot.",
       },
       {
         key: "floatingToggleSize",
@@ -743,7 +743,7 @@ const SCHEMA: Group[] = [
         run: "howFar",
         label: "Extra thinking tag names",
         type: "text",
-        hint: "Optional, one per line. The common reasoning tags are already handled. Add a tag name only if your model wraps its thinking in an unusual one (for example: mythink). Just the name, no brackets or pipes; underscores and hyphens are part of a name, spaces are not. A name you add is recognised in all four wrappers, and it covers the word swaps and the length checks as well as refusals.",
+        hint: "Optional, one per line. The common reasoning tags are already handled. Add a tag name only if your model wraps its thinking in an unusual one (for example: mythink). Just the name, no brackets or pipes; underscores and hyphens are part of a name, spaces are not. A name you add is recognised in all four wrappers, and it covers the length checks as well as refusals.",
       },
       {
         key: "refusalNote",
@@ -2674,12 +2674,6 @@ function markSvg(off?: boolean, size?: number): string {
   );
 }
 
-// These buttons appear in the chat input's Extras menu when the floating button
-// is off, and in the floating button's own menu when it is on. The wording is
-// written once, here, because the same button has to say the same thing in both
-// places. Different wording would look like a different button.
-const SWAP_ONE_LABEL = "Swap words in the last reply";
-const SWAP_ALL_LABEL = "Swap words in every reply";
 const OPEN_PANEL_LABEL = "Open the Auto Retry panel";
 
 // Every tick box in the panel, at one size. The settings rows have always set
@@ -2699,15 +2693,6 @@ function iconSvg(body: string): string {
   );
 }
 
-// Two arrows pointing opposite ways: one word replaced by another. The
-// whole-chat icon is the same drawing with a line down the middle. That line is
-// the only difference between them, and it has to work at 16 pixels, which is
-// the size the Extras menu draws these at.
-const SWAP_ARROWS =
-  '<polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/>' +
-  '<polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>';
-const SWAP_ONE_ICON = iconSvg(SWAP_ARROWS);
-const SWAP_ALL_ICON = iconSvg(SWAP_ARROWS + '<line x1="12" y1="7" x2="12" y2="17"/>');
 const OPEN_PANEL_ICON = iconSvg(
   '<rect x="3" y="3" width="18" height="18" rx="2"/><line x1="15" y1="3" x2="15" y2="21"/>',
 );
@@ -2782,7 +2767,6 @@ export function setup(ctx: Ctx, opts?: any) {
   // eventually. Pairing the two at the point of reading means "no chat is open"
   // cannot be believed while a chat is known, whoever forgot to clear it.
   const outsideAnyChat = (): boolean => noChatOpen && lastChatId == null;
-  let lastMessageId: any = null;
 
   // ---- knowing when the chat has been left ----
   // Walking out to the home screen is the one move nothing reliably announces.
@@ -2828,7 +2812,6 @@ export function setup(ctx: Ctx, opts?: any) {
   function leftTheChat() {
     noChatOpen = true;
     lastChatId = null;
-    lastMessageId = null;
     stopChatUrlWatch();
     if (chatSwitchPaint) {
       try {
@@ -2877,8 +2860,8 @@ export function setup(ctx: Ctx, opts?: any) {
   //
   // One map instead of two variables per button, so adding, removing and
   // tearing one down is the same code for all of them. When each button had its
-  // own copy of that code, the swap-whole-chat one was left out of teardown and
-  // a duplicate piled up on every reload.
+  // own copy of that code, one of them was left out of teardown and a duplicate
+  // piled up on every reload.
   //
   // The on/off button is not in here. Its label changes with the state, and the
   // host has no way to relabel a button once it is registered, so it has to be
@@ -2894,47 +2877,6 @@ export function setup(ctx: Ctx, opts?: any) {
   // every button was registered again on the way out and left behind. The next
   // load then had two of each.
   let tornDown = false;
-  // Optional consent dialog before any edit, for people who don't want surprises.
-  // Returns true to proceed. If the host has no confirm dialog, proceeds.
-  async function confirmEdit(message: string): Promise<boolean> {
-    try {
-      if (ctx && (ctx as any).ui && typeof (ctx as any).ui.showConfirm === "function") {
-        const r = await (ctx as any).ui.showConfirm({ title: "Apply word swaps?", message: message, confirmLabel: "Swap", cancelLabel: "Cancel" });
-        return !!(r && r.confirmed);
-      }
-    } catch (_) {}
-    return true;
-  }
-  // Swap requests that have gone out and have not been picked up yet.
-  //
-  // Somebody pressed a button to start a swap, so nothing happening is the one
-  // outcome they cannot make sense of: it looks exactly like the extension
-  // being broken.
-  //
-  // The backend answers twice. Once straight away to say it has the request,
-  // and again when the work is finished. This keeps a timer per request against
-  // the first answer, so a backend that is not running, or a message that never
-  // arrives, gets a message instead of silence.
-  //
-  // The timer waits for the first answer rather than the finished work, because
-  // swapping a whole chat can take a while and a timer on the finish would
-  // report a slow job as a failure.
-  const swapWaits = new Map<string, any>();
-  // Read from the setup argument rather than from the settings, because it is
-  // not a choice anybody should have to make: it is here so the browser checks
-  // can drive this path without sitting through the real wait.
-  const SWAP_ACK_MS = Number(opts && opts.swapAckMs) > 0 ? Number(opts.swapAckMs) : 8000;
-
-  function clearSwapWait(requestId: any) {
-    const id = String(requestId == null ? "" : requestId);
-    const timer = swapWaits.get(id);
-    if (timer === undefined) return;
-    swapWaits.delete(id);
-    try { clearTimeout(timer); } catch (_) {}
-  }
-
-
-
   // The Extras-menu on/off entry. Its label and icon carry the current state,
   // and the host offers no way to relabel an action once it is registered, so a
   // state change registers it again rather than editing it in place.
@@ -4012,9 +3954,8 @@ export function setup(ctx: Ctx, opts?: any) {
   function showLiveLog() {
     if (liveLogEl || typeof document === "undefined") return;
     const el = document.createElement("div");
-    // Named, like the other surfaces the extension owns. Without an id the
-    // word-swap pass over the page had no way to tell this panel from the chat,
-    // so a rule could rewrite its own log text underneath it.
+    // Named, like the other surfaces the extension owns, so anything walking
+    // the page can tell this panel from the chat behind it.
     el.id = "__lvRetryLog";
     el.style.cssText =
       "position:fixed;right:8px;bottom:8px;z-index:" + Z_LIVE_LOG + ";width:min(340px,92vw);height:min(300px,50vh);min-width:200px;min-height:120px;max-width:96vw;max-height:85vh;display:flex;flex-direction:column;background-color:var(--lumiverse-card-bg-solid,rgb(24,20,34));background-image:linear-gradient(var(--lumiverse-bg-elevated,rgba(35,30,48,.9)),var(--lumiverse-bg-elevated,rgba(35,30,48,.9)));border:1px solid var(--lumiverse-border,rgba(255,255,255,.14));border-radius:var(--lumiverse-radius-md,10px);box-shadow:var(--lumiverse-shadow-md,0 8px 24px rgba(0,0,0,.4));font-family:var(--lumiverse-font-family,system-ui);font-size:13px;color:var(--lumiverse-text,#e9e4f0);overflow:hidden";
@@ -4731,9 +4672,9 @@ export function setup(ctx: Ctx, opts?: any) {
   }
 
   // The menu shown by holding or right-clicking the floating button. It holds
-  // the ways into the extension's own screens, the two word swap buttons when
-  // those are switched on, and hiding the button itself. Nothing here changes
-  // how a reply is retried. The settings panel is the only place that does.
+  // the ways into the extension's own screens and hiding the button itself.
+  // Nothing here changes how a reply is retried. The settings panel is the only
+  // place that does.
   //
   // Drawn by Lumiverse rather than by us. It arrives in the user's own theme,
   // accent and dark or light mode, clamps itself to the screen, and closes on
@@ -5438,9 +5379,8 @@ export function setup(ctx: Ctx, opts?: any) {
         const incoming = coercePresets(msg.presets);
         const local = loadPresets();
         // Per kind, not all or nothing. The account winning outright would drop
-        // a kind it has none of, which is exactly what happens the first time
-        // somebody saves a note set on a device whose account only knows about
-        // word swaps.
+        // a kind it has none of. Only one kind ships today, and this is
+        // written per kind so a second one cannot quietly wipe the first.
         const merged: Record<string, Preset[]> = {};
         let took = 0, kept = 0;
         for (const kind of Object.keys(local)) {
@@ -5555,10 +5495,10 @@ export function setup(ctx: Ctx, opts?: any) {
     } catch (_) {}
   }
 
-  // Everything the backend knows about word swaps arrived over this bridge, and
-  // a backend that restarts comes back knowing none of it. It cannot look the
-  // settings up for itself either: that read happens before any user is known,
-  // so it finds nothing and stays at its own defaults, which have swapping off.
+  // Everything the backend knows arrived over this bridge, and a backend that
+  // restarts comes back knowing none of it. It cannot look the settings up for
+  // itself either: that read happens before any user is known, so it finds
+  // nothing and stays at its own defaults.
   //
   // So the swaps quietly stopped after a restart, and a chat switched off
   // started being swapped again. Neither says anything, because from the
@@ -5597,7 +5537,7 @@ export function setup(ctx: Ctx, opts?: any) {
     let remembered = false;
     // Temporary chats are filtered out of what gets written, not out of the
     // list itself: the switch has to hold for the chat that is open, and the
-    // backend still needs to be told so its word swaps leave that chat alone.
+    // backend still needs to be told so it leaves that chat alone.
     // Filtering here rather than at the point of the change also keeps a later
     // switch in an ordinary chat from writing the temporary one down with it.
     const keep = chatsOff.filter((c) => !cardless.has(c));
@@ -5677,8 +5617,8 @@ export function setup(ctx: Ctx, opts?: any) {
   // Real ids are host uuids, so nothing can collide with this.
   //
   // Only the internal state is keyed on it. Anything the user acts on through
-  // a chat id, the per-chat switch and the swap buttons, keeps refusing when
-  // there is no real id to act on, since there is nothing for them to name.
+  // a chat id, the per-chat switch among them, keeps refusing when there is no
+  // real id to act on, since there is nothing for it to name.
   const NO_CHAT = "lv-no-chat";
   // Which slot a chat's own state is filed under. Everything keyed by chat goes
   // through this, so a chat with no id of its own lands in the same place
@@ -7131,12 +7071,11 @@ export function setup(ctx: Ctx, opts?: any) {
     // later cannot produce one for this generation however long it runs.
     s.watchedFromStart = promptsAsked;
     // The id the rest of the panel shows, which stays null when the host named
-    // no chat. The per-chat switch and the swap buttons read this, and all of
-    // them need a real id to be honest about what they would act on.
+    // no chat. The per-chat switch reads this, and it needs a real id to be
+    // honest about what it would act on.
     const realId = p.chatId == null || p.chatId === "" ? null : p.chatId;
     const switched = lastChatId !== realId;
     lastChatId = realId;
-    lastMessageId = p.messageId;
     if (realId != null) startChatUrlWatch();
     if (switched) {
       paintFloat();
@@ -7199,19 +7138,6 @@ export function setup(ctx: Ctx, opts?: any) {
   // asked minutes ago.
   const chatAsks = new Set<() => void>();
   const CHAT_ASK_MS = 8000;
-  // Asks which chat is open and hands back the answer, rather than only acting
-  // on it. The swap buttons need the answer itself: they edit saved replies and
-  // must not do that to a chat the user has walked away from.
-  //
-  // answered is false when there is no bridge or nothing came back in time.
-  // resolved is the backend saying it could actually look. A null chatId with
-  // resolved true means no chat is open; with resolved false it means nothing
-  // at all, and the caller falls back to what it already knew.
-  function whichChatIsOpen(
-    forChat?: string,
-  ): Promise<{ answered: boolean; resolved: boolean; chatId: string | null }> {
-    return new Promise((resolve) => askActiveChat(forChat, resolve));
-  }
 
   function askActiveChat(
     forChat?: string,
@@ -7307,7 +7233,6 @@ export function setup(ctx: Ctx, opts?: any) {
     // did, which left the manual swap aiming at a message in another chat. The
     // backend falls back to the latest reply for an id it cannot find, so it
     // did no harm, but it was asking for the wrong thing.
-    lastMessageId = null;
     // A chat learned from an event arrives as an id and nothing else, so this
     // is the moment to find out whose it is. Asked once per chat: the answer
     // does not change while you are in it.
@@ -7334,7 +7259,6 @@ export function setup(ctx: Ctx, opts?: any) {
     // the row says there is no chat rather than that it is still working out
     // which one you are in.
     noChatOpen = lastChatId == null;
-    lastMessageId = null;
     ensureChatName(lastChatId);
     if (lastChatId == null) stopChatUrlWatch();
     else startChatUrlWatch();
@@ -7433,7 +7357,6 @@ export function setup(ctx: Ctx, opts?: any) {
       ensureChatName(chatId);
       startChatUrlWatch();
     }
-    lastMessageId = p.messageId;
     // Text that turned up without a single token behind it is a build that
     // does not stream, which is the other half of what the live line needs to
     // know. An empty or failed reply proves nothing, so it has to have text.
@@ -7582,212 +7505,6 @@ export function setup(ctx: Ctx, opts?: any) {
     standDown(chatId, true); // genuine user stop: stand down, don't fight them
   }
 
-  // The host saves a swapped reply without redrawing the chat, so the old words
-  // stay on screen until the view is rebuilt. This applies the same swaps to the
-  // rendered text. Only text nodes are touched, so markdown, formatting and any
-  // element structure are left exactly as they were.
-  //
-  // The backend records one pair per match it made, so the number of pairs is
-  // exactly the number of occurrences it changed. Each pair therefore spends
-  // itself on exactly one occurrence here, taken from the end of the page
-  // backwards, which is the newest text first.
-  //
-  // One pair must not rewrite more than its own occurrence. Spending a pair on
-  // every match inside a node would use up the later pairs on text the backend
-  // never touched, and the screen would then disagree with the stored chat
-  // until the view was rebuilt.
-  //
-  // Counting from the end is exact for one reply and approximate for a whole
-  // chat, where a message of the user's can sit between two replies and be
-  // caught. Being exact needs knowing which element is which message, which is
-  // the host dependency this extension avoids, so this stays a heuristic.
-  function applySwapsToView(pairs: Array<[string, string]>): number {
-    if (typeof document === "undefined" || !pairs || !pairs.length) return 0;
-    const SKIP = /^(SCRIPT|STYLE|TEXTAREA|INPUT|SELECT|OPTION)$/;
-    let done = 0;
-
-    // The candidate list is the same for every rule, so the page is walked once
-    // and the list reused. Building a TreeWalker inside the loop below would
-    // mean one full pass over every text node per rule.
-    // Only the rendered replies, not the whole page. The host marks each one
-    // with data-component="MessageContent", so the walk starts there.
-    //
-    // Starting at document.body would make every text node a candidate:
-    // another extension's panel, a menu, a tooltip, the character list. A rule
-    // of "cat => dog" would then rewrite the word inside somebody else's
-    // interface. Nothing outside a message is ours to touch.
-    //
-    // If the host ever renames that attribute this finds nothing and falls back
-    // to the old behaviour, which is worth having: a swap that reaches too far
-    // is a nuisance, but a swap that silently stops working looks like the
-    // feature is broken.
-    const roots: any[] = [];
-    try {
-      const marked = document.querySelectorAll('[data-component="MessageContent"]');
-      for (let i = 0; i < marked.length; i++) roots.push(marked[i]);
-    } catch (_) {}
-    if (!roots.length && document.body) roots.push(document.body);
-
-    const nodes: any[] = [];
-    try {
-      for (const root of roots) {
-        const walker: any = document.createTreeWalker(root, 4 /* SHOW_TEXT */);
-        let node: any = walker.nextNode ? walker.nextNode() : null;
-        while (node) {
-          const parent = node.parentElement;
-          let skip = !parent || SKIP.test(String(parent.tagName || ""));
-          // Our own panels, anything the user is typing into, and anything that
-          // looks like another extension's surface rather than the chat.
-          if (!skip && parent.closest) {
-            try {
-              skip = !!parent.closest(
-                "[data-ar-ui],[contenteditable='true'],[role='dialog'],[role='menu'],[role='tooltip']",
-              );
-            } catch (__) {}
-          }
-          if (!skip) nodes.push(node);
-          node = walker.nextNode();
-        }
-      }
-    } catch (_) {
-      return done;
-    }
-
-    for (const pair of pairs) {
-      const from = String(pair && pair[0] != null ? pair[0] : "");
-      const to = String(pair && pair[1] != null ? pair[1] : "");
-      if (!from || from === to) continue;
-      // The backend matches whole words for single-word rules, so a literal
-      // replace here would also hit "dogged" when the rule was "dog". This
-      // rebuilds the same boundary the backend used.
-      let re: RegExp | null = null;
-      const esc = from.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      const needsLead = /^[\p{L}\p{N}]/u.test(from);
-      const needsTail = /[\p{L}\p{N}]$/u.test(from);
-      const build = (lead: string, tail: string) =>
-        new RegExp((needsLead ? lead : "") + esc + (needsTail ? tail : ""), "gu");
-      try {
-        // Not \b. It is defined against [A-Za-z0-9_] even under the u flag, so
-        // it fails at the first accented letter and the visible text would keep
-        // the old wording while the saved reply had the new one. The backend
-        // matches with these same lookarounds.
-        re = build("(?<![\\p{L}\\p{N}_])", "(?![\\p{L}\\p{N}_])");
-      } catch (__) {
-        // No lookbehind on this engine. Same fallback the backend takes.
-        try {
-          re = build("\\b", "\\b");
-        } catch (___) {
-          re = null;
-        }
-      }
-      if (!re) continue;
-      // Walk backwards and stop at the first node that still matches, changing
-      // the last occurrence in it. Re-read each node as we go: an earlier pair
-      // may already have rewritten it, and matching has to see the text as it
-      // stands now rather than as it was when the walk started.
-      for (let i = nodes.length - 1; i >= 0; i--) {
-        const text = String(nodes[i].nodeValue || "");
-        re.lastIndex = 0;
-        let at = -1;
-        let len = 0;
-        let m: RegExpExecArray | null;
-        while ((m = re.exec(text)) !== null) {
-          at = m.index;
-          len = m[0].length;
-        }
-        if (at < 0) continue;
-        try {
-          nodes[i].nodeValue = text.slice(0, at) + to + text.slice(at + len);
-          done++;
-        } catch (__) {}
-        break;
-      }
-    }
-    return done;
-  }
-
-  // ---- repairing the host's edit box after a swap ----
-  //
-  // A swap is written to the server through the Chat Mutation API, so the
-  // stored message is the swapped one. The host's own copy of that message in
-  // the browser does not always pick the change up, and when it does not,
-  // pressing Edit fills the box from that stale copy: the pre-swap wording
-  // appears, and pressing Save writes it back over the swap. The swap is lost
-  // and it looks like the extension undid its own work.
-  //
-  // Patching what is on screen does not help here, because the edit box is
-  // filled from the host's state and not from the text on the page.
-  //
-  // So each swap is remembered as the exact text before and the exact text
-  // after. When an edit box turns up holding a whole message that is character
-  // for character the pre-swap text, it is the stale copy, and it is replaced
-  // with the swapped one. Nothing heuristic happens: it is a whole-string
-  // match or it is left alone, so a box holding anything else, including a
-  // message the user has started editing, is never touched.
-  const swapUndos: Array<{ before: string; after: string }> = [];
-  const SWAP_UNDO_CAP = 40;
-  function rememberSwap(before: any, after: any) {
-    const b = String(before == null ? "" : before);
-    const a = String(after == null ? "" : after);
-    if (!b || b === a) return;
-    for (const e of swapUndos) if (e.before === b) return;
-    swapUndos.push({ before: b, after: a });
-    while (swapUndos.length > SWAP_UNDO_CAP) swapUndos.shift();
-  }
-
-  // The host's message editor. Matched on the name attribute rather than on a
-  // class, because the classes are build-hashed and the name is not.
-  const EDIT_BOX_SELECTOR =
-    'textarea[name="message-edit-content"],textarea[aria-label="Message content"]';
-
-  function repairEditBox(): boolean {
-    if (!swapUndos.length || typeof document === "undefined") return false;
-    let fixed = false;
-    let boxes: any[] = [];
-    try {
-      boxes = Array.prototype.slice.call(document.querySelectorAll(EDIT_BOX_SELECTOR));
-    } catch (_) {
-      return false;
-    }
-    for (const box of boxes) {
-      const v = String(box.value == null ? "" : box.value);
-      if (!v) continue;
-      for (const e of swapUndos) {
-        if (v !== e.before) continue;
-        try {
-          box.value = e.after;
-          // The host tracks the box through its own listeners, so a value set
-          // from script has to announce itself or Save writes what the host
-          // still thinks is in there.
-          box.dispatchEvent(new Event("input", { bubbles: true }));
-          box.dispatchEvent(new Event("change", { bubbles: true }));
-          fixed = true;
-          log("put the swapped wording back into the edit box");
-        } catch (__) {}
-        break;
-      }
-    }
-    return fixed;
-  }
-
-  // The edit box is built after the click that opens it, and the host may take
-  // a moment over it, so this looks a few times rather than once. Every pass is
-  // a no-op while nothing has been swapped.
-  let repairTimers: any[] = [];
-  function scheduleEditRepair() {
-    if (!swapUndos.length) return;
-    for (const t of repairTimers) clearTimeout(t);
-    repairTimers = [0, 60, 200, 500].map((ms) => setTimeout(repairEditBox, ms));
-  }
-
-  function onDocFocusIn(e: any) {
-    try {
-      if (!swapUndos.length) return;
-      const t = e && e.target;
-      if (!t || !t.matches || !t.matches(EDIT_BOX_SELECTOR)) return;
-      scheduleEditRepair();
-    } catch (_) {}
-  }
 
   // Backup for the user's Stop press: if the host's GENERATION_STOPPED event is
   // late or never fires, catch the click on the stop button itself and stand
@@ -7803,9 +7520,6 @@ export function setup(ctx: Ctx, opts?: any) {
       // user is driving. Back off rather than press a dialog button underneath
       // them, which could take a feedback prompt they opened themselves.
       clearConfirmWatch();
-      // A click is how an edit box gets opened. Costs nothing until something
-      // has actually been swapped.
-      scheduleEditRepair();
       const tgt =
         e && e.target && e.target.closest
           ? e.target.closest(cfg.stopSelector)
@@ -9167,15 +8881,6 @@ export function setup(ctx: Ctx, opts?: any) {
           wrap.appendChild(buildPresetBar(kind));
           return wrap;
         };
-        if (hasExtra("swapPresets")) {
-          body.appendChild(
-            presetBlock(
-              "swap",
-              "Word presets",
-              "Save your current word swaps as a named setup and switch between them. Applying takes effect right away. Saved to your account, so they follow you to other devices.",
-            ),
-          );
-        }
         if (hasExtra("notePresets")) {
           const block = presetBlock(
             "notes",
@@ -11325,13 +11030,9 @@ export function setup(ctx: Ctx, opts?: any) {
   // backup stop-press catcher (see onDocClick)
   if (typeof document !== "undefined") {
     document.addEventListener("click", onDocClick, true);
-    // A keyboard or a screen reader can reach the edit box without a click
-    // anywhere near it, and the host may fill it after focus rather than before.
-    document.addEventListener("focusin", onDocFocusIn, true);
     disposers.push(() => {
       try {
         document.removeEventListener("click", onDocClick, true);
-        document.removeEventListener("focusin", onDocFocusIn, true);
       } catch (_) {}
     });
   }
@@ -11467,10 +11168,6 @@ export function setup(ctx: Ctx, opts?: any) {
   // A swap timer left running would show a message about a backend nobody is
   // waiting on any more, from an extension that has already been closed.
   disposers.push(() => {
-    for (const timer of Array.from(swapWaits.values())) {
-      try { clearTimeout(timer); } catch (_) {}
-    }
-    swapWaits.clear();
   });
   askForPermissions();
   log("ready v" + VERSION, cfg);
@@ -11539,11 +11236,6 @@ export function setup(ctx: Ctx, opts?: any) {
       } catch (_) {}
       modalHandle = null;
     }
-    for (const t of repairTimers) {
-      try { clearTimeout(t); } catch (_) {}
-    }
-    repairTimers = [];
-    swapUndos.length = 0;
     lastPrompt = null;
     paintTabs = null;
     focusTab = null;

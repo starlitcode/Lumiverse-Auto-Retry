@@ -1,7 +1,7 @@
 /*
  * Auto Retry backend.
  *
- * Two jobs, now that word swaps are gone.
+ * Two jobs.
  *
  * It keeps the whole settings object in per-user account storage, so somebody's
  * settings follow them across browsers and devices instead of living in one
@@ -30,21 +30,15 @@ declare function setTimeout(fn: () => void, ms: number): any;
 declare function clearTimeout(handle: any): void;
 
 const SETTINGS_FILE = 'settings.json';
-// Word-swap presets, kept in account storage next to the settings so they
+// Presets, kept in account storage next to the settings so they
 // follow the user between devices. The browser copy is a fast local cache, not
 // the only copy.
 const PRESETS_FILE = 'presets.json';
 
-
-// Per process, not per user, like the flag above it. One warning for the whole
-// server is the point: this fires on every reply that cannot be read, and the
-// reason is the same one every time.
-let warnedUnreadableChat = false;
-
 // ---- per-user storage ----
 // One backend process can serve every account on the server. spindle.storage
 // resolves to a single shared directory in that case, so settings and presets
-// written through it were pooled across accounts: one person's word swaps could
+// written through it were pooled across accounts: one person's settings could
 // be read back by another. userStorage always resolves per user. On an ordinary
 // single-user install the userId is inferred and this behaves exactly as before.
 function hasUserStorage(): boolean {
@@ -107,8 +101,8 @@ function replyTo(userId: string | undefined, msg: any): void {
 interface RefusalNote { chatId: string; notes: Array<{ text: string; role: string }>; placement: string; at: number; strictType: boolean; }
 let refusalNote: RefusalNote | null = null;
 // The extension's master switch, and the chats it is switched off in. Both are
-// the frontend's, and both have to be sent here because swapping runs on this
-// side and would otherwise ignore them.
+// the frontend's, and both are sent here so this side agrees with the panel
+// about where the extension is meant to be doing anything at all.
 let masterOn = true;
 let chatsOff: Set<string> = new Set();
 // Long enough to cover prompt assembly on a busy server, short enough that a
@@ -279,41 +273,6 @@ function escapeRe(s: string): string {
 
 
 
-// Reads the message at the moment of the swap rather than using the text the
-// end event carried. That is what lets a deferred swap apply on top of another
-// extension's rewrite instead of replacing it with the pre-rewrite reply.
-// userId is threaded all the way down because sendToFrontend without one
-// broadcasts to every connected user on an operator-scoped install: one
-// person's "apply your word swaps?" prompt reached everybody, and so did the
-// text of the swap. It is undefined on a user-scoped install, where the host
-// ignores the argument, so this costs nothing there.
-// A chat that cannot be read back cannot have its words swapped. Reaching here
-// means there are rules to apply, so the swap was wanted and did not happen,
-// and without a word said that is indistinguishable from rules that matched
-// nothing. Said once, because this runs on every reply and the reason does not
-// change between them.
-function warnUnreadableChat(e?: any): void {
-  if (warnedUnreadableChat) return;
-  warnedUnreadableChat = true;
-  const why = e && e.message ? ': ' + e.message : '';
-  try {
-    spindle.log.warn(
-      'auto-retry: could not read a chat to swap its words' + why +
-      ' (said once. Its replies are left as they are. Retrying is unaffected.)',
-    );
-  } catch (__) {}
-}
-
-
-
-// Every deferred swap in one chat, dropped, and how many there were.
-//
-// Pressing a swap button is the reader saying they are not waiting. Keeping a
-// timer running past that has nothing to recommend it: the wait exists to let
-// another extension finish first, and someone who reaches for the button has
-// decided that is not worth the seconds. A leftover timer also lands minutes
-// later, on a reply that has been scrolled past, with nothing on screen to say
-// why the words changed again.
 // Load persisted settings on startup. There is no userId here, so this only
 // resolves on a user-scoped install where userStorage can infer the owner.
 // Everywhere else it finds nothing and the state stays at its defaults until a
@@ -348,14 +307,9 @@ spindle.onFrontendMessage(async (payload: any, userId?: string) => {
     if (payload.type === 'load_settings') {
       let settings: any = null;
       try { settings = await readUserJson(SETTINGS_FILE, userId); } catch (__) { settings = null; }
-      // Adopted here, not just handed back. This runs on every page load and it
-      // is the only path that arrives with a userId, so it is the one that can
-      // resolve per-user storage. The startup read above cannot: it has no user
-      // to read for, and says so. Without this the swap state stayed at its
-      // defaults until the panel was opened and Save pressed, so automatic
-      // swapping did nothing while the manual buttons worked, because those
-      // only ask whether there are rules and never look at the switch.
-      //
+      // This runs on every page load and it is the only path that arrives with
+      // a userId, so it is the one that can resolve per-user storage. The
+      // startup read above cannot: it has no user to read for.
       replyTo(userId, { type: 'loaded_settings', requestId: payload.requestId, settings: settings });
       return;
     }
@@ -369,8 +323,8 @@ spindle.onFrontendMessage(async (payload: any, userId?: string) => {
       let character: string | null = null;
       // Whether the host could actually be asked which chat is open. Without
       // this a null chatId means two different things, "no chat is open" and
-      // "I could not look", and the frontend has to tell them apart: it refuses
-      // to swap on the first and must not on the second.
+      // "I could not look", and the frontend has to tell them apart: the first
+      // is worth saying out loud and the second is worth waiting through.
       let resolved = false;
       let hasCharacter = false;
       try {

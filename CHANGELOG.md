@@ -8,9 +8,13 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
-## Unreleased
+## 5.0.0
 
-_On the testing branch._
+_2026-09-03_
+
+**On the testing branch, not yet on stable.**
+
+**No reinstall needed.** The two majors below needed one; this one does not. It is a major because a feature people were using has been taken out, which is what the number is for even when nothing about installing changes.
 
 ### Removed
 
