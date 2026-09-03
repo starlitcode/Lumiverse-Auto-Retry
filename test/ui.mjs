@@ -9500,6 +9500,43 @@ console.log("\nfind and replace, retired");
   check("and how much of theirs is still there", out.counted, out);
   check("the download holds the rules themselves", /cat => dog/.test(out.file), out.file.slice(0, 120));
   check("hiding it takes it away", out.goneAfterHide && out.remembered, out);
+
+  // Hiding the card must not be a decision anybody has to get right first time.
+  // The same download stays under Import / export for as long as there is
+  // anything to hand back.
+  const { out: after, errors: e2 } = await inPanel(browser, {}, async (page) =>
+    page.evaluate(async () => {
+      const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const raw = JSON.parse(localStorage.getItem("lv-auto-retry:settings:v1") || "{}");
+      raw.replaceRules = "cat => dog";
+      localStorage.setItem("lv-auto-retry:settings:v1", JSON.stringify(raw));
+      // Already dismissed, the way somebody who pressed it by accident is.
+      localStorage.setItem("lv-auto-retry:swaps-retired:v1", "1");
+      window.__acts["auto-retry-settings"].cb();
+      await frame();
+      for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      await frame();
+      const saved = [];
+      const realCreate = URL.createObjectURL;
+      URL.createObjectURL = (b) => { saved.push(b); return realCreate.call(URL, b); };
+      const row = document.querySelector("[data-ar-old-swaps]");
+      const get = document.querySelector("[data-ar-old-swaps-save]");
+      if (get) get.click();
+      await frame();
+      const file = saved.length ? await saved[0].text() : "";
+      URL.createObjectURL = realCreate;
+      return {
+        cardGone: !document.querySelector("[data-ar-retired]") ||
+          !document.querySelector("[data-ar-retired]").textContent.trim(),
+        rowThere: !!row,
+        file,
+      };
+    }),
+  );
+  check("with the card dismissed, the way back is still in Import / export",
+    after.cardGone && after.rowThere, after);
+  check("and it hands over the same rules", /cat => dog/.test(after.file), after.file.slice(0, 100));
+  check("no console errors on the way back", e2.length === 0, e2);
   check("no console errors", errors.length === 0, errors);
 }
 

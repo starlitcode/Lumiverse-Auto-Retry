@@ -9016,6 +9016,60 @@ export function setup(ctx: Ctx, opts?: any) {
         ),
       );
 
+      // The word swaps somebody had before the feature went. The card at the top
+      // of the panel says the same thing louder and can be put away; this line
+      // cannot, so putting that card away is not a decision anybody has to get
+      // right first time. It is here for as long as there is anything to hand
+      // back, and gone the moment there is not.
+      {
+        const held = retiredSwaps();
+        const count = held.rules.split("\n").filter((l) => l.indexOf("=>") > 0).length;
+        if (count || held.presets.length) {
+          const row = document.createElement("div");
+          row.setAttribute("data-ar-old-swaps", "1");
+          row.style.cssText = "display:flex;flex-direction:column;gap:6px";
+          const bits: string[] = [];
+          if (count) bits.push(count + (count === 1 ? " rule" : " rules"));
+          if (held.presets.length)
+            bits.push(held.presets.length + (held.presets.length === 1 ? " preset" : " presets"));
+          row.appendChild(
+            sectionDesc(
+              "Find and replace was retired and Auto Refine does that job now. Your old word swaps are still here, " +
+                bits.join(" and ") +
+                " of them, and this is where to take a copy whenever you want one.",
+              false,
+            ),
+          );
+          const get = btn("Download my old word swaps", false);
+          get.setAttribute("data-ar-old-swaps-save", "1");
+          get.style.alignSelf = "flex-start";
+          get.addEventListener("click", () => {
+            const ok = downloadText(
+              "auto-retry-word-swaps.json",
+              JSON.stringify(
+                {
+                  extension: "auto-retry",
+                  what: "word swaps, exported when find and replace was retired",
+                  at: new Date().toISOString(),
+                  rules: held.rules,
+                  presets: held.presets,
+                },
+                null,
+                2,
+              ),
+            );
+            showToast(
+              ok
+                ? "Saved. The file holds your rules and your presets."
+                : "The browser would not save the file. Some private windows block downloads.",
+              { force: true },
+            );
+          });
+          row.appendChild(get);
+          body.appendChild(row);
+        }
+      }
+
       const { wrap: checkWrap, checks } = buildCheckList(EXPORT_CATEGORIES);
       body.appendChild(checkWrap);
       const chosen = () =>
@@ -9415,7 +9469,8 @@ export function setup(ctx: Ctx, opts?: any) {
     where.style.cssText =
       "font-size:11px;line-height:1.5;color:var(--lumiverse-text-muted,rgba(255,255,255,.5))";
     where.textContent =
-      "Auto Refine: github.com/starlitcode/Lumiverse-Auto-Refine";
+      "Auto Refine: github.com/starlitcode/Lumiverse-Auto-Refine \u00b7 " +
+      "Hiding this keeps your swaps. The same download stays under Import / export.";
     box.appendChild(where);
     return box;
   }
