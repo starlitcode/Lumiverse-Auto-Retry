@@ -2544,6 +2544,13 @@ function fixContrast(el: any, min?: number) {
     const dark: Rgba = [20, 18, 26, 1];
     el.style.color =
       contrastRatio(light, bg) >= contrastRatio(dark, bg) ? NEAR_WHITE : NEAR_BLACK;
+    // Marked, so a theme swapped underneath can take this back off before
+    // measuring again. Without that the second measurement reads the first
+    // one's repair and finds nothing wrong, which is how a panel keeps the ink
+    // it was given for a theme that is no longer on the screen.
+    try {
+      el.setAttribute("data-ar-ink", "1");
+    } catch (_) {}
   } catch (_) {}
 }
 
@@ -2562,6 +2569,7 @@ function afterPaint(fn: () => void) {
 // measure what the panel is actually sitting on and say which way round it is,
 // so a light theme still gets light controls.
 function matchColorScheme(el: any) {
+  keepReadable(el, "scheme");
   afterPaint(() => {
     try {
       if (!el || !el.style) return;
@@ -2596,14 +2604,19 @@ function fixEdge(el: any, min?: number) {
     // edge has to separate it from.
     el.style.borderColor =
       contrastRatio(light, behind) >= contrastRatio(dark, behind) ? NEAR_WHITE : NEAR_BLACK;
+    try {
+      el.setAttribute("data-ar-edge", "1");
+    } catch (_) {}
   } catch (_) {}
 }
 
 function ensureEdge(el: any, min?: number) {
+  keepReadable(el, "edge", min);
   afterPaint(() => fixEdge(el, min));
 }
 
 function ensureReadable(el: any, min?: number) {
+  keepReadable(el, "ink", min);
   afterPaint(() => fixContrast(el, min));
 }
 
@@ -2633,15 +2646,159 @@ function paintsText(el: any): boolean {
 // (hints, section headers) is meant to sit quieter than the main text, so it is
 // held to a lower floor and only rescued when it has all but disappeared.
 function ensureReadableTree(root: any, min?: number) {
-  afterPaint(() => {
+  keepReadable(root, "tree", min);
+  afterPaint(() => sweepTree(root, min));
+}
+
+function sweepTree(root: any, min?: number) {
+  try {
+    if (!root || !root.querySelectorAll) return;
+    const all: any[] = [root].concat(
+      Array.prototype.slice.call(root.querySelectorAll("*")),
+    );
+    for (const el of all) if (paintsText(el)) fixContrast(el, min);
+  } catch (_) {}
+}
+
+// Everything the colour repairs have been run over, and at what floor. A repair
+// is only right for the theme it measured: the panel keeps the ink it was given
+// for a dark page after the page turns light, and reads at about one to one.
+// Nothing here repaints on a theme change, so the repairs have to be taken off
+// and made again, and this is what says where they are.
+//
+// Elements that have left the page are dropped as they are found, which is
+// every panel this extension has ever opened but the current one.
+type Repair = { el: any; kind: "tree" | "ink" | "edge" | "scheme"; min?: number };
+let repairs: Repair[] = [];
+
+function keepReadable(el: any, kind: Repair["kind"], min?: number) {
+  if (!el) return;
+  // Every panel this extension has opened leaves entries here, so the ones
+  // whose element has left the page are dropped before the list can grow into
+  // something worth scanning.
+  if (repairs.length > 200) liveRepairs();
+  for (const r of repairs) if (r.el === el && r.kind === kind && r.min === min) return;
+  repairs.push({ el: el, kind: kind, min: min });
+}
+
+// Only what is still on the page, which is also when the list gets shorter.
+function liveRepairs(): Repair[] {
+  repairs = repairs.filter((r) => {
     try {
-      if (!root || !root.querySelectorAll) return;
-      const all: any[] = [root].concat(
-        Array.prototype.slice.call(root.querySelectorAll("*")),
-      );
-      for (const el of all) if (paintsText(el)) fixContrast(el, min);
-    } catch (_) {}
+      return !!(r.el && (r.el.isConnected === undefined || r.el.isConnected));
+    } catch (_) {
+      return false;
+    }
   });
+  return repairs;
+}
+
+// Take the old repairs off. Measuring without doing this first reads the last
+// theme's answer back and calls it healthy.
+function stripInk(root: any) {
+  try {
+    const all: any[] = [root].concat(
+      root.querySelectorAll ? Array.prototype.slice.call(root.querySelectorAll("[data-ar-ink],[data-ar-edge]")) : [],
+    );
+    for (const el of all) {
+      if (!el || !el.getAttribute) continue;
+      if (el.getAttribute("data-ar-ink") != null) {
+        el.style.color = "";
+        el.removeAttribute("data-ar-ink");
+      }
+      if (el.getAttribute("data-ar-edge") != null) {
+        el.style.borderColor = "";
+        el.removeAttribute("data-ar-edge");
+      }
+    }
+  } catch (_) {}
+}
+
+// Every panel on screen measured again, against the theme that is on the screen
+// now.
+function reInk() {
+  for (const r of liveRepairs()) {
+    try {
+      if (r.kind === "scheme") {
+        const bg = backdropOf(r.el);
+        if (bg) r.el.style.colorScheme = relLuminance(bg) < 0.5 ? "dark" : "light";
+        continue;
+      }
+      stripInk(r.el);
+      if (r.kind === "tree") sweepTree(r.el, r.min);
+      else if (r.kind === "ink") fixContrast(r.el, r.min);
+      else fixEdge(r.el, r.min);
+    } catch (_) {}
+  }
+}
+
+// What the theme resolves to, as a string to compare against the last one. The
+// variables the panel is drawn from, plus the two surfaces behind it: a theme
+// that swaps only the page colour and leaves the variables alone still changes
+// every answer these repairs give.
+const THEME_VARS = [
+  "--lumiverse-bg",
+  "--lumiverse-bg-elevated",
+  "--lumiverse-text",
+  "--lumiverse-text-muted",
+  "--lumiverse-primary",
+  "--lumiverse-secondary",
+  "--lumiverse-border",
+];
+
+// Where the reader is, so it can be put back after a host dialog. A dialog stops
+// the page behind it scrolling, and the way that is done is to stop the page
+// scrolling at all, which sets its scroll to nought; letting go afterwards does
+// not put it back, because by then nothing is left saying where it was. The
+// floating panel scrolls inside its own box and never notices, but in the drawer
+// the page can be what carries the scroll, and there this is the difference
+// between coming back where you were and coming back at the top.
+function holdScroll(from: any): Array<{ node: any; at: number }> {
+  const out: Array<{ node: any; at: number }> = [];
+  try {
+    let node: any = from;
+    let hops = 0;
+    while (node && hops < 16) {
+      if (node.scrollTop > 0) out.push({ node: node, at: node.scrollTop });
+      node = node.parentElement;
+      hops++;
+    }
+    const page = document.scrollingElement || document.documentElement;
+    if (page && page.scrollTop > 0) out.push({ node: page, at: page.scrollTop });
+  } catch (_) {}
+  return out;
+}
+
+// Put back now, and twice more over the next two frames, since a dialog's hold
+// on the page can outlast its answer.
+function releaseScroll(held: Array<{ node: any; at: number }>) {
+  const put = () => {
+    for (const one of held) {
+      try {
+        if (one.node && one.node.scrollTop !== one.at) one.node.scrollTop = one.at;
+      } catch (_) {}
+    }
+  };
+  put();
+  try {
+    requestAnimationFrame(() => {
+      put();
+      requestAnimationFrame(put);
+    });
+  } catch (_) {}
+}
+
+function themeMark(): string {
+  try {
+    const cs = getComputedStyle(document.documentElement);
+    let out = "";
+    for (const v of THEME_VARS) out += cs.getPropertyValue(v).trim() + "|";
+    out += cs.backgroundColor + "|";
+    if (document.body) out += getComputedStyle(document.body).backgroundColor;
+    return out;
+  } catch (_) {
+    return "";
+  }
 }
 
 // Long enough that a normal tap never reaches it, short enough that holding
@@ -5099,6 +5256,71 @@ export function setup(ctx: Ctx, opts?: any) {
     } catch (_) {}
   }
   const disposers: Array<() => void> = [];
+
+  // Three ways a theme changes and none of them covers the others. The reader
+  // switching their system between light and dark fires the media query and
+  // touches nothing in the page. Lumiverse's own switch writes a class or an
+  // attribute on the page, which the observer catches. A theme that rewrites the
+  // contents of a stylesheet does neither, so the theme is also read on a slow
+  // timer, which costs one computed style a second and is the only thing that
+  // catches that case at all.
+  const THEME_TICK_MS = 1000;
+  let themeWas = "";
+  let themeTimer: any = null;
+
+  function themeMoved() {
+    const now = themeMark();
+    if (now === themeWas) return;
+    themeWas = now;
+    reInk();
+  }
+
+  // A theme switch is several attribute writes in a row, and re-measuring every
+  // panel on each one is the same work three times over. Held until they stop,
+  // and the styles have to have resolved anyway before there is anything new to
+  // measure.
+  function themeSoon() {
+    if (themeTimer) clearTimeout(themeTimer);
+    themeTimer = setTimeout(() => {
+      themeTimer = null;
+      themeMoved();
+    }, 200);
+  }
+
+  function watchTheme() {
+    themeWas = themeMark();
+    try {
+      const q = matchMedia("(prefers-color-scheme: dark)");
+      const said = () => themeSoon();
+      if (typeof q.addEventListener === "function") {
+        q.addEventListener("change", said);
+        disposers.push(() => {
+          try {
+            q.removeEventListener("change", said);
+          } catch (_) {}
+        });
+      }
+    } catch (_) {}
+    try {
+      const eye = new MutationObserver(() => themeSoon());
+      const marks = { attributes: true, attributeFilter: ["class", "style", "data-theme"] };
+      eye.observe(document.documentElement, marks);
+      if (document.body) eye.observe(document.body, marks);
+      if (document.head) eye.observe(document.head, { childList: true });
+      disposers.push(() => {
+        try {
+          eye.disconnect();
+        } catch (_) {}
+      });
+    } catch (_) {}
+    const beat = setInterval(themeMoved, THEME_TICK_MS);
+    disposers.push(() => {
+      clearInterval(beat);
+      if (themeTimer) clearTimeout(themeTimer);
+      themeTimer = null;
+      repairs = [];
+    });
+  }
 
   // Coerce a raw saved object (local cache or account storage) into a clean
   // partial config: keep only known fields, run each through its type.
@@ -8723,12 +8945,14 @@ export function setup(ctx: Ctx, opts?: any) {
         let ok = true;
         try {
           if (ctx?.ui?.showConfirm) {
+            const held = holdScroll(del);
             const r = await ctx.ui.showConfirm({
               title: "Delete preset",
               message: 'Delete the preset "' + name + '"?',
               variant: "warning",
               confirmLabel: "Delete",
             });
+            releaseScroll(held);
             ok = !!r?.confirmed;
           }
         } catch (_) {}
@@ -11617,6 +11841,7 @@ export function setup(ctx: Ctx, opts?: any) {
   disposers.push(() => dropBarEntries());
   disposers.push(() => dropToggleAction());
   askForPermissions();
+  watchTheme();
   log("ready v" + VERSION, cfg);
 
   return () => {

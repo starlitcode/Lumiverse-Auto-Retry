@@ -35,6 +35,8 @@ _2026-09-04_
 
 ### Fixed
 
+- **The panel follows a theme change.** Where a theme makes its own text unreadable the panel repaints that text, and what it writes is only right for the theme it measured. Nothing rebuilt the panel when the theme changed, so moving a phone from dark to light left the panel wearing the ink it was given for the dark one: measured on a light theme after a switch, thirty-seven labels fell under the readable floor and the worst came out at 1.18 against its background. The theme is watched three ways now, since none of them catches the others: the system switch, the page's own switch, and a stylesheet rewritten in place. A change takes the old repairs off and measures again.
+- **Deleting a preset no longer costs you your place in the panel.** The dialog that asks first stops the page behind it scrolling, and the way that is done is to stop the page scrolling at all, which sets its scroll to nought; letting go afterwards does not put it back. The floating panel scrolls inside its own box and never noticed, but in the drawer the page can be what carries the scroll. Where you were is held across the dialog now.
 - **The panel knows which chat you are in after pressing Update.** Update resets to the remote branch and rebuilds, which builds the panel again with the backend restarting under it. Asked which chat was open, the backend answers with the account's most recent chat, which on the home screen is the one you were in before the update, and a backend still starting up answers that nobody is in a chat while you are sitting in one. Either answer was taken as final. The address settles it now, and the question is asked again until something answers it properly.
 
 ## 4.24.8

@@ -333,6 +333,72 @@ try {
 }
 
 // ---- every label must be readable on whatever theme is in play ----
+// What every label on the panel measures against what is behind it. Used by
+// the theme checks below and by the one that swaps the theme underneath a panel
+// that is already drawn.
+const CONTRAST_PROBE = () => {
+  const lum = (c) => {
+    const n = c.match(/[\d.]+/g).map(Number);
+    const f = (v) => {
+      v /= 255;
+      return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+    };
+    return 0.2126 * f(n[0]) + 0.7152 * f(n[1]) + 0.0722 * f(n[2]);
+  };
+  const ratio = (a, b) => {
+    const x = lum(a), y = lum(b);
+    return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+  };
+  // Composite the layers rather than hunting for an opaque one. Looking for
+  // the first background over 90% opaque walked straight past a button
+  // whose fill is exactly 90%, and measured its label against the panel
+  // behind it instead of against the button. Gradients count too: a tinted
+  // surface paints a colour its background-color never mentions.
+  const solid = (el) => {
+    const layers = [];
+    let p = el;
+    while (p) {
+      const cs = getComputedStyle(p);
+      const n = (cs.backgroundColor.match(/[\d.]+/g) || []).map(Number);
+      let c = n.slice(0, 3);
+      let a = n[3] === undefined ? 1 : n[3];
+      const stop = (cs.backgroundImage || "").match(/rgba?\([^)]*\)/);
+      if (stop) {
+        const g = (stop[0].match(/[\d.]+/g) || []).map(Number);
+        const ga = g[3] === undefined ? 1 : g[3];
+        c = [g[0] * ga + c[0] * (1 - ga), g[1] * ga + c[1] * (1 - ga), g[2] * ga + c[2] * (1 - ga)];
+        a = Math.min(1, a + ga * (1 - a));
+      }
+      if (a > 0) layers.push([c, a]);
+      if (a >= 0.999) break;
+      p = p.parentElement;
+    }
+    let base = [0, 0, 0];
+    for (let i = layers.length - 1; i >= 0; i--) {
+      const [c, a] = layers[i];
+      base = [c[0] * a + base[0] * (1 - a), c[1] * a + base[1] * (1 - a), c[2] * a + base[2] * (1 - a)];
+    }
+    return "rgb(" + base.map((v) => Math.round(v)).join(",") + ")";
+  };
+  const modal = document.getElementById("modal");
+  const paints = [...modal.querySelectorAll("*")].filter((e) => {
+    if (/^(INPUT|SELECT|TEXTAREA|BUTTON)$/.test(e.tagName)) return true;
+    return [...e.childNodes].some((n) => n.nodeType === 3 && n.nodeValue.trim());
+  });
+  const rows = paints.map((e) => ({
+    text: (e.textContent || "").trim().slice(0, 30),
+    r: Number(ratio(getComputedStyle(e).color, solid(e)).toFixed(2)),
+  }));
+  const save = [...modal.querySelectorAll("button")].find((b) => b.textContent === "Save");
+  return {
+    count: rows.length,
+    worst: rows.reduce((a, x) => (x.r < a.r ? x : a), rows[0]),
+    under3: rows.filter((x) => x.r < 3).map((x) => x.text),
+    saveColour: getComputedStyle(save).color,
+    labelPx: parseFloat(getComputedStyle(save).fontSize),
+  };
+};
+
 console.log("\ncontrast");
 for (const [label, css] of [
   ["stock theme", ""],
@@ -358,68 +424,7 @@ for (const [label, css] of [
   ["light theme, pale accent", LIGHT + ":root{--lumiverse-primary:rgba(196,180,232,.9);--lumiverse-primary-hover:rgba(206,192,240,.95)}"],
 ]) {
   const { out, errors } = await inPanel(browser, { css }, (page) =>
-    page.evaluate(() => {
-      const lum = (c) => {
-        const n = c.match(/[\d.]+/g).map(Number);
-        const f = (v) => {
-          v /= 255;
-          return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
-        };
-        return 0.2126 * f(n[0]) + 0.7152 * f(n[1]) + 0.0722 * f(n[2]);
-      };
-      const ratio = (a, b) => {
-        const x = lum(a), y = lum(b);
-        return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
-      };
-      // Composite the layers rather than hunting for an opaque one. Looking for
-      // the first background over 90% opaque walked straight past a button
-      // whose fill is exactly 90%, and measured its label against the panel
-      // behind it instead of against the button. Gradients count too: a tinted
-      // surface paints a colour its background-color never mentions.
-      const solid = (el) => {
-        const layers = [];
-        let p = el;
-        while (p) {
-          const cs = getComputedStyle(p);
-          const n = (cs.backgroundColor.match(/[\d.]+/g) || []).map(Number);
-          let c = n.slice(0, 3);
-          let a = n[3] === undefined ? 1 : n[3];
-          const stop = (cs.backgroundImage || "").match(/rgba?\([^)]*\)/);
-          if (stop) {
-            const g = (stop[0].match(/[\d.]+/g) || []).map(Number);
-            const ga = g[3] === undefined ? 1 : g[3];
-            c = [g[0] * ga + c[0] * (1 - ga), g[1] * ga + c[1] * (1 - ga), g[2] * ga + c[2] * (1 - ga)];
-            a = Math.min(1, a + ga * (1 - a));
-          }
-          if (a > 0) layers.push([c, a]);
-          if (a >= 0.999) break;
-          p = p.parentElement;
-        }
-        let base = [0, 0, 0];
-        for (let i = layers.length - 1; i >= 0; i--) {
-          const [c, a] = layers[i];
-          base = [c[0] * a + base[0] * (1 - a), c[1] * a + base[1] * (1 - a), c[2] * a + base[2] * (1 - a)];
-        }
-        return "rgb(" + base.map((v) => Math.round(v)).join(",") + ")";
-      };
-      const modal = document.getElementById("modal");
-      const paints = [...modal.querySelectorAll("*")].filter((e) => {
-        if (/^(INPUT|SELECT|TEXTAREA|BUTTON)$/.test(e.tagName)) return true;
-        return [...e.childNodes].some((n) => n.nodeType === 3 && n.nodeValue.trim());
-      });
-      const rows = paints.map((e) => ({
-        text: (e.textContent || "").trim().slice(0, 30),
-        r: Number(ratio(getComputedStyle(e).color, solid(e)).toFixed(2)),
-      }));
-      const save = [...modal.querySelectorAll("button")].find((b) => b.textContent === "Save");
-      return {
-        count: rows.length,
-        worst: rows.reduce((a, x) => (x.r < a.r ? x : a), rows[0]),
-        under3: rows.filter((x) => x.r < 3).map((x) => x.text),
-        saveColour: getComputedStyle(save).color,
-        labelPx: parseFloat(getComputedStyle(save).fontSize),
-      };
-    }),
+    page.evaluate(CONTRAST_PROBE),
   );
   check(`${label}: all ${out.count} labels clear 3.0`, out.under3.length === 0, out.under3);
   check(`${label}: no console errors`, errors.length === 0, errors);
@@ -428,6 +433,43 @@ for (const [label, css] of [
     // setting; doing so once made it grow until barely one section fitted.
     check("raised text scale: panel text does not grow", out.labelPx === 13, out.labelPx);
   }
+}
+
+// ---- the theme swapped under a panel that is already open ----
+// Every check above opens the panel on a theme and measures it. This opens it on
+// one theme and then changes the theme, which is what happens when somebody
+// moves their phone from dark to light with the panel up. The repairs the panel
+// made are only right for the theme they measured, and nothing rebuilds the
+// panel on a theme change, so without a watch they stay: text repainted white to
+// survive a dark card, still white once that card is white.
+console.log("\ntheme swapped under an open panel");
+for (const [label, before, after] of [
+  ["dark to light", "", LIGHT],
+  ["light to dark", LIGHT, THEME],
+]) {
+  const { out, errors } = await inPanel(browser, { css: before }, async (page) => {
+    const was = await page.evaluate(CONTRAST_PROBE);
+    await page.addStyleTag({ content: after });
+    // The watch settles before it re-measures, and the repairs land a frame
+    // after that.
+    await page.waitForTimeout(500);
+    await page.evaluate(
+      () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))),
+    );
+    const now = await page.evaluate(CONTRAST_PROBE);
+    return { was: was, now: now };
+  });
+  check(
+    `${label}: readable before the swap`,
+    out.was.under3.length === 0,
+    out.was.under3,
+  );
+  check(
+    `${label}: all ${out.now.count} labels clear 3.0 after it`,
+    out.now.under3.length === 0,
+    out.now.worst.text + " at " + out.now.worst.r + "; " + out.now.under3.join(", "),
+  );
+  check(`${label}: no console errors`, errors.length === 0, errors);
 }
 
 // ---- a hint must not move the list ----
@@ -3122,8 +3164,10 @@ console.log("\nstats clock");
     // Switching away has to take its clock with it, or every tab visited in a
     // session leaves one running against elements that are gone. All of them
     // share one interval, so a leak does not show up as a second interval; what
-    // it would show up as is the count creeping past one. Switched back and
-    // forth enough times that a per-view interval could not hide.
+    // it would show up as is the count creeping past what was already running.
+    // Counted against onStats rather than against one, since the extension owns
+    // other timers of its own and this is asking about the view's. Switched back
+    // and forth enough times that a per-view interval could not hide.
     let peak = live.size;
     for (let i = 0; i < 5; i++) {
       const log = tab("Log");
@@ -3157,7 +3201,7 @@ console.log("\nstats clock");
   check("in seconds, not rounded to a minute", out.firstN < 60, out);
   check("and the number climbs on its own", out.laterN !== null && out.laterN > out.firstN, out);
   check("something is ticking while Stats is up", out.onStats >= 1, out);
-  check("switching tabs never stacks up another clock", out.peak === 1, out);
+  check("switching tabs never stacks up another clock", out.peak === out.onStats, out);
   check("and nothing is ticking after teardown", out.afterTeardown === 0, out);
   check("no console errors", errors.length === 0, errors);
 }
