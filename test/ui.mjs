@@ -9581,6 +9581,44 @@ console.log("\nfind and replace, retired");
   check("no console errors", errors.length === 0, errors);
 }
 
+// A section opening moves rather than appearing between two frames.
+{
+  const { out, errors } = await inPanel(browser, {}, async (page) =>
+    page.evaluate(async () => {
+      const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      await frame();
+      const head = document.querySelector('[role="button"][aria-expanded="false"]');
+      if (!head) return { missing: true };
+      const body = head.parentElement.querySelector("div[style*='display: none']") ||
+        head.nextElementSibling;
+      // Every section is applied once while the panel is built, and animating
+      // those would have the whole thing shimmer itself into existence.
+      const onBuild = body.getAttribute("data-ar-arrive");
+      head.click();
+      const opened = body.getAttribute("data-ar-arrive");
+      const style = getComputedStyle(body);
+      const mid = { name: style.animationName, time: style.animationDuration };
+      await new Promise((r) => setTimeout(r, 300));
+      // Read into a plain object here and not later. getComputedStyle hands
+      // back a live view, so holding on to it and reading it after the next
+      // click reports the state the section ended in rather than the one being
+      // asked about.
+      const after = getComputedStyle(body);
+      const settled = { opacity: after.opacity, shown: after.display };
+      head.click();
+      const shut = body.getAttribute("data-ar-arrive");
+      return { missing: false, onBuild, opened, shut, mid, settled };
+    }),
+  );
+  check("a section is not animated just for being built", !out.missing && out.onBuild === null, out);
+  check("opening one marks it to move", out.opened === "1", out);
+  check("with the same shape and time as Auto Refine's folds",
+    out.mid.name === "lvRetryArrive" && out.mid.time === "0.18s", out.mid);
+  check("and it settles fully open", out.settled.opacity === "1" && out.settled.shown === "flex", out.settled);
+  check("shutting it takes the mark off again", out.shut === null, out);
+  check("no console errors", errors.length === 0, errors);
+}
+
 // What a file gives and what it takes are two questions with one answer each.
 {
   const { out, errors } = await inPanel(browser, {}, async (page) =>

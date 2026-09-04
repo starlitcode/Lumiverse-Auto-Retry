@@ -6606,6 +6606,14 @@ export function setup(ctx: Ctx, opts?: any) {
         // The browser's own ring goes either way. Ours replaces it, and a
         // button the extension focused itself is not meant to be marked at all.
         "[data-ar-btn]:focus-visible{outline:none}" +
+        // A section opening. It used to go from display:none to shown between
+        // two frames, which is the panel jumping rather than a section opening,
+        // and it is the one place Auto Refine and this did not look alike.
+        // Same shape and same time as the folds there: down four pixels and in.
+        "[data-ar-arrive]{animation:lvRetryArrive 180ms ease-out both}" +
+        "@keyframes lvRetryArrive{from{opacity:0;transform:translateY(-4px)}" +
+        "to{opacity:1;transform:none}}" +
+        "@media (prefers-reduced-motion: reduce){[data-ar-arrive]{animation:none}}" +
         // The tick boxes, drawn here rather than left to the browser. A browser
         // checkbox tinted with accent-color cannot be animated at all: it is
         // painted by the platform and it snaps, which made every tick on this
@@ -8890,16 +8898,31 @@ export function setup(ctx: Ctx, opts?: any) {
       caret: HTMLElement,
       title: string,
     ): (open: boolean) => void {
-      const apply = (v: boolean) => {
+      // moved is for a section somebody opened. Every section is applied once
+      // while the panel is being built, and animating those would have the
+      // whole panel shimmer itself into existence.
+      const apply = (v: boolean, moved?: boolean) => {
         body.style.display = v ? "flex" : "none";
         caret.textContent = v ? CARET_OPEN : CARET_SHUT;
         h.setAttribute("aria-expanded", v ? "true" : "false");
+        if (!v || !moved) {
+          body.removeAttribute("data-ar-arrive");
+          return;
+        }
+        try {
+          // Off, then the layout read, then on. Without the read between them
+          // the browser sees one value set and treats it as the animation that
+          // already finished.
+          body.removeAttribute("data-ar-arrive");
+          void body.offsetWidth;
+          body.setAttribute("data-ar-arrive", "1");
+        } catch (_) {}
       };
       h.setAttribute("role", "button");
       h.setAttribute("tabindex", "0");
       const toggle = () => {
         const open = body.style.display !== "none";
-        apply(!open);
+        apply(!open, true);
         if (!open) openGroups.add(title);
         else openGroups.delete(title);
       };
