@@ -23,7 +23,19 @@ _2026-09-04_
 
 ### Added
 
-- **A card in the panel for anyone who had word swaps**, offering a JSON file with their rules and their word swap presets in it. It reads them straight out of storage, including the copy that came down from the account, since the panel no longer has a field for them. It appears only for somebody who has some, and it goes for good once they say they have taken a copy.
+- **A card in the panel for anyone who had word swaps**, offering a JSON file with their rules and their word swap presets in it. It reads them straight out of storage, including the copy that came down from the account, since the panel no longer has a field for them. The same download also sits in Import / export for as long as there is anything to hand back, so putting the card away does not take it with it.
+- **What to accept from one** is a list of ticks of its own, the way **What to put in the file** already was, so you can take somebody's refusal phrases from their file without their button selectors. **Reset…** asks the same way, over the same parts.
+
+### Changed
+
+- **A reply that ends inside an unclosed bold run is retried.** Emphasis was counted one marker at a time, so an unclosed `**bold**` looked balanced: the two markers it leaves behind are an even number. Pairs are what emphasis is made of, so pairs are what gets counted.
+- **The panel moves rather than jumps.** Tick boxes fill in, sections open, and a row that hangs off a switch arrives when the switch goes on instead of appearing whole.
+- **The live dot is the same one in both extensions**, so a glance at either says the same thing.
+- **The widget's menu is grouped**, with a line between the ways in and the way out.
+
+### Fixed
+
+- **The panel knows which chat you are in after pressing Update.** Update resets to the remote branch and rebuilds, which builds the panel again with the backend restarting under it. Asked which chat was open, the backend answers with the account's most recent chat, which on the home screen is the one you were in before the update, and a backend still starting up answers that nobody is in a chat while you are sitting in one. Either answer was taken as final. The address settles it now, and the question is asked again until something answers it properly.
 
 ## 4.24.8
 
