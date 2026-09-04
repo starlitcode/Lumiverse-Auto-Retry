@@ -2723,10 +2723,89 @@ export function setup(ctx, opts) {
             return false;
         return hereUrl().indexOf(s) >= 0;
     };
+    const urlParts = () => {
+        try {
+            return String(location.pathname || "").split("/").filter(Boolean);
+        }
+        catch (_) {
+            return [];
+        }
+    };
+    // ---- where in an address a chat id sits ----
+    // urlNamesChats is learned from the chat in hand, so it is false for as long
+    // as there is no chat in hand, which is exactly the state the panel is in the
+    // moment it is built. Updating the extension rebuilds it in place with no
+    // reload, and the address is then the only thing on screen that knows where
+    // you are while the backend is still starting up.
+    //
+    // What is not known is the shape of a Lumiverse address, and guessing at it
+    // is how this breaks on somebody else's build. So it is not guessed: while a
+    // chat is known and its id is in the address, where the id sits is written
+    // down, and that is the only place read from afterwards. Kept in this browser
+    // so a panel built on the home screen already knows where to look. A build
+    // whose addresses carry no id never records a slot and none of this does
+    // anything.
+    const SLOT_KEY = "lv-auto-retry:url-slot:v1";
+    let urlSlot = (() => {
+        try {
+            const raw = localStorage.getItem(SLOT_KEY);
+            const got = raw ? JSON.parse(raw) : null;
+            if (got && typeof got.at === "number" && got.at >= 0)
+                return { at: got.at, after: got.after == null ? null : String(got.after) };
+        }
+        catch (_) { }
+        return null;
+    })();
+    function learnSlot(id) {
+        const t = id == null ? "" : String(id);
+        if (t.length < URL_ID_MIN)
+            return;
+        const parts = urlParts();
+        const at = parts.indexOf(t);
+        if (at < 0)
+            return;
+        const next = { at: at, after: at > 0 ? parts[at - 1] : null };
+        if (urlSlot && urlSlot.at === next.at && urlSlot.after === next.after)
+            return;
+        urlSlot = next;
+        try {
+            localStorage.setItem(SLOT_KEY, JSON.stringify(next));
+        }
+        catch (_) { }
+    }
+    // The id the address is carrying right now, if it is carrying one where a
+    // chat id has been seen before.
+    function idInUrl() {
+        if (!urlSlot)
+            return null;
+        const parts = urlParts();
+        const got = parts[urlSlot.at];
+        if (!got || got.length < URL_ID_MIN)
+            return null;
+        // The word in front has to match too. Without it /settings/something-long
+        // reads as a chat purely for having a long enough word in the right place,
+        // and being wrong here means acting on a chat nobody opened.
+        if (urlSlot.after != null && parts[urlSlot.at - 1] !== urlSlot.after)
+            return null;
+        return got;
+    }
+    // Whether the address in front of you names this chat. The slot is asked
+    // first and the whole address second, so a build that has moved its ids
+    // somewhere else is not called wrong for it while the slot catches up.
+    function addressHas(id) {
+        const want = id == null ? "" : String(id);
+        if (!want)
+            return false;
+        const slotted = idInUrl();
+        return (slotted != null && String(slotted) === want) || urlHolds(id);
+    }
     // The address bar naming a different chat than the one in hand. Anything
     // acting on an id it did not get from the browser asks this first, since the
     // wrong answer edits or describes a chat nobody is looking at.
-    const urlSaysGone = (id) => urlNamesChats && !urlHolds(id);
+    //
+    // The slot answers for the case urlNamesChats cannot: a panel just built,
+    // holding no chat, with the address the only source there is.
+    const urlSaysGone = (id) => (urlNamesChats || urlSlot != null) && !addressHas(id);
     // Everything that describes the chat you are in, told that you are not in one
     // any more. Both the backend answering "none" and the address bar losing the
     // id come through here, so the two cannot end up clearing different things.
@@ -2753,8 +2832,10 @@ export function setup(ctx, opts) {
         // says which chat is open, which is the one moment the address is certain
         // to agree; the first tick can land after the user has already moved on,
         // and by then an address without the id proves nothing.
-        if (urlHolds(lastChatId))
+        if (urlHolds(lastChatId)) {
             urlNamesChats = true;
+            learnSlot(lastChatId);
+        }
         if (chatUrlTimer)
             return;
         chatUrlTimer = setInterval(() => {
@@ -2764,6 +2845,7 @@ export function setup(ctx, opts) {
             }
             if (urlHolds(lastChatId)) {
                 urlNamesChats = true;
+                learnSlot(lastChatId);
                 return;
             }
             if (!urlNamesChats)
@@ -7273,10 +7355,10 @@ export function setup(ctx, opts) {
             armWatchdog(s, "startTimer", cfg.stuckTimeoutMs, () => abortAndRetry(chatId, "stuck"));
     }
     // Ask the backend which chat is open. Everything else that sets the chat id
-    // waits for something to happen in the chat, which leaves the per-chat switch
-    // greyed out after an update: nothing re-renders, so nothing announces where
-    // you are. This asks outright. Without the chats permission it answers null
-    // and the waiting behaviour stands.
+    // waits for something to happen in the chat, and sitting still in one is not
+    // something happening, so the per-chat switch would sit greyed out until the
+    // next reply. This asks outright. Without the chats permission it answers
+    // null and the waiting behaviour stands.
     //
     // Handlers waiting on an answer that may never come. Held so teardown can
     // drop them, and so one is never left listening for a reply to a question
@@ -7373,7 +7455,17 @@ export function setup(ctx, opts) {
                 // The backend answers with the account's most recent chat, which is not
                 // the same question as which page is open. On the home screen it names
                 // the chat just left, so the address bar gets the last word.
-                if (!forChat && !urlSaysGone(msg.chatId))
+                if (!forChat && urlSaysGone(msg.chatId)) {
+                    // And when the address names no chat at all, that is the home screen
+                    // said outright, which is worth saying rather than leaving the row
+                    // waiting to find out which chat it is in. This is the shape of a
+                    // panel just built: the answer names the chat you were in before the
+                    // update and the address has moved on from it.
+                    if (idInUrl() == null && !outsideAnyChat())
+                        leftTheChat();
+                    return;
+                }
+                if (!forChat)
                     noteChat(msg.chatId);
             });
             chatAsks.add(finish);
@@ -7387,6 +7479,47 @@ export function setup(ctx, opts) {
             // is the exact fault this whole path exists to stop.
             reply({ answered: false, resolved: false, chatId: null });
         }
+    }
+    // ---- asking more than once, right after the panel is built ----
+    // Updating the extension tears the panel down and builds it again in place,
+    // with no reload, and the backend restarts under it. Asked the instant it
+    // comes up, the backend answers with what it knows then, which is nothing:
+    // "nobody is in a chat", from something that could look. One such answer used
+    // to be the last word, and the panel sat on "No chat is open" in a chat
+    // somebody was reading, with nothing left to ask again. Everything that
+    // learns a chat here is an event, and sitting still in a chat raises none.
+    //
+    // Eight over about six seconds, which covers a backend coming up without
+    // turning the home screen into a poll. A chain rather than an interval,
+    // because it is a bounded run of questions that stops when one of them is
+    // answered, not a heartbeat: it books the next ask only while it still wants
+    // one, so there is no timer to leave running.
+    const CHASE_TRIES = 8;
+    const CHASE_EVERY_MS = 700;
+    let chaseTimer = null;
+    let chaseLeft = 0;
+    function stopChasingChat() {
+        chaseLeft = 0;
+        if (!chaseTimer)
+            return;
+        clearTimeout(chaseTimer);
+        chaseTimer = null;
+    }
+    disposers.push(stopChasingChat);
+    function chaseActiveChat() {
+        askActiveChat();
+        if (chaseTimer)
+            return;
+        chaseLeft = CHASE_TRIES;
+        const again = () => {
+            chaseTimer = null;
+            if (lastChatId != null || chaseLeft <= 0)
+                return;
+            chaseLeft--;
+            askActiveChat();
+            chaseTimer = setTimeout(again, CHASE_EVERY_MS);
+        };
+        chaseTimer = setTimeout(again, CHASE_EVERY_MS);
     }
     function noteChat(id) {
         const next = id == null ? null : id;
@@ -9755,9 +9888,8 @@ export function setup(ctx, opts) {
                 // moment after the panel opens. Saying "open a chat" there would be
                 // wrong in front of somebody sitting in one. Anything happening in a
                 // chat tells it: a reply arriving does, and so does sending a message
-                // or switching away and back. Updating the extension while sitting in a
-                // chat is the case that leaves it waiting, because nothing re-renders
-                // and so nothing announces which chat you are in.
+                // or switching away and back, and so does the run of questions a panel
+                // just built asks while the backend comes up behind it.
                 ? outsideAnyChat()
                     ? "No chat is open, so there is nothing to switch off here. Open a chat and this is ready. Every chat carries on as it is."
                     : "Waiting to find out which chat this is. Send a message, or switch to another chat and back, and this is ready. Every other chat carries on as it is."
@@ -11355,7 +11487,7 @@ export function setup(ctx, opts) {
     syncLiveLog();
     syncFloat();
     armBackend();
-    askActiveChat();
+    chaseActiveChat();
     loadFromAccount();
     loadPresetsFromAccount();
     syncInputBarActions();

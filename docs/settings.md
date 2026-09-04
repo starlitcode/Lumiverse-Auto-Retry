@@ -165,7 +165,7 @@ The same options live in the CONFIG block at the top of `src/frontend.ts` and `d
 | --- | --- | --- |
 | enabled | true | Master switch. |
 | showFloatingToggle | false | Put a small draggable on/off button over the chat. |
-| floatingToggleSize | 44 | How wide that floating button is, in pixels (28-96). Shown only while `showFloatingToggle` is on. |
+| floatingToggleSize | 44 | How wide that floating button is, in pixels (28-96). The button on the chat resizes as you type, so the size can be seen before it is saved, and closing the settings without saving puts it back. Shown only while `showFloatingToggle` is on. |
 | showExtrasToggle | false | Add an on/off button to the chat input's Extras menu. Its label says whether Auto Retry is on or off. Hidden while the floating button is on. |
 | maxRetries | 4 | Hard cap per message. Nothing retries past this. The lowest is 1: to stop it retrying, switch it off rather than setting this to 0. |
 | pauseWhenFailing | true | Pause auto-retry after several whole runs give up in a row. Cleared by the next reply that comes back fine. |

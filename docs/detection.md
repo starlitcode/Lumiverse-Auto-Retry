@@ -208,7 +208,7 @@ To run entirely on your own phrases, turn off the built-in list and put your wor
 
 ## Sending a note with the retry
 
-Off by default. Every other retry re-sends your request exactly as it was, and still does. This one can add a note you write to the prompt for that single try.
+Off by default. Every other retry re-sends your request exactly as it was. This one can add a note you write to the prompt for that single try.
 
 Turn on **Send a note with a refusal retry** in the refusal tuning section and write the note in the box below it. Whatever you type is sent exactly as written. Nothing is added to it, nothing is removed, and nothing in it is checked.
 

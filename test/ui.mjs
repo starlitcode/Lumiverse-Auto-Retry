@@ -9831,6 +9831,126 @@ console.log("\nteardown");
   check("no console errors", errors.length === 0, errors);
 }
 
+
+// ---- the panel built again in place, which is what Update does ----
+// Updating the extension tears the panel down and sets it up again with no
+// reload, and the backend restarts under it. The panel comes back holding no
+// chat, and the two things it can ask both mislead it at that moment: the
+// backend answers "which chat is open" with the account's most recent chat,
+// which on the home screen is the one you were in before the update, and a
+// backend still starting up answers "nobody is in a chat" while you are plainly
+// sitting in one. Neither used to be checked against anything.
+console.log("\nrebuilt in place");
+{
+  const page = await browser.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await stage(page, '<div id=modal></div><button data-testid="regenerate">R</button>');
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  const out = await page.evaluate(async () => {
+    localStorage.removeItem("lv-auto-retry:url-slot:v1");
+    const tick = (ms) => new Promise((r) => setTimeout(r, ms || 90));
+    const res = {};
+    let sent = [], listeners = [];
+    // What the backend says when asked which chat is open. Set per case.
+    let answerWith = null;
+    const build = (url) => {
+      try { window.__teardown && window.__teardown(); } catch (_) {}
+      document.getElementById("modal").innerHTML = "";
+      history.pushState({}, "", url);
+      sent = []; listeners = [];
+      window.__acts = {}; window.__handlers = {};
+      window.__teardown = window.__setup({
+        events: { on: (n, f) => { window.__handlers[n] = f; return () => {}; } },
+        sendToBackend: (m) => {
+          sent.push(m);
+          if (m && m.type === "get_active_chat" && answerWith !== null) {
+            const a = answerWith;
+            setTimeout(() => listeners.slice().forEach((f) => {
+              try {
+                f({ type: "active_chat", requestId: m.requestId, chatId: a,
+                    character: a ? "Wren" : null, resolved: true, hasCharacter: !!a });
+              } catch (_) {}
+            }), 0);
+          }
+        },
+        onBackendMessage: (cb) => {
+          listeners.push(cb);
+          return () => { const i = listeners.indexOf(cb); if (i >= 0) listeners.splice(i, 1); };
+        },
+        ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+              registerInputBarAction: (o) => { const a = { onClick: (cb) => { a.cb = cb; return () => {}; }, destroy: () => {} }; window.__acts[o.id] = a; return a; } },
+      }, { toast: false, stuckTimeoutMs: 0, idleTimeoutMs: 0 });
+    };
+    const openPanel = async () => {
+      window.__acts["auto-retry-settings"].cb();
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      await tick();
+    };
+    const note = () => {
+      const w = document.getElementById("modal").querySelector("[data-ar-chat-switch]");
+      return w ? w.innerText.replace(/\s+/g, " ") : "";
+    };
+    const asks = () => sent.filter((m) => m.type === "get_active_chat").length;
+
+    // A chat first, with its id in the address, which is the one moment the
+    // panel can learn where in an address an id sits. That is kept in this
+    // browser, which is what makes it there after the rebuild.
+    answerWith = "oldchat00001";
+    build("/chat/oldchat00001");
+    window.__handlers.GENERATION_STARTED({ chatId: "oldchat00001", generationId: "g1" });
+    window.__handlers.GENERATION_ENDED({ chatId: "oldchat00001", generationId: "g1", content: "ok reply here." });
+    await tick(300);
+    res.slotLearned = !!localStorage.getItem("lv-auto-retry:url-slot:v1");
+
+    // Update pressed on the home screen. The backend names the chat from before.
+    build("/");
+    await openPanel();
+    await tick(300);
+    res.homeNote = note();
+    res.homeAsks = asks();
+
+    // Update pressed in a chat, with the backend not up yet.
+    answerWith = null;
+    build("/chat/oldchat00001");
+    await openPanel();
+    // The first answer, from something that could look, saying there is none.
+    sent.filter((m) => m.type === "get_active_chat").forEach((m) => {
+      listeners.slice().forEach((f) => {
+        try { f({ type: "active_chat", requestId: m.requestId, chatId: null, character: null, resolved: true, hasCharacter: false }); } catch (_) {}
+      });
+    });
+    await tick(200);
+    res.coldNote = note();
+    const asked = asks();
+    await tick(3000);
+    res.askedAgain = asks() > asked;
+    // It comes up.
+    sent.filter((m) => m.type === "get_active_chat").forEach((m) => {
+      listeners.slice().forEach((f) => {
+        try { f({ type: "active_chat", requestId: m.requestId, chatId: "oldchat00001", character: "Wren", resolved: true, hasCharacter: true }); } catch (_) {}
+      });
+    });
+    await tick(200);
+    res.warmNote = note();
+    return res;
+  });
+  await page.close();
+
+  check("the address teaches where a chat id sits", out.slotLearned, out);
+  check("rebuilt on the home screen, the last chat is not taken for this one",
+    /No chat is open/.test(out.homeNote), out.homeNote);
+  check("and the row does not offer to switch a chat off there",
+    !/Turn off here/.test(out.homeNote) || /No chat is open/.test(out.homeNote), out.homeNote);
+  check("a backend still starting up is believed for now",
+    /No chat is open|Waiting to find out/.test(out.coldNote), out.coldNote);
+  check("but it is asked again rather than taken as final", out.askedAgain, out);
+  check("and the row lands in the chat once it answers",
+    !/No chat is open|Waiting to find out/.test(out.warmNote), out.warmNote);
+  check("no console errors", errors.length === 0, errors);
+}
+
 await browser.close();
 console.log(failures ? `\n${failures} FAILED` : "\nall browser checks passed");
 process.exit(failures ? 1 : 0);
