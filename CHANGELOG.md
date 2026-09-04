@@ -10,7 +10,7 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ## 5.0.0
 
-_2026-09-03_
+_2026-09-04_
 
 **On the testing branch, not yet on stable.**
 

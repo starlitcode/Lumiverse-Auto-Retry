@@ -8148,8 +8148,13 @@ console.log("\nhint placement");
     // shortened, so the longest one is worked out from the schema instead.
     // Rows behind a switch are skipped, since they are not on screen by
     // default, and so is the note list, which opens above on purpose.
+    //
+    // The height is what leaves less room under the row than the description
+    // needs, so the cap has something to fire on. Measured at 98 of room
+    // against 122 of description. Shorten the descriptions again and this has
+    // to come down with them, or the cap stops being exercised.
     const { out, errors } = await inPanel(
-      browser, { css: PANEL, viewport: { width: 393, height: 460 }, settings: { refusalNote: true } },
+      browser, { css: PANEL, viewport: { width: 393, height: 280 }, settings: { refusalNote: true } },
       async (page) => page.evaluate(async (want) => {
         const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
         for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
@@ -8246,7 +8251,7 @@ console.log("\nhint placement");
   // one ran the popover off the bottom of the screen at 1.4.
   {
     const { out, errors } = await inPanel(
-      browser, { css: PANEL + "body{zoom:1.4}", viewport: { width: 500, height: 520 },
+      browser, { css: PANEL + "body{zoom:1.4}", viewport: { width: 500, height: 360 },
                  settings: { refusalNote: true } },
       async (page) => page.evaluate(async (want) => {
         const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
