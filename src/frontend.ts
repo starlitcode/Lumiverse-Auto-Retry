@@ -7468,13 +7468,25 @@ export function setup(ctx: Ctx, opts?: any) {
   // somebody was reading, with nothing left to ask again. Everything that
   // learns a chat here is an event, and sitting still in a chat raises none.
   //
-  // Eight over about six seconds, which covers a backend coming up without
-  // turning the home screen into a poll. A chain rather than an interval,
-  // because it is a bounded run of questions that stops when one of them is
-  // answered, not a heartbeat: it books the next ask only while it still wants
-  // one, so there is no timer to leave running.
+  // Eight quick ones over about six seconds, and then one every few seconds for
+  // as long as the question is still open. The quick run catches a backend that
+  // is only a moment behind; the slow one is for the Update button, which says
+  // what it does on the tin: it resets to the remote branch and rebuilds. A
+  // rebuild takes as long as it takes, and it is longer than six seconds often
+  // enough that stopping there would leave the panel wrong with no way back.
+  // One ask waits CHAT_ASK_MS on its own, so the quick run can be over before
+  // its own first question has finished timing out.
+  //
+  // The slow one stops when the address says you are not in a chat, because
+  // then there is nothing to be wrong about: no chat open is the answer. On a
+  // build whose addresses name no chats there is nothing to ask, so it keeps
+  // asking, which is the only recourse that build has.
+  //
+  // A chain rather than an interval, because it books the next ask only while
+  // it still wants one, so there is no timer left running behind it.
   const CHASE_TRIES = 8;
   const CHASE_EVERY_MS = 700;
+  const CHASE_SLOW_MS = 5000;
   let chaseTimer: any = null;
   let chaseLeft = 0;
   function stopChasingChat() {
@@ -7484,16 +7496,22 @@ export function setup(ctx: Ctx, opts?: any) {
     chaseTimer = null;
   }
   disposers.push(stopChasingChat);
+  // Whether the question is still worth asking: no chat in hand, and nothing
+  // saying there is none to find.
+  const stillWondering = (): boolean =>
+    lastChatId == null && (idInUrl() != null || urlSlot == null);
   function chaseActiveChat() {
     askActiveChat();
     if (chaseTimer) return;
     chaseLeft = CHASE_TRIES;
     const again = () => {
       chaseTimer = null;
-      if (lastChatId != null || chaseLeft <= 0) return;
-      chaseLeft--;
+      if (lastChatId != null) return;
+      const quick = chaseLeft > 0;
+      if (!quick && !stillWondering()) return;
+      if (quick) chaseLeft--;
       askActiveChat();
-      chaseTimer = setTimeout(again, CHASE_EVERY_MS);
+      chaseTimer = setTimeout(again, quick ? CHASE_EVERY_MS : CHASE_SLOW_MS);
     };
     chaseTimer = setTimeout(again, CHASE_EVERY_MS);
   }

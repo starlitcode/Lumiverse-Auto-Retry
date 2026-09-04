@@ -9934,6 +9934,25 @@ console.log("\nrebuilt in place");
     });
     await tick(200);
     res.warmNote = note();
+
+    // And the same thing taking longer than the quick run of questions, which
+    // is what the Update button does: it resets to the remote branch and
+    // rebuilds, and a rebuild is not always over in six seconds.
+    answerWith = null;
+    build("/chat/oldchat00001");
+    await openPanel();
+    // Nothing answers at all, the way a backend that is not there yet does not
+    // answer. Counted from after the quick run is over rather than from the
+    // start, so the quick run's own questions cannot be mistaken for the slow
+    // one still going.
+    await tick(8000);
+    const afterQuick = asks();
+    await tick(12000);
+    res.slowAsks = asks() - afterQuick;
+    // It finishes rebuilding and answers.
+    answerWith = "oldchat00001";
+    await tick(6000);
+    res.slowNote = note();
     return res;
   });
   await page.close();
@@ -9948,6 +9967,10 @@ console.log("\nrebuilt in place");
   check("but it is asked again rather than taken as final", out.askedAgain, out);
   check("and the row lands in the chat once it answers",
     !/No chat is open|Waiting to find out/.test(out.warmNote), out.warmNote);
+  check("a rebuild slower than the quick run is still being asked about",
+    out.slowAsks >= 2, out);
+  check("and the row lands in the chat when it finally answers",
+    !/No chat is open|Waiting to find out/.test(out.slowNote), out.slowNote);
   check("no console errors", errors.length === 0, errors);
 }
 
