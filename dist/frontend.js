@@ -8141,7 +8141,20 @@ export function setup(ctx, opts) {
         (document.body || document.documentElement).appendChild(el);
         const vw = vpW();
         const vh = vpH();
-        el.style.width = Math.min(300, vw - 24) + "px";
+        // The cap is room on the screen; width is written in the element's own
+        // units, and under a host applying its UI Scale as a zoom those are not the
+        // same. At 1.5 a cap of 300 renders as 450, which still fits a tablet and
+        // runs off a 360-wide phone by ninety pixels: forty-six of the forty-seven
+        // descriptions drifted off the side there while every wider screen passed.
+        // So it is set once, measured, and set again against however much the host
+        // is scaling. Without a zoom the second pass divides by one and changes
+        // nothing.
+        const want = Math.min(300, vw - 24);
+        el.style.width = want + "px";
+        const first = el.getBoundingClientRect();
+        const zoomW = el.offsetWidth > 0 ? first.width / el.offsetWidth : 1;
+        if (zoomW > 0.01 && Math.abs(zoomW - 1) > 0.01)
+            el.style.width = Math.floor(want / zoomW) + "px";
         // Measured from the whole row, not from the "?" inside it. The button is
         // 18px tall and sits partway down a row that can be two lines high, so
         // hanging the description off the button covered the very setting it was

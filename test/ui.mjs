@@ -563,17 +563,23 @@ console.log("\nhints do not cover their own row");
 // parented to the page so it gets zoomed too. Zooming only #modal leaves the
 // popover and the row in one coordinate space, which passes while the real
 // thing is broken at 0.9, so the zoom goes on the page.
-for (const [label, css] of [
+for (const [label, css, viewport] of [
   ["normal", ""],
   ["UI Scale 0.8", "body{zoom:0.8}"],
   ["UI Scale 0.9", "body{zoom:0.9}"],
   ["UI Scale 1.5", "body{zoom:1.5}"],
   ["scaled by transform", "body{transform:scale(0.9);transform-origin:top left}"],
   ["larger host text", "#modal{font-size:20px}"],
+  // A narrow phone at the top of the scale. The popover's width is a cap in
+  // screen pixels written in the element's own units, and a zoom is the
+  // difference between the two: at 480 wide the widest it can be still fits
+  // after being zoomed, so every case above passes while a smaller phone is
+  // broken. 360 is a small phone and 1.5 is the top of Lumiverse's slider.
+  ["small phone at UI Scale 1.5", "body{zoom:1.5}", { width: 360, height: 800 }],
 ]) {
   const { out, errors } = await inPanel(
     browser,
-    { css, viewport: { width: 480, height: 1030 }, touch: true },
+    { css, viewport: viewport || { width: 480, height: 1030 }, touch: true },
     (page) =>
       page.evaluate(async () => {
         const frame = () =>
