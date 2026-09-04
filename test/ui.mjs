@@ -9974,6 +9974,53 @@ console.log("\nrebuilt in place");
   check("no console errors", errors.length === 0, errors);
 }
 
+
+// ---- the count climbs while the reply is arriving ----
+// A figure that is right at the end and right at the start still reads as a
+// hang if it never moves in between. This watches it through the middle of one
+// reply rather than at either end of it.
+console.log("\nthe live count climbs as the reply arrives");
+{
+  const { out, errors } = await inPanel(
+    browser,
+    { settings: { liveLog: true, panelHome: "float" } },
+    (page) =>
+      page.evaluate(async () => {
+        const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+        const read = () => {
+          const e = document.getElementById("__lvRetryStatus");
+          return e ? e.textContent.trim() : "";
+        };
+        const count = () => {
+          const m = /([\d,]+) characters/.exec(read());
+          return m ? Number(m[1].replace(/,/g, "")) : null;
+        };
+        window.__handlers.GENERATION_STARTED({ chatId: "c1", generationId: "g1", messageId: "m1" });
+        await wait(60);
+        const seen = [];
+        for (let i = 0; i < 8; i++) {
+          window.__handlers.STREAM_TOKEN_RECEIVED({
+            chatId: "c1", generationId: "g1", token: "0123456789", type: "content", seq: i,
+          });
+          // Longer than the quarter-second clock, so each reading is a repaint
+          // that happened rather than one that might have.
+          await wait(320);
+          const n = count();
+          if (n !== null) seen.push(n);
+        }
+        return { seen: seen, line: read() };
+      }),
+  );
+  const seen = out.seen || [];
+  check("the line counts what has arrived", seen.length >= 3, out);
+  check("and the count climbs while it arrives",
+    seen.length >= 3 && seen[seen.length - 1] > seen[0], out);
+  check("without ever going backwards",
+    seen.every((n, i) => i === 0 || n >= seen[i - 1]), out);
+  check("landing on everything that came", /80 characters/.test(out.line || ""), out.line);
+  check("no console errors", errors.length === 0, errors);
+}
+
 await browser.close();
 console.log(failures ? `\n${failures} FAILED` : "\nall browser checks passed");
 process.exit(failures ? 1 : 0);
