@@ -1693,7 +1693,7 @@ const DIALOGUE_TAG = /^[,.!?"'\u2014\u2013 ]{0,4}(?:(?:the|a|an|his|her|their|my
 // stops being the scene and becomes a message addressed to the person at the
 // keyboard: what you have written is concerning, you are not alone, please talk
 // to someone, and here is a list of numbers to ring. In a heavy scene, where
-// the character is the one in pain and the whole point is to stay with them,
+// the character is the one in pain and the reader is there to stay with them,
 // this reads as the story being taken away.
 //
 // It is also the tier where a wrong answer costs the most in the other
@@ -2527,11 +2527,10 @@ function ensureReadableTree(root, min) {
 const HOLD_MS = 500;
 // The extension's mark: a reply, with the retry arrow sweeping over it.
 //
-// It was a tumbling die, because Lumiverse calls a fresh attempt a reroll. A
-// die on its own says dice, though, and dice say tabletop, which is not what
-// this is. What the extension actually acts on is a reply: it reads one,
-// decides it failed, and asks for another. So the reply is the shape, and the
-// arrow is what is being done to it.
+// A reply is the shape and the arrow is what is being done to it, because what
+// the extension acts on is a reply: it reads one, decides it failed, and asks
+// for another. Not a die, though Lumiverse calls a fresh attempt a reroll: a
+// die on its own says dice, and dice say tabletop, which this is not.
 //
 // The arrow is drawn a little thinner than the bubble so the two read apart at
 // the size the Extras menu draws them, which is 16 pixels and the size that
@@ -2579,10 +2578,10 @@ const OPEN_PANEL_LABEL = "Open the Auto Retry panel";
 // smaller than the same control one screen over. The reset picker is the worst
 // place for that, since a tick there can delete saved presets.
 // The box itself is drawn by the stylesheet, keyed on the attribute every one
-// of them carries. It used to be a browser checkbox tinted with accent-color,
-// which the browser draws and snaps into place: nothing about it can be
-// animated, and it was the one control here that arrived rather than moved.
-// Only what a stylesheet cannot say stays inline.
+// of them carries, rather than a browser checkbox tinted with accent-color. The
+// browser draws one of those itself and snaps it into place, so nothing about
+// it can be animated and it is the one control here that arrives rather than
+// moves. Only what a stylesheet cannot say stays inline.
 const CHECKBOX_STYLE = "flex:none;";
 // One place they are all made, so the panel cannot end up with two kinds.
 function checkBox() {
@@ -4405,11 +4404,11 @@ export function setup(ctx, opts) {
         floatEl.style.opacity = on ? "1" : "0.75";
         // Drawn once and then left alone.
         //
-        // It used to be rewritten on every paint, which throws the element away and
-        // starts any animation on it again from nothing. That is why switching the
-        // button could only ever pop: there was no element old enough to move.
-        // Written only when the size changes, and the state is a class, so the
-        // stroke has something continuous to animate along.
+        // Rewriting it on every paint throws the element away and starts any
+        // animation on it again from nothing, which leaves switching the button
+        // able only to pop: no element is old enough to move. Written only when the
+        // size changes, with the state as a class, so the stroke has something
+        // continuous to animate along.
         if (floatEl.getAttribute("data-ar-glyph") !== String(glyph)) {
             floatEl.setAttribute("data-ar-glyph", String(glyph));
             floatEl.innerHTML = markSvgLive(glyph);
@@ -5667,9 +5666,9 @@ export function setup(ctx, opts) {
     const chatKey = (chatId) => String(chatId == null ? "" : chatId);
     // The key a generation is filed under when the host names no chat for it.
     //
-    // Everything here is keyed by chat, so a reply arriving with no chatId used
-    // to fall out of every handler: no retry, no watchdog, no line in the log,
-    // and nothing on the panel to say why. The host names the chat on every
+    // Everything here is keyed by chat, so a reply arriving with no chatId falls
+    // out of every handler: it is not retried, no watchdog covers it, and nothing
+    // on the panel says why. The host names the chat on every
     // build seen so far, which makes this a guard rather than a fix for a known
     // case, and the reason it is worth having is that the failure was silent.
     //
@@ -5781,11 +5780,11 @@ export function setup(ctx, opts) {
             // against, and no conclusion is drawn from it.
             screenAtStart: "",
             ignored: new Set(),
-            // Generations whose ending has already been judged. A build that reports
-            // one generation as ended twice used to get two verdicts out of it, and
-            // the second landed after the extension had given up, which hands back a
-            // fresh budget: the cap said two tries and the reply was re-rolled until
-            // something else stopped it. One ending, one verdict.
+            // Generations whose ending has already been judged. One ending, one
+            // verdict: a build that reports the same generation as ended twice would
+            // otherwise get two, and the second lands after the extension has given
+            // up, handing back a fresh budget. The cap says two tries and the reply
+            // is re-rolled until something else stops it.
             judged: new Set(),
             suppressUntil: 0,
             startWatchdog: null,
@@ -6613,10 +6612,10 @@ export function setup(ctx, opts) {
                     // The browser's own ring goes either way. Ours replaces it, and a
                     // button the extension focused itself is not meant to be marked at all.
                     "[data-ar-btn]:focus-visible{outline:none}" +
-                    // A section opening. It used to go from display:none to shown between
-                    // two frames, which is the panel jumping rather than a section opening,
-                    // and it is the one place Auto Refine and this did not look alike.
-                    // Same shape and same time as the folds there: down four pixels and in.
+                    // A section opening. Going from display:none to shown between two
+                    // frames is the panel jumping rather than a section opening, so it
+                    // moves: down four pixels and in, the same shape and time as Auto
+                    // Refine's folds.
                     "[data-ar-arrive]{animation:lvRetryArrive 180ms ease-out both}" +
                     "@keyframes lvRetryArrive{from{opacity:0;transform:translateY(-4px)}" +
                     "to{opacity:1;transform:none}}" +
@@ -7236,9 +7235,9 @@ export function setup(ctx, opts) {
         }
         // Ours if a click is still waiting for its start, and also if one went out
         // recently enough that this is almost certainly it. The wait is given up on
-        // after a minute; a start arriving after that on the back of our own click
-        // used to read as the reader asking for a reply themselves, which hands the
-        // tries back and lets the same reply be re-rolled past the cap.
+        // after a minute, because a start arriving later than that on the back of
+        // our own click reads as the reader asking for a reply themselves, which
+        // hands the tries back and lets the same reply be re-rolled past the cap.
         const ours = s.selfTriggered ||
             (s.retryClickAt > 0 && Date.now() - s.retryClickAt < OURS_WINDOW_MS);
         log("gen start", p.generationId, ours ? "(auto-retry)" : "(user)");
@@ -8731,11 +8730,11 @@ export function setup(ctx, opts) {
         const panel = document.createElement("div");
         panel.style.cssText =
             "display:flex;flex-direction:column;max-height:min(74vh,640px);overflow:hidden;box-sizing:border-box;font:13px/1.45 var(--lumiverse-font-family,system-ui);color:var(--lumiverse-text,#eee)";
-        // No shading down the panel. It was tried and taken back out: this element
-        // is only the modal's content area, and the header, the frame and the
-        // footer around it belong to the host. Anything painted here stops at a
-        // hard line where that chrome takes over, so a wash that is meant to read
-        // as depth reads as one panel not matching the window it is in.
+        // No shading down the panel. This element is only the modal's content area,
+        // and the header, the frame and the footer around it belong to the host, so
+        // anything painted here stops at a hard line where that chrome takes over:
+        // a wash meant to read as depth reads instead as one panel not matching the
+        // window it is in.
         matchColorScheme(panel);
         // the one scroll area: flexes to fill whatever height is left after the
         // footer. min-height:0 lets it actually shrink and scroll inside the flex.
@@ -10145,9 +10144,9 @@ export function setup(ctx, opts) {
             sel.style.maxWidth = "60%";
             sel.addEventListener("change", () => {
                 cfg[f.key] = coerce("pick", sel.value, CONFIG[f.key], f);
-                // Honoured here as well as on a number box. It was only ever wired up
-                // for numbers, so a dropdown asking to apply as it is picked was
-                // accepted by the schema and then quietly did nothing.
+                // Honoured here as well as on a number box. Wired up for numbers alone,
+                // a dropdown asking to apply as it is picked is accepted by the schema
+                // and then quietly does nothing.
                 if (f.live)
                     onLiveEdit(String(f.key));
             });

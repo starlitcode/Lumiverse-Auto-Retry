@@ -95,10 +95,8 @@ function replyTo(userId: string | undefined, msg: any): void {
 // know their build reports it properly can ask for that check with strictType.
 interface RefusalNote { chatId: string; notes: Array<{ text: string; role: string }>; placement: string; at: number; strictType: boolean; }
 let refusalNote: RefusalNote | null = null;
-// The extension's master switch, and the chats it is switched off in. Both are
-// the frontend's, and both are sent here so this side agrees with the panel
-// about where the extension is meant to be doing anything at all.
-let masterOn = true;
+// The chats the extension is switched off in. The frontend's list, sent here so
+// this side agrees with the panel about where it is meant to be doing anything.
 let chatsOff: Set<string> = new Set();
 // Long enough to cover prompt assembly on a busy server, short enough that a
 // note whose click died is expired rather than sitting around. The frontend
@@ -245,10 +243,6 @@ function placeNotes(messages: any[], notes: any[], placement: string): { list: a
   return { list: list, from: at };
 }
 
-
-function escapeRe(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
 
 
 

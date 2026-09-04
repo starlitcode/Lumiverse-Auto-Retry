@@ -87,10 +87,8 @@ function replyTo(userId, msg) {
     catch (_) { }
 }
 let refusalNote = null;
-// The extension's master switch, and the chats it is switched off in. Both are
-// the frontend's, and both are sent here so this side agrees with the panel
-// about where the extension is meant to be doing anything at all.
-let masterOn = true;
+// The chats the extension is switched off in. The frontend's list, sent here so
+// this side agrees with the panel about where it is meant to be doing anything.
 let chatsOff = new Set();
 // Long enough to cover prompt assembly on a busy server, short enough that a
 // note whose click died is expired rather than sitting around. The frontend
@@ -241,9 +239,6 @@ function placeNotes(messages, notes, placement) {
     // what lets a note answer the one before it.
     list.splice.apply(list, [at, 0].concat(notes));
     return { list: list, from: at };
-}
-function escapeRe(s) {
-    return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 // Load persisted settings on startup. There is no userId here, so this only
 // resolves on a user-scoped install where userStorage can infer the owner.
