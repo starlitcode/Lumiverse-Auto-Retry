@@ -490,7 +490,11 @@ console.log("\nhints");
         );
         const before = below.getBoundingClientRect().top;
         infos[0].click();
+        // Straight after the press, before the fade has run.
+        const early = document.querySelector('[role="tooltip"]');
+        const faded = !!early && Number(getComputedStyle(early).opacity) < 1;
         await frame();
+        await new Promise((r) => setTimeout(r, 220));
         const moved = Math.round(below.getBoundingClientRect().top - before);
         const el = document.querySelector('[role="tooltip"]');
         const r = el && el.getBoundingClientRect();
@@ -503,11 +507,13 @@ console.log("\nhints");
         const afterSecond = pops();
         infos[1].click();
         await frame();
+        await new Promise((r) => setTimeout(r, 220));
         const afterRetap = pops();
         infos[0].click();
         await frame();
         document.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
         await frame();
+        await new Promise((r) => setTimeout(r, 220));
         const afterOutside = pops();
         infos[0].click();
         await frame();
@@ -516,6 +522,7 @@ console.log("\nhints");
         );
         scroller.dispatchEvent(new Event("scroll", { bubbles: true }));
         await frame();
+        await new Promise((r) => setTimeout(r, 220));
         const afterScroll = pops();
         // The last row on the page has to flip above its "?" rather than run off.
         infos[infos.length - 1].scrollIntoView();
@@ -526,6 +533,7 @@ console.log("\nhints");
         const lr = last && last.getBoundingClientRect();
         return {
           count: infos.length,
+          faded,
           moved,
           onScreen,
           afterSecond,
@@ -539,6 +547,7 @@ console.log("\nhints");
       }),
   );
   check("a hint moves nothing below it", out.moved === 0, out.moved);
+  check("and fades in rather than appearing", out.faded, out);
   check("the popover lands on screen", out.onScreen);
   // It covers the row it is explaining. At anything under full opacity that
   // row's text reads through the description sitting on top of it, which no
@@ -557,6 +566,83 @@ console.log("\nhints");
 // sits partway down a row that can be two lines high, so anchoring to it drops
 // the description on top of the setting being asked about. Reading the row also
 // holds at any scale the host applies, since it reads what was painted.
+// ---- the press that closes a hint does only that ----
+{
+  // Closing happens on the way down, and the click that follows lands on
+  // whatever was under the finger, so dismissing a description by tapping the
+  // panel also flipped whichever tick it landed on.
+  const { out, errors } = await inPanel(
+    browser,
+    { viewport: { width: 480, height: 1030 }, touch: true },
+    (page) =>
+      page.evaluate(async () => {
+        const frame = () =>
+          new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        const modal = document.getElementById("modal");
+        const info = modal.querySelector("button[data-ar-hint]");
+        // A tick well away from the "?" being pressed, so the press that closes
+        // the description lands on this and nothing else.
+        const tick = [...modal.querySelectorAll('[data-ar-check]')].pop();
+        if (!info || !tick) return { skipped: true };
+        info.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerType: "touch" }));
+        info.click();
+        await frame();
+        const opened = document.querySelectorAll('[role="tooltip"]').length;
+        const was = tick.checked;
+        // A finger landing on the tick, the whole gesture as a browser sends it.
+        tick.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerType: "touch" }));
+        tick.click();
+        await frame();
+        await new Promise((r) => setTimeout(r, 240));
+        const after = tick.checked;
+        const stillOpen = document.querySelectorAll('[role="tooltip"]').length;
+        // And the press after it works normally, or the guard has outstayed the
+        // gesture it was armed for.
+        tick.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerType: "touch" }));
+        tick.click();
+        await frame();
+        return { opened, was, after, stillOpen, then: tick.checked };
+      }),
+  );
+  check("a hint was open to close", out.opened === 1, out);
+  check("the press that closes it does not flip the setting under it", out.after === out.was, out);
+  check("and it did close", out.stillOpen === 0, out);
+  check("while the press after it works normally", out.then !== out.was, out);
+  check("no console errors", errors.length === 0, errors);
+
+  // A gesture that closes a description without ever producing a click, which is
+  // what a drag or a scroll is. The guard must not still be sitting there
+  // waiting to eat the next real press.
+  const dragged = await inPanel(
+    browser,
+    { viewport: { width: 480, height: 1030 }, touch: true },
+    (page) =>
+      page.evaluate(async () => {
+        const frame = () =>
+          new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        const modal = document.getElementById("modal");
+        const info = modal.querySelector("button[data-ar-hint]");
+        const tick = [...modal.querySelectorAll("[data-ar-check]")].pop();
+        info.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerType: "touch" }));
+        info.click();
+        await frame();
+        // A finger going down on the panel and dragging away. No click follows a
+        // drag, so nothing arrives to spend the guard on.
+        document.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerType: "touch" }));
+        await frame();
+        await new Promise((r) => setTimeout(r, 240));
+        const closed = document.querySelectorAll('[role="tooltip"]').length === 0;
+        const was = tick.checked;
+        tick.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerType: "touch" }));
+        tick.click();
+        await frame();
+        return { closed, was, then: tick.checked };
+      }),
+  );
+  check("a drag closes the description", dragged.out.closed, dragged.out);
+  check("and the press after a drag is not eaten", dragged.out.then !== dragged.out.was, dragged.out);
+}
+
 console.log("\nhints do not cover their own row");
 // The scales below are the range of Lumiverse's own UI Scale slider, which
 // runs 0.8 to 1.5. It applies as a zoom on the page, and the popover is
@@ -618,6 +704,7 @@ for (const [label, css, viewport] of [
         const p2 = document.querySelector('[role="tooltip"]');
         if (p2) p2.click();
         await frame();
+        await new Promise((r) => setTimeout(r, 220));
         return {
           checked: infos.length,
           covering,

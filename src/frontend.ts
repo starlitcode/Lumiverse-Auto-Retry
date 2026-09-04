@@ -8061,16 +8061,36 @@ export function setup(ctx: Ctx, opts?: any) {
   let hintAnchor: any = null;
   let hintReset: (() => void) | null = null;
 
+  // How long the description takes to arrive and to leave.
+  const HINT_FADE = 140;
+  // The ones still fading out, so teardown does not leave a box on the page
+  // waiting on a timer that will never be allowed to run.
+  const hintGoing = new Set<any>();
+
   function hideHint() {
-    if (hintPop) {
-      try { hintPop.remove(); } catch (_) {}
-    }
+    const going: any = hintPop;
+    // Cleared before the fade, not after. What is on its way out is no longer
+    // the open description: a press during the fade must open a new one rather
+    // than find this still standing and decide it is already open.
     hintPop = null;
     hintAnchor = null;
     if (hintReset) {
       try { hintReset(); } catch (_) {}
     }
     hintReset = null;
+    if (!going) return;
+    // And it stops being a tooltip to anything reading the page, which is what
+    // it is: a box finishing its fade is not something to announce.
+    try {
+      going.removeAttribute("role");
+      going.style.opacity = "0";
+    } catch (_) {}
+    const one: any = { box: going, timer: null };
+    one.timer = setTimeout(() => {
+      hintGoing.delete(one);
+      try { going.remove(); } catch (_) {}
+    }, HINT_FADE + 40);
+    hintGoing.add(one);
   }
 
   function showHint(anchor: any, text: string, onClose: () => void) {
@@ -8094,6 +8114,11 @@ export function setup(ctx: Ctx, opts?: any) {
       "border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));" +
       "box-shadow:var(--lumiverse-shadow-md,0 8px 24px rgba(0,0,0,.4));" +
       "color:var(--lumiverse-text,#eee);font:12px/1.45 var(--lumiverse-font-family,system-ui);" +
+      // Fades in where it opens and out where it stood, rather than appearing
+      // and vanishing between two frames. It arrives on top of the rows below
+      // the one it belongs to, and something landing over what you were reading
+      // with no travel at all reads as the page having flinched.
+      "opacity:0;transition:opacity 140ms ease-out;" +
       // Off screen until it has been measured, so it is never seen in the wrong
       // place for a frame.
       "left:0;top:-9999px";
@@ -8185,6 +8210,16 @@ export function setup(ctx: Ctx, opts?: any) {
     if (room <= 0) el.style.display = "none";
 
     placeFixed(el, left, top);
+    // Reading the layout between building it and turning the opacity up is what
+    // makes the browser treat this as a fade rather than as a value that was
+    // always one. The read is the placement above, which has already asked for
+    // the box's rect.
+    let still = false;
+    try {
+      still = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+    } catch (_) {}
+    if (still) el.style.transition = "none";
+    el.style.opacity = "1";
 
     // Tapping the description dismisses it. On a phone that is the first thing
     // a thumb reaches for, and it did nothing.
@@ -8198,8 +8233,41 @@ export function setup(ctx: Ctx, opts?: any) {
   // Anything that means the anchor has moved or attention has gone elsewhere
   // closes it. Scroll is captured, since the options list scrolls, not the page.
   if (typeof document !== "undefined") {
+    // The press that closes a description does only that.
+    //
+    // Closing happens on the way down, and the click that follows lands on
+    // whatever was under the finger, so dismissing a description by tapping the
+    // panel also flipped whichever tick or button it happened to land on. The
+    // next click is eaten, once, and only when a description was open to close.
+    // A gesture that never produces one, a drag or a scroll, drops the guard on
+    // its own rather than leaving it armed for the next real press.
+    let eatClick: (() => void) | null = null;
+    const swallowNext = () => {
+      const eat = (e: any) => {
+        drop();
+        if (!e) return;
+        e.preventDefault();
+        e.stopPropagation();
+      };
+      let timer: any = null;
+      const drop = () => {
+        eatClick = null;
+        try { clearTimeout(timer); } catch (_) {}
+        try { document.removeEventListener("click", eat, true); } catch (_) {}
+      };
+      eatClick = drop;
+      document.addEventListener("click", eat, true);
+      timer = setTimeout(drop, 700);
+    };
+
     const onHintDismiss = (e: any) => {
       const t = e && e.target;
+      // A guard left over from a gesture that never produced a click, a drag or
+      // a scroll, goes now. Its click is not coming, and a press is the proof:
+      // the click for the gesture before this one would already have arrived.
+      // Left armed it would eat the next real press instead of the one it was
+      // put there for.
+      if (eatClick) eatClick();
       if (!hintPop) return;
       try {
         // The "?" itself is left alone so its own handler can close it, rather
@@ -8208,6 +8276,7 @@ export function setup(ctx: Ctx, opts?: any) {
         if (t && hintPop.contains && hintPop.contains(t)) return;
       } catch (_) {}
       hideHint();
+      swallowNext();
     };
     // A long description scrolls inside itself. That scroll is someone reading
     // it, not the anchor moving, so it is the one scroll that leaves it open.
@@ -8253,7 +8322,15 @@ export function setup(ctx: Ctx, opts?: any) {
       try { document.removeEventListener("scroll", onHintScroll, true); } catch (_) {}
       try { document.removeEventListener("keydown", onHintKey, true); } catch (_) {}
       try { if (typeof window !== "undefined") window.removeEventListener("resize", onHintResize); } catch (_) {}
+      if (eatClick) eatClick();
       hideHint();
+      // Whatever is still fading goes now rather than on its own timer, which
+      // teardown would never let run.
+      hintGoing.forEach((one: any) => {
+        try { clearTimeout(one.timer); } catch (_) {}
+        try { one.box.remove(); } catch (_) {}
+      });
+      hintGoing.clear();
     });
   }
 
@@ -9331,9 +9408,15 @@ export function setup(ctx: Ctx, opts?: any) {
         body.style.transition = "";
       };
       const apply = (v: boolean, moved?: boolean) => {
-        const still =
-          typeof matchMedia === "function" &&
-          matchMedia("(prefers-reduced-motion: reduce)").matches;
+        // Wrapped, like every other reading of it here. A host that has the
+        // function and throws on the query would otherwise take the section
+        // open-and-shut down with it.
+        let still = false;
+        try {
+          still =
+            typeof matchMedia === "function" &&
+            matchMedia("(prefers-reduced-motion: reduce)").matches;
+        } catch (_) {}
         // Closing travels too. The header stays where your finger left it and
         // everything under it rises, which is the same jump read upwards.
         if (!v && moved && !still && body.style.display !== "none") {
@@ -10324,7 +10407,19 @@ export function setup(ctx: Ctx, opts?: any) {
       // Size and text size are in the panel stylesheet, not here, so the
       // coarse-pointer rule can raise them. Everything else is inline.
       info.style.cssText =
-        "flex:none;padding:0;line-height:1;border-radius:50%;border:1px solid var(--lumiverse-border,rgba(255,255,255,.3));background:transparent;color:var(--lumiverse-text-muted,rgba(255,255,255,.65));cursor:pointer";
+        "flex:none;padding:0;line-height:1;border-radius:50%;border:1px solid var(--lumiverse-border,rgba(255,255,255,.3));background:transparent;color:var(--lumiverse-text-muted,rgba(255,255,255,.65));cursor:pointer;" +
+        // The ring lights up and back down rather than switching, the same way
+        // a field's focus ring does. It paints outside the box, so nothing is
+        // laid out again and the row cannot move.
+        //
+        // The border only. The text colour is the readability sweep's to write,
+        // and a theme that makes its own muted colour unreadable has that
+        // rewritten a frame after the panel is built: animating it means the
+        // repair can be watched happening, which is the label reading correct,
+        // then wrong, then correct. Measured on a light page with dark theme
+        // variables, all twenty-five of them sat under the readable floor for
+        // the length of the fade.
+        "transition:border-color var(--lumiverse-transition-fast,150ms ease)";
       const paint = (on: boolean) => {
         info.style.borderColor = on
           ? "var(--lumiverse-primary,rgba(147,112,219,.9))"
