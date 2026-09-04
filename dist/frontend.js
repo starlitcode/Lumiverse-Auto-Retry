@@ -8792,6 +8792,34 @@ export function setup(ctx, opts) {
         let searchBox = null;
         // Same reason as searchBox: applyDeps is defined long before this element
         // is built, and a const would still be in its dead zone if it ever ran early.
+        // A row that hangs off a switch, arriving rather than appearing between two
+        // frames. The same movement a section makes when it opens, since they are
+        // the same thing happening: something that was not on the panel now is.
+        //
+        // Only on the way in. Something going away has nothing worth watching, and
+        // taking the mark off on the way out is also what keeps this cheap: the
+        // reflow that restarts an animation is only needed when one is already
+        // marked, which after a hide it is not. Turning a switch that reveals a
+        // dozen rows costs no forced layouts at all.
+        //
+        // Nothing shimmers on open, either. A freshly built panel has display unset
+        // rather than "none", so the first pass over it animates nothing.
+        const showsNow = (node, on) => {
+            const was = node.style.display;
+            node.style.display = on ? "flex" : "none";
+            if (!on || was !== "none") {
+                node.removeAttribute("data-ar-arrive");
+                return;
+            }
+            try {
+                if (node.hasAttribute("data-ar-arrive")) {
+                    node.removeAttribute("data-ar-arrive");
+                    void node.offsetWidth;
+                }
+                node.setAttribute("data-ar-arrive", "1");
+            }
+            catch (_) { }
+        };
         applyDeps = () => {
             // Ahead of the search guard: whether the master switch is off has nothing
             // to do with what is being searched for, and this must not go stale.
@@ -8805,11 +8833,11 @@ export function setup(ctx, opts) {
             }
             for (const d of depRows) {
                 const on = d.groups.every((g) => g.some((k) => !!cfg[k]));
-                d.row.style.display = on ? "flex" : "none";
+                showsNow(d.row, on);
             }
             for (const d of depSections) {
                 const on = d.needs.some((k) => !!cfg[k]);
-                d.sec.style.display = on ? "flex" : "none";
+                showsNow(d.sec, on);
             }
             // A run whose rows have all gone takes its heading with it, the same way
             // it does under a search.
@@ -8819,7 +8847,7 @@ export function setup(ctx, opts) {
                 for (let i = 0; i < rows.length; i++)
                     if (rows[i].style.display !== "none")
                         any = true;
-                w.style.display = any ? "flex" : "none";
+                showsNow(w, any);
             }
             paintDepNotes(false);
         };

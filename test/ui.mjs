@@ -9581,6 +9581,57 @@ console.log("\nfind and replace, retired");
   check("no console errors", errors.length === 0, errors);
 }
 
+// A row that hangs off a switch moves in the same way a section does, since
+// they are the same thing happening: something that was not on the panel now is.
+{
+  const { out, errors } = await inPanel(browser, {}, async (page) =>
+    page.evaluate(async () => {
+      const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      await frame();
+      for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      await frame();
+      // A switch with rows named after it in the schema, rather than whichever
+      // one happens to be first: Pause when it keeps failing carries the two
+      // rows saying how many runs and how long a pause.
+      const kid = () => document.querySelector('#modal [data-ar-row="breakerRuns"]');
+      const parent = document.querySelector('#modal [data-ar-row="pauseWhenFailing"]');
+      const sw = parent && parent.querySelector("input[data-ar-check]");
+      if (!sw || !kid()) return { found: false, sw: !!sw, kid: !!kid() };
+      // Rows only. The sections were opened by hand just above, and an opened
+      // section is marked to move for the same reason a row is, so counting
+      // both would be counting this check's own clicks.
+      const marks = () => document.querySelectorAll("#modal [data-ar-row][data-ar-arrive]").length;
+      const onBuild = marks();
+      // Whichever way it starts, drive it off and then on.
+      if (kid().style.display !== "none") sw.click();
+      await frame();
+      const hidden = kid().style.display === "none";
+      const wentAway = marks();
+      sw.click();
+      const back = kid();
+      const shown = back.style.display !== "none";
+      const marked = back.getAttribute("data-ar-arrive");
+      const cs = getComputedStyle(back);
+      const anim = { name: cs.animationName, time: cs.animationDuration };
+      await new Promise((r) => setTimeout(r, 300));
+      const after = getComputedStyle(back);
+      const settled = { opacity: after.opacity, shown: after.display };
+      return { found: true, onBuild, hidden, wentAway, shown, marked, anim, settled };
+    }),
+  );
+  check("the switch and the row under it are both there to drive", out.found, out);
+  check("nothing is animated just for the panel being built", out.onBuild === 0, out);
+  check("switching it off takes the row away", out.hidden, out);
+  check("and marks nothing, since going away is not worth watching", out.wentAway === 0, out);
+  check("switching it back on brings the row and marks it to move",
+    out.shown && out.marked === "1", out);
+  check("with the same shape and time as a section opening",
+    out.anim && out.anim.name === "lvRetryArrive" && out.anim.time === "0.18s", out.anim);
+  check("and it settles fully in place",
+    out.settled && out.settled.opacity === "1" && out.settled.shown === "flex", out.settled);
+  check("no console errors", errors.length === 0, errors);
+}
+
 // A section opening moves rather than appearing between two frames.
 {
   const { out, errors } = await inPanel(browser, {}, async (page) =>
