@@ -566,6 +566,88 @@ console.log("\nhints");
 // sits partway down a row that can be two lines high, so anchoring to it drops
 // the description on top of the setting being asked about. Reading the row also
 // holds at any scale the host applies, since it reads what was painted.
+// ---- what each part of a row answers to ----
+{
+  // A label with no `for` names the first labelable element inside it, and a
+  // button is one, so the "?" on these rows took the label off the setting:
+  // pressing a setting's own words opened its description instead of flipping
+  // its switch, and the switch was left with only its own small box to press.
+  // Invisible from the "?" alone, which is why this presses the words too.
+  const { out, errors } = await inPanel(
+    browser,
+    { viewport: { width: 480, height: 1030 }, touch: true },
+    (page) =>
+      page.evaluate(async () => {
+        const frame = () =>
+          new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        const press = (n) => {
+          n.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerType: "touch" }));
+          n.click();
+        };
+        const modal = document.getElementById("modal");
+        const rows = [...modal.querySelectorAll("[data-ar-row]")].filter(
+          (r) => r.querySelector("button[data-ar-hint]") && r.querySelector("[data-ar-check]"),
+        );
+        const out = { n: 0, wrong: [], pressed: 0, bad: [] };
+        // Read rather than pressed, so every one of them is covered.
+        for (const row of rows) {
+          out.n++;
+          const tick = row.querySelector("[data-ar-check]");
+          const name = String(row.getAttribute("data-ar-row") || "").slice(0, 26);
+          if (row.tagName !== "LABEL") continue;
+          if (row.control !== tick) out.wrong.push("names the wrong control: " + name);
+        }
+        // And pressed, on a few, both ways.
+        for (const row of rows.slice(0, 6)) {
+          const tick = row.querySelector("[data-ar-check]");
+          const q = row.querySelector("button[data-ar-hint]");
+          const words = [...row.querySelectorAll("span")].find(
+            (n) => (n.textContent || "").trim().length > 3,
+          );
+          if (!words) continue;
+          out.pressed++;
+          const name = String(row.getAttribute("data-ar-row") || "").slice(0, 26);
+          row.scrollIntoView({ block: "center" });
+          await frame();
+          let was = tick.checked;
+          press(words);
+          await frame();
+          await new Promise((r) => setTimeout(r, 250));
+          if (tick.checked === was) out.bad.push("the words did not flip it: " + name);
+          if (document.querySelector('[role="tooltip"]'))
+            out.bad.push("the words opened the description: " + name);
+          press(words);
+          await frame();
+          await new Promise((r) => setTimeout(r, 250));
+          was = tick.checked;
+          press(q);
+          await frame();
+          await new Promise((r) => setTimeout(r, 250));
+          if (tick.checked !== was) out.bad.push("the ? flipped it: " + name);
+          if (!document.querySelector('[role="tooltip"]'))
+            out.bad.push("the ? opened nothing: " + name);
+          const pop = document.querySelector('[role="tooltip"]');
+          if (pop) press(pop);
+          await frame();
+          await new Promise((r) => setTimeout(r, 250));
+        }
+        return out;
+      }),
+  );
+  check("there are tick rows with a ? to check", out.n >= 10, out.n);
+  check(
+    `on all ${out.n}, the words name the switch and not the ?`,
+    out.wrong.length === 0,
+    out.wrong.slice(0, 4),
+  );
+  check(
+    `pressing the words on ${out.pressed} of them flips the switch, and the ? opens the description`,
+    out.bad.length === 0,
+    out.bad.slice(0, 4),
+  );
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- the press that closes a hint does only that ----
 {
   // Closing happens on the way down, and the click that follows lands on

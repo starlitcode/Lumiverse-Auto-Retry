@@ -10369,10 +10369,26 @@ export function setup(ctx: Ctx, opts?: any) {
     return row;
   }
 
+  // A name for one control on the panel, so a label can say which one it means
+  // rather than being handed whichever it happens to hold first. Only ever has
+  // to be unique among what is on screen at once.
+  let idAt = 0;
+  const nextId = () => "ar-i" + ++idAt;
+
   function buildRow(f: Field): HTMLElement {
     // bool/num wrap in <label> so the whole row toggles or focuses its control.
     // text rows use <div> because they contain a Test button, which shouldn't sit inside a label.
     const row = document.createElement(f.type === "text" ? "div" : "label");
+    // Which control the row names, said outright.
+    //
+    // A label with no `for` names the first labelable element inside it, and a
+    // button is one, so the "?" added to these rows took the label off the
+    // setting: pressing a setting's own words opened its description instead of
+    // flipping its switch, and the switch was left with only its own small box
+    // to press. Naming the control means whatever else ends up standing in the
+    // row cannot take it again.
+    const forId = f.type === "bool" || f.type === "num" || f.type === "pick" ? nextId() : "";
+    if (forId) (row as HTMLLabelElement).htmlFor = forId;
     // Marks the row as the thing a hint popover measures itself against, and
     // names which setting it holds, which is what the checks read to tell a
     // duration apart from a plain number.
@@ -10485,6 +10501,7 @@ export function setup(ctx: Ctx, opts?: any) {
 
     if (f.type === "bool") {
       const input = checkBox();
+      if (forId) input.id = forId;
       input.checked = !!cfg[f.key];
       input.addEventListener("change", () => {
         // Turning the crisis check on is the one tick that has to be answered
@@ -10686,6 +10703,7 @@ export function setup(ctx: Ctx, opts?: any) {
       row.appendChild(foot);
     } else if (f.type === "pick") {
       const sel = document.createElement("select");
+      if (forId) sel.id = forId;
       for (const o of f.options || []) {
         const opt = document.createElement("option");
         opt.value = o.value;
@@ -10710,6 +10728,7 @@ export function setup(ctx: Ctx, opts?: any) {
       row.appendChild(top);
     } else if (f.type === "num") {
       const input = document.createElement("input");
+      if (forId) input.id = forId;
       input.type = "number";
       input.inputMode = "numeric";
       // Marks it for the rule that takes the browser's spinner off. An
