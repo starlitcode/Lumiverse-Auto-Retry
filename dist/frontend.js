@@ -2578,7 +2578,20 @@ const OPEN_PANEL_LABEL = "Open the Auto Retry panel";
 // the browser default of 13px, which is a small thing to hit with a thumb and
 // smaller than the same control one screen over. The reset picker is the worst
 // place for that, since a tick there can delete saved presets.
-const CHECKBOX_STYLE = "flex:none;width:20px;height:20px;accent-color:var(--lumiverse-primary,rgba(147,112,219,.9));";
+// The box itself is drawn by the stylesheet, keyed on the attribute every one
+// of them carries. It used to be a browser checkbox tinted with accent-color,
+// which the browser draws and snaps into place: nothing about it can be
+// animated, and it was the one control here that arrived rather than moved.
+// Only what a stylesheet cannot say stays inline.
+const CHECKBOX_STYLE = "flex:none;";
+// One place they are all made, so the panel cannot end up with two kinds.
+function checkBox() {
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.setAttribute("data-ar-check", "1");
+    cb.style.cssText = CHECKBOX_STYLE + "cursor:pointer";
+    return cb;
+}
 function iconSvg(body) {
     return ('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"' +
         ' stroke-linecap="round" stroke-linejoin="round">' +
@@ -6594,6 +6607,39 @@ export function setup(ctx, opts) {
                     // The browser's own ring goes either way. Ours replaces it, and a
                     // button the extension focused itself is not meant to be marked at all.
                     "[data-ar-btn]:focus-visible{outline:none}" +
+                    // The tick boxes, drawn here rather than left to the browser. A browser
+                    // checkbox tinted with accent-color cannot be animated at all: it is
+                    // painted by the platform and it snaps, which made every tick on this
+                    // panel the one control that arrived instead of moving. The mark scales
+                    // up into the box and the box fills behind it, in step and in the same
+                    // time as Auto Refine's switches, since somebody running both should not
+                    // have to notice which one they are looking at.
+                    // The margin is the browser's own default for a checkbox, kept rather than
+                    // zeroed. It is what gives every row holding one its height, and a check
+                    // holds those rows to 26px so a finger has something to land on: taking
+                    // the margin off dropped them to 20.
+                    "[data-ar-check]{-webkit-appearance:none;appearance:none;margin:3px 3px 3px 4px;" +
+                    "position:relative;" +
+                    "width:20px;height:20px;border-radius:var(--lumiverse-radius-sm,5px);" +
+                    "background:var(--lumiverse-fill,rgba(0,0,0,.15));" +
+                    "border:1px solid var(--lumiverse-border,rgba(128,128,128,.25));" +
+                    "transition:background-color var(--lumiverse-transition-fast,150ms ease)," +
+                    "border-color var(--lumiverse-transition-fast,150ms ease)}" +
+                    // Two sides of a square, turned, which is a tick. Drawn from the middle
+                    // so it grows out of the box rather than sliding in from an edge.
+                    "[data-ar-check]::after{content:\"\";position:absolute;left:6px;top:2px;" +
+                    "width:5px;height:10px;border:solid var(--lumiverse-primary,rgba(147,112,219,.9));" +
+                    "border-width:0 2px 2px 0;transform-origin:center;" +
+                    "transform:rotate(45deg) scale(.3);opacity:0;" +
+                    "transition:transform var(--lumiverse-transition-fast,150ms ease)," +
+                    "opacity var(--lumiverse-transition-fast,150ms ease)}" +
+                    "[data-ar-check]:checked{background:var(--lumiverse-primary-020,rgba(147,112,219,.2));" +
+                    "border-color:var(--lumiverse-primary-050,rgba(147,112,219,.5))}" +
+                    "[data-ar-check]:checked::after{transform:rotate(45deg) scale(1);opacity:1}" +
+                    "[data-ar-check]:disabled{opacity:.45;cursor:not-allowed}" +
+                    "[data-ar-check]:focus-visible{outline:none;box-shadow:" + FOCUS_RING + "}" +
+                    "@media (prefers-reduced-motion: reduce){" +
+                    "[data-ar-check],[data-ar-check]::after{transition:none}}" +
                     // Ours, and not on one the extension focused itself: see focusQuietly.
                     "[data-ar-btn]:not([data-ar-quiet]):focus-visible" +
                     "{box-shadow:" + FOCUS_RING + "}" +
@@ -8260,10 +8306,8 @@ export function setup(ctx, opts) {
             const row = document.createElement("label");
             row.style.cssText =
                 "display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer";
-            const cb = document.createElement("input");
-            cb.type = "checkbox";
+            const cb = checkBox();
             cb.checked = true;
-            cb.style.cssText = CHECKBOX_STYLE + "cursor:pointer";
             const txt = document.createElement("span");
             txt.textContent = it.label;
             row.appendChild(cb);
@@ -9078,7 +9122,7 @@ export function setup(ctx, opts) {
             panelSections.push(handle);
             const body = document.createElement("div");
             body.style.cssText = "display:none;flex-direction:column;gap:10px";
-            body.appendChild(sectionDesc("Save settings to a file or load them from one. Tick the parts to include, then Export or Import. An import fills in the settings above without saving, so you can review first: press Save to keep it, or close to discard.", false));
+            body.appendChild(sectionDesc("Save settings to a file or load them from one. The two lists are asked separately, because what you want out of a file and what you are willing to let a file change are different questions. An import fills in the settings above without saving, so you can review first: press Save to keep it, or close to discard.", false));
             // The word swaps somebody had before the feature went. The card at the top
             // of the panel says the same thing louder and can be put away; this line
             // cannot, so putting that card away is not a decision anybody has to get
@@ -9118,9 +9162,28 @@ export function setup(ctx, opts) {
                     body.appendChild(row);
                 }
             }
-            const { wrap: checkWrap, checks } = buildCheckList(EXPORT_CATEGORIES);
-            body.appendChild(checkWrap);
-            const chosen = () => checks.filter((x) => x.input.checked).map((x) => x.id);
+            // Two lists, not one. They were the same ticks for a long time, which
+            // meant exporting everything and then importing one part was two rounds
+            // of ticking: set them for the export, unset them for the import, set
+            // them back the next time you export. What you want out of a file and
+            // what you are willing to let a file change are different questions and
+            // they get one answer each.
+            const takeWrap = document.createElement("div");
+            takeWrap.style.cssText = "display:flex;flex-direction:column;gap:6px";
+            takeWrap.appendChild(sectionDesc("What to put in the file", false));
+            const { wrap: outWrap, checks: outChecks } = buildCheckList(EXPORT_CATEGORIES);
+            outWrap.setAttribute("data-ar-parts", "export");
+            takeWrap.appendChild(outWrap);
+            body.appendChild(takeWrap);
+            const inWrap2 = document.createElement("div");
+            inWrap2.style.cssText = "display:flex;flex-direction:column;gap:6px";
+            inWrap2.appendChild(sectionDesc("What to accept from one", false));
+            const { wrap: inWrap, checks: inChecks } = buildCheckList(EXPORT_CATEGORIES);
+            inWrap.setAttribute("data-ar-parts", "import");
+            inWrap2.appendChild(inWrap);
+            body.appendChild(inWrap2);
+            const chosen = () => outChecks.filter((x) => x.input.checked).map((x) => x.id);
+            const taking = () => inChecks.filter((x) => x.input.checked).map((x) => x.id);
             const status = document.createElement("div");
             status.style.cssText =
                 "font-size:12px;line-height:1.4;color:var(--lumiverse-text-muted,rgba(255,255,255,.65));min-height:1em";
@@ -9128,7 +9191,7 @@ export function setup(ctx, opts) {
             exportBtn.addEventListener("click", () => {
                 const ids = chosen();
                 if (!ids.length) {
-                    status.textContent = "Tick at least one part to export.";
+                    status.textContent = "Tick at least one part under What to put in the file.";
                     return;
                 }
                 const ok = downloadText("auto-retry-settings.json", buildExport(ids));
@@ -9145,9 +9208,9 @@ export function setup(ctx, opts) {
                 fileInput.value = "";
                 if (!f)
                     return;
-                const ids = chosen();
+                const ids = taking();
                 if (!ids.length) {
-                    status.textContent = "Tick at least one part to import.";
+                    status.textContent = "Tick at least one part under What to accept from one.";
                     return;
                 }
                 readFileAsText(f, (text) => {
@@ -9203,8 +9266,8 @@ export function setup(ctx, opts) {
             });
             const importBtn = btn("Import from file", false);
             importBtn.addEventListener("click", () => {
-                if (!chosen().length) {
-                    status.textContent = "Tick at least one part to import first.";
+                if (!taking().length) {
+                    status.textContent = "Tick at least one part under What to accept from one first.";
                     return;
                 }
                 fileInput.click();
@@ -9803,10 +9866,8 @@ export function setup(ctx, opts) {
         }
         top.appendChild(labelWrap);
         if (f.type === "bool") {
-            const input = document.createElement("input");
-            input.type = "checkbox";
+            const input = checkBox();
             input.checked = !!cfg[f.key];
-            input.style.cssText = CHECKBOX_STYLE + "cursor:pointer";
             input.addEventListener("change", () => {
                 // Turning the crisis check on is the one tick that has to be answered
                 // for first. The box goes back to where it was straight away, so the
@@ -10477,13 +10538,13 @@ export function setup(ctx, opts) {
             row.style.cssText =
                 "display:flex;align-items:center;gap:8px;font-size:13px;cursor:" +
                     (n ? "pointer" : "default");
-            const cb = document.createElement("input");
-            cb.type = "checkbox";
+            const cb = checkBox();
             cb.checked = false;
             // A part already at its defaults is nothing to press. Left tickable it
             // reads as an action that did nothing when the count came back zero.
             cb.disabled = n === 0;
-            cb.style.cssText = CHECKBOX_STYLE + "cursor:" + (n ? "pointer" : "default");
+            if (!n)
+                cb.style.cursor = "default";
             const txt = document.createElement("span");
             txt.textContent = part.label;
             const count = document.createElement("span");
@@ -10512,11 +10573,11 @@ export function setup(ctx, opts) {
         presetRow.style.cssText =
             "flex:none;display:flex;align-items:center;gap:8px;font-size:13px;cursor:" +
                 (presetCount ? "pointer" : "default");
-        const presetCb = document.createElement("input");
-        presetCb.type = "checkbox";
+        const presetCb = checkBox();
         presetCb.checked = false;
         presetCb.disabled = presetCount === 0;
-        presetCb.style.cssText = CHECKBOX_STYLE + "cursor:" + (presetCount ? "pointer" : "default");
+        if (!presetCount)
+            presetCb.style.cursor = "default";
         const presetTxt = document.createElement("span");
         // The one line in the picker that destroys something no Save can take back,
         // so it is the one line that does not look like the others.

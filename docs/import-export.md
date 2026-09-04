@@ -1,6 +1,6 @@
 # Import and export
 
-You can save your settings to a file and load them back later. In the settings modal, open **Import / export**. Tick the parts you want, then either **Export to file** to save them as a small `.json` file, or **Import from file** to load one.
+You can save your settings to a file and load them back later. In the settings modal, open **Import / export**. There are two lists of ticks: **What to put in the file** decides what **Export to file** writes, and **What to accept from one** decides what **Import from file** is allowed to change. They are asked separately because they are different questions, and sharing one list meant setting the ticks twice to export everything and then take back one part.
 
 Your settings and your saved presets already follow your Lumiverse account across browsers on their own, so this is mainly for keeping a backup, sharing a setup with someone else, or copying between accounts.
 

@@ -9581,6 +9581,49 @@ console.log("\nfind and replace, retired");
   check("no console errors", errors.length === 0, errors);
 }
 
+// What a file gives and what it takes are two questions with one answer each.
+{
+  const { out, errors } = await inPanel(browser, {}, async (page) =>
+    page.evaluate(async () => {
+      const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      await frame();
+      for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      await frame();
+      const outList = document.querySelector('[data-ar-parts="export"]');
+      const inList = document.querySelector('[data-ar-parts="import"]');
+      if (!outList || !inList) return { missing: true };
+      const outBoxes = Array.from(outList.querySelectorAll('input[type="checkbox"]'));
+      const inBoxes = Array.from(inList.querySelectorAll('input[type="checkbox"]'));
+      // Untick everything on the import side only.
+      for (const b of inBoxes) if (b.checked) b.click();
+      // Long enough for the mark to have finished going. Reading it a frame
+      // later catches it part-way out, which is the animation working and not
+      // an answer to whether the box ends up empty.
+      await new Promise((r) => setTimeout(r, 300));
+      return {
+        missing: false,
+        same: outBoxes.length === inBoxes.length,
+        outStillOn: outBoxes.every((b) => b.checked),
+        inAllOff: inBoxes.every((b) => !b.checked),
+        // Both are drawn by us rather than by the browser, so they can animate.
+        drawn: outBoxes.concat(inBoxes).every((b) => b.getAttribute("data-ar-check") === "1"),
+        appearance: getComputedStyle(outBoxes[0]).appearance,
+        tickHidden: getComputedStyle(inBoxes[0], "::after").opacity,
+        tickShown: getComputedStyle(outBoxes[0], "::after").opacity,
+        moves: /transform/.test(getComputedStyle(outBoxes[0], "::after").transitionProperty),
+      };
+    }),
+  );
+  check("there are two lists of ticks, not one", !out.missing && out.same, out);
+  check("unticking what a file may change leaves what goes into one alone",
+    out.inAllOff && out.outStillOn, out);
+  check("the boxes are drawn by us, so they can be animated", out.drawn && out.appearance === "none", out);
+  check("a ticked one shows its mark and an unticked one does not",
+    out.tickShown === "1" && out.tickHidden === "0", out);
+  check("and the mark moves rather than appearing", out.moves, out);
+  check("no console errors", errors.length === 0, errors);
+}
+
 // Somebody who never used it should never learn it existed.
 {
   const { out, errors } = await inPanel(browser, {}, async (page) =>
