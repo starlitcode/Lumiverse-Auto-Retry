@@ -9080,7 +9080,45 @@ export function setup(ctx: Ctx, opts?: any) {
       // moved is for a section somebody opened. Every section is applied once
       // while the panel is being built, and animating those would have the
       // whole panel shimmer itself into existence.
+      // A section is most of a screen. Opening one used to fade its body in
+      // while its height arrived whole, so everything below moved by twelve
+      // hundred pixels between two frames: the fade said something was
+      // arriving and the jump said the panel had lost its place. The height
+      // travels now, and the fade rides along with it.
+      let sizing: any = null;
+      const sizeOff = () => {
+        if (sizing) clearTimeout(sizing);
+        sizing = null;
+        body.style.height = "";
+        body.style.overflow = "";
+        body.style.transition = "";
+      };
       const apply = (v: boolean, moved?: boolean) => {
+        const still =
+          typeof matchMedia === "function" &&
+          matchMedia("(prefers-reduced-motion: reduce)").matches;
+        // Closing travels too. The header stays where your finger left it and
+        // everything under it rises, which is the same jump read upwards.
+        if (!v && moved && !still && body.style.display !== "none") {
+          const tall = body.getBoundingClientRect().height;
+          if (tall > 0) {
+            sizeOff();
+            body.style.overflow = "hidden";
+            body.style.height = tall + "px";
+            void body.offsetWidth;
+            body.style.transition = "height 160ms ease-in";
+            body.style.height = "0px";
+            caret.textContent = CARET_SHUT;
+            h.setAttribute("aria-expanded", "false");
+            body.removeAttribute("data-ar-arrive");
+            sizing = setTimeout(() => {
+              sizeOff();
+              body.style.display = "none";
+            }, 180);
+            return;
+          }
+        }
+        sizeOff();
         body.style.display = v ? "flex" : "none";
         caret.textContent = v ? CARET_OPEN : CARET_SHUT;
         h.setAttribute("aria-expanded", v ? "true" : "false");
@@ -9095,6 +9133,17 @@ export function setup(ctx: Ctx, opts?: any) {
           body.removeAttribute("data-ar-arrive");
           void body.offsetWidth;
           body.setAttribute("data-ar-arrive", "1");
+          if (still) return;
+          const tall = body.getBoundingClientRect().height;
+          if (!(tall > 0)) return;
+          body.style.overflow = "hidden";
+          body.style.height = "0px";
+          void body.offsetWidth;
+          body.style.transition = "height 180ms ease-out";
+          body.style.height = tall + "px";
+          // Its own height back afterwards, or a section holding a box that
+          // grows as you type would be pinned to whatever it measured here.
+          sizing = setTimeout(sizeOff, 260);
         } catch (_) {}
       };
       h.setAttribute("role", "button");

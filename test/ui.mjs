@@ -602,7 +602,9 @@ console.log("\nkeyboard and search");
       await frame();
       const afterEnter = { exp: refusal.getAttribute("aria-expanded"), vis: vis("Extra thinking tag names") };
       refusal.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true }));
-      await frame();
+      // Closing travels, so the body is still on screen for the length of it.
+      // The header says shut straight away; the room it took goes as it goes.
+      await new Promise((r) => setTimeout(r, 260));
       const afterSpace = { exp: refusal.getAttribute("aria-expanded"), vis: vis("Extra thinking tag names") };
       const search = modal.querySelector('input[type=search]');
       search.value = "blank";
@@ -1311,6 +1313,9 @@ console.log("\nwhole-list note settings");
         new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       const modal = document.getElementById("modal");
       for (const h of modal.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      // Sections travel open now, so their contents have no height for the
+      // length of that. Waited out here rather than in every check below.
+      await new Promise((r) => setTimeout(r, 260));
       await frame();
       const run = () =>
         [...modal.querySelectorAll("div")].find(
@@ -1354,6 +1359,9 @@ console.log("\nthe crisis check asks first");
         new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       const modal = document.getElementById("modal");
       for (const h of modal.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      // Sections travel open now, so their contents have no height for the
+      // length of that. Waited out here rather than in every check below.
+      await new Promise((r) => setTimeout(r, 260));
       await frame();
       const box = () =>
         modal.querySelector('[data-ar-row="refusalCatchCrisis"] input[type=checkbox]');
@@ -2232,6 +2240,9 @@ console.log("\nfloat button menu");
     acts["auto-retry-settings"].cb();
     await wait(30);
     for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      // Sections travel open now, so their contents have no height for the
+      // length of that. Waited out here rather than in every check below.
+      await new Promise((r) => setTimeout(r, 260));
     await wait(30);
     const sizeBox = document.querySelector('[data-ar-row="floatingToggleSize"] input');
     sizeBox.value = "72";
@@ -2763,8 +2774,11 @@ console.log("\ndropdown focus");
     browser,
     { settings: { refusalNote: true } },
     async (page) => {
-      await page.evaluate(() => {
+      await page.evaluate(async () => {
         for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+        // Sections travel open now, so their contents have no height for the
+        // length of that. Waited out here rather than in every check below.
+        await new Promise((r) => setTimeout(r, 260));
       });
       // The border eases over 150ms, so each reading waits it out. Measuring
       // straight after a click caught it partway and read a colour that was
@@ -3283,6 +3297,9 @@ console.log("\nfloating surfaces");
 
       // the full-size editor
       for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      // Sections travel open now, so their contents have no height for the
+      // length of that. Waited out here rather than in every check below.
+      await new Promise((r) => setTimeout(r, 260));
       await frame();
       const ex = [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === "Expand");
       if (ex) ex.click();
@@ -3371,6 +3388,9 @@ console.log("\npreset controls");
   const { out, errors } = await inPanel(browser, {}, async (page) =>
     page.evaluate(async () => {
       for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      // Sections travel open now, so their contents have no height for the
+      // length of that. Waited out here rather than in every check below.
+      await new Promise((r) => setTimeout(r, 260));
       await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       const by = (t) => [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === t);
       // The preset dropdown sits in the same row as its Load button. Taken
@@ -3429,6 +3449,9 @@ console.log("\none preset bar, holding only its own keys");
     page.evaluate(async () => {
       const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      // Sections travel open now, so their contents have no height for the
+      // length of that. Waited out here rather than in every check below.
+      await new Promise((r) => setTimeout(r, 260));
       await frame();
       const bar = (kind) => document.querySelector('[data-ar-presets="' + kind + '"]');
       const press = (b, label) =>
@@ -3592,6 +3615,9 @@ console.log("\nthe note preset bar follows the notes switch");
     page.evaluate(async () => {
       const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      // Sections travel open now, so their contents have no height for the
+      // length of that. Waited out here rather than in every check below.
+      await new Promise((r) => setTimeout(r, 260));
       await frame();
       const root = document.getElementById("modal");
       // The block is the bar's parent: hairline, heading, description and bar.
@@ -3723,6 +3749,9 @@ console.log("\npreset boundary");
     page.evaluate(async () => {
       const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      // Sections travel open now, so their contents have no height for the
+      // length of that. Waited out here rather than in every check below.
+      await new Promise((r) => setTimeout(r, 260));
       await frame();
       const bar = document.querySelector('[data-ar-presets="notes"]');
       const by = (t) => [...document.querySelectorAll("button")].find((x) => x.textContent.trim() === t);
@@ -3801,6 +3830,9 @@ console.log("\nbackup round trip");
     acts["auto-retry-settings"].cb();
     await frame();
     for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      // Sections travel open now, so their contents have no height for the
+      // length of that. Waited out here rather than in every check below.
+      await new Promise((r) => setTimeout(r, 260));
     await frame();
     const by = (t) => [...document.querySelectorAll("button")].find((x) => x.textContent.trim() === t);
 
@@ -3931,6 +3963,9 @@ console.log("\nbackup restore");
     window.__acts["auto-retry-settings"].cb();
     await frame();
     for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      // Sections travel open now, so their contents have no height for the
+      // length of that. Waited out here rather than in every check below.
+      await new Promise((r) => setTimeout(r, 260));
     await frame();
     window.__by = (t) => [...document.querySelectorAll("button")].find((x) => x.textContent.trim() === t);
     window.__ctl = (k) => { const r = document.querySelector('[data-ar-row="' + k + '"]'); return r && (r.querySelector("textarea") || r.querySelector("input")); };
@@ -4119,6 +4154,9 @@ console.log("\nsaved settings come back");
       acts["auto-retry-settings"].cb();
       await frame();
       for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      // Sections travel open now, so their contents have no height for the
+      // length of that. Waited out here rather than in every check below.
+      await new Promise((r) => setTimeout(r, 260));
       await frame();
     };
     const rows = () => [...document.querySelectorAll("[data-ar-row]")]
@@ -6006,6 +6044,9 @@ console.log("\nthe number box spinner");
   const { out, errors } = await inPanel(browser, {}, async (page) => {
     await page.evaluate(async () => {
       for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      // Sections travel open now, so their contents have no height for the
+      // length of that. Waited out here rather than in every check below.
+      await new Promise((r) => setTimeout(r, 260));
       await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       // A number box the host might have, outside anything of ours.
       const theirs = document.createElement("input");
@@ -6052,6 +6093,9 @@ console.log("\nthe focus ring");
   const { out, errors } = await inPanel(browser, {}, async (page) => {
     await page.evaluate(async () => {
       for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      // Sections travel open now, so their contents have no height for the
+      // length of that. Waited out here rather than in every check below.
+      await new Promise((r) => setTimeout(r, 260));
       await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
     });
     return page.evaluate(async () => {
@@ -6263,6 +6307,9 @@ console.log("\nthe description button is sized for what is pointing at it");
       acts["auto-retry-settings"].cb();
       await wait(60);
       for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      // Sections travel open now, so their contents have no height for the
+      // length of that. Waited out here rather than in every check below.
+      await new Promise((r) => setTimeout(r, 260));
       await wait(60);
       const hints = [...document.querySelectorAll("button[data-ar-hint]")]
         .filter((e) => e.getBoundingClientRect().width);
@@ -6326,6 +6373,9 @@ console.log("\nthe tick boxes are one size");
         return seen;
       };
       for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      // Sections travel open now, so their contents have no height for the
+      // length of that. Waited out here rather than in every check below.
+      await new Promise((r) => setTimeout(r, 260));
       await wait(40);
       const rows = sizes("#modal");
       // The reset picker is its own overlay, and the one that matters most.
@@ -8158,6 +8208,9 @@ console.log("\nhint placement");
       async (page) => page.evaluate(async (want) => {
         const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
         for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      // Sections travel open now, so their contents have no height for the
+      // length of that. Waited out here rather than in every check below.
+      await new Promise((r) => setTimeout(r, 260));
         await frame();
         const row = document.querySelector('[data-ar-row="' + want + '"]');
         if (!row) return { err: "no row" };
@@ -8212,6 +8265,9 @@ console.log("\nhint placement");
         const at = await page.evaluate(async (want) => {
           const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
           for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      // Sections travel open now, so their contents have no height for the
+      // length of that. Waited out here rather than in every check below.
+      await new Promise((r) => setTimeout(r, 260));
           await frame();
           const row = document.querySelector('[data-ar-row="' + want + '"]');
           if (!row) return null;
@@ -8256,6 +8312,9 @@ console.log("\nhint placement");
       async (page) => page.evaluate(async (want) => {
         const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
         for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      // Sections travel open now, so their contents have no height for the
+      // length of that. Waited out here rather than in every check below.
+      await new Promise((r) => setTimeout(r, 260));
         await frame();
         const row = document.querySelector('[data-ar-row="' + want + '"]');
         // Mid screen on purpose. Jammed against the bottom there is barely any
@@ -8292,6 +8351,9 @@ console.log("\nhint placement");
       async (page) => page.evaluate(async () => {
         const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
         for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      // Sections travel open now, so their contents have no height for the
+      // length of that. Waited out here rather than in every check below.
+      await new Promise((r) => setTimeout(r, 260));
         await frame();
         const row = document.querySelector('[data-ar-row="refusalNotes"]');
         row.scrollIntoView({ block: "center" });
@@ -8329,6 +8391,9 @@ console.log("\nhint placement");
       async (page) => page.evaluate(async () => {
         const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
         for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      // Sections travel open now, so their contents have no height for the
+      // length of that. Waited out here rather than in every check below.
+      await new Promise((r) => setTimeout(r, 260));
         await frame();
         const row = document.querySelector('[data-ar-row="refusalNotes"]');
         row.scrollIntoView({ block: "start" });
@@ -8365,6 +8430,9 @@ console.log("\nhint placement");
       async (page) => page.evaluate(async () => {
         const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
         for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      // Sections travel open now, so their contents have no height for the
+      // length of that. Waited out here rather than in every check below.
+      await new Promise((r) => setTimeout(r, 260));
         await frame();
         const row = document.querySelector('[data-ar-row="refusalNotes"]');
         row.scrollIntoView({ block: "start" });
@@ -8426,6 +8494,9 @@ console.log("\ndependent rows");
     page.evaluate(async () => {
       const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      // Sections travel open now, so their contents have no height for the
+      // length of that. Waited out here rather than in every check below.
+      await new Promise((r) => setTimeout(r, 260));
       await frame();
       const shown = (k) => {
         const r = document.querySelector('[data-ar-row="' + k + '"]');
@@ -8553,6 +8624,9 @@ console.log("\nlines that fill in later");
       page.evaluate(async () => {
         const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
         for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      // Sections travel open now, so their contents have no height for the
+      // length of that. Waited out here rather than in every check below.
+      await new Promise((r) => setTimeout(r, 260));
         await frame();
         // Everything that puts words into a line that started out empty.
         const by = (t) => [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === t);
@@ -8638,6 +8712,9 @@ console.log("\nwhat a hidden row is waiting on");
     page.evaluate(async () => {
       const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      // Sections travel open now, so their contents have no height for the
+      // length of that. Waited out here rather than in every check below.
+      await new Promise((r) => setTimeout(r, 260));
       await frame();
       const search = document.querySelector("input[type=search]");
       const find = (q) => { search.value = q; search.dispatchEvent(new Event("input", { bubbles: true })); };
@@ -8723,6 +8800,9 @@ console.log("\nwhat a hidden row is waiting on");
       page.evaluate(async () => {
         const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
         for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      // Sections travel open now, so their contents have no height for the
+      // length of that. Waited out here rather than in every check below.
+      await new Promise((r) => setTimeout(r, 260));
         await frame();
         const s = document.querySelector("input[type=search]");
         s.value = "where the notes go";
@@ -8787,6 +8867,9 @@ console.log("\nmaster switch off");
         .filter((r) => r.getClientRects().length > 0).length;
 
       for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      // Sections travel open now, so their contents have no height for the
+      // length of that. Waited out here rather than in every check below.
+      await new Promise((r) => setTimeout(r, 260));
       await frame();
       const quietWhileOn = !showing();
       const before = rowsUp();
@@ -8819,6 +8902,9 @@ console.log("\nhiding keeps everything");
     page.evaluate(async () => {
       const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      // Sections travel open now, so their contents have no height for the
+      // length of that. Waited out here rather than in every check below.
+      await new Promise((r) => setTimeout(r, 260));
       await frame();
       const head = () => [...document.querySelectorAll('[role="button"]')]
         .find((h) => /refusal tuning/i.test(h.textContent || ""));
@@ -8856,6 +8942,9 @@ console.log("\nnote list");
     page.evaluate(async () => {
       const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      // Sections travel open now, so their contents have no height for the
+      // length of that. Waited out here rather than in every check below.
+      await new Promise((r) => setTimeout(r, 260));
       await frame();
       const row = document.querySelector('[data-ar-row="refusalNotes"]');
       const plus = [...row.querySelectorAll("button")].find((b) => b.textContent.trim() === "+");
@@ -8926,6 +9015,9 @@ console.log("\nadding a note");
     page.evaluate(async () => {
       const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      // Sections travel open now, so their contents have no height for the
+      // length of that. Waited out here rather than in every check below.
+      await new Promise((r) => setTimeout(r, 260));
       await frame();
       const row = document.querySelector('[data-ar-row="refusalNotes"]');
       const plus = [...row.querySelectorAll("button")].find((b) => b.textContent.trim() === "+");
@@ -9033,6 +9125,9 @@ console.log("\npainted surfaces");
 
         // The full-size editor, reached the way someone would reach it.
         for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      // Sections travel open now, so their contents have no height for the
+      // length of that. Waited out here rather than in every check below.
+      await new Promise((r) => setTimeout(r, 260));
         await frame();
         const ex = [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === "Expand");
         if (ex) ex.click();
@@ -9100,6 +9195,9 @@ console.log("\nreset picker");
     await page.evaluate(async () => {
       const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      // Sections travel open now, so their contents have no height for the
+      // length of that. Waited out here rather than in every check below.
+      await new Promise((r) => setTimeout(r, 260));
       await frame();
       const row = (k) => document.querySelector('[data-ar-row="' + k + '"]');
       const set = (k, v) => {
@@ -9176,6 +9274,9 @@ console.log("\nreset picker");
     await page.evaluate(async () => {
       const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      // Sections travel open now, so their contents have no height for the
+      // length of that. Waited out here rather than in every check below.
+      await new Promise((r) => setTimeout(r, 260));
       await frame();
       const el = document.querySelector('[data-ar-row="maxRetries"] input');
       el.value = "9";
@@ -9216,6 +9317,9 @@ console.log("\nreset confirmation");
     page.evaluate(async () => {
       const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      // Sections travel open now, so their contents have no height for the
+      // length of that. Waited out here rather than in every check below.
+      await new Promise((r) => setTimeout(r, 260));
       await frame();
       const el = document.querySelector('[data-ar-row="maxRetries"] input');
       el.value = "9";
@@ -9297,6 +9401,9 @@ console.log("\nreset confirmation");
     page.evaluate(async () => {
       const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      // Sections travel open now, so their contents have no height for the
+      // length of that. Waited out here rather than in every check below.
+      await new Promise((r) => setTimeout(r, 260));
       await frame();
       document.querySelector('[data-ar-row="refusalExtraPhrases"] textarea').value = "cat => dog";
       document.querySelector('[data-ar-row="refusalExtraPhrases"] textarea')
@@ -9334,6 +9441,9 @@ console.log("\nreset confirmation");
     page.evaluate(async () => {
       const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      // Sections travel open now, so their contents have no height for the
+      // length of that. Waited out here rather than in every check below.
+      await new Promise((r) => setTimeout(r, 260));
       await frame();
       const el = document.querySelector('[data-ar-row="maxRetries"] input');
       el.value = "9";
@@ -9387,6 +9497,9 @@ console.log("\nreset urgency");
     page.evaluate(async () => {
       const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      // Sections travel open now, so their contents have no height for the
+      // length of that. Waited out here rather than in every check below.
+      await new Promise((r) => setTimeout(r, 260));
       await frame();
       const el = document.querySelector('[data-ar-row="maxRetries"] input');
       el.value = "9";
@@ -9493,6 +9606,9 @@ console.log("\nreset urgency");
     page.evaluate(async () => {
       const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      // Sections travel open now, so their contents have no height for the
+      // length of that. Waited out here rather than in every check below.
+      await new Promise((r) => setTimeout(r, 260));
       await frame();
       const el = document.querySelector('[data-ar-row="maxRetries"] input');
       el.value = "9";
@@ -9583,6 +9699,9 @@ console.log("\nfind and replace, retired");
       window.__acts["auto-retry-settings"].cb();
       await frame();
       for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      // Sections travel open now, so their contents have no height for the
+      // length of that. Waited out here rather than in every check below.
+      await new Promise((r) => setTimeout(r, 260));
       await frame();
       const saved = [];
       const realCreate = URL.createObjectURL;
@@ -9616,6 +9735,9 @@ console.log("\nfind and replace, retired");
       const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       await frame();
       for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      // Sections travel open now, so their contents have no height for the
+      // length of that. Waited out here rather than in every check below.
+      await new Promise((r) => setTimeout(r, 260));
       await frame();
       // A switch with rows named after it in the schema, rather than whichever
       // one happens to be first: Pause when it keeps failing carries the two
@@ -9704,6 +9826,9 @@ console.log("\nfind and replace, retired");
       const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       await frame();
       for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      // Sections travel open now, so their contents have no height for the
+      // length of that. Waited out here rather than in every check below.
+      await new Promise((r) => setTimeout(r, 260));
       await frame();
       const outList = document.querySelector('[data-ar-parts="export"]');
       const inList = document.querySelector('[data-ar-parts="import"]');
@@ -10019,6 +10144,55 @@ console.log("\nthe live count climbs as the reply arrives");
     seen.every((n, i) => i === 0 || n >= seen[i - 1]), out);
   check("landing on everything that came", /80 characters/.test(out.line || ""), out.line);
   check("no console errors", errors.length === 0, errors);
+}
+
+
+// ---- opening a section does not throw the panel ----
+// A section is most of a screen. Its body used to fade in while its height
+// arrived whole, so everything below it moved twelve hundred pixels between two
+// frames: the fade said something was arriving and the jump said the panel had
+// lost its place.
+console.log("\nsections open without throwing the panel");
+{
+  const measure = (shutFirst) =>
+    inPanel(browser, {}, (page) =>
+      page.evaluate(async (closeIt) => {
+        const root = document.getElementById("modal");
+        const shut = () => [...root.querySelectorAll('[aria-expanded="false"]')];
+        const head = shut()[0];
+        const below = shut()[1];
+        if (!head || !below) return { err: "not enough sections" };
+        const at = () => below.getBoundingClientRect().top;
+        if (closeIt) {
+          head.click();
+          await new Promise((r) => setTimeout(r, 400));
+        }
+        const before = at();
+        head.click();
+        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        const after = at();
+        await new Promise((r) => setTimeout(r, 600));
+        const rested = at();
+        return {
+          moved: Math.abs(Math.round(after - before)),
+          settled: Math.abs(Math.round(rested - before)),
+        };
+      }, shutFirst),
+    );
+
+  // Against how far it had to travel, so the rule reads the same for a short
+  // section and a long one.
+  const smooth = (o) => o.moved < Math.max(6, o.settled / 3);
+
+  const { out: open, errors: openErrors } = await measure(false);
+  check("opening one travels rather than jumping", smooth(open), open);
+  check("and it really is open by the end", open.settled > 200, open);
+  check("opening one: no console errors", openErrors.length === 0, openErrors);
+
+  const { out: close, errors: closeErrors } = await measure(true);
+  check("closing one travels too", smooth(close), close);
+  check("and it really is closed by the end", close.settled > 200, close);
+  check("closing one: no console errors", closeErrors.length === 0, closeErrors);
 }
 
 await browser.close();
