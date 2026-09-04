@@ -4699,6 +4699,11 @@ export function setup(ctx, opts) {
             const res = await menu.call(ctx.ui, {
                 position,
                 items: [
+                    // Two groups with a line between them: the ways into the extension,
+                    // and the one entry that takes the button away. A short menu still
+                    // reads better when the thing that removes something is not sitting
+                    // flush against the things that open something.
+                    //
                     // Settings first. Reaching them otherwise means the input bar's
                     // Extras popover, which is several taps away and is the thing someone
                     // holding this button is most likely to be after.
@@ -4707,6 +4712,7 @@ export function setup(ctx, opts) {
                     // panel floating it is already on screen, and an entry that opens
                     // what you can see is noise in a menu opened for something else.
                     ...(canOpenPanel() ? [{ key: "panel", label: OPEN_PANEL_LABEL }] : []),
+                    { key: "line", label: "", type: "divider" },
                     // Last, under everything else, because it is the only entry here
                     // that closes this menu for good.
                     //

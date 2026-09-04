@@ -2175,7 +2175,11 @@ console.log("\nfloat button menu");
     // asked to show, not what got drawn.
     const shown = () => (window.__menus || []).length;
     const last = () => (window.__menus || [])[(window.__menus || []).length - 1] || null;
-    const items = () => (last() ? last().items.map((i) => i.label) : []);
+    // Entries only. A divider is an item to the host but not a thing anybody
+    // can pick, so counting one would make the menu look a row longer than it
+    // offers.
+    const real = () => (last() ? last().items.filter((i) => i.type !== "divider") : []);
+    const items = () => real().map((i) => i.label);
     const down = (el, x, y) => el.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, clientX: x, clientY: y }));
     // Dispatched at the document, which is what a host that has captured the
     // pointer for its drag would produce. A move aimed at the button would not
@@ -2194,7 +2198,7 @@ console.log("\nfloat button menu");
     down(btn(), 130, 130); await wait(620);
     const openedByHold = shown() === 1;
     const entries = items();
-    const keys = last() ? last().items.map((i) => i.key) : [];
+    const keys = real().map((i) => i.key);
     up(btn()); btn().click();
     const afterHold = { pressed: btn().getAttribute("aria-pressed"), same: btn().getAttribute("aria-pressed") === before };
 
@@ -4373,7 +4377,14 @@ console.log("\nper-chat switch");
     const btn = () => host.querySelector("button");
     const menu = () => {
       const m = (window.__menus || [])[(window.__menus || []).length - 1];
-      return m ? m.items.map((i) => i.label) : [];
+      // Labels only, and a divider has none, so it never reads as an entry.
+      return m ? m.items.filter((i) => i.type !== "divider").map((i) => i.label) : [];
+    };
+    // The shape of it, dividers included, for the check that they group rather
+    // than pad.
+    window.__menuShape = () => {
+      const m = (window.__menus || [])[(window.__menus || []).length - 1];
+      return m ? m.items.map((i) => (i.type === "divider" ? "|" : i.key)) : [];
     };
     const hold = async () => {
       btn().dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, clientX: 130, clientY: 130 }));
@@ -4393,6 +4404,7 @@ console.log("\nper-chat switch");
     // among those entries was clutter. Checked here so it cannot drift back in
     // without somebody meaning it.
     const menuOn = await hold();
+    const shape = window.__menuShape();
     up();
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     await wait(20);
@@ -4457,7 +4469,7 @@ console.log("\nper-chat switch");
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
 
     teardown();
-    return { menuOn, offNow, retriedWhileOff, otherChatOn, retriedElsewhere, remembered,
+    return { menuOn, shape, offNow, retriedWhileOff, otherChatOn, retriedElsewhere, remembered,
       noteShown, noteText, noteButtons, afterBack, menuBack, rowThere, saidBefore, saidAfter };
   });
   await page.close();
@@ -4465,6 +4477,16 @@ console.log("\nper-chat switch");
     !out.menuOn.some((t) => /this chat/i.test(t)), out.menuOn);
   check("and still offers the way to the settings",
     out.menuOn.some((t) => /settings/i.test(t)), out.menuOn);
+  // The ways in, then a line, then the one entry that takes the button away.
+  check("the button's menu is grouped rather than one column",
+    out.shape.indexOf("|") > 0, out.shape.join(" "));
+  check("a line never opens or closes it",
+    out.shape[0] !== "|" && out.shape[out.shape.length - 1] !== "|", out.shape.join(" "));
+  check("hiding the button sits alone under that line",
+    out.shape[out.shape.length - 1] === "hide" && out.shape[out.shape.length - 2] === "|",
+    out.shape.join(" "));
+  check("and a divider is never counted as an entry",
+    !out.menuOn.some((t) => !t), out.menuOn);
   check("settings carries the row that switches this chat off", out.rowThere, out);
   check("which says what it will do before and after",
     /off here/i.test(out.saidBefore || "") && /on here/i.test(out.saidAfter || ""),
