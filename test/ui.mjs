@@ -604,7 +604,8 @@ console.log("\nhints");
           again.click();
         }
         await frame();
-        await new Promise((r) => setTimeout(r, 200));
+        // Past the travel that closes its space.
+        await new Promise((r) => setTimeout(r, 420));
         return { had, afterOne, said, afterTwo: notes() };
       }),
   );
@@ -9247,12 +9248,14 @@ console.log("\nnote list");
       boxes()[1].dispatchEvent(new Event("input", { bubbles: true }));
       // Twice. A note holds writing and there is no undo, so the first press
       // arms the button and the second removes it.
+      // Twice, then past the travel: the row's space is let down before it goes.
       const drop = (n) => {
         n.click();
         n.click();
       };
+      const settled = () => new Promise((r) => setTimeout(r, 380));
       drop(minuses()[0]);
-      await frame();
+      await settled();
       const afterRemove = { notes: boxes().length, left: boxes()[0].value };
 
       // Climb to the ceiling.
@@ -9261,7 +9264,11 @@ console.log("\nnote list");
       const atCap = { notes: boxes().length, plusOff: plus.disabled };
 
       // And back down to the floor.
-      for (let i = 0; i < 30; i++) { const m = minuses(); if (m.length) drop(m[m.length - 1]); }
+      for (let i = 0; i < 30; i++) {
+        const m = minuses();
+        if (m.length) drop(m[m.length - 1]);
+        await settled();
+      }
       await frame();
       const atFloor = { notes: boxes().length, minusOff: minuses()[0].disabled, plusOn: !plus.disabled };
 

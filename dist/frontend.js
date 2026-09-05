@@ -5230,6 +5230,108 @@ export function setup(ctx, opts) {
             return false;
         }
     }
+    // Auto Refine's, copied across so a note and a block go the same way. A row
+    // removed makes the panel shorter by its own height, and a reader at the end
+    // of the list is then past the end of it, so the page is pulled back by
+    // exactly that much between two frames. Its space is let down first instead
+    // and the pull back comes with it.
+    // A box let down to nothing and then handed over. done runs once, whether the
+    // travel finished, was cut short by a second one, or never started because the
+    // reader asked for no movement.
+    function foldAway(node, done) {
+        let ran = false;
+        const finish = () => {
+            if (ran)
+                return;
+            ran = true;
+            try {
+                node.style.height = "";
+                node.style.opacity = "";
+                node.style.overflow = "";
+                node.style.transition = "";
+                node.style.marginBottom = "";
+                node.style.paddingTop = "";
+                node.style.paddingBottom = "";
+                node.style.borderTopWidth = "";
+                node.style.borderBottomWidth = "";
+            }
+            catch (_) { }
+            done();
+        };
+        try {
+            let still = false;
+            try {
+                still =
+                    typeof matchMedia === "function" &&
+                        matchMedia("(prefers-reduced-motion: reduce)").matches;
+            }
+            catch (_) { }
+            const tall = node && node.getBoundingClientRect ? node.getBoundingClientRect().height : 0;
+            if (still || !(tall > 0) || !node.style) {
+                finish();
+                return;
+            }
+            // The gap its parent puts under it, which is not the block's to shrink: a
+            // box at no height with its padding and edge gone was still a gap tall,
+            // and that last stretch went in one step at the end of the travel. Taken
+            // off as a negative margin, which cancels it.
+            let gap = 0;
+            try {
+                const owner = node.parentElement;
+                const how = owner ? getComputedStyle(owner) : null;
+                if (how)
+                    gap = parseFloat(how.rowGap || how.gap || "0") || 0;
+            }
+            catch (_) { }
+            node.style.height = tall + "px";
+            node.style.overflow = "hidden";
+            // Read the layout between the two, or the browser sees one value being set
+            // and nothing to travel between.
+            void node.offsetWidth;
+            // Out rather than in. Easing in puts the longest step at the end, so the
+            // panel travels gently and then stops dead, which is the part that reads
+            // as a jump; easing out spends the distance early and lands softly.
+            //
+            // The curve eases in a little as well as out. A pure ease-out spends its
+            // distance at the very start, so the first frame was the largest step of
+            // the whole travel; this leans into it over two or three frames and then
+            // has a long tail to land on. Longer than the panel's other movements
+            // because this one carries the page with it, and the same distance over
+            // more frames is a smaller step in each.
+            const ease = "240ms cubic-bezier(.4,0,.2,1)";
+            node.style.transition =
+                "height " + ease + ",opacity " + ease + ",margin-bottom " + ease +
+                    ",padding-top " + ease + ",padding-bottom " + ease +
+                    ",border-top-width " + ease + ",border-bottom-width " + ease;
+            node.style.height = "0px";
+            node.style.opacity = "0";
+            // The gap under it closes too, or the last few pixels go all at once.
+            node.style.marginBottom = gap > 0 ? -gap + "px" : "0px";
+            // And its own padding and edge. A height of nothing still leaves those
+            // standing, so a block let down to zero was thirty pixels tall and the
+            // last thirty went in one frame at the end of the travel.
+            node.style.paddingTop = "0px";
+            node.style.paddingBottom = "0px";
+            node.style.borderTopWidth = "0px";
+            node.style.borderBottomWidth = "0px";
+            const end = (e) => {
+                if (e && e.target !== node)
+                    return;
+                try {
+                    node.removeEventListener("transitionend", end);
+                }
+                catch (_) { }
+                finish();
+            };
+            node.addEventListener("transitionend", end);
+            // A transition that never runs, on a page that will not animate, must
+            // still hand the block over.
+            setTimeout(finish, 600);
+        }
+        catch (_) {
+            finish();
+        }
+    }
     async function askFirst(key, spec, armSays, go) {
         let asked = false;
         let yes = false;
@@ -10687,9 +10789,13 @@ export function setup(ctx, opts) {
                         }, "Press it again to remove this note.", () => {
                             if (notes.length <= 1)
                                 return;
-                            notes.splice(i, 1);
-                            push();
-                            draw();
+                            // Its space closes rather than going between two frames, the
+                            // same as a block in Auto Refine.
+                            foldAway(wrap, () => {
+                                notes.splice(i, 1);
+                                push();
+                                draw();
+                            });
                         });
                     });
                     bar.appendChild(num);
