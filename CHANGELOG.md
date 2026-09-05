@@ -47,6 +47,7 @@ _2026-09-05_
 - **Deleting a preset does not cost you your place in the panel.** A dialog stops the page behind it scrolling, which loses where you were, so that place is held across it.
 - **The panel knows which chat you are in after pressing Update.** The backend answers with the account's most recent chat, or that nobody is in a chat while it is still starting. Neither is taken as final: the address settles it, and the question is asked again until something answers properly.
 - **The Prompt tab's "different chat" line has both chat ids behind it.** They live in the debug report, where they say whether a host is naming one chat two ways.
+- **Switching the extension off while Pick it for me is up takes the picker with it.** It left its listeners on the page and text selection switched off across it.
 
 ## 4.24.8
 
