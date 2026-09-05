@@ -116,6 +116,15 @@ async function inPanel(browser, { css = "", viewport, touch = false, settings = 
     // Recorded rather than discarded, so a check can drive the lifecycle the
     // host would drive: a generation starting, tokens arriving, one ending.
     window.__handlers = {};
+    window.__sent = [];
+    window.__backs = [];
+    window.__fromBackend = (m) => {
+      for (const f of window.__backs.slice()) {
+        try {
+          f(m);
+        } catch (_) {}
+      }
+    };
     window.__setup(
       {
         events: {
@@ -125,6 +134,17 @@ async function inPanel(browser, { css = "", viewport, touch = false, settings = 
               delete window.__handlers[name];
             };
           },
+        },
+        // What crosses to the backend, and a way to answer as it would. Every
+        // handler is kept rather than only the newest: the panel registers
+        // short-lived ones of its own alongside the router, so replacing them
+        // would deliver to whichever happened to register last.
+        sendToBackend: (m) => window.__sent.push(m),
+        onBackendMessage: (fn) => {
+          window.__backs.push(fn);
+          return () => {
+            window.__backs = window.__backs.filter((f) => f !== fn);
+          };
         },
         ui: {
           showModal: () => ({
@@ -470,6 +490,115 @@ for (const [label, before, after] of [
     out.now.worst.text + " at " + out.now.worst.r + "; " + out.now.under3.join(", "),
   );
   check(`${label}: no console errors`, errors.length === 0, errors);
+}
+
+// ---- a repair has to land on the frame the reader sees ----
+// Anything the panel adds is measured against the page once it is in it. Left to
+// the next frame, it is drawn once in the theme's own colours and once in the
+// repaired ones, so a row appears and then changes colour under the reader.
+console.log("\nrepainting on a press");
+{
+  // A theme that has all but erased its own text, so there is a real repair to
+  // watch. Nothing here is wrong with the panel.
+  const cruel = ":root{--lumiverse-text-muted:rgba(255,255,255,.1);--lumiverse-text:rgba(255,255,255,.2)}";
+  const { out, errors } = await inPanel(browser, { css: cruel }, (page) =>
+    page.evaluate(async () => {
+      const modal = document.getElementById("modal");
+      const read = () => [...modal.querySelectorAll("*")].map((n) => getComputedStyle(n).color);
+      const inked = () => modal.querySelectorAll("[data-ar-ink]").length;
+      // The + on a rule list, which is the plainest press that puts new rows on
+      // the panel rather than changing ones already there.
+      const press = [...modal.querySelectorAll("button")].find(
+        (b) => b.textContent.trim() === "+",
+      );
+      const was = modal.querySelectorAll("*").length;
+      const inkWas = inked();
+      press.click();
+      // What the next frame is painted with, read before it gets one.
+      const atOnce = read();
+      const inkAtOnce = inked();
+      await new Promise((r) => setTimeout(r, 400));
+      const later = read();
+      let moved = 0;
+      for (let i = 0; i < Math.min(atOnce.length, later.length); i++)
+        if (atOnce[i] !== later[i]) moved++;
+      return { moved, was, added: atOnce.length - was, inkWas, inkAtOnce, inkLater: inked() };
+    }),
+  );
+  check("the press puts rows on the panel, or this proves nothing", out.added > 4, out.added);
+  check(
+    "and this theme leaves them needing a repair, or this proves nothing",
+    out.inkLater > out.inkWas,
+    out.inkWas + " before, " + out.inkLater + " after",
+  );
+  check(
+    "which they carry on their first frame",
+    out.inkAtOnce === out.inkLater,
+    out.inkAtOnce + " of " + out.inkLater + " were there in time",
+  );
+  check(
+    "so nothing changes colour after the frame it appeared on",
+    out.moved === 0,
+    out.moved + " changed colour after the frame",
+  );
+  check("no console errors", errors.length === 0, errors);
+}
+
+// ---- the prompt the model was handed ----
+// The one view that is fed entirely from the backend, and until now the stub
+// had no bridge at all, so nothing here was covered.
+console.log("\nthe prompt view");
+{
+  const { out, errors } = await inPanel(browser, { settings: { liveLog: true } }, (page) =>
+    page.evaluate(async () => {
+      const rows = (chatId) => ({
+        type: "prompt_snapshot",
+        at: Date.now(),
+        chatId,
+        messages: [
+          { role: "system", content: "a wrapper line", history: false, note: false, noteIndex: 0 },
+          { role: "user", content: "the words I typed", history: true, note: false, noteIndex: 0 },
+        ],
+        total: 2,
+        notes: 0,
+      });
+      const wait = () => new Promise((r) => setTimeout(r, 120));
+      const said = () => document.body.innerText;
+      const tab = (name) =>
+        [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === name);
+      const asked = () => window.__sent.filter((m) => m.type === "set_prompt_capture");
+      const before = asked().length;
+      tab("Prompt").click();
+      await wait();
+      const armed = asked().slice(before);
+      // The chat you are in, as the host would say it.
+      if (window.__handlers.CHAT_CHANGED) window.__handlers.CHAT_CHANGED({ chatId: "here-1" });
+      await wait();
+      window.__fromBackend(rows("here-1"));
+      await wait();
+      const mine = said();
+      // One captured somewhere else is withheld, and the two ids are named so a
+      // host that says the same chat two ways can be told from a real move.
+      window.__fromBackend(rows("elsewhere-2"));
+      await wait();
+      const other = said();
+      return {
+        armed,
+        mineHasIt: mine.includes("the words I typed"),
+        otherHasIt: other.includes("the words I typed"),
+        otherNames: other.includes("elsewhere-2") && other.includes("here-1"),
+      };
+    }),
+  );
+  check(
+    "opening it asks the backend to start capturing",
+    out.armed.length === 1 && out.armed[0].on === true,
+    JSON.stringify(out.armed),
+  );
+  check("a prompt for the chat you are in is drawn", out.mineHasIt);
+  check("one captured elsewhere is not", !out.otherHasIt);
+  check("and it names both chats, so a mismatch can be seen", out.otherNames);
+  check("no console errors", errors.length === 0, errors);
 }
 
 // ---- a hint must not move the list ----

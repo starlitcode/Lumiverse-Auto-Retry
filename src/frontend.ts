@@ -2561,6 +2561,25 @@ function afterPaint(fn: () => void) {
   else fn();
 }
 
+// The same check, run now when the element is already in the page. Asking for a
+// computed colour lays it out there and then, so waiting for the next frame buys
+// nothing and costs a frame drawn in the theme's own colours before the repaired
+// one replaces it: a row added by the + button appeared, then changed colour
+// under the reader. Only a tree still being assembled has to wait.
+function repairNow(el: any, fn: () => void) {
+  let live = false;
+  try {
+    live = !!(el && el.isConnected);
+  } catch (_) {}
+  if (live) {
+    try {
+      fn();
+    } catch (_) {}
+    return;
+  }
+  afterPaint(fn);
+}
+
 // Checkboxes and number spinners are drawn by the browser, not by us. The
 // browser picks their colours from the page's colour scheme rather than from
 // the theme, and with no scheme set it assumes light, which is why an unchecked
@@ -2570,7 +2589,7 @@ function afterPaint(fn: () => void) {
 // so a light theme still gets light controls.
 function matchColorScheme(el: any) {
   keepReadable(el, "scheme");
-  afterPaint(() => {
+  repairNow(el, () => {
     try {
       if (!el || !el.style) return;
       const bg = backdropOf(el);
@@ -2612,12 +2631,12 @@ function fixEdge(el: any, min?: number) {
 
 function ensureEdge(el: any, min?: number) {
   keepReadable(el, "edge", min);
-  afterPaint(() => fixEdge(el, min));
+  repairNow(el, () => fixEdge(el, min));
 }
 
 function ensureReadable(el: any, min?: number) {
   keepReadable(el, "ink", min);
-  afterPaint(() => fixContrast(el, min));
+  repairNow(el, () => fixContrast(el, min));
 }
 
 // True when the element paints text of its own, rather than only holding other
@@ -2647,7 +2666,7 @@ function paintsText(el: any): boolean {
 // held to a lower floor and only rescued when it has all but disappeared.
 function ensureReadableTree(root: any, min?: number) {
   keepReadable(root, "tree", min);
-  afterPaint(() => sweepTree(root, min));
+  repairNow(root, () => sweepTree(root, min));
 }
 
 function sweepTree(root: any, min?: number) {
@@ -3807,9 +3826,19 @@ export function setup(ctx: Ctx, opts?: any) {
             : "(no prompt seen yet; send a reply)";
       return;
     }
+    // Both ids, not just the fact that they differ. They come from different
+    // places, the chat events and the interceptor's own context, so a host that
+    // names the same chat differently in each holds this view shut for good and
+    // the old wording gave nobody a way to tell that apart from having simply
+    // walked into another chat.
     if (!promptIsForThisChat()) {
       body.textContent =
-        "The last prompt captured was for a different chat. Send a reply here to see this one's.";
+        "The last prompt captured was for a different chat. Send a reply here to see this one's. " +
+        "It was captured for " +
+        String(lastPrompt.chatId) +
+        ", and this window is in " +
+        String(lastChatId) +
+        ".";
       return;
     }
     const chars = lastPrompt.messages.reduce(
