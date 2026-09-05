@@ -12,8 +12,6 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 _2026-09-05_
 
-**On the testing branch, not yet on stable.**
-
 **No reinstall needed.** It is a major because a feature people were using has been taken out, which is what the number is for even when installing does not change.
 
 ### Removed
