@@ -11800,11 +11800,10 @@ export function setup(ctx, opts) {
             p.textContent = para;
             body.appendChild(p);
         }
-        // The last line carries the only link the extension has. Telling somebody
-        // to go and read a page, in a box they cannot leave without answering,
-        // works out to telling them not to bother: the repository is not open in
-        // front of them and the file is four clicks in. Nothing is fetched by
-        // drawing this. It opens a tab if it is tapped, and not otherwise.
+        // The page itself rather than an instruction to go and find it: in a box
+        // they cannot leave without answering, telling somebody to read a file four
+        // clicks into a repository works out to telling them not to bother.
+        // Nothing is fetched by drawing this. It opens a tab only if it is tapped.
         {
             const p = document.createElement("div");
             p.appendChild(document.createTextNode("There is more information about this setting and its risks on "));
@@ -11891,9 +11890,19 @@ export function setup(ctx, opts) {
     const HOLD_PICK_MS = 500;
     // How far a finger may wander and still count as a hold rather than a drag.
     const HOLD_PICK_SLIP = 10;
+    // The picker's own way out, so teardown can take it down. Without a handle it
+    // is a closure nothing else can reach, and an extension switched off with the
+    // picker up leaves its listeners and its no-selecting class on the page.
+    let stopPicking = null;
+    disposers.push(() => {
+        if (stopPicking)
+            stopPicking();
+    });
     function startPicking(key, label) {
         if (typeof document === "undefined")
             return;
+        if (stopPicking)
+            stopPicking();
         // Refresh the baseline first: dismissing the modal rolls cfg back to it, so
         // without this every unsaved edit would be lost by opening the picker.
         if (modalSnapshot) {
@@ -11932,6 +11941,7 @@ export function setup(ctx, opts) {
             if (done)
                 return;
             done = true;
+            stopPicking = null;
             letGo();
             try {
                 document.removeEventListener("keydown", onKey, true);
@@ -12034,6 +12044,36 @@ export function setup(ctx, opts) {
         const onKey = (e) => {
             if (e && e.key === "Escape")
                 finish(null, "Picking cancelled.");
+        };
+        // Cancelled, not answered: teardown wants the listeners gone, not the panel
+        // reopened over a page the extension is leaving.
+        stopPicking = () => {
+            if (done)
+                return;
+            done = true;
+            letGo();
+            try {
+                document.removeEventListener("keydown", onKey, true);
+            }
+            catch (_) { }
+            for (const [type, fn] of [
+                ["pointerdown", onDown],
+                ["pointermove", onMove],
+                ["pointerup", onUp],
+                ["pointercancel", onUp],
+                ["contextmenu", onMenu],
+            ]) {
+                try {
+                    document.removeEventListener(type, fn, true);
+                }
+                catch (_) { }
+            }
+            try {
+                document.documentElement.classList.remove("ar-picking");
+            }
+            catch (_) { }
+            hideToast();
+            stopPicking = null;
         };
         try {
             document.documentElement.classList.add("ar-picking");

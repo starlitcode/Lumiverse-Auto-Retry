@@ -842,6 +842,63 @@ console.log("\nhints");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- the picker is taken down with the extension ----
+// It puts listeners on the document and switches text selection off page-wide,
+// so an extension switched off with the picker up would leave both behind on a
+// page it is no longer part of.
+console.log("\nthe picker and teardown");
+{
+  const page = await browser.newPage();
+  await stage(page, "<div id=modal></div>");
+  await page.addStyleTag({ content: THEME });
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  const out = await page.evaluate(async () => {
+    const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    window.__acts = {};
+    const teardown = window.__setup(
+      {
+        events: { on: () => () => {} },
+        ui: {
+          showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+          registerInputBarAction: (o) => {
+            const a = { onClick: (cb) => { a.cb = cb; return () => {}; }, destroy: () => {} };
+            window.__acts[o.id] = a;
+            return a;
+          },
+        },
+      },
+      { toast: false },
+    );
+    window.__acts["auto-retry-settings"].cb();
+    await frame();
+    const modal = document.getElementById("modal");
+    const row = modal.querySelector('[data-ar-row="stopSelector"]');
+    [...row.querySelectorAll("button")]
+      .find((b) => /pick it for me/i.test(b.textContent))
+      .click();
+    await frame();
+    const armed = document.documentElement.classList.contains("ar-picking");
+    teardown();
+    await frame();
+    // Anything the picker left would still answer a press on the page.
+    const target = document.createElement("button");
+    document.body.appendChild(target);
+    let fired = 0;
+    target.addEventListener("click", () => { fired++; });
+    target.click();
+    return {
+      armed,
+      stillPicking: document.documentElement.classList.contains("ar-picking"),
+      pageStillWorks: fired === 1,
+    };
+  });
+  await page.close();
+  check("the picker was up, or this proves nothing", out.armed, out);
+  check("teardown lets the page select text again", !out.stillPicking, out);
+  check("and the page still answers a press", out.pageStillWorks, out);
+}
+
 // ---- the browser's own long press is the same gesture ----
 // On a phone a long press is also how the browser starts selecting text and
 // raises its callout, and it decides that at about the moment the hold
