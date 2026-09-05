@@ -568,6 +568,53 @@ console.log("\nhints");
 // sits partway down a row that can be two lines high, so anchoring to it drops
 // the description on top of the setting being asked about. Reading the row also
 // holds at any scale the host applies, since it reads what was painted.
+// ---- a note is not thrown away on one press ----
+{
+  // A note holds writing somebody typed and there is no undo, so it goes the
+  // way a preset does. The panel here is carried by the page, which is the
+  // layout where a dialog would cost the reader their place, so the question is
+  // asked on the button itself.
+  const { out, errors } = await inPanel(
+    browser,
+    { viewport: { width: 480, height: 1030 }, touch: true, settings: { refusalNote: true } },
+    (page) =>
+      page.evaluate(async () => {
+        const frame = () =>
+          new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        const modal = document.getElementById("modal");
+        const notes = () => modal.querySelectorAll("[data-ar-note-drop]").length;
+        const add = [...modal.querySelectorAll("button")].find(
+          (b) => b.getAttribute("aria-label") === "Add another note",
+        );
+        if (!add) return { skipped: true };
+        // Two of them, since the last one cannot be removed.
+        add.click();
+        await frame();
+        const had = notes();
+        const drop = modal.querySelector('[data-ar-note-drop="1"]');
+        drop.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerType: "touch" }));
+        drop.click();
+        await frame();
+        await new Promise((r) => setTimeout(r, 200));
+        const afterOne = notes();
+        const said = (document.getElementById("__lvRetryToast") || {}).textContent || "";
+        const again = modal.querySelector('[data-ar-note-drop="1"]');
+        if (again) {
+          again.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerType: "touch" }));
+          again.click();
+        }
+        await frame();
+        await new Promise((r) => setTimeout(r, 200));
+        return { had, afterOne, said, afterTwo: notes() };
+      }),
+  );
+  check("there are two notes to work with", out.had === 2, out);
+  check("one press removes nothing", out.afterOne === out.had, out);
+  check("and it says what a second press would do", /press it again/i.test(out.said), out.said);
+  check("the second press removes it", out.afterTwo === out.had - 1, out);
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- what each part of a row answers to ----
 {
   // A label with no `for` names the first labelable element inside it, and a
@@ -9198,7 +9245,13 @@ console.log("\nnote list");
       // one that is left.
       boxes()[1].value = "second";
       boxes()[1].dispatchEvent(new Event("input", { bubbles: true }));
-      minuses()[0].click();
+      // Twice. A note holds writing and there is no undo, so the first press
+      // arms the button and the second removes it.
+      const drop = (n) => {
+        n.click();
+        n.click();
+      };
+      drop(minuses()[0]);
       await frame();
       const afterRemove = { notes: boxes().length, left: boxes()[0].value };
 
@@ -9208,7 +9261,7 @@ console.log("\nnote list");
       const atCap = { notes: boxes().length, plusOff: plus.disabled };
 
       // And back down to the floor.
-      for (let i = 0; i < 30; i++) { const m = minuses(); if (m.length) m[m.length - 1].click(); }
+      for (let i = 0; i < 30; i++) { const m = minuses(); if (m.length) drop(m[m.length - 1]); }
       await frame();
       const atFloor = { notes: boxes().length, minusOff: minuses()[0].disabled, plusOn: !plus.disabled };
 

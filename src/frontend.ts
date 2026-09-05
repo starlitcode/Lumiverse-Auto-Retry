@@ -5257,6 +5257,79 @@ export function setup(ctx: Ctx, opts?: any) {
   }
   const disposers: Array<() => void> = [];
 
+  // Anything that throws writing away asks first.
+  //
+  // In the host's dialog where that costs nothing, and on the button itself
+  // where it does not. A dialog stops the page behind it scrolling, and the way
+  // that is done is to stop the page scrolling at all, which sets its scroll to
+  // nought and loses where the reader was: on a panel the page carries, asking
+  // one question throws them to the top and back. The floating panel scrolls in
+  // a box of its own and never notices; in the drawer the page can carry it.
+  //
+  // Auto Refine asks the same way, for the same reason.
+  const ARM_MS = 4000;
+  const armedFor = new Map<string, any>();
+  disposers.push(() => {
+    armedFor.forEach((t) => {
+      try {
+        clearTimeout(t);
+      } catch (_) {}
+    });
+    armedFor.clear();
+  });
+
+  function pageHasScroll(): boolean {
+    try {
+      const page: any = document.scrollingElement || document.documentElement;
+      return !!page && page.scrollHeight > page.clientHeight + 4;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  async function askFirst(
+    key: string,
+    spec: { title: string; message: string; confirmLabel: string },
+    armSays: string,
+    go: () => void,
+  ) {
+    let asked = false;
+    let yes = false;
+    try {
+      if (ctx?.ui?.showConfirm && !pageHasScroll()) {
+        const answer = await (ctx as any).ui.showConfirm({
+          title: spec.title,
+          message: spec.message,
+          variant: "warning",
+          confirmLabel: spec.confirmLabel,
+        });
+        asked = true;
+        yes = !!(answer && answer.confirmed);
+      }
+    } catch (_) {
+      asked = false;
+    }
+    if (asked) {
+      if (yes) go();
+      return;
+    }
+    // Armed instead. Keyed per button, since two of these on one panel are two
+    // different questions and arming one must not arm the other, and the arming
+    // lapses so a press tomorrow does not land on one waiting since today.
+    const waiting = armedFor.get(key);
+    if (waiting) {
+      clearTimeout(waiting);
+      armedFor.delete(key);
+      go();
+      return;
+    }
+    showToast(armSays, { force: true });
+    armedFor.set(
+      key,
+      setTimeout(() => armedFor.delete(key), ARM_MS),
+    );
+  }
+
   // Three ways a theme changes and none of them covers the others. The reader
   // switching their system between light and dark fires the media query and
   // touches nothing in the page. Lumiverse's own switch writes a class or an
@@ -9032,29 +9105,27 @@ export function setup(ctx: Ctx, opts?: any) {
           status.textContent = "Pick a preset to delete.";
           return;
         }
-        let ok = true;
-        try {
-          if (ctx?.ui?.showConfirm) {
-            const held = holdScroll(del);
-            const r = await ctx.ui.showConfirm({
-              title: "Delete preset",
-              message: 'Delete the preset "' + name + '"?',
-              variant: "warning",
-              confirmLabel: "Delete",
-            });
+        const held = holdScroll(del);
+        askFirst(
+          "preset:" + kind + ":" + name,
+          {
+            title: "Delete preset",
+            message: 'Delete the preset "' + name + '"? There is no undo.',
+            confirmLabel: "Delete",
+          },
+          'Press Delete again to remove "' + name + '".',
+          () => {
             releaseScroll(held);
-            ok = !!r?.confirmed;
-          }
-        } catch (_) {}
-        if (!ok) return;
-        presets[kind] = list().filter((x) => x.name !== name);
-        if (!persist()) {
-          status.textContent = "Couldn't save on this browser.";
-          return;
-        }
-        refreshSelect();
-        status.textContent = "Deleted preset: " + name + ".";
-        log("deleted the " + kindLabel + " preset " + JSON.stringify(name));
+            presets[kind] = list().filter((x) => x.name !== name);
+            if (!persist()) {
+              status.textContent = "Couldn't save on this browser.";
+              return;
+            }
+            refreshSelect();
+            status.textContent = "Deleted preset: " + name + ".";
+            log("deleted the " + kindLabel + " preset " + JSON.stringify(name));
+          },
+        );
       });
 
       wrap.appendChild(miniLabel("Saved presets"));
@@ -10617,11 +10688,28 @@ export function setup(ctx: Ctx, opts?: any) {
           drop.disabled = !canDrop;
           drop.style.opacity = canDrop ? "1" : "0.45";
           drop.style.cursor = canDrop ? "pointer" : "not-allowed";
+          drop.setAttribute("data-ar-note-drop", String(i));
           drop.addEventListener("click", () => {
             if (notes.length <= 1) return;
-            notes.splice(i, 1);
-            push();
-            draw();
+            const words = String(note.text || "").trim();
+            askFirst(
+              "note:" + i,
+              {
+                title: "Remove note",
+                message: words
+                  ? 'Remove note ' + (i + 1) + '? There is no undo, and what it says goes with it: "' +
+                    words.slice(0, 90) + (words.length > 90 ? "\u2026" : "") + '"'
+                  : "Remove note " + (i + 1) + "? It is empty, so nothing is lost.",
+                confirmLabel: "Remove",
+              },
+              "Press it again to remove this note.",
+              () => {
+                if (notes.length <= 1) return;
+                notes.splice(i, 1);
+                push();
+                draw();
+              },
+            );
           });
           bar.appendChild(num);
           bar.appendChild(fromWrap);
