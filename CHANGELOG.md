@@ -8,6 +8,14 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.1.0
+
+_2026-09-05_
+
+### Added
+
+- **The panel says what a retry costs.** Put your provider's prices per million tokens under Basics and the Prompt tab works out what sending that prompt again comes to, and what the retries fired so far this session come to at that size. What the new reply costs is on top of it and is named rather than guessed at, since nothing can know the size of a reply before it arrives. Both prices start at 0, and at 0 the line is not there. No currency is shown, because nothing here knows which one you are billed in.
+
 ## 5.0.0
 
 _2026-09-05_

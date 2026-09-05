@@ -121,7 +121,7 @@ const STREAM_BUF_MAX = 200000;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.0.0";
+const VERSION = "5.1.0";
 
 // The addresses the extension points at. Pinned to the released branch rather
 // than to a tag, so an old install still opens the page as it stands today.
@@ -288,6 +288,10 @@ const CONFIG = {
   // sidebar, which places it, themes it, lists it in the Ctrl+K palette, and
   // keeps it off the reply the user is reading.
   panelHome: "float",
+  // What a million tokens costs, in and out. Nobody's prices are known here, so
+  // 0 means the reader has not said and no cost is worked out.
+  costIn: 0,
+  costOut: 0,
 };
 
 // A hint that quotes a default reads it from the block above rather than
@@ -419,6 +423,10 @@ const RUNS: Record<string, { title: string; note: string }> = {
     title: "How far it looks",
     note: "What the check is allowed to read. A long reply is real writing rather than a refusal, and the model's own reasoning is not the reply, so neither is treated as one by default.",
   },
+  panelCost: {
+    title: "What a retry costs",
+    note: "Your provider's own prices, per million tokens. Nothing here knows what a model charges and no two providers agree, so this is the only way the panel can turn a token count into money. Left at 0, no cost is worked out anywhere.",
+  },
   frozen: {
     title: "Replies that freeze",
     note: "The rows above are about a reply that arrived and was no good. These two are about one that never finished. Both are waits in milliseconds, and both lean long so a slow connection is not read as a freeze. Lower them for quicker retries on a fast provider, or set either to 0 to switch that one off.",
@@ -481,6 +489,30 @@ const SCHEMA: Group[] = [
           { value: "drawer", label: "In the sidebar drawer" },
         ],
         hint: "Floating is a small box in the corner you can move and resize, and where you leave it is remembered. In the sidebar puts it in Lumiverse's own side panel, which never covers the reply you are reading. A Lumiverse with no side panel for extensions gets the box, and the Log says so.",
+      },
+      // A retry is a whole generation paid for twice, so the Prompt tab can say
+      // what one costs. Nothing here knows what a model charges and no two
+      // providers agree, so the price comes from the reader. Both at 0 leaves
+      // the line off.
+      {
+        key: "costIn",
+        needs: ["liveLog"],
+        run: "panelCost",
+        label: "Price per million tokens sent",
+        type: "num",
+        min: 0,
+        max: 10000,
+        hint: "From your provider's own price list. The panel's Prompt tab uses it to say what a retry costs. Left at 0, no cost is worked out.",
+      },
+      {
+        key: "costOut",
+        needs: ["liveLog"],
+        run: "panelCost",
+        label: "Price per million tokens back",
+        type: "num",
+        min: 0,
+        max: 10000,
+        hint: "The other half of that price list, usually the dearer one. In whatever currency your provider bills you in, since nothing here converts anything.",
       },
     ],
   },
@@ -3524,6 +3556,23 @@ export function setup(ctx: Ctx, opts?: any) {
   }
 
   const rough = (n: number) => (n < 1000 ? String(n) : Math.round(n / 100) / 10 + "k");
+  // ---- turning tokens into the number people actually want ----
+  // A retry is a whole generation charged for again, so what one costs is worth
+  // saying beside the prompt it was measured from.
+  const hasPrices = (): boolean => Number(cfg.costIn) > 0 || Number(cfg.costOut) > 0;
+
+  // No currency symbol, because nothing here knows the currency: a "$" printed
+  // for somebody billed in euros is worse than no symbol at all.
+  //
+  // Two places at a whole unit and up, two significant figures below one. A
+  // fixed number of decimals is what goes wrong here: two prints every prompt
+  // there is as 0.00, and four rounds a cost of 0.000012 away to nothing.
+  const money = (n: number): string =>
+    !Number.isFinite(n) || n <= 0 ? "0" : n >= 1 ? n.toFixed(2) : String(Number(n.toPrecision(2)));
+
+  // Sent and back priced apart, since providers charge more for what comes back.
+  const costOf = (sent: number, back: number): number =>
+    (sent / 1e6) * Number(cfg.costIn || 0) + (back / 1e6) * Number(cfg.costOut || 0);
   // The host's own count when it gives one, and an estimate otherwise. Which
   // of the two it is gets said in words, since a count and a guess are
   // different things to act on.
@@ -3861,6 +3910,25 @@ export function setup(ctx: Ctx, opts?: any) {
       lastPrompt.total + (lastPrompt.total === 1 ? " message, " : " messages, ") +
       rough(chars) + " characters, " + sayTokens(chars);
     body.appendChild(sum);
+    // What retrying this costs. A retry sends the whole prompt again, which is
+    // the half that can be worked out from what is on this tab. What the new
+    // reply costs is not knowable before it arrives, so it is named rather than
+    // guessed at: a figure with an invented half in it is worse than an honest
+    // one with a gap.
+    if (hasPrices()) {
+      const sent = lastPromptTokens || Math.round(chars / 4);
+      const one = costOf(sent, 0);
+      const cost = document.createElement("div");
+      cost.style.cssText =
+        "margin-bottom:6px;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+      cost.textContent =
+        "About " + money(one) + " to send this again, plus whatever the new reply costs." +
+        (stats.retries
+          ? " The " + stats.retries + (stats.retries === 1 ? " retry" : " retries") +
+            " this session would be about " + money(one * stats.retries) + " at this size."
+          : "");
+      body.appendChild(cost);
+    }
     const viewRow = document.createElement("div");
     viewRow.style.cssText = "margin-bottom:8px";
     const viewBtn = document.createElement("button");

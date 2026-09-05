@@ -8685,6 +8685,76 @@ console.log("\nprompt viewer");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- what a retry costs ----
+// The prompt tab reported messages, characters and tokens, none of which is
+// what somebody is billed in. A retry sends the whole prompt again, so that
+// half can be worked out; what the new reply costs cannot be known before it
+// arrives and is named rather than guessed at.
+{
+  const run = async (over) => {
+    const page = await browser.newPage();
+    const errors = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    await stage(page, "<div id=modal></div>");
+    await page.addStyleTag({ content: THEME });
+    await page.addScriptTag({ content: SOURCE, type: "module" });
+    await page.waitForFunction(() => !!window.__setup);
+    const out = await page.evaluate(async (over) => {
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      let msgCbs = [];
+      const onBackend = (m) => { for (const cb of msgCbs.slice()) { try { cb(m); } catch (_) {} } };
+      const sent = [];
+      window.__setup(
+        {
+          events: { on: () => () => {} },
+          sendToBackend: (m) => sent.push(m),
+          onBackendMessage: (cb) => { msgCbs.push(cb); return () => {}; },
+          ui: {
+            showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+            registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }),
+          },
+        },
+        over,
+      );
+      await wait(30);
+      const tab = (label) => [...document.querySelectorAll('[role="tab"]')]
+        .find((b) => b.textContent.trim() === label);
+      const body = () => document.getElementById("__lvRetryLogBody");
+      tab("Prompt").click();
+      await wait(20);
+      // 4000 characters with no host count, so the estimate is 1000 tokens.
+      onBackend({
+        type: "prompt_snapshot",
+        at: Date.now(),
+        chatId: "c1",
+        messages: [{ role: "system", content: "z".repeat(4000), history: false }],
+        total: 1,
+        notes: 0,
+      });
+      await wait(30);
+      return body() ? body().textContent : "";
+    }, over);
+    await page.close();
+    return { out, errors };
+  };
+
+  const priced = await run({ liveLog: true, toast: false, costIn: 3, costOut: 15 });
+  // 1000 tokens sent at 3 per million is 0.003.
+  check("the prompt tab says what sending it again costs",
+    /About 0\.003 to send this again/.test(priced.out), priced.out.slice(0, 240));
+  check("and does not pretend to know what the reply will cost",
+    /plus whatever the new reply costs/.test(priced.out), priced.out.slice(0, 240));
+  check("no currency is invented", !/[$£€]/.test(priced.out), priced.out.slice(0, 240));
+  check("no console errors with prices set", priced.errors.length === 0, priced.errors);
+
+  const free = await run({ liveLog: true, toast: false });
+  check("and nothing is costed until prices are set",
+    !/to send this again/.test(free.out), free.out.slice(0, 240));
+  check("while the token count is there either way",
+    /tokens/.test(free.out), free.out.slice(0, 240));
+  check("no console errors without prices", free.errors.length === 0, free.errors);
+}
+
 // ---- taking a note back is scoped to the chat it was armed for ----
 // Taking a note back was first written as a single flag, which said a note was
 // waiting but not which chat it was waiting on. Cancelling a retry in one chat
