@@ -485,7 +485,9 @@ console.log("\nhints");
         const modal = document.getElementById("modal");
         const pops = () => document.querySelectorAll('[role="tooltip"]').length;
         const infos = [...modal.querySelectorAll("button[data-ar-hint]")];
-        const below = [...modal.querySelectorAll("span")].find(
+        // The setting's name, which is a label where the row has a control to
+        // name and a span where it has none.
+        const below = [...modal.querySelectorAll("label,span")].find(
           (s) => s.textContent === "Floating on/off button",
         );
         const before = below.getBoundingClientRect().top;
@@ -589,21 +591,24 @@ console.log("\nhints");
           (r) => r.querySelector("button[data-ar-hint]") && r.querySelector("[data-ar-check]"),
         );
         const out = { n: 0, wrong: [], pressed: 0, bad: [] };
-        // Read rather than pressed, so every one of them is covered.
+        // Read rather than pressed, so every one of them is covered. The row
+        // itself must not be the label: the whole row as one press target made
+        // every part of it a press on the switch, the description under it and
+        // the boxes of the rows nested inside it included.
         for (const row of rows) {
           out.n++;
           const tick = row.querySelector("[data-ar-check]");
           const name = String(row.getAttribute("data-ar-row") || "").slice(0, 26);
-          if (row.tagName !== "LABEL") continue;
-          if (row.control !== tick) out.wrong.push("names the wrong control: " + name);
+          if (row.tagName === "LABEL") out.wrong.push("the whole row is the label: " + name);
+          const words = row.querySelector("label");
+          if (!words) out.wrong.push("the words are not a label: " + name);
+          else if (words.control !== tick) out.wrong.push("the words name the wrong control: " + name);
         }
         // And pressed, on a few, both ways.
         for (const row of rows.slice(0, 6)) {
           const tick = row.querySelector("[data-ar-check]");
           const q = row.querySelector("button[data-ar-hint]");
-          const words = [...row.querySelectorAll("span")].find(
-            (n) => (n.textContent || "").trim().length > 3,
-          );
+          const words = row.querySelector("label");
           if (!words) continue;
           out.pressed++;
           const name = String(row.getAttribute("data-ar-row") || "").slice(0, 26);
@@ -809,8 +814,10 @@ console.log("\nkeyboard and search");
       const frame = () =>
         new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       const modal = document.getElementById("modal");
+      // A setting's name is a label where its row has a control to name and a
+      // span where it has none, so both count as the words on screen.
       const vis = (w) =>
-        [...modal.querySelectorAll("span")].filter(
+        [...modal.querySelectorAll("label,span")].filter(
           (s) => s.textContent === w && s.offsetParent !== null,
         ).length;
       const heads = [...modal.querySelectorAll('[role="button"][aria-expanded]')];

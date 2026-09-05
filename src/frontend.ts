@@ -10376,26 +10376,23 @@ export function setup(ctx: Ctx, opts?: any) {
   const nextId = () => "ar-i" + ++idAt;
 
   function buildRow(f: Field): HTMLElement {
-    // bool/num wrap in <label> so the whole row toggles or focuses its control.
-    // text rows use <div> because they contain a Test button, which shouldn't sit inside a label.
-    const row = document.createElement(f.type === "text" ? "div" : "label");
-    // Which control the row names, said outright.
+    // The row is a plain box and the setting's words are the label inside it.
     //
-    // A label with no `for` names the first labelable element inside it, and a
-    // button is one, so the "?" added to these rows took the label off the
-    // setting: pressing a setting's own words opened its description instead of
-    // flipping its switch, and the switch was left with only its own small box
-    // to press. Naming the control means whatever else ends up standing in the
-    // row cannot take it again.
+    // The whole row used to be the label, which made every part of it a press on
+    // the control: the description under a setting, the boxes belonging to the
+    // rows nested inside it, empty space. A label with no `for` also names the
+    // first labelable element inside it, and a button is one, so the "?" added
+    // to these rows took the label off the setting outright.
+    //
+    // The words carry it now, named to the control by id, which is the target
+    // anyone aims at anyway and the one Auto Refine's rows already use.
+    const row = document.createElement("div");
     const forId = f.type === "bool" || f.type === "num" || f.type === "pick" ? nextId() : "";
-    if (forId) (row as HTMLLabelElement).htmlFor = forId;
     // Marks the row as the thing a hint popover measures itself against, and
     // names which setting it holds, which is what the checks read to tell a
     // duration apart from a plain number.
     row.setAttribute("data-ar-row", String(f.key || "1"));
-    row.style.cssText =
-      "display:flex;flex-direction:column;gap:5px;cursor:" +
-      (f.type === "text" ? "default" : "pointer");
+    row.style.cssText = "display:flex;flex-direction:column;gap:5px";
 
     // The description belongs to the "?" next to the label (hover on a mouse,
     // tap on touch) and is shown in a popover over the panel, so revealing one
@@ -10406,9 +10403,10 @@ export function setup(ctx: Ctx, opts?: any) {
     const labelWrap = document.createElement("div");
     labelWrap.style.cssText =
       "display:flex;align-items:center;gap:6px;min-width:0";
-    const name = document.createElement("span");
+    const name = document.createElement(forId ? "label" : "span");
+    if (forId) (name as HTMLLabelElement).htmlFor = forId;
     name.textContent = f.label;
-    name.style.cssText = "font-size:13.5px";
+    name.style.cssText = "font-size:13.5px" + (forId ? ";cursor:pointer" : "");
     labelWrap.appendChild(name);
     if (f.hint) {
       ensurePanelStyle();
