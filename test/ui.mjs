@@ -616,6 +616,87 @@ console.log("\nhints");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- pointing at a button without freezing the page ----
+{
+  // The stop button only exists while a reply is generating, and the only way to
+  // make one generate is to press send. Catching the next press anywhere meant
+  // that press was the one caught, so there was no way to reach the thing being
+  // pointed at. A press held is the pick; a press that is not held does what it
+  // always does.
+  const { out, errors } = await inPanel(
+    browser,
+    { viewport: { width: 480, height: 1030 }, touch: true },
+    (page) =>
+      page.evaluate(async () => {
+        const frame = () =>
+          new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        // The send button and the stop button, as Lumiverse draws them.
+        const send = document.createElement("button");
+        send.type = "button";
+        send.setAttribute("aria-label", "Nudge for a fresh reply");
+        send.textContent = "send";
+        let sent = 0;
+        send.addEventListener("click", () => { sent++; });
+        document.body.appendChild(send);
+
+        const stop = document.createElement("button");
+        stop.type = "button";
+        stop.setAttribute("aria-label", "Stop generating");
+        stop.textContent = "stop";
+        let stopped = 0;
+        stop.addEventListener("click", () => { stopped++; });
+        document.body.appendChild(stop);
+
+        const at = (n) => {
+          const b = n.getBoundingClientRect();
+          return { clientX: b.left + 2, clientY: b.top + 2, bubbles: true, pointerType: "touch" };
+        };
+        const tap = async (n) => {
+          n.dispatchEvent(new PointerEvent("pointerdown", at(n)));
+          n.dispatchEvent(new PointerEvent("pointerup", at(n)));
+          n.click();
+          await frame();
+        };
+        const hold = async (n) => {
+          n.dispatchEvent(new PointerEvent("pointerdown", at(n)));
+          await new Promise((r) => setTimeout(r, 640));
+          n.dispatchEvent(new PointerEvent("pointerup", at(n)));
+          n.click();
+          await frame();
+        };
+
+        const modal = document.getElementById("modal");
+        const row = modal.querySelector('[data-ar-row="stopSelector"]');
+        if (!row) return { skipped: true };
+        const pick = [...row.querySelectorAll("button")].find((b) => /pick it for me/i.test(b.textContent));
+        if (!pick) return { skipped: true };
+        pick.click();
+        await frame();
+
+        // A normal press on send has to still work: it is how a reply starts.
+        await tap(send);
+        const afterSend = sent;
+        // And a hold on stop is the pick.
+        await hold(stop);
+        await new Promise((r) => setTimeout(r, 200));
+        return {
+          afterSend,
+          stopped,
+          held: (window.__cfgPeek && window.__cfgPeek()) || null,
+          sel: (document.querySelector('[data-ar-row="stopSelector"] input') || {}).value,
+        };
+      }),
+  );
+  check("a press that is not held still works while picking", out.afterSend === 1, out);
+  check("the held press does not also fire the button", out.stopped === 0, out);
+  check(
+    "and holding it writes a selector that names it",
+    /Stop generating/.test(String(out.sel || "")),
+    out,
+  );
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- what each part of a row answers to ----
 {
   // A label with no `for` names the first labelable element inside it, and a

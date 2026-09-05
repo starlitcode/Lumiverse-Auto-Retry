@@ -11842,16 +11842,20 @@ export function setup(ctx, opts) {
         };
     }
     // Lets someone point at the control instead of writing a selector for it. The
-    // settings modal steps out of the way, the next click on the page is caught
-    // before the app sees it, and the element under it becomes the selector.
-    const PRESS_EVENTS = [
-        "pointerdown",
-        "pointerup",
-        "mousedown",
-        "mouseup",
-        "touchstart",
-        "touchend",
-    ];
+    // settings modal steps out of the way and a press held on the control becomes
+    // the selector.
+    //
+    // Held rather than tapped, so the page carries on working while the picker is
+    // up. Catching the next press anywhere meant the page was frozen: the stop
+    // button only exists while a reply is generating, and the only way to make one
+    // generate is to press send, which was the press being caught. There was no
+    // way to get to the thing being pointed at.
+    //
+    // Auto Refine's picker takes a hold for the same reason: its box is on the
+    // chat screen behind a drawer that has to be closed to reach it.
+    const HOLD_PICK_MS = 500;
+    // How far a finger may wander and still count as a hold rather than a drag.
+    const HOLD_PICK_SLIP = 10;
     function startPicking(key, label) {
         if (typeof document === "undefined")
             return;
@@ -11871,21 +11875,41 @@ export function setup(ctx, opts) {
             modalHandle = null;
         }
         let done = false;
+        let held = null;
+        const ours = (t) => {
+            try {
+                return !!(t && t.closest && t.closest("#__lvRetryToast"));
+            }
+            catch (_) {
+                return false;
+            }
+        };
+        const letGo = () => {
+            if (!held)
+                return;
+            try {
+                clearTimeout(held.timer);
+            }
+            catch (_) { }
+            held = null;
+        };
         const finish = (sel, message) => {
             if (done)
                 return;
             done = true;
-            try {
-                document.removeEventListener("click", onPick, true);
-            }
-            catch (_) { }
+            letGo();
             try {
                 document.removeEventListener("keydown", onKey, true);
             }
             catch (_) { }
-            for (const type of PRESS_EVENTS) {
+            for (const [type, fn] of [
+                ["pointerdown", onDown],
+                ["pointermove", onMove],
+                ["pointerup", onUp],
+                ["pointercancel", onUp],
+            ]) {
                 try {
-                    document.removeEventListener(type, swallow, true);
+                    document.removeEventListener(type, fn, true);
                 }
                 catch (_) { }
             }
@@ -11896,50 +11920,71 @@ export function setup(ctx, opts) {
             if (message)
                 showToast(message, { force: true, top: true });
         };
-        const onPick = (e) => {
-            const t = e && e.target;
-            // Our own toast is on screen during this, so let its buttons work.
-            try {
-                if (t && t.closest && t.closest("#__lvRetryToast"))
-                    return;
-            }
-            catch (_) { }
-            // Swallowed so picking the stop or regenerate control doesn't also fire it.
-            try {
-                e.preventDefault();
-                e.stopPropagation();
-            }
-            catch (_) { }
-            const sel = deriveSelector(t);
+        // The press that picked is still down, so a click is coming for whatever is
+        // under it. Eaten by a listener of its own, since the picker stands down the
+        // moment it has its answer and would take its own with it.
+        const eatClick = () => {
+            const eat = (e) => {
+                try {
+                    document.removeEventListener("click", eat, true);
+                }
+                catch (_) { }
+                try {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+                catch (_) { }
+            };
+            document.addEventListener("click", eat, true);
+            setTimeout(() => {
+                try {
+                    document.removeEventListener("click", eat, true);
+                }
+                catch (_) { }
+            }, 1200);
+        };
+        const take = (node) => {
+            held = null;
+            eatClick();
+            const sel = deriveSelector(node);
             if (!sel) {
-                finish(null, "Couldn't identify that one. Try clicking the button itself rather than an icon inside it.");
+                finish(null, "Couldn't identify that one. Try holding the button itself rather than an icon inside it.");
                 return;
             }
             finish(sel, "Set to " + sel);
         };
+        // Nothing is stopped on the way down. A press that is not held does what it
+        // always does, which is how the reply that makes a stop button appear gets
+        // sent in the first place.
+        const onDown = (e) => {
+            const t = e && e.target;
+            if (ours(t))
+                return;
+            letGo();
+            held = {
+                node: t,
+                x: (e && e.clientX) || 0,
+                y: (e && e.clientY) || 0,
+                timer: setTimeout(() => take(t), HOLD_PICK_MS),
+            };
+        };
+        const onMove = (e) => {
+            if (!held)
+                return;
+            const dx = ((e && e.clientX) || 0) - held.x;
+            const dy = ((e && e.clientY) || 0) - held.y;
+            if (dx * dx + dy * dy > HOLD_PICK_SLIP * HOLD_PICK_SLIP)
+                letGo();
+        };
+        const onUp = () => letGo();
         const onKey = (e) => {
             if (e && e.key === "Escape")
                 finish(null, "Picking cancelled.");
         };
-        // Some controls act on pointerdown rather than click. Their listeners are cut
-        // off here so nothing fires while picking. Only propagation is stopped: a
-        // preventDefault on touchstart would also stop the browser synthesising the
-        // click that the picker itself needs.
-        const swallow = (e) => {
-            const t = e && e.target;
-            try {
-                if (t && t.closest && t.closest("#__lvRetryToast"))
-                    return;
-            }
-            catch (_) { }
-            try {
-                e.stopPropagation();
-            }
-            catch (_) { }
-        };
-        for (const type of PRESS_EVENTS)
-            document.addEventListener(type, swallow, true);
-        document.addEventListener("click", onPick, true);
+        document.addEventListener("pointerdown", onDown, true);
+        document.addEventListener("pointermove", onMove, true);
+        document.addEventListener("pointerup", onUp, true);
+        document.addEventListener("pointercancel", onUp, true);
         document.addEventListener("keydown", onKey, true);
         // The field labels already read "Your ... button", so the leading "your" is
         // dropped rather than repeated back.
@@ -11948,7 +11993,9 @@ export function setup(ctx, opts) {
         // page, since the screen alone says a phone showing the desktop site has a
         // keyboard and it would then name a key nobody can press.
         const hasKeyboard = fromMouse();
-        showToast("Click your " + what + ". " + (hasKeyboard ? "Esc or Cancel to stop." : "Or press Cancel."), {
+        showToast("Press and hold your " + what +
+            ". Everything else still works, so you can get to it. " +
+            (hasKeyboard ? "Esc or Cancel to stop." : "Or press Cancel."), {
             sticky: true,
             force: true,
             top: true,
