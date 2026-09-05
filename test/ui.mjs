@@ -20,7 +20,7 @@
 
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
 const root = join(import.meta.dir, "..");
@@ -334,19 +334,51 @@ const check = (name, ok, detail) => {
   if (!ok) failures++;
 };
 
-// Playwright can be importable while its browser is not downloaded, so a failed
-// launch is a skip too rather than a red run. CHROMIUM_PATH points it at a
-// browser you already have instead of one it manages.
+
+// Where Chromium actually is.
+//
+// Left to itself Playwright looks under its own download directory for a build
+// named the way it would have downloaded it, and an image that ships a browser
+// under any other name sends it to a path that does not exist. So the
+// environment's own copy is looked for first, and CHROMIUM_PATH still wins.
+function findChromium() {
+  if (process.env.CHROMIUM_PATH) return process.env.CHROMIUM_PATH;
+  const root = process.env.PLAYWRIGHT_BROWSERS_PATH;
+  if (!root || !existsSync(root)) return undefined;
+  const inside = [
+    "chrome-linux/chrome",
+    "chrome-linux64/chrome",
+    "chrome-mac/Chromium.app/Contents/MacOS/Chromium",
+    "chrome-win/chrome.exe",
+  ];
+  try {
+    for (const dir of readdirSync(root)) {
+      if (!/^chromium(-|$)/.test(dir)) continue;
+      for (const rel of inside) {
+        const p = join(root, dir, rel);
+        if (existsSync(p)) return p;
+      }
+    }
+  } catch (_) {}
+  return undefined;
+}
+
+const chromePath = findChromium();
 let browser;
 try {
-  browser = await chromium.launch({
-    executablePath: process.env.CHROMIUM_PATH || undefined,
-  });
+  browser = await chromium.launch({ executablePath: chromePath });
 } catch (e) {
+  const why = String((e && e.message) || e).split("\n")[0];
+  // A browser that is there and will not start is a failure, not a skip.
+  // Exiting 0 on that turns a red run green and nobody finds out.
+  if (chromePath) {
+    console.error("chromium is at " + chromePath + " and would not start:\n  " + why);
+    process.exit(1);
+  }
   console.log(
     "no browser to run against, skipping the browser checks.\n" +
       "  bunx playwright install chromium   (or set CHROMIUM_PATH)\n" +
-      "  " + String((e && e.message) || e).split("\n")[0],
+      "  " + why,
   );
   process.exit(0);
 }
