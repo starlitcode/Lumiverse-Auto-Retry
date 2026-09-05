@@ -468,7 +468,7 @@ const SCHEMA: Group[] = [
         key: "liveLog",
         label: "Show the on-screen panel",
         type: "bool",
-        hint: "A panel with four tabs: Log for what it is doing as it happens, Prompt for what went to the model, Stats for what it keeps retrying for, and Replaced for the last reply a retry threw away. Useful without opening the console, especially on a phone.",
+        hint: "A panel with four tabs. Log is what it is doing as it happens, Prompt is what went to the model, Stats is what it keeps retrying for, and Replaced is the last reply a retry threw away. Handy on a phone, where there is no console to open.",
       },
       {
         key: "panelHome",

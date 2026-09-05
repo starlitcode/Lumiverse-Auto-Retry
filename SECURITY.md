@@ -4,13 +4,13 @@ How to report a security problem in Auto Retry. For what the extension touches a
 
 ## Where to send it
 
-**Something sensitive, or anything you can see being abused: message me on Discord.** I am `.moonsight.` in the Lumiverse server. Send it there and wait for my reply before posting it anywhere public.
+**Something sensitive, or anything you can see being abused: open a [security advisory](https://github.com/starlitcode/Lumiverse-Auto-Retry/security/advisories/new), or message me on Discord.** I am `.moonsight.` in the Lumiverse server. Either way, wait for my reply before posting it anywhere public.
 
 **Anything else: [open an issue](https://github.com/starlitcode/Lumiverse-Auto-Retry/issues).** Ordinary bugs, odd behaviour, and anything you are happy to have read by everyone belong there.
 
-**A permission being used for more than [Privacy](docs/privacy.md) says: Discord.** That page states exactly what each permission is for and what the extension does not do with it. If you find it doing something that page does not describe, that is a security report, not a bug report, whether or not it looks harmful.
+**A permission being used for more than [Privacy](docs/privacy.md) says: an advisory or Discord.** That page states what each permission is for and what the extension does not do with it. If you find it doing something that page does not describe, that is a security report, not a bug report, whether or not it looks harmful.
 
-Not sure which? Use Discord. If it turns out to be nothing sensitive, you can open an issue afterwards and nothing is lost. If you open an issue first and it was sensitive, deleting it does not undo anything: GitHub has already emailed it to everyone watching the repo, and search engines may have it.
+Not sure which? Use an advisory. If it turns out to be nothing sensitive, you can open an issue afterwards and nothing is lost. If you open an issue first and it was sensitive, deleting it does not undo anything: GitHub has already emailed it to everyone watching the repo, and search engines may have it.
 
 ## What to include
 
