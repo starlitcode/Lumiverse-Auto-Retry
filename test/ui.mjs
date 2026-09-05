@@ -577,16 +577,29 @@ console.log("\nthe prompt view");
       window.__fromBackend(rows("here-1"));
       await wait();
       const mine = said();
-      // One captured somewhere else is withheld, and the two ids are named so a
-      // host that says the same chat two ways can be told from a real move.
+      // One captured somewhere else is withheld. Which two ids disagreed is in
+      // the debug report rather than on the tab, where it would be noise for
+      // the ordinary reason for this, which is having changed chats.
       window.__fromBackend(rows("elsewhere-2"));
       await wait();
       const other = said();
+      // The report the panel offers for a bug report, built on demand.
+      const modal = document.getElementById("modal");
+      const build = [...modal.querySelectorAll("button")].find(
+        (b) => b.textContent.trim() === "Build preview",
+      );
+      let report = "";
+      if (build) {
+        build.click();
+        await wait();
+        const area = modal.querySelector("[data-ar-debug]");
+        report = area ? area.value : "";
+      }
       return {
         armed,
         mineHasIt: mine.includes("the words I typed"),
         otherHasIt: other.includes("the words I typed"),
-        otherNames: other.includes("elsewhere-2") && other.includes("here-1"),
+        report,
       };
     }),
   );
@@ -597,7 +610,11 @@ console.log("\nthe prompt view");
   );
   check("a prompt for the chat you are in is drawn", out.mineHasIt);
   check("one captured elsewhere is not", !out.otherHasIt);
-  check("and it names both chats, so a mismatch can be seen", out.otherNames);
+  check(
+    "and the debug report names both chats, which is where a mismatch shows",
+    /prompt held for chat: elsewhere-2, window is in: here-1/.test(out.report),
+    out.report,
+  );
   check("no console errors", errors.length === 0, errors);
 }
 

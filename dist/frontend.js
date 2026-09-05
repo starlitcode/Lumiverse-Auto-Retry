@@ -3717,19 +3717,9 @@ export function setup(ctx, opts) {
                         : "(no prompt seen yet; send a reply)";
             return;
         }
-        // Both ids, not just the fact that they differ. They come from different
-        // places, the chat events and the interceptor's own context, so a host that
-        // names the same chat differently in each holds this view shut for good and
-        // the old wording gave nobody a way to tell that apart from having simply
-        // walked into another chat.
         if (!promptIsForThisChat()) {
             body.textContent =
-                "The last prompt captured was for a different chat. Send a reply here to see this one's. " +
-                    "It was captured for " +
-                    String(lastPrompt.chatId) +
-                    ", and this window is in " +
-                    String(lastChatId) +
-                    ".";
+                "The last prompt captured was for a different chat. Send a reply here to see this one's.";
             return;
         }
         const chars = lastPrompt.messages.reduce((n, m) => n + String(m.content || "").length, 0);
@@ -8886,6 +8876,16 @@ export function setup(ctx, opts) {
         }
         if (inc(o.activity)) {
             lines.push("");
+            // Both ids, because they come from different places: the chat this window
+            // followed from the events, and the one the interceptor named on the
+            // prompt. A host that says the same chat two ways holds the Prompt tab
+            // shut, and on the tab itself that reads exactly like having walked into
+            // another chat, which is the ordinary reason for it.
+            lines.push("prompt held for chat: " +
+                (lastPrompt && lastPrompt.chatId ? String(lastPrompt.chatId) : "none") +
+                ", window is in: " +
+                (lastChatId == null ? "unknown" : String(lastChatId)));
+            lines.push("");
             lines.push("this session:");
             // How long the counters below have been running. Without it they cannot
             // be read: no retries after two minutes and no retries after four hours
@@ -9875,6 +9875,7 @@ export function setup(ctx, opts) {
             dStatus.style.cssText =
                 "font-size:12px;line-height:1.4;color:var(--lumiverse-text-muted,rgba(255,255,255,.65));min-height:1em";
             const dArea = document.createElement("textarea");
+            dArea.setAttribute("data-ar-debug", "1");
             dArea.rows = 6;
             dArea.placeholder =
                 "Press Build preview to fill this, then edit out anything private before copying.";
