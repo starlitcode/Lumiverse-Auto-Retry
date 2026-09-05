@@ -362,8 +362,8 @@ describe("refusal detection ignores the model's thinking", () => {
   });
 
   // The pipe forms. Several models wrap their reasoning this way rather than in
-  // plain angle brackets, and none of it was recognised, so the whole reasoning
-  // block was read as part of the reply.
+  // plain angle brackets, and without these the whole reasoning block counts as
+  // part of the reply.
   test("<|think|> ... <|/think|> is stripped", () => {
     expect(looksLikeRefusal("<|think|>I cannot assist with that.<|/think|>She opened the door.", cfg)).toBe(false);
   });
@@ -1481,8 +1481,8 @@ describe("the model leaving the scene to offer support", () => {
 
   test("and with it off, only the one that also breaks off is caught at all", () => {
     // The second opens with "I'm going to pause here", which the breaking-off
-    // tier has always caught and still should. The other three are invisible
-    // without this check, which is what makes it worth having.
+    // tier catches on its own. The other three are invisible without this
+    // check, which is what makes it worth having.
     const caught = CRISIS.map((t, i) => (looksLikeRefusal(t, cfg) ? i : -1)).filter((i) => i >= 0);
     expect(caught).toEqual([1]);
   });
@@ -1553,10 +1553,10 @@ describe("the model leaving the scene to offer support", () => {
     expect(both).toEqual([true, true]);
   });
 
-  // Two signals were enough on their own until a man crouching beside somebody
-  // and a nurse doing her job both came out as the model. Comfort is a register
-  // a character uses; the deciding signal has to come from one a character does
-  // not, so warmth and services can only ever agree with it.
+  // Comfort is a register a character uses, so two comfort signals on their own
+  // would match a man crouching beside somebody and a nurse doing her job. The
+  // deciding signal has to come from a register a character does not use, so
+  // warmth and services can only ever agree with it.
   test("comfort on its own decides nothing, however much of it there is", () => {
     const scenes = [
       "*He crouches beside her.* You don't have to go through this alone. Your safety matters to me more than the job does.",
@@ -1566,7 +1566,7 @@ describe("the model leaving the scene to offer support", () => {
     ];
     for (const text of scenes) expect(refusalVerdict(text, on).kind).not.toBe("crisis");
     // And one line of the model's own register turns any of them into a match,
-    // which is proof the comfort above was being counted all along.
+    // which is what shows the comfort above is counted at all.
     expect(refusalVerdict("Support is available. " + scenes[0], on).kind).toBe("crisis");
   });
 

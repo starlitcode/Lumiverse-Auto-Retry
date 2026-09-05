@@ -10,41 +10,43 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ## 5.0.0
 
-_2026-09-04_
+_2026-09-05_
 
 **On the testing branch, not yet on stable.**
 
-**No reinstall needed.** The two majors below needed one; this one does not. It is a major because a feature people were using has been taken out, which is what the number is for even when nothing about installing changes.
+**No reinstall needed.** It is a major because a feature people were using has been taken out, which is what the number is for even when installing does not change.
 
 ### Removed
 
-- **Find and replace is gone.** It swapped words in a reply after it arrived. It was copied from another extension without a use of its own, and rewriting a reply well is a different job from retrying one: Auto Refine does that job, and this extension is going back to retrying. Everything that went with it went too: the settings, the two Extras buttons, the word swap presets, the backend engine that did the swapping, and the edit watcher that waited for other extensions to finish.
-- **The `chat_mutation` permission is no longer asked for.** Word swaps were the only thing that used it. Auto Retry no longer writes to a saved reply at all, which is a smaller thing to have to trust.
+- **Find and replace is gone.** It swapped words in a reply after it arrived. Rewriting a reply well is a different job from retrying one: [Auto Refine](https://github.com/starlitcode/Lumiverse-Auto-Refine) does that job, and this extension is going back to retrying. Its settings, its two Extras buttons, its presets, the backend that did the swapping and the edit watcher all went with it.
+- **The `chat_mutation` permission is no longer asked for.** Word swaps were the only thing that used it, so Auto Retry no longer writes to a saved reply at all.
 
 ### Added
 
-- **A card in the panel for anyone who had word swaps**, offering a JSON file with their rules and their word swap presets in it. It reads them straight out of storage, including the copy that came down from the account, since the panel no longer has a field for them. The same download also sits in Import / export for as long as there is anything to hand back, so putting the card away does not take it with it.
-- **What to accept from one** is a list of ticks of its own, the way **What to put in the file** already was, so you can take somebody's refusal phrases from their file without their button selectors. **Reset…** asks the same way, over the same parts.
+- **A card in the panel for anyone who had word swaps**, offering a JSON file with their rules and presets in it. The same download stays under Import / export for as long as there is anything to hand back, so putting the card away does not take it with it.
+- **What to accept from one** is a list of ticks of its own, so you can take somebody's refusal phrases from their file without their button selectors. **Reset...** asks over the same parts.
 
 ### Changed
 
-- **A setting's description fades in and out.** It arrives on top of the rows below the one it belongs to, and something landing over what you were reading with no travel at all reads as the page having flinched. The "?" lights its ring up and back down with it.
-- **A reply that ends inside an unclosed bold run is retried.** Emphasis was counted one marker at a time, so an unclosed `**bold**` looked balanced: the two markers it leaves behind are an even number. Pairs are what emphasis is made of, so pairs are what gets counted.
-- **The panel moves rather than jumps.** Tick boxes fill in, sections open, and a row that hangs off a switch arrives when the switch goes on instead of appearing whole.
+- **Pick it for me takes a press you hold** rather than any press at all. Everything else on the page keeps working while it is up, which is what lets you press send to make the stop button appear, then hold that button to pick it. Text selection is off while it is up, since the browser starts a selection on a long press too.
+- **A setting's description fades in and out**, and the "?" lights its ring up and down with it.
+- **A reply that ends inside an unclosed bold run is retried.** Emphasis is counted in pairs now, so an unclosed `**bold**` no longer looks balanced.
+- **The panel moves rather than jumps.** Tick boxes fill in, sections open, and a row that hangs off a switch arrives when the switch goes on.
 - **The live dot is the same one in both extensions**, so a glance at either says the same thing.
 - **The widget's menu is grouped**, with a line between the ways in and the way out.
 
 ### Fixed
 
-- **The panel follows a theme change.** Where a theme makes its own text unreadable the panel repaints that text, and what it writes is only right for the theme it measured. Nothing rebuilt the panel when the theme changed, so moving a phone from dark to light left the panel wearing the ink it was given for the dark one: measured on a light theme after a switch, thirty-seven labels fell under the readable floor and the worst came out at 1.18 against its background. The theme is watched three ways now, since none of them catches the others: the system switch, the page's own switch, and a stylesheet rewritten in place. A change takes the old repairs off and measures again.
-- **A setting's own words flip its switch again, rather than opening its description.** A label with no `for` names the first thing inside it that can be labelled, and a button is one of those, so the "?" beside each setting had taken the label off the setting: pressing a setting's name opened its description, and the switch was left with only its own small box to press. The control is named outright now, so nothing standing next to it can take it.
-- **A removed note's space closes rather than vanishing.** A row taken away makes the panel shorter by its own height, and a reader at the end of the list is then past the end of it, so the page was pulled back by exactly that much between two frames. The same movement Auto Refine gives a deleted block.
-- **Removing a note asks first.** A note holds writing you typed and there is no undo, so it goes the way a preset does. Asked in the host's dialog where that costs nothing, and on the button itself where it does not: a dialog stops the page behind it scrolling, and on a panel the page carries, that throws you to the top and back to ask one question.
-- **A setting's own words flip its switch again.** The whole row was one label, so every part of it was a press on the setting: the description under it, the boxes of the rows nested inside it, the space beside them. Only the words carry it now.
-- **The press that closes a description does only that.** Closing happens on the way down, and the click that follows lands on whatever was under the finger, so dismissing a description by tapping the panel also flipped whichever tick or button it happened to land on.
-- **A setting's description no longer runs off the side of a small phone.** The description is capped at three hundred pixels wide, but that cap is room on the screen while the width is written in the element's own units, and Lumiverse's UI Scale is applied as a zoom, which is the difference between the two. At 1.5 the cap rendered as four hundred and fifty: wide enough to still fit a tablet, and ninety pixels over the edge of a 360-wide phone. Forty-six of the forty-seven descriptions drifted off the side there while every wider screen looked correct. The width is measured and set again against however much the host is scaling.
-- **Deleting a preset no longer costs you your place in the panel.** The dialog that asks first stops the page behind it scrolling, and the way that is done is to stop the page scrolling at all, which sets its scroll to nought; letting go afterwards does not put it back. The floating panel scrolls inside its own box and never noticed, but in the drawer the page can be what carries the scroll. Where you were is held across the dialog now.
-- **The panel knows which chat you are in after pressing Update.** Update resets to the remote branch and rebuilds, which builds the panel again with the backend restarting under it. Asked which chat was open, the backend answers with the account's most recent chat, which on the home screen is the one you were in before the update, and a backend still starting up answers that nobody is in a chat while you are sitting in one. Either answer was taken as final. The address settles it now, and the question is asked again until something answers it properly.
+- **The panel follows a theme change.** Where a theme makes its own text unreadable the panel repaints it, and that repaint is only right for the theme it measured. Moving a phone from dark to light left the panel wearing the wrong ink. The theme is watched three ways, since none of them catches the others, and a change measures again.
+- **A press does not repaint the panel twice.** New rows were drawn in the theme's own colours and repaired a frame later, which shows as a flicker. The repair now lands on the first frame they appear on.
+- **A setting's own words flip its switch, rather than opening its description.** A label with no `for` names the first thing inside it that can be labelled, and a button is one, so the "?" beside each setting had taken the label off the setting. The control is named outright now.
+- **The press that closes a description does only that**, instead of also flipping whatever tick was under your finger.
+- **A setting's description stays on the screen of a small phone.** Its width cap is room on the screen while the width itself is in the element's own units, and Lumiverse's UI Scale is a zoom, so the two came apart. The width is measured against however much the host is scaling.
+- **A removed note's space closes rather than vanishing**, the same movement Auto Refine gives a deleted block.
+- **Removing a note asks first.** A note holds writing you typed and there is no undo, so it goes the way a preset does.
+- **Deleting a preset does not cost you your place in the panel.** A dialog stops the page behind it scrolling, which loses where you were, so that place is held across it.
+- **The panel knows which chat you are in after pressing Update.** The backend answers with the account's most recent chat, or that nobody is in a chat while it is still starting. Neither is taken as final: the address settles it, and the question is asked again until something answers properly.
+- **The Prompt tab's "different chat" line has both chat ids behind it.** They live in the debug report, where they say whether a host is naming one chat two ways.
 
 ## 4.24.8
 

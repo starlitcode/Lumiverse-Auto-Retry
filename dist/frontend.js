@@ -111,10 +111,22 @@ const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
 const VERSION = "5.0.0";
-// The one address the extension ever points at, used by the warning in front of
-// the crisis-support check. Pinned to the released branch rather than to a tag,
-// so an old install still opens the page as it stands today.
+// The addresses the extension points at. Pinned to the released branch rather
+// than to a tag, so an old install still opens the page as it stands today.
 const SAFETY_URL = "https://github.com/starlitcode/Lumiverse-Auto-Retry/blob/stable/docs/safety.md";
+const REFINE_URL = "https://github.com/starlitcode/Lumiverse-Auto-Refine";
+// A link in the panel's own colours. Names are linked rather than printed as
+// bare addresses, which read as noise and cannot be followed on a phone.
+function linkTo(url, text) {
+    const a = document.createElement("a");
+    a.href = url;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    a.textContent = text;
+    a.style.cssText =
+        "color:var(--lumiverse-primary,rgba(147,112,219,.9));text-decoration:underline";
+    return a;
+}
 // ---- defaults (the UI overrides these; editing here changes the fallback) ----
 const CONFIG = {
     enabled: true,
@@ -133,7 +145,7 @@ const CONFIG = {
     // long the pause lasts in minutes. Only used when pauseWhenFailing is on.
     breakerRuns: 3,
     breakerPauseMins: 5,
-    retryDelayMs: 2000, // long enough that a provider catching its breath has caught it
+    retryDelayMs: 2000, // long enough for a provider to recover from a brief overload
     backoffFactor: 2,
     maxDelayMs: 60000,
     jitter: true,
@@ -1040,8 +1052,8 @@ function endsOnPunctuation(t) {
     let last = "";
     // Walk back past anything that is not a character in its own right. An emoji
     // written with a variation selector ends on U+FE0F, which is a combining
-    // mark rather than a symbol, so a reply ending on a heart was read as having
-    // no ending at all and re-rolled. The same goes for the joiners inside a
+    // mark rather than a symbol, so a reply ending on a heart reads as having no
+    // ending at all unless it is skipped. The same goes for the joiners inside a
     // multi-part emoji. What is wanted is the last thing that is actually there.
     for (let i = cps.length - 1; i >= 0; i--) {
         try {
@@ -1938,10 +1950,10 @@ function stripThinking(text, cfg) {
     if (t.indexOf("[/") >= 0)
         t = t.replace(new RegExp("\\[(" + alt + ")(?:\\s[^\\]]*)?\\][\\s\\S]*?\\[\\/\\1\\s*\\]", "gi"), " ");
     // The pipe forms. Several models wrap their reasoning in <|think|>...<|/think|>
-    // or <|think>...<think|> rather than in plain angle brackets, and neither was
-    // recognised, so the whole reasoning block was read as part of the reply.
-    // Both closers are accepted for either opener, since builds are not
-    // consistent about which way round the pipe goes.
+    // or <|think>...<think|> rather than in plain angle brackets, and without
+    // these the whole reasoning block counts as part of the reply. Both closers
+    // are accepted for either opener, since builds are not consistent about which
+    // way round the pipe goes.
     const CLOSE = "<\\|?\\/?(?:" + alt + ")\\|?>";
     // Same guard, same reason: with no closer, every opener would scan to the end.
     if (t.indexOf("|>") >= 0 || t.indexOf("</") >= 0)
@@ -2458,11 +2470,11 @@ function repairNow(el, fn) {
 }
 // Checkboxes and number spinners are drawn by the browser, not by us. The
 // browser picks their colours from the page's colour scheme rather than from
-// the theme, and with no scheme set it assumes light, which is why an unchecked
-// box came out as a white block sitting on a dark panel. This is the same fault
-// that made the search field's clear button white. Rather than assume dark,
-// measure what the panel is actually sitting on and say which way round it is,
-// so a light theme still gets light controls.
+// the theme, and with no scheme set it assumes light, which draws an unchecked
+// box as a white block on a dark panel. The search field's clear button goes
+// the same way. Rather than assume dark, measure what the panel is actually
+// sitting on and say which way round it is, so a light theme still gets light
+// controls.
 function matchColorScheme(el) {
     keepReadable(el, "scheme");
     repairNow(el, () => {
@@ -3329,9 +3341,9 @@ export function setup(ctx, opts) {
         catch (_) { /* storage full or blocked: the position is not worth an error */ }
     }
     let liveTab = layout.tab || "log";
-    // How the Prompt tab draws the prompt. Rendered is the panel as it has always
-    // looked: a row per message, its role, its size, and whether it came from the
-    // chat or was wrapped around it. Raw is the same prompt with all of that taken
+    // How the Prompt tab draws the prompt. Rendered is the default: a row per
+    // message, its role, its size, and whether it came from the chat or was
+    // wrapped around it. Raw is the same prompt with all of that taken
     // off, as the data the model was actually handed, which is the form to read
     // when the question is about structure rather than wording, and the form to
     // paste somewhere else. Rendered is the default, since it is the readable one.
@@ -4108,9 +4120,9 @@ export function setup(ctx, opts) {
             const st = liveStatus();
             if (words.textContent !== st.text)
                 words.textContent = st.text;
-            // Off is dim and flat. On is the theme's own colour. Something actually
-            // happening breathes a ring outward, so movement means movement rather
-            // than decoration.
+            // Off is dim and flat. On is the theme's own colour. A ring grows out of
+            // the dot only while something is running, so movement on this panel
+            // always means something is happening.
             //
             // The same dot as Auto Refine's, down to the timing: somebody running
             // both reads one panel and then the other, and two dots that mean the
@@ -5460,19 +5472,15 @@ export function setup(ctx, opts) {
     }
     // Coerce a raw saved object (local cache or account storage) into a clean
     // partial config: keep only known fields, run each through its type.
-    // Saving writes every setting, at its default or not, so a saved copy from
-    // before swiping became the preferred retry pins the old behaviour: a reader
-    // who has ever pressed Save keeps regenerating, which is the one that can
-    // take a good reply away, and would never see the change.
+    // Swiping is the retry that keeps the reply it replaces, so it is the one to
+    // prefer. Saving writes every setting whether or not it was touched, so a
+    // saved copy can hold "off" for a reader who never chose it: at the default,
+    // leaving it alone and picking it look the same in storage.
     //
-    // Nobody can have chosen the old value on purpose in a way this could tell
-    // apart, because it was the default: leaving it alone and picking it look the
-    // same in storage. So it is turned on once, and once only. The marker is its
-    // own key rather than a setting, so turning it back off afterwards sticks.
-    // Runs once ever, whether or not anything was saved. Setting the marker on a
-    // fresh install too is what makes it once: without that, someone installing
-    // this version and turning it straight back off would have it turned on again
-    // on their next reload, for ever. No logging from here, because this runs
+    // So it is switched on once and once only, marked by a key of its own rather
+    // than a setting, which is what lets someone switch it back off and have that
+    // stick. The marker is set on a fresh install too, or switching it off would
+    // be undone on the next reload for ever. No logging from here: this runs
     // while the settings are being read and the log does not exist yet.
     function swipeFirstOnce(parsed) {
         try {
@@ -5545,9 +5553,9 @@ export function setup(ctx, opts) {
         }
     }
     // Returns whether the browser copy was actually written. A browser with site
-    // data blocked, or with no room left, throws here. Swallowing that let the
-    // panel say "Saved" over settings that were gone on the next reload, which is
-    // the one thing a Save button must never do. savePresets has always said.
+    // data blocked, or with no room left, throws here. Swallowed, the panel would
+    // say "Saved" over settings that are gone on the next reload, which is the one
+    // thing a Save button must never do. savePresets answers the same way.
     function saveSaved() {
         try {
             if (typeof localStorage === "undefined")
@@ -7023,8 +7031,8 @@ export function setup(ctx, opts) {
             el.id = "__lvRetryStatusStyle";
             el.textContent =
                 // A ring growing out of the dot and fading, rather than the dot itself
-                // fading in and out. Auto Refine's dot has always done this; the two
-                // now match, keyframe for keyframe.
+                // fading in and out. Auto Refine's dot matches this, keyframe for
+                // keyframe.
                 "@keyframes lvRetryBreathe{" +
                     "0%,100%{box-shadow:0 0 0 0 var(--lumiverse-primary-050,rgba(147,112,219,.5))}" +
                     "50%{box-shadow:0 0 0 5px rgba(0,0,0,0)}}" +
@@ -7970,10 +7978,9 @@ export function setup(ctx, opts) {
             return;
         lastChatId = next;
         // The last reply seen belonged to the chat just left, so it is not the last
-        // reply here. onChatSwitched has always cleared this and noteChat never
-        // did, which left a manual action aiming at a message in another chat. The
-        // backend falls back to the latest reply for an id it cannot find, so it
-        // did no harm, but it was asking for the wrong thing.
+        // reply here, and a manual action would otherwise aim at a message in
+        // another chat.
+        //
         // A chat learned from an event arrives as an id and nothing else, so this
         // is the moment to find out whose it is. Asked once per chat: the answer
         // does not change while you are in it.
@@ -8247,7 +8254,7 @@ export function setup(ctx, opts) {
         if (s.ignored.has(p.generationId))
             return; // our own abort, not a user stop
         log("user stop", p.generationId);
-        standDown(chatId, true); // genuine user stop: stand down, don't fight them
+        standDown(chatId, true); // a real user stop, so nothing is retried after it
     }
     // Backup for the user's Stop press: if the host's GENERATION_STOPPED event is
     // late or never fires, catch the click on the stop button itself and stand
@@ -8341,10 +8348,10 @@ export function setup(ctx, opts) {
             "position:fixed;z-index:" + Z_HINT + ";box-sizing:border-box;padding:8px 10px;" +
                 "border-radius:var(--lumiverse-radius,8px);" +
                 // This has to be fully opaque. It sits directly on top of the options
-                // list, and --lumiverse-bg-elevated is only 90% opaque, which left the row
-                // underneath legible through the description covering it. The theme's own
-                // solid surface is painted first and the elevated colour laid over it, so
-                // the tint still follows the theme but nothing shows through.
+                // list, and --lumiverse-bg-elevated is only 90% opaque, so the row
+                // underneath would read through the description covering it. The theme's
+                // own solid surface is painted first and the elevated colour laid over
+                // it, so the tint still follows the theme but nothing shows through.
                 "background-color:var(--lumiverse-card-bg-solid,rgb(24,20,34));" +
                 "background-image:linear-gradient(var(--lumiverse-bg-elevated,rgba(35,30,48,.98))," +
                 "var(--lumiverse-bg-elevated,rgba(35,30,48,.98)));" +
@@ -8809,10 +8816,9 @@ export function setup(ctx, opts) {
     function buildDebugInfo(opts) {
         const o = opts || {};
         const inc = (v) => v !== false; // sections default to on
-        // Taken from the schema rather than listed again here. The old hand-kept
-        // list had drifted, so settings added later were missing from every report,
-        // which is exactly the information a bug report is supposed to carry. The
-        // selectors are printed in full by the buttons section below instead.
+        // Taken from the schema rather than listed again here. A list kept by hand
+        // drifts, and a setting missing from a report is exactly what the report is
+        // for. The selectors are printed in full by the buttons section below.
         const keys = Object.keys(fieldByKey).filter((k) => !fieldByKey[k].selector);
         const lines = [];
         lines.push("Auto Retry v" + VERSION + " debug info");
@@ -9604,21 +9610,18 @@ export function setup(ctx, opts) {
                 "height:1px;background:var(--lumiverse-border,rgba(255,255,255,.08));margin:4px 0 2px";
             return r;
         }
-        // Every collapsible header goes through here. They were plain elements with
-        // a click handler, which left all five collapsed sections unreachable
-        // without a pointer: no tab stop, and nothing telling a screen reader that
-        // the header opened anything. Doing it in one place also means the caret,
-        // the remembered open state and the announced state cannot drift apart,
-        // which they could when this was written out three times over.
+        // Every collapsible header goes through here, so each one is a real button
+        // with a tab stop and a state a screen reader can read. In one place, the
+        // caret, the remembered open state and the announced state cannot drift
+        // apart.
         function makeCollapsible(h, body, caret, title) {
             // moved is for a section somebody opened. Every section is applied once
             // while the panel is being built, and animating those would have the
             // whole panel shimmer itself into existence.
-            // A section is most of a screen. Opening one used to fade its body in
-            // while its height arrived whole, so everything below moved by twelve
-            // hundred pixels between two frames: the fade said something was
-            // arriving and the jump said the panel had lost its place. The height
-            // travels now, and the fade rides along with it.
+            // A section is most of a screen, so its height travels rather than
+            // arriving whole: a body that appeared at full height would move
+            // everything below it by twelve hundred pixels between two frames. The
+            // fade goes along with the height.
             let sizing = null;
             const sizeOff = () => {
                 if (sizing)
@@ -9943,9 +9946,12 @@ export function setup(ctx, opts) {
                         bits.push(count + (count === 1 ? " rule" : " rules"));
                     if (held.presets.length)
                         bits.push(held.presets.length + (held.presets.length === 1 ? " preset" : " presets"));
-                    row.appendChild(sectionDesc("Find and replace was retired and Auto Refine does that job now. Your old word swaps are still here, " +
+                    const said = sectionDesc("Find and replace was retired and ", false);
+                    said.appendChild(linkTo(REFINE_URL, "Auto Refine"));
+                    said.appendChild(document.createTextNode(" does that job now. Your old word swaps are still here, " +
                         bits.join(" and ") +
-                        " of them, and this is where to take a copy whenever you want one.", false));
+                        " of them, and this is where to take a copy whenever you want one."));
+                    row.appendChild(said);
                     const get = btn("Download my old word swaps", false);
                     get.setAttribute("data-ar-old-swaps-save", "1");
                     get.style.alignSelf = "flex-start";
@@ -10328,11 +10334,10 @@ export function setup(ctx, opts) {
         const body = document.createElement("div");
         body.style.cssText =
             "font-size:12px;line-height:1.5;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
-        body.textContent =
-            "It swapped words in a reply after it arrived. That was copied from another " +
-                "extension without a use of its own, and rewriting a reply well is a different " +
-                "job from retrying one. Auto Refine does that job, and this one is going back to " +
-                "retrying. Nothing else here has changed.";
+        body.appendChild(document.createTextNode("It swapped words in a reply after it arrived. Rewriting a reply well is a " +
+            "different job from retrying one. "));
+        body.appendChild(linkTo(REFINE_URL, "Auto Refine"));
+        body.appendChild(document.createTextNode(" does that job, and this one is going back to retrying. Nothing else here has changed."));
         box.appendChild(body);
         const what = document.createElement("div");
         what.style.cssText =
@@ -10382,8 +10387,7 @@ export function setup(ctx, opts) {
         where.style.cssText =
             "font-size:11px;line-height:1.5;color:var(--lumiverse-text-muted,rgba(255,255,255,.5))";
         where.textContent =
-            "Auto Refine: github.com/starlitcode/Lumiverse-Auto-Refine \u00b7 " +
-                "Hiding this keeps your swaps. The same download stays under Import / export.";
+            "Hiding this keeps your swaps. The same download stays under Import / export.";
         box.appendChild(where);
         return box;
     }
@@ -10563,13 +10567,13 @@ export function setup(ctx, opts) {
     function buildRow(f) {
         // The row is a plain box and the setting's words are the label inside it.
         //
-        // The whole row used to be the label, which made every part of it a press on
-        // the control: the description under a setting, the boxes belonging to the
-        // rows nested inside it, empty space. A label with no `for` also names the
-        // first labelable element inside it, and a button is one, so the "?" added
-        // to these rows took the label off the setting outright.
+        // A label wrapping the whole row would make every part of it a press on the
+        // control: the description, the boxes belonging to nested rows, empty
+        // space. A label with no `for` also names the first labelable element
+        // inside it, and a button is one, so the "?" on these rows would take the
+        // label off the setting outright.
         //
-        // The words carry it now, named to the control by id, which is the target
+        // The words carry it instead, named to the control by id, which is the target
         // anyone aims at anyway and the one Auto Refine's rows already use.
         const row = document.createElement("div");
         const forId = f.type === "bool" || f.type === "num" || f.type === "pick" ? nextId() : "";
@@ -10653,7 +10657,7 @@ export function setup(ctx, opts) {
                     leave();
             });
             // Focus opens it only when a key put you there. A tap focuses the button
-            // too, and opening from that as well would fight the tap below.
+            // too, so opening from focus as well would open it twice.
             //
             // Blur closes only what focus opened. A finger reading a long
             // description touches the popover, which takes focus off the button, and
@@ -11804,14 +11808,7 @@ export function setup(ctx, opts) {
         {
             const p = document.createElement("div");
             p.appendChild(document.createTextNode("There is more information about this setting and its risks on "));
-            const a = document.createElement("a");
-            a.href = SAFETY_URL;
-            a.target = "_blank";
-            a.rel = "noopener noreferrer";
-            a.textContent = "the safety page";
-            a.style.cssText =
-                "color:var(--lumiverse-primary,rgba(147,112,219,.9));text-decoration:underline";
-            p.appendChild(a);
+            p.appendChild(linkTo(SAFETY_URL, "the safety page"));
             p.appendChild(document.createTextNode("."));
             body.appendChild(p);
         }

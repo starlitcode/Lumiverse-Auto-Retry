@@ -84,8 +84,8 @@ describe("the themes that matter", () => {
     expect(contrastRatio(stockText, panel)).toBeGreaterThan(MIN);
   });
 
-  // The reported bug: a custom theme with a light lavender accent, and a body
-  // text colour almost the same shade.
+  // A custom theme with a light lavender accent, and a body text colour almost
+  // the same shade.
   const lightAccent = parseColor("rgb(224, 192, 255)")!;
   const lavenderText = parseColor("rgb(226, 200, 250)")!;
 

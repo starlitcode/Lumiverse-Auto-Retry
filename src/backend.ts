@@ -459,9 +459,9 @@ const promptInterceptor = async (messages: any[], context: any) => {
       return messages;
     }
     const type = String((context && context.generationType) || '');
-    // Only when the user asked for it. Left on by default this rejected every
-    // generation on any build that reports "normal", which is the bug that
-    // made the note look like it did nothing at all.
+    // Only when the user asked for it. Left on by default it would reject every
+    // generation on a build that reports "normal", and the note would then
+    // never appear at all.
     if (refusalNote.strictType && type && RETRY_TYPES.indexOf(type.toLowerCase()) < 0) {
       snapshotPrompt(messages, context, who);
       // Named rather than swallowed. A note that never appears looks the same

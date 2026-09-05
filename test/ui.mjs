@@ -297,9 +297,8 @@ async function stage(page, body) {
 }
 
 // A light theme, built the way Lumiverse's own variables invert: every value
-// the stock dark theme sets, given a light counterpart. Until this existed the
-// checks only ever ran on dark surfaces, so nothing held light themes to the
-// same standard even though the extension is used on them.
+// the stock dark theme sets, given a light counterpart. It holds light surfaces
+// to the same standard as dark, which is the standard the extension is used on.
 const LIGHT = `:root{
 --lumiverse-primary:rgba(124,92,196,.95);--lumiverse-primary-hover:rgba(108,76,180,.95);
 --lumiverse-primary-text:rgba(96,64,168,1);--lumiverse-primary-020:rgba(124,92,196,.14);
@@ -422,8 +421,8 @@ const CONTRAST_PROBE = () => {
 console.log("\ncontrast");
 for (const [label, css] of [
   ["stock theme", ""],
-  // The reported bug: an accent close enough to the text colour that a filled
-  // button rendered as a blank rectangle.
+  // An accent close enough to the text colour that a filled button would render
+  // as a blank rectangle.
   ["light accent", ":root{--lumiverse-primary:#e0c0ff;--lumiverse-primary-hover:#ecd8ff;--lumiverse-text:#e2c8fa}"],
   ["raised text scale", ":root{--lumiverse-font-scale:1.5;--lumiverse-ui-scale:1.5}"],
   // The whole panel on a light theme, held to exactly the same floor as dark.
@@ -431,16 +430,16 @@ for (const [label, css] of [
   // A light theme pack that overrides the common variables and not all 92,
   // which is what a hand-written theme actually looks like. Every fallback in
   // the source is a dark colour, so anything reaching for a variable this
-  // leaves unset is measured against the wrong surface. The reported bug: the
-  // hint popover painted near-white over an unset card-bg-solid, measured as
-  // the dark fallback underneath, and had its text repainted white to match.
+  // leaves unset is measured against the wrong surface: a hint popover painted
+  // near-white over an unset card-bg-solid measures as the dark fallback
+  // underneath, and its text would be repainted white to match.
   ["partial light theme", PARTIAL_LIGHT],
   // The harshest one: a light page with every theme variable left at its dark
   // value. Nothing here can be got right by reading a variable, so anything
   // that still reads on this reads anywhere.
   ["dark variables on a light page", LIGHT_PAGE],
-  // And a light theme whose accent has drifted close to its own text colour,
-  // which is the light-side version of the bug that started all of this.
+  // And a light theme whose accent sits close to its own text colour, which is
+  // the light-side version of the same problem.
   ["light theme, pale accent", LIGHT + ":root{--lumiverse-primary:rgba(196,180,232,.9);--lumiverse-primary-hover:rgba(206,192,240,.95)}"],
 ]) {
   const { out, errors } = await inPanel(browser, { css }, (page) =>
@@ -450,7 +449,7 @@ for (const [label, css] of [
   check(`${label}: no console errors`, errors.length === 0, errors);
   if (label === "raised text scale") {
     // The panel is interface chrome and must not follow the reader's text-size
-    // setting; doing so once made it grow until barely one section fitted.
+    // setting: following it grows the panel until barely one section fits.
     check("raised text scale: panel text does not grow", out.labelPx === 13, out.labelPx);
   }
 }
@@ -846,7 +845,7 @@ console.log("\nhints");
 // ---- the browser's own long press is the same gesture ----
 // On a phone a long press is also how the browser starts selecting text and
 // raises its callout, and it decides that at about the moment the hold
-// completes, so the press was being taken away before the pick could happen.
+// completes, so it can take the press away before the pick happens.
 console.log("\nthe picker and the browser's own long press");
 {
   const { out, errors } = await inPanel(browser, {}, (page) =>
@@ -898,9 +897,9 @@ console.log("\nthe picker and the browser's own long press");
 {
   // A label with no `for` names the first labelable element inside it, and a
   // button is one, so the "?" on these rows took the label off the setting:
-  // pressing a setting's own words opened its description instead of flipping
-  // its switch, and the switch was left with only its own small box to press.
-  // Invisible from the "?" alone, which is why this presses the words too.
+  // A wrong target here would open the description instead of flipping the
+  // switch, leaving the switch with only its own small box to press. The "?"
+  // alone cannot show that, so this presses the words too.
   const { out, errors } = await inPanel(
     browser,
     { viewport: { width: 480, height: 1030 }, touch: true },
@@ -2052,9 +2051,9 @@ console.log("\nsearch clear button");
   // either kind of theme. A cross that has taken the field's own colour, which
   // is what the leaked fallback amounts to, leaves nothing standing out.
   //
-  // Note this cannot prove the untouched button was white: headless Chromium
-  // never paints the browser's own clear button, which is why this bug reached
-  // a real phone without any check noticing.
+  // Note this cannot prove an unstyled button would be white: headless Chromium
+  // never paints the browser's own clear button, so that half is out of reach
+  // here and only a real phone can show it.
   const seen = crossOnField(png);
   check(themeName + ": the clear button stands out from the field",
     !!seen && seen.ratio >= 3, seen);
@@ -2152,10 +2151,10 @@ console.log("\nretrying");
 
 // ---- a chat the host does not name ----
 // Everything in the extension is keyed by chat, so a reply arriving with no
-// chatId used to fall out of every handler: no retry, no watchdog, nothing in
-// the log. The host names the chat on every build seen so far, so this guards
-// a case nobody has reported. It is checked anyway because the failure was
-// silent, which is the kind that reaches users unnoticed.
+// chatId has to be handled rather than dropped: no retry, no watchdog and
+// nothing in the log is a silent failure, which is the kind that reaches users
+// unnoticed. The host names the chat on every build seen so far, so this guards
+// a case nobody has met.
 //
 // Each case gets its own page. Sharing one would share the retry budget, and
 // the later cases would read as failures for a reason that has nothing to do
@@ -2198,7 +2197,7 @@ console.log("\nchats with no id of their own");
   const noteOn = { refusalNote: true, refusalNotes: [{ text: "stay in character", role: "system", fromTry: 1 }] };
 
   // The three shapes a build can leave a chat id in. All of them mean the same
-  // thing to a reader and used to mean "drop this reply" to the code.
+  // thing to a reader, so all three have to reach the same code.
   const absent = await runOne({ generationId: "g" }, empty());
   const isNull = await runOne({ chatId: null, generationId: "g" }, empty({ chatId: null }));
   const isEmpty = await runOne({ chatId: "", generationId: "g" }, empty({ chatId: "" }));
@@ -2236,9 +2235,9 @@ console.log("\nchats with no id of their own");
 // ---- a reply that is streaming is not stuck ----
 // The watchdog that waits for a reply to start is armed against the chat the
 // start event named, and only text arriving calls it off. A build whose token
-// events carry a different chat id than the start, or none at all, used to
-// leave that watchdog armed on a chat nobody was going to reach, so it fired
-// mid-stream and re-rolled a reply that was writing itself out fine.
+// events carry a different chat id than the start, or none at all, would leave
+// that watchdog armed on a chat nothing reaches, so it fires mid-stream and
+// re-rolls a reply that is writing itself out fine.
 //
 // The three token shapes are the point of this section. A version that reads
 // the token's own chat id passes the first and fails the other two.
@@ -3301,7 +3300,7 @@ console.log("\ncopy takes everything");
   check("and every message's role and origin", /1 system \(chat\)/.test(p) && /3 user \(chat\)/.test(p), report(out.prompt));
   check("and every message's text",
     ["You are here.", "A note.", "Hello."].every((t) => p.indexOf(t) >= 0), report(out.prompt));
-  // The one the old Stats builder left out entirely.
+  // The part a report is most often opened for.
   check("Copy carries the retry breakdown",
     /What it retried for/i.test(out.stats.clip) && /needed a retry/i.test(out.stats.clip), report(out.stats));
   check("no console errors", errors.length === 0, errors);
@@ -4082,7 +4081,7 @@ console.log("\nleaving a chat for the home screen");
       history.pushState({}, "", "/");
       await wait(1200);
       const atHome = state();
-      // And back in, which is the path that used to be the only way out of it.
+      // And back in, which is the other half of the journey.
       history.pushState({}, "", "/chat/" + chat);
       window.__handlers.CHARACTER_MESSAGE_RENDERED({ chatId: chat, messageId: "m2" });
       await frame();
@@ -5598,10 +5597,9 @@ async function page2NoChat(browser, REPLY, errors) {
 }
 
 // ---- the swipe default reaches people who already had settings ----
-// Saving writes every setting, at its default or not, so a copy saved before
-// swiping became the preferred retry pins the old behaviour. Anyone who had
-// ever pressed Save would have gone on regenerating, which is the one that can
-// take a good reply away, and would never have seen the change.
+// Saving writes every setting whether or not it was touched, so a saved copy
+// can hold "off" for a reader who never chose it. Left alone, they would go on
+// regenerating, which is the retry that can take a good reply away.
 //
 // Turned on once, and once only: turning it back off afterwards has to stick.
 // Read off which button a retry actually clicks, because the switch is applied
@@ -5650,8 +5648,8 @@ console.log("\nturning swiping on for people who already had settings");
   const chosen = await run(OLD, false);
   check("an old saved copy retries by swiping now", migrated.clicked === "swipe-right", migrated);
   check("and the once is written down", migrated.marked === true, migrated);
-  // Without the marker this would turn itself back on at every reload and the
-  // setting would be unusable for anyone who wants the old behaviour.
+  // Without the marker this would turn itself back on at every reload, leaving
+  // the setting unusable for anyone who wants regenerating.
   check("turning it back off sticks", chosen.clicked === "regenerate", chosen);
   // The settings are read before most of the extension exists. A key declared
   // too late throws in there, and the catch around it hands back an empty
@@ -7273,8 +7271,8 @@ console.log("\nthe toast gets the width it was given");
     return { long, short };
   });
   await page.close();
-  // 206 is exactly half of this viewport, which is what the old centring
-  // capped every message at whatever max-width said.
+  // 206 is exactly half of this viewport, which is where a centred layout
+  // would cap every message whatever max-width said.
   check("a long message is wider than half the screen", out.long.width > 206, out.long);
   check("and no wider than the cap it was given", out.long.width <= Math.round(412 * 0.92), out.long);
   check("a short message is not padded out to the cap", out.short.width < 206, out.short);
@@ -8045,9 +8043,8 @@ console.log("\na prompt is only shown for the chat you are in");
 }
 
 // ---- the Prompt tab draws the prompt two ways ----
-// Rendered is the panel as it has always looked, and the default: a row per
-// message with its role, its size, and whether it came from the chat or was
-// wrapped around it. Raw is the same prompt with all of that taken off, as the
+// Rendered is the default: a row per message with its role, its size, and
+// whether it came from the chat or was wrapped around it. Raw is the same prompt with all of that taken off, as the
 // data the model was handed, which is the form to read for structure and the
 // form to paste somewhere else.
 console.log("\nthe Prompt tab has a rendered and a raw view");
@@ -9871,10 +9868,9 @@ console.log("\nreset picker");
   check("no console errors", errors.length === 0, errors);
 }
 
-// Nothing resets without being asked first. The old all-or-nothing button went
-// through the host's confirm dialog and treated a host with no dialog as a yes,
-// which is the wrong way round for the one control that throws settings away.
-// The picker asks for itself, so a host without a dialog still asks.
+// Nothing resets without being asked first. Leaning on the host's confirm
+// dialog would treat a host without one as a yes, which is the wrong way round
+// for the one control that throws settings away, so the picker asks for itself.
 console.log("\nreset confirmation");
 {
   const { out, errors } = await inPanel(browser, {}, async (page) =>
@@ -10528,7 +10524,7 @@ console.log("\nteardown");
 // backend answers "which chat is open" with the account's most recent chat,
 // which on the home screen is the one you were in before the update, and a
 // backend still starting up answers "nobody is in a chat" while you are plainly
-// sitting in one. Neither used to be checked against anything.
+// sitting in one.
 console.log("\nrebuilt in place");
 {
   const page = await browser.newPage();
@@ -10712,10 +10708,9 @@ console.log("\nthe live count climbs as the reply arrives");
 
 
 // ---- opening a section does not throw the panel ----
-// A section is most of a screen. Its body used to fade in while its height
-// arrived whole, so everything below it moved twelve hundred pixels between two
-// frames: the fade said something was arriving and the jump said the panel had
-// lost its place.
+// A section is most of a screen, so its height has to travel. A body arriving
+// at full height moves everything below it twelve hundred pixels between two
+// frames, which reads as the panel losing its place.
 console.log("\nsections open without throwing the panel");
 {
   const measure = (shutFirst) =>
