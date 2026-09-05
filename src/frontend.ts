@@ -7081,6 +7081,13 @@ export function setup(ctx: Ctx, opts?: any) {
       const el = document.createElement("style");
       el.id = "__lvRetryPanelStyle";
       el.textContent =
+        // While the picker is armed. A long press is also how the browser
+        // starts selecting text and raises its own callout, and it decides
+        // that at about the same moment the picker does, so the press was
+        // being taken away before the hold completed. Off for as long as the
+        // mode lasts, and only for that long.
+        ".ar-picking,.ar-picking *{-webkit-touch-callout:none!important;" +
+        "-webkit-user-select:none!important;user-select:none!important}" +
         "#" + SEARCH_ID + "::-webkit-search-cancel-button{" +
         "-webkit-appearance:none;appearance:none;width:14px;height:14px;cursor:pointer;" +
         "background-color:currentColor;opacity:.6;" +
@@ -11900,9 +11907,11 @@ export function setup(ctx: Ctx, opts?: any) {
         ["pointermove", onMove],
         ["pointerup", onUp],
         ["pointercancel", onUp],
+        ["contextmenu", onMenu],
       ] as Array<[string, any]>) {
         try { document.removeEventListener(type, fn, true); } catch (_) {}
       }
+      try { document.documentElement.classList.remove("ar-picking"); } catch (_) {}
       hideToast();
       if (sel) cfg[key] = sel;
       openSettings();
@@ -11952,13 +11961,27 @@ export function setup(ctx: Ctx, opts?: any) {
       if (dx * dx + dy * dy > HOLD_PICK_SLIP * HOLD_PICK_SLIP) letGo();
     };
     const onUp = () => letGo();
+    // The browser raising its own menu on a long press is that same press,
+    // recognised by something else first. Taken as the pick rather than
+    // competed with, which also covers a right click on a desktop.
+    const onMenu = (e: any) => {
+      const node = held ? held.node : e && e.target;
+      if (!node || ours(node)) return;
+      try {
+        e.preventDefault();
+        e.stopPropagation();
+      } catch (_) {}
+      take(node);
+    };
     const onKey = (e: any) => {
       if (e && e.key === "Escape") finish(null, "Picking cancelled.");
     };
+    try { document.documentElement.classList.add("ar-picking"); } catch (_) {}
     document.addEventListener("pointerdown", onDown, true);
     document.addEventListener("pointermove", onMove, true);
     document.addEventListener("pointerup", onUp, true);
     document.addEventListener("pointercancel", onUp, true);
+    document.addEventListener("contextmenu", onMenu, true);
     document.addEventListener("keydown", onKey, true);
     // The field labels already read "Your ... button", so the leading "your" is
     // dropped rather than repeated back.

@@ -843,6 +843,57 @@ console.log("\nhints");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- the browser's own long press is the same gesture ----
+// On a phone a long press is also how the browser starts selecting text and
+// raises its callout, and it decides that at about the moment the hold
+// completes, so the press was being taken away before the pick could happen.
+console.log("\nthe picker and the browser's own long press");
+{
+  const { out, errors } = await inPanel(browser, {}, (page) =>
+    page.evaluate(async () => {
+      const frame = () =>
+        new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const stop = document.createElement("button");
+      stop.type = "button";
+      stop.setAttribute("aria-label", "Stop generating");
+      stop.textContent = "stop";
+      document.body.appendChild(stop);
+
+      const modal = document.getElementById("modal");
+      const row = modal.querySelector('[data-ar-row="stopSelector"]');
+      const pick = [...row.querySelectorAll("button")].find((b) =>
+        /pick it for me/i.test(b.textContent),
+      );
+      pick.click();
+      await frame();
+      const quiet = getComputedStyle(document.documentElement).userSelect === "none";
+
+      const b = stop.getBoundingClientRect();
+      const at = { clientX: b.left + 2, clientY: b.top + 2, bubbles: true, cancelable: true, pointerType: "touch" };
+      stop.dispatchEvent(new PointerEvent("pointerdown", at));
+      // The menu the browser raises, and the press it takes away with it.
+      const menuAllowed = stop.dispatchEvent(
+        new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: at.clientX, clientY: at.clientY }),
+      );
+      stop.dispatchEvent(new PointerEvent("pointercancel", at));
+      await new Promise((r) => setTimeout(r, 200));
+      return {
+        quiet,
+        menuAllowed,
+        sel: (document.querySelector('[data-ar-row="stopSelector"] input') || {}).value,
+      };
+    }),
+  );
+  check("selecting text is off while the picker is up", out.quiet, out);
+  check("the browser's own menu is not left to open over it", !out.menuAllowed, out);
+  check(
+    "and that press still counts as the pick",
+    /Stop generating/.test(String(out.sel || "")),
+    out,
+  );
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- what each part of a row answers to ----
 {
   // A label with no `for` names the first labelable element inside it, and a
