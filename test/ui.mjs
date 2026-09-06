@@ -8685,6 +8685,52 @@ console.log("\nprompt viewer");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- prices as a provider writes them ----
+// A price list reads $5.00/M or $0.075/M. The box asked a phone for the keypad
+// with no decimal point on it and held itself to whole numbers, so neither a
+// price nor the backoff factor could be typed on one.
+{
+  const { errors: priceErrors } = await inPanel(browser, {}, async (page) => {
+    const out = await page.evaluate(() => {
+      const find = (k) => {
+        const row = document.querySelector('[data-ar-row="' + k + '"]');
+        return row ? row.querySelector("input[data-ar-num]") : null;
+      };
+      const shape = (n) => (n ? { step: n.step, mode: n.inputMode } : null);
+      return {
+        price: shape(find("costIn")),
+        out: shape(find("costOut")),
+        factor: shape(find("backoffFactor")),
+        whole: shape(find("maxRetries")),
+      };
+    });
+    check("a price box takes decimals", out.price && out.price.step === "any", JSON.stringify(out));
+    check("and asks for a keypad with a point on it", out.price && out.price.mode === "decimal", JSON.stringify(out));
+    check("the output price the same", out.out && out.out.step === "any", JSON.stringify(out));
+    check("the backoff factor too, which it never did", out.factor && out.factor.step === "any", JSON.stringify(out));
+    check("while a whole number still asks for whole numbers", out.whole && out.whole.step === "1", JSON.stringify(out));
+    check("and keeps the plain keypad", out.whole && out.whole.mode === "numeric", JSON.stringify(out));
+
+    // Typed and pasted, as somebody copying a price list would do each.
+    const kept = await page.evaluate(async () => {
+      const row = document.querySelector('[data-ar-row="costIn"]');
+      const n = row.querySelector("input[data-ar-num]");
+      n.value = "0.075";
+      n.dispatchEvent(new Event("change", { bubbles: true }));
+      const orow = document.querySelector('[data-ar-row="costOut"]');
+      const o = orow.querySelector("input[data-ar-num]");
+      const dt = new DataTransfer();
+      dt.setData("text", "$3.75/M");
+      o.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
+      await new Promise((r) => setTimeout(r, 40));
+      return { typed: n.value, pasted: o.value };
+    });
+    check("a fraction of a unit survives being typed", kept.typed === "0.075", JSON.stringify(kept));
+    check("and a price pasted as the provider writes it is understood", kept.pasted === "3.75", JSON.stringify(kept));
+  });
+  check("no console errors on the price rows", priceErrors.length === 0, priceErrors);
+}
+
 // ---- the reply is only sent for counting when it is asked for ----
 // The privacy page promises this happens with the panel watching prompts and a
 // price set, and not otherwise. That promise is the check.
@@ -8747,7 +8793,7 @@ console.log("\nprompt viewer");
 // half can be worked out; what the new reply costs cannot be known before it
 // arrives and is named rather than guessed at.
 {
-  const run = async (over) => {
+  const run = async (over, opts) => {
     const page = await browser.newPage();
     const errors = [];
     page.on("pageerror", (e) => errors.push(e.message));
@@ -8755,7 +8801,7 @@ console.log("\nprompt viewer");
     await page.addStyleTag({ content: THEME });
     await page.addScriptTag({ content: SOURCE, type: "module" });
     await page.waitForFunction(() => !!window.__setup);
-    const out = await page.evaluate(async (over) => {
+    const out = await page.evaluate(async ({ over, opts }) => {
       const wait = (ms) => new Promise((r) => setTimeout(r, ms));
       let msgCbs = [];
       const onBackend = (m) => { for (const cb of msgCbs.slice()) { try { cb(m); } catch (_) {} } };
@@ -8782,9 +8828,17 @@ console.log("\nprompt viewer");
       // A reply of 800 characters, which is the estimate's 200 tokens, so the
       // output half has a size to be priced on.
       const fire = (name, p) => { for (const fn of handlers[name] || []) { try { fn(p); } catch (_) {} } };
-      fire("GENERATION_STARTED", { generationId: "g1", chatId: "c1" });
-      fire("GENERATION_ENDED", { generationId: "g1", chatId: "c1", content: "She set the cup down. ".repeat(36) });
+      const replyChat = (opts && opts.replyChat) || "c1";
+      fire("GENERATION_STARTED", { generationId: "g1", chatId: replyChat });
+      fire("GENERATION_ENDED", { generationId: "g1", chatId: replyChat, content: "She set the cup down. ".repeat(36) });
       await wait(30);
+      // The prompt below is for c1. A reply that came from somewhere else has
+      // to leave the panel with a prompt it will still show, so the generation
+      // that follows puts the tab back in c1.
+      if (replyChat !== "c1") {
+        fire("GENERATION_STARTED", { generationId: "g2", chatId: "c1" });
+        await wait(10);
+      }
       // 4000 characters with no host count, so the estimate is 1000 tokens.
       onBackend({
         type: "prompt_snapshot",
@@ -8796,7 +8850,7 @@ console.log("\nprompt viewer");
       });
       await wait(30);
       return body() ? body().textContent : "";
-    }, over);
+    }, { over, opts });
     await page.close();
     return { out, errors };
   };
@@ -8806,8 +8860,10 @@ console.log("\nprompt viewer");
   const both = await run({ liveLog: true, toast: false, costIn: 3, costOut: 15 });
   check("a retry is priced on the prompt and the reply together",
     /About 0\.006 a retry at this size/.test(both.out), both.out.slice(0, 260));
+  // No host count in this stub, so the reply is the panel's own estimate and
+  // the line has to say so rather than let half the sum read as measured.
   check("and says where the reply's size came from",
-    /reckoned at the size of the last one here/.test(both.out), both.out.slice(0, 260));
+    /reckoned at roughly the size of the last one here/.test(both.out), both.out.slice(0, 260));
   check("no currency is invented", !/[$£€]/.test(both.out), both.out.slice(0, 260));
   check("no console errors with both prices set", both.errors.length === 0, both.errors);
 
@@ -8817,6 +8873,14 @@ console.log("\nprompt viewer");
     /About 0\.003 a retry at this size/.test(half.out), half.out.slice(0, 260));
   check("and the line says so rather than leaving half out quietly",
     /Only the prompt is priced/.test(half.out), half.out.slice(0, 260));
+
+  // A reply from another chat is not a stand-in for the next one here, and the
+  // line says "the last one here", so it has to mean here.
+  const elsewhere = await run({ liveLog: true, toast: false, costIn: 3, costOut: 15 }, { replyChat: "c2" });
+  check("a reply from another chat is not priced against this one",
+    /No reply has arrived in this chat yet/.test(elsewhere.out), elsewhere.out.slice(0, 260));
+  check("and the prompt half is still counted",
+    /About 0\.003 a retry at this size/.test(elsewhere.out), elsewhere.out.slice(0, 260));
 
   const free = await run({ liveLog: true, toast: false });
   check("and nothing is costed until prices are set",

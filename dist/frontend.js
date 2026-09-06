@@ -396,7 +396,7 @@ const SCHEMA = [
                 type: "num",
                 min: 0,
                 max: 10000,
-                hint: "What your provider charges for what you send it, which for a retry is the whole prompt again. Its price list calls this input.",
+                hint: "What your provider charges for what you send it, which for a retry is the whole prompt again. Its price list calls this input, and writes it as $5.00/M or $0.075/M. Type the number on its own, or paste the whole thing and the number is taken out of it.",
             },
             {
                 key: "costOut",
@@ -406,7 +406,7 @@ const SCHEMA = [
                 type: "num",
                 min: 0,
                 max: 10000,
-                hint: "What it charges for the reply the model writes. Its price list calls this output, and it is usually the dearer of the two.",
+                hint: "What it charges for the reply the model writes. Its price list calls this output, and it is usually the dearer of the two. Same as above: the number on its own, or paste the line and let it take the number out.",
             },
         ],
     },
@@ -3471,18 +3471,30 @@ export function setup(ctx, opts) {
     // four characters a token where it will not, the same as the prompt.
     let lastReplyChars = 0;
     let lastReplyTokens = 0;
-    const replyTokens = () => lastReplyTokens || Math.round(lastReplyChars / 4);
+    // Which chat it came from. A reply from the chat you were in an hour ago is
+    // not a stand-in for the next one here, and the line says "the last one
+    // here", so it has to mean here.
+    let lastReplyChat = "";
+    const replyTokens = (chatId) => {
+        if (!lastReplyChars || String(chatId || "") !== lastReplyChat)
+            return 0;
+        return lastReplyTokens || Math.round(lastReplyChars / 4);
+    };
     // Remembered on every reply so the panel has a size to price the output half
     // with. The host is asked for the real count only while the panel is watching
     // prompts and a price is set, so a reader who never opens the panel and never
     // asked for costs sends nothing anywhere.
     let replyCountAt = 0;
-    function noteReplySize(text) {
+    function noteReplySize(text, chatId) {
         lastReplyChars = String(text || "").length;
         lastReplyTokens = 0;
+        lastReplyChat = String(chatId || "");
         if (!lastReplyChars || !promptsAsked || !hasPrices())
             return;
-        const at = Date.now();
+        // Never the same number twice, so two replies ending inside one millisecond
+        // cannot have the first one's count accepted for the second. The prompt
+        // snapshots are stamped the same way for the same reason.
+        const at = Math.max(Date.now(), replyCountAt + 1);
         replyCountAt = at;
         try {
             if (ctx && typeof ctx.sendToBackend === "function")
@@ -3823,7 +3835,7 @@ export function setup(ctx, opts) {
         // only honest stand-in for one that has not been written yet.
         if (hasPrices()) {
             const sent = lastPromptTokens || Math.round(chars / 4);
-            const back = replyTokens();
+            const back = replyTokens(lastPrompt.chatId);
             const one = costOf(sent, back);
             const cost = document.createElement("div");
             cost.style.cssText =
@@ -3836,8 +3848,14 @@ export function setup(ctx, opts) {
                 : Number(cfg.costOut) <= 0
                     ? " Only the prompt is priced, since the output price is 0."
                     : back
-                        ? " The reply is reckoned at the size of the last one here."
-                        : " No reply has arrived in this tab yet, so only the prompt is counted.";
+                        ? " The reply is reckoned at " +
+                            // Counted by the host, or the panel's own four-characters-a-token
+                            // guess. The prompt half says which of the two it is holding and
+                            // this one has to as well, or half the sum reads as measured when
+                            // it is not.
+                            (lastReplyTokens ? "" : "roughly ") +
+                            "the size of the last one here."
+                        : " No reply has arrived in this chat yet, so only the prompt is counted.";
             cost.textContent =
                 "About " + money(one) + " a retry at this size." +
                     (stats.retries
@@ -8293,7 +8311,7 @@ export function setup(ctx, opts) {
         // away was still generated and still paid for, so it is exactly the size a
         // retry costs, and recording it only on a clean pass left the panel with
         // nothing to price the output half with in the case it exists for.
-        noteReplySize(content);
+        noteReplySize(content, chatId);
         // Empty only when the payload says so, or when nothing streamed either. A
         // missing field plus tokens that carried no readable text is not a verdict,
         // so it is left alone rather than re-rolled on a guess.
@@ -11061,7 +11079,12 @@ export function setup(ctx, opts) {
             if (forId)
                 input.id = forId;
             input.type = "number";
-            input.inputMode = "numeric";
+            // A box with no step is one the browser holds to whole numbers, and
+            // "numeric" is the keypad with no decimal point on it. Every setting here
+            // was whole until a price arrived, so both were right and both are wrong
+            // now: a price is a fraction of a unit, and so is the backoff factor.
+            input.step = f.int ? "1" : "any";
+            input.inputMode = f.int ? "numeric" : "decimal";
             // Marks it for the rule that takes the browser's spinner off. An
             // attribute of ours rather than a bare input[type=number] selector,
             // because that stylesheet is on the host's page and would reach every
@@ -11078,6 +11101,22 @@ export function setup(ctx, opts) {
             // for. The circle also reserved a box the width of the largest size the
             // setting allows, so it took that much room out of every panel whether
             // or not the button was even switched on.
+            // A price is copied off a provider's own page, where it reads $5.00/M or
+            // $0.075/M. A number box takes none of that: the paste lands as nothing
+            // and the setting quietly stays at its default, which reads as the
+            // feature being broken. The number is lifted out of whatever was pasted.
+            input.addEventListener("paste", (e) => {
+                const raw = e && e.clipboardData && e.clipboardData.getData("text");
+                if (!raw)
+                    return;
+                const found = String(raw).replace(/,/g, "").match(/-?\d*\.?\d+/);
+                if (!found)
+                    return;
+                e.preventDefault();
+                input.value = found[0];
+                input.dispatchEvent(new Event("input", { bubbles: true }));
+                input.dispatchEvent(new Event("change", { bubbles: true }));
+            });
             input.addEventListener("input", () => {
                 if (!f.live)
                     return;

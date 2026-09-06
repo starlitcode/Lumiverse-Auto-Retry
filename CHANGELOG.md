@@ -14,7 +14,8 @@ _2026-09-05_
 
 ### Added
 
-- **The panel says what a retry costs, both halves of it.** Put your provider's input and output prices under Basics and the Prompt tab works out what a retry comes to: the prompt from what is on that tab, and the reply reckoned at the size of the last one the tab saw, which is the only honest stand-in for one nobody has written yet. Under it, what the retries fired this session come to at that size. The reply is measured with Lumiverse's own tokeniser, and only while the panel is on the Prompt tab with a price set: leave either and nothing is sent anywhere. Both prices start at 0, and with both at 0 the line is not there. No currency is shown, because nothing here knows which one you are billed in.
+- **A number box takes decimals where the setting is one.** The boxes asked a phone for the keypad with no decimal point on it and held themselves to whole numbers, which stopped a price being entered at all and had been quietly doing the same to **How much longer each wait gets**. Pasting `$5.00/M` off a price list works too, since that is where the number is being copied from.
+- **The panel says what a retry costs, both halves of it.** Put your provider's input and output prices under Basics and the Prompt tab works out what a retry comes to: the prompt from what is on that tab, and the reply reckoned at the size of the last one in that chat, which is the only honest stand-in for one nobody has written yet. Under it, what the retries fired this session come to at that size. The reply is measured with Lumiverse's own tokeniser, and only while the panel is on the Prompt tab with a price set: leave either and nothing is sent anywhere. Both prices start at 0, and with both at 0 the line is not there. No currency is shown, because nothing here knows which one you are billed in.
 
 ## 5.0.0
 
