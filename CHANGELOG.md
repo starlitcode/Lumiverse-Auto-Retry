@@ -14,7 +14,7 @@ _2026-09-05_
 
 ### Added
 
-- **The panel says what a retry costs.** Put your provider's prices per million tokens under Basics and the Prompt tab works out what sending that prompt again comes to, and what the retries fired so far this session come to at that size. What the new reply costs is on top of it and is named rather than guessed at, since nothing can know the size of a reply before it arrives. Both prices start at 0, and at 0 the line is not there. No currency is shown, because nothing here knows which one you are billed in.
+- **The panel says what a retry costs.** Put your provider's price per million tokens under Basics and the Prompt tab works out what sending that prompt again comes to, and what the retries fired so far this session come to at that size. What the new reply costs is on top of it and is named rather than guessed at, since nothing can know the size of a reply before it arrives. The price starts at 0, and at 0 the line is not there. No currency is shown, because nothing here knows which one you are billed in.
 
 ## 5.0.0
 
@@ -48,7 +48,7 @@ _2026-09-05_
 - **A setting's own words flip its switch, rather than opening its description.** A label with no `for` names the first thing inside it that can be labelled, and a button is one, so the "?" beside each setting had taken the label off the setting. The control is named outright now.
 - **The press that closes a description does only that**, instead of also flipping whatever tick was under your finger.
 - **A setting's description stays on the screen of a small phone.** Its width cap is room on the screen while the width itself is in the element's own units, and Lumiverse's UI Scale is a zoom, so the two came apart. The width is measured against however much the host is scaling.
-- **A removed note's space closes rather than vanishing**, the same movement Auto Refine gives a deleted block.
+- **A removed note's space closes rather than vanishing**, the same movement [Auto Refine](https://github.com/starlitcode/Lumiverse-Auto-Refine) gives a deleted block.
 - **Removing a note asks first.** A note holds writing you typed and there is no undo, so it goes the way a preset does.
 - **Deleting a preset does not cost you your place in the panel.** A dialog stops the page behind it scrolling, which loses where you were, so that place is held across it.
 - **The panel knows which chat you are in after pressing Update.** The backend answers with the account's most recent chat, or that nobody is in a chat while it is still starting. Neither is taken as final: the address settles it, and the question is asked again until something answers properly.

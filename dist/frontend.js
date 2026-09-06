@@ -260,10 +260,11 @@ const CONFIG = {
     // sidebar, which places it, themes it, lists it in the Ctrl+K palette, and
     // keeps it off the reply the user is reading.
     panelHome: "float",
-    // What a million tokens costs, in and out. Nobody's prices are known here, so
-    // 0 means the reader has not said and no cost is worked out.
+    // What a million tokens sent costs. Nobody's prices are known here, so 0
+    // means the reader has not said and no cost is worked out. There is no price
+    // for what comes back, because nothing here can know the size of a reply
+    // before it arrives and a setting nothing reads is worse than none.
     costIn: 0,
-    costOut: 0,
 };
 // A hint that quotes a default reads it from the block above rather than
 // spelling it out. Five of them were written by hand and went stale the moment
@@ -319,7 +320,7 @@ const RUNS = {
     },
     panelCost: {
         title: "What a retry costs",
-        note: "Your provider's own prices, per million tokens. Nothing here knows what a model charges and no two providers agree, so this is the only way the panel can turn a token count into money. Left at 0, no cost is worked out anywhere.",
+        note: "Your provider's own price, per million tokens, in whatever currency it bills you in. Nothing here knows what a model charges and no two providers agree, so this is the only way the panel can turn a token count into money. Left at 0, no cost is worked out and the Prompt tab says nothing about it.",
     },
     frozen: {
         title: "Replies that freeze",
@@ -392,21 +393,11 @@ const SCHEMA = [
                 key: "costIn",
                 needs: ["liveLog"],
                 run: "panelCost",
-                label: "Price per million tokens sent",
+                label: "Price per million tokens",
                 type: "num",
                 min: 0,
                 max: 10000,
-                hint: "From your provider's own price list. The panel's Prompt tab uses it to say what a retry costs. Left at 0, no cost is worked out.",
-            },
-            {
-                key: "costOut",
-                needs: ["liveLog"],
-                run: "panelCost",
-                label: "Price per million tokens back",
-                type: "num",
-                min: 0,
-                max: 10000,
-                hint: "The other half of that price list, usually the dearer one. In whatever currency your provider bills you in, since nothing here converts anything.",
+                hint: "What your provider charges for what goes to the model, which for a retry is the whole prompt again.",
             },
         ],
     },
@@ -613,7 +604,7 @@ const SCHEMA = [
                 run: "whatCounts",
                 label: "Use the built-in phrase list",
                 type: "bool",
-                hint: "On by default. This only controls the built-in list. Your own phrases below are always used either way. On, the built-in list is used together with your own phrases. Off, only your own phrases are used.",
+                hint: "On by default, and it only controls the built-in list. Your own phrases below are used either way, so off leaves your phrases working alone.",
             },
             {
                 key: "refusalCatchDisengage",
@@ -643,7 +634,7 @@ const SCHEMA = [
                 run: "yourWords",
                 label: "Your own refusal phrases",
                 type: "text",
-                hint: "Optional. Extra phrases that should also count as a refusal, one per line. These are always used, whether or not the built-in list above is on. Upper or lower case doesn't matter. Paste the exact wording your model refuses with.",
+                hint: "Extra phrases that count as a refusal, one per line, used whether or not the built-in list above is on. Case does not matter, so paste the exact wording your model refuses with.",
             },
             {
                 key: "refusalPhraseSubs",
@@ -3456,7 +3447,7 @@ export function setup(ctx, opts) {
     // ---- turning tokens into the number people actually want ----
     // A retry is a whole generation charged for again, so what one costs is worth
     // saying beside the prompt it was measured from.
-    const hasPrices = () => Number(cfg.costIn) > 0 || Number(cfg.costOut) > 0;
+    const hasPrices = () => Number(cfg.costIn) > 0;
     // No currency symbol, because nothing here knows the currency: a "$" printed
     // for somebody billed in euros is worse than no symbol at all.
     //
@@ -3464,8 +3455,9 @@ export function setup(ctx, opts) {
     // fixed number of decimals is what goes wrong here: two prints every prompt
     // there is as 0.00, and four rounds a cost of 0.000012 away to nothing.
     const money = (n) => !Number.isFinite(n) || n <= 0 ? "0" : n >= 1 ? n.toFixed(2) : String(Number(n.toPrecision(2)));
-    // Sent and back priced apart, since providers charge more for what comes back.
-    const costOf = (sent, back) => (sent / 1e6) * Number(cfg.costIn || 0) + (back / 1e6) * Number(cfg.costOut || 0);
+    // Only what is sent. What a reply costs cannot be worked out before it
+    // arrives, so it is named on the line instead of being guessed at.
+    const costOf = (sent) => (sent / 1e6) * Number(cfg.costIn || 0);
     // The host's own count when it gives one, and an estimate otherwise. Which
     // of the two it is gets said in words, since a count and a guess are
     // different things to act on.
@@ -3800,7 +3792,7 @@ export function setup(ctx, opts) {
         // one with a gap.
         if (hasPrices()) {
             const sent = lastPromptTokens || Math.round(chars / 4);
-            const one = costOf(sent, 0);
+            const one = costOf(sent);
             const cost = document.createElement("div");
             cost.style.cssText =
                 "margin-bottom:6px;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";

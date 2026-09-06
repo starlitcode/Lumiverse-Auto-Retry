@@ -8738,7 +8738,7 @@ console.log("\nprompt viewer");
     return { out, errors };
   };
 
-  const priced = await run({ liveLog: true, toast: false, costIn: 3, costOut: 15 });
+  const priced = await run({ liveLog: true, toast: false, costIn: 3 });
   // 1000 tokens sent at 3 per million is 0.003.
   check("the prompt tab says what sending it again costs",
     /About 0\.003 to send this again/.test(priced.out), priced.out.slice(0, 240));

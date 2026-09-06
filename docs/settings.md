@@ -143,7 +143,7 @@ The line and the pop-up read from the same place, so they never disagree. Both s
 
 **Rendered** and **Raw** are the two ways to read the prompt, and the button under the message and character count switches between them. Rendered is the readable view described above, and where it starts: a row per message, its role, its size, whether it came from your chat or was wrapped around it, and your notes marked. Raw takes all of that off and shows the prompt as the data the model was handed, role and content, which is the form to read when the question is about structure rather than wording, and the form to paste somewhere else. **Copy** follows whichever you are on, so on raw it copies the data. Whichever you pick is remembered.
 
-**What a retry costs** sits under that count once you have filled in **Price per million tokens sent** and **Price per million tokens back**, under Basics. A retry sends this whole prompt again, so the panel can say what sending it again comes to, and what the retries fired so far this session would come to at that size. What the new reply costs is on top and is named rather than guessed at, since nothing can know the size of a reply before it arrives. Both prices start at 0, and at 0 the line is not there. They are your provider's own numbers, in your provider's own currency: nothing here knows what a model charges and nothing converts anything.
+**What a retry costs** sits under that count once you have filled in **Price per million tokens**, under Basics. A retry sends this whole prompt again, so the panel can say what sending it again comes to, and what the retries fired so far this session would come to at that size. What the new reply costs is on top and is named rather than guessed at, since nothing can know the size of a reply before it arrives. The price starts at 0, and at 0 the line is not there. It is your provider's own number, in your provider's own currency: nothing here knows what a model charges and nothing converts anything.
 
 Your **refusal notes are marked** in that list, in the accent colour, and opened for you. A line at the top says how many went and where in the prompt they landed. That is the thing the Prompt view is most likely to be open for: seeing exactly how and where a note was inserted.
 
@@ -211,8 +211,7 @@ The same options live in the CONFIG block at the top of `src/frontend.ts` and `d
 | stopSelector | (see file) | Host stop button, used to abort a stalled reply. |
 | toast | true | Show the little retry pop-up with its Cancel button. It counts the wait down in real time and names what the retry is for and which try it is. |
 | liveLog | false | Show the on-screen panel. Two tabs: Log for what the extension is doing, Prompt for what went to the model. |
-| costIn | 0 | Your provider's price per million tokens sent. The panel's Prompt tab uses it to say what retrying costs. 0 leaves every cost line off. |
-| costOut | 0 | The same list's price per million tokens back. In whatever currency your provider bills you in, since nothing converts anything. |
+| costIn | 0 | Your provider's price per million tokens, in its own currency. The panel's Prompt tab uses it to say what retrying costs. 0 leaves the line off. |
 
 The two watchdog waits (`stuckTimeoutMs`, `idleTimeoutMs`) are long, and the defaults assume a slow model rather than a fast one. A watchdog that fires early on a model that is slow but healthy is worse than one that fires late: it throws away a reply that was still arriving, and the replacement comes from the same slow model, so it fires again on that one too. If your provider is fast and you want quicker recovery, lower them.
 
