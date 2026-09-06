@@ -378,6 +378,24 @@ spindle.onFrontendMessage(async (payload, userId) => {
             });
             return;
         }
+        // The reply a generation just produced, counted so the panel can price the
+        // output half of a retry. Only the count goes back: the text is not kept,
+        // not stored, and not read for anything else, and it came from this server
+        // in the first place.
+        if (payload.type === 'count_reply') {
+            const text = String(payload.text == null ? '' : payload.text);
+            const at = Number(payload.at) || 0;
+            if (!text)
+                return;
+            countTokens(text, null, userId)
+                .then((tokens) => {
+                if (tokens == null)
+                    return;
+                replyTo(userId, { type: 'reply_tokens', at: at, tokens: tokens });
+            })
+                .catch(() => { });
+            return;
+        }
         if (payload.type === 'set_prompt_capture') {
             const k = watcherKey(userId);
             if (payload.on)

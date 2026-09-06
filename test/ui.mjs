@@ -8685,6 +8685,62 @@ console.log("\nprompt viewer");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- the reply is only sent for counting when it is asked for ----
+// The privacy page promises this happens with the panel watching prompts and a
+// price set, and not otherwise. That promise is the check.
+{
+  const run = async (over, opts) => {
+    const page = await browser.newPage();
+    const errors = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    await stage(page, "<div id=modal></div>");
+    await page.addStyleTag({ content: THEME });
+    await page.addScriptTag({ content: SOURCE, type: "module" });
+    await page.waitForFunction(() => !!window.__setup);
+    const out = await page.evaluate(async ({ over, opts }) => {
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      let msgCbs = [];
+      const sent = [];
+      const handlers = {};
+      window.__setup(
+        {
+          events: { on: (n, fn) => { (handlers[n] = handlers[n] || []).push(fn); return () => {}; } },
+          sendToBackend: (m) => sent.push(m),
+          onBackendMessage: (cb) => { msgCbs.push(cb); return () => {}; },
+          ui: {
+            showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+            registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }),
+          },
+        },
+        over,
+      );
+      await wait(30);
+      if (opts.openPromptTab) {
+        const tab = [...document.querySelectorAll('[role="tab"]')].find((b) => b.textContent.trim() === "Prompt");
+        tab && tab.click();
+        await wait(20);
+      }
+      const fire = (name, p) => { for (const fn of handlers[name] || []) { try { fn(p); } catch (_) {} } };
+      fire("GENERATION_STARTED", { generationId: "g1", chatId: "c1" });
+      fire("GENERATION_ENDED", { generationId: "g1", chatId: "c1", content: "A perfectly ordinary reply." });
+      await wait(40);
+      return sent.filter((m) => m.type === "count_reply").length;
+    }, { over, opts });
+    await page.close();
+    return { out, errors };
+  };
+
+  const asked = await run({ liveLog: true, toast: false, costIn: 3, costOut: 15 }, { openPromptTab: true });
+  check("with the prompt tab open and prices set, the reply is counted", asked.out === 1, asked.out);
+  check("no console errors while counting", asked.errors.length === 0, asked.errors);
+
+  const noPrice = await run({ liveLog: true, toast: false }, { openPromptTab: true });
+  check("with no price set, the reply is not sent anywhere", noPrice.out === 0, noPrice.out);
+
+  const noTab = await run({ liveLog: true, toast: false, costIn: 3, costOut: 15 }, { openPromptTab: false });
+  check("and not while the panel is not watching prompts", noTab.out === 0, noTab.out);
+}
+
 // ---- what a retry costs ----
 // The prompt tab reported messages, characters and tokens, none of which is
 // what somebody is billed in. A retry sends the whole prompt again, so that
@@ -8703,10 +8759,11 @@ console.log("\nprompt viewer");
       const wait = (ms) => new Promise((r) => setTimeout(r, ms));
       let msgCbs = [];
       const onBackend = (m) => { for (const cb of msgCbs.slice()) { try { cb(m); } catch (_) {} } };
+      const handlers = {};
       const sent = [];
       window.__setup(
         {
-          events: { on: () => () => {} },
+          events: { on: (n, fn) => { (handlers[n] = handlers[n] || []).push(fn); return () => {}; } },
           sendToBackend: (m) => sent.push(m),
           onBackendMessage: (cb) => { msgCbs.push(cb); return () => {}; },
           ui: {
@@ -8722,6 +8779,12 @@ console.log("\nprompt viewer");
       const body = () => document.getElementById("__lvRetryLogBody");
       tab("Prompt").click();
       await wait(20);
+      // A reply of 800 characters, which is the estimate's 200 tokens, so the
+      // output half has a size to be priced on.
+      const fire = (name, p) => { for (const fn of handlers[name] || []) { try { fn(p); } catch (_) {} } };
+      fire("GENERATION_STARTED", { generationId: "g1", chatId: "c1" });
+      fire("GENERATION_ENDED", { generationId: "g1", chatId: "c1", content: "She set the cup down. ".repeat(36) });
+      await wait(30);
       // 4000 characters with no host count, so the estimate is 1000 tokens.
       onBackend({
         type: "prompt_snapshot",
@@ -8738,18 +8801,26 @@ console.log("\nprompt viewer");
     return { out, errors };
   };
 
-  const priced = await run({ liveLog: true, toast: false, costIn: 3 });
-  // 1000 tokens sent at 3 per million is 0.003.
-  check("the prompt tab says what sending it again costs",
-    /About 0\.003 to send this again/.test(priced.out), priced.out.slice(0, 240));
-  check("and does not pretend to know what the reply will cost",
-    /plus whatever the new reply costs/.test(priced.out), priced.out.slice(0, 240));
-  check("no currency is invented", !/[$£€]/.test(priced.out), priced.out.slice(0, 240));
-  check("no console errors with prices set", priced.errors.length === 0, priced.errors);
+  // Both halves: 1000 tokens of prompt at 3 per million is 0.003, and a reply
+  // of 200 tokens at 15 is another 0.003, so 0.006.
+  const both = await run({ liveLog: true, toast: false, costIn: 3, costOut: 15 });
+  check("a retry is priced on the prompt and the reply together",
+    /About 0\.006 a retry at this size/.test(both.out), both.out.slice(0, 260));
+  check("and says where the reply's size came from",
+    /reckoned at the size of the last one here/.test(both.out), both.out.slice(0, 260));
+  check("no currency is invented", !/[$£€]/.test(both.out), both.out.slice(0, 260));
+  check("no console errors with both prices set", both.errors.length === 0, both.errors);
+
+  // One price missing is a price nobody gave, not a cost of nothing.
+  const half = await run({ liveLog: true, toast: false, costIn: 3 });
+  check("with no output price, only the prompt is counted",
+    /About 0\.003 a retry at this size/.test(half.out), half.out.slice(0, 260));
+  check("and the line says so rather than leaving half out quietly",
+    /Only the prompt is priced/.test(half.out), half.out.slice(0, 260));
 
   const free = await run({ liveLog: true, toast: false });
   check("and nothing is costed until prices are set",
-    !/to send this again/.test(free.out), free.out.slice(0, 240));
+    !/a retry at this size/.test(free.out), free.out.slice(0, 240));
   check("while the token count is there either way",
     /tokens/.test(free.out), free.out.slice(0, 240));
   check("no console errors without prices", free.errors.length === 0, free.errors);

@@ -260,11 +260,10 @@ const CONFIG = {
     // sidebar, which places it, themes it, lists it in the Ctrl+K palette, and
     // keeps it off the reply the user is reading.
     panelHome: "float",
-    // What a million tokens sent costs. Nobody's prices are known here, so 0
-    // means the reader has not said and no cost is worked out. There is no price
-    // for what comes back, because nothing here can know the size of a reply
-    // before it arrives and a setting nothing reads is worse than none.
+    // What a million tokens costs, input and output. Nobody's prices are known
+    // here, so 0 means the reader has not said and no cost is worked out.
     costIn: 0,
+    costOut: 0,
 };
 // A hint that quotes a default reads it from the block above rather than
 // spelling it out. Five of them were written by hand and went stale the moment
@@ -320,7 +319,7 @@ const RUNS = {
     },
     panelCost: {
         title: "What a retry costs",
-        note: "Your provider's own input price, copied off its price list, in whatever currency it bills you in. Nothing here knows what a model charges and no two providers agree, so this is the only way the panel can turn a token count into money. There is no output price here because a retry's reply is not written yet, and its cost is named on the line rather than guessed at. Left at 0, no cost is worked out and the Prompt tab says nothing about it.",
+        note: "Your provider's own prices, copied off its price list, in whatever currency it bills you in. Nothing here knows what a model charges and no two providers agree, so this is the only way the panel can turn a token count into money. A retry pays for the prompt again and for a whole new reply, so both are counted. Both at 0, no cost is worked out and the Prompt tab says nothing about it.",
     },
     frozen: {
         title: "Replies that freeze",
@@ -398,6 +397,16 @@ const SCHEMA = [
                 min: 0,
                 max: 10000,
                 hint: "What your provider charges for what you send it, which for a retry is the whole prompt again. Its price list calls this input.",
+            },
+            {
+                key: "costOut",
+                needs: ["liveLog"],
+                run: "panelCost",
+                label: "Output price, per million tokens",
+                type: "num",
+                min: 0,
+                max: 10000,
+                hint: "What it charges for the reply the model writes. Its price list calls this output, and it is usually the dearer of the two.",
             },
         ],
     },
@@ -3447,7 +3456,7 @@ export function setup(ctx, opts) {
     // ---- turning tokens into the number people actually want ----
     // A retry is a whole generation charged for again, so what one costs is worth
     // saying beside the prompt it was measured from.
-    const hasPrices = () => Number(cfg.costIn) > 0;
+    const hasPrices = () => Number(cfg.costIn) > 0 || Number(cfg.costOut) > 0;
     // No currency symbol, because nothing here knows the currency: a "$" printed
     // for somebody billed in euros is worse than no symbol at all.
     //
@@ -3455,9 +3464,32 @@ export function setup(ctx, opts) {
     // fixed number of decimals is what goes wrong here: two prints every prompt
     // there is as 0.00, and four rounds a cost of 0.000012 away to nothing.
     const money = (n) => !Number.isFinite(n) || n <= 0 ? "0" : n >= 1 ? n.toFixed(2) : String(Number(n.toPrecision(2)));
-    // Only what is sent. What a reply costs cannot be worked out before it
-    // arrives, so it is named on the line instead of being guessed at.
-    const costOf = (sent) => (sent / 1e6) * Number(cfg.costIn || 0);
+    // Input and output priced apart, since providers charge more for output.
+    const costOf = (sent, back) => (sent / 1e6) * Number(cfg.costIn || 0) + (back / 1e6) * Number(cfg.costOut || 0);
+    // The last reply this tab saw, which is the only honest stand-in for the size
+    // of the next one. Counted by the host where it will answer and estimated at
+    // four characters a token where it will not, the same as the prompt.
+    let lastReplyChars = 0;
+    let lastReplyTokens = 0;
+    const replyTokens = () => lastReplyTokens || Math.round(lastReplyChars / 4);
+    // Remembered on every reply so the panel has a size to price the output half
+    // with. The host is asked for the real count only while the panel is watching
+    // prompts and a price is set, so a reader who never opens the panel and never
+    // asked for costs sends nothing anywhere.
+    let replyCountAt = 0;
+    function noteReplySize(text) {
+        lastReplyChars = String(text || "").length;
+        lastReplyTokens = 0;
+        if (!lastReplyChars || !promptsAsked || !hasPrices())
+            return;
+        const at = Date.now();
+        replyCountAt = at;
+        try {
+            if (ctx && typeof ctx.sendToBackend === "function")
+                ctx.sendToBackend({ type: "count_reply", at: at, text: text });
+        }
+        catch (_) { }
+    }
     // The host's own count when it gives one, and an estimate otherwise. Which
     // of the two it is gets said in words, since a count and a guess are
     // different things to act on.
@@ -3785,23 +3817,34 @@ export function setup(ctx, opts) {
             lastPrompt.total + (lastPrompt.total === 1 ? " message, " : " messages, ") +
                 rough(chars) + " characters, " + sayTokens(chars);
         body.appendChild(sum);
-        // What retrying this costs. A retry sends the whole prompt again, which is
-        // the half that can be worked out from what is on this tab. What the new
-        // reply costs is not knowable before it arrives, so it is named rather than
-        // guessed at: a figure with an invented half in it is worse than an honest
-        // one with a gap.
+        // What retrying this costs. A retry sends the whole prompt again and pays
+        // for a whole new reply, so both halves are here: the prompt from this tab,
+        // and the reply from the size of the last one this tab saw, which is the
+        // only honest stand-in for one that has not been written yet.
         if (hasPrices()) {
             const sent = lastPromptTokens || Math.round(chars / 4);
-            const one = costOf(sent);
+            const back = replyTokens();
+            const one = costOf(sent, back);
             const cost = document.createElement("div");
             cost.style.cssText =
                 "margin-bottom:6px;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+            // Which half of the sum is real. One price left at 0 is a price nobody
+            // gave rather than a cost of nothing, and a total that quietly leaves
+            // half out is worse than one that says what it covers.
+            const covers = Number(cfg.costIn) <= 0
+                ? " Only the reply is priced, since the input price is 0."
+                : Number(cfg.costOut) <= 0
+                    ? " Only the prompt is priced, since the output price is 0."
+                    : back
+                        ? " The reply is reckoned at the size of the last one here."
+                        : " No reply has arrived in this tab yet, so only the prompt is counted.";
             cost.textContent =
-                "About " + money(one) + " to send this again, plus whatever the new reply costs." +
+                "About " + money(one) + " a retry at this size." +
                     (stats.retries
                         ? " The " + stats.retries + (stats.retries === 1 ? " retry" : " retries") +
-                            " this session would be about " + money(one * stats.retries) + " at this size."
-                        : "");
+                            " this session come to about " + money(one * stats.retries) + "."
+                        : "") +
+                    covers;
             body.appendChild(cost);
         }
         const viewRow = document.createElement("div");
@@ -8246,6 +8289,11 @@ export function setup(ctx, opts) {
         // keep one of these, so leaving this one uncapped while the store it feeds
         // is capped only moves where the memory goes.
         s.lastText = content.slice(-STREAM_BUF_MAX);
+        // Every finished reply, not only the ones that pass. A reply a retry throws
+        // away was still generated and still paid for, so it is exactly the size a
+        // retry costs, and recording it only on a clean pass left the panel with
+        // nothing to price the output half with in the case it exists for.
+        noteReplySize(content);
         // Empty only when the payload says so, or when nothing streamed either. A
         // missing field plus tokens that carried no readable text is not a verdict,
         // so it is left alone rather than re-rolled on a guess.
@@ -12374,6 +12422,21 @@ export function setup(ctx, opts) {
                         if (!Number.isFinite(n) || n <= 0)
                             return;
                         lastPromptTokens = n;
+                        if (liveTab === "prompt")
+                            renderLiveLog();
+                        return;
+                    }
+                    // The real count for the reply the panel is pricing. Late answers for a
+                    // reply that has since been replaced are dropped, the same way the
+                    // prompt's count is, so a slow tokeniser cannot put an old number
+                    // against a new reply.
+                    if (msg.type === "reply_tokens") {
+                        if (!msg.at || msg.at !== replyCountAt)
+                            return;
+                        const n = Number(msg.tokens);
+                        if (!Number.isFinite(n) || n <= 0)
+                            return;
+                        lastReplyTokens = n;
                         if (liveTab === "prompt")
                             renderLiveLog();
                         return;

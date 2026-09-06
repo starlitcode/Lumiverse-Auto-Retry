@@ -14,7 +14,7 @@ _2026-09-05_
 
 ### Added
 
-- **The panel says what a retry costs.** Put your provider's input price per million tokens under Basics and the Prompt tab works out what sending that prompt again comes to, and what the retries fired so far this session come to at that size. What the new reply costs is on top of it and is named rather than guessed at, since nothing can know the size of a reply before it arrives. The price starts at 0, and at 0 the line is not there. No currency is shown, because nothing here knows which one you are billed in.
+- **The panel says what a retry costs, both halves of it.** Put your provider's input and output prices under Basics and the Prompt tab works out what a retry comes to: the prompt from what is on that tab, and the reply reckoned at the size of the last one the tab saw, which is the only honest stand-in for one nobody has written yet. Under it, what the retries fired this session come to at that size. The reply is measured with Lumiverse's own tokeniser, and only while the panel is on the Prompt tab with a price set: leave either and nothing is sent anywhere. Both prices start at 0, and with both at 0 the line is not there. No currency is shown, because nothing here knows which one you are billed in.
 
 ## 5.0.0
 
