@@ -8882,6 +8882,14 @@ console.log("\nprompt viewer");
   check("and the prompt half is still counted",
     /About 0\.003 a retry at this size/.test(elsewhere.out), elsewhere.out.slice(0, 260));
 
+  // The output price alone, with no reply here to measure it against, leaves
+  // the sum with nothing in it. A total printed then is a 0 sitting next to a
+  // price somebody has just typed.
+  const outOnly = await run({ liveLog: true, toast: false, costOut: 15 }, { replyChat: "c2" });
+  check("an output price with no reply to size says so instead of printing nothing",
+    /nothing to price/.test(outOnly.out) && !/a retry at this size/.test(outOnly.out),
+    outOnly.out.slice(0, 260));
+
   const free = await run({ liveLog: true, toast: false });
   check("and nothing is costed until prices are set",
     !/a retry at this size/.test(free.out), free.out.slice(0, 240));

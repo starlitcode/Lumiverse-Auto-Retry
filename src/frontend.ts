@@ -3973,13 +3973,18 @@ export function setup(ctx: Ctx, opts?: any) {
                 (lastReplyTokens ? "" : "roughly ") +
                 "the size of the last one here."
               : " No reply has arrived in this chat yet, so only the prompt is counted.";
-      cost.textContent =
-        "About " + money(one) + " a retry at this size." +
-        (stats.retries
-          ? " The " + stats.retries + (stats.retries === 1 ? " retry" : " retries") +
-            " this session come to about " + money(one * stats.retries) + "."
-          : "") +
-        covers;
+      // With the output price the only one set and no reply to measure, the sum
+      // has nothing in it. Printing the total then puts a 0 on the panel next
+      // to a price somebody just typed, which reads as retries being free.
+      const nothingYet = Number(cfg.costIn) <= 0 && !back;
+      cost.textContent = nothingYet
+        ? "The input price is 0 and no reply has arrived in this chat yet, so there is nothing to price."
+        : "About " + money(one) + " a retry at this size." +
+          (stats.retries
+            ? " The " + stats.retries + (stats.retries === 1 ? " retry" : " retries") +
+              " this session come to about " + money(one * stats.retries) + "."
+            : "") +
+          covers;
       body.appendChild(cost);
     }
     const viewRow = document.createElement("div");
@@ -5865,7 +5870,14 @@ export function setup(ctx: Ctx, opts?: any) {
         "confirmButtonLabels",
       ],
     },
-    { id: "notifications", label: "Panel and pop-up", keys: ["toast", "liveLog", "panelHome"] },
+    // The prices are here because the panel is the only thing that reads them:
+    // the cost line is on its Prompt tab and nowhere else. A tick box named
+    // after the panel and carrying them is one somebody can predict.
+    {
+      id: "notifications",
+      label: "Panel, pop-up and prices",
+      keys: ["toast", "liveLog", "panelHome", "costIn", "costOut"],
+    },
     // Special entry: carried outside cfg. buildExport and the import handler
     // treat it as the whole preset store, every kind of preset in it, rather
     // than as settings keys, which is why the label names every kind.

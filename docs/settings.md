@@ -147,7 +147,7 @@ The line and the pop-up read from the same place, so they never disagree. Both s
 
 A retry pays twice, so both halves are counted. The prompt is the one on this tab. The reply has not been written yet, so it is reckoned at the size of the last reply in this chat, which is the only honest stand-in there is. The line says that is what it is doing, and says **roughly** when that size is the panel's own estimate rather than a count. A chat with no reply in it yet is priced on the prompt alone, and says so. Under it, what the retries fired so far this session come to at that size.
 
-Both prices start at 0, and with both at 0 the line is not there. Fill in one and the line says which half it is pricing. They are your provider's own numbers, in your provider's own currency: nothing here knows what a model charges and nothing converts anything.
+Both prices start at 0, and with both at 0 the line is not there. Fill in one and the line says which half it is pricing. With the output price the only one filled in and no reply in this chat yet, there is nothing left to price, and the line says that rather than showing a total of nothing. They are your provider's own numbers, in your provider's own currency: nothing here knows what a model charges and nothing converts anything.
 
 **What to type.** Price lists write these as `$5.00/M` or `$0.075/M`, which already means per million tokens, so the number is the number: type `5` or `0.075`. You can also paste the whole thing, `$` and `/M` included, and the number is taken out of it. Decimals matter here, since the cheap models are priced in fractions of a penny.
 

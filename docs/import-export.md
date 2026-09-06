@@ -11,7 +11,7 @@ The parts are grouped so you only move what you mean to:
 - **Retrying and its buttons**, including whether the floating button and the Extras entry are shown
 - **Refusals and notes**, everything that decides a reply was a refusal, plus the note wording sent on the retry
 - **Button selectors**
-- **Panel and pop-up**
+- **Panel, pop-up and prices**, the on-screen panel, the message on each retry, and the two prices the panel works costs out from
 - **All presets**, both kinds at once
 
 Each name covers everything in that part, so nothing rides along unnamed.

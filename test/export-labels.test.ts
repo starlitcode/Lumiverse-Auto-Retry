@@ -62,7 +62,26 @@ describe("every tick box is named after what it carries", () => {
       keys: ["liveLog", "panelHome", "toast"],
       why: "it carries the on-screen panel and the pop-up",
     },
+    {
+      word: /price/i,
+      keys: ["costIn", "costOut"],
+      why: "it carries what your provider charges",
+    },
   ];
+
+  // The list has a safety net under it that folds an uncovered setting into the
+  // retry part rather than dropping it from every export. That keeps a backup
+  // whole, and it is also how a setting ends up under a name that says nothing
+  // about it, which nobody sees. Naming every key on purpose is the point of
+  // the rules above, so the net is checked for having nothing to catch.
+  test("nothing is landing in a part by default", () => {
+    const fields = SRC.slice(SRC.indexOf("const SCHEMA"), SRC.indexOf("const EXPORT_CATEGORIES"));
+    const keys = [...fields.matchAll(/^\s+key: "([A-Za-z0-9_]+)",$/gm)].map((m) => m[1]);
+    expect(keys.length).toBeGreaterThan(20);
+    const covered = new Set<string>();
+    for (const p of all) for (const k of p.keys) covered.add(k);
+    expect(keys.filter((k) => !covered.has(k))).toEqual([]);
+  });
 
   for (const r of rules) {
     test("a part holding " + r.keys[0] + " says so in its name", () => {
