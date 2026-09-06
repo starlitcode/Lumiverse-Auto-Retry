@@ -320,7 +320,7 @@ const RUNS = {
     },
     panelCost: {
         title: "What a retry costs",
-        note: "Your provider's own price, per million tokens, in whatever currency it bills you in. Nothing here knows what a model charges and no two providers agree, so this is the only way the panel can turn a token count into money. Left at 0, no cost is worked out and the Prompt tab says nothing about it.",
+        note: "Your provider's own input price, copied off its price list, in whatever currency it bills you in. Nothing here knows what a model charges and no two providers agree, so this is the only way the panel can turn a token count into money. There is no output price here because a retry's reply is not written yet, and its cost is named on the line rather than guessed at. Left at 0, no cost is worked out and the Prompt tab says nothing about it.",
     },
     frozen: {
         title: "Replies that freeze",
@@ -393,11 +393,11 @@ const SCHEMA = [
                 key: "costIn",
                 needs: ["liveLog"],
                 run: "panelCost",
-                label: "Price per million tokens",
+                label: "Input price, per million tokens",
                 type: "num",
                 min: 0,
                 max: 10000,
-                hint: "What your provider charges for what goes to the model, which for a retry is the whole prompt again.",
+                hint: "What your provider charges for what you send it, which for a retry is the whole prompt again. Its price list calls this input.",
             },
         ],
     },
