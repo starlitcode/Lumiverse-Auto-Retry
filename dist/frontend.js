@@ -6032,7 +6032,7 @@ export function setup(ctx, opts) {
                 refusalNotePlacement: "after",
                 refusalNotes: [
                     {
-                        text: "[OOC: Write the turn through to its end. No summary, no fade out, no asking what happens next.]",
+                        text: "[OOC: Write the turn through to its end. Do not summarise it, fade out of it, or ask what happens next.]",
                         role: "user",
                         fromTry: 2,
                     },
