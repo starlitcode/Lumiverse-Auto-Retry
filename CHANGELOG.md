@@ -8,12 +8,13 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
-## 5.2.0
+## 5.1.0
 
 _2026-09-10_
 
 ### Added
 
+- **The panel says what a retry costs, both halves of it.** Put your provider's input and output prices under Basics and the Prompt tab works out what a retry comes to: the prompt from what is on that tab, and the reply reckoned at the size of the last one in that chat, which is the only honest stand-in for one nobody has written yet. Under it, what the retries fired this session come to at that size. The reply is measured with Lumiverse's own tokeniser, and only while the panel is on the Prompt tab with a price set: leave either and nothing is sent anywhere. Both prices start at 0, and with both at 0 the line is not there, and where only one half can be worked out the line says which. Price lists write these as `$5.00/M`, so type the number on its own or paste the line and the number is taken out of it. They ride with **Panel, pop-up and prices** in an export. No currency is shown, because nothing here knows which one you are billed in.
 - **At the very end**, a fourth place for a refusal note. **After the last message** stops at the end of the conversation, and some builds append their own instructions behind it; this is the only placement that puts a note after those, which is where a note has to be to answer one of them.
 - **Four note sets ship with it**, under **Ships with it** in the note preset picker. Load one to see the shape, edit the boxes, and save it under a name of your own. They cannot be renamed, changed or deleted, so they are still there after you have made a mess of one.
 - **A wait the provider named is the wait it takes.** A free or shared tier that answers "retry after 23 seconds" has said exactly when the next try can work, and every wait shorter than that spent a try being told the same thing. The number is read out of what came back, in the header's own form and in the wordings providers write into an error body, and it wins over the backoff and over **Longest wait between tries**. An hour is the ceiling, because a provider naming longer than that is naming a daily quota.
@@ -24,19 +25,8 @@ _2026-09-10_
 
 ### Fixed
 
-- **The package description still named find and replace**, which went in 5.0.0.
-
-## 5.1.0
-
-_2026-09-06_
-
-### Added
-
-- **The panel says what a retry costs, both halves of it.** Put your provider's input and output prices under Basics and the Prompt tab works out what a retry comes to: the prompt from what is on that tab, and the reply reckoned at the size of the last one in that chat, which is the only honest stand-in for one nobody has written yet. Under it, what the retries fired this session come to at that size. The reply is measured with Lumiverse's own tokeniser, and only while the panel is on the Prompt tab with a price set: leave either and nothing is sent anywhere. Both prices start at 0, and with both at 0 the line is not there, and where only one half can be worked out the line says which. Price lists write these as `$5.00/M`, so type the number on its own or paste the line and the number is taken out of it. They ride with **Panel, pop-up and prices** in an export. No currency is shown, because nothing here knows which one you are billed in.
-
-### Fixed
-
 - **How much longer each wait gets was rounded to a whole number.** Every number box on the panel held itself to whole ones, so `1.5` was saved as `2` and every retry after the first waited longer than you asked it to. A box for a setting that is not a whole number now takes one, and asks a phone for a keypad with a decimal point on it.
+- **The package description still named find and replace**, which went in 5.0.0.
 
 ## 5.0.0
 
