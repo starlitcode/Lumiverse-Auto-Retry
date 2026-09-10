@@ -183,7 +183,7 @@ The same options live in the CONFIG block at the top of `src/frontend.ts` and `d
 | backoffFactor | 2 | Each wait is this many times longer than the last. |
 | maxDelayMs | 60000 | Longest it will ever wait. |
 | jitter | true | Nudges each wait randomly so retries don't all land at once. |
-| rateLimitDelayMs | 15000 | Floor wait when the server says it's busy. Most shared tiers meter per minute, so a shorter wait usually spends a try hitting the same limit. |
+| rateLimitDelayMs | 15000 | Floor wait when the server says it's busy. Most shared tiers meter per minute, so a shorter wait usually spends a try hitting the same limit. Where the server says how long to wait, that figure is used instead and it is not held under `maxDelayMs`: it is the only number here that is not a guess. An hour is the ceiling. |
 | retryByNewReroll | true | On: a retry clicks the next / swipe button, adding a new reroll and keeping the existing ones, so a reply it was wrong to retry can be swiped back to. Off: a retry redoes the reply in place via the regenerate button, which on some builds clears the other rerolls. Applies to every retry reason. The other button is the fallback. |
 | keepReplaced | true | Keep the last reply a retry threw away in this chat, so it can be read back or copied from the Replaced tab of the on-screen panel. Held in the tab's memory only: never written down, never sent anywhere, gone when the tab closes. |
 | stuckTimeoutMs | 180000 | Started, then nothing arrived and it never finished, within this. 0 disables. |
@@ -208,7 +208,7 @@ The same options live in the CONFIG block at the top of `src/frontend.ts` and `d
 | refusalThinkTags | (empty) | Extra reasoning tag names, one per line, for unusual thinking wrappers. |
 | refusalNote | false | Send a note with a refusal retry, and only a refusal retry. Needs the `interceptor` permission. |
 | refusalNotes | one empty note | The notes themselves. Each carries its own role (system, user or assistant) and its own first try, so notes can be set to escalate. Up to ten. Whichever have come due are sent together, in order. Empty ones are skipped, and nothing is sent while they all are. Shown only while `refusalNote` is on. |
-| refusalNotePlacement | after | For the whole list, not one note. Where the block of due notes goes: after the last message, before it, or at the very start. Shown only while `refusalNote` is on. |
+| refusalNotePlacement | after | For the whole list, not one note. Where the block of due notes goes: after the last message, before it, at the very end (past anything the build appends behind the conversation), or at the very start. Shown only while `refusalNote` is on. |
 | refusalNoteStrictType | false | For the whole list, not one note: it decides whether any of them are sent at all. Only attach them when Lumiverse reports the generation as a regenerate or a swipe. Most builds report every generation as "normal", and on those this stops the note going out at all, which is why it is off. Shown only while `refusalNote` is on. |
 | regenerateSelector | (see file) | Host button. See below. |
 | swipeNextSelector | (see file) | Backup button if your build retries by swiping. |

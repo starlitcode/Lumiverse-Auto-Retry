@@ -8,6 +8,24 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.2.0
+
+_2026-09-10_
+
+### Added
+
+- **At the very end**, a fourth place for a refusal note. **After the last message** stops at the end of the conversation, and some builds append their own instructions behind it; this is the only placement that puts a note after those, which is where a note has to be to answer one of them.
+- **Four note sets ship with it**, under **Ships with it** in the note preset picker. Load one to see the shape, edit the boxes, and save it under a name of your own. They cannot be renamed, changed or deleted, so they are still there after you have made a mess of one.
+- **A wait the provider named is the wait it takes.** A free or shared tier that answers "retry after 23 seconds" has said exactly when the next try can work, and every wait shorter than that spent a try being told the same thing. The number is read out of what came back, in the header's own form and in the wordings providers write into an error body, and it wins over the backoff and over **Longest wait between tries**. An hour is the ceiling, because a provider naming longer than that is naming a daily quota.
+
+### Changed
+
+- **The note box says to keep a note short.** A note is read alongside the whole prompt, and a short one that says one thing gets followed where a paragraph gets averaged in with everything else.
+
+### Fixed
+
+- **The package description still named find and replace**, which went in 5.0.0.
+
 ## 5.1.0
 
 _2026-09-06_

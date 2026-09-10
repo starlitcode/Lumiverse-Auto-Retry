@@ -258,12 +258,32 @@ A set carries the notes themselves and **Where the notes go**, and nothing else.
 
 Presets are saved to your account, so they follow you to other devices.
 
+### The sets that ship with it
+
+Four sets are in the picker under **Ships with it**, so the boxes are not blank the first time you switch notes on:
+
+- **Stay in the scene**, for a model that steps out of the story to comment on it.
+- **Write them as written**, for a model that softens a character away from their sheet.
+- **Finish the turn**, for a model that summarises or fades out instead of writing the scene.
+- **Stay in the scene, firmer**, which is the first one with a third note that only goes out from try 4.
+
+They can be loaded and nothing else: **Update selected**, **Delete** and **Rename** stay off while one is picked, and no name of theirs can be taken. To make one yours, load it, edit the boxes, and save it under a name of your own.
+
+Each is a pair: a note in your own voice and an answer in the model's. A note the model has already agreed to is harder for it to walk back than one that only asks. None goes out before try 2, because the first retry is usually the same model having a bad turn and a note fired on it spends prompt on a problem that was not there.
+
+### Keep them short
+
+A note is read alongside the whole prompt: the card, the world, the scene, and every message of the conversation. Two or three lines that say one thing get followed. A paragraph gets averaged in with everything else around it, and a page of instruction competes with the character sheet you wrote.
+
+If a note is not working, the answer is almost never more words. It is usually the wrong words, or a note going out too early, or a reply that was never a refusal in the first place. The tester below tells you which.
+
 ### Where the note goes, and prompt caching
 
 If your provider caches prompts, it caches from the front: it reuses everything up to the first thing that changed, and anything after that counts as new. Where a note goes decides how much of that reuse survives.
 
-- **After the last message**, the default, adds the note at the very end. Everything before it is unchanged, so the cached part is still cached. This costs nothing.
+- **After the last message**, the default, adds the note after the last message of your conversation. Everything before it is unchanged, so the cached part is still cached. This costs nothing.
 - **Before the last message** puts it one place earlier, so the last message and the note count as new. That is one message's worth.
+- **At the very end** puts it past everything, including anything your build appends behind the conversation. On most builds nothing is appended and this lands in the same place as **After the last message**; where something is, this is the only placement that goes after it, which is where a note has to be to answer one. It costs the same as the default: nothing before it moved.
 - **At the very start** puts it ahead of everything, so the whole chat counts as new for that turn.
 
 The note is only there for the one retry and is thrown away afterwards, so the turn after it is back to the prompt your provider already has. That holds whichever placement you pick.

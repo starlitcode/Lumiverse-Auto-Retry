@@ -228,6 +228,15 @@ function placeNotes(messages, notes, placement) {
         list.unshift.apply(list, notes);
         return { list: list, from: 0 };
     }
+    // Past everything, the host's own trailing messages included. "After the last
+    // message" stops at the end of the conversation, and some builds append their
+    // own instructions behind it; this is the only placement that puts a note
+    // after those, which is where a note has to be to answer one of them.
+    if (placement === 'end') {
+        const from = list.length;
+        list.push.apply(list, notes);
+        return { list: list, from: from };
+    }
     let last = -1;
     for (let i = 0; i < list.length; i++)
         if (list[i] && list[i].__isChatHistory)
