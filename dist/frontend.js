@@ -11425,16 +11425,21 @@ export function setup(ctx, opts) {
         ensureReadable(input);
         if (!mark)
             return;
-        // A field lifts its border under the pointer, so it reads as something you
-        // can put a cursor in before you have. Focus overwrites this and blur puts
-        // it back, so the two never argue over the border.
+        // A box lifts its border under the pointer, so it reads as something you can
+        // put a cursor in before you have. Focus overwrites this and blur puts it
+        // back, so the two never argue over the border.
+        //
+        // Not a dropdown. There is no cursor to put in one, so the lift is telling
+        // you something that is not true of it, and a menu you pick from takes no
+        // mark here at all.
         let focused = false;
+        const dropdown = String(input.tagName || "").toUpperCase() === "SELECT";
         input.addEventListener("pointerenter", () => {
-            if (!focused)
+            if (!focused && !dropdown)
                 input.style.borderColor = "var(--lumiverse-border-hover,rgba(147,112,219,.25))";
         });
         input.addEventListener("pointerleave", () => {
-            if (!focused)
+            if (!focused && !dropdown)
                 input.style.borderColor = "var(--lumiverse-border,rgba(255,255,255,.16))";
         });
         // On focus, tint the border and put the ring around it.
@@ -11449,22 +11454,18 @@ export function setup(ctx, opts) {
         // does not answer this question: a browser counts a dropdown as worth
         // marking on a click, because you can type a letter to jump through its
         // options. That is true and it is not what is being asked here.
-        let byPointer = false;
-        input.addEventListener("pointerdown", () => {
-            byPointer = true;
-        });
+        // A menu you pick from takes no mark on focus either, reached any way. The
+        // list opening in front of you is the whole of the feedback, and a ring
+        // behind it is decoration over the top of the thing it is pointing at.
+        // Auto Refine does the same, so a dropdown behaves the same in both.
         input.addEventListener("focus", () => {
-            const dropdown = String(input.tagName || "").toUpperCase() === "SELECT";
-            const skip = dropdown && byPointer;
-            byPointer = false;
-            if (!skip) {
-                focused = true;
-                input.style.borderColor = "var(--lumiverse-primary,rgba(147,112,219,.9))";
-                input.style.boxShadow = FOCUS_RING;
-            }
+            if (dropdown)
+                return;
+            focused = true;
+            input.style.borderColor = "var(--lumiverse-primary,rgba(147,112,219,.9))";
+            input.style.boxShadow = FOCUS_RING;
         });
         input.addEventListener("blur", () => {
-            byPointer = false;
             focused = false;
             input.style.borderColor = "var(--lumiverse-border,rgba(255,255,255,.16))";
             input.style.boxShadow = "none";

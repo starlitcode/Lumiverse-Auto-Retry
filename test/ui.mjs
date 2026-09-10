@@ -3401,6 +3401,10 @@ console.log("\ncopy takes everything");
 // opens its menu with the choice already in front of you, and the tint then sat
 // there after the choosing was done until something else was clicked.
 //
+// So a dropdown takes nothing at all now, reached any way: no ring, no focus
+// tint, and no hover lift, since there is no cursor to put in one. Auto Refine
+// does the same, so a dropdown behaves the same in both.
+//
 // Driven with a real pointer and real keys rather than dispatched events,
 // because :focus-visible is decided by how the focus arrived and a synthetic
 // click does not carry that.
@@ -3479,14 +3483,19 @@ console.log("\ndropdown focus");
   );
   check("the dropdown is there to test", out.selectRest !== null, out);
   check("clicking it still focuses it", out.focused === true, out);
-  // The point is that clicking a dropdown does not mark it as focused, not that
-  // its border never moves at all. A field lifts its border under the pointer
-  // now, which a click necessarily is, so what has to hold is that the lift is
-  // the hover colour and not the focus one.
-  check("but does not mark it as focused", out.selectClicked !== out.selectFocusColour, out);
-  check("and lifts only as far as the hover colour", out.selectClicked === out.selectHoverColour, out);
-  check("reaching that same dropdown without the pointer does mark it",
-    out.afterTab.onIt === true && out.afterTab.border !== out.selectRest, out);
+  // A menu you pick from takes no mark at all. The list opening in front of you
+  // is the whole of the feedback, and anything drawn behind it is decoration
+  // over the top of the thing it would be pointing at. That holds however the
+  // dropdown was reached, so neither the pointer nor the keyboard moves it off
+  // its resting border, and it never lifts to the hover colour either: there is
+  // no cursor to put in one, so the lift would be saying something untrue of it.
+  check("clicking it marks nothing", out.selectClicked === out.selectRest, out);
+  check("and it is not the focus colour either", out.selectClicked !== out.selectFocusColour, out);
+  check("nor does it lift to the hover colour", out.selectClicked !== out.selectHoverColour, out);
+  check("reaching it without the pointer marks nothing either",
+    out.afterTab.onIt === true && out.afterTab.border === out.selectRest, out);
+  // Where the mark does belong: a box you can type in, which is the whole of
+  // what these rules are for. If this ever fails, the change went too wide.
   check("and a text box clicked is still marked", out.textClicked !== out.textRest, out);
   check("no console errors", errors.length === 0, errors);
 }
