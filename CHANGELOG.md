@@ -22,6 +22,7 @@ _2026-09-10_
 ### Changed
 
 - **The note box says to keep a note short.** A note is read alongside the whole prompt, and a short one that says one thing gets followed where a paragraph gets averaged in with everything else.
+- **A dropdown takes no mark at all now, reached any way.** It still took one from the keyboard, and lifted its border under the pointer as though there were a cursor to put in it. The list opening in front of you is the whole of the feedback, and anything drawn behind it sits over the top of what it would be pointing at. A box you can type in is still marked, which is where the mark belongs. [Auto Refine](https://github.com/starlitcode/Lumiverse-Auto-Refine) does the same, so a dropdown behaves the same in both.
 
 ### Fixed
 

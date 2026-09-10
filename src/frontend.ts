@@ -11462,20 +11462,10 @@ export function setup(ctx: Ctx, opts?: any) {
     });
     // On focus, tint the border and put the ring around it.
     //
-    // Except on a dropdown opened by pointer. Clicking one puts its menu on
-    // screen with the choice already in front of you, so the mark says nothing
-    // you cannot see, and it then stayed on the row after the choosing was done
-    // until something else was clicked. Tabbing to one is the opposite case:
-    // there is no menu and nothing else saying where you are, so it is marked.
-    //
-    // Worked out from the pointer rather than asked of :focus-visible, which
-    // does not answer this question: a browser counts a dropdown as worth
-    // marking on a click, because you can type a letter to jump through its
-    // options. That is true and it is not what is being asked here.
-    // A menu you pick from takes no mark on focus either, reached any way. The
-    // list opening in front of you is the whole of the feedback, and a ring
-    // behind it is decoration over the top of the thing it is pointing at.
-    // Auto Refine does the same, so a dropdown behaves the same in both.
+    // Except on a dropdown, reached any way. The list opening in front of you is
+    // the whole of the feedback, and a ring behind it is decoration over the top
+    // of the thing it would be pointing at. Auto Refine does the same, so a
+    // dropdown behaves the same in both.
     input.addEventListener("focus", () => {
       if (dropdown) return;
       focused = true;
