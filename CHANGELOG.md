@@ -8,6 +8,14 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.4.0
+
+_2026-09-11_
+
+### Changed
+
+- **The cost figure now says what it is worth.** A line under it on the Prompt tab, whenever there is a figure to caveat. The tokens are counted here rather than taken from your provider, so their tokeniser may disagree and whatever they wrap around the prompt is missing from the number. It also prices every token sent at the full rate, so on a model with prompt caching switched on a retry usually costs less than the panel says, sometimes a lot less.
+
 ## 5.3.0
 
 _2026-09-11_

@@ -110,7 +110,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.3.0";
+const VERSION = "5.4.0";
 // The addresses the extension points at. Pinned to the released branch rather
 // than to a tag, so an old install still opens the page as it stands today.
 const SAFETY_URL = "https://github.com/starlitcode/Lumiverse-Auto-Retry/blob/stable/docs/safety.md";
@@ -3909,6 +3909,17 @@ export function setup(ctx, opts) {
                         : "") +
                     covers;
             body.appendChild(cost);
+            // Said under the figure rather than in a hint, because a hint is only read
+            // by somebody who went looking and this is worth knowing by anybody who
+            // reads the number.
+            const rough = document.createElement("div");
+            rough.setAttribute("data-ar-cost-rough", "1");
+            rough.style.cssText =
+                "margin-bottom:6px;font-size:12px;line-height:1.4;" +
+                    "color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
+            rough.textContent =
+                "Read that as a ballpark rather than your bill. The tokens are counted here rather than taken from your provider, so their tokeniser may not agree and anything they wrap around the prompt is missing. It also prices every token sent at the full rate, so on a model with prompt caching switched on a retry usually costs less than this, sometimes a lot less.";
+            body.appendChild(rough);
         }
         const viewRow = document.createElement("div");
         viewRow.style.cssText = "margin-bottom:8px";

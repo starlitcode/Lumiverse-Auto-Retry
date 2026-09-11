@@ -10799,6 +10799,55 @@ console.log("\ntaking more than one file at a time");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- the cost figure says what it is worth ----
+// The tokens are counted here rather than taken from the provider, and every
+// one is priced at the full rate, so a model with prompt caching on bills less
+// than this. Somebody reading the number needs that beside it, not in a hint.
+console.log("\nthe cost line says it is a ballpark");
+{
+  const { out, errors } = await inPanel(
+    browser,
+    { settings: { liveLog: true, costIn: 3, costOut: 9 } },
+    (page) =>
+      page.evaluate(async () => {
+        const wait = () => new Promise((r) => setTimeout(r, 140));
+        const tab = (name) =>
+          [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === name);
+        const seen = () => {
+          const n = document.querySelector("[data-ar-cost-rough]");
+          return n ? n.textContent : null;
+        };
+        tab("Prompt").click();
+        await wait();
+        // Nothing captured yet, so there is no figure on screen to caveat.
+        const empty = seen();
+        // A prompt, fed the way the prompt view check feeds one.
+        if (window.__handlers.CHAT_CHANGED) window.__handlers.CHAT_CHANGED({ chatId: "here-1" });
+        await wait();
+        window.__fromBackend({
+          type: "prompt_snapshot",
+          at: Date.now(),
+          chatId: "here-1",
+          messages: [
+            { role: "system", content: "a wrapper line", history: false, note: false, noteIndex: 0 },
+            { role: "user", content: "the words I typed", history: true, note: false, noteIndex: 0 },
+          ],
+          total: 2,
+          notes: 0,
+        });
+        await wait();
+        const body = document.body.innerText;
+        return { empty, after: seen(), priced: /About /.test(body) };
+      }),
+  );
+  check("with nothing captured there is no figure to caveat", out.empty === null, out.empty);
+  check("a captured prompt with prices set does show a figure", out.priced, out.priced);
+  check("and the ballpark line sits under it", /ballpark/.test(out.after || ""), out.after);
+  check("which names caching as why it reads high",
+    /caching/.test(out.after || ""), out.after);
+  check("no console errors", errors.length === 0, errors);
+}
+
 console.log("\nteardown");
 {
   const page = await browser.newPage();
