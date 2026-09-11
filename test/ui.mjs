@@ -10837,7 +10837,17 @@ console.log("\nthe cost line says it is a ballpark");
         });
         await wait();
         const body = document.body.innerText;
-        return { empty, after: seen(), priced: /About /.test(body) };
+        return {
+          empty,
+          after: seen(),
+          priced: /About /.test(body),
+          // The cost block is drawn above the message list, so anything that
+          // throws in it takes the prompt itself off the screen with it. The
+          // other prompt view check runs with no prices set and never comes
+          // through here, so without this the priced path had nothing holding
+          // it to drawing the prompt at all.
+          messages: body.indexOf("the words I typed") >= 0,
+        };
       }),
   );
   check("with nothing captured there is no figure to caveat", out.empty === null, out.empty);
@@ -10845,6 +10855,7 @@ console.log("\nthe cost line says it is a ballpark");
   check("and the ballpark line sits under it", /ballpark/.test(out.after || ""), out.after);
   check("which names caching as why it reads high",
     /caching/.test(out.after || ""), out.after);
+  check("and the prompt itself is still drawn under it", out.messages, out);
   check("no console errors", errors.length === 0, errors);
 }
 
