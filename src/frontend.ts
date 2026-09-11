@@ -650,7 +650,7 @@ const SCHEMA: Group[] = [
         key: "retryOnTruncated",
         label: "It cut off mid-sentence",
         type: "bool",
-        hint: "Retry when a reply stops partway, like an open quote, an unfinished *action*, or a trailing comma. It's careful so it doesn't throw away good writing.",
+        hint: "Retry when a reply stops partway, like an open quote, an action opened with an asterisk and never closed, or a trailing comma. It's careful so it doesn't throw away good writing.",
       },
       {
         key: "retryOnNoPunct",
