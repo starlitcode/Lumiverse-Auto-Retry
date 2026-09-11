@@ -8,6 +8,14 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.4.1
+
+_2026-09-11_
+
+### Fixed
+
+- **A prompt the Prompt tab never received now says why.** The backend reads every prompt and hands it to the tab waiting for one, and it matches the two by account. Where the generation names an account the tab is not waiting under, or names none while several tabs wait, it could hand it to nobody and said nothing at all, leaving the tab on a message telling you to report a bug with nothing to report. It names which of the two happened now, in the tab and in the Log. Counts only, never anybody's account.
+
 ## 5.4.0
 
 _2026-09-11_

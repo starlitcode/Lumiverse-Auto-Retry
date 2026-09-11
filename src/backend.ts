@@ -174,7 +174,34 @@ async function countTokens(text: string, context: any, userId?: string): Promise
 
 function snapshotPrompt(messages: any[], context: any, userId?: string, noteAt?: { from: number; count: number }): void {
   const watcher = promptWatcherFor(userId);
-  if (watcher == null || !Array.isArray(messages)) return;
+  if (watcher == null) {
+    // A prompt was read and there was somebody waiting for one, and the two
+    // could not be matched to the same person. The tab's own empty state calls
+    // that worth reporting, so it has to be able to say more than that it
+    // happened: without this the drop is silent and there is nothing to report.
+    //
+    // Counts and whether the host named anybody, never the names themselves.
+    // This goes to every panel on the instance, because the one thing known
+    // here is that nobody can be addressed.
+    if (promptWatchers.size) {
+      try {
+        replyTo(undefined, {
+          type: 'prompt_unclaimed',
+          watchers: promptWatchers.size,
+          named: watcherKey(userId) !== '',
+        });
+      } catch (_) {}
+      try {
+        spindle.log.warn(
+          'auto-retry: read a prompt and could not match it to the tab waiting for one. ' +
+            'Watching: ' + promptWatchers.size + '. The generation ' +
+            (watcherKey(userId) !== '' ? 'named an account' : 'named no account') + '.',
+        );
+      } catch (_) {}
+    }
+    return;
+  }
+  if (!Array.isArray(messages)) return;
   // An empty key is a host that does not name its users, where a broadcast and
   // a targeted send reach the same one person.
   const to = watcher === '' ? undefined : watcher;

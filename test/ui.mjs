@@ -10859,6 +10859,56 @@ console.log("\nthe cost line says it is a ballpark");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- a prompt read and handed to nobody ----
+// The tab's empty state for a prompt that never turned up says to report a bug.
+// Until now the drop behind it was silent, so there was nothing to report with.
+console.log("\na prompt that could not be matched to this tab");
+{
+  const { out, errors } = await inPanel(browser, { settings: { liveLog: true } }, (page) =>
+    page.evaluate(async () => {
+      const wait = () => new Promise((r) => setTimeout(r, 140));
+      const tab = (name) =>
+        [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === name);
+      const said = () => document.body.innerText;
+      tab("Prompt").click();
+      await wait();
+      const before = said();
+      // The backend read one and could not say whose it was, with the host
+      // naming an account: the two sides are under different names.
+      window.__fromBackend({ type: "prompt_unclaimed", watchers: 1, named: true });
+      await wait();
+      const named = said();
+      // And the other shape: no account named, several tabs waiting, so there
+      // is no way to pick one.
+      window.__fromBackend({ type: "prompt_unclaimed", watchers: 3, named: false });
+      await wait();
+      const unnamed = said();
+      // A real prompt afterwards clears it.
+      window.__fromBackend({
+        type: "prompt_snapshot",
+        at: Date.now(),
+        chatId: "",
+        messages: [{ role: "user", content: "the words I typed", history: true, note: false, noteIndex: 0 }],
+        total: 1,
+        notes: 0,
+      });
+      await wait();
+      return { before, named, unnamed, after: said() };
+    }),
+  );
+  check("it says nothing before anything is dropped",
+    !/could not be matched/.test(out.before), out.before.slice(0, 120));
+  check("a named account says the two sides are under different names",
+    /could not be matched/.test(out.named) && /different one/.test(out.named),
+    out.named.slice(0, 240));
+  check("no named account says how many tabs are waiting",
+    /3 tabs are waiting/.test(out.unnamed), out.unnamed.slice(0, 240));
+  check("and a prompt that does arrive replaces it",
+    /the words I typed/.test(out.after) && !/could not be matched/.test(out.after),
+    out.after.slice(0, 160));
+  check("no console errors", errors.length === 0, errors);
+}
+
 console.log("\nteardown");
 {
   const page = await browser.newPage();

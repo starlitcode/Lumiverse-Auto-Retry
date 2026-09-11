@@ -121,7 +121,7 @@ const STREAM_BUF_MAX = 200000;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.4.0";
+const VERSION = "5.4.1";
 
 // The addresses the extension points at. Pinned to the released branch rather
 // than to a tag, so an old install still opens the page as it stands today.
@@ -3428,6 +3428,10 @@ export function setup(ctx: Ctx, opts?: any) {
   // to somebody who has sent several, which reads as a fault in their chat
   // rather than a permission that was never granted.
   let promptNeverArrived = false;
+  // The backend read a prompt and could not work out which panel to hand it to.
+  // Its own message for a prompt that never turned up says to report a bug, so
+  // this is what turns that into something reportable.
+  let promptUnclaimed: { watchers: number; named: boolean } | null = null;
   // What the host has actually granted, as the backend sees it. Held rather
   // than guessed at: a missing permission raises nothing, so without asking,
   // the only evidence is a feature quietly doing nothing.
@@ -3958,7 +3962,18 @@ export function setup(ctx: Ctx, opts?: any) {
       body.textContent =
         interceptor === false
           ? "The interceptor permission is not granted, so no prompt can be read. It is privileged, so an admin has to approve it. Everything else in the extension works without it."
-          : promptNeverArrived
+          : promptUnclaimed
+            ? // Read, and handed to nobody. Worth saying apart from the case
+              // below: the prompt is being captured, so the permission and the
+              // capture are both fine and the fault is in matching the two
+              // sides to the same account.
+              "A prompt was read and could not be matched to this tab. That is this extension's fault rather than yours, and " +
+              (promptUnclaimed.named
+                ? "worth reporting: the generation named an account and the tab is waiting under a different one."
+                : "worth reporting: the generation named no account, and " +
+                  promptUnclaimed.watchers +
+                  " tabs are waiting, so there is no way to tell whose it is. Closing the panel in your other tabs and sending a reply should bring it back.")
+            : promptNeverArrived
             ? interceptor === true
               ? "That reply finished without a prompt reaching this tab, and the interceptor permission is granted, so this is worth reporting as a bug."
               : "That reply finished without a prompt reaching this tab. Reading the prompt needs the interceptor permission, which is privileged, so an admin has to approve it before it does anything. Everything else in the extension works without it."
@@ -12596,6 +12611,15 @@ export function setup(ctx: Ctx, opts?: any) {
           if (permPaint) {
             try { permPaint(); } catch (_) {}
           }
+          if (liveTab === "prompt") renderLiveLog();
+          return;
+        }
+        if (msg.type === "prompt_unclaimed") {
+          promptUnclaimed = {
+            watchers: Number(msg.watchers) || 0,
+            named: !!msg.named,
+          };
+          log("a prompt was read and could not be matched to this tab");
           if (liveTab === "prompt") renderLiveLog();
           return;
         }
