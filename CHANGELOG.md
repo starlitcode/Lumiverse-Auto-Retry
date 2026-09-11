@@ -8,6 +8,14 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.3.0
+
+_2026-09-11_
+
+### Added
+
+- **Import takes more than one file at a time.** Two files one after the other reported each on its own, so a pair carrying a preset each said one preset, twice, and left you adding them up. Picked together they are one import with one total. They go on in the order you picked them, so where two files carry the same setting the last one is what stands, and a file that cannot be read stops the whole import and names which one rather than taking half.
+
 ## 5.2.0
 
 _2026-09-11_

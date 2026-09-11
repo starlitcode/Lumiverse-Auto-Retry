@@ -10748,6 +10748,57 @@ console.log("\nfind and replace, retired");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- several files in one import ----
+// Taking two files one after the other reports each on its own, so somebody
+// importing a pair is left adding the numbers up. Picked together they are one
+// import with one total.
+console.log("\ntaking more than one file at a time");
+{
+  const { out, errors } = await inPanel(browser, {}, async (page) => {
+    const file = (name, body) => ({
+      name: name, mimeType: "application/json", buffer: Buffer.from(JSON.stringify(body)),
+    });
+    // The store's own shape: presets are keyed by kind, and each carries the
+    // values it sets. Invented here rather than lifted from a chat.
+    const preset = (n) => ({
+      autoRetry: "5.0.0",
+      settings: {},
+      presets: { notes: [{ name: n, values: { notesEnabled: true } }] },
+    });
+    await page.evaluate(async () => {
+      const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      window.__acts["auto-retry-settings"].cb();
+      await frame();
+      for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      await new Promise((r) => setTimeout(r, 260));
+      await frame();
+    });
+    const aim = await page.evaluate(() => {
+      const n = document.querySelector('input[type="file"][accept*="json"]');
+      return { there: !!n, multiple: !!(n && n.multiple) };
+    });
+    await page.setInputFiles('input[type="file"][accept*="json"]',
+      [file("one.json", preset("First of mine")), file("two.json", preset("Second of mine"))]);
+    await new Promise((r) => setTimeout(r, 400));
+    const said = await page.evaluate(() => {
+      const n = document.querySelector('[data-ar-transfer="said"]');
+      return n ? n.textContent : null;
+    });
+    const held = await page.evaluate(() => {
+      try {
+        const all = JSON.parse(localStorage.getItem("lv-auto-retry:presets:v1") || "{}");
+        return (all.notes || []).map((p) => p.name);
+      } catch (_) { return null; }
+    });
+    return { aim, said, held };
+  });
+  check("the picker takes more than one", out.aim.there && out.aim.multiple, out.aim);
+  check("two files in one press count as two",
+    /2 presets/.test(out.said || ""), out.said);
+  check("and both are held", (out.held || []).length === 2, JSON.stringify(out.held));
+  check("no console errors", errors.length === 0, errors);
+}
+
 console.log("\nteardown");
 {
   const page = await browser.newPage();

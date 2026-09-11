@@ -1,6 +1,8 @@
 # Import and export
 
-You can save your settings to a file and load them back later. In the settings modal, open **Import / export**. There are two lists of ticks: **What to put in the file** decides what **Export to file** writes, and **What to accept from one** decides what **Import from file** is allowed to change. They are asked separately because they are different questions, and sharing one list meant setting the ticks twice to export everything and then take back one part.
+You can save your settings to a file and load them back later. In the settings modal, open **Import / export**. There are two lists of ticks: **What to put in the file** decides what **Export to file** writes, and **What to accept from one** decides what **Import from files** is allowed to change. They are asked separately because they are different questions, and sharing one list meant setting the ticks twice to export everything and then take back one part.
+
+**Import from files** takes more than one at a time. Pick several and they are applied as one import with one count at the end, so two files carrying a preset each report two presets rather than one twice. They go on in the order you picked them, so where two files carry the same setting the last one is what stands. A file that cannot be read stops the whole import and names which one.
 
 Your settings and your saved presets already follow your Lumiverse account across browsers on their own, so this is mainly for keeping a backup, sharing a setup with someone else, or copying between accounts.
 

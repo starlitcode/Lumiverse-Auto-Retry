@@ -110,7 +110,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.2.0";
+const VERSION = "5.3.0";
 // The addresses the extension points at. Pinned to the released branch rather
 // than to a tag, so an old install still opens the page as it stands today.
 const SAFETY_URL = "https://github.com/starlitcode/Lumiverse-Auto-Retry/blob/stable/docs/safety.md";
@@ -9256,6 +9256,25 @@ export function setup(ctx, opts) {
         }
     }
     // Read a chosen file as text and hand it to cb.
+    // Every file in a selection, read before any of them is applied, so one
+    // import covers the lot and the count at the end is the real total rather
+    // than the last file's.
+    function readAllAsText(files, cb) {
+        const out = new Array(files.length);
+        let left = files.length;
+        if (!left) {
+            cb(out);
+            return;
+        }
+        files.forEach((file, at) => {
+            readFileAsText(file, (text) => {
+                out[at] = text;
+                left--;
+                if (left === 0)
+                    cb(out);
+            });
+        });
+    }
     function readFileAsText(file, cb) {
         try {
             const reader = new FileReader();
@@ -10301,6 +10320,7 @@ export function setup(ctx, opts) {
             const status = document.createElement("div");
             status.style.cssText =
                 "font-size:12px;line-height:1.4;color:var(--lumiverse-text-muted,rgba(255,255,255,.65));min-height:1em";
+            status.setAttribute("data-ar-transfer", "said");
             const exportBtn = btn("Export to file", false);
             exportBtn.addEventListener("click", () => {
                 const ids = chosen();
@@ -10317,46 +10337,65 @@ export function setup(ctx, opts) {
             fileInput.type = "file";
             fileInput.accept = "application/json,.json";
             fileInput.style.display = "none";
+            // More than one at a time, because taking two files one after the other
+            // reports each on its own and leaves you adding the numbers up yourself.
+            fileInput.multiple = true;
             fileInput.addEventListener("change", () => {
-                const f = fileInput.files && fileInput.files[0];
+                const picked = fileInput.files ? Array.prototype.slice.call(fileInput.files) : [];
                 fileInput.value = "";
-                if (!f)
+                if (!picked.length)
                     return;
                 const ids = taking();
                 if (!ids.length) {
                     status.textContent = "Tick at least one part under What to accept from one.";
                     return;
                 }
-                readFileAsText(f, (text) => {
-                    if (text == null) {
-                        status.textContent = "Couldn't read that file.";
-                        return;
-                    }
-                    const applied = applyImport(text, ids);
-                    if (applied === null) {
-                        status.textContent = "That file isn't a valid Auto Retry export.";
-                        return;
-                    }
-                    // Presets ride outside the settings model: they save right away.
+                // Named where there is more than one, because "that file" leaves you
+                // opening all of them to find out which one it meant.
+                const which = (at) => picked.length === 1 ? "that file" : picked[at].name;
+                readAllAsText(picked, (texts) => {
+                    // Applied in the order they were picked, so where two files carry the
+                    // same setting the last one is what stands.
+                    const parts = [];
                     let presetCount = 0;
-                    if (ids.indexOf("presets") >= 0) {
-                        let data = null;
-                        try {
-                            data = JSON.parse(text);
-                        }
-                        catch (_) { }
-                        presetCount = importPresets(data);
-                        if (presetCount === -1) {
-                            status.textContent =
-                                "Couldn't save the imported presets on this browser.";
+                    let ran = 0;
+                    for (let i = 0; i < texts.length; i++) {
+                        const text = texts[i];
+                        if (text == null) {
+                            status.textContent = "Couldn't read " + which(i) + ".";
                             return;
                         }
-                        if (presetCount > 0)
-                            for (const r of presetBarRefreshers)
-                                r();
+                        const applied = applyImport(text, ids);
+                        if (applied === null) {
+                            status.textContent = which(i) + " isn't a valid Auto Retry export.";
+                            return;
+                        }
+                        for (const one of applied)
+                            if (parts.indexOf(one) < 0)
+                                parts.push(one);
+                        // Presets ride outside the settings model: they save right away.
+                        if (ids.indexOf("presets") >= 0) {
+                            let data = null;
+                            try {
+                                data = JSON.parse(text);
+                            }
+                            catch (_) { }
+                            const got = importPresets(data);
+                            if (got === -1) {
+                                status.textContent = "Couldn't save the imported presets on this browser.";
+                                return;
+                            }
+                            presetCount += got;
+                        }
+                        ran++;
                     }
-                    if (!applied.length && !presetCount) {
-                        status.textContent = "Nothing matched the ticked parts in that file.";
+                    if (presetCount > 0)
+                        for (const r of presetBarRefreshers)
+                            r();
+                    if (!parts.length && !presetCount) {
+                        status.textContent =
+                            "Nothing matched the ticked parts in " +
+                                (picked.length === 1 ? "that file." : "those " + ran + " files.");
                         return;
                     }
                     // Reflect imported settings in the visible fields without a rebuild,
@@ -10365,8 +10404,8 @@ export function setup(ctx, opts) {
                         fieldSetters[k](cfg[k]);
                     applyDeps();
                     let msg = "";
-                    if (applied.length)
-                        msg = "Imported: " + applied.join(", ") + ". Press Save to keep it.";
+                    if (parts.length)
+                        msg = "Imported: " + parts.join(", ") + ". Press Save to keep it.";
                     if (presetCount > 0)
                         msg +=
                             (msg ? " " : "") +
@@ -10378,7 +10417,7 @@ export function setup(ctx, opts) {
                     status.textContent = msg;
                 });
             });
-            const importBtn = btn("Import from file", false);
+            const importBtn = btn("Import from files", false);
             importBtn.addEventListener("click", () => {
                 if (!taking().length) {
                     status.textContent = "Tick at least one part under What to accept from one first.";
