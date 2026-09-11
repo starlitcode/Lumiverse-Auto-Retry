@@ -265,7 +265,8 @@ Four sets are in the picker under **Ships with it**, so the boxes are not blank 
 - **Stay in the scene**, for a model that steps out of the story to comment on it.
 - **Write them as written**, for a model that softens a character away from their sheet.
 - **Finish the turn**, for a model that summarises or fades out instead of writing the scene.
-- **Stay in the scene, firmer**, which is the first one with a third note that only goes out from try 4.
+- **Stay in the scene, firmer after a few tries**, which opens lighter than the first one and carries a third note that only goes out from try 4.
+- **Write it at full strength**, for the reply that is not a refusal at all: the scene gets written and quietly watered down. It is the hardest one to catch by eye, because what arrives reads fine until you notice what is missing from it.
 
 They can be loaded and nothing else: **Update selected**, **Delete** and **Rename** stay off while one is picked, and no name of theirs can be taken. To make one yours, load it, edit the boxes, and save it under a name of your own.
 

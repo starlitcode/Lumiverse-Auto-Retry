@@ -8,6 +8,22 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.2.0
+
+_2026-09-11_
+
+### Added
+
+- **A fifth note set, Write it at full strength.** The other four answer a model that steps out of the scene, writes a character against their sheet, or cuts the turn short. This one answers the reply that is not a refusal at all: the scene gets written and quietly watered down. It is the hardest of them to catch by eye, because what arrives reads fine until you notice what is missing from it.
+
+### Changed
+
+- **Stay in the scene, firmer is now Stay in the scene, firmer after a few tries.** The old name said how strong it is. What it does is open lighter than the plain one and get firmer only if the same thing keeps happening, which is a different offer, and the name should say which one you are picking.
+
+### Fixed
+
+- **A hint had markdown in it.** Hints are drawn as plain text, so the asterisks around a word in the mid-sentence hint were two asterisks on the screen. It says what it means in words now, and a check holds every hint, label and description to it.
+
 ## 5.1.0
 
 _2026-09-10_
