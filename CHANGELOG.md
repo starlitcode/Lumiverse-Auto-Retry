@@ -25,6 +25,8 @@ _2026-09-12_
 
 ### Changed
 
+- **A phrase too short to mean anything is ignored.** Every phrase box is matched with "does the text contain this", so a stray letter left on a line of its own matched almost everything: in **Your own refusal phrases** that threw away every reply you wrote until the retry cap, and in the other two boxes it switched the check off without a word. A line under three characters is skipped now, which still leaves a provider's own codes like 402 usable. The three hints say so.
+- **The note roles are named after the roles they are.** **You** is **User** and **The character** is **Assistant**. The old pair read as friendlier and were worse: a chat can have a cast on it, so the reply role is not one character, and the user role is where your messages go whether you write one person or five. It is also what every other tool that builds a prompt calls them. Notes you already saved are not touched: the names changed, not the roles.
 - **The settings now say your own refusal phrases are matched against a provider error too.** They always were, and it is the only way to add an error of your own, so leaving it unsaid meant somebody with a provider error their setup keeps hitting had no way of knowing where to put it. It also overrides **Skip hard failures**: an error the built-in list reads as permanent is retried when one of your phrases is in it. Nothing about how it behaves has changed, only what the panel and [When it retries](docs/detection.md) tell you about it.
 
 ## 5.4.1

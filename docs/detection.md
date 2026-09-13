@@ -206,6 +206,8 @@ Everything sits under **Refusal tuning** in the settings, so the basic on/off to
 - **Also catch the model breaking off** (on by default). The fourth tier described above. Only shown while the built-in list is on, since it is part of it.
 - **Ignore refusals inside quotation marks** (on by default). Described above.
 - **Your own refusal phrases.** Extras that should also count, one per line, always used whether or not the built-in list is on. Paste the exact wording your model refuses with. Matched against a provider error as well as against the reply, which is how you add an error of your own.
+
+  A line under three characters is ignored in every box on this page. These are matched with "does the reply contain this", so one stray letter would match almost everything. Three still leaves a provider's own codes usable.
 - **Reword the built-in phrases.** Change wording inside the built-in list with `old => new` rules, one per line. For example `assist => help` rewrites every built-in phrase that uses "assist" to use "help" instead. Handy if a built-in phrase uses a word you'd rather see worded differently, or if your model phrases the same refusal a little differently. It changes what the built-in list matches, so use wording your model actually refuses with. It never touches a reply.
 - **Never treat these as a refusal.** A whitelist. If a reply contains any of these, one per line, it is never re-rolled. This wins over everything else.
 - **Longest reply to treat as a refusal** (2000 by default). Longer replies are assumed to be real writing and left alone. Raise it if your model writes long, padded refusals, lower it to be safer with long scenes, or set it to 0 to scan replies of any length.
@@ -218,7 +220,7 @@ Off by default. Every other retry re-sends your request exactly as it was. This 
 
 Turn on **Send a note with a refusal retry** in the refusal tuning section and write the note in the box below it. Whatever you type is sent exactly as written. Nothing is added to it, nothing is removed, and nothing in it is checked.
 
-**You can send more than one.** The **+** button adds another note and **−** removes it, up to ten. They go out together, in the order you wrote them, so a note can answer the one before it: a system note explaining the scene, then a line in the character's voice picking it back up, then a line from you asking it to continue.
+**You can send more than one.** The **+** button adds another note and **−** removes it, up to ten. They go out together, in the order you wrote them, so a note can answer the one before it: a system note explaining the scene, then a line under the assistant role picking it back up, then a line under your own role asking it to continue.
 
 Each note carries its own role. An empty note is skipped, so a half-filled list is not a trap, and nothing is sent at all when they are all empty.
 
@@ -226,7 +228,7 @@ Ten is the ceiling because every note is a whole message added to the prompt on 
 
 Two things belong to each note on its own, set on its row:
 
-- **Who it comes from.** Which role it is sent under. **System** puts it alongside the instructions your setup already sends. **You** puts it in the same role as your own messages. **The character** puts it in the same role as the replies. Models treat the three differently, so which one works best depends on your model and your setup.
+- **Who it comes from.** Which role it is sent under, named the way the prompt names it. **System** puts it alongside the instructions your setup already sends. **User** puts it in the same role as your own messages. **Assistant** puts it in the same role as the replies. Models treat the three differently, so which one works best depends on your model and your setup.
 - **From try.** Which retry that note joins on. At 2, the first retry re-sends unchanged and the note joins from the second onward; at 1 it goes on every refusal retry. This is per note, which is what lets a list escalate: give a gentle note 2 and a firmer one 4, and the firmer one is only ever sent if the gentle one did not work. Each retry carries whichever notes have come due, in the order you wrote them.
 
 Two things belong to the list as a whole, and apply to every note in it:

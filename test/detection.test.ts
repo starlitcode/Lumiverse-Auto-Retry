@@ -457,6 +457,31 @@ describe("refusal detection on error text", () => {
   });
 });
 
+describe("a phrase too short to mean anything", () => {
+  // Every one of these lists is matched with "does the text contain this", so a
+  // stray letter on a line of its own matches nearly everything. In the refusal
+  // box that throws away every reply somebody writes, which is the one failure
+  // here that costs writing rather than only stopping.
+  test("a line under three characters is dropped", () => {
+    expect(splitPhrases("a\nxy\nyes")).toEqual(["yes"]);
+  });
+
+  test("so a stray letter does not make every reply a refusal", () => {
+    const stray = withCfg({ refusalExtraPhrases: "e" });
+    expect(refusalVerdict("She set the crate down and went back inside.", stray).refusal).toBe(false);
+  });
+
+  test("and does not switch the hard failure check on for everything", () => {
+    const stray = withCfg({ hardErrorPhrases: "e" });
+    expect(isHardError("429 Too Many Requests", stray)).toBe(false);
+  });
+
+  test("a provider's own code is still long enough to use", () => {
+    expect(splitPhrases("402")).toEqual(["402"]);
+    expect(isHardError("billing says 402", withCfg({ hardErrorPhrases: "402" }))).toBe(true);
+  });
+});
+
 describe("an error that will not fix itself", () => {
   test("the built-in list reads the usual ones", () => {
     expect(isHardError("401 Unauthorized", cfg)).toBe(true);

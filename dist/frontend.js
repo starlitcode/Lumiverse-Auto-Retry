@@ -95,10 +95,15 @@ const MAX_NOTES = 10;
 // because the picker was written out twice: once to build the dropdown and
 // again to check what came back out of it, so adding a role in one place would
 // have made the other silently reject it.
+// Named for the role each is actually sent as, which is also what every other
+// tool that builds a prompt calls them. You and The character read as friendlier
+// and were worse: a chat can have a cast on it, so the reply role is not one
+// character, and User is the role your messages go under whether you write one
+// person or five.
 const NOTE_ROLE_OPTIONS = [
     { value: "system", label: "System" },
-    { value: "user", label: "You" },
-    { value: "assistant", label: "The character" },
+    { value: "user", label: "User" },
+    { value: "assistant", label: "Assistant" },
 ];
 const NOTE_ROLES = NOTE_ROLE_OPTIONS.map((o) => o.value);
 // Which retry a note starts on, when it does not say. Two, so the first retry
@@ -547,7 +552,7 @@ const SCHEMA = [
                 needs: ["ignoreHardErrors"],
                 label: "Your own hard failures",
                 type: "text",
-                hint: "Wording your provider uses for an error that will not fix itself, one per line, counted alongside the built-in list. Case does not matter. A phrase that is also in Your own refusal phrases is retried as a refusal instead, since that one is worth another try.",
+                hint: "Wording your provider uses for an error that will not fix itself, one per line, counted alongside the built-in list. Case does not matter, and a line under three characters is ignored. A phrase that is also in Your own refusal phrases is retried as a refusal instead, since that one is worth another try.",
             },
             {
                 key: "retryOnEmpty",
@@ -658,7 +663,7 @@ const SCHEMA = [
                 run: "yourWords",
                 label: "Your own refusal phrases",
                 type: "text",
-                hint: "Extra phrases that count as a refusal, one per line, used whether or not the built-in list above is on. Case does not matter, so paste the exact wording your model refuses with. These are matched against a provider error as well as against the reply, so wording from an error that Skip hard failures would otherwise write off is retried instead.",
+                hint: "Extra phrases that count as a refusal, one per line, used whether or not the built-in list above is on. Case does not matter, so paste the exact wording your model refuses with. Matched against a provider error as well as against the reply, so wording from an error that Skip hard failures would otherwise write off is retried instead. A line under three characters is ignored, since it would match almost every reply.",
             },
             {
                 key: "refusalPhraseSubs",
@@ -673,7 +678,7 @@ const SCHEMA = [
                 run: "yourWords",
                 label: "Never treat these as a refusal",
                 type: "text",
-                hint: "Optional. If a reply contains any of these phrases, one per line, it's never counted as a refusal. This wins over everything else.",
+                hint: "Optional. If a reply contains any of these phrases, one per line, it's never counted as a refusal. This wins over everything else. A line under three characters is ignored, since it would match almost every reply.",
             },
             {
                 key: "refusalMaxChars",
@@ -1281,11 +1286,20 @@ function normalizeForMatch(text) {
 }
 // A user list is newline-separated (one entry per line). Lowercased + normalized for a
 // case-insensitive substring test.
+// One phrase a line, for every box that takes them.
+//
+// A line shorter than three characters is dropped. Every one of these lists is
+// matched with "does the text contain this", so a stray letter left on a line of
+// its own matches nearly everything: in the refusal box that re-rolls every
+// reply you write until the cap, which costs real writing, and in the other two
+// it switches the check off without a word. Three is the shortest thing worth
+// matching on, and it leaves a provider's own codes like 402 usable.
+const PHRASE_MIN_CHARS = 3;
 function splitPhrases(raw) {
     return String(raw == null ? "" : raw)
         .split(/\r?\n/)
         .map((p) => normalizeForMatch(p).toLowerCase())
-        .filter((p) => p.length > 0);
+        .filter((p) => p.length >= PHRASE_MIN_CHARS);
 }
 // Reword rules: "old => new" pairs, one per line. Lets a user change a word or
 // bit of phrasing in the built-in refusal list to wording their model actually
