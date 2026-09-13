@@ -260,7 +260,7 @@ Presets are saved to your account, so they follow you to other devices.
 
 ### The sets that ship with it
 
-Four sets are in the picker under **Ships with it**, so the boxes are not blank the first time you switch notes on:
+Five sets are in the picker under **Ships with it**, so the boxes are not blank the first time you switch notes on:
 
 - **Stay in the scene**, for a model that steps out of the story to comment on it.
 - **Write them as written**, for a model that softens a character away from their sheet.

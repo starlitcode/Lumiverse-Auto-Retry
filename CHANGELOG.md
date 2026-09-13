@@ -8,6 +8,15 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.4.2
+
+_2026-09-12_
+
+### Fixed
+
+- **A shipped note assumed one character.** **Write them as written** said the sheet was the authority on who this person is, which reads wrong in a group chat or on a card holding a cast. It says the sheet is the authority here, and the rest of the note is unchanged. Notes you saved yourself are not touched.
+- **The note sets page said four sets and listed five.** It says five.
+
 ## 5.4.1
 
 _2026-09-11_
