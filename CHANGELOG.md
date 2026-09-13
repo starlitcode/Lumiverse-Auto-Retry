@@ -18,6 +18,12 @@ _2026-09-13_
 
   On a wider screen the row is wider than the cap the descriptions already had, so nothing about them changes there. Auto Refine had the same thing wrong with its descriptions and got the same fix.
 
+- **The pop-up at the bottom of the screen is the size of what is written in it.** Any message too long for one line filled the box out to its widest allowed width, which on a phone is almost the whole screen, and the wrap then left the last line sitting a long way short of the right edge. A message ending in one stranded word was the usual result.
+
+  The lines are evened out first and the box is then fitted to the longest of them. A short message already shrank to fit and is unchanged, and the widest a message can get is what it was before.
+
+  Auto Refine hands its short messages to Lumiverse and they are drawn by the app rather than by the extension, so there is nothing matching to change there.
+
 ## 5.5.0
 
 _2026-09-13_

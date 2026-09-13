@@ -9014,6 +9014,44 @@ export function setup(ctx: Ctx, opts?: any) {
     }
     return t;
   }
+  // A message too long for one line used to fill the box out to its cap, which
+  // on a phone is nearly the whole screen, and left the last line stranded well
+  // short of the right edge. The browser evens the lines out and the box is then
+  // pinned to the widest of them, so it comes out the size of what is written in
+  // it rather than the size of the screen. A message that fits on one line
+  // already did that on its own and is left alone.
+  function hugToast(t: any) {
+    const span = t && t.__words;
+    if (!span || typeof document === "undefined") return;
+    try {
+      // Cleared first, so what is measured is the message at the full width it
+      // is allowed rather than whatever the message before it was pinned to.
+      span.style.width = "";
+      const range = document.createRange();
+      range.selectNodeContents(span);
+      const rects = range.getClientRects();
+      let widest = 0;
+      let lines = 0;
+      for (let i = 0; i < rects.length; i++) {
+        const w = rects[i].width;
+        if (w <= 0) continue;
+        lines++;
+        if (w > widest) widest = w;
+      }
+      if (lines < 2 || widest <= 0) return;
+      // Lines are measured as they land on screen and a width is written in the
+      // element's own units. Under a host applying its UI Scale as a zoom those
+      // are not the same, and pinning a screen measurement as an element width
+      // would come out wider than what was measured by however much it is
+      // scaling. Without a zoom this divides by one.
+      const zoom =
+        span.offsetWidth > 0 ? span.getBoundingClientRect().width / span.offsetWidth : 1;
+      const own = zoom > 0.01 ? widest / zoom : widest;
+      // A pixel over, so a line pinned to its own measured width cannot come
+      // back a hair too narrow and wrap again.
+      span.style.width = Math.ceil(own) + 1 + "px";
+    } catch (_) {}
+  }
   function hideToast() {
     stopToastCountdown();
     const t: any =
@@ -9033,6 +9071,9 @@ export function setup(ctx: Ctx, opts?: any) {
       typeof document !== "undefined" && document.getElementById("__lvRetryToast");
     if (!t || !t.__words || t.style.opacity !== "1") return;
     t.__words.textContent = msg;
+    // The new words are a different length, so the box is fitted to them rather
+    // than left at the width the last ones needed.
+    hugToast(t);
   }
   // The countdown behind a sticky retry message. One at a time: a second retry
   // replaces the first message, so it replaces the clock with it.
@@ -9081,7 +9122,12 @@ export function setup(ctx: Ctx, opts?: any) {
       t.innerHTML = "";
       const span = document.createElement("span");
       span.textContent = msg;
-      span.style.cssText = "flex:1";
+      // Not flex:1. Filling the row makes the box the width of its cap whenever
+      // the message wraps, and the cap on a phone is nearly the whole screen.
+      // Sized to the words instead, then pinned to them by hugToast below.
+      // balance asks the browser to even the lines out, so what gets pinned is
+      // the width of two half lines rather than a full one and a stub.
+      span.style.cssText = "flex:0 1 auto;min-width:0;text-wrap:balance";
       t.appendChild(span);
       // Kept so a countdown can rewrite the words without rebuilding the box.
       // Rebuilding would replace the Cancel button four times a second, which
@@ -9134,6 +9180,7 @@ export function setup(ctx: Ctx, opts?: any) {
         t.style.top = "auto";
         t.style.bottom = "max(20px,env(safe-area-inset-bottom,0px))";
       }
+      hugToast(t);
       t.style.opacity = "1";
       ensureReadableTree(t);
       clearTimeout(t.__h);

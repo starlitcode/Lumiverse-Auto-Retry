@@ -7328,7 +7328,13 @@ console.log("\na finished reply is not re-rolled, a stalled one still is");
 // 412px phone and the box stopped dead at 206px. It is centred by pinning both
 // edges and sharing the remainder between the margins now, so the cap it was
 // given is the cap it gets.
-console.log("\nthe toast gets the width it was given");
+//
+// The cap is not the size it should end up, though. Reaching for it on every
+// message that wraps made the box nearly the width of the screen on a phone and
+// stranded the last line well short of the right edge. The lines are evened out
+// and the box is pinned to the widest of them, so what is checked here is that
+// it takes the room it needs and stops.
+console.log("\nthe toast is the size of what is written in it");
 {
   const page = await browser.newPage({ viewport: { width: 412, height: 800 } });
   const errors = [];
@@ -7371,10 +7377,23 @@ console.log("\nthe toast gets the width it was given");
         at += word.length + 1;
       }
       const bottom = Math.max(...tops);
+      // The rendered lines themselves, which is what the box is supposed to be
+      // the size of. Counting word tops says how many there are; this says how
+      // long each one came out.
+      const whole = document.createRange();
+      whole.selectNodeContents(node);
+      const rects = whole.getClientRects();
+      const lineWidths = [];
+      for (let i = 0; i < rects.length; i++)
+        if (rects[i].width > 0) lineWidths.push(Math.round(rects[i].width));
       return {
         text: node.textContent,
         width: Math.round(r.width),
         lines: new Set(tops).size,
+        lineWidths,
+        shortest: lineWidths.length ? Math.min(...lineWidths) : 0,
+        widest: lineWidths.length ? Math.max(...lineWidths) : 0,
+        overflows: t.scrollWidth > Math.ceil(t.clientWidth) + 1,
         lastWords: tops.filter((t) => t === bottom).length,
         // Centred on the viewport, and not hanging off either edge.
         centred: Math.abs(r.left + r.width / 2 - 206) < 2,
@@ -7404,9 +7423,20 @@ console.log("\nthe toast gets the width it was given");
   await page.close();
   // 206 is exactly half of this viewport, which is where a centred layout
   // would cap every message whatever max-width said.
+  const CAP = Math.round(412 * 0.92);
   check("a long message is wider than half the screen", out.long.width > 206, out.long);
-  check("and no wider than the cap it was given", out.long.width <= Math.round(412 * 0.92), out.long);
+  check("and no wider than the cap it was given", out.long.width <= CAP, out.long);
   check("a short message is not padded out to the cap", out.short.width < 206, out.short);
+  check("a long message wraps, so there is something to even out", out.long.lines > 1, out.long);
+  // The three that describe the fix. Reaching for the cap is what made it look
+  // like the screen rather than like a message; a stranded last line is what
+  // that looked like up close; and the box hugging its widest line is what
+  // replaces both.
+  check("a long message is not padded out to the cap either", out.long.width < CAP - 8, out.long);
+  check("and its lines come out even", out.long.shortest >= out.long.widest * 0.6, out.long);
+  check("and the box is the width of its widest line", out.long.width - out.long.widest <= 32, out.long);
+  for (const [what, m] of [["long", out.long], ["short", out.short]])
+    check(what + ": nothing spills out of the box", !m.overflows, m);
   for (const [what, m] of [["long", out.long], ["short", out.short]]) {
     check(what + ": centred on the screen", m.centred, m);
     check(what + ": and fully on it", m.onScreen, m);
