@@ -1407,6 +1407,33 @@ function normalizeForMatch(text: string): string {
 // matching on, and it leaves a provider's own codes like 402 usable.
 const PHRASE_MIN_CHARS = 3;
 
+// Find and replace was retired in 5.0.0, on the 5th of September 2026. What is
+// left of it is the way back out: the rules and the presets are still in this
+// browser and in the account, and the panel hands them over as a file.
+//
+// That offer ends on this date, which both places carrying it say out loud so
+// nobody finds it gone without having been told. Just under six weeks from the
+// retirement, so anybody who updates monthly gets two passes at it.
+//
+// On the day, everything gated on swapsOffered stops drawing and this whole
+// block can be deleted with nothing on screen changing. The rules themselves
+// are never touched: the offer ends, the data stays where it is, and anybody
+// who wants it later can still find it in their own storage.
+const SWAPS_GONE_ON = "2026-10-15";
+const SWAPS_GONE_SAID = "15 October 2026";
+
+// Date only, and the reader's own day rather than UTC: a cutoff people can read
+// off a calendar should turn over when their calendar does.
+function swapsOffered(today: string): boolean {
+  return String(today || "") < SWAPS_GONE_ON;
+}
+
+function todayHere(): string {
+  const d = new Date();
+  const pad = (n: number) => (n < 10 ? "0" + n : String(n));
+  return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+}
+
 function splitPhrases(raw: any): string[] {
   return String(raw == null ? "" : raw)
     .split(/\r?\n/)
@@ -10414,7 +10441,7 @@ export function setup(ctx: Ctx, opts?: any) {
       {
         const held = retiredSwaps();
         const count = held.rules.split("\n").filter((l) => l.indexOf("=>") > 0).length;
-        if (count || held.presets.length) {
+        if ((count || held.presets.length) && swapsOffered(todayHere())) {
           const row = document.createElement("div");
           row.setAttribute("data-ar-old-swaps", "1");
           row.style.cssText = "display:flex;flex-direction:column;gap:6px";
@@ -10428,7 +10455,9 @@ export function setup(ctx: Ctx, opts?: any) {
             document.createTextNode(
               " does that job now. Your old word swaps are still here, " +
                 bits.join(" and ") +
-                " of them, and this is where to take a copy whenever you want one.",
+                " of them, and this is where to take a copy. The offer ends on " +
+                SWAPS_GONE_SAID +
+                ". Nothing is deleted on that day, the panel just stops offering.",
             ),
           );
           row.appendChild(said);
@@ -10832,8 +10861,10 @@ export function setup(ctx: Ctx, opts?: any) {
     const held = retiredSwaps();
     const count = held.rules.split("\n").filter((l) => l.indexOf("=>") > 0).length;
     // Nothing to hand back, or already handed back. Somebody who never used the
-    // feature should never learn it existed.
-    if ((!count && !held.presets.length) || swapsNoticeDone()) return box;
+    // feature should never learn it existed. Past the date the offer ends on,
+    // nobody sees it either.
+    if ((!count && !held.presets.length) || swapsNoticeDone() || !swapsOffered(todayHere()))
+      return box;
     box.style.cssText =
       "display:flex;flex-direction:column;gap:8px;flex:none;margin-bottom:12px;padding:12px;" +
       "border-radius:var(--lumiverse-radius,8px);" +
@@ -10867,7 +10898,11 @@ export function setup(ctx: Ctx, opts?: any) {
     if (held.presets.length)
       bits.push(held.presets.length + (held.presets.length === 1 ? " preset" : " presets"));
     what.textContent =
-      "You have " + bits.join(" and ") + " saved. Take a copy before this card goes.";
+      "You have " +
+      bits.join(" and ") +
+      " saved. This offer ends on " +
+      SWAPS_GONE_SAID +
+      ", so take a copy before then. Nothing is deleted on that day: the panel just stops offering.";
     box.appendChild(what);
 
     const row = document.createElement("div");
@@ -12930,6 +12965,8 @@ export const __testing = {
   sayTime,
   normalizeForMatch,
   splitPhrases,
+  swapsOffered,
+  SWAPS_GONE_ON,
   parseSubs,
   applySubs,
   stripThinking,

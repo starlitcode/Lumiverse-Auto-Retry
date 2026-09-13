@@ -10549,6 +10549,7 @@ console.log("\nfind and replace, retired");
         URL.createObjectURL = realCreate;
         return {
           there: !!box && !!box.textContent.trim(),
+          text: text,
           saysWhy: /retired/i.test(text) && /Auto Refine/.test(text),
           counted: /2 rules/.test(text),
           file,
@@ -10560,6 +10561,10 @@ console.log("\nfind and replace, retired");
   );
   check("somebody with rules is told the feature went", out.there && out.saysWhy, out);
   check("and how much of theirs is still there", out.counted, out);
+  // The offer ends on a date, and a date nobody is told is a door that shuts
+  // without warning. Both places carrying the download name it.
+  check("and the date the offer ends on", /15 October 2026/.test(out.text || ""), out.text);
+  check("and that nothing is deleted on that day", /Nothing is deleted/.test(out.text || ""), out.text);
   check("the download holds the rules themselves", /cat => dog/.test(out.file), out.file.slice(0, 120));
   check("hiding it takes it away", out.goneAfterHide && out.remembered, out);
 
@@ -10594,6 +10599,7 @@ console.log("\nfind and replace, retired");
         cardGone: !document.querySelector("[data-ar-retired]") ||
           !document.querySelector("[data-ar-retired]").textContent.trim(),
         rowThere: !!row,
+        rowText: row ? row.textContent : "",
         file,
       };
     }),
@@ -10601,6 +10607,7 @@ console.log("\nfind and replace, retired");
   check("with the card dismissed, the way back is still in Import / export",
     after.cardGone && after.rowThere, after);
   check("and it hands over the same rules", /cat => dog/.test(after.file), after.file.slice(0, 100));
+  check("that line names the date too", /15 October 2026/.test(after.rowText || ""), after.rowText);
   check("no console errors on the way back", e2.length === 0, e2);
   check("no console errors", errors.length === 0, errors);
 }

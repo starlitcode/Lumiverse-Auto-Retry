@@ -33,3 +33,11 @@ Every imported value runs through the same checks as your normal settings, so a 
 ---
 
 [Back to the README](../README.md)
+
+## If you used find and replace
+
+It was retired in 5.0.0. [Auto Refine](https://github.com/starlitcode/Lumiverse-Auto-Refine) does that job now.
+
+Your old rules and word presets are still in this browser and in your account, and there is a **Download my old word swaps** button here that hands them over as a file. **That offer ends on 15 October 2026.** Nothing is deleted on that day and nothing of yours is touched: the button and the card simply stop being drawn, and the panel goes back to having nothing to say about a feature that is gone.
+
+If you never used it you have never seen either of them, and you will not.

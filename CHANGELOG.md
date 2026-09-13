@@ -14,6 +14,10 @@ _2026-09-13_
 
 ### Fixed
 
+- **The way back out of find and replace now has a date on it.** The card and the **Download my old word swaps** line under Import / export both say the offer ends on **15 October 2026**, which is just under six weeks after 5.0.0 retired the feature. Nothing is deleted on that day: the panel stops offering, your rules stay where they are, and the code that draws it can then come out with nothing on screen changing.
+
+  A door that shuts without warning is worse than one that stays open too long, which is why the date is on the card rather than in a release note somebody has to have read.
+
 - **A token count Lumiverse called a guess was reported as a count.** It counts with a real tokeniser where it has one for the model and says so when it has none and fell back to characters over four. That flag was not read, so the Prompt tab showed a guess as an exact figure instead of saying roughly over it. The flag is read now.
 - **A shipped note assumed one character.** **Write them as written** said the sheet was the authority on who this person is, which reads wrong in a group chat or on a card holding a cast. It says the sheet is the authority here, and the rest of the note is unchanged. Notes you saved yourself are not touched.
 - **The note sets page said four sets and listed five.** It says five.
