@@ -20,11 +20,11 @@ const BACKEND = readFileSync(
   "utf8",
 );
 
-function boot() {
+function boot(opts?: { tokens?: { approximate?: boolean } }) {
   let onFrontend: any = null;
   let interceptor: any = null;
   const sent: Array<{ msg: any; userId: any }> = [];
-  const spindle = {
+  const spindle: any = {
     storage: {
       read: async () => { throw new Error("empty"); },
       write: async () => {},
@@ -36,12 +36,23 @@ function boot() {
     registerInterceptor: (fn: any) => { interceptor = fn; },
     log: { info() {}, warn() {}, error() {} },
   };
+  // Lumiverse's own counter. Absent unless a check asks for it, since the panel
+  // falls back to its own estimate and most checks here are about the prompt
+  // rather than the size of it.
+  if (opts && opts.tokens)
+    spindle.tokens = {
+      countText: async (text: string) => ({
+        total_tokens: Math.ceil(String(text || "").length / 3),
+        approximate: !!opts.tokens.approximate,
+      }),
+    };
   // eslint-disable-next-line no-new-func
   new Function("spindle", BACKEND)(spindle);
   return {
     tell: (payload: any, userId?: string) => onFrontend(payload, userId),
     run: (messages: any[], context?: any) => interceptor(messages, context || {}),
     snapshots: () => sent.filter((s) => s.msg && s.msg.type === "prompt_snapshot"),
+    counts: () => sent.filter((s) => s.msg && s.msg.type === "prompt_tokens"),
     watch: (on: boolean, userId?: string) =>
       onFrontend({ type: "set_prompt_capture", on: on }, userId),
     arm: (over?: any, userId?: string) =>
@@ -498,5 +509,42 @@ describe("reporting which permissions are granted", () => {
       expect(g.chats).toBe(true);
       expect(g.interceptor).toBe(false);
     });
+  });
+});
+
+// Lumiverse counts with a real tokeniser where it has one for the model, and
+// says so when it has none and fell back to characters over four. That fallback
+// is the same guess the panel makes for itself, so taking it for a count would
+// put an exact-looking figure over a guess.
+describe("the token count under the prompt", () => {
+  const capture = async (h: any) => {
+    await h.watch(true, "u1");
+    await h.run([{ role: "system", content: "Some rules that are long enough to count." }], {
+      chatId: "c1",
+      userId: "u1",
+      model: "a-model",
+    });
+    // The count is sent after the snapshot so a slow tokeniser never holds one
+    // up, so it has to be waited for rather than read straight away.
+    await new Promise((r) => setTimeout(r, 60));
+    return h;
+  };
+
+  test("a real count is sent on", async () => {
+    const h = await capture(boot({ tokens: { approximate: false } }));
+    expect(h.counts().length).toBe(1);
+    expect(h.counts()[0].msg.tokens).toBeGreaterThan(0);
+  });
+
+  test("one Lumiverse calls approximate is not sent at all", async () => {
+    const h = await capture(boot({ tokens: { approximate: true } }));
+    // Nothing sent leaves the panel on its own estimate, which says roughly
+    // over it rather than giving a figure that looks exact.
+    expect(h.counts().length).toBe(0);
+  });
+
+  test("and a build with no counter sends nothing either", async () => {
+    const h = await capture(boot());
+    expect(h.counts().length).toBe(0);
   });
 });

@@ -4105,7 +4105,7 @@ export function setup(ctx: Ctx, opts?: any) {
         "margin-bottom:6px;font-size:12px;line-height:1.4;" +
         "color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
       rough.textContent =
-        "Read that as a ballpark rather than your bill. The tokens are counted here rather than taken from your provider, so their tokeniser may not agree and anything they wrap around the prompt is missing. It also prices every token sent at the full rate, so on a model with prompt caching switched on a retry usually costs less than this, sometimes a lot less.";
+        "Read that as a ceiling rather than your bill. Anything your provider wraps around the prompt is missing from it, and it prices every token at the full rate: whatever your provider reuses from a cache is charged at less than this says. Lumiverse counts the tokens with its own tokeniser for the model, which is not the counter your provider bills you against.";
       body.appendChild(rough);
     }
     const viewRow = document.createElement("div");

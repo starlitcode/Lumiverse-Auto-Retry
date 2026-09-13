@@ -158,6 +158,12 @@ async function countTokens(text, context, userId) {
             return null;
         const model = context && (context.model || context.modelId);
         const res = await spindle.tokens.countText(text, { model: model, userId: userId });
+        // Lumiverse says when it had no tokeniser for the model and fell back to
+        // characters over four. Answered as no count at all, because that is the
+        // same guess the panel makes for itself and saying roughly over it is the
+        // difference between a figure and a figure that looks exact.
+        if (res && res.approximate)
+            return null;
         const n = res && Number(res.total_tokens);
         return Number.isFinite(n) && n > 0 ? n : null;
     }

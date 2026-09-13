@@ -10,10 +10,11 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ## 5.5.0
 
-_2026-09-12_
+_2026-09-13_
 
 ### Fixed
 
+- **A token count Lumiverse called a guess was reported as a count.** It counts with a real tokeniser where it has one for the model and says so when it has none and fell back to characters over four. That flag was not read, so the Prompt tab showed a guess as an exact figure instead of saying roughly over it. The flag is read now.
 - **A shipped note assumed one character.** **Write them as written** said the sheet was the authority on who this person is, which reads wrong in a group chat or on a card holding a cast. It says the sheet is the authority here, and the rest of the note is unchanged. Notes you saved yourself are not touched.
 - **The note sets page said four sets and listed five.** It says five.
 
