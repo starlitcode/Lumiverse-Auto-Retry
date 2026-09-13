@@ -17,6 +17,10 @@ _2026-09-12_
 - **A shipped note assumed one character.** **Write them as written** said the sheet was the authority on who this person is, which reads wrong in a group chat or on a card holding a cast. It says the sheet is the authority here, and the rest of the note is unchanged. Notes you saved yourself are not touched.
 - **The note sets page said four sets and listed five.** It says five.
 
+### Changed
+
+- **The settings now say your own refusal phrases are matched against a provider error too.** They always were, and it is the only way to add an error of your own, so leaving it unsaid meant somebody with a provider error their setup keeps hitting had no way of knowing where to put it. It also overrides **Skip hard failures**: an error the built-in list reads as permanent is retried when one of your phrases is in it. Nothing about how it behaves has changed, only what the panel and [When it retries](docs/detection.md) tell you about it.
+
 ## 5.4.1
 
 _2026-09-11_

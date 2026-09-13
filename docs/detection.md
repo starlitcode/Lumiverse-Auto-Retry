@@ -138,6 +138,8 @@ Wordings that carry no object at all and read naturally in a scene ("let's move 
 
 Some providers deliver a refusal as an *error* instead of as reply text (Gemini's prohibited-content result, for one). With error retries on (the default) those are already covered. If you turn error retries off but leave refusal retries on, it still catches an error whose text is about content moderation, while leaving ordinary network errors like a dropped connection alone.
 
+**Your own phrases are matched against that error text too,** not only against replies. That is where to put a provider error your setup keeps hitting: paste the wording, and an error carrying it is retried as a refusal rather than skipped. It also overrides **Skip hard failures**, so an error the built-in list reads as permanent is retried when one of your phrases is in it. Refusal retries have to be on for any of that.
+
 ## Stopping to offer support
 
 **Also catch it stopping to offer support** is off by default, and it is the only switch in the panel that asks you to read something before it will go on. [Safety](safety.md#the-setting-that-asks-before-it-turns-on) is that page, and it is worth reading before this one.
@@ -199,7 +201,7 @@ Everything sits under **Refusal tuning** in the settings, so the basic on/off to
 - **Use the built-in phrase list** (on by default). This only controls the built-in list. Your own phrases below are always used either way. On, the built-in list is used together with your own phrases. Off, only your own phrases are used.
 - **Also catch the model breaking off** (on by default). The fourth tier described above. Only shown while the built-in list is on, since it is part of it.
 - **Ignore refusals inside quotation marks** (on by default). Described above.
-- **Your own refusal phrases.** Extras that should also count, one per line, always used whether or not the built-in list is on. Paste the exact wording your model refuses with.
+- **Your own refusal phrases.** Extras that should also count, one per line, always used whether or not the built-in list is on. Paste the exact wording your model refuses with. Matched against a provider error as well as against the reply, which is how you add an error of your own.
 - **Reword the built-in phrases.** Change wording inside the built-in list with `old => new` rules, one per line. For example `assist => help` rewrites every built-in phrase that uses "assist" to use "help" instead. Handy if a built-in phrase uses a word you'd rather see worded differently, or if your model phrases the same refusal a little differently. It changes what the built-in list matches, so use wording your model actually refuses with. It never touches a reply.
 - **Never treat these as a refusal.** A whitelist. If a reply contains any of these, one per line, it is never re-rolled. This wins over everything else.
 - **Longest reply to treat as a refusal** (2000 by default). Longer replies are assumed to be real writing and left alone. Raise it if your model writes long, padded refusals, lower it to be safer with long scenes, or set it to 0 to scan replies of any length.

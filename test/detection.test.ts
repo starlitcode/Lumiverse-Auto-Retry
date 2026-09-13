@@ -9,7 +9,6 @@
 
 import { expect, test, describe } from "bun:test";
 import { readFileSync } from "node:fs";
-import { readFileSync } from "node:fs";
 import { __testing } from "../src/frontend";
 
 const {
@@ -431,6 +430,28 @@ describe("refusal detection on error text", () => {
     expect(looksLikeRefusalError("connection refused", cfg)).toBe(false);
     expect(looksLikeRefusalError("ETIMEDOUT", cfg)).toBe(false);
     expect(looksLikeRefusalError("502 Bad Gateway", cfg)).toBe(false);
+  });
+
+  // This is how somebody adds an error of their own. There is no separate field
+  // for one, and the settings say so, so it has to keep working.
+  test("a phrase you typed yourself counts, even where the built-in list finds nothing", () => {
+    const mine = withCfg({ refusalExtraPhrases: "policy_engine_halt" });
+    expect(looksLikeRefusalError("policy_engine_halt", cfg)).toBe(false);
+    expect(looksLikeRefusalError("upstream said POLICY_ENGINE_HALT", mine)).toBe(true);
+  });
+
+  test("and it still counts with the built-in list switched off", () => {
+    const mine = withCfg({ refusalUseBuiltins: false, refusalExtraPhrases: "policy_engine_halt" });
+    expect(looksLikeRefusalError("PROHIBITED_CONTENT", mine)).toBe(false);
+    expect(looksLikeRefusalError("policy_engine_halt", mine)).toBe(true);
+  });
+
+  test("the never-treat-as-a-refusal list wins over your own phrase", () => {
+    const both = withCfg({
+      refusalExtraPhrases: "policy_engine_halt",
+      refusalIgnorePhrases: "dry run",
+    });
+    expect(looksLikeRefusalError("dry run: policy_engine_halt", both)).toBe(false);
   });
 });
 

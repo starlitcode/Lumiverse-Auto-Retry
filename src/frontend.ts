@@ -121,7 +121,7 @@ const STREAM_BUF_MAX = 200000;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.4.1";
+const VERSION = "5.4.2";
 
 // The addresses the extension points at. Pinned to the released branch rather
 // than to a tag, so an old install still opens the page as it stands today.
@@ -749,7 +749,7 @@ const SCHEMA: Group[] = [
         run: "yourWords",
         label: "Your own refusal phrases",
         type: "text",
-        hint: "Extra phrases that count as a refusal, one per line, used whether or not the built-in list above is on. Case does not matter, so paste the exact wording your model refuses with.",
+        hint: "Extra phrases that count as a refusal, one per line, used whether or not the built-in list above is on. Case does not matter, so paste the exact wording your model refuses with. These are matched against a provider error as well as against the reply, so wording from an error that Skip hard failures would otherwise write off is retried instead.",
       },
       {
         key: "refusalPhraseSubs",
@@ -2420,6 +2420,9 @@ function looksLikeRefusalError(errText: string, cfg?: any): boolean {
   const lower = norm.toLowerCase();
   for (const p of splitPhrases(cfg && cfg.refusalIgnorePhrases))
     if (lower.includes(p)) return false;
+  // Somebody's own wording, matched here as well as against a reply. This is the
+  // only way to add a provider error of your own, and the panel and the docs
+  // both say so, so it is not an incidental use of the field.
   for (const p of splitPhrases(cfg && cfg.refusalExtraPhrases))
     if (lower.includes(p)) return true;
   if (!cfg || cfg.refusalUseBuiltins !== false) {
