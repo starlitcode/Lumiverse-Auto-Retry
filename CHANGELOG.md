@@ -14,7 +14,9 @@ _2026-09-13_
 
 ### Fixed
 
-- **The way back out of find and replace now has a date on it.** The card and the **Download my old word swaps** line under Import / export both say the offer ends on **15 October 2026**, which is just under six weeks after 5.0.0 retired the feature. Nothing is deleted on that day: the panel stops offering, your rules stay where they are, and the code that draws it can then come out with nothing on screen changing.
+- **The way back out of find and replace now has a date on it.** The card and the **Download my old word swaps** line under Import / export are the last places that hand your old rules and presets over as a file, and both now say they go on **15 October 2026**. That is just under six weeks after 5.0.0 retired the feature.
+
+  Your rules are not wiped that day. Nothing in the panel will offer them to you after it, which is the part worth knowing, so both places say that rather than leading with the reassurance and leaving you to work out why there is a deadline at all.
 
   A door that shuts without warning is worse than one that stays open too long, which is why the date is on the card rather than in a release note somebody has to have read.
 

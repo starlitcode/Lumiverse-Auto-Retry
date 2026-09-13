@@ -38,6 +38,8 @@ Every imported value runs through the same checks as your normal settings, so a 
 
 It was retired in 5.0.0. [Auto Refine](https://github.com/starlitcode/Lumiverse-Auto-Refine) does that job now.
 
-Your old rules and word presets are still in this browser and in your account, and there is a **Download my old word swaps** button here that hands them over as a file. **That offer ends on 15 October 2026.** Nothing is deleted on that day and nothing of yours is touched: the button and the card simply stop being drawn, and the panel goes back to having nothing to say about a feature that is gone.
+Your old rules and word presets are still in this browser and in your account, and the **Download my old word swaps** button here is the last place that hands them over as a file. **It goes on 15 October 2026.**
+
+Your rules are not wiped that day. The button and the card stop being drawn, and after that nothing in the panel will offer them to you, so take the copy while it is there.
 
 If you never used it you have never seen either of them, and you will not.

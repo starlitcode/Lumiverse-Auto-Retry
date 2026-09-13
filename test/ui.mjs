@@ -10564,7 +10564,10 @@ console.log("\nfind and replace, retired");
   // The offer ends on a date, and a date nobody is told is a door that shuts
   // without warning. Both places carrying the download name it.
   check("and the date the offer ends on", /15 October 2026/.test(out.text || ""), out.text);
-  check("and that nothing is deleted on that day", /Nothing is deleted/.test(out.text || ""), out.text);
+  check("and that it is the last way to get them out",
+    /last place/.test(out.text || ""), out.text);
+  check("without reading as though the rules get wiped",
+    /not wiped/.test(out.text || ""), out.text);
   check("the download holds the rules themselves", /cat => dog/.test(out.file), out.file.slice(0, 120));
   check("hiding it takes it away", out.goneAfterHide && out.remembered, out);
 

@@ -10453,9 +10453,9 @@ export function setup(ctx, opts) {
                     said.appendChild(linkTo(REFINE_URL, "Auto Refine"));
                     said.appendChild(document.createTextNode(" does that job now. Your old word swaps are still here, " +
                         bits.join(" and ") +
-                        " of them, and this is where to take a copy. The offer ends on " +
+                        " of them, and this is the last place that hands them over as a file. It goes on " +
                         SWAPS_GONE_SAID +
-                        ". Nothing is deleted on that day, the panel just stops offering."));
+                        ". Your rules are not wiped that day, but nothing here will offer them to you after it."));
                     row.appendChild(said);
                     const get = btn("Download my old word swaps", false);
                     get.setAttribute("data-ar-old-swaps-save", "1");
@@ -10876,9 +10876,9 @@ export function setup(ctx, opts) {
         what.textContent =
             "You have " +
                 bits.join(" and ") +
-                " saved. This offer ends on " +
+                " saved. This is the last place that hands them over as a file, and it goes on " +
                 SWAPS_GONE_SAID +
-                ", so take a copy before then. Nothing is deleted on that day: the panel just stops offering.";
+                ". Your rules are not wiped that day, but nothing in the panel will offer them to you after it, so take the copy now.";
         box.appendChild(what);
         const row = document.createElement("div");
         row.style.cssText = "display:flex;flex-wrap:wrap;gap:8px;margin-top:2px";
