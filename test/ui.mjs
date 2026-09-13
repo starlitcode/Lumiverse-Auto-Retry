@@ -1170,6 +1170,11 @@ for (const [label, css, viewport] of [
   // after being zoomed, so every case above passes while a smaller phone is
   // broken. 360 is a small phone and 1.5 is the top of Lumiverse's slider.
   ["small phone at UI Scale 1.5", "body{zoom:1.5}", { width: 360, height: 800 }],
+  // A panel narrower than the screen, which is what the settings modal is on a
+  // phone. The cap used to be room on the screen, so a description came out
+  // wider than the panel holding it and hung off the side: on screen, and
+  // nowhere near the setting it belonged to.
+  ["narrow panel on a phone", "#modal{width:270px;margin:0 auto;padding:0 12px}", { width: 393, height: 852 }],
 ]) {
   const { out, errors } = await inPanel(
     browser,
@@ -1183,6 +1188,8 @@ for (const [label, css, viewport] of [
           !(a.bottom <= b.top || a.top >= b.bottom || a.right <= b.left || a.left >= b.right);
         const infos = [...modal.querySelectorAll("button[data-ar-hint]")];
         const covering = [];
+        const wider = [];
+        const outside = [];
         let offscreen = 0;
         for (const info of infos) {
           info.scrollIntoView({ block: "center" });
@@ -1196,11 +1203,26 @@ for (const [label, css, viewport] of [
           }
           const row = info.closest("[data-ar-row]");
           const pr = pop.getBoundingClientRect();
-          if (overlaps(pr, row.getBoundingClientRect())) {
+          const rr = row.getBoundingClientRect();
+          if (overlaps(pr, rr)) {
             covering.push((row.textContent || "").trim().slice(0, 28));
           }
           if (pr.left < -1 || pr.right > innerWidth + 1 || pr.top < -1 || pr.bottom > innerHeight + 1)
             offscreen++;
+          // No wider than the setting it describes, and inside the panel it
+          // opened from. Being on screen is not enough: the panel is narrower
+          // than the screen, so a description can clear the screen edge and
+          // still sit half off the panel.
+          //
+          // Only rows that are actually drawn. A row inside a shut section has
+          // no box at all, and there is nothing for a description to be sized
+          // to, which is also why the real thing falls back to the screen there.
+          const mr = modal.getBoundingClientRect();
+          if (rr.width > 0) {
+            if (pr.width > rr.width + 1) wider.push(Math.round(pr.width) + " over " + Math.round(rr.width));
+            if (pr.left < mr.left - 1 || pr.right > mr.right + 1)
+              outside.push(Math.round(pr.left) + ".." + Math.round(pr.right) + " in " + Math.round(mr.left) + ".." + Math.round(mr.right));
+          }
           pop.click();
           await frame();
         }
@@ -1216,6 +1238,8 @@ for (const [label, css, viewport] of [
         return {
           checked: infos.length,
           covering,
+          wider,
+          outside,
           offscreen,
           tapDismiss: wasOpen && !document.querySelector('[role="tooltip"]'),
         };
@@ -1223,6 +1247,8 @@ for (const [label, css, viewport] of [
   );
   check(`${label}: none of ${out.checked} hints cover their row`, out.covering.length === 0, out.covering.slice(0, 4));
   check(`${label}: none drift off screen`, out.offscreen === 0, out.offscreen);
+  check(`${label}: none are wider than their row`, out.wider.length === 0, out.wider.slice(0, 4));
+  check(`${label}: none hang off the panel`, out.outside.length === 0, out.outside.slice(0, 4));
   check(`${label}: tapping the description closes it`, out.tapDismiss);
   check(`${label}: no console errors`, errors.length === 0, errors);
 }

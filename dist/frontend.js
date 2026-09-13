@@ -119,7 +119,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.5.0";
+const VERSION = "5.5.1";
 // The addresses the extension points at. Pinned to the released branch rather
 // than to a tag, so an old install still opens the page as it stands today.
 const SAFETY_URL = "https://github.com/starlitcode/Lumiverse-Auto-Retry/blob/stable/docs/safety.md";
@@ -8790,20 +8790,6 @@ export function setup(ctx, opts) {
         (document.body || document.documentElement).appendChild(el);
         const vw = vpW();
         const vh = vpH();
-        // The cap is room on the screen; width is written in the element's own
-        // units, and under a host applying its UI Scale as a zoom those are not the
-        // same. At 1.5 a cap of 300 renders as 450, which still fits a tablet and
-        // runs off a 360-wide phone by ninety pixels: forty-six of the forty-seven
-        // descriptions drifted off the side there while every wider screen passed.
-        // So it is set once, measured, and set again against however much the host
-        // is scaling. Without a zoom the second pass divides by one and changes
-        // nothing.
-        const want = Math.min(300, vw - 24);
-        el.style.width = want + "px";
-        const first = el.getBoundingClientRect();
-        const zoomW = el.offsetWidth > 0 ? first.width / el.offsetWidth : 1;
-        if (zoomW > 0.01 && Math.abs(zoomW - 1) > 0.01)
-            el.style.width = Math.floor(want / zoomW) + "px";
         // Measured from the whole row, not from the "?" inside it. The button is
         // 18px tall and sits partway down a row that can be two lines high, so
         // hanging the description off the button covered the very setting it was
@@ -8812,6 +8798,37 @@ export function setup(ctx, opts) {
         // painted rather than a size assumed in advance.
         const row = (anchor.closest && anchor.closest("[data-ar-row]")) || anchor;
         const r = row.getBoundingClientRect();
+        // No wider than the setting it belongs to.
+        //
+        // The cap used to be room on the screen, which is the wrong thing to
+        // measure: the panel is a modal narrower than the screen, so 300 on a phone
+        // came out wider than the panel and hung off the side of it. Sized to the
+        // row instead, it lands in the same column as the setting with the panel's
+        // own gutter either side, which is what makes it read as belonging to that
+        // row rather than floating over everything.
+        //
+        // The row is the whole width of the panel, so on a wide screen this is the
+        // 300 cap as before and nothing changes there.
+        //
+        // Falling back to the screen where no row was found, since without one the
+        // anchor is the "?" itself and a description eighteen pixels wide is not a
+        // description.
+        const WIDEST = 300;
+        const roomW = row !== anchor && r.width > 180 ? Math.min(r.width, vw - 24) : vw - 24;
+        // Width is written in the element's own units, and under a host applying
+        // its UI Scale as a zoom those are not the screen units the row was
+        // measured in. At 1.5 a cap of 300 renders as 450, which still fits a
+        // tablet and runs off a 360-wide phone by ninety pixels: forty-six of the
+        // forty-seven descriptions drifted off the side there while every wider
+        // screen passed. So it is set once, measured, and set again against however
+        // much the host is scaling. Without a zoom the second pass divides by one
+        // and changes nothing.
+        const want = Math.min(WIDEST, roomW);
+        el.style.width = want + "px";
+        const first = el.getBoundingClientRect();
+        const zoomW = el.offsetWidth > 0 ? first.width / el.offsetWidth : 1;
+        if (zoomW > 0.01 && Math.abs(zoomW - 1) > 0.01)
+            el.style.width = Math.floor(want / zoomW) + "px";
         // Measured as it ends up on screen. Under a host that scales its interface
         // an element's offsetHeight is not the height it actually occupies, and
         // these have to be in the same units as the row's rect to be compared.

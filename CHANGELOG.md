@@ -8,6 +8,16 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.5.1
+
+_2026-09-13_
+
+### Fixed
+
+- **A setting's description is sized to the setting now, not to the screen.** Tapping a `?` opened a box capped at the width of the screen, and the settings panel is narrower than the screen on a phone, so the description came out wider than the panel and hung off the side of it. It is capped at the width of its own row instead, which lands it in the same column as the setting with the panel's own gutter either side.
+
+  On a wider screen the row is wider than the cap the descriptions already had, so nothing about them changes there. Auto Refine had the same thing wrong with its descriptions and got the same fix.
+
 ## 5.5.0
 
 _2026-09-13_
