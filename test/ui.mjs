@@ -98,7 +98,7 @@ body{background:rgb(10,8,18);margin:0}#modal{background:rgb(35,30,48);padding:0;
 
 // Boots the extension in a page with the settings panel open, and hands the
 // callback the same helpers every check needs.
-async function inPanel(browser, { css = "", viewport, touch = false, settings = null } = {}, fn) {
+async function inPanel(browser, { css = "", viewport, touch = false, settings = null, seed = null } = {}, fn) {
   const page = await browser.newPage(
     viewport ? { viewport, hasTouch: touch, isMobile: touch } : {},
   );
@@ -109,6 +109,13 @@ async function inPanel(browser, { css = "", viewport, touch = false, settings = 
   });
   await stage(page, "<div id=modal></div>");
   await page.addStyleTag({ content: THEME + css });
+  // Written before the panel comes up, for the things it keeps in this browser
+  // rather than in its settings. Reading one of those is the first thing some of
+  // them do, so seeding it afterwards would be seeding it too late.
+  if (seed)
+    await page.evaluate((pairs) => {
+      for (const k of Object.keys(pairs)) localStorage.setItem(k, pairs[k]);
+    }, seed);
   await page.addScriptTag({ content: SOURCE, type: "module" });
   await page.waitForFunction(() => !!window.__setup);
   await page.evaluate(async (over) => {
@@ -11224,6 +11231,89 @@ console.log("\nsections open without throwing the panel");
   check("closing one travels too", smooth(close), close);
   check("and it really is closed by the end", close.settled > 200, close);
   check("closing one: no console errors", closeErrors.length === 0, closeErrors);
+}
+
+console.log("\nsaying the note sets have changed");
+{
+  const KEY = "lv-auto-retry:shipped-seen:v1";
+  const line = (page) =>
+    page.evaluate(() => {
+      const n = document.querySelector('#modal [data-lvr-shippedmoved="1"]');
+      return n ? n.textContent.trim() : null;
+    });
+  // The bar lives in a section that starts shut, so it has to be opened before
+  // anything in it can be read. Asserted rather than assumed: a closed section
+  // and a missing line look identical from here.
+  const openNotes = (page) =>
+    page.evaluate(async () => {
+      const heads = [...document.querySelectorAll("#modal button")];
+      for (const b of heads) {
+        const t = (b.textContent || "").trim();
+        if (/^Refusal tuning/.test(t) && b.getAttribute("aria-expanded") === "false") b.click();
+      }
+      await new Promise((r) => setTimeout(r, 120));
+      return !!document.querySelector('#modal [data-lvr-presetbar="notes"], #modal select');
+    });
+
+  // Somebody with notes on who took a set back when they were different.
+  {
+    const { out, errors } = await inPanel(
+      browser,
+      { settings: { refusalNote: true }, seed: { [KEY]: "notthemark" } },
+      async (page) => {
+        const opened = await openNotes(page);
+        const said = await line(page);
+        const after = await page.evaluate(async () => {
+          const b = document.querySelector('#modal [data-lvr-shippedmoved="dismiss"]');
+          if (!b) return { noButton: true };
+          b.click();
+          await new Promise((r) => setTimeout(r, 80));
+          return {
+            gone: !document.querySelector('#modal [data-lvr-shippedmoved="1"]'),
+            stamped: localStorage.getItem("lv-auto-retry:shipped-seen:v1"),
+          };
+        });
+        return { opened, said, after };
+      },
+    );
+    check("the section holding the note sets opened", out.opened, JSON.stringify(out.opened));
+    check("somebody who took a set before is told", !!out.said, String(out.said));
+    check("and told their own notes are untouched", /Your own notes are untouched/.test(out.said || ""), String(out.said));
+    check("saying got it takes the line away", out.after && out.after.gone, JSON.stringify(out.after));
+    check(
+      "and writes the mark down, so it stays away",
+      out.after && out.after.stamped && out.after.stamped !== "notthemark",
+      JSON.stringify(out.after),
+    );
+    check("no console errors", errors.length === 0, errors.join(" | "));
+  }
+
+  // Notes off. The sets do nothing for them, so neither does a line about the
+  // sets changing.
+  {
+    const { out } = await inPanel(
+      browser,
+      { settings: { refusalNote: false }, seed: { [KEY]: "notthemark" } },
+      async (page) => {
+        await openNotes(page);
+        return { said: await line(page) };
+      },
+    );
+    check("with notes off nobody is told", out.said === null, String(out.said));
+  }
+
+  // Nothing stored is a browser that has never taken one.
+  {
+    const { out } = await inPanel(browser, { settings: { refusalNote: true } }, async (page) => {
+      await openNotes(page);
+      return {
+        said: await line(page),
+        stamped: await page.evaluate(() => localStorage.getItem("lv-auto-retry:shipped-seen:v1")),
+      };
+    });
+    check("a browser that has never taken one is told nothing", out.said === null, String(out.said));
+    check("and is stamped, so the next change is the first thing it says", !!out.stamped, String(out.stamped));
+  }
 }
 
 await browser.close();

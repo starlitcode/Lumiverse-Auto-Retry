@@ -35,6 +35,10 @@ const STORE_KEY = "lv-auto-retry:settings:v1";
 // read before most of setup() exists, and a const declared further down is
 // not initialised yet when that happens.
 const SWIPE_FIRST_KEY = "lv-auto-retry:swipe-first:v1";
+// The note sets that ship, as they were when this browser last took one. Its own
+// key rather than a setting, because it is not something anybody sets and a
+// setting would carry it into an export.
+const SHIPPED_SEEN_KEY = "lv-auto-retry:shipped-seen:v1";
 // The settings search field. It needs an id because the browser's own clear
 // button inside it can only be reached from a stylesheet, not inline.
 const SEARCH_ID = "__lvRetrySearch";
@@ -6150,6 +6154,51 @@ export function setup(ctx, opts) {
         },
     ];
     const builtInNote = (name) => BUILT_IN_NOTES.find((p) => p.name === name) || null;
+    // A short mark for the sets as they ship, so a reader can be told when they
+    // have changed. FNV-1a: it only has to differ when they differ, and it goes in
+    // storage, so short matters more than anything a hash is usually chosen for.
+    const shippedMark = (() => {
+        const text = JSON.stringify(BUILT_IN_NOTES);
+        let h = 0x811c9dc5;
+        for (let i = 0; i < text.length; i++) {
+            h ^= text.charCodeAt(i);
+            h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
+        }
+        return h.toString(36);
+    })();
+    // Written down as seen. Called when one of the sets is loaded, when the panel
+    // first comes up with nothing stored, and when the line saying they moved is
+    // dismissed.
+    function markShippedSeen() {
+        try {
+            if (typeof localStorage !== "undefined")
+                localStorage.setItem(SHIPPED_SEEN_KEY, shippedMark);
+        }
+        catch (_) { }
+    }
+    // Whether the sets have changed since this browser last took one, and whether
+    // this reader is somebody the change reaches: notes off means the sets do
+    // nothing for them and a line about them is noise.
+    function shippedMoved() {
+        if (!cfg.refusalNote)
+            return false;
+        try {
+            if (typeof localStorage === "undefined")
+                return false;
+            const seen = String(localStorage.getItem(SHIPPED_SEEN_KEY) || "");
+            // Nothing stored is a browser that has never had notes on, or one from
+            // before this existed. Neither is worth a line about a change nobody can
+            // point at, so it is stamped and stays quiet.
+            if (!seen) {
+                markShippedSeen();
+                return false;
+            }
+            return seen !== shippedMark;
+        }
+        catch (_) {
+            return false;
+        }
+    }
     const PRESET_KINDS = {
         notes: {
             catId: "refusal",
@@ -9591,6 +9640,11 @@ export function setup(ctx, opts) {
                     return;
                 }
                 applyPresetValues(kind, p.values);
+                // Taking one of the sets that ship marks them as seen, so a change to
+                // them later is worth a line and a change for somebody who has never
+                // taken one is not.
+                if (kind === "notes" && isShipped(name))
+                    markShippedSeen();
                 // Reflect the new values in the on-screen fields without a rebuild.
                 for (const k of keysForKind(kind)) {
                     const fld = fieldByKey[k];
@@ -9719,6 +9773,34 @@ export function setup(ctx, opts) {
                     log("deleted the " + kindLabel + " preset " + JSON.stringify(name));
                 });
             });
+            // The sets that ship have changed since this browser last took one. Said
+            // here, above the picker they are in, and only on the notes bar: the other
+            // bar has no shipped sets to change. Only while notes are on, since the
+            // sets do nothing for somebody who has them off.
+            if (kind === "notes" && shippedMoved()) {
+                const moved = document.createElement("div");
+                moved.setAttribute("data-lvr-shippedmoved", "1");
+                moved.style.cssText =
+                    "display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:8px 10px;" +
+                        "border-radius:var(--lumiverse-radius,8px);" +
+                        "border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));" +
+                        "background:var(--lumiverse-fill-subtle,rgba(0,0,0,.1))";
+                const what = document.createElement("div");
+                what.style.cssText =
+                    "flex:1;min-width:180px;font-size:12px;line-height:1.45;" +
+                        "color:var(--lumiverse-text-muted,rgba(255,255,255,.7))";
+                what.textContent =
+                    "The note sets that ship with Auto Retry have changed since you last loaded one. Your own notes are untouched. To take the new wording, load a set below, which writes over the notes you have.";
+                const gotIt = smallBtn(btn("Got it", false));
+                gotIt.setAttribute("data-lvr-shippedmoved", "dismiss");
+                gotIt.addEventListener("click", () => {
+                    markShippedSeen();
+                    moved.remove();
+                });
+                moved.appendChild(what);
+                moved.appendChild(gotIt);
+                wrap.appendChild(moved);
+            }
             wrap.appendChild(miniLabel("Saved presets"));
             wrap.appendChild(pickRow);
             wrap.appendChild(manageRow);

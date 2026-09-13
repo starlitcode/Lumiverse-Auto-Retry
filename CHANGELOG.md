@@ -19,6 +19,10 @@ _2026-09-12_
 
 ### Added
 
+- **It says when the note sets that ship with it have changed.** One line above the preset picker under **Refusal tuning**, with a **Got it** that puts it away for good. Your own notes are never touched by it and it never loads anything for you: loading a set writes over the notes you have, so that stays your call.
+
+  Only where notes are on, since the sets do nothing for anybody else. A browser that has never loaded one of the sets is told nothing and marked as up to date, so this release is quiet for everybody and the first thing it says is about the next change.
+
 - **Your own hard failures**, a box under **Skip hard failures**. The list of errors that will not fix themselves is built in, and no built-in list holds every provider's wording, so an error yours returns that is genuinely permanent was retried to the cap every time. Paste the wording, one per line, and it stops being retried. Counted alongside the built-in list, shown only while the skip is on, and a phrase that is also in **Your own refusal phrases** is retried as a refusal instead.
 
   The error rows now sit under an **Errors** heading, which is what keeps that section readable with a row added to it.

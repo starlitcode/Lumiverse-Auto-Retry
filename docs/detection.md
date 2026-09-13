@@ -278,6 +278,8 @@ Five sets are in the picker under **Ships with it**, so the boxes are not blank 
 
 They can be loaded and nothing else: **Update selected**, **Delete** and **Rename** stay off while one is picked, and no name of theirs can be taken. To make one yours, load it, edit the boxes, and save it under a name of your own.
 
+When these sets change in a later version, a line above the picker says so and a **Got it** puts it away. It appears only if you have loaded one of them before and only while notes are on, it never touches your own notes, and it never loads anything for you: loading writes over the notes you have, so that stays your call.
+
 Each is a pair: a note in your own voice and an answer in the model's. A note the model has already agreed to is harder for it to walk back than one that only asks. None goes out before try 2, because the first retry is usually the same model having a bad turn and a note fired on it spends prompt on a problem that was not there.
 
 ### Keep them short
