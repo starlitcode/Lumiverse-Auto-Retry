@@ -14,6 +14,7 @@ import { __testing } from "../src/frontend";
 const {
   refusalVerdict,
   looksLikeRefusalError,
+  isHardError,
   looksTruncated,
   normalizeForMatch,
   splitPhrases,
@@ -33,6 +34,7 @@ const looksLikeRefusal = (text: string, cfg?: any): boolean =>
 // The defaults the extension ships with.
 const cfg = {
   refusalUseBuiltins: true,
+  hardErrorPhrases: "",
   refusalMaxChars: 2000,
   refusalStripThinking: true,
   refusalExtraPhrases: "",
@@ -452,6 +454,37 @@ describe("refusal detection on error text", () => {
       refusalIgnorePhrases: "dry run",
     });
     expect(looksLikeRefusalError("dry run: policy_engine_halt", both)).toBe(false);
+  });
+});
+
+describe("an error that will not fix itself", () => {
+  test("the built-in list reads the usual ones", () => {
+    expect(isHardError("401 Unauthorized", cfg)).toBe(true);
+    expect(isHardError("model does not exist", cfg)).toBe(true);
+    expect(isHardError("invalid api key", cfg)).toBe(true);
+  });
+
+  test("and leaves a temporary one alone", () => {
+    expect(isHardError("429 Too Many Requests", cfg)).toBe(false);
+    expect(isHardError("503 Service Unavailable", cfg)).toBe(false);
+    expect(isHardError("ETIMEDOUT", cfg)).toBe(false);
+  });
+
+  test("wording you supply counts the same as the built-in list", () => {
+    const mine = withCfg({ hardErrorPhrases: "region not enabled" });
+    expect(isHardError("this region not enabled for the model", cfg)).toBe(false);
+    expect(isHardError("this REGION NOT ENABLED for the model", mine)).toBe(true);
+  });
+
+  test("one phrase a line, and a blank list changes nothing", () => {
+    const mine = withCfg({ hardErrorPhrases: "region not enabled\nseat suspended" });
+    expect(isHardError("your seat suspended until renewal", mine)).toBe(true);
+    expect(isHardError("your seat suspended until renewal", withCfg({ hardErrorPhrases: "" }))).toBe(false);
+  });
+
+  test("no settings at all still reads the built-in list", () => {
+    expect(isHardError("403 Forbidden")).toBe(true);
+    expect(isHardError("")).toBe(false);
   });
 });
 

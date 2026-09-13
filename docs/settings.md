@@ -12,7 +12,7 @@ There are eight sections. Three are open when the panel opens:
 
 Four start shut, each with a **▸** to open it: **Refusal tuning**, **Buttons it clicks**, **Debug info** and **Import / export**. They are closed because nothing in them is needed to use the extension, not because they are difficult.
 
-The longer sections are split under headings, so you can find the part you want without reading every row. **How it retries** runs from the cap on one message through **When it gives up** and **How long it waits between tries**. **When to count a reply as bad** ends with **Replies that freeze**. **Refusal tuning** goes **What counts as one**, **Wording you supply**, **How far it looks**, then the note rows. Each heading carries a line saying what its rows have in common.
+The longer sections are split under headings, so you can find the part you want without reading every row. **How it retries** runs from the cap on one message through **When it gives up** and **How long it waits between tries**. **When to count a reply as bad** opens on **Errors** and ends with **Replies that freeze**. **Refusal tuning** goes **What counts as one**, **Wording you supply**, **How far it looks**, then the note rows. Each heading carries a line saying what its rows have in common.
 
 ## The **?** on each option
 
@@ -192,6 +192,7 @@ The same options live in the CONFIG block at the top of `src/frontend.ts` and `d
 | idleTimeoutMs | 90000 | Tokens flowed then stopped for this long. 0 disables. |
 | retryOnError | true | Retry provider errors. |
 | ignoreHardErrors | true | Skip permanent failures like missing models or invalid API keys. |
+| hardErrorPhrases | (empty) | Your own wording for an error that will not fix itself, one per line, counted alongside the built-in list. Shown only while `ignoreHardErrors` is on. |
 | retryOnEmpty | true | Retry empty replies and mid-reasoning cutoffs. |
 | retryOnTruncated | true | Retry a reply that ends mid-sentence. |
 | retryOnNoPunct | true | Retry a reply that stops on a word with nothing after it. Punctuation in any script counts as an ending, and so does an emoji. |

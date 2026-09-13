@@ -8,7 +8,7 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
-## 5.4.2
+## 5.5.0
 
 _2026-09-12_
 
@@ -16,6 +16,12 @@ _2026-09-12_
 
 - **A shipped note assumed one character.** **Write them as written** said the sheet was the authority on who this person is, which reads wrong in a group chat or on a card holding a cast. It says the sheet is the authority here, and the rest of the note is unchanged. Notes you saved yourself are not touched.
 - **The note sets page said four sets and listed five.** It says five.
+
+### Added
+
+- **Your own hard failures**, a box under **Skip hard failures**. The list of errors that will not fix themselves is built in, and no built-in list holds every provider's wording, so an error yours returns that is genuinely permanent was retried to the cap every time. Paste the wording, one per line, and it stops being retried. Counted alongside the built-in list, shown only while the skip is on, and a phrase that is also in **Your own refusal phrases** is retried as a refusal instead.
+
+  The error rows now sit under an **Errors** heading, which is what keeps that section readable with a row added to it.
 
 ### Changed
 

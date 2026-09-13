@@ -138,6 +138,10 @@ Wordings that carry no object at all and read naturally in a scene ("let's move 
 
 Some providers deliver a refusal as an *error* instead of as reply text (Gemini's prohibited-content result, for one). With error retries on (the default) those are already covered. If you turn error retries off but leave refusal retries on, it still catches an error whose text is about content moderation, while leaving ordinary network errors like a dropped connection alone.
 
+**Skip hard failures** is the other side of this. An error that will read the same on the next try, a missing model or an invalid key, is not worth a call, so it is not retried. That list is built in and no list can hold every provider's wording, which is what **Your own hard failures** is for: paste the wording, one per line, and an error carrying it stops being retried. It is only shown while **Skip hard failures** is on, since it does nothing otherwise.
+
+A phrase in both boxes is retried as a refusal. Refusals get another try by design and that is the more useful of the two answers.
+
 **Your own phrases are matched against that error text too,** not only against replies. That is where to put a provider error your setup keeps hitting: paste the wording, and an error carrying it is retried as a refusal rather than skipped. It also overrides **Skip hard failures**, so an error the built-in list reads as permanent is retried when one of your phrases is in it. Refusal retries have to be on for any of that.
 
 ## Stopping to offer support

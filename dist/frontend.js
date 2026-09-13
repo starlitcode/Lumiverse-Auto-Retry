@@ -110,7 +110,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.4.2";
+const VERSION = "5.5.0";
 // The addresses the extension points at. Pinned to the released branch rather
 // than to a tag, so an old install still opens the page as it stands today.
 const SAFETY_URL = "https://github.com/starlitcode/Lumiverse-Auto-Retry/blob/stable/docs/safety.md";
@@ -186,6 +186,7 @@ const CONFIG = {
     // what counts as needing a retry
     retryOnError: true,
     ignoreHardErrors: true,
+    hardErrorPhrases: "", // your own wording for an error that will not fix itself, one per line. Counted alongside the built-in list, and only while Skip hard failures is on.
     retryOnEmpty: true, // also catches a generation cut off mid-reasoning (reasoning seen, content empty)
     retryOnTruncated: true, // final content present but cut off mid-sentence (structural heuristic, see looksTruncated)
     // Also treat "the reply stops on a letter" as cut off. This was off because
@@ -320,6 +321,10 @@ const RUNS = {
     panelCost: {
         title: "What a retry costs",
         note: "Your provider's own prices, copied off its price list, in whatever currency it bills you in. Nothing here knows what a model charges and no two providers agree, so this is the only way the panel can turn a token count into money. A retry pays for the prompt again and for a whole new reply, so both are counted. Both at 0, no cost is worked out and the Prompt tab says nothing about it.",
+    },
+    errors: {
+        title: "Errors",
+        note: "A reply that failed outright, rather than one that arrived and was no good. Most errors are worth another try. The ones that will read the same next time are not, and the two rows under the switch are where that is decided.",
     },
     frozen: {
         title: "Replies that freeze",
@@ -524,15 +529,25 @@ const SCHEMA = [
         fields: [
             {
                 key: "retryOnError",
+                run: "errors",
                 label: "It came back as an error",
                 type: "bool",
                 hint: "Retry when the reply fails outright with an error.",
             },
             {
                 key: "ignoreHardErrors",
+                run: "errors",
                 label: "Skip hard failures",
                 type: "bool",
                 hint: "Stops it from retrying when an error is permanent, like a missing model, an invalid API key, or an authentication failure.",
+            },
+            {
+                key: "hardErrorPhrases",
+                run: "errors",
+                needs: ["ignoreHardErrors"],
+                label: "Your own hard failures",
+                type: "text",
+                hint: "Wording your provider uses for an error that will not fix itself, one per line, counted alongside the built-in list. Case does not matter. A phrase that is also in Your own refusal phrases is retried as a refusal instead, since that one is worth another try.",
             },
             {
                 key: "retryOnEmpty",
@@ -2263,6 +2278,22 @@ const statedWait = (err) => {
     const ms = Number(hit[1]) * (WAIT_SCALE[String(hit[2]).toLowerCase()] || 0);
     return Number.isFinite(ms) && ms > 0 ? Math.min(WAIT_CEILING, ms) : 0;
 };
+// An error that will read the same on the next try. Retrying one of these buys
+// nothing and costs a call, which is what Skip hard failures is for.
+//
+// Your own wording is checked first and counts the same as the built-in list.
+// Providers word these however they like, and a list in here can only ever
+// carry the ones somebody has already hit.
+function isHardError(err, cfg) {
+    if (!err)
+        return false;
+    const text = String(err);
+    const lower = text.toLowerCase();
+    for (const p of splitPhrases(cfg && cfg.hardErrorPhrases))
+        if (lower.includes(p))
+            return true;
+    return /\b(?:400|401|402|403|404|405|406|411|413|415|422|invalid api key|authentication|unauthorized|not found|does not exist|model missing|insufficient balance|permission|forbidden|not allowed)\b/i.test(text);
+}
 function looksLikeRefusalError(errText, cfg) {
     const norm = normalizeForMatch(errText);
     if (!norm)
@@ -5852,6 +5883,7 @@ export function setup(ctx, opts) {
                 "idleTimeoutMs",
                 "retryOnError",
                 "ignoreHardErrors",
+                "hardErrorPhrases",
                 "retryOnEmpty",
                 "retryOnTruncated",
                 "retryOnNoPunct",
@@ -6914,8 +6946,6 @@ export function setup(ctx, opts) {
     };
     const isRateLimit = (err) => !!err &&
         /\b(?:408|429|500|502|503|504|520|521|522|523|524)\b|rate.?limit|too many requests|quota|overloaded|timeout|temporary|network/i.test(String(err));
-    const isHardError = (err) => !!err &&
-        /\b(?:400|401|402|403|404|405|406|411|413|415|422|invalid api key|authentication|unauthorized|not found|does not exist|model missing|insufficient balance|permission|forbidden|not allowed)\b/i.test(String(err));
     const computeDelay = (attempt, rateLimited, err) => {
         let d = cfg.retryDelayMs * Math.pow(cfg.backoffFactor, Math.max(0, attempt - 1));
         d = Math.min(d, cfg.maxDelayMs);
@@ -8455,7 +8485,7 @@ export function setup(ctx, opts) {
         if (p.error) {
             // A content-moderation block we can retry as a refusal is not a permanent
             // failure, so don't let the hard-error skip swallow it before the refusal check.
-            if (cfg.ignoreHardErrors && isHardError(p.error) && !(cfg.retryOnRefusal && looksLikeRefusalError(String(p.error), cfg))) {
+            if (cfg.ignoreHardErrors && isHardError(p.error, cfg) && !(cfg.retryOnRefusal && looksLikeRefusalError(String(p.error), cfg))) {
                 log("hard error ignored", p.error);
                 showToast("Auto Retry did not retry: that error will not fix itself, so trying again would not help.");
                 s.attempts = 0;
@@ -12895,6 +12925,7 @@ export const __testing = {
     contrastRatio,
     refusalVerdict,
     looksLikeRefusalError,
+    isHardError,
     looksTruncated,
     sayTime,
     normalizeForMatch,
