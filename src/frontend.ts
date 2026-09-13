@@ -9018,12 +9018,25 @@ export function setup(ctx: Ctx, opts?: any) {
   // on a phone is nearly the whole screen, and left the last line stranded well
   // short of the right edge. The browser evens the lines out and the box is then
   // pinned to the widest of them, so it comes out the size of what is written in
-  // it rather than the size of the screen. A message that fits on one line
-  // already did that on its own and is left alone.
-  function hugToast(t: any) {
+  // it rather than the size of the screen. A message that fits on one line comes
+  // out that size on its own, so there is usually nothing to pin.
+  // keepWidth is for a message being rewritten in place rather than a new one
+  // going up. The box only ever widens then, never narrows: a countdown loses a
+  // digit twice on its way down, and letting the box shrink with it moves the
+  // Cancel button sideways under a thumb already reaching for it. Widening is
+  // left in so a message that grows past its box wraps no further than it has
+  // to.
+  //
+  // __holds marks a message that will be rewritten, which is pinned even when
+  // it is one line. Without the pin there is no width for the rewrite to hold
+  // on to, and the box follows the words as they shorten, which is the same
+  // sideways jump by another route. Every countdown message starts as one line
+  // on a wide screen, so this is the usual case rather than the odd one.
+  function hugToast(t: any, keepWidth?: boolean) {
     const span = t && t.__words;
     if (!span || typeof document === "undefined") return;
     try {
+      const had = keepWidth ? parseFloat(span.style.width) || 0 : 0;
       // Cleared first, so what is measured is the message at the full width it
       // is allowed rather than whatever the message before it was pinned to.
       span.style.width = "";
@@ -9038,7 +9051,13 @@ export function setup(ctx: Ctx, opts?: any) {
         lines++;
         if (w > widest) widest = w;
       }
-      if (lines < 2 || widest <= 0) return;
+      if (widest <= 0 || (lines < 2 && !t.__holds)) {
+        // One line already fits the box exactly, so there is nothing to pin. A
+        // message being rewritten keeps the width it had, since narrowing to
+        // the words alone is the same sideways jump.
+        if (had > 0) span.style.width = had + "px";
+        return;
+      }
       // Lines are measured as they land on screen and a width is written in the
       // element's own units. Under a host applying its UI Scale as a zoom those
       // are not the same, and pinning a screen measurement as an element width
@@ -9049,7 +9068,7 @@ export function setup(ctx: Ctx, opts?: any) {
       const own = zoom > 0.01 ? widest / zoom : widest;
       // A pixel over, so a line pinned to its own measured width cannot come
       // back a hair too narrow and wrap again.
-      span.style.width = Math.ceil(own) + 1 + "px";
+      span.style.width = Math.max(had, Math.ceil(own) + 1) + "px";
     } catch (_) {}
   }
   function hideToast() {
@@ -9071,9 +9090,10 @@ export function setup(ctx: Ctx, opts?: any) {
       typeof document !== "undefined" && document.getElementById("__lvRetryToast");
     if (!t || !t.__words || t.style.opacity !== "1") return;
     t.__words.textContent = msg;
-    // The new words are a different length, so the box is fitted to them rather
-    // than left at the width the last ones needed.
-    hugToast(t);
+    // The new words are a different length, so the box is refitted to them.
+    // Widening only: this is the same box being rewritten, and a box that
+    // narrows mid-message takes the Cancel button with it.
+    hugToast(t, true);
   }
   // The countdown behind a sticky retry message. One at a time: a second retry
   // replaces the first message, so it replaces the clock with it.
@@ -9180,6 +9200,9 @@ export function setup(ctx: Ctx, opts?: any) {
         t.style.top = "auto";
         t.style.bottom = "max(20px,env(safe-area-inset-bottom,0px))";
       }
+      // Sticky and cancellable messages are the ones rewritten in place. Set
+      // before the fit, which reads it.
+      t.__holds = !!(opts && (opts.cancel || opts.sticky));
       hugToast(t);
       t.style.opacity = "1";
       ensureReadableTree(t);

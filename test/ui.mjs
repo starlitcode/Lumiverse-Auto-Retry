@@ -3627,6 +3627,71 @@ console.log("\npop-up goes away");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- the countdown must not move its own Cancel button ----
+// The box is fitted to the message it is holding, and a countdown rewrites that
+// message four times a second. Losing a digit on the way down makes the message
+// shorter, and a box that shrinks with it takes the Cancel button sideways under
+// a thumb already on its way there. So a message being rewritten in place may
+// widen and may not narrow.
+console.log("\na countdown does not move its Cancel button");
+{
+  const page = await browser.newPage({ viewport: { width: 393, height: 852 } });
+  const errors = [];
+  page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
+  page.on("console", (m) => { if (m.type() === "error") errors.push("console: " + m.text()); });
+  await stage(page, "<div id=modal></div>");
+  await page.addStyleTag({ content: THEME });
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  const out = await page.evaluate(async () => {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const handlers = {};
+    const teardown = window.__setup(
+      { events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
+        ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+              registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) } },
+      // Long enough to watch the seconds go from two digits to one, which is
+      // the moment the message gets shorter.
+      { toast: true, retryDelayMs: 12000, backoffFactor: 1, maxDelayMs: 12000, jitter: false,
+        maxRetries: 5, stuckTimeoutMs: 0, idleTimeoutMs: 0, pauseWhenFailing: false },
+    );
+    const box = () => document.getElementById("__lvRetryToast");
+    const says = () => { const t = box(); const sp = t && t.querySelector("span"); return sp ? sp.textContent : ""; };
+    handlers.GENERATION_STARTED({ chatId: "c", generationId: "g1" });
+    handlers.GENERATION_ENDED({ chatId: "c", content: "" });
+    for (let i = 0; i < 40 && !/Retrying in/.test(says()); i++) await wait(50);
+
+    const seen = [];
+    const widths = [];
+    const cancelLefts = [];
+    for (let i = 0; i < 20; i++) {
+      const t = box();
+      const c = [...t.querySelectorAll("button")].find((b) => (b.textContent || "").trim() === "Cancel");
+      const said = says();
+      if (said && seen[seen.length - 1] !== said) seen.push(said);
+      widths.push(Math.round(t.getBoundingClientRect().width));
+      if (c) cancelLefts.push(Math.round(c.getBoundingClientRect().left));
+      await wait(250);
+    }
+    teardown();
+    return { seen, widths, cancelLefts };
+  });
+  await page.close();
+  // The probe has to have watched the thing it is judging. Without the digit
+  // dropping there is nothing here that could move, and a run that never got
+  // that far would pass on an empty window.
+  const twoDigits = out.seen.some((t) => /\b1\ds\b/.test(t));
+  const oneDigit = out.seen.some((t) => /\b\ds\b/.test(t));
+  check("the countdown was watched while it ran", out.seen.length >= 3, out.seen);
+  check("and while it lost a digit", twoDigits && oneDigit, out.seen.slice(0, 12));
+  check("it had a Cancel button throughout", out.cancelLefts.length === out.widths.length, out);
+  check("the box never narrows while it counts",
+    out.widths.every((w, i) => i === 0 || w >= out.widths[i - 1]), out.widths);
+  check("so the Cancel button never moves sideways",
+    new Set(out.cancelLefts).size === 1, out.cancelLefts);
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- the reply it checks when the end event carries no text ----
 // Not every build puts the finished text on the end event. When it is missing,
 // what actually streamed stands in for it, so the checks still have something

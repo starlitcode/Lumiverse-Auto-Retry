@@ -20,7 +20,9 @@ _2026-09-13_
 
 - **The pop-up at the bottom of the screen is the size of what is written in it.** Any message too long for one line filled the box out to its widest allowed width, which on a phone is almost the whole screen, and the wrap then left the last line sitting a long way short of the right edge. A message ending in one stranded word was the usual result.
 
-  The lines are evened out first and the box is then fitted to the longest of them. A short message already shrank to fit and is unchanged, and the widest a message can get is what it was before.
+  The lines are evened out first and the box is then fitted to the longest of them. A short message already shrank to fit and is unchanged, and the widest a message can get is what it was before. This is every message it puts there, including the ones about a refusal, an error, and giving up.
+
+- **The countdown no longer moves its own Cancel button.** The box has always been the width of the message in it, and the countdown rewrites that message as the seconds run down. Going from two digits to one made the message shorter, so the box pulled in and took Cancel with it, which is a button moving sideways while somebody is reaching for it. A message being rewritten in place holds the width it opened at now. It can still widen for a longer message and will not pull in.
 
   Auto Refine hands its short messages to Lumiverse and they are drawn by the app rather than by the extension, so there is nothing matching to change there.
 
