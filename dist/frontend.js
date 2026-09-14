@@ -9736,7 +9736,7 @@ export function setup(ctx, opts) {
                 undoBtn.hidden = !undoTo;
                 // A set that ships with the extension can be loaded and nothing else.
                 // It is not stored here, so there is nothing for Update, Delete or
-                // Rename to act on; the way to make one yours is Load, edit, Save.
+                // Rename to act on; the way to make one yours is pick it, edit, Save as new.
                 const mine = picked && !isShipped(select.value);
                 setEnabled(loadBtn, picked);
                 setEnabled(update, mine);

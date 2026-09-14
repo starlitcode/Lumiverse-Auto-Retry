@@ -4429,6 +4429,12 @@ console.log("\npicking a preset loads it, so a save cannot land on the wrong one
       const press = (label) =>
         [...bar.querySelectorAll("button")].find((x) => x.textContent.trim() === label).click();
       const select = bar.querySelector("select");
+      const startedHidden = (() => {
+        const b = [...bar.querySelectorAll("button")].find(
+          (x) => x.textContent.trim() === "Put it back",
+        );
+        return !b || b.offsetParent === null || getComputedStyle(b).display === "none";
+      })();
       // refusalNotes, because that is what this kind of preset actually holds.
       // A field outside the kind is not saved and not restored, so a check
       // written against one proves nothing either way.
@@ -4483,10 +4489,12 @@ console.log("\npicking a preset loads it, so a save cannot land on the wrong one
       await setPhrases("UNSAVED");
       await pick("Alpha");
       const onPick = phrases().value;
+      const seen = (el) =>
+        !!el && el.offsetParent !== null && getComputedStyle(el).display !== "none";
       const undo = [...bar.querySelectorAll("button")].find(
         (x) => x.textContent.trim() === "Put it back",
       );
-      const undoOffered = !!undo && !undo.hidden;
+      const undoOffered = seen(undo);
       if (undoOffered) {
         undo.click();
         await frame();
@@ -4503,8 +4511,11 @@ console.log("\npicking a preset loads it, so a save cannot land on the wrong one
           const b = [...bar.querySelectorAll("button")].find(
             (x) => x.textContent.trim() === "Put it back",
           );
-          return !b || b.hidden;
+          return !seen(b);
         })(),
+        // Before any pick has loaded anything there is nothing to put back, so
+        // the button must not be sitting there offering to do it.
+        undoHiddenAtRest: startedHidden,
       };
     }),
   );
@@ -4521,6 +4532,7 @@ console.log("\npicking a preset loads it, so a save cannot land on the wrong one
   check("which brings the unsaved work back", out.restored === "UNSAVED", out);
   check("and takes the picker back with it", out.pickAfterUndo === "Beta", out);
   check("with nothing left to put back", out.undoGoneAfter, out);
+  check("and it was not sitting there before any pick", out.undoHiddenAtRest, out);
   for (const e of errors) check("no console errors", false, e);
   if (!errors.length) check("no console errors", true);
 }
