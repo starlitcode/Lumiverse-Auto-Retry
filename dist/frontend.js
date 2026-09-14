@@ -9808,7 +9808,7 @@ export function setup(ctx, opts) {
                 const p = list().find((x) => x.name === name) || builtInNote(name);
                 if (!p) {
                     status.textContent = "That preset is gone.";
-                    return false;
+                    return;
                 }
                 const before = {
                     values: snapshotKind(kind),
@@ -9836,7 +9836,6 @@ export function setup(ctx, opts) {
                 syncPresetButtons();
                 status.textContent = "Loaded preset: " + name + ". It's in effect now.";
                 log("loaded the " + kindLabel + " preset " + JSON.stringify(name));
-                return true;
             };
             loadBtn.addEventListener("click", () => {
                 const name = select.value;
