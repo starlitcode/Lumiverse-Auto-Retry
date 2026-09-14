@@ -111,7 +111,7 @@ Two more things are written, and both stay in this browser:
 
 Neither is synced and neither is included in an export, since a position on one screen and an id on one account mean nothing on another. That is everything written anywhere.
 
-Separately it keeps the last twenty lines of what it did, and a few counters for the session: replies that came back fine, retries fired, what they fired for, how many happened in each chat, named where a name was available, and refusal notes sent and skipped. The per-chat counts are kept against the chat id, never against anything a reply said. That is all in memory, so the Copy debug info button has something to report. Both die with the tab.
+Separately it keeps the last twenty lines of what it did, and a few counters for the session: replies that came back fine, retries fired, what they fired for, how many happened in each chat, named where a name was available, and refusal notes sent and skipped. The per-chat counts are kept against the chat id, never against anything a reply said. That is all in memory, so **Debug info** has something to report. Both die with the tab.
 
 **Keep the reply a retry replaced** adds one more thing to that list, and it is the only one that holds a whole reply. When a retry throws a reply away, the text of that reply is kept for the chat it came from, so you can read it back on the **Replaced** tab if the retry was a mistake. At most eight chats' worth is kept, the newest replacing the oldest. It is never written to disk, never synced, never sent anywhere, and it goes when the tab closes. Turn it off under **How it retries** and nothing is kept. Neither is written to disk and neither leaves your device.
 
@@ -121,9 +121,9 @@ From then on it keeps up while the panel stays open, so glancing at the log does
 
 ## One thing to be careful with
 
-Nothing in this section leaves your device by itself. All three are buttons that put something on your clipboard when you press them, and the only risk is what you then paste, and where.
+Nothing in this section leaves your device by itself. Everything here puts something on your clipboard when you ask it to, and the only risk is what you then paste, and where.
 
-The Copy debug info button gathers your settings, your button selectors, your browser string, the session counters, and that recent activity log. The activity log records what the extension saw, so it can contain short fragments of a reply. Read what you copied before pasting it somewhere public, and untick any section you would rather keep to yourself. The tick boxes are there for exactly that.
+**Debug info** gathers your settings, your button selectors, your browser string, the session counters, and that recent activity log. The activity log records what the extension saw, so it can contain short fragments of a reply. Read what you copied before pasting it somewhere public, and untick any section you would rather keep to yourself. The tick boxes are there for exactly that.
 
 The **Copy** button on the on-screen panel is the same thing in miniature, and it takes everything the tab is showing. On the **Replaced** tab that is a whole reply. On the Log tab that is the whole activity log in one tap, fragments included, and on the Prompt tab the entire prompt, which is most of your chat. The Stats tab is the safe one: counters and the names of what it retried for, no text from any reply.
 

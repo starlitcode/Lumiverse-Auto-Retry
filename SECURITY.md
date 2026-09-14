@@ -17,7 +17,7 @@ Not sure which? Use an advisory. If it turns out to be nothing sensitive, you ca
 - What you saw, and what you expected instead.
 - The steps that produce it, or the reply or setting that triggers it.
 - Your Lumiverse build, your browser, and the Auto Retry version from the top of the settings panel.
-- Whatever **Copy debug info** gives you. Use its tick boxes to leave out anything you would rather not share, and read it before you send it.
+- Whatever **Debug info** gives you. Tick the parts to include, press **Build preview**, and read it before you send it. Leave out anything you would rather not share.
 
 ## What not to do
 

@@ -113,7 +113,7 @@ The reply the last retry in this chat threw away, with what it was thrown away f
 
 Retrying by adding a reroll already leaves the old reply in the chat to swipe back to, but a reroll is not a safe place to leave it. You can tidy your rerolls away, and an extension whose job is tidying them will. [Swipe Scrubber](https://codeberg.org/targren/SwipeScrubber) is the case this was built for: it removes every reroll but the current one, and its per-message button and **Scrub all** take the newest message too. This tab is the copy nothing outside your browser tab can reach.
 
-It holds one reply per chat, for the last eight chats. **Press Clear** to drop the one you are looking at. Turn the whole thing off with **Keep the reply a retry replaced**, under How it retries.
+It holds one reply per chat, for the last eight chats. Press **Clear** to drop the one you are looking at. Turn the whole thing off with **Keep the reply a retry replaced**, under How it retries.
 
 ### The line under the tabs
 
