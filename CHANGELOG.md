@@ -14,7 +14,7 @@ _2026-09-13_
 
 ### Fixed
 
-- **A debug report now says which version each half of the extension is running.** Auto Retry is two files. Lumiverse loads one of them in your browser and runs the other on the server, and they are loaded at different times, so they can end up on different versions: leave a tab open across an update and the panel keeps the version it started with while the server side moves on.
+- **A debug report now says which version each half of the extension is running.** Auto Retry is two files. Lumiverse loads one of them in your browser and runs the other on the server. Updating restarts the server side and leaves an open tab alone, so a tab you had open before the update goes on running the old panel against the new server side, until you reload it.
 
   The report only ever printed the panel's version and presented it as the version of the whole thing. It now prints both, and says plainly when they do not match. The on-screen log says so too, as soon as it finds out.
 

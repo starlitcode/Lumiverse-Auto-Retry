@@ -24,12 +24,12 @@ declare const spindle: any;
 declare function setTimeout(fn: () => void, ms: number): any;
 declare function clearTimeout(handle: any): void;
 
-// The build this half is running. The two halves ship in one repo and are
-// loaded separately, the frontend by the browser and this by the server, so
-// they can come up on different builds: a tab left open across an update keeps
-// the frontend it loaded with, and this side reloads on the server's terms. A
-// debug report naming only the panel's version would be speaking for a file it
-// cannot see, so the panel asks for this one and prints both.
+// The build this half is running. An update pulls the repo, rebuilds if it has
+// to, and restarts the backend runtime. It does not reach into a browser tab
+// that is already open, so that tab goes on running the frontend it loaded
+// with while this side comes back on the new build. A debug report naming only
+// the panel's version would be speaking for a file it cannot see, so the panel
+// asks for this one and prints both.
 const VERSION = '5.5.2';
 
 const SETTINGS_FILE = 'settings.json';

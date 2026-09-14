@@ -8,7 +8,7 @@ If the extension seems to do nothing at all, check the top of the settings panel
 
 **Debug info** in the settings panel is the main tool. Tick the parts you want, press **Build preview**, then edit the text to take out anything private before you copy it. What you get is a short plain-text snapshot, no developer tools needed, and nothing leaves your device until you paste it somewhere.
 
-The first two lines are always there and cannot be ticked off. They name the version the panel is running and the version the server side is running. Those are usually the same. They can differ if you leave a tab open across an update, and a report that says so saves the first round of questions.
+The first two lines are always there and cannot be ticked off. They name the version the panel is running and the version the server side is running. Those are usually the same. They differ when you update while a tab is open and have not reloaded that tab since, and a report that says so saves the first round of questions.
 
 The parts are **Your settings**, **Buttons and selectors**, **Permissions, browser and screen**, and **Session totals and recent activity**. Each name covers everything in that part, so leaving one out never drops something you did not know was in it. Your permissions ride with the browser part, and the selectors you wrote ride with whether they match.
 
