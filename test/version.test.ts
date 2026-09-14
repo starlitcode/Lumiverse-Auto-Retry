@@ -1,8 +1,11 @@
-// The version is written in three places and shown to users from two of them:
-// Lumiverse reads spindle.json, and the debug report and live log print the
-// constant in the frontend. A release that bumps two of the three ships a
-// debug report claiming the wrong version, which is exactly what a bug report
-// is meant to tell you.
+// The version is written in five places and shown to users from three of them:
+// Lumiverse reads spindle.json, the debug report and live log print the
+// constant in the frontend, and the server log and the same report print the
+// one in the backend. A release that bumps some of them ships a debug report
+// claiming the wrong version, which is exactly what a bug report is meant to
+// tell you. The backend's copy is the one with no panel to notice it, since the
+// two halves are loaded separately and the panel prints whatever this side
+// tells it.
 import { test, expect, describe } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -14,6 +17,8 @@ const manifest = JSON.parse(read("spindle.json")).version;
 const pkg = JSON.parse(read("package.json")).version;
 const inCode = (read("src/frontend.ts").match(/const VERSION = "([^"]+)"/) || [])[1];
 const inBuild = (read("dist/frontend.js").match(/const VERSION = "([^"]+)"/) || [])[1];
+const inBack = (read("src/backend.ts").match(/const VERSION = '([^']+)'/) || [])[1];
+const inBackBuild = (read("dist/backend.js").match(/const VERSION = '([^']+)'/) || [])[1];
 
 describe("version", () => {
   test("spindle.json and package.json agree", () => {
@@ -26,6 +31,14 @@ describe("version", () => {
 
   test("and the built file that Lumiverse actually loads", () => {
     expect(inBuild).toBe(manifest);
+  });
+
+  test("and the constant the backend puts in the server log", () => {
+    expect(inBack).toBe(manifest);
+  });
+
+  test("and the built backend the server actually runs", () => {
+    expect(inBackBuild).toBe(manifest);
   });
 
   test("it looks like a version", () => {

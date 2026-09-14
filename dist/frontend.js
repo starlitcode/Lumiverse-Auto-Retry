@@ -119,7 +119,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.5.1";
+const VERSION = "5.5.2";
 // The addresses the extension points at. Pinned to the released branch rather
 // than to a tag, so an old install still opens the page as it stands today.
 const SAFETY_URL = "https://github.com/starlitcode/Lumiverse-Auto-Retry/blob/stable/docs/safety.md";
@@ -3436,6 +3436,20 @@ export function setup(ctx, opts) {
         try {
             if (ctx && typeof ctx.sendToBackend === "function")
                 ctx.sendToBackend({ type: "get_permissions", requestId: "ar-perm-" + Date.now() });
+        }
+        catch (_) { }
+    }
+    // What the backend says it is running. The two halves ship together and load
+    // separately, so this is not always the version above. Empty until it answers,
+    // which is the honest reading on a build with no backend up.
+    let backendVersion = "";
+    function askForBackendVersion() {
+        try {
+            if (ctx && typeof ctx.sendToBackend === "function")
+                ctx.sendToBackend({
+                    type: "get_backend_version",
+                    requestId: "ar-ver-" + Date.now(),
+                });
         }
         catch (_) { }
     }
@@ -9334,6 +9348,12 @@ export function setup(ctx, opts) {
         const keys = Object.keys(fieldByKey).filter((k) => !fieldByKey[k].selector);
         const lines = [];
         lines.push("Auto Retry v" + VERSION + " debug info");
+        lines.push("backend: " +
+            (!backendVersion
+                ? "has not answered"
+                : backendVersion === VERSION
+                    ? "the same version"
+                    : "v" + backendVersion + ", which is not the version above"));
         lines.push("time: " + new Date().toISOString());
         // Always included, whatever categories are ticked. This is the first thing
         // to check when retries have stopped happening, so it must never be the
@@ -12906,10 +12926,21 @@ export function setup(ctx, opts) {
                     if (msg.type === "backend_ready") {
                         armBackend();
                         askForPermissions();
+                        askForBackendVersion();
                         if (promptsAsked) {
                             log("backend restarted, asking it for prompts again");
                             askForPrompts(true);
                         }
+                        return;
+                    }
+                    if (msg.type === "backend_version") {
+                        const said = typeof msg.version === "string" ? msg.version : "";
+                        // Logged only on a change, since this arrives on every panel load and
+                        // on every backend restart, and a line saying the halves agree is one
+                        // the reader has no use for.
+                        if (said && said !== backendVersion && said !== VERSION)
+                            log("the backend is running " + said + ", this panel is " + VERSION);
+                        backendVersion = said;
                         return;
                     }
                     if (msg.type === "permissions") {
@@ -13021,6 +13052,7 @@ export function setup(ctx, opts) {
     disposers.push(() => dropBarEntries());
     disposers.push(() => dropToggleAction());
     askForPermissions();
+    askForBackendVersion();
     watchTheme();
     log("ready v" + VERSION, cfg);
     return () => {

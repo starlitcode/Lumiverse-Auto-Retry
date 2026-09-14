@@ -8,6 +8,18 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.5.2
+
+_2026-09-13_
+
+### Fixed
+
+- **A debug report now says which version each half of the extension is running.** Auto Retry is two files. Lumiverse loads one of them in your browser and runs the other on the server, and they are loaded at different times, so they can end up on different versions: leave a tab open across an update and the panel keeps the version it started with while the server side moves on.
+
+  The report only ever printed the panel's version and presented it as the version of the whole thing. It now prints both, and says plainly when they do not match. The on-screen log says so too, as soon as it finds out.
+
+  Nothing about this makes the halves agree. It makes a report that would have sent somebody looking in the wrong file say where to look instead. [Auto Refine](https://github.com/starlitcode/Lumiverse-Auto-Refine) got the same thing.
+
 ## 5.5.1
 
 _2026-09-13_

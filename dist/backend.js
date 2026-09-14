@@ -16,6 +16,13 @@
  * Needs the `generation` permission to hear when a reply finishes, and
  * `interceptor` for the refusal note.
  */
+// The build this half is running. The two halves ship in one repo and are
+// loaded separately, the frontend by the browser and this by the server, so
+// they can come up on different builds: a tab left open across an update keeps
+// the frontend it loaded with, and this side reloads on the server's terms. A
+// debug report naming only the panel's version would be speaking for a file it
+// cannot see, so the panel asks for this one and prints both.
+const VERSION = '5.5.2';
 const SETTINGS_FILE = 'settings.json';
 // Presets, kept in account storage next to the settings so they
 // follow the user between devices. The browser copy is a fast local cache, not
@@ -397,6 +404,13 @@ spindle.onFrontendMessage(async (payload, userId) => {
             chatsOff = new Set(list.slice(0, 500).map((c) => String(c)));
             return;
         }
+        // Which build this half is on. Asked on every panel load rather than only
+        // announced at startup: this module comes up once and stays up, so a panel
+        // opened at any point after that missed the announcement.
+        if (payload.type === 'get_backend_version') {
+            replyTo(userId, { type: 'backend_version', requestId: payload.requestId, version: VERSION });
+            return;
+        }
         if (payload.type === 'get_permissions') {
             // getGranted is a roundtrip to the host and is the authoritative answer,
             // where has() reads a cache. This is the one place worth paying for it: a
@@ -690,7 +704,13 @@ try {
     replyTo(undefined, { type: 'backend_ready' });
 }
 catch (_) { }
+// Sent unprompted as well as on request, so a panel that was already open when
+// this module restarted hears about a build change without asking again.
 try {
-    spindle.log.info('Auto Retry backend loaded.');
+    replyTo(undefined, { type: 'backend_version', version: VERSION });
+}
+catch (_) { }
+try {
+    spindle.log.info('Auto Retry ' + VERSION + ' backend loaded.');
 }
 catch (_) { }
