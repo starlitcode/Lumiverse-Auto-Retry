@@ -119,7 +119,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.5.2";
+const VERSION = "5.5.3";
 // The addresses the extension points at. Pinned to the released branch rather
 // than to a tag, so an old install still opens the page as it stands today.
 const SAFETY_URL = "https://github.com/starlitcode/Lumiverse-Auto-Retry/blob/stable/docs/safety.md";
@@ -9631,6 +9631,18 @@ export function setup(ctx, opts) {
         // place (no rebuild), so it never jumps the scroll or closes open sections.
         function buildPresetBar(kind) {
             const wrap = document.createElement("div");
+            // What this bar's settings held before the last pick loaded a preset over
+            // them, so a pick made to see what is in a preset can be taken back. One
+            // step, not a history. Cleared by a save, since Put it back after saving
+            // would mean two things at once.
+            //
+            // Declared up here because the first refreshSelect runs before the
+            // buttons are wired and reaches this through syncPresetButtons.
+            let undoTo = null;
+            // What the picker was on before the change now being handled. The event
+            // fires with select.value already moved on, so the old value has to be
+            // kept rather than read back.
+            let lastPick = "";
             // Which set of presets this bar drives. There is more than one bar on the
             // panel now, and they are identical to look at, so anything reaching for
             // one by position finds whichever section happens to come first.
@@ -9657,10 +9669,17 @@ export function setup(ctx, opts) {
             const select = document.createElement("select");
             select.style.cssText =
                 "flex:1;min-width:150px;padding:8px 10px;border-radius:var(--lumiverse-radius,8px);border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));background:var(--lumiverse-fill-subtle,rgba(0,0,0,.1));color:var(--lumiverse-text,#eee);font:13px var(--lumiverse-font-family,system-ui)";
-            const loadBtn = smallBtn(btn("Load", true));
+            // Picking already loads, so this is only for loading the one already
+            // picked a second time, which is how you throw away changes and get the
+            // saved settings back. Named for that, because "Load" next to a picker
+            // that loads reads as the thing you press to make the pick happen.
+            const loadBtn = smallBtn(btn("Load it again", true));
+            const undoBtn = smallBtn(btn("Put it back", false));
+            undoBtn.setAttribute("data-ar-preset", "undo");
             const pickRow = rowBox();
             pickRow.appendChild(select);
             pickRow.appendChild(loadBtn);
+            pickRow.appendChild(undoBtn);
             const update = smallBtn(btn("Update selected", false));
             const del = smallBtn(btn("Delete", false));
             const manageRow = rowBox();
@@ -9711,6 +9730,10 @@ export function setup(ctx, opts) {
             };
             const syncPresetButtons = () => {
                 const picked = !!select.value;
+                // Hidden rather than greyed: an always-present button offering to put
+                // back nothing is a question the reader has to answer every time they
+                // look at the row.
+                undoBtn.hidden = !undoTo;
                 // A set that ships with the extension can be loaded and nothing else.
                 // It is not stored here, so there is nothing for Update, Delete or
                 // Rename to act on; the way to make one yours is Load, edit, Save.
@@ -9720,7 +9743,17 @@ export function setup(ctx, opts) {
                 setEnabled(del, mine);
                 setEnabled(rename, mine);
             };
-            select.addEventListener("change", syncPresetButtons);
+            select.addEventListener("change", () => {
+                // Picking loads it. Before this, picking only greyed the buttons in and
+                // out, so Update selected wrote whatever was set over the preset that
+                // had just been picked, and that preset was gone.
+                const was = lastPick;
+                lastPick = select.value;
+                const name = select.value;
+                syncPresetButtons();
+                if (name)
+                    doLoad(name, was);
+            });
             // The sets that ship with the extension, for this bar's kind. Only notes
             // has any today; a bar for another kind gets an empty list and behaves
             // exactly as it did before these existed.
@@ -9753,6 +9786,7 @@ export function setup(ctx, opts) {
                 group("Yours", list());
                 if (selectName)
                     select.value = selectName;
+                lastPick = select.value;
                 syncPresetButtons();
             };
             refreshSelect();
@@ -9763,18 +9797,24 @@ export function setup(ctx, opts) {
                 presets[kind] = fresh[kind] || [];
                 refreshSelect();
             });
-            loadBtn.addEventListener("click", () => {
-                const name = select.value;
-                if (!name) {
-                    status.textContent = "Pick a preset to load.";
-                    return;
-                }
+            // Loading, from a pick or from the button. One function, because a pick
+            // that did a different thing from the button is how the panel and the
+            // picker come apart in the first place.
+            //
+            // wasPick is the picker's value before the caller changed it, since the
+            // change handler sets it first and reading it here would snapshot the
+            // preset being loaded.
+            const doLoad = (name, wasPick) => {
                 const p = list().find((x) => x.name === name) || builtInNote(name);
                 if (!p) {
                     status.textContent = "That preset is gone.";
-                    return;
+                    return false;
                 }
-                applyPresetValues(kind, p.values);
+                const before = {
+                    values: snapshotKind(kind),
+                    pick: wasPick === undefined ? select.value : wasPick,
+                };
+                const took = applyPresetValues(kind, p.values);
                 // Taking one of the sets that ship marks them as seen, so a change to
                 // them later is worth a line and a change for somebody who has never
                 // taken one is not.
@@ -9790,8 +9830,44 @@ export function setup(ctx, opts) {
                 }
                 applyDeps();
                 applyAndSave();
+                // Nothing changed means nothing to put back, and an offer to undo a
+                // load that did nothing reads as though something happened.
+                undoTo = took ? before : null;
+                syncPresetButtons();
                 status.textContent = "Loaded preset: " + name + ". It's in effect now.";
                 log("loaded the " + kindLabel + " preset " + JSON.stringify(name));
+                return true;
+            };
+            loadBtn.addEventListener("click", () => {
+                const name = select.value;
+                if (!name) {
+                    status.textContent = "Pick a preset to load.";
+                    return;
+                }
+                doLoad(name);
+            });
+            undoBtn.addEventListener("click", () => {
+                const back = undoTo;
+                if (!back)
+                    return;
+                applyPresetValues(kind, back.values);
+                for (const k of keysForKind(kind)) {
+                    const fld = fieldByKey[k];
+                    if (fld && fld.type === "num")
+                        cfg[k] = clampField(fld, cfg[k]);
+                    if (fieldSetters[k])
+                        fieldSetters[k](cfg[k]);
+                }
+                applyDeps();
+                applyAndSave();
+                // The picker goes back with it. Leaving it on the preset that was just
+                // undone is the same mismatch this whole change is here to stop.
+                select.value = back.pick;
+                lastPick = select.value;
+                undoTo = null;
+                syncPresetButtons();
+                status.textContent = "Put back what was here before.";
+                log("put back what the " + kindLabel + " preset replaced");
             });
             saveNew.addEventListener("click", () => {
                 const name = nameInput.value.trim();
@@ -9816,6 +9892,7 @@ export function setup(ctx, opts) {
                     return;
                 }
                 nameInput.value = "";
+                undoTo = null;
                 refreshSelect(name);
                 status.textContent = "Saved current settings as: " + name + ".";
                 log("saved a " + kindLabel + " preset called " + JSON.stringify(name));
@@ -9881,6 +9958,8 @@ export function setup(ctx, opts) {
                     status.textContent = "Couldn't save on this browser.";
                     return;
                 }
+                undoTo = null;
+                syncPresetButtons();
                 status.textContent =
                     "Updated " + name + " to your current settings.";
                 log("updated the " + kindLabel + " preset " + JSON.stringify(name));

@@ -8,6 +8,22 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.5.3
+
+_2026-09-14_
+
+### Fixed
+
+- **Picking a note set loads it now, so a save can no longer land on the wrong one.** Picking one only lit the buttons up and left your notes exactly as they were. The panel then showed one set while the picker named another, and pressing **Update selected** wrote what was in the boxes over the set you had just picked. The set you overwrote was gone, with nothing to get it back from.
+
+  Choosing one in the list loads it straight away. What you are looking at always matches what the picker says, which is what makes **Update selected** safe to press.
+
+  **Put it back** appears beside the picker after a pick has loaded over something. One press restores exactly what was there before, the picker included, so looking inside a set cannot cost you wording you had not saved yet. It only shows when there is something to put back.
+
+  **Load** is now **Load it again**, since picking already loads. Its job is reloading the set you are already on, which is how you throw away edits and get the saved wording back.
+
+  [Auto Refine](https://github.com/starlitcode/Lumiverse-Auto-Refine) had the same fault in its presets and its model setups, and got the same fix in both.
+
 ## 5.5.2
 
 _2026-09-13_

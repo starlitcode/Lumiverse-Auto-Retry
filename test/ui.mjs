@@ -4143,8 +4143,8 @@ console.log("\npreset controls");
       // The preset dropdown sits in the same row as its Load button. Taken
       // that way rather than as the first select on the page, which is only
       // the preset one for as long as no section above it holds a dropdown.
-      const sel = by("Load").parentElement.querySelector("select");
-      const names = ["Load", "Update selected", "Delete", "Rename selected"];
+      const sel = by("Load it again").parentElement.querySelector("select");
+      const names = ["Load it again", "Update selected", "Delete", "Rename selected"];
       const state = () => names.map((n) => { const b = by(n); return { n, off: !!(b && b.disabled) }; });
 
       const empty = { picked: sel ? sel.value : null, buttons: state(), options: sel ? sel.options.length : 0 };
@@ -4409,6 +4409,122 @@ console.log("\nthe note preset bar follows the notes switch");
 // to reach past that into one key. With a second kind that meant note presets
 // never followed the account, and the reset that names word swaps deleted them
 // as a side effect of writing an object without their key.
+console.log("\npicking a preset loads it, so a save cannot land on the wrong one");
+{
+  // The bug: picking only greyed the buttons in and out and left the settings
+  // alone, so the panel held one preset's settings while the picker named
+  // another. Update selected then wrote what was set over the preset just
+  // picked, and the preset it overwrote was gone with no way back.
+  const { out, errors } = await inPanel(
+    browser,
+    { settings: { retryOnRefusal: true, refusalNote: true } },
+    async (page) =>
+    page.evaluate(async () => {
+      const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      await new Promise((r) => setTimeout(r, 260));
+      await frame();
+
+      const bar = document.querySelector('[data-ar-presets="notes"]');
+      const press = (label) =>
+        [...bar.querySelectorAll("button")].find((x) => x.textContent.trim() === label).click();
+      const select = bar.querySelector("select");
+      // refusalNotes, because that is what this kind of preset actually holds.
+      // A field outside the kind is not saved and not restored, so a check
+      // written against one proves nothing either way.
+      const phrases = () => document.querySelector('[data-ar-row="refusalNotes"] textarea');
+      const setPhrases = async (text) => {
+        const t = phrases();
+        t.value = text;
+        t.dispatchEvent(new Event("input", { bubbles: true }));
+        t.dispatchEvent(new Event("change", { bubbles: true }));
+        // A preset saves what has been saved, not what is typed, so the
+        // panel's own Save goes first. It is not inside the bar.
+        [...document.querySelectorAll("button")].find((x) => x.textContent.trim() === "Save").click();
+        await frame();
+      };
+      const saveAs = async (name) => {
+        bar.querySelector('input[placeholder="Preset name"]').value = name;
+        press("Save as new");
+        await frame();
+      };
+      const pick = async (name) => {
+        select.value = name;
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+        await frame();
+      };
+      // Forced with the button, so the same check run against a build where
+      // picking does not load still gets each preset's real contents on screen.
+      const forceLoad = async (name) => {
+        await pick(name);
+        press("Load it again");
+        await frame();
+      };
+
+      await setPhrases("ALPHA");
+      await saveAs("Alpha");
+      await setPhrases("BETA");
+      await saveAs("Beta");
+
+      await forceLoad("Alpha");
+      const onAlpha = phrases().value;
+
+      // The move that used to destroy a preset: Alpha's settings on screen,
+      // pick Beta, save.
+      await pick("Beta");
+      const afterPick = phrases().value;
+      press("Update selected");
+      await frame();
+      await forceLoad("Alpha");
+      await forceLoad("Beta");
+      const betaNow = phrases().value;
+
+      // Put it back, for a pick made only to see what was in there.
+      await setPhrases("UNSAVED");
+      await pick("Alpha");
+      const onPick = phrases().value;
+      const undo = [...bar.querySelectorAll("button")].find(
+        (x) => x.textContent.trim() === "Put it back",
+      );
+      const undoOffered = !!undo && !undo.hidden;
+      if (undoOffered) {
+        undo.click();
+        await frame();
+      }
+      return {
+        onAlpha,
+        afterPick,
+        betaNow,
+        onPick,
+        undoOffered,
+        restored: phrases().value,
+        pickAfterUndo: select.value,
+        undoGoneAfter: (() => {
+          const b = [...bar.querySelectorAll("button")].find(
+            (x) => x.textContent.trim() === "Put it back",
+          );
+          return !b || b.hidden;
+        })(),
+      };
+    }),
+  );
+
+  check("picking one loads its settings", out.onAlpha === "ALPHA", out);
+  check("picking the other one loads that one instead", out.afterPick === "BETA", out);
+  check(
+    "and updating it writes its own settings back, not the ones it replaced",
+    out.betaNow === "BETA",
+    out,
+  );
+  check("a pick over unsaved work loads the preset", out.onPick === "ALPHA", out);
+  check("and offers to put it back", out.undoOffered, out);
+  check("which brings the unsaved work back", out.restored === "UNSAVED", out);
+  check("and takes the picker back with it", out.pickAfterUndo === "Beta", out);
+  check("with nothing left to put back", out.undoGoneAfter, out);
+  for (const e of errors) check("no console errors", false, e);
+  if (!errors.length) check("no console errors", true);
+}
+
 console.log("\npresets across both kinds");
 {
   const errors = [];
@@ -4529,7 +4645,7 @@ console.log("\npreset boundary");
       const sel = bar.querySelector("select");
       sel.value = "A";
       sel.dispatchEvent(new Event("change", { bubbles: true }));
-      inBar("Load").click(); await frame();
+      inBar("Load it again").click(); await frame();
 
       return { notes: get("refusalNotes"), sending: get("refusalNote") };
     }),

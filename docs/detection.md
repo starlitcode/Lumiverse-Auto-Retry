@@ -264,6 +264,14 @@ Under the notes is a **Note presets** bar, which appears once **Send a note with
 
 A set carries the notes themselves and **Where the notes go**, and nothing else. It does not carry **Send a note with a refusal retry**, so loading a set never starts sending notes to the model on your behalf. Everything else about how refusals are detected stays as you have it.
 
+**Picking a set loads it.** The moment you choose one in the list, its wording is in the boxes and in effect.
+
+That matters because of what used to happen without it. Picking a set only lit the buttons up and left your notes alone, so the panel showed one set while the picker named another. Pressing **Update selected** then wrote what was in the boxes over the set you had just picked, and the set you overwrote was gone.
+
+**Put it back** appears beside the picker after a pick has loaded over what you had. One press restores exactly what was there before, the picker included, so you can look inside a set without losing wording you had not saved. It only shows when there is something to put back, and it goes once you save.
+
+**Load it again** reloads the set you are already on, which is how you throw away edits and get the saved wording back.
+
 Presets are saved to your account, so they follow you to other devices.
 
 ### The sets that ship with it
