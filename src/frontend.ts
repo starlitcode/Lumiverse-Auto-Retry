@@ -2183,9 +2183,20 @@ function thinkTagNames(cfg?: any): string[] {
   return THINK_TAGS.concat(extra);
 }
 
+// The markers a backend wraps a turn in. Not reasoning and not anybody's
+// writing, so they come off whatever the thinking option is set to: that option
+// governs whether a refusal written inside the working counts, not whether the
+// backend's own markers are read as part of the reply. Runs after the working
+// has gone, since a channel block is closed by one of these.
+function stripControlTokens(text: string): string {
+  let t = String(text == null ? "" : text);
+  for (const mark of CONTROL_MARKS) t = t.replace(mark, " ");
+  return t;
+}
+
 function stripThinking(text: string, cfg?: any): string {
   let t = String(text == null ? "" : text);
-  if (cfg && cfg.refusalStripThinking === false) return t;
+  if (cfg && cfg.refusalStripThinking === false) return stripControlTokens(t);
   const names = thinkTagNames(cfg);
   if (!names.length) return t;
   const alt = names.join("|");
@@ -2219,7 +2230,7 @@ function stripThinking(text: string, cfg?: any): string {
   // reach us they count towards the reply's length and sit in the middle of a
   // phrase the checks are trying to match. Only the markers go; the reply
   // between them is what we are keeping.
-  for (const mark of CONTROL_MARKS) t = t.replace(mark, " ");
+  t = stripControlTokens(t);
 
   // <tag ...>...</tag> and [tag ...]...[/tag], same tag both ends, across newlines
   //

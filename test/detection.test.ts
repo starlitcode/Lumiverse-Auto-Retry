@@ -472,6 +472,17 @@ describe("refusal detection ignores the model's thinking", () => {
       expect(looksTruncated("<|channel|>commentary<|message|>{}<|call|>", false, {})).toBe(false);
     });
 
+    // The thinking option governs whether a refusal inside the working counts.
+    // A turn marker is not working, so it comes off either way, or it sits in
+    // the middle of the phrase a refusal is matched on.
+    test("control tokens come off with the thinking option turned off", () => {
+      const off = { refusalStripThinking: false };
+      expect(stripThinking("<|im_start|>assistant\n" + REPLY + "<|im_end|>", off).trim()).toBe(REPLY);
+      expect(stripThinking("<|turn>model\n" + REPLY + "<turn|>", off).trim()).toBe(REPLY);
+      // The working itself stays, which is what the option asks for.
+      expect(stripThinking("<think>" + WORKING + "</think>" + REPLY, off)).toContain(WORKING);
+    });
+
     test("turn markers do not count towards the reply", () => {
       expect(stripThinking("<|turn>model\n" + REPLY + "<turn|>", {}).trim()).toBe(REPLY);
       expect(stripThinking("<|im_start|>assistant\n" + REPLY + "<|im_end|>", {}).trim()).toBe(REPLY);

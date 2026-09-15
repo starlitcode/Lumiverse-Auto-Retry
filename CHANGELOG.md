@@ -24,6 +24,8 @@ _2026-09-15_
 
 - **Turn and role markers are removed before the checks run.** Gemma's `<|turn>model` and `<turn|>`, ChatML's `<|im_start|>` and `<|im_end|>`, Llama's header block, and Cohere's turn tokens. They are not reasoning, but until they were gone they counted towards the length checks and sat in the middle of the phrases a refusal is matched on.
 
+  This happens whether or not **Ignore the thinking / reasoning** is on. That option decides whether a refusal written inside the working counts, which is a question about the working. A turn marker is not the working.
+
 Cloud connections are unaffected. They hand reasoning back in a field of its own, so it never reaches the reply text and there has never been anything to strip. This is what a local backend needs.
 
 ## 5.5.3

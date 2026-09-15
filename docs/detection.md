@@ -195,7 +195,7 @@ The Harmony form is the one gpt-oss uses. It has no closing tag of its own: the 
 
 Gemma 4 names a channel the same way but spells the tokens differently, with the pipe inside the opener and outside the closer. Every assistant turn carries one, empty when the model is not thinking, so an empty pair is recognised as well as a full one.
 
-Turn and role markers are removed too, whichever format they come from: Gemma's `<\|turn>model` and `<turn\|>`, ChatML's `<\|im_start\|>` and `<\|im_end\|>`, Llama's header block, and Cohere's turn tokens. They are not reasoning, but until they are gone they count towards the length checks and sit in the middle of the phrases a refusal is matched on.
+Turn and role markers are removed too, whichever format they come from: Gemma's `<\|turn>model` and `<turn\|>`, ChatML's `<\|im_start\|>` and `<\|im_end\|>`, Llama's header block, and Cohere's turn tokens. They are not reasoning, but until they are gone they count towards the length checks and sit in the middle of the phrases a refusal is matched on. They come off whether or not **Ignore the thinking / reasoning** is on: that option decides whether a refusal written inside the working counts, and a turn marker is not the working.
 
 Some providers hand their reasoning back separately rather than inside the reply. Nothing above applies to that: it never reaches the reply text in the first place, so there is nothing to strip and the checks only ever see what you read.
 
