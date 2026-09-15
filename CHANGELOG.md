@@ -8,6 +8,24 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.6.0
+
+_2026-09-15_
+
+### Added
+
+- **Three more reasoning formats are recognised by the refusal, empty and cut-off checks.** Gemma 4, Cohere Command A Reasoning, and Seed-OSS. Harmony was already covered.
+
+  None of these could be reached by adding a name under **Extra thinking tag names**. The three wrappers matched by tag name close on the name that opened them; in these the reasoning word sits in the content and the closer is a different token again.
+
+  An opener with nothing closing it now reads as cut off for these as well, which is what a reply that stopped inside the model's thinking looks like.
+
+- **A commentary channel closed by a tool call is no longer read as cut off.** A tool call ends on `<|call|>` rather than on `<|end|>`, and that token was missing from the list, so every reply where the model called a tool looked truncated.
+
+- **Turn and role markers are removed before the checks run.** Gemma's `<|turn>model` and `<turn|>`, ChatML's `<|im_start|>` and `<|im_end|>`, Llama's header block, and Cohere's turn tokens. They are not reasoning, but until they were gone they counted towards the length checks and sat in the middle of the phrases a refusal is matched on.
+
+Cloud connections are unaffected. They hand reasoning back in a field of its own, so it never reaches the reply text and there has never been anything to strip. This is what a local backend needs.
+
 ## 5.5.3
 
 _2026-09-14_

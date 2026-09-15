@@ -421,6 +421,65 @@ describe("refusal detection ignores the model's thinking", () => {
   });
 });
 
+  // The formats that close on a token with a different name from the one that
+  // opened them. None can be reached by adding a name: the reasoning word is
+  // content rather than the tag, and the closer is a separate token again.
+  describe("reasoning wrappers that are not a matched pair of tags", () => {
+    const REPLY = "She opened the door.";
+    const WORKING = "I should refuse.";
+
+    const CLOSED: Array<[string, string]> = [
+      ["Gemma 4", "<|turn>model\n<|channel>thought\n" + WORKING + "\n<channel|>" + REPLY + "<turn|>"],
+      ["Gemma 4 with an empty thought channel", "<|turn>model\n<|channel>thought\n<channel|>" + REPLY + "<turn|>"],
+      ["Cohere", "<|START_THINKING|>" + WORKING + "<|END_THINKING|><|START_RESPONSE|>" + REPLY + "<|END_RESPONSE|>"],
+      ["Seed-OSS", "<seed:think>" + WORKING + "</seed:think>" + REPLY],
+      ["Seed-OSS budget reflection", "<seed:cot_budget_reflect>" + WORKING + "</seed:cot_budget_reflect>" + REPLY],
+    ];
+
+    for (const [name, text] of CLOSED) {
+      test(name + ": the working comes off and the reply is left", () => {
+        expect(stripThinking(text, {}).trim()).toBe(REPLY);
+      });
+
+      test(name + ": a refusal in the working does not count as one", () => {
+        expect(looksLikeRefusal(text, cfg)).toBe(false);
+      });
+
+      test(name + ": a closed block does not read as cut off", () => {
+        expect(looksTruncated(text, false, {})).toBe(false);
+      });
+    }
+
+    const OPEN: Array<[string, string]> = [
+      ["Gemma 4", "<|channel>thought\nstill working on it"],
+      ["Cohere", "<|START_THINKING|>still working on it"],
+      ["Seed-OSS", "<seed:think>still working on it"],
+    ];
+
+    for (const [name, text] of OPEN) {
+      test(name + ": an opener with nothing closing it reads as cut off", () => {
+        expect(looksTruncated(text, false, {})).toBe(true);
+      });
+
+      test(name + ": and leaves nothing behind once stripped", () => {
+        expect(stripThinking(text, {}).trim()).toBe("");
+      });
+    }
+
+    // A tool call ends a commentary channel on its own token. Without it in the
+    // list the reply reads as cut off every time the model calls a tool.
+    test("a commentary channel closed by a tool call is not cut off", () => {
+      expect(looksTruncated("<|channel|>commentary<|message|>{}<|call|>", false, {})).toBe(false);
+    });
+
+    test("turn markers do not count towards the reply", () => {
+      expect(stripThinking("<|turn>model\n" + REPLY + "<turn|>", {}).trim()).toBe(REPLY);
+      expect(stripThinking("<|im_start|>assistant\n" + REPLY + "<|im_end|>", {}).trim()).toBe(REPLY);
+      expect(stripThinking("<start_of_turn>model\n" + REPLY + "<end_of_turn>", {}).trim()).toBe(REPLY);
+    });
+  });
+
+
 describe("refusal detection on error text", () => {
   test("a content-moderation error counts", () => {
     expect(looksLikeRefusalError("PROHIBITED_CONTENT", cfg)).toBe(true);

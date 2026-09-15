@@ -119,7 +119,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.5.3";
+const VERSION = "5.6.0";
 // The addresses the extension points at. Pinned to the released branch rather
 // than to a tag, so an old install still opens the page as it stands today.
 const SAFETY_URL = "https://github.com/starlitcode/Lumiverse-Auto-Retry/blob/stable/docs/safety.md";
@@ -1145,8 +1145,13 @@ function looksTruncated(text, retryOnNoPunct, cfg) {
     // The channel form has no closing tag of its own: the block ends at the next
     // control token, so an analysis channel with none after it was cut off.
     if (new RegExp("<\\|channel\\|>\\s*(?:" + THINK_CHANNELS + ")\\b", "i").test(raw) &&
-        !/<\|(?:end|return|start)\|>/i.test(raw))
+        !new RegExp(HARMONY_END, "i").test(raw))
         return true;
+    // The same question for the formats that close on a token of their own: an
+    // opener with nothing closing it is thinking the reply never came out of.
+    for (const pair of THINK_PAIRS)
+        if (new RegExp(pair.open, "i").test(raw) && !new RegExp(pair.close, "i").test(raw))
+            return true;
     // The checks below count fences, backticks, asterisks and quotes. A closed
     // reasoning block sits outside the visible reply and its punctuation throws
     // those counts off, so it is removed first regardless of the refusal-side
@@ -1986,6 +1991,48 @@ const THINK_TAGS = ["think", "thinking", "thought", "thoughts", "reasoning", "re
 // was not recognised as cut off, while the stripper had already decided that
 // channel was thinking.
 const THINK_CHANNELS = "analysis|thinking|thought|reasoning|commentary";
+// The control tokens that can end a Harmony channel. A tool call ends on its
+// own token rather than on an end, so a commentary channel closed that way is
+// finished rather than cut off.
+const HARMONY_END = "<\\|(?:end|return|start|call)\\|>";
+// The reasoning wrappers whose opener and closer are different tokens, so no
+// name in the list above can reach them. One entry per format: what opens it,
+// and what closes it.
+// `needs` is the cheapest thing that has to be present for the opener to match,
+// checked with indexOf first. Each pattern walks forward looking for its closer,
+// so a reply carrying the opener and no closer would otherwise scan the whole
+// remainder once per format.
+const THINK_PAIRS = [
+    // Gemma 4. The pipe sits inside the opener and outside the closer, and the
+    // channel is named after the opener rather than being the tag. Every
+    // assistant turn carries one, empty when the model is not thinking.
+    {
+        needs: "<|channel>",
+        open: "<\\|channel>[ \\t]*(?:" + THINK_CHANNELS + ")\\b",
+        close: "<channel\\|>",
+    },
+    // Cohere Command A Reasoning.
+    { needs: "<|start_thinking|>", open: "<\\|START_THINKING\\|>", close: "<\\|END_THINKING\\|>" },
+    // Seed-OSS, whose tag carries a namespace the name list cannot hold.
+    { needs: "<seed:think>", open: "<seed:think>", close: "<\\/seed:think>" },
+    {
+        needs: "<seed:cot_budget_reflect>",
+        open: "<seed:cot_budget_reflect>",
+        close: "<\\/seed:cot_budget_reflect>",
+    },
+];
+// Turn, role and reply markers a local backend can pass through. They are not
+// reasoning, but until they are gone they count towards the length checks and
+// sit in the middle of the phrases the refusal checks match on.
+const CONTROL_MARKS = [
+    /[ \t]*<\|channel\|>[ \t]*\w*[ \t]*(?:<\|message\|>)?[ \t]*/gi,
+    /[ \t]*(?:<\|channel>[ \t]*\w*|<channel\|>)[ \t]*/gi,
+    /[ \t]*(?:<\|(?:start|turn|im_start)\|?>|<start_of_turn>)[ \t]*\w*[ \t]*/gi,
+    /[ \t]*<\|start_header_id\|>[\s\S]*?<\|end_header_id\|>[ \t]*/gi,
+    /[ \t]*(?:<\|(?:end|return|call|message|constrain|endoftext|eot_id|im_end)\|>|<turn\|>|<end_of_turn>)[ \t]*/gi,
+    /[ \t]*<\|(?:START|END)_(?:THINKING|RESPONSE)\|>[ \t]*/gi,
+    /[ \t]*<\|(?:START_OF_TURN_TOKEN|CHATBOT_TOKEN|USER_TOKEN|SYSTEM_TOKEN)\|>[ \t]*/gi,
+];
 // What a streamed token calls itself when it is the model working rather than
 // the reply. A different vocabulary from the channel names above and matched
 // loosely, since builds differ: "reasoning_content" and "thinking" both appear.
@@ -2019,15 +2066,25 @@ function stripThinking(text, cfg) {
     // second block whose channel is "final". Only the thinking channels go: the
     // final channel is the reply and has to survive, so this names the channels
     // it removes rather than removing every block it finds.
-    t = t.replace(new RegExp("<\\|channel\\|>\\s*(?:" + THINK_CHANNELS + ")\\b[\\s\\S]*?(?:<\\|(?:end|return|start)\\|>|$)", "gi"), " ");
+    t = t.replace(new RegExp("<\\|channel\\|>\\s*(?:" + THINK_CHANNELS + ")\\b[\\s\\S]*?(?:" + HARMONY_END + "|$)", "gi"), " ");
+    // The other formats that close on a token with a different name. Each is
+    // taken closed first, then as an opener running to the end, which is thinking
+    // that was cut off before the reply started.
+    const low = t.toLowerCase();
+    for (const pair of THINK_PAIRS) {
+        if (low.indexOf(pair.needs) < 0)
+            continue;
+        t = t.replace(new RegExp(pair.open + "[\\s\\S]*?" + pair.close, "gi"), " ");
+        t = t.replace(new RegExp(pair.open + "[\\s\\S]*$", "i"), " ");
+    }
     // What is left of the channel format once the thinking channels are gone: the
     // header that introduces the visible reply, and the control tokens around it.
     // The host normally strips these before anything is displayed, but when they
     // reach us they count towards the reply's length and sit in the middle of a
     // phrase the checks are trying to match. Only the markers go; the reply
     // between them is what we are keeping.
-    t = t.replace(/<\|channel\|>\s*\w+\s*<\|message\|>/gi, " ");
-    t = t.replace(/<\|(?:start|end|return|message|constrain)\|>/gi, " ");
+    for (const mark of CONTROL_MARKS)
+        t = t.replace(mark, " ");
     // <tag ...>...</tag> and [tag ...]...[/tag], same tag both ends, across newlines
     //
     // Skipped when there is no closer anywhere in the reply. These patterns walk
