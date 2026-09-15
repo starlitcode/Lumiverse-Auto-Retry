@@ -14,15 +14,23 @@ _2026-09-15_
 
 ### Changed
 
-- **The note sets that ship are written at the refusal now.** A note only ever goes out after a reply was read as a refusal, so its one job is to get the next reply written instead of declined. The old wording went around that: it asked the model to stay in the scene, or to follow the character sheet, without ever naming the thing that had just happened.
+- **The note sets that ship are written at the refusal now, and they run from the lightest push to the firmest.** A note only ever goes out after a reply was read as a refusal, so its one job is getting the next reply written rather than declined. The old five were all pitched the same way and none of them named what had just happened.
 
-  Each is shorter and says what not to do in the words a model reaches for when it declines: no refusal, no disclaimer, no aside about the content, no asking whether to go on. What each set is for has not changed, and the names and the order are the same, so a set you have loaded before is the same set.
+  How hard a note pushes is the thing worth choosing by. A model that declined once by accident does not need to be argued with about fiction, and a model that has declined the same scene four times does.
 
-  Your own notes are not touched. A set you saved under your own name is not touched either. The line above the picker tells you the shipped sets have moved, and **Got it** puts it away.
+- **Added: A nudge**, the lightest of them, for a model that is not usually fussy. It says almost nothing, which is the point.
+
+- **Added: Firmer with every try**, for a model that keeps declining. It opens as lightly as **A nudge**, then sends a more direct note from try 4 and a firmer one again from try 6. It replaces **Stay in the scene, firmer after a few tries**, which only had two steps and started halfway up.
+
+- **Changed: The acknowledgement notes are gone.** Every set used to answer its own note in the assistant's voice. That leaves the request ending on a turn the model has not written, which is a prefill, and providers are dropping support for it. A set built that way works until the connection behind it stops allowing it, and then it fails for a reason nobody reading the note would guess. Every shipped note is a user note now. Your own notes can still use any role the panel offers.
+
+- **Fixed: The panel said four sets ship with it.** Five did.
+
+Your own notes are not touched. A set you saved under your own name is not touched either. The line above the picker tells you the shipped sets have moved, and **Got it** puts it away.
 
 ## 5.6.0
 
-_2026-09-14_
+_2026-09-15_
 
 ### Added
 
