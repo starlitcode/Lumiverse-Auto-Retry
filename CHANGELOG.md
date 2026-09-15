@@ -8,6 +8,18 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.6.1
+
+_2026-09-15_
+
+### Changed
+
+- **The note sets that ship are written at the refusal now.** A note only ever goes out after a reply was read as a refusal, so its one job is to get the next reply written instead of declined. The old wording went around that: it asked the model to stay in the scene, or to follow the character sheet, without ever naming the thing that had just happened.
+
+  Each is shorter and says what not to do in the words a model reaches for when it declines: no refusal, no disclaimer, no aside about the content, no asking whether to go on. What each set is for has not changed, and the names and the order are the same, so a set you have loaded before is the same set.
+
+  Your own notes are not touched. A set you saved under your own name is not touched either. The line above the picker tells you the shipped sets have moved, and **Got it** puts it away.
+
 ## 5.6.0
 
 _2026-09-14_
