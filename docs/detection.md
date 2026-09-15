@@ -283,7 +283,9 @@ Presets are saved to your account, so they follow you to other devices.
 
 ### The sets that ship with it
 
-Six sets are in the picker under **Ships with it**, so the boxes are not blank the first time you switch notes on. They run from the gentlest to the most direct, because that is the thing worth choosing by: a model that declined once by accident does not need to be argued with, and a model that has declined the same scene four times needs telling plainly. All of them ask rather than order. A note that scolds tends to get a more careful reply back rather than a braver one, which is the opposite of what you wanted when you turned notes on.
+Six sets are in the picker under **Ships with it**, so the boxes are not blank the first time you switch notes on. They run from the gentlest to the most direct, which is what you pick by: a model that declined once by accident does not need arguing with, and one that has declined the same scene four times does need telling.
+
+All of them ask rather than order, the firmest included. A note that scolds gets a more careful reply back rather than a braver one, which is the opposite of what you turned notes on for.
 
 - **A nudge**, for a model that is not usually fussy and just wobbled once. It says almost nothing, which is the point.
 - **Stay in the scene**, for a model that steps out of the story to comment on it.

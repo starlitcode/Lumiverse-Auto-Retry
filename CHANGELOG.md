@@ -16,9 +16,9 @@ _2026-09-15_
 
 - **The note sets that ship are written at the refusal now, and they run from the gentlest to the most direct.** A note only ever goes out after a reply was read as a refusal, so its one job is getting the next reply written rather than declined. The old five were all pitched the same way and none of them named what had just happened.
 
-  How plainly a note asks is the thing worth choosing by. A model that declined once by accident does not need to be argued with about fiction, and a model that has declined the same scene four times needs telling plainly.
+  How plainly a note asks is what you pick by. A model that declined once by accident does not need arguing with, and one that has declined the same scene four times does need telling.
 
-  All of them ask rather than order, the firmest included. A note that scolds tends to get a more careful reply back rather than a braver one, which is the opposite of what you wanted when you switched notes on.
+  All of them ask rather than order, the firmest included. A note that scolds gets a more careful reply back rather than a braver one, which is the opposite of what you switched notes on for.
 
 - **Added: A nudge**, the lightest of them, for a model that is not usually fussy. It says almost nothing, which is the point.
 
