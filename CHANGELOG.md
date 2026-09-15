@@ -14,13 +14,15 @@ _2026-09-15_
 
 ### Changed
 
-- **The note sets that ship are written at the refusal now, and they run from the lightest push to the firmest.** A note only ever goes out after a reply was read as a refusal, so its one job is getting the next reply written rather than declined. The old five were all pitched the same way and none of them named what had just happened.
+- **The note sets that ship are written at the refusal now, and they run from the gentlest to the most direct.** A note only ever goes out after a reply was read as a refusal, so its one job is getting the next reply written rather than declined. The old five were all pitched the same way and none of them named what had just happened.
 
-  How hard a note pushes is the thing worth choosing by. A model that declined once by accident does not need to be argued with about fiction, and a model that has declined the same scene four times does.
+  How plainly a note asks is the thing worth choosing by. A model that declined once by accident does not need to be argued with about fiction, and a model that has declined the same scene four times needs telling plainly.
+
+  All of them ask rather than order, the firmest included. A note that scolds tends to get a more careful reply back rather than a braver one, which is the opposite of what you wanted when you switched notes on.
 
 - **Added: A nudge**, the lightest of them, for a model that is not usually fussy. It says almost nothing, which is the point.
 
-- **Added: Firmer with every try**, for a model that keeps declining. It opens as lightly as **A nudge**, then sends a more direct note from try 4 and a firmer one again from try 6. It replaces **Stay in the scene, firmer after a few tries**, which only had two steps and started halfway up.
+- **Added: Firmer with every try**, for a model that keeps declining. It opens as lightly as **A nudge**, then sends a plainer note from try 4 and a plainer one again from try 6. It replaces **Stay in the scene, firmer after a few tries**, which only had two steps and started halfway up.
 
 - **Changed: The acknowledgement notes are gone.** Every set used to answer its own note in the assistant's voice. That leaves the request ending on a turn the model has not written, which is a prefill, and providers are dropping support for it. A set built that way works until the connection behind it stops allowing it, and then it fails for a reason nobody reading the note would guess. Every shipped note is a user note now. Your own notes can still use any role the panel offers.
 
