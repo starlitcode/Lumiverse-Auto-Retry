@@ -8,9 +8,31 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.6.1
+
+_2026-09-15_
+
+### Changed
+
+- **The note sets that ship are written at the refusal now, and they run from the gentlest to the most direct.** A note only ever goes out after a reply was read as a refusal, so its one job is getting the next reply written rather than declined. The old five were all pitched the same way and none of them named what had just happened.
+
+  How plainly a note asks is what you pick by. A model that declined once by accident does not need arguing with, and one that has declined the same scene four times does need telling.
+
+  All of them ask rather than order, the firmest included. A note that scolds gets a more careful reply back rather than a braver one, which is the opposite of what you switched notes on for.
+
+- **Added: A nudge**, the lightest of them, for a model that is not usually fussy. It says almost nothing, which is the point.
+
+- **Added: Firmer with every try**, for a model that keeps declining. It opens as lightly as **A nudge**, then sends a plainer note from try 4 and a plainer one again from try 6. It replaces **Stay in the scene, firmer after a few tries**, which only had two steps and started halfway up.
+
+- **Changed: The acknowledgement notes are gone.** Every set used to answer its own note in the assistant's voice. That leaves the request ending on a turn the model has not written, which is a prefill, and providers are dropping support for it. A set built that way works until the connection behind it stops allowing it, and then it fails for a reason nobody reading the note would guess. Every shipped note is a user note now. Your own notes can still use any role the panel offers.
+
+- **Fixed: The panel said four sets ship with it.** Five did.
+
+Your own notes are not touched. A set you saved under your own name is not touched either. The line above the picker tells you the shipped sets have moved, and **Got it** puts it away.
+
 ## 5.6.0
 
-_2026-09-14_
+_2026-09-15_
 
 ### Added
 
