@@ -11122,8 +11122,8 @@ console.log("\nthe cost line says it is a ballpark");
   // on what the line is for rather than on its exact wording, so rewording it
   // does not fail a check that was never about the wording.
   check("and the line under it calls the figure a ceiling", /ceiling/.test(out.after || ""), out.after);
-  check("naming a cache as one reason it reads high",
-    /cache/.test(out.after || ""), out.after);
+  check("and saying the rate it prices at is the full one",
+    /full rate/.test(out.after || ""), out.after);
   check("and saying whose tokeniser counted it",
     /tokeniser/.test(out.after || ""), out.after);
   check("and the prompt itself is still drawn under it", out.messages, out);

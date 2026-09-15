@@ -151,9 +151,9 @@ Both prices start at 0, and with both at 0 the line is not there. Fill in one an
 
 **What to type.** Price lists write these as `$5.00/M` or `$0.075/M`, which already means per million tokens, so the number is the number: type `5` or `0.075`. You can also paste the whole thing, `$` and `/M` included, and the number is taken out of it. Decimals matter here, since the cheap models are priced in fractions of a penny.
 
-**Read the figure as a ceiling rather than your bill,** which is what the line under it says. Whatever your provider wraps around your prompt is missing from the number, and it prices every token at the full rate: whatever your provider reuses from a cache is charged at less than this says.
+**Read the figure as a ceiling rather than your bill,** which is what the line under it says. Whatever your provider wraps around your prompt is missing from the number, and it prices every token at the full rate, which is the most you could be charged rather than what you will be.
 
-The tokens are counted by Lumiverse, with its own tokeniser for the model rather than the counter your provider bills you against. Where it has no tokeniser for a model it says so, and the panel says roughly rather than giving you a figure that looks exact. Nothing here can do better than a ceiling: Lumiverse reports a prompt, completion and total token count back to an extension and no cached count at all, so there is nothing to price a cached token against.
+The tokens are counted by Lumiverse, with its own tokeniser for the model rather than the counter your provider bills you against. Where it has no tokeniser for a model it says so, and the panel says roughly rather than giving you a figure that looks exact.
 
 Your **refusal notes are marked** in that list, in the accent colour, and opened for you. A line at the top says how many went and where in the prompt they landed. That is the thing the Prompt view is most likely to be open for: seeing exactly how and where a note was inserted.
 

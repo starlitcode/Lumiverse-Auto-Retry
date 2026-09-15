@@ -483,6 +483,13 @@ describe("refusal detection ignores the model's thinking", () => {
       expect(stripThinking("<think>" + WORKING + "</think>" + REPLY, off)).toContain(WORKING);
     });
 
+    // A marker sitting straight in front of the reply names no role, so nothing
+    // may be eaten with it. Taking a word here would delete the reader's text.
+    test("a marker with no role after it keeps the first word of the reply", () => {
+      for (const open of ["<|start|>", "<|turn>", "<|im_start|>", "<start_of_turn>", "<|channel|>"])
+        expect(stripThinking(open + REPLY, {}).trim()).toBe(REPLY);
+    });
+
     test("turn markers do not count towards the reply", () => {
       expect(stripThinking("<|turn>model\n" + REPLY + "<turn|>", {}).trim()).toBe(REPLY);
       expect(stripThinking("<|im_start|>assistant\n" + REPLY + "<|im_end|>", {}).trim()).toBe(REPLY);

@@ -303,18 +303,16 @@ A note is read alongside the whole prompt: the card, the world, the scene, and e
 
 If a note is not working, the answer is almost never more words. It is usually the wrong words, or a note going out too early, or a reply that was never a refusal in the first place. The tester below tells you which.
 
-### Where the note goes, and prompt caching
+### Where the note goes
 
-If your provider caches prompts, it caches from the front: it reuses everything up to the first thing that changed, and anything after that counts as new. Where a note goes decides how much of that reuse survives.
+Each placement lands the note in a different part of the request.
 
-- **After the last message**, the default, adds the note after the last message of your conversation. Everything before it is unchanged, so the cached part is still cached. This costs nothing.
-- **Before the last message** puts it one place earlier, so the last message and the note count as new. That is one message's worth.
-- **At the very end** puts it past everything, including anything your build appends behind the conversation. On most builds nothing is appended and this lands in the same place as **After the last message**; where something is, this is the only placement that goes after it, which is where a note has to be to answer one. It costs the same as the default: nothing before it moved.
-- **At the very start** puts it ahead of everything, so the whole chat counts as new for that turn.
+- **After the last message**, the default, adds the note after the last message of your conversation, right before the point the reply continues from.
+- **Before the last message** puts it one place earlier, so the last message is read after it.
+- **At the very end** puts it past everything, including anything your build appends behind the conversation. On most builds nothing is appended and this lands in the same place as **After the last message**; where something is, this is the only placement that goes after it, which is where a note has to be to answer one.
+- **At the very start** puts it ahead of everything, where it is read before the card and the conversation.
 
-The note is only there for the one retry and is thrown away afterwards, so the turn after it is back to the prompt your provider already has. That holds whichever placement you pick.
-
-Retrying on its own is the cheap case: the same request goes out again unchanged, which is exactly what a cache is for.
+The note is only there for the one retry and is thrown away afterwards, so the turn after it is back to the request your provider already had. That holds whichever placement you pick.
 
 ## Trying it on a reply
 

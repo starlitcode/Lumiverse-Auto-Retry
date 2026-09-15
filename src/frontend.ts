@@ -840,7 +840,7 @@ const SCHEMA: Group[] = [
           { value: "start", label: "At the very start" },
           { value: "end", label: "At the very end" },
         ],
-        hint: "Whichever notes are due go in together as one block. After the last message puts it right before the point the reply continues from. At the very end goes past anything your build appends behind the conversation, which is the one that can answer it. At the very start is the one to avoid if your provider caches prompts.",
+        hint: "Whichever notes are due go in together as one block. After the last message puts it right before the point the reply continues from. At the very end goes past anything your build appends behind the conversation, which is the one that can answer it.",
       },
       {
         key: "refusalNoteStrictType",
@@ -2124,6 +2124,12 @@ const THINK_CHANNELS = "analysis|thinking|thought|reasoning|commentary";
 // finished rather than cut off.
 const HARMONY_END = "<\\|(?:end|return|start|call)\\|>";
 
+// What a turn marker names after itself, and what a channel marker does. Only
+// these are eaten with the marker: a bare marker sitting straight in front of
+// the reply would otherwise take the first word of it.
+const TURN_ROLES = "system|user|assistant|model|tool|developer|human";
+const CHANNEL_NAMES = THINK_CHANNELS + "|final";
+
 // The reasoning wrappers whose opener and closer are different tokens, so no
 // name in the list above can reach them. One entry per format: what opens it,
 // and what closes it.
@@ -2155,9 +2161,18 @@ const THINK_PAIRS: Array<{ needs: string; open: string; close: string }> = [
 // reasoning, but until they are gone they count towards the length checks and
 // sit in the middle of the phrases the refusal checks match on.
 const CONTROL_MARKS: RegExp[] = [
-  /[ \t]*<\|channel\|>[ \t]*\w*[ \t]*(?:<\|message\|>)?[ \t]*/gi,
-  /[ \t]*(?:<\|channel>[ \t]*\w*|<channel\|>)[ \t]*/gi,
-  /[ \t]*(?:<\|(?:start|turn|im_start)\|?>|<start_of_turn>)[ \t]*\w*[ \t]*/gi,
+  new RegExp("[ \\t]*<\\|channel\\|>[ \\t]*\\w+[ \\t]*<\\|message\\|>[ \\t]*", "gi"),
+  new RegExp("[ \\t]*<\\|channel\\|>(?:[ \\t]*(?:" + CHANNEL_NAMES + ")\\b)?[ \\t]*", "gi"),
+  new RegExp(
+    "[ \\t]*(?:<\\|channel>(?:[ \\t]*(?:" + CHANNEL_NAMES + ")\\b)?|<channel\\|>)[ \\t]*",
+    "gi",
+  ),
+  new RegExp(
+    "[ \\t]*(?:<\\|(?:start|turn|im_start)\\|?>|<start_of_turn>)(?:[ \\t]*(?:" +
+      TURN_ROLES +
+      ")\\b)?[ \\t]*",
+    "gi",
+  ),
   /[ \t]*<\|start_header_id\|>[\s\S]*?<\|end_header_id\|>[ \t]*/gi,
   /[ \t]*(?:<\|(?:end|return|call|message|constrain|endoftext|eot_id|im_end)\|>|<turn\|>|<end_of_turn>)[ \t]*/gi,
   /[ \t]*<\|(?:START|END)_(?:THINKING|RESPONSE)\|>[ \t]*/gi,
@@ -4215,7 +4230,7 @@ export function setup(ctx: Ctx, opts?: any) {
         "margin-bottom:6px;font-size:12px;line-height:1.4;" +
         "color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
       rough.textContent =
-        "Read that as a ceiling rather than your bill. Anything your provider wraps around the prompt is missing from it, and it prices every token at the full rate: whatever your provider reuses from a cache is charged at less than this says. Lumiverse counts the tokens with its own tokeniser for the model, which is not the counter your provider bills you against.";
+        "Read that as a ceiling rather than your bill. Anything your provider wraps around the prompt is missing from it, and it prices every token at the full rate, which is the most you could be charged rather than what you will be. Lumiverse counts the tokens with its own tokeniser for the model, which is not the counter your provider bills you against.";
       body.appendChild(rough);
     }
     const viewRow = document.createElement("div");

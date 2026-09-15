@@ -22,11 +22,19 @@ _2026-09-15_
 
 - **A commentary channel closed by a tool call is no longer read as cut off.** A tool call ends on `<|call|>` rather than on `<|end|>`, and that token was missing from the list, so every reply where the model called a tool looked truncated.
 
+- **A marker with no role after it keeps the first word of the reply.** The markers that name a speaker take the name with them, and a bare one sitting straight in front of the reply was taking the first word of it instead.
+
 - **Turn and role markers are removed before the checks run.** Gemma's `<|turn>model` and `<turn|>`, ChatML's `<|im_start|>` and `<|im_end|>`, Llama's header block, and Cohere's turn tokens. They are not reasoning, but until they were gone they counted towards the length checks and sat in the middle of the phrases a refusal is matched on.
 
   This happens whether or not **Ignore the thinking / reasoning** is on. That option decides whether a refusal written inside the working counts, which is a question about the working. A turn marker is not the working.
 
 Cloud connections are unaffected. They hand reasoning back in a field of its own, so it never reaches the reply text and there has never been anything to strip. This is what a local backend needs.
+
+### Removed
+
+- **Everything about prompt caching is gone from the panel and the pages.** The clause on the note placement hint, the section on the detection page, and the clause on the cost note.
+
+  Nothing about where a note goes has changed. The detection page still says where each placement lands the note and which one goes after anything your build appends.
 
 ## 5.5.3
 
