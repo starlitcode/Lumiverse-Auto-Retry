@@ -179,22 +179,29 @@ All four take the same retry, the same attempt cap and the same note if you send
 
 ## Thinking and reasoning
 
-Only the final reply is ever checked for a refusal, never the model's thinking. Before matching, known reasoning blocks are stripped out. Four wrappers are recognised, using tag names like `think`, `thinking`, `reasoning`, `thought`, `reflection`, `scratchpad` and `analysis`:
+Only the final reply is ever checked for a refusal, never the model's thinking. Before matching, known reasoning blocks are stripped out. Seven wrappers are recognised. The first three are matched by tag name, using names like `think`, `thinking`, `reasoning`, `thought`, `reflection`, `scratchpad` and `analysis`. The rest close on a token with a different name from the one that opened them, so a tag name cannot reach them and each is recognised as a format in its own right:
 
 | Form | Example |
 | --- | --- |
 | Angle brackets | `<think>` … `</think>` |
 | Square brackets | `[thinking]` … `[/thinking]` |
 | Pipes | `<\|think\|>` … `<\|/think\|>`, and `<\|think>` … `<think\|>` |
-| Channels | `<\|channel\|>analysis<\|message\|>` … `<\|end\|>` |
+| Harmony channels | `<\|channel\|>analysis<\|message\|>` … `<\|end\|>` |
+| Gemma 4 channels | `<\|channel>thought` … `<channel\|>` |
+| Cohere | `<\|START_THINKING\|>` … `<\|END_THINKING\|>` |
+| Seed-OSS | `<seed:think>` … `</seed:think>` |
 
-The channel form is the one models trained on the Harmony format use. It has no closing tag of its own: the reasoning runs until the next control token. The channels treated as thinking are `analysis`, `thinking`, `thought`, `reasoning` and `commentary`. The `final` channel is the visible reply and is kept, along with anything outside a block.
+The Harmony form is the one gpt-oss uses. It has no closing tag of its own: the reasoning runs until the next control token, which is `<\|end\|>`, `<\|return\|>`, `<\|start\|>` or the `<\|call\|>` that ends a tool call. The channels treated as thinking are `analysis`, `thinking`, `thought`, `reasoning` and `commentary`. The `final` channel is the visible reply and is kept, along with anything outside a block.
+
+Gemma 4 names a channel the same way but spells the tokens differently, with the pipe inside the opener and outside the closer. Every assistant turn carries one, empty when the model is not thinking, so an empty pair is recognised as well as a full one.
+
+Turn and role markers are removed too, whichever format they come from: Gemma's `<\|turn>model` and `<turn\|>`, ChatML's `<\|im_start\|>` and `<\|im_end\|>`, Llama's header block, and Cohere's turn tokens. They are not reasoning, but until they are gone they count towards the length checks and sit in the middle of the phrases a refusal is matched on. They come off whether or not **Ignore the thinking / reasoning** is on: that option decides whether a refusal written inside the working counts, and a turn marker is not the working.
 
 Some providers hand their reasoning back separately rather than inside the reply. Nothing above applies to that: it never reaches the reply text in the first place, so there is nothing to strip and the checks only ever see what you read.
 
 So if a model weighs a refusal while reasoning but then writes a normal reply, nothing is re-rolled. If a refusal ends up in the actual reply, it is caught as usual, and if the model reasons and then produces nothing, that is handled by the empty-reply retry instead.
 
-If your model wraps its thinking in an unusual tag the built-in set misses, add its name under **Extra thinking tag names** in the refusal tuning section, one per line, just the name (no brackets or pipes). A name you add works in all four forms above. You can turn the whole thing off with **Ignore the thinking / reasoning**, though leaving it on is the safe default.
+If your model wraps its thinking in an unusual tag the built-in set misses, add its name under **Extra thinking tag names** in the refusal tuning section, one per line, just the name (no brackets or pipes). A name you add works in the three tag-name forms above. You can turn the whole thing off with **Ignore the thinking / reasoning**, though leaving it on is the safe default.
 
 An opened reasoning block with nothing closing it means the reply was cut off inside the thinking, which counts as cut off rather than as a refusal.
 
@@ -296,18 +303,16 @@ A note is read alongside the whole prompt: the card, the world, the scene, and e
 
 If a note is not working, the answer is almost never more words. It is usually the wrong words, or a note going out too early, or a reply that was never a refusal in the first place. The tester below tells you which.
 
-### Where the note goes, and prompt caching
+### Where the note goes
 
-If your provider caches prompts, it caches from the front: it reuses everything up to the first thing that changed, and anything after that counts as new. Where a note goes decides how much of that reuse survives.
+Each placement lands the note in a different part of the request.
 
-- **After the last message**, the default, adds the note after the last message of your conversation. Everything before it is unchanged, so the cached part is still cached. This costs nothing.
-- **Before the last message** puts it one place earlier, so the last message and the note count as new. That is one message's worth.
-- **At the very end** puts it past everything, including anything your build appends behind the conversation. On most builds nothing is appended and this lands in the same place as **After the last message**; where something is, this is the only placement that goes after it, which is where a note has to be to answer one. It costs the same as the default: nothing before it moved.
-- **At the very start** puts it ahead of everything, so the whole chat counts as new for that turn.
+- **After the last message**, the default, adds the note after the last message of your conversation, right before the point the reply continues from.
+- **Before the last message** puts it one place earlier, so the last message is read after it.
+- **At the very end** puts it past everything, including anything your build appends behind the conversation. On most builds nothing is appended and this lands in the same place as **After the last message**; where something is, this is the only placement that goes after it, which is where a note has to be to answer one.
+- **At the very start** puts it ahead of everything, where it is read before the card and the conversation.
 
-The note is only there for the one retry and is thrown away afterwards, so the turn after it is back to the prompt your provider already has. That holds whichever placement you pick.
-
-Retrying on its own is the cheap case: the same request goes out again unchanged, which is exactly what a cache is for.
+The note is only there for the one retry and is thrown away afterwards, so the turn after it is back to the request your provider already had. That holds whichever placement you pick.
 
 ## Trying it on a reply
 
