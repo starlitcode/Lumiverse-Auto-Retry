@@ -8,28 +8,6 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
-## 5.6.1
-
-_2026-09-15_
-
-### Changed
-
-- **The note sets that ship are written at the refusal now, and they run from the gentlest to the most direct.** A note only ever goes out after a reply was read as a refusal, so its one job is getting the next reply written rather than declined. The old five were all pitched the same way and none of them named what had just happened.
-
-  How plainly a note asks is what you pick by. A model that declined once by accident does not need arguing with, and one that has declined the same scene four times does need telling.
-
-  All of them ask rather than order, the firmest included. A note that scolds gets a more careful reply back rather than a braver one, which is the opposite of what you switched notes on for.
-
-- **Added: A nudge**, the lightest of them, for a model that is not usually fussy. It says almost nothing, which is the point.
-
-- **Added: Firmer with every try**, for a model that keeps declining. It opens as lightly as **A nudge**, then sends a plainer note from try 4 and a plainer one again from try 6. It replaces **Stay in the scene, firmer after a few tries**, which only had two steps and started halfway up.
-
-- **Changed: The acknowledgement notes are gone.** Every set used to answer its own note in the assistant's voice. That leaves the request ending on a turn the model has not written, which is a prefill, and providers are dropping support for it. A set built that way works until the connection behind it stops allowing it, and then it fails for a reason nobody reading the note would guess. Every shipped note is a user note now. Your own notes can still use any role the panel offers.
-
-- **Fixed: The panel said four sets ship with it.** Five did.
-
-Your own notes are not touched. A set you saved under your own name is not touched either. The line above the picker tells you the shipped sets have moved, and **Got it** puts it away.
-
 ## 5.6.0
 
 _2026-09-15_
@@ -42,21 +20,39 @@ _2026-09-15_
 
   An opener with nothing closing it now reads as cut off for these as well, which is what a reply that stopped inside the model's thinking looks like.
 
-- **A commentary channel closed by a tool call is no longer read as cut off.** A tool call ends on `<|call|>` rather than on `<|end|>`, and that token was missing from the list, so every reply where the model called a tool looked truncated.
+- **A nudge**, a new note set and the gentlest of them, for a model that is not usually fussy. It says almost nothing, which is the point.
 
-- **A marker with no role after it keeps the first word of the reply.** The markers that name a speaker take the name with them, and a bare one sitting straight in front of the reply was taking the first word of it instead.
+- **Firmer with every try**, a new note set for a model that keeps declining. It opens as lightly as **A nudge**, then sends a plainer note from try 4 and a plainer one again from try 6. It replaces **Stay in the scene, firmer after a few tries**, which only had two steps and started halfway up.
+
+### Changed
+
+- **The note sets that ship are written at the refusal now, and they run from the gentlest to the most direct.** A note only ever goes out after a reply was read as a refusal, so its one job is getting the next reply written rather than declined. The old five were all pitched the same way and none of them named what had just happened.
+
+  How plainly a note asks is what you pick by. A model that declined once by accident does not need arguing with, and one that has declined the same scene four times does need telling.
+
+  All of them ask rather than order, the firmest included. A note that scolds gets a more careful reply back rather than a braver one, which is the opposite of what you switched notes on for.
+
+- **The acknowledgement notes are gone.** Every set used to answer its own note in the assistant's voice. That leaves the request ending on a turn the model has not written, which is a prefill, and providers are dropping support for it. A set built that way works until the connection behind it stops allowing it, and then it fails for a reason nobody reading the note would guess. Every shipped note is a user note now. Your own notes can still use any role the panel offers.
 
 - **Turn and role markers are removed before the checks run.** Gemma's `<|turn>model` and `<turn|>`, ChatML's `<|im_start|>` and `<|im_end|>`, Llama's header block, and Cohere's turn tokens. They are not reasoning, but until they were gone they counted towards the length checks and sat in the middle of the phrases a refusal is matched on.
 
   This happens whether or not **Ignore the thinking / reasoning** is on. That option decides whether a refusal written inside the working counts, which is a question about the working. A turn marker is not the working.
 
-Cloud connections are unaffected. They hand reasoning back in a field of its own, so it never reaches the reply text and there has never been anything to strip. This is what a local backend needs.
+### Fixed
+
+- **A commentary channel closed by a tool call is no longer read as cut off.** A tool call ends on `<|call|>` rather than on `<|end|>`, and that token was missing from the list, so every reply where the model called a tool looked truncated.
+
+- **A marker with no role after it keeps the first word of the reply.** The markers that name a speaker take the name with them, and a bare one sitting straight in front of the reply was taking the first word of it instead.
+
+- **The panel said four sets ship with it.** Five did, and six do now.
 
 ### Removed
 
 - **Everything about prompt caching is gone from the panel and the pages.** The clause on the note placement hint, the section on the detection page, and the clause on the cost note.
 
   Nothing about where a note goes has changed. The detection page still says where each placement lands the note and which one goes after anything your build appends.
+
+Cloud connections are unaffected by the reasoning half of this. They hand reasoning back in a field of its own, so it never reaches the reply text and there has never been anything to strip. Your own notes and your own saved sets are untouched, and the line above the picker tells you the shipped sets have moved.
 
 ## 5.5.3
 
