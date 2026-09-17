@@ -2,7 +2,15 @@
 
 Lumiverse has no built-in way for an extension to regenerate a reply, so the re-fire clicks your own on-screen regenerate or swipe button. The defaults match common Lumiverse builds, but a future update could rename those buttons.
 
-There are three button fields, listed the way a retry tries them: **next / swipe** (add a reroll, which is what it reaches for first), **regenerate** (redo the reply where it stands, the fallback), and **stop** (to halt a frozen reply). Each takes one CSS selector, the kind you'd pass to `document.querySelector`, and you can list several separated by commas as fallbacks. The extension checks these in the exact order you write them, so put your most specific selectors first (like data attributes) and broader ones last (like aria-label or title).
+There are three button fields, listed in the order a retry tries them:
+
+- **next / swipe** adds a reroll. This is the one it tries first.
+- **regenerate** redoes the reply where it stands. This is the fallback.
+- **stop** halts a frozen reply.
+
+Each takes one CSS selector, the kind you would pass to `document.querySelector`. You can list several separated by commas, and each one after the first is a fallback.
+
+They are checked in the exact order you write them, so put your most specific selectors first, such as data attributes, and broader ones last, such as aria-label or title.
 
 By default a retry clicks the next / swipe button, which adds a new reroll and leaves the existing ones in place. That way a retry the extension should not have made can be undone: the reply it re-rolled is still there to swipe back to. This is **Retry by adding a new reroll**, at the end of "How it retries" in settings.
 
@@ -14,7 +22,15 @@ This applies to every reason a retry fires, including empty replies and errors, 
 
 ## Setting the buttons without writing a selector
 
-Each button setting has a **Pick it for me** button next to **Test**. Press it and the settings panel hides. Press and hold the real button in Lumiverse and the selector is filled in for you. The press is swallowed, so picking your stop or regenerate button doesn't also press it. A press that is not held does what it always does, which is how you reach a button that only appears once a reply is running: send one normally, then hold the stop button. Selecting text is off while the picker is up, because a long press is also how the browser starts a selection and raises its own callout, and it decides that at about the moment the hold finishes. Press Cancel on the prompt to back out, or Esc if you're on a keyboard.
+Each button setting has a **Pick it for me** button next to **Test**. Press it and the settings panel hides. Press and hold the real button in Lumiverse, and the selector is filled in for you.
+
+The press itself is blocked, so picking your stop or regenerate button does not also press it.
+
+A press that is not held does what it always does. That is how you reach a button that only appears once a reply is running: send one normally, then hold the stop button.
+
+Selecting text is off while the picker is up. A long press is also how the browser starts a selection and raises its own menu, and it decides that at about the moment the hold finishes.
+
+Press Cancel on the prompt to back out, or Esc if you are on a keyboard.
 
 It builds the selector from what is most likely to survive an app update, preferring `aria-label`, `title` and `data-` attributes over class names. Lumiverse rebuilds its class names on every release, so a selector based on one stops matching the next time the app updates. Those are skipped. If the element it lands on has nothing dependable, it says so rather than saving something that will break; clicking the button itself rather than an icon inside it usually fixes that.
 

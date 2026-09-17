@@ -49,9 +49,9 @@ const SHIPPED_SEEN_KEY = "lv-auto-retry:shipped-seen:v1";
 const SEARCH_ID = "__lvRetrySearch";
 
 // How long (ms) to suppress automatic retries after the user stops or cancels.
-// Long enough to swallow the stopped generation's own trailing events.
+// Long enough to cover the stopped generation's own trailing events.
 const STAND_DOWN_MS = 2500;
-const IGNORE_MAX = 16; // most aborted-generation ids kept around to swallow their late events
+const IGNORE_MAX = 16; // most aborted-generation ids kept around to ignore their late events
 
 // How long (ms) to wait after clicking a retry control before deciding the
 // click started nothing. A swipe control can move between existing rerolls
@@ -3532,8 +3532,8 @@ export function setup(ctx: Ctx, opts?: any) {
       // screen, its menu holds them. The Extras menu holds them only when there
       // is no floating button to.
       //
-      // Two ways to reach the same thing is one more than anybody needs, and
-      // clutters a menu that was opened for something else. With the floating
+      // One way in at a time, so a menu opened for something else stays short.
+      // With the floating
       // button hidden, or refused because ui_panels was not granted, the Extras
       // menu is the only way to reach these on a phone, so they come back.
       const inExtras = canReg && !floatCarriesEntries();
@@ -4401,16 +4401,16 @@ export function setup(ctx: Ctx, opts?: any) {
       b.id = "__lvRetryTab-" + id;
       b.setAttribute("aria-controls", "__lvRetryLogBody");
       b.style.cssText =
-        // 32px tall and padded wide enough to be a thumb target. A tab strip
-        // that only works with a mouse is the wrong way round here: this panel
-        // exists because there is no console on a phone.
+        // 32px tall and padded wide enough to be a thumb target. This panel
+        // exists because there is no console on a phone, so the tabs have to
+        // work without a mouse.
         "cursor:pointer;border:0;background:transparent;font:inherit;color:inherit;" +
         "min-height:32px;padding:4px 4px;border-radius:var(--lumiverse-radius-sm,5px);" +
         // An equal share each, so the row has one rhythm and one pill size.
         "flex:1 1 0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" +
         "text-align:center;" +
         // The header is the drag handle, and a tap that slides a pixel would
-        // otherwise be swallowed as the start of a drag.
+        // otherwise be taken as the start of a drag.
         "touch-action:manipulation";
       b.addEventListener("click", () => showTab(id));
       tabs.appendChild(b);
@@ -5301,7 +5301,7 @@ export function setup(ctx: Ctx, opts?: any) {
     // phase so the host's own listener never runs, and stopImmediatePropagation
     // because the host may have more than one on the same element.
     //
-    // Only this event is swallowed. Pointer events still reach the host
+    // Only this event is blocked. Pointer events still reach the host
     // untouched, which is what drags the button and snaps it to an edge.
     const onMenu = (e: any) => {
       try {
@@ -5979,7 +5979,7 @@ export function setup(ctx: Ctx, opts?: any) {
     }
   }
   // Returns whether the browser copy was actually written. A browser with site
-  // data blocked, or with no room left, throws here. Swallowed, the panel would
+  // data blocked, or with no room left, throws here. Ignored, the panel would
   // say "Saved" over settings that are gone on the next reload, which is the one
   // thing a Save button must never do. savePresets answers the same way.
   function saveSaved(): boolean {
@@ -6426,7 +6426,7 @@ export function setup(ctx: Ctx, opts?: any) {
   }
   type Preset = { name: string; values: Record<string, any> };
   // Keep only what a preset is allowed to be, whatever the source. The same
-  // check runs on the local copy and on anything the account hands back, so a
+  // check runs on the local copy and on anything the account returns, so a
   // malformed or hand-edited store cannot put junk into the dropdown.
   function coercePresets(data: any): Record<string, Preset[]> {
     // swap is here on purpose and is not a leftover. Find and replace is gone
@@ -6778,8 +6778,8 @@ export function setup(ctx: Ctx, opts?: any) {
     return remembered != null && remembered !== "" ? remembered : chatOf(p);
   };
   const CHATS_MAX = 24; // chats kept before the quietest are let go
-  // Anything mid-flight has to stay: dropping it would strand a running
-  // watchdog and lose the budget for a retry that is already in the air.
+  // Anything still running has to stay: dropping it would leave a watchdog
+  // with nothing to report to, and lose the budget for a retry already sent.
   const chatIsBusy = (s: any): boolean =>
     !!(s && (s.pending || s.timer || s.startTimer || s.idleTimer || s.startWatchdog ||
       s.expectingStart || s.attempts > 0 || Date.now() < s.suppressUntil));
@@ -7760,7 +7760,7 @@ export function setup(ctx: Ctx, opts?: any) {
 
   // Anything dialog-shaped that has turned up since the retry click. Hidden
   // rather than removed, and with pointer events switched off so that even in
-  // the worst case an unseen dialog cannot swallow taps.
+  // the worst case an unseen dialog cannot block taps.
   function hideNewDialogs(before: Set<any>) {
     if (typeof document === "undefined") return;
     let list: any = [];
@@ -7829,7 +7829,7 @@ export function setup(ctx: Ctx, opts?: any) {
     log("a dialog opened after the retry click; confirming it");
     // Kept in the hidden list until the watch ends: if this press dismisses it
     // the element goes away and restoring it is a no-op, and if it does not the
-    // dialog reappears rather than being stranded.
+    // dialog reappears rather than staying hidden.
 
     // The observer is dropped here but the timer keeps running: our own press
     // churns the page, and reacting to that would spin. The timer looks again
@@ -7932,7 +7932,7 @@ export function setup(ctx: Ctx, opts?: any) {
       log("retry click produced no generation; resetting stale state", chatId);
       disarmRefusalNote(chatId);
       s.selfTriggered = false;
-      // The try is not handed back. A click that worked on a host slow to
+      // The try is not refunded. A click that worked on a host slow to
       // announce it looks exactly like one that did nothing, and refunding on
       // that guess let the reply arrive later and be judged on a full budget
       // again: "most tries" said two and the reply was re-rolled five times
@@ -8192,7 +8192,7 @@ export function setup(ctx: Ctx, opts?: any) {
 
   // Stalled or stuck. Halt the dead generation (best effort) and retry.
   // Any terminal events the dead generation fires next (a stop, then maybe an
-  // end) are swallowed by remembering its id, so a late one can't be mistaken
+  // end) are ignored by remembering its id, so a late one can't be mistaken
   // for a user stop or a fresh result even after the next generation begins.
   // A reply that was writing itself out and then went quiet. Two different
   // things wear that description, and only one of them is this watchdog's.
@@ -8654,7 +8654,7 @@ export function setup(ctx: Ctx, opts?: any) {
     } // user just stopped; do not retry
     if (p.error) {
       // A content-moderation block we can retry as a refusal is not a permanent
-      // failure, so don't let the hard-error skip swallow it before the refusal check.
+      // failure, so don't let the hard-error skip catch it before the refusal check.
       if (cfg.ignoreHardErrors && isHardError(p.error, cfg) && !(cfg.retryOnRefusal && looksLikeRefusalError(String(p.error), cfg))) {
         log("hard error ignored", p.error);
         showToast("Auto Retry did not retry: that error will not fix itself, so trying again would not help.");
@@ -8989,8 +8989,8 @@ export function setup(ctx: Ctx, opts?: any) {
     if (still) el.style.transition = "none";
     el.style.opacity = "1";
 
-    // Tapping the description dismisses it. On a phone that is the first thing
-    // a thumb reaches for, and it did nothing.
+    // Tapping the description dismisses it. On a phone that is the easiest
+    // place to tap, and it did nothing.
     el.addEventListener("click", () => hideHint());
     hintPop = el;
     hintAnchor = anchor;
@@ -9010,7 +9010,7 @@ export function setup(ctx: Ctx, opts?: any) {
     // A gesture that never produces one, a drag or a scroll, drops the guard on
     // its own rather than leaving it armed for the next real press.
     let eatClick: (() => void) | null = null;
-    const swallowNext = () => {
+    const blockNextClick = () => {
       const eat = (e: any) => {
         drop();
         if (!e) return;
@@ -9044,7 +9044,7 @@ export function setup(ctx: Ctx, opts?: any) {
         if (t && hintPop.contains && hintPop.contains(t)) return;
       } catch (_) {}
       hideHint();
-      swallowNext();
+      blockNextClick();
     };
     // A long description scrolls inside itself. That scroll is someone reading
     // it, not the anchor moving, so it is the one scroll that leaves it open.
@@ -9119,7 +9119,7 @@ export function setup(ctx: Ctx, opts?: any) {
         // box's containing block starts halfway across the screen and ends at
         // the right edge, so it could never be wider than half the viewport:
         // max-width was 379px on a 412px phone and the box stopped at 206px.
-        // Messages that fit on one line wrapped, and the wrap stranded a word.
+        // Messages that fit on one line wrapped, leaving one word on its own.
         // fit-content keeps a short message from being padded out to the cap.
         "position:fixed;bottom:max(20px,env(safe-area-inset-bottom,0px));left:0;right:0;" +
         "margin-left:auto;margin-right:auto;width:fit-content;" +
@@ -9139,7 +9139,7 @@ export function setup(ctx: Ctx, opts?: any) {
     return t;
   }
   // A message too long for one line used to fill the box out to its cap, which
-  // on a phone is nearly the whole screen, and left the last line stranded well
+  // on a phone is nearly the whole screen, and left the last line ending well
   // short of the right edge. The browser evens the lines out and the box is then
   // pinned to the widest of them, so it comes out the size of what is written in
   // it rather than the size of the screen. A message that fits on one line comes
@@ -10486,7 +10486,7 @@ export function setup(ctx: Ctx, opts?: any) {
       h.addEventListener("click", toggle);
       h.addEventListener("keydown", (e: any) => {
         if (!e) return;
-        // What a real button answers to. Space is swallowed as well, or it
+        // What a real button answers to. Space is blocked as well, or it
         // would page the panel down at the same time as opening the section.
         if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") {
           e.preventDefault();
@@ -11155,7 +11155,7 @@ export function setup(ctx: Ctx, opts?: any) {
     box.setAttribute("data-ar-retired", "1");
     const held = retiredSwaps();
     const count = held.rules.split("\n").filter((l) => l.indexOf("=>") > 0).length;
-    // Nothing to hand back, or already handed back. Somebody who never used the
+    // Nothing to restore, or already restored. Somebody who never used the
     // feature should never learn it existed. Past the date the offer ends on,
     // nobody sees it either.
     if ((!count && !held.presets.length) || swapsNoticeDone() || !swapsOffered(todayHere()))

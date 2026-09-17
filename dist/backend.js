@@ -544,7 +544,7 @@ const promptInterceptor = async (messages, context) => {
         // never appear at all.
         if (refusalNote.strictType && type && RETRY_TYPES.indexOf(type.toLowerCase()) < 0) {
             snapshotPrompt(messages, context, who);
-            // Named rather than swallowed. A note that never appears looks the same
+            // Named rather than hidden. A note that never appears looks the same
             // whether it was never armed or the host called this generation
             // something else, and only one of those is fixable by the user. The
             // note stays armed: with the strict check on, the point is to wait for
@@ -685,7 +685,7 @@ try {
 }
 catch (_) { }
 // The only way to find out a fire-and-forget registration was refused. Said in
-// the log rather than swallowed, since the two features it takes out both look
+// the log rather than hidden, since the two features it takes out both look
 // like nothing happening.
 try {
     spindle.permissions.onDenied((e) => {
