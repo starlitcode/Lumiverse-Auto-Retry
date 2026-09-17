@@ -130,7 +130,7 @@ const STREAM_BUF_MAX = 200000;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.6.0";
+const VERSION = "5.6.2";
 
 // The addresses the extension points at. Pinned to the released branch rather
 // than to a tag, so an old install still opens the page as it stands today.
@@ -4386,10 +4386,11 @@ export function setup(ctx: Ctx, opts?: any) {
     // both are wanted in the same place.
     const tabs = document.createElement("div");
     tabs.setAttribute("role", "tablist");
-    // Wraps too. The header wrapping does nothing on its own while the strip
-    // inside it is one unbreakable row: the tabs would overflow this box rather
-    // than the header, and the last one would sit off the edge.
-    tabs.style.cssText = "display:flex;flex-wrap:wrap;gap:4px;flex:1;min-width:0";
+    // One row, with the four sharing it evenly. Wrapping dropped the last tab
+    // onto a second line on a narrow panel, and sizing each to its own label
+    // left the gaps between them all different and the selected one reading as
+    // cramped next to the wide ones. Auto Refine's tab strip is the same.
+    tabs.style.cssText = "display:flex;flex-wrap:nowrap;gap:4px;flex:1;min-width:0";
     const ORDER: Array<"log" | "prompt" | "stats" | "replaced"> = ["log", "prompt", "stats", "replaced"];
     const tabBtns: Record<string, HTMLButtonElement> = {};
     const mkTab = (id: "log" | "prompt" | "stats" | "replaced", label: string) => {
@@ -4404,7 +4405,10 @@ export function setup(ctx: Ctx, opts?: any) {
         // that only works with a mouse is the wrong way round here: this panel
         // exists because there is no console on a phone.
         "cursor:pointer;border:0;background:transparent;font:inherit;color:inherit;" +
-        "min-height:32px;padding:4px 12px;border-radius:var(--lumiverse-radius-sm,5px);" +
+        "min-height:32px;padding:4px 4px;border-radius:var(--lumiverse-radius-sm,5px);" +
+        // An equal share each, so the row has one rhythm and one pill size.
+        "flex:1 1 0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" +
+        "text-align:center;" +
         // The header is the drag handle, and a tap that slides a pixel would
         // otherwise be swallowed as the start of a drag.
         "touch-action:manipulation";

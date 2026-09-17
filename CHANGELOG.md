@@ -8,6 +8,14 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.6.2
+
+_2026-09-17_
+
+### Changed
+
+- **The four tabs on the floating panel share the row evenly.** They wrapped onto a second line on a narrow panel, and each was sized to its own label, so the gaps between them all differed and the selected one read as cramped next to the wide ones. Auto Refine's tab strip is the same now.
+
 ## 5.6.0
 
 _2026-09-15_
