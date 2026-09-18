@@ -11497,6 +11497,82 @@ console.log("\nsections open without throwing the panel");
   check("closing one: no console errors", closeErrors.length === 0, closeErrors);
 }
 
+console.log("\nwhen the notes stop matching the set named in the picker");
+{
+  // Loading a set puts its name in the picker and nothing cleared it, so
+  // changing a note afterwards left the picker naming a set the panel no longer
+  // held.
+  //
+  // The fields are not locked while a set that comes with the extension is
+  // picked. Loading one and changing it is how somebody is meant to start,
+  // which is what Save as new is for. What was missing was the panel saying the
+  // two had parted company.
+  const openNotes = (page) =>
+    page.evaluate(async () => {
+      for (const b of [...document.querySelectorAll("#modal button")]) {
+        const t = (b.textContent || "").trim();
+        if (/^Refusal tuning/.test(t) && b.getAttribute("aria-expanded") === "false") b.click();
+      }
+      await new Promise((r) => setTimeout(r, 150));
+      return !!document.querySelector("#modal select");
+    });
+  const drift = (page) =>
+    page.evaluate(() => {
+      const n = document.querySelector("#modal [data-lvr-presetdrift]");
+      return n && !n.hidden ? n.textContent.trim() : null;
+    });
+
+  const { out, errors } = await inPanel(
+    browser,
+    { settings: { refusalNote: true } },
+    async (page) => {
+      const opened = await openNotes(page);
+      // Load one of the sets that come with it.
+      const loaded = await page.evaluate(async () => {
+        const sel = [...document.querySelectorAll("#modal select")].find((s) =>
+          [...s.options].some((o) => /A nudge/.test(o.textContent)),
+        );
+        if (!sel) return { noPicker: true };
+        const opt = [...sel.options].find((o) => /A nudge/.test(o.textContent));
+        sel.value = opt.value;
+        sel.dispatchEvent(new Event("change", { bubbles: true }));
+        await new Promise((r) => setTimeout(r, 250));
+        return { name: opt.textContent.trim() };
+      });
+      const afterLoading = await drift(page);
+      // Change a note by hand, the way somebody tweaking a set would.
+      const edited = await page.evaluate(async () => {
+        const boxes = [...document.querySelectorAll("#modal textarea")];
+        const box = boxes.find((b) => /OOC/.test(b.value));
+        if (!box) return false;
+        box.focus();
+        box.value = box.value.replace("]", " And one line of my own.]");
+        box.dispatchEvent(new Event("input", { bubbles: true }));
+        box.dispatchEvent(new Event("change", { bubbles: true }));
+        box.blur();
+        box.dispatchEvent(new Event("blur", { bubbles: true }));
+        await new Promise((r) => setTimeout(r, 400));
+        return true;
+      });
+      return { opened, loaded, afterLoading, edited, afterEditing: await drift(page) };
+    },
+  );
+  check("the section holding the note sets opened", out.opened, JSON.stringify(out.opened));
+  check("one of the sets loaded", !!out.loaded && !out.loaded.noPicker, JSON.stringify(out.loaded));
+  // The half that is easy to get wrong: a set that has only just loaded matches
+  // itself, and saying otherwise would put the line up for everybody the moment
+  // they picked anything.
+  check("a freshly loaded set says nothing", out.afterLoading === null, String(out.afterLoading));
+  check("there was a note to edit", out.edited, JSON.stringify(out.edited));
+  check("editing one says the notes have changed", !!out.afterEditing, String(out.afterEditing));
+  check(
+    "and names Save as new, since a set that comes with it cannot be written over",
+    /Save as new/.test(out.afterEditing || ""),
+    String(out.afterEditing),
+  );
+  check("no console errors", errors.length === 0, errors);
+}
+
 console.log("\nsaying the note sets have changed");
 {
   const KEY = "lv-auto-retry:shipped-seen:v1";

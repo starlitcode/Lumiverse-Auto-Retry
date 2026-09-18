@@ -6518,6 +6518,45 @@ export function setup(ctx, opts) {
         return n;
     }
     // Snapshot the current values of a kind's keys.
+    // JSON with the keys in a settled order, so two values holding the same thing
+    // compare equal whatever order they were built in. A note set that ships is
+    // written text, role, fromTry, and one read back off the panel can carry
+    // those in another order, which a plain stringify would call a difference.
+    function settledJson(v) {
+        const walk = (x) => {
+            if (Array.isArray(x))
+                return x.map(walk);
+            if (x && typeof x === "object") {
+                const out = {};
+                for (const k of Object.keys(x).sort())
+                    out[k] = walk(x[k]);
+                return out;
+            }
+            return x;
+        };
+        try {
+            return JSON.stringify(walk(v));
+        }
+        catch (_) {
+            return "";
+        }
+    }
+    // Anything that has to re-read cfg when a field writes into it directly.
+    //
+    // The notes editor is the one that does: it writes the whole list into cfg as
+    // you type and leaves saving to the panel's own button, so a surface watching
+    // for a change would otherwise not hear about it until the save. Cleared when
+    // the settings body is built, so a rebuild does not leave the old panel's
+    // watchers behind.
+    let cfgWatchers = [];
+    function cfgChanged() {
+        for (const w of cfgWatchers) {
+            try {
+                w();
+            }
+            catch (_) { }
+        }
+    }
     function snapshotKind(kind) {
         const values = {};
         for (const k of keysForKind(kind))
@@ -9713,6 +9752,10 @@ export function setup(ctx, opts) {
         // Everything a change to cfg needs to take effect: written to both stores,
         // then each surface that reads cfg brought into line. Saving and loading a
         // preset both end here, and missing one line is a surface left stale.
+        // One per preset bar on this build of the panel. Emptied here rather than
+        // added to, so a rebuild does not leave the old panel's bars listening.
+        cfgWatchers = [];
+        const driftSyncers = [];
         const applyAndSave = () => {
             const storedHere = saveSaved();
             // Switching it off has to drop what is already held, or "turn it off and
@@ -9723,6 +9766,10 @@ export function setup(ctx, opts) {
             syncLiveLog();
             syncFloat();
             syncInputBarActions();
+            // A note edited by hand is what makes the picker's name go stale, and
+            // every change lands here.
+            for (const sync of driftSyncers)
+                sync();
             if (onSaved)
                 onSaved();
             return storedHere;
@@ -9801,6 +9848,18 @@ export function setup(ctx, opts) {
             const status = document.createElement("div");
             status.style.cssText =
                 "font-size:12px;line-height:1.4;color:var(--lumiverse-text-muted,rgba(255,255,255,.65));min-height:1em";
+            // Said once what is set stops matching the preset the picker still names.
+            //
+            // Loading one sets the picker and nothing cleared it, so changing a note
+            // afterwards left the box naming a set the panel no longer held. The
+            // fields are not locked while a set that ships is picked: loading one and
+            // changing it is how you are meant to start, which is what Save as new is
+            // for. What was missing was the panel saying the two had parted company.
+            const drift = document.createElement("div");
+            drift.setAttribute("data-lvr-presetdrift", "1");
+            drift.style.cssText =
+                "font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.7))";
+            drift.hidden = true;
             const presets = loadPresets();
             const list = () => presets[kind] || [];
             // Only this bar's own kind is this bar's to write. The store holds every
@@ -9843,6 +9902,35 @@ export function setup(ctx, opts) {
                 setEnabled(update, mine);
                 setEnabled(del, mine);
                 setEnabled(rename, mine);
+                syncDrift();
+            };
+            // Only the keys the preset actually carries. A set that ships holds the
+            // notes and where they go, and nothing else, so measuring it against
+            // every setting on the panel would call it changed the moment it loaded.
+            const syncDrift = () => {
+                const name = select.value;
+                const p = name ? list().find((x) => x.name === name) || builtInNote(name) : null;
+                if (!p || !p.values) {
+                    drift.hidden = true;
+                    return;
+                }
+                const now = cfg;
+                let moved = false;
+                for (const k of Object.keys(p.values)) {
+                    if (settledJson(now[k]) !== settledJson(p.values[k])) {
+                        moved = true;
+                        break;
+                    }
+                }
+                drift.hidden = !moved;
+                if (moved)
+                    drift.textContent = isShipped(name)
+                        ? "You have changed these since loading " +
+                            name +
+                            ". A set that comes with the extension cannot be written over, so put a name in the box and press Save as new to keep this."
+                        : "You have changed these since loading " +
+                            name +
+                            ". Press Update selected to keep it, or Save as new for a second copy.";
             };
             select.addEventListener("change", () => {
                 // Picking loads it. Before this, picking only greyed the buttons in and
@@ -10120,7 +10208,14 @@ export function setup(ctx, opts) {
             wrap.appendChild(manageRow);
             wrap.appendChild(miniLabel("Save or rename"));
             wrap.appendChild(saveRow);
+            wrap.appendChild(drift);
             wrap.appendChild(status);
+            // The picker starts on nothing, so this only has an answer once something
+            // has been loaded. Called anyway, so the line is right from the first
+            // paint rather than only after the next press.
+            syncDrift();
+            driftSyncers.push(syncDrift);
+            cfgWatchers.push(syncDrift);
             return wrap;
         }
         // Somewhere to try the refusal settings on real text. Without this the whole
@@ -11569,6 +11664,7 @@ export function setup(ctx, opts) {
                     role: n.role,
                     fromTry: n.fromTry,
                 }));
+                cfgChanged();
             };
             const draw = () => {
                 list.replaceChildren();

@@ -12,6 +12,14 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 _2026-09-17_
 
+### Fixed
+
+- **A note set no longer claims to be loaded after you have changed it.** Loading one put its name in the picker and nothing cleared it, so editing a note afterwards left the picker naming a set the panel no longer held.
+
+  The line under the picker says so once the two part company, and says where to keep the change: a set that comes with the extension cannot be written over, so it goes under a name of your own with **Save as new**.
+
+  The notes stay editable while one is picked. Loading a set and changing it is how you are meant to start.
+
 ### Changed
 
 - **The four tabs on the floating panel share the row evenly.** They wrapped onto a second line on a narrow panel, and each was sized to its own label, so the gaps between them all differed and the selected one read as cramped next to the wide ones. Auto Refine's tab strip is the same now.
