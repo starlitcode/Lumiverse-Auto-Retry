@@ -14,6 +14,14 @@ _2026-09-17_
 
 ### Fixed
 
+- **A note set that comes with the extension cannot be typed into.** Picking one locks its notes: the text, the role, the try it starts on, the remove button and the button that adds another. A line above them says why and says what to do instead.
+
+  Those sets cannot be written over, so editing them was typing into something the panel was about to refuse to save. To change one, put a name in the box under **Saved presets** and press **Save as new**. The copy is yours and opens for editing straight away.
+
+  A fresh install is not affected, since the picker starts on nothing. The text stays selectable while locked, so a line can still be copied out of a set you want to borrow wording from.
+
+  Auto Refine locks its built-in prompts the same way, and both say the same thing about it.
+
 - **A note set no longer claims to be loaded after you have changed it.** Loading one put its name in the picker and nothing cleared it, so editing a note afterwards left the picker naming a set the panel no longer held.
 
   The line under the picker says so once the two part company, and says where to keep the change: a set that comes with the extension cannot be written over, so it goes under a name of your own with **Save as new**.

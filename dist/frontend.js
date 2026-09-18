@@ -6541,6 +6541,27 @@ export function setup(ctx, opts) {
             return "";
         }
     }
+    // The set the notes picker is on, when it is one that comes with the
+    // extension, and empty otherwise.
+    //
+    // Those cannot be written over, so editing the notes while one is named would
+    // be typing into something the panel is about to refuse to save. The notes
+    // editor is built outside the bar that owns the picker, so the bar writes the
+    // name here and the editor reads it. Auto Refine locks its built-in prompts
+    // the same way, and the two say the same thing about it.
+    let notesOnBuiltIn = "";
+    // Turns a control off and says why, so a screen reader gets the reason rather
+    // than a dead field.
+    function lockForBuiltIn(node) {
+        try {
+            node.disabled = true;
+            node.style.opacity = "0.55";
+            node.style.cursor = "not-allowed";
+            node.title =
+                "Part of " + notesOnBuiltIn + ", which cannot be changed. Save it as your own first.";
+        }
+        catch (_) { }
+    }
     // Anything that has to re-read cfg when a field writes into it directly.
     //
     // The notes editor is the one that does: it writes the whole list into cfg as
@@ -9903,6 +9924,18 @@ export function setup(ctx, opts) {
                 setEnabled(del, mine);
                 setEnabled(rename, mine);
                 syncDrift();
+                // Only the notes bar owns a set that can be locked, and only it should
+                // speak for the notes editor.
+                if (kind === "notes") {
+                    const now = picked && isShipped(select.value) ? select.value : "";
+                    if (now !== notesOnBuiltIn) {
+                        notesOnBuiltIn = now;
+                        // Redraw the notes through their own setter, which is what every
+                        // other change to them goes through.
+                        if (fieldSetters.refusalNotes)
+                            fieldSetters.refusalNotes(cfg.refusalNotes);
+                    }
+                }
             };
             // Only the keys the preset actually carries. A set that ships holds the
             // notes and where they go, and nothing else, so measuring it against
@@ -11677,6 +11710,7 @@ export function setup(ctx, opts) {
                     num.textContent = notes.length > 1 ? "Note " + (i + 1) : "Note";
                     num.style.cssText =
                         "font-size:11px;color:var(--lumiverse-text-muted,rgba(255,255,255,.65));flex:1";
+                    const held = !!notesOnBuiltIn;
                     const who = document.createElement("select");
                     for (const o of NOTE_ROLE_OPTIONS) {
                         const opt = document.createElement("option");
@@ -11688,6 +11722,8 @@ export function setup(ctx, opts) {
                     styleField(who);
                     who.style.cssText += "flex:none;padding:5px 8px;font-size:12px";
                     who.setAttribute("aria-label", "Who note " + (i + 1) + " comes from");
+                    if (held)
+                        lockForBuiltIn(who);
                     who.addEventListener("change", () => {
                         note.role = coerce("pick", who.value, "system", {
                             options: NOTE_ROLE_OPTIONS,
@@ -11704,6 +11740,8 @@ export function setup(ctx, opts) {
                     const fromLabel = document.createElement("span");
                     fromLabel.textContent = "from try";
                     const from = document.createElement("input");
+                    if (held)
+                        lockForBuiltIn(from);
                     from.type = "number";
                     from.inputMode = "numeric";
                     from.min = "1";
@@ -11724,6 +11762,8 @@ export function setup(ctx, opts) {
                     fromWrap.appendChild(fromLabel);
                     fromWrap.appendChild(from);
                     const drop = btn("\u2212", false);
+                    if (held)
+                        lockForBuiltIn(drop);
                     drop.style.cssText += "min-height:0;padding:4px 12px;flex:none";
                     drop.setAttribute("aria-label", "Remove note " + (i + 1));
                     // One note is the floor. Removing the last one would leave nothing to
@@ -11761,6 +11801,14 @@ export function setup(ctx, opts) {
                     bar.appendChild(who);
                     bar.appendChild(drop);
                     const ta = document.createElement("textarea");
+                    // Readable rather than disabled, so a line can still be copied out of a
+                    // set somebody wants to borrow wording from.
+                    if (held) {
+                        ta.readOnly = true;
+                        ta.style.opacity = "0.75";
+                        ta.title =
+                            "Part of " + notesOnBuiltIn + ", which cannot be changed. Save it as your own first.";
+                    }
                     ta.rows = 3;
                     ta.value = note.text;
                     ta.setAttribute("aria-label", "Note " + (i + 1));
@@ -11832,11 +11880,33 @@ export function setup(ctx, opts) {
             });
             fieldSetters[f.key] = (v) => {
                 notes = coerce("notes", v, CONFIG[f.key], f);
+                setLocked();
                 draw();
             };
+            // Adding a note, and the line above the list explaining why the rest is
+            // read-only. Both follow the pick, so they are set here rather than once
+            // at build time.
+            const heldLine = document.createElement("div");
+            heldLine.setAttribute("data-lvr-noteslocked", "1");
+            heldLine.style.cssText =
+                "font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.7))";
+            const setLocked = () => {
+                const held = !!notesOnBuiltIn;
+                heldLine.hidden = !held;
+                if (held)
+                    heldLine.textContent =
+                        "You are looking at " +
+                            notesOnBuiltIn +
+                            ", one of the sets built in. It cannot be written over, so the notes below are read-only. To change it, put a name in the box under Saved presets and press Save as new. The copy is yours and opens for editing.";
+                add.disabled = held;
+                add.style.opacity = held ? "0.55" : "1";
+                add.style.cursor = held ? "not-allowed" : "pointer";
+            };
+            setLocked();
             draw();
             foot.appendChild(add);
             foot.appendChild(count);
+            row.appendChild(heldLine);
             row.appendChild(list);
             row.appendChild(foot);
         }

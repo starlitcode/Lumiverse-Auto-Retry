@@ -11497,6 +11497,65 @@ console.log("\nsections open without throwing the panel");
   check("closing one: no console errors", closeErrors.length === 0, closeErrors);
 }
 
+console.log("\na note set that comes with it cannot be typed into");
+{
+  // The same rule Auto Refine keeps for its built-in prompts. A set that comes
+  // with the extension cannot be written over, so editing its notes would be
+  // typing into something the panel is about to refuse to save.
+  //
+  // A fresh install is not in this state: the picker starts on nothing, so
+  // somebody who has never opened the list can type into every note.
+  const openNotes = (page) =>
+    page.evaluate(async () => {
+      for (const b of [...document.querySelectorAll("#modal button")]) {
+        const t = (b.textContent || "").trim();
+        if (/^Refusal tuning/.test(t) && b.getAttribute("aria-expanded") === "false") b.click();
+      }
+      await new Promise((r) => setTimeout(r, 150));
+      return !!document.querySelector("#modal select");
+    });
+  const look = (page) =>
+    page.evaluate(() => {
+      // By its label, not "the first textarea in the panel": the refusal section
+      // holds several and the first is not a note.
+      const ta = document.querySelector('#modal textarea[aria-label^="Note "]');
+      const line = document.querySelector("#modal [data-lvr-noteslocked]");
+      return {
+        readOnly: ta ? !!ta.readOnly : null,
+        said: !!(line && !line.hidden),
+        text: line ? line.textContent : "",
+      };
+    });
+
+  const { out, errors } = await inPanel(
+    browser,
+    { settings: { refusalNote: true } },
+    async (page) => {
+      const opened = await openNotes(page);
+      const fresh = await look(page);
+      const picked = await page.evaluate(async () => {
+        const sel = [...document.querySelectorAll("#modal select")].find((s) =>
+          [...s.options].some((o) => /A nudge/.test(o.textContent)),
+        );
+        if (!sel) return false;
+        sel.value = [...sel.options].find((o) => /A nudge/.test(o.textContent)).value;
+        sel.dispatchEvent(new Event("change", { bubbles: true }));
+        await new Promise((r) => setTimeout(r, 300));
+        return true;
+      });
+      return { opened, fresh, picked, held: await look(page) };
+    },
+  );
+  check("the section holding the note sets opened", out.opened, JSON.stringify(out.opened));
+  check("a fresh install can type into its notes", out.fresh.readOnly === false, JSON.stringify(out.fresh));
+  check("and is told nothing about a locked set", !out.fresh.said, JSON.stringify(out.fresh));
+  check("one of the sets was picked", out.picked, JSON.stringify(out.picked));
+  check("the notes stop taking typing", out.held.readOnly === true, JSON.stringify(out.held));
+  check("a line says why", out.held.said, JSON.stringify(out.held));
+  check("and says Save as new is the way round it", /Save as new/.test(out.held.text || ""), String(out.held.text).slice(0, 200));
+  check("no console errors", errors.length === 0, errors);
+}
+
 console.log("\nwhen the notes stop matching the set named in the picker");
 {
   // Loading a set puts its name in the picker and nothing cleared it, so
