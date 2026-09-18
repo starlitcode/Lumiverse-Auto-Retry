@@ -3123,6 +3123,15 @@ const HOLD_MS = 500;
 // cent reads as broken.
 const HOLD_RING_MS = HOLD_MS - 70;
 
+// How long a press has to last before the ring is drawn at all. A tap is over
+// well inside this, so tapping shows nothing and the two gestures stay apart:
+// a ring on screen means a hold is running. Without the wait every tap flashed
+// a ring, which read as the button not knowing which one you meant.
+//
+// It only holds back the fade. The ring is already filling underneath, so when
+// it does appear it appears at how far through the hold you actually are.
+const HOLD_RING_WAIT = 150;
+
 // How far a finger may drift and still be holding rather than dragging. Ten
 // pixels, because a thumb resting on glass drifts further than eight and every
 // one of those was a hold that quietly did nothing. Auto Refine allows the same.
@@ -5079,6 +5088,13 @@ export function setup(ctx: Ctx, opts?: any) {
   // Reassigned each time the button is rebuilt; the document listener below
   // calls through this so only one listener is ever registered.
   let holdMoveWatch: ((e: any) => void) | null = null;
+  // The same idea for the end of a press. It has to be watched on the document
+  // rather than on the button: the host captures the pointer to drag the
+  // widget, and once it has, the pointerup is delivered to whatever it captured
+  // on. A listener on the button never saw it, so the hold timer ran on after
+  // the finger left and every tap opened the menu. Auto Refine watches the
+  // window for the same reason.
+  let holdEndWatch: (() => void) | null = null;
   let floatEl: any = null;
   let floatWidgetSize = 0;
   // What the button was last painted as, so a repaint that says nothing new
@@ -5381,6 +5397,8 @@ export function setup(ctx: Ctx, opts?: any) {
     // through the document on the way down, so this sees them either way. A
     // listener only on the button would miss a drag entirely and pop the menu
     // open in the middle of one.
+    // Every press ends here, captured pointer or not.
+    holdEndWatch = () => dropPress();
     holdMoveWatch = (e: any) => {
       if (!pressFrom || !e) return;
       if (
@@ -5598,6 +5616,7 @@ export function setup(ctx: Ctx, opts?: any) {
     // kept a whole button's worth of handlers alive after the button was gone,
     // and every pointer move on the page went on running its hold check.
     holdMoveWatch = null;
+    holdEndWatch = null;
     // The Extras menu takes them all back, now that there is no floating
     // button. Hiding the button from its own menu is why this is needed:
     // nothing else runs afterwards, so without it the buttons that had moved
@@ -7803,7 +7822,8 @@ export function setup(ctx: Ctx, opts?: any) {
         // grows rather than a circle that appears.
         "[data-ar-float] .lv-ar-hold circle{stroke-dasharray:" + HOLD_RING_LEN + ";" +
         "stroke-dashoffset:" + HOLD_RING_LEN + ";transition:stroke-dashoffset 160ms ease-out}" +
-        '[data-ar-float][data-ar-holding] .lv-ar-hold{opacity:1;transition:opacity 90ms linear}' +
+        "[data-ar-float][data-ar-holding] .lv-ar-hold{opacity:1;" +
+        "transition:opacity 90ms linear " + HOLD_RING_WAIT + "ms}" +
         // Linear, so the ring fills at one steady rate and how far round it has
         // gone is how far through the hold you are. Eased would run ahead or
         // behind.
@@ -9292,13 +9312,20 @@ export function setup(ctx: Ctx, opts?: any) {
       noteKind(e);
       onHintDismiss(e);
     };
+    const onHoldEnd = () => {
+      if (holdEndWatch) holdEndWatch();
+    };
     document.addEventListener("pointermove", onHoldMove, true);
+    document.addEventListener("pointerup", onHoldEnd, true);
+    document.addEventListener("pointercancel", onHoldEnd, true);
     document.addEventListener("pointerdown", onDown, true);
     document.addEventListener("scroll", onHintScroll, true);
     document.addEventListener("keydown", onHintKey, true);
     if (typeof window !== "undefined") window.addEventListener("resize", onHintResize);
     disposers.push(() => {
       try { document.removeEventListener("pointermove", onHoldMove, true); } catch (_) {}
+      try { document.removeEventListener("pointerup", onHoldEnd, true); } catch (_) {}
+      try { document.removeEventListener("pointercancel", onHoldEnd, true); } catch (_) {}
       try { document.removeEventListener("pointerdown", onDown, true); } catch (_) {}
       try { document.removeEventListener("scroll", onHintScroll, true); } catch (_) {}
       try { document.removeEventListener("keydown", onHintKey, true); } catch (_) {}

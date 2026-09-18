@@ -2888,9 +2888,26 @@ console.log("\nfloat button menu");
 
     // A quick tap toggles and opens nothing.
     const wasOn = btn().getAttribute("aria-pressed");
-    down(btn(), 130, 130); await wait(60); up(btn()); btn().click();
+    down(btn(), 130, 130); await wait(60);
+    // Read while the finger is still down and well inside a tap. The ring is
+    // what tells a hold from a tap, so drawing one on every press is the button
+    // saying it does not know which you meant.
+    const tapRing = ringAt(btn());
+    up(btn()); btn().click();
     const afterTap = { pressed: btn().getAttribute("aria-pressed"), menu: shown() > 0 };
     btn().click(); // back on
+
+    // The same tap with the host holding the pointer, which is what it does to
+    // drag the widget. Once it has, the pointerup goes to whatever it captured
+    // on, so a listener on the button never sees it. That left the hold timer
+    // running after the finger was gone and turned every tap into a hold.
+    const beforeCaptured = shown();
+    down(btn(), 130, 130);
+    await wait(60);
+    document.dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
+    await wait(620);
+    const capturedTap = { menu: shown() > beforeCaptured };
+    btn().click();
 
     down(btn(), 130, 130);
     await wait(250);
@@ -2987,11 +3004,15 @@ console.log("\nfloat button menu");
     const left = { ours: document.querySelectorAll('[role="menu"],[role="menuitem"]').length };
     return { wasOn, afterTap, openedByHold, entries, keys, afterHold, onScreen, onButton,
              afterDrag, resize, afterDismiss, gone, left,
-             ringIdle, ringMid, ringAfter, ringDone, ringNearlyUp };
+             ringIdle, ringMid, ringAfter, ringDone, ringNearlyUp, tapRing, capturedTap };
   });
   await page.close();
   check("a quick tap still toggles", out.afterTap.pressed !== out.wasOn, out.afterTap);
   check("and opens no menu", !out.afterTap.menu);
+  check("a tap draws no ring, so it never reads as a hold",
+    out.tapRing && out.tapRing.shown === 0, JSON.stringify(out.tapRing));
+  check("a tap opens no menu even when the host is holding the pointer",
+    out.capturedTap && !out.capturedTap.menu, JSON.stringify(out.capturedTap));
   check("a hold opens the menu", out.openedByHold);
 
   // The ring that fills while the button is held. Nothing on screen used to say
