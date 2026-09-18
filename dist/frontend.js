@@ -5105,16 +5105,34 @@ export function setup(ctx, opts) {
         // The mark is drawn, not typed, so it is sized here rather than by font
         // size. Just over half the button leaves the ring around it looking even.
         const glyph = Math.max(14, Math.round(d * 0.56));
-        floatEl.style.background = on
-            ? "var(--lumiverse-primary-020,rgba(147,112,219,.2))"
-            : "var(--lumiverse-fill-subtle,rgba(0,0,0,.1))";
+        // The base is opaque, and the accent goes on as a layer over it rather than
+        // replacing it. A floating control sits over whatever the chat is showing,
+        // and a fill with alpha in it takes the colour of the message underneath, so
+        // the same button was muddy over one reply and clear over the next.
+        //
+        // Auto Refine's button says its own states with the same four values moving
+        // together, so somebody running both reads one control rather than two.
+        floatEl.style.backgroundColor = "var(--lumiverse-card-bg-solid,rgb(24,20,34))";
+        floatEl.style.backgroundImage = on
+            ? "linear-gradient(var(--lumiverse-primary-020,rgba(147,112,219,.2))," +
+                "var(--lumiverse-primary-020,rgba(147,112,219,.2)))," +
+                "linear-gradient(var(--lumiverse-bg-elevated,rgba(35,30,48,.9))," +
+                "var(--lumiverse-bg-elevated,rgba(35,30,48,.9)))"
+            : "linear-gradient(var(--lumiverse-bg-elevated,rgba(35,30,48,.9))," +
+                "var(--lumiverse-bg-elevated,rgba(35,30,48,.9)))";
         floatEl.style.borderColor = on
             ? "var(--lumiverse-primary-050,rgba(147,112,219,.5))"
-            : "var(--lumiverse-border,rgba(147,112,219,.12))";
-        floatEl.style.color = on
-            ? "var(--lumiverse-primary-text,rgba(186,135,255,.95))"
-            : "var(--lumiverse-text-muted,rgba(255,255,255,.65))";
-        floatEl.style.opacity = on ? "1" : "0.75";
+            : "var(--lumiverse-border-hover,rgba(147,112,219,.25))";
+        // The mark's job is to stay legible; the fill, the edge and the ring say
+        // which state it is in. Tinting the mark itself with the accent measured
+        // 2.49 against a floor of 3 on a light theme in Auto Refine, which is the
+        // same pair of colours this used.
+        floatEl.style.color = "var(--lumiverse-text,rgba(255,255,255,.9))";
+        // Off is said by the fill, the edge, the ink and the slash across the mark.
+        // Dropping the whole button to three quarters as well dimmed the mark that
+        // says which extension this is, and a faded control reads as broken rather
+        // than as switched off.
+        floatEl.style.opacity = "1";
         // Drawn once and then left alone.
         //
         // Rewriting it on every paint throws the element away and starts any
@@ -5228,7 +5246,9 @@ export function setup(ctx, opts) {
                 // browser's own callout, either of which lands on top of the menu.
                 "user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;" +
                 "font-family:var(--lumiverse-font-family,system-ui);" +
-                "box-shadow:var(--lumiverse-shadow-sm,0 2px 8px rgba(0,0,0,.2));";
+                // The same lift Auto Refine's button has. A control floating over the
+                // chat needs enough shadow to sit above it rather than on it.
+                "box-shadow:var(--lumiverse-shadow-md,0 8px 24px rgba(0,0,0,.4));";
         // The colours ease between the two states and the mark fades in over the one
         // it replaces, so turning it off reads as one movement rather than a
         // flicker. Only on a real change of state: repainting for a chat switch or
@@ -7794,6 +7814,7 @@ export function setup(ctx, opts) {
                 // you pressed and it should be seen, and eased so it settles rather
                 // than stopping dead.
                 "[data-ar-float]{transition:background-color 260ms cubic-bezier(.2,.7,.3,1)," +
+                    "background-image 260ms cubic-bezier(.2,.7,.3,1)," +
                     "border-color 260ms cubic-bezier(.2,.7,.3,1)," +
                     "color 260ms cubic-bezier(.2,.7,.3,1)," +
                     "box-shadow 260ms cubic-bezier(.2,.7,.3,1)," +

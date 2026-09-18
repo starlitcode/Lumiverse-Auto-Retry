@@ -2776,7 +2776,15 @@ console.log("\nicons");
       );
       await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       const btn = host.querySelector("button");
-      const was = btn.style.background;
+      // What is painted, not what was assigned. Reading btn.style.background
+      // only sees the shorthand, so moving the paint onto backgroundColor and
+      // backgroundImage made this look like the button had stopped answering a
+      // tap when all that changed was which property carried it.
+      const look = () => {
+        const st = getComputedStyle(btn);
+        return st.backgroundImage + "|" + st.backgroundColor + "|" + st.borderColor;
+      };
+      const was = look();
       btn.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
       const moved = btn.style.transform;
       // Duration rather than the shorthand: with nothing set, Chromium
@@ -2786,7 +2794,7 @@ console.log("\nicons");
       // The tap still has to say something, and it says it in colour.
       btn.click();
       await new Promise((r) => requestAnimationFrame(r));
-      return { moved, transition: css, recoloured: btn.style.background !== was };
+      return { moved, transition: css, recoloured: look() !== was };
     });
     await page.close();
     return { ...out, errs };
@@ -2866,6 +2874,54 @@ console.log("\nfloat button menu");
     const move = (_el, x, y) => document.dispatchEvent(new PointerEvent("pointermove", { bubbles: true, clientX: x, clientY: y }));
     const up = (el) => el.dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
 
+    // The mark on the button, measured against what is actually behind it. The
+    // contrast sweep walks text, and this button has none: its mark is an SVG
+    // drawn in currentColor. So the one part of this extension that sits over
+    // somebody else's chat, in their theme, was never measured at all, and the
+    // pair of colours it used measured 2.49 against a floor of 3 on a light
+    // theme in Auto Refine. Held to 3, which is what a graphic is asked for
+    // rather than the 4.5 asked of body text.
+    const inkRatio = (el) => {
+      const parse = (str) => {
+        const m = /rgba?\(([^)]+)\)/.exec(str || "");
+        if (!m) return null;
+        const p = m[1].split(",").map((x) => parseFloat(x.trim()));
+        return { r: p[0], g: p[1], b: p[2], a: p.length > 3 ? p[3] : 1 };
+      };
+      const over = (f, b) => ({
+        r: f.r * f.a + b.r * (1 - f.a),
+        g: f.g * f.a + b.g * (1 - f.a),
+        b: f.b * f.a + b.b * (1 - f.a),
+        a: 1,
+      });
+      const lum = (c) => {
+        const f = (v) => {
+          v /= 255;
+          return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+        };
+        return 0.2126 * f(c.r) + 0.7152 * f(c.g) + 0.0722 * f(c.b);
+      };
+      const stack = [];
+      let node = el;
+      while (node && node !== document.documentElement) {
+        const c = parse(getComputedStyle(node).backgroundColor);
+        if (c && c.a > 0) {
+          stack.push(c);
+          if (c.a >= 0.999) break;
+        }
+        node = node.parentElement;
+      }
+      let base = { r: 255, g: 255, b: 255, a: 1 };
+      const pg = parse(getComputedStyle(document.body).backgroundColor);
+      if (pg && pg.a >= 0.999) base = pg;
+      for (let i = stack.length - 1; i >= 0; i--) base = over(stack[i], base);
+      const ink = parse(getComputedStyle(el).color);
+      if (!ink) return null;
+      const a = lum(over(ink, base));
+      const b = lum(base);
+      return Math.round(((Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)) * 100) / 100;
+    };
+
     // The ring around the edge is what says a hold is under way. Read part way
     // through, while the finger is still down, since that is the only moment it
     // is meant to be visible.
@@ -2888,6 +2944,7 @@ console.log("\nfloat button menu");
 
     // A quick tap toggles and opens nothing.
     const wasOn = btn().getAttribute("aria-pressed");
+    const inkOn = inkRatio(btn());
     down(btn(), 130, 130); await wait(60);
     // Read while the finger is still down and well inside a tap. The ring is
     // what tells a hold from a tap, so drawing one on every press is the button
@@ -2895,6 +2952,8 @@ console.log("\nfloat button menu");
     const tapRing = ringAt(btn());
     up(btn()); btn().click();
     const afterTap = { pressed: btn().getAttribute("aria-pressed"), menu: shown() > 0 };
+    await wait(320);
+    const inkOff = inkRatio(btn());
     btn().click(); // back on
 
     // The same tap with the host holding the pointer, which is what it does to
@@ -3004,11 +3063,16 @@ console.log("\nfloat button menu");
     const left = { ours: document.querySelectorAll('[role="menu"],[role="menuitem"]').length };
     return { wasOn, afterTap, openedByHold, entries, keys, afterHold, onScreen, onButton,
              afterDrag, resize, afterDismiss, gone, left,
-             ringIdle, ringMid, ringAfter, ringDone, ringNearlyUp, tapRing, capturedTap };
+             ringIdle, ringMid, ringAfter, ringDone, ringNearlyUp, tapRing, capturedTap,
+             inkOn, inkOff };
   });
   await page.close();
   check("a quick tap still toggles", out.afterTap.pressed !== out.wasOn, out.afterTap);
   check("and opens no menu", !out.afterTap.menu);
+  check("the mark is readable while it is on", out.inkOn !== null && out.inkOn >= 3,
+    out.inkOn + " against 3");
+  check("and readable while it is off", out.inkOff !== null && out.inkOff >= 3,
+    out.inkOff + " against 3");
   check("a tap draws no ring, so it never reads as a hold",
     out.tapRing && out.tapRing.shown === 0, JSON.stringify(out.tapRing));
   check("a tap opens no menu even when the host is holding the pointer",
