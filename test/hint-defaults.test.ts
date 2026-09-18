@@ -106,7 +106,7 @@ describe("the timings read the way a person would say them", () => {
     expect(human(CONFIG.retryDelayMs)).toBe("2 seconds");
     expect(human(CONFIG.maxDelayMs)).toBe("1 minute");
     expect(human(CONFIG.rateLimitDelayMs)).toBe("15 seconds");
-    expect(human(CONFIG.stuckTimeoutMs)).toBe("3 minutes");
+    expect(human(CONFIG.stuckTimeoutMs)).toBe("4 minutes");
     expect(human(CONFIG.idleTimeoutMs)).toBe("90 seconds");
   });
 });

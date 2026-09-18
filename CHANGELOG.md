@@ -12,7 +12,25 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 _2026-09-17_
 
+### Added
+
+- **A ring fills around the floating button while you hold it.** Holding the button opens its menu, and nothing on screen said a hold was under way, so the half second before the menu appeared read as a tap that did nothing.
+
+  The ring starts at the top and closes exactly as the menu opens. Letting go early wipes it back. A press still dips the button a little, so a tap answers whether or not it changed anything: a dip on its own is a tap, a dip with the ring running is a hold.
+
+  Auto Refine's floating button draws the same ring the same way, at the same length, so the two behave alike.
+
+  Somebody who has asked their device for less movement gets the menu on the same hold with no ring drawn.
+
 ### Fixed
+
+- **A reply is given four minutes to start, not three.** The watchdog that catches a generation which began and then produced nothing was set to three minutes, which covers a local model loading weights and a long prompt being read.
+
+  It did not cover a reasoning model on an endpoint that sends nothing at all until the answer starts. A model that streams its thinking clears the watchdog on its first thinking token and was never at risk; one that keeps its thinking to itself looks identical to a dead generation, and a hard question can hold it past three minutes. The reply was then thrown away and asked for again, which is the worst of both, since the second attempt thinks just as long.
+
+  If you were still on three minutes, the panel says so at the top and offers to move you. If you had set your own number, it says nothing, because nothing of yours changed. **Take it** moves you and **Keep mine** leaves it, and either one puts the line away for good.
+
+  Auto Refine carries the same kind of line for the same reason.
 
 - **A note set that comes with the extension cannot be typed into.** Picking one locks its notes: the text, the role, the try it starts on, the remove button and the button that adds another. A line above them says why and says what to do instead.
 

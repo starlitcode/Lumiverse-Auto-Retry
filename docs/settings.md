@@ -42,6 +42,8 @@ Two options in **Basics**, and you can use either or both:
 
 - **Floating on/off button** puts a small button over the chat that toggles it in one tap. Drag it anywhere; it snaps to the nearest edge and stays where you leave it, and you can set its size, which the button itself takes on as you type so you can see it before saving. Changing the size grows it around where it is sitting rather than moving it, though a button against an edge does come inward far enough for the bigger size to fit. Tapping it eases between on and off rather than flicking, and a device set to reduce motion gets the same change with nothing in between. Hold it, or right-click on a computer, for its menu. That menu is drawn by Lumiverse, so it arrives in your own theme and accent.
 
+  Holding it fills a ring around its edge, which closes exactly as the menu opens. Letting go early wipes it back. A press also dips the button a little, so a tap answers whether or not it changed anything: a dip on its own is a tap, a dip with the ring running is a hold. Auto Refine's floating button does the same. A device set to reduce motion opens the menu on the same hold with no ring drawn.
+
   While this button is showing, its menu holds everything that would otherwise be in the **Extras** menu. In order: **Auto Retry settings**, then **Open the Auto Retry panel** if the panel is set to live in the sidebar, then **Hide this button** at the bottom.
 - **On/off button in the Extras menu** adds a button next to the settings button. Its label says whether Auto Retry is on or off, so you can check and change it without opening the settings. It takes up no room on the screen. In a chat you have switched off, it says so, because "on" would be true of everywhere except where you are. Tapping it always switches Auto Retry on or off everywhere, wherever you tap it from, and the label says so.
 
@@ -190,7 +192,7 @@ The same options live in the CONFIG block at the top of `src/frontend.ts` and `d
 | rateLimitDelayMs | 15000 | Floor wait when the server says it is busy. Most shared tiers meter per minute, so a shorter wait usually spends a try hitting the same limit. Where the server says how long to wait, that figure is used instead and it is not held under `maxDelayMs`: it is the only number here that is not a guess. An hour is the ceiling. |
 | retryByNewReroll | true | On: a retry clicks the next / swipe button, adding a new reroll and keeping the existing ones, so a reply it was wrong to retry can be swiped back to. Off: a retry redoes the reply in place via the regenerate button, which on some builds clears the other rerolls. Applies to every retry reason. The other button is the fallback. |
 | keepReplaced | true | Keep the last reply a retry threw away in this chat, so it can be read back or copied from the Replaced tab of the on-screen panel. Held in the tab's memory only: never written down, never sent anywhere, gone when the tab closes. |
-| stuckTimeoutMs | 180000 | Started, then nothing arrived and it never finished, within this. 0 disables. |
+| stuckTimeoutMs | 240000 | Started, then nothing arrived and it never finished, within this. 0 disables. |
 | idleTimeoutMs | 90000 | Tokens flowed then stopped for this long. 0 disables. |
 | retryOnError | true | Retry provider errors. |
 | ignoreHardErrors | true | Skip permanent failures like missing models or invalid API keys. |

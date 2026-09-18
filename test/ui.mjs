@@ -2866,15 +2866,45 @@ console.log("\nfloat button menu");
     const move = (_el, x, y) => document.dispatchEvent(new PointerEvent("pointermove", { bubbles: true, clientX: x, clientY: y }));
     const up = (el) => el.dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
 
+    // The ring around the edge is what says a hold is under way. Read part way
+    // through, while the finger is still down, since that is the only moment it
+    // is meant to be visible.
+    const ringAt = (el) => {
+      const r = el.querySelector(".lv-ar-hold");
+      if (!r) return null;
+      const c = r.querySelector("circle");
+      const rs = getComputedStyle(r);
+      const cs = getComputedStyle(c);
+      return {
+        held: el.getAttribute("data-ar-holding"),
+        shown: Number(rs.opacity),
+        // How far round it has drawn. Full offset is nothing drawn.
+        offset: parseFloat(cs.strokeDashoffset),
+        len: parseFloat(cs.strokeDasharray),
+        spins: /rotate\(-?90deg\)|matrix/.test(rs.transform),
+      };
+    };
+    const ringIdle = ringAt(btn());
+
     // A quick tap toggles and opens nothing.
     const wasOn = btn().getAttribute("aria-pressed");
     down(btn(), 130, 130); await wait(60); up(btn()); btn().click();
     const afterTap = { pressed: btn().getAttribute("aria-pressed"), menu: shown() > 0 };
     btn().click(); // back on
 
+    down(btn(), 130, 130);
+    await wait(250);
+    const ringMid = ringAt(btn());
+    up(btn());
+    // Long enough for the wipe back to finish, or the read catches it mid-way.
+    await wait(360);
+    const ringAfter = ringAt(btn());
+    btn().click(); // the tap that release turned into, put back
+
     // A hold opens the menu and does not toggle.
     const before = btn().getAttribute("aria-pressed");
     down(btn(), 130, 130); await wait(620);
+    const ringDone = ringAt(btn());
     const openedByHold = shown() === 1;
     const entries = items();
     const keys = real().map((i) => i.key);
@@ -2948,12 +2978,34 @@ console.log("\nfloat button menu");
     teardown();
     const left = { ours: document.querySelectorAll('[role="menu"],[role="menuitem"]').length };
     return { wasOn, afterTap, openedByHold, entries, keys, afterHold, onScreen, onButton,
-             afterDrag, resize, afterDismiss, gone, left };
+             afterDrag, resize, afterDismiss, gone, left,
+             ringIdle, ringMid, ringAfter, ringDone };
   });
   await page.close();
   check("a quick tap still toggles", out.afterTap.pressed !== out.wasOn, out.afterTap);
   check("and opens no menu", !out.afterTap.menu);
   check("a hold opens the menu", out.openedByHold);
+
+  // The ring that fills while the button is held. Nothing on screen used to say
+  // a hold was under way, so the half second before the menu opened read as a
+  // tap that did nothing.
+  check("there is a ring on the button", !!out.ringMid, JSON.stringify(out.ringMid));
+  check("it is out of sight until something is held",
+    out.ringIdle && out.ringIdle.shown === 0, JSON.stringify(out.ringIdle));
+  check("and drawn at no length at all",
+    out.ringIdle && out.ringIdle.offset === out.ringIdle.len, JSON.stringify(out.ringIdle));
+  check("holding the button shows it",
+    out.ringMid && out.ringMid.held === "1" && out.ringMid.shown > 0.5, JSON.stringify(out.ringMid));
+  check("and it is part way round, not all of it",
+    out.ringMid && out.ringMid.offset > 0 && out.ringMid.offset < out.ringMid.len,
+    JSON.stringify(out.ringMid));
+  check("letting go early wipes it back",
+    out.ringAfter && out.ringAfter.held === null &&
+      out.ringAfter.offset === out.ringAfter.len, JSON.stringify(out.ringAfter));
+  check("and a hold that reached the menu leaves none of it standing",
+    out.ringDone && out.ringDone.held === null, JSON.stringify(out.ringDone));
+  check("the ring starts at the top rather than at three o'clock",
+    out.ringMid && out.ringMid.spins, JSON.stringify(out.ringMid));
   // Two, because nothing else is switched on here. The panel button and the
   // two word swap buttons join them when their settings are on, which the
   // "where the ways into the extension live" checks cover. This is the floor.

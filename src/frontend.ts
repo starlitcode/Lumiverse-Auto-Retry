@@ -44,6 +44,10 @@ const SWIPE_FIRST_KEY = "lv-auto-retry:swipe-first:v1";
 // key rather than a setting, because it is not something anybody sets and a
 // setting would carry it into an export.
 const SHIPPED_SEEN_KEY = "lv-auto-retry:shipped-seen:v1";
+// Which set of moved defaults this browser has already been told about. Its own
+// key for the same two reasons, and separate from the one above so saying got it
+// to a line about a number never quietly marks the note sets as seen too.
+const MOVED_SEEN_KEY = "lv-auto-retry:moved-seen:v1";
 // The settings search field. It needs an id because the browser's own clear
 // button inside it can only be reached from a stylesheet, not inline.
 const SEARCH_ID = "__lvRetrySearch";
@@ -205,9 +209,16 @@ const CONFIG = {
   // half-written replies. The cost of waiting too long is that a genuinely dead
   // generation sits there a bit longer, which the user can see and stop.
   //
-  // Three minutes covers a local model loading weights, a long prompt being
+  // Four minutes covers a local model loading weights, a long prompt being
   // processed before the first token, and a queue on a shared endpoint.
-  stuckTimeoutMs: 180000, // started but never produced a token or an end. 0 disables.
+  //
+  // It also covers the case three minutes did not. A reasoning model that
+  // streams its thinking clears this watchdog on its first thinking token, so
+  // the wait only ever has to cover the thinking on an endpoint that sends
+  // nothing until the answer starts. Several of them work that way, and a hard
+  // question can hold one past three minutes, which was killing a reply that
+  // was still being thought about.
+  stuckTimeoutMs: 240000, // started but never produced a token or an end. 0 disables.
   // Ninety seconds of silence mid-stream. Reasoning models go quiet between
   // blocks, and a slow CPU model can take a minute between tokens on a long
   // context, so anything shorter re-rolls replies that were still coming.
@@ -326,6 +337,27 @@ function defaultMs(key: keyof typeof CONFIG): string {
   return ms + " = " + humanMs(ms);
 }
 const def = (key: keyof typeof CONFIG): string => String((CONFIG as any)[key]);
+
+// Defaults that moved, with the value they moved from. A reader still holding
+// the old value is told once and offered the new one; anybody who set their own
+// is told nothing, because nothing of theirs changed.
+//
+// A row stays here for as long as somebody could still be on the old value,
+// which is until the next major version, since that is a reinstall. Auto Refine
+// carries the same table for the same reason.
+const MOVED_DEFAULTS: Array<{ key: keyof typeof CONFIG; was: number; label: string; why: string }> = [
+  {
+    key: "stuckTimeoutMs",
+    was: 180000,
+    label: "Give up waiting for it to start",
+    why: "Three minutes was under what a reasoning model needs on an endpoint that sends nothing until the answer starts, so a reply still being thought about could be thrown away and asked for again. It is four minutes now.",
+  },
+];
+
+// What a browser writes down once it has been told. The values themselves
+// rather than a hash: the list is short, and a stamp somebody can read in their
+// own storage is better than one only this file can explain.
+const MOVED_MARK = MOVED_DEFAULTS.map((m) => m.key + ":" + String(m.was)).join("|");
 
 // Fields the settings UI can edit, in display order. The one place that defines
 // both the form and what gets persisted. Every option above (except the two
@@ -712,7 +744,7 @@ const SCHEMA: Group[] = [
         int: true,
         min: 0,
         max: 600000,
-        hint: "If a reply begins but no words appear in this long, treat it as stuck and retry. The default of " + defaultMs("stuckTimeoutMs") + " is long enough for a local model to load and a long prompt to be read. Set to 0 to switch off.",
+        hint: "If a reply begins but no words appear in this long, treat it as stuck and retry. The default of " + defaultMs("stuckTimeoutMs") + " is long enough for a local model to load, a long prompt to be read, and a reasoning model to think on an endpoint that sends nothing until the answer starts. Set to 0 to switch off.",
       },
       {
         key: "idleTimeoutMs",
@@ -3130,6 +3162,29 @@ function markSvgLive(size: number): string {
   );
 }
 
+// The ring that fills while the button is held down. A hold opens the menu, and
+// until now nothing on screen said a hold was under way, so the half second
+// before the menu appeared read as a tap that did nothing.
+//
+// Its own square rather than part of the mark: this belongs to the button's
+// edge, and the mark is drawn at just over half the button's width. The viewBox
+// is 100 wide whatever size the button is, so one set of numbers covers every
+// size, and the stroke is held at 2 real pixels rather than being scaled with
+// the box, so it looks the same on a 28px button and a 96px one.
+//
+// Auto Refine draws the same ring the same way.
+const HOLD_RING_R = 47;
+const HOLD_RING_LEN = (2 * Math.PI * HOLD_RING_R).toFixed(1);
+
+function holdRingSvg(): string {
+  return (
+    '<svg class="lv-ar-hold" viewBox="0 0 100 100" aria-hidden="true" focusable="false">' +
+    '<circle cx="50" cy="50" r="' + HOLD_RING_R + '" fill="none" stroke="currentColor"' +
+    ' stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke" />' +
+    "</svg>"
+  );
+}
+
 const OPEN_PANEL_LABEL = "Open the Auto Retry panel";
 
 // Every tick box in the panel, at one size. The settings rows have always set
@@ -5145,7 +5200,8 @@ export function setup(ctx: Ctx, opts?: any) {
     // continuous to animate along.
     if (floatEl.getAttribute("data-ar-glyph") !== String(glyph)) {
       floatEl.setAttribute("data-ar-glyph", String(glyph));
-      floatEl.innerHTML = markSvgLive(glyph);
+      const box = floatEl.querySelector(".lv-ar-glyph");
+      if (box) box.innerHTML = markSvgLive(glyph);
     }
     floatEl.setAttribute("data-ar-on", on ? "1" : "0");
     // The first paint sets the state without moving: a button appearing already
@@ -5249,11 +5305,18 @@ export function setup(ctx: Ctx, opts?: any) {
     // after a drag says nothing new, and a device asking for less movement gets
     // the change with none of this.
     //
-    // The button itself never moves. A scale dip on every press was here once,
-    // and it forced a compositing layer on a control whose whole job is to flip
-    // between two states; a press is also how the menu is opened, so dipping on
-    // the way in makes a hold look like a tap that took.
+    // A press dips the whole button a little, so a tap answers whether or not
+    // it changed anything. That used to be ambiguous, since a press is also how
+    // the menu is opened and a dip on the way in made a hold read as a tap that
+    // took. The ring filling around the edge is what tells the two apart now: a
+    // dip on its own is a tap, a dip with the ring running is a hold.
     el.setAttribute("data-ar-float", "1");
+    // The mark sits in its own holder and the ring sits over the whole button.
+    // Separated so repainting the mark does not throw the ring away mid-hold.
+    const glyphBox = document.createElement("span");
+    glyphBox.className = "lv-ar-glyph";
+    el.appendChild(glyphBox);
+    el.insertAdjacentHTML("beforeend", holdRingSvg());
     markOwnUI(el);
     ensureFloatStyle();
 
@@ -5270,13 +5333,21 @@ export function setup(ctx: Ctx, opts?: any) {
         pressTimer = null;
       }
       pressFrom = null;
+      try {
+        el.removeAttribute("data-ar-holding");
+      } catch (_) {}
     };
     el.addEventListener("pointerdown", (e: any) => {
       openedByHold = false;
       pressFrom = { x: e && e.clientX, y: e && e.clientY };
+      // The ring starts filling now and reaches the whole way round exactly as
+      // the menu opens, so the wait is something you watch rather than sit
+      // through. Letting go early wipes it back in a fraction of the time.
+      el.setAttribute("data-ar-holding", "1");
       pressTimer = setTimeout(() => {
         pressTimer = null;
         openedByHold = true;
+        el.removeAttribute("data-ar-holding");
         showFloatMenu();
       }, HOLD_MS);
     });
@@ -5325,6 +5396,9 @@ export function setup(ctx: Ctx, opts?: any) {
     }
     el.addEventListener("pointerup", dropPress);
     el.addEventListener("pointercancel", dropPress);
+    // A finger that slides off the button is a press that ended, and without
+    // this the ring is left standing full on a button nobody is touching.
+    el.addEventListener("pointerleave", dropPress);
     // The host does the dragging and does not report where it finished, so the
     // only way to know is to look. Read after a delay rather than straight away
     // because the button snaps to the nearest edge once it is let go, and the
@@ -6360,6 +6434,25 @@ export function setup(ctx: Ctx, opts?: any) {
     }
     return h.toString(36);
   })();
+
+  // The moved defaults this reader is actually on. Anybody who set their own
+  // value is not on the list, because nothing about their setup moved, and a
+  // browser that has already answered the line is not on it either.
+  function movedForMe(): typeof MOVED_DEFAULTS {
+    try {
+      if (typeof localStorage === "undefined") return [];
+      if (String(localStorage.getItem(MOVED_SEEN_KEY) || "") === MOVED_MARK) return [];
+    } catch (_) {
+      return [];
+    }
+    return MOVED_DEFAULTS.filter((m) => Number((cfg as any)[m.key]) === m.was);
+  }
+
+  function markMovedSeen() {
+    try {
+      if (typeof localStorage !== "undefined") localStorage.setItem(MOVED_SEEN_KEY, MOVED_MARK);
+    } catch (_) {}
+  }
 
   // Written down as seen. Called when one of the sets is loaded, when the panel
   // first comes up with nothing stored, and when the line saying they moved is
@@ -7659,6 +7752,26 @@ export function setup(ctx: Ctx, opts?: any) {
         "opacity 260ms cubic-bezier(.2,.7,.3,1)," +
         "transform 260ms cubic-bezier(.2,.7,.3,1)}" +
         "[data-ar-float] svg{transform-origin:50% 50%;overflow:visible}" +
+        // The mark holder and the ring share the button's box, so the button is
+        // the thing they are positioned against.
+        "[data-ar-float]{position:relative}" +
+        "[data-ar-float] .lv-ar-glyph{display:flex;align-items:center;justify-content:center;" +
+        "line-height:0}" +
+        // The ring starts at the top and fills clockwise, which is the direction
+        // every progress ring people have already used goes.
+        "[data-ar-float] .lv-ar-hold{position:absolute;inset:0;width:100%;height:100%;" +
+        "pointer-events:none;transform:rotate(-90deg);opacity:0;" +
+        "color:var(--lumiverse-primary,rgba(147,112,219,.9));" +
+        "transition:opacity 200ms ease-out}" +
+        // Drawn at zero length when nothing is held, so there is one circle that
+        // grows rather than a circle that appears.
+        "[data-ar-float] .lv-ar-hold circle{stroke-dasharray:" + HOLD_RING_LEN + ";" +
+        "stroke-dashoffset:" + HOLD_RING_LEN + ";transition:stroke-dashoffset 160ms ease-out}" +
+        '[data-ar-float][data-ar-holding] .lv-ar-hold{opacity:1;transition:opacity 90ms linear}' +
+        // Linear, and exactly as long as the hold, so the ring closing and the
+        // menu opening are the same moment. Eased would arrive early or late.
+        '[data-ar-float][data-ar-holding] .lv-ar-hold circle{stroke-dashoffset:0;' +
+        "transition:stroke-dashoffset " + HOLD_MS + "ms linear}" +
         // A ring while it is on, which is the panel dot's halo at button size.
         // The two say on the same way.
         '[data-ar-float][data-ar-on="1"]{' +
@@ -7680,6 +7793,10 @@ export function setup(ctx: Ctx, opts?: any) {
         "@media (prefers-reduced-motion:reduce){" +
         "[data-ar-float],[data-ar-float] .lv-ar-slash{transition:none}" +
         "[data-ar-float]:active{transform:none}" +
+        // The ring is movement and nothing else: it says how far through a hold
+        // you are and carries no state worth showing still. Somebody who asked
+        // for less movement gets the menu on the same hold with nothing drawn.
+        "[data-ar-float] .lv-ar-hold{display:none}" +
         "[data-ar-float] svg{animation:none !important}}";
       (document.head || document.documentElement).appendChild(el);
       floatStyleEl = el;
@@ -11160,6 +11277,9 @@ export function setup(ctx: Ctx, opts?: any) {
     // comes and goes, so the lasting one reads first.
     panel.appendChild(buildRetiredNotice());
     panel.appendChild(buildPermissionNotice());
+    // Under the two above it. Both of those are about something that is not
+    // working; this one is about a number that is, so it reads after them.
+    panel.appendChild(buildMovedNotice());
     panel.appendChild(masterNote);
     masterNoteEl = masterNote;
     syncMasterNote();
@@ -11367,6 +11487,61 @@ export function setup(ctx: Ctx, opts?: any) {
     where.textContent =
       "Hiding this keeps your swaps. The same download stays under Import / export.";
     box.appendChild(where);
+    return box;
+  }
+
+  // A default moved under somebody who was on it. Said at the top of the panel
+  // rather than tucked beside the row it belongs to, because it is about a
+  // number they are running right now and did not choose.
+  //
+  // Only reaches a reader still holding the old value. Anybody who set their own
+  // is told nothing, since nothing of theirs changed, and a fresh install starts
+  // on the new value so it never sees this at all.
+  function buildMovedNotice(): HTMLElement {
+    const box = document.createElement("div");
+    box.setAttribute("data-ar-moveddefault", "1");
+    const moved = movedForMe();
+    if (!moved.length) return box;
+    box.style.cssText =
+      "display:flex;gap:8px;flex-wrap:wrap;align-items:center;flex:none;margin-bottom:12px;" +
+      "padding:10px 12px;border-radius:var(--lumiverse-radius,8px);" +
+      "border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));" +
+      "background:var(--lumiverse-fill-subtle,rgba(0,0,0,.1))";
+    const what = document.createElement("div");
+    what.style.cssText =
+      "flex:1;min-width:180px;font-size:12px;line-height:1.5;" +
+      "color:var(--lumiverse-text-muted,rgba(255,255,255,.7))";
+    what.textContent =
+      (moved.length === 1
+        ? "A default setting has changed in this update, and you were on the old one. "
+        : "Some default settings have changed in this update, and you were on the old ones. ") +
+      moved.map((m) => m.label + ": " + m.why).join(" ") +
+      " Yours is still the old value until you take the new one.";
+    box.appendChild(what);
+    const small = (b: HTMLButtonElement) => {
+      b.style.cssText += "min-height:0;padding:7px 12px";
+      return b;
+    };
+    const take = small(btn("Take it", true));
+    take.setAttribute("data-ar-moveddefault", "take");
+    take.addEventListener("click", () => {
+      for (const m of moved) {
+        (cfg as any)[m.key] = (CONFIG as any)[m.key];
+        if (fieldSetters[m.key as string]) fieldSetters[m.key as string]((cfg as any)[m.key]);
+      }
+      markMovedSeen();
+      saveSaved();
+      saveToAccount();
+      box.remove();
+    });
+    box.appendChild(take);
+    const keep = small(btn("Keep mine", false));
+    keep.setAttribute("data-ar-moveddefault", "keep");
+    keep.addEventListener("click", () => {
+      markMovedSeen();
+      box.remove();
+    });
+    box.appendChild(keep);
     return box;
   }
 
@@ -13451,4 +13626,5 @@ export const __testing = {
   // first time that value is retuned, with nothing to catch it.
   CONFIG,
   SCHEMA,
+  MOVED_DEFAULTS,
 };
