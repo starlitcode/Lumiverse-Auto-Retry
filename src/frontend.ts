@@ -631,7 +631,7 @@ const SCHEMA: Group[] = [
         type: "num",
         min: 1,
         max: 10,
-        hint: "Each retry waits this many times longer than the last, so it doesn't hammer the server. 2 means the wait doubles each time. Stays at 1 or above.",
+        hint: "Each retry waits this many times longer than the last, so it does not hammer the server. 2 means the wait doubles each time. Stays at 1 or above.",
       },
       {
         key: "maxDelayMs",
@@ -658,7 +658,7 @@ const SCHEMA: Group[] = [
         run: "waits",
         label: "Add a little randomness to waits",
         type: "bool",
-        hint: "Nudges each wait by a random amount so retries don't all hit the server at the same instant. Best left on.",
+        hint: "Nudges each wait by a random amount so retries do not all hit the server at the same instant. Best left on.",
       },
       {
         key: "keepReplaced",
@@ -710,7 +710,7 @@ const SCHEMA: Group[] = [
         key: "retryOnTruncated",
         label: "It cut off mid-sentence",
         type: "bool",
-        hint: "Retry when a reply stops partway, like an open quote, an action opened with an asterisk and never closed, or a trailing comma. It's careful so it doesn't throw away good writing.",
+        hint: "Retry when a reply stops partway, like an open quote, an action opened with an asterisk and never closed, or a trailing comma. It is careful, so it does not throw away good writing.",
       },
       {
         key: "retryOnNoPunct",
@@ -824,7 +824,7 @@ const SCHEMA: Group[] = [
         run: "yourWords",
         label: "Never treat these as a refusal",
         type: "text",
-        hint: "Optional. If a reply contains any of these phrases, one per line, it's never counted as a refusal. This wins over everything else. A line under three characters is ignored, since it would match almost every reply.",
+        hint: "Optional. If a reply contains any of these phrases, one per line, it is never counted as a refusal. This wins over everything else. A line under three characters is ignored, since it would match almost every reply.",
       },
       {
         key: "refusalMaxChars",
@@ -891,7 +891,7 @@ const SCHEMA: Group[] = [
   {
     title: "Buttons it clicks",
     collapsed: true,
-    desc: "It retries by clicking your own on-screen buttons, so you only need this if retries aren't happening. The quickest fix is Pick it for me: press it, then click the real button. Otherwise paste a CSS selector and press Test until it says match found, with that button on screen. The stop button only appears while a reply is generating. The README covers fallback lists and selector syntax.",
+    desc: "It retries by clicking your own on-screen buttons, so you only need this if retries are not happening. The quickest fix is Pick it for me: press it, then click the real button. Otherwise paste a CSS selector and press Test until it says match found, with that button on screen. The stop button only appears while a reply is generating. The README covers fallback lists and selector syntax.",
     fields: [
       {
         key: "swipeNextSelector",
@@ -11437,15 +11437,6 @@ export function setup(ctx: Ctx, opts?: any) {
   }
 
 
-  // What is missing, and what that costs. Drawn only while something is
-  // actually missing, so a correctly installed extension carries no panel
-  // furniture for a problem it does not have.
-  //
-  // This exists because a refused permission is the one failure that raises
-  // nothing anywhere: a gated event never fires, and a fire-and-forget
-  // registration silently does nothing. Every other fault in here reports
-  // itself somewhere. This one leaves the extension installed and apparently
-  // working while it does none of what it was asked to.
   // ---- find and replace, retired ----
   // The feature is gone. This card is the only thing left that knows it existed,
   // and it exists to hand somebody's rules back to them rather than to argue
@@ -11630,6 +11621,15 @@ export function setup(ctx: Ctx, opts?: any) {
     return box;
   }
 
+  // What is missing, and what that costs. Drawn only while something is
+  // actually missing, so a correctly installed extension carries no panel
+  // furniture for a problem it does not have.
+  //
+  // This exists because a refused permission is the one failure that raises
+  // nothing anywhere: a gated event never fires, and a fire-and-forget
+  // registration silently does nothing. Every other fault in here reports
+  // itself somewhere. This one leaves the extension installed and apparently
+  // working while it does none of what it was asked to.
   function buildPermissionNotice(): HTMLElement {
     const box = document.createElement("div");
     box.setAttribute("data-ar-perms", "1");
