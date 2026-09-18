@@ -4,7 +4,7 @@
 // server to their screen, so the promises around it are worth holding down:
 // nothing is captured until the panel asks, it stops when the panel stops
 // asking, one person watching does not capture anybody else's prompt, and a
-// vast prompt is trimmed rather than shipped whole.
+// vast prompt is trimmed rather than sent whole.
 //
 // The other half is the notes. Seeing where a note landed is the reason the
 // view exists, so a note has to come back marked, counted, and in the place it

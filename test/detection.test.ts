@@ -31,7 +31,7 @@ const {
 const looksLikeRefusal = (text: string, cfg?: any): boolean =>
   refusalVerdict(text, cfg).refusal;
 
-// The defaults the extension ships with.
+// The defaults the extension starts on.
 const cfg = {
   refusalUseBuiltins: true,
   hardErrorPhrases: "",
@@ -1057,7 +1057,7 @@ describe("the flat no", () => {
 // How most of these replies sign off. The scene is not coming back, so here is
 // a menu instead. It is the last line of the reply every time, which is what
 // puts it on the breaking-off tier with its tail and quotation rules.
-// Two replies that got through after 4.8.0 shipped. Neither says "I can't"
+// Two replies that got through after 4.8.0 went out. Neither says "I can't"
 // anywhere, and both spend most of their length being reasonable about it,
 // which is what put them past every check in the list.
 //
@@ -1449,7 +1449,7 @@ describe("what a refusal is counted as", () => {
 // what the reword field acts on. Two copies of the same list is two copies that
 // drift, and a phrase added to one and not the other is invisible: the docs
 // quietly describe a version of the extension that does not exist.
-describe("the printed phrase list is the shipped phrase list", () => {
+describe("the printed phrase list is the built-in phrase list", () => {
   const DOC = readFileSync(new URL("../docs/detection.md", import.meta.url), "utf8");
   const printed = (() => {
     const m = DOC.match(/```\ni can't help with that[\s\S]*?\n```/);
@@ -1467,12 +1467,12 @@ describe("the printed phrase list is the shipped phrase list", () => {
     expect((printed as string[]).length).toBe(REFUSAL_PHRASES.length);
   });
 
-  test("every shipped phrase is printed", () => {
+  test("every built-in phrase is printed", () => {
     const missing = REFUSAL_PHRASES.filter((p: string) => (printed as string[]).indexOf(p) < 0);
     expect(missing).toEqual([]);
   });
 
-  test("and nothing is printed that is not shipped", () => {
+  test("and nothing is printed that is not built in", () => {
     const extra = (printed as string[]).filter((p) => REFUSAL_PHRASES.indexOf(p) < 0);
     expect(extra).toEqual([]);
   });
@@ -1643,7 +1643,7 @@ describe("the model leaving the scene to offer support", () => {
     expect(caught).toEqual([1]);
   });
 
-  test("it is off in the defaults the extension ships", () => {
+  test("it is off in the defaults the extension starts on", () => {
     expect((__testing.CONFIG as any).refusalCatchCrisis).toBe(false);
   });
 

@@ -1,4 +1,4 @@
-// The note sets that ship with the extension.
+// The note sets that come with the extension.
 //
 // These had no check at all, four of them for several versions and a fifth
 // added on top. They are data rather than code, which is exactly why nothing
@@ -17,7 +17,7 @@ const src = readFileSync(join(root, "src/frontend.ts"), "utf8");
 
 // Read out of the source rather than imported, because they sit inside setup
 // where a test cannot reach them.
-function shippedNotes(): Array<{ name: string; notes: Array<{ text: string; role: string; fromTry: number }>; placement: string }> {
+function builtInNotes(): Array<{ name: string; notes: Array<{ text: string; role: string; fromTry: number }>; placement: string }> {
   const start = src.indexOf("const BUILT_IN_NOTES");
   const end = src.indexOf("\n  const builtInNote", start);
   const blob = src.slice(start, end);
@@ -38,9 +38,9 @@ function shippedNotes(): Array<{ name: string; notes: Array<{ text: string; role
 
 const ROLES = ["system", "user", "assistant"];
 const PLACEMENTS = ["before", "after", "system", "end"];
-const sets = shippedNotes();
+const sets = builtInNotes();
 
-describe("the note sets that ship with it", () => {
+describe("the note sets that come with it", () => {
   test("there are some, and this found them", () => {
     expect(sets.length).toBeGreaterThanOrEqual(5);
   });

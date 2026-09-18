@@ -92,7 +92,7 @@ describe("a finished reply is never called cut off", () => {
     test(name + " (no-punct check off)", () => {
       expect(looksTruncated(text, false, {})).toBe(false);
     });
-    test(name + " (no-punct check on, the shipped default)", () => {
+    test(name + " (no-punct check on, which is the default)", () => {
       expect(looksTruncated(text, true, {})).toBe(false);
     });
   }

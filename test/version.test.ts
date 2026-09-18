@@ -1,7 +1,7 @@
 // The version is written in five places and shown to users from three of them:
 // Lumiverse reads spindle.json, the debug report and live log print the
 // constant in the frontend, and the server log and the same report print the
-// one in the backend. A release that bumps some of them ships a debug report
+// one in the backend. A release that bumps some of them sends a debug report
 // claiming the wrong version, which is exactly what a bug report is meant to
 // tell you. The backend's copy is the one with no panel to notice it, since the
 // two halves are loaded separately and the panel prints whatever this side

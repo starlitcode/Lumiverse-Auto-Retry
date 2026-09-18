@@ -40,10 +40,14 @@ const STORE_KEY = "lv-auto-retry:settings:v1";
 // read before most of setup() exists, and a const declared further down is
 // not initialised yet when that happens.
 const SWIPE_FIRST_KEY = "lv-auto-retry:swipe-first:v1";
-// The note sets that ship, as they were when this browser last took one. Its own
+// The note sets that come with it, as they were when this browser last took one. Its own
 // key rather than a setting, because it is not something anybody sets and a
 // setting would carry it into an export.
-const SHIPPED_SEEN_KEY = "lv-auto-retry:shipped-seen:v1";
+const BUILT_IN_SEEN_KEY = "lv-auto-retry:built-in-seen:v1";
+// What the key above was called before. Read once, so upgrading keeps what it
+// was holding: losing it would quietly swallow the one line saying the sets
+// changed, and nothing on screen would say anything was missing.
+const OLD_SEEN_KEY = "lv-auto-retry:shipped-seen:v1";
 // Which set of moved defaults this browser has already been told about. Its own
 // key for the same two reasons, and separate from the one above so saying got it
 // to a line about a number never quietly marks the note sets as seen too.
@@ -134,7 +138,7 @@ const STREAM_BUF_MAX = 200000;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.6.1";
+const VERSION = "5.6.0";
 
 // The addresses the extension points at. Pinned to the released branch rather
 // than to a tag, so an old install still opens the page as it stands today.
@@ -2754,7 +2758,7 @@ function contrastRatio(a: Rgba, b: Rgba): number {
 
 // What is actually behind an element: its own background when that is opaque,
 // otherwise the ancestors' backgrounds composited underneath it.
-const PAGE_FALLBACK: Rgba = [20, 16, 30, 1]; // Lumiverse ships dark; last resort only
+const PAGE_FALLBACK: Rgba = [20, 16, 30, 1]; // Lumiverse is dark; last resort only
 // What a surface actually paints, rather than only what its background-color
 // says. Every floating panel here builds an opaque surface by painting a solid
 // colour and laying the theme's translucent tint over it as a gradient, because
@@ -3106,6 +3110,23 @@ function themeMark(): string {
 // Long enough that a normal tap never reaches it, short enough that holding
 // the button does not feel broken.
 const HOLD_MS = 500;
+
+// How long the ring takes to close. Shorter than the hold on purpose.
+//
+// The timer starts the moment the finger lands. The ring cannot: it is a CSS
+// transition, and a transition only begins once the browser has recalculated
+// style for the attribute that started it, which is the next frame at best and
+// later than that on a busy page. Given the same length as the hold, the timer
+// always won by that gap, the menu opened, and the ring was wiped back a few
+// per cent short of closed. Landing early is the fix, because a ring that
+// closed and then waited a moment reads as finished, and one cut off at 95 per
+// cent reads as broken.
+const HOLD_RING_MS = HOLD_MS - 70;
+
+// How far a finger may drift and still be holding rather than dragging. Ten
+// pixels, because a thumb resting on glass drifts further than eight and every
+// one of those was a hold that quietly did nothing. Auto Refine allows the same.
+const HOLD_SLOP = 10;
 
 // The extension's mark: a reply, with the retry arrow sweeping over it.
 //
@@ -3682,7 +3703,7 @@ export function setup(ctx: Ctx, opts?: any) {
     } catch (_) {}
   }
 
-  // What the backend says it is running. The two halves ship together and load
+  // What the backend says it is running. The two halves go out together and load
   // separately, so this is not always the version above. Empty until it answers,
   // which is the honest reading on a build with no backend up.
   let backendVersion = "";
@@ -5362,7 +5383,10 @@ export function setup(ctx: Ctx, opts?: any) {
     // open in the middle of one.
     holdMoveWatch = (e: any) => {
       if (!pressFrom || !e) return;
-      if (Math.abs(e.clientX - pressFrom.x) > 8 || Math.abs(e.clientY - pressFrom.y) > 8)
+      if (
+        Math.abs(e.clientX - pressFrom.x) > HOLD_SLOP ||
+        Math.abs(e.clientY - pressFrom.y) > HOLD_SLOP
+      )
         dropPress();
     };
     // Stopped, not just prevented. preventDefault suppresses the browser's own
@@ -5396,9 +5420,6 @@ export function setup(ctx: Ctx, opts?: any) {
     }
     el.addEventListener("pointerup", dropPress);
     el.addEventListener("pointercancel", dropPress);
-    // A finger that slides off the button is a press that ended, and without
-    // this the ring is left standing full on a button nobody is touching.
-    el.addEventListener("pointerleave", dropPress);
     // The host does the dragging and does not report where it finished, so the
     // only way to know is to look. Read after a delay rather than straight away
     // because the button snaps to the nearest edge once it is let go, and the
@@ -5422,7 +5443,6 @@ export function setup(ctx: Ctx, opts?: any) {
     };
     el.addEventListener("pointerup", rememberFloat);
     el.addEventListener("pointercancel", rememberFloat);
-    el.addEventListener("pointerleave", dropPress);
     el.addEventListener("click", () => {
       // The hold already acted. Toggling here as well would undo it in the same
       // gesture.
@@ -6306,7 +6326,7 @@ export function setup(ctx: Ctx, opts?: any) {
   // function, so a kind added there needs no new UI code.
   const PRESETS_KEY = "lv-auto-retry:presets:v1";
 
-  // Note sets that ship with the extension, so the box is not blank the first
+  // Note sets that come with the extension, so the box is not blank the first
   // time somebody switches notes on. They load like any saved set and cannot be
   // renamed, changed or deleted: the way to make one your own is to load it,
   // edit the boxes, and save it under a name of your own.
@@ -6422,10 +6442,10 @@ export function setup(ctx: Ctx, opts?: any) {
   ];
   const builtInNote = (name: string) => BUILT_IN_NOTES.find((p) => p.name === name) || null;
 
-  // A short mark for the sets as they ship, so a reader can be told when they
+  // A short mark for the sets as they stand, so a reader can be told when they
   // have changed. FNV-1a: it only has to differ when they differ, and it goes in
   // storage, so short matters more than anything a hash is usually chosen for.
-  const shippedMark = (() => {
+  const builtInMark = (() => {
     const text = JSON.stringify(BUILT_IN_NOTES);
     let h = 0x811c9dc5;
     for (let i = 0; i < text.length; i++) {
@@ -6454,31 +6474,47 @@ export function setup(ctx: Ctx, opts?: any) {
     } catch (_) {}
   }
 
+  // A stamp written under the key's old name, moved over to the new one and the
+  // old one dropped. Returns what it moved, so the read it sits inside gets the
+  // answer on the same pass rather than a frame later.
+  function carryOldSeen(): string {
+    try {
+      if (typeof localStorage === "undefined") return "";
+      const was = String(localStorage.getItem(OLD_SEEN_KEY) || "");
+      if (!was) return "";
+      localStorage.setItem(BUILT_IN_SEEN_KEY, was);
+      localStorage.removeItem(OLD_SEEN_KEY);
+      return was;
+    } catch (_) {
+      return "";
+    }
+  }
+
   // Written down as seen. Called when one of the sets is loaded, when the panel
   // first comes up with nothing stored, and when the line saying they moved is
   // dismissed.
-  function markShippedSeen() {
+  function markBuiltInSeen() {
     try {
-      if (typeof localStorage !== "undefined") localStorage.setItem(SHIPPED_SEEN_KEY, shippedMark);
+      if (typeof localStorage !== "undefined") localStorage.setItem(BUILT_IN_SEEN_KEY, builtInMark);
     } catch (_) {}
   }
 
   // Whether the sets have changed since this browser last took one, and whether
   // this reader is somebody the change reaches: notes off means the sets do
   // nothing for them and a line about them is noise.
-  function shippedMoved(): boolean {
+  function builtInMoved(): boolean {
     if (!cfg.refusalNote) return false;
     try {
       if (typeof localStorage === "undefined") return false;
-      const seen = String(localStorage.getItem(SHIPPED_SEEN_KEY) || "");
+      const seen = String(localStorage.getItem(BUILT_IN_SEEN_KEY) || carryOldSeen() || "");
       // Nothing stored is a browser that has never had notes on, or one from
       // before this existed. Neither is worth a line about a change nobody can
       // point at, so it is stamped and stays quiet.
       if (!seen) {
-        markShippedSeen();
+        markBuiltInSeen();
         return false;
       }
-      return seen !== shippedMark;
+      return seen !== builtInMark;
     } catch (_) {
       return false;
     }
@@ -6590,7 +6626,7 @@ export function setup(ctx: Ctx, opts?: any) {
         const incoming = coercePresets(msg.presets);
         const local = loadPresets();
         // Per kind, not all or nothing. The account winning outright would drop
-        // a kind it has none of. Only one kind ships today, and this is
+        // a kind it has none of. Only one kind exists today, and this is
         // written per kind so a second one cannot quietly wipe the first.
         const merged: Record<string, Preset[]> = {};
         let took = 0, kept = 0;
@@ -6643,7 +6679,7 @@ export function setup(ctx: Ctx, opts?: any) {
 
   // Snapshot the current values of a kind's keys.
   // JSON with the keys in a settled order, so two values holding the same thing
-  // compare equal whatever order they were built in. A note set that ships is
+  // compare equal whatever order they were built in. A note set that comes with it is
   // written text, role, fromTry, and one read back off the panel can carry
   // those in another order, which a plain stringify would call a difference.
   function settledJson(v: any): string {
@@ -7768,10 +7804,11 @@ export function setup(ctx: Ctx, opts?: any) {
         "[data-ar-float] .lv-ar-hold circle{stroke-dasharray:" + HOLD_RING_LEN + ";" +
         "stroke-dashoffset:" + HOLD_RING_LEN + ";transition:stroke-dashoffset 160ms ease-out}" +
         '[data-ar-float][data-ar-holding] .lv-ar-hold{opacity:1;transition:opacity 90ms linear}' +
-        // Linear, and exactly as long as the hold, so the ring closing and the
-        // menu opening are the same moment. Eased would arrive early or late.
+        // Linear, so the ring fills at one steady rate and how far round it has
+        // gone is how far through the hold you are. Eased would run ahead or
+        // behind.
         '[data-ar-float][data-ar-holding] .lv-ar-hold circle{stroke-dashoffset:0;' +
-        "transition:stroke-dashoffset " + HOLD_MS + "ms linear}" +
+        "transition:stroke-dashoffset " + HOLD_RING_MS + "ms linear}" +
         // A ring while it is on, which is the panel dot's halo at button size.
         // The two say on the same way.
         '[data-ar-float][data-ar-on="1"]{' +
@@ -9937,7 +9974,7 @@ export function setup(ctx: Ctx, opts?: any) {
       //
       // Loading one sets the picker and nothing cleared it, so changing a note
       // afterwards left the box naming a set the panel no longer held. The
-      // fields are not locked while a set that ships is picked: loading one and
+      // fields are not locked while a set that comes with it is picked: loading one and
       // changing it is how you are meant to start, which is what Save as new is
       // for. What was missing was the panel saying the two had parted company.
       const drift = document.createElement("div");
@@ -9980,10 +10017,10 @@ export function setup(ctx: Ctx, opts?: any) {
         // back nothing is a question the reader has to answer every time they
         // look at the row.
         undoBtn.hidden = !undoTo;
-        // A set that ships with the extension can be loaded and nothing else.
+        // A set that comes with the extension can be loaded and nothing else.
         // It is not stored here, so there is nothing for Update, Delete or
         // Rename to act on; the way to make one yours is pick it, edit, Save as new.
-        const mine = picked && !isShipped(select.value);
+        const mine = picked && !isBuiltIn(select.value);
         setEnabled(loadBtn, picked);
         setEnabled(update, mine);
         setEnabled(del, mine);
@@ -9992,7 +10029,7 @@ export function setup(ctx: Ctx, opts?: any) {
         // Only the notes bar owns a set that can be locked, and only it should
         // speak for the notes editor.
         if (kind === "notes") {
-          const now = picked && isShipped(select.value) ? select.value : "";
+          const now = picked && isBuiltIn(select.value) ? select.value : "";
           if (now !== notesOnBuiltIn) {
             notesOnBuiltIn = now;
             // Redraw the notes through their own setter, which is what every
@@ -10002,7 +10039,7 @@ export function setup(ctx: Ctx, opts?: any) {
         }
       };
 
-      // Only the keys the preset actually carries. A set that ships holds the
+      // Only the keys the preset actually carries. A set that comes with it holds the
       // notes and where they go, and nothing else, so measuring it against
       // every setting on the panel would call it changed the moment it loaded.
       const syncDrift = () => {
@@ -10022,7 +10059,7 @@ export function setup(ctx: Ctx, opts?: any) {
         }
         drift.hidden = !moved;
         if (moved)
-          drift.textContent = isShipped(name)
+          drift.textContent = isBuiltIn(name)
             ? "You have changed these since loading " +
               name +
               ". A set that comes with the extension cannot be written over, so put a name in the box and press Save as new to keep this."
@@ -10041,21 +10078,21 @@ export function setup(ctx: Ctx, opts?: any) {
         if (name) doLoad(name, was);
       });
 
-      // The sets that ship with the extension, for this bar's kind. Only notes
+      // The sets that come with the extension, for this bar's kind. Only notes
       // has any today; a bar for another kind gets an empty list and behaves
       // exactly as it did before these existed.
-      const shipped = () => (kind === "notes" ? BUILT_IN_NOTES : []);
-      const isShipped = (name: string) => shipped().some((p) => p.name === name);
+      const builtIns = () => (kind === "notes" ? BUILT_IN_NOTES : []);
+      const isBuiltIn = (name: string) => builtIns().some((p) => p.name === name);
 
       const refreshSelect = (selectName?: string) => {
         select.innerHTML = "";
         const ph = document.createElement("option");
         ph.value = "";
-        ph.textContent = list().length || shipped().length
+        ph.textContent = list().length || builtIns().length
           ? "Pick a preset"
           : "No presets saved yet";
         select.appendChild(ph);
-        // Under a heading each, so a shipped set is never mistaken for one you
+        // Under a heading each, so a built-in set is never mistaken for one you
         // wrote and wondered where your edits went.
         const group = (label: string, items: Array<{ name: string }>) => {
           if (!items.length) return;
@@ -10069,7 +10106,7 @@ export function setup(ctx: Ctx, opts?: any) {
           }
           select.appendChild(g);
         };
-        group("Ships with it", shipped());
+        group("Comes with it", builtIns());
         group("Yours", list());
         if (selectName) select.value = selectName;
         lastPick = select.value;
@@ -10102,10 +10139,10 @@ export function setup(ctx: Ctx, opts?: any) {
           pick: wasPick === undefined ? select.value : wasPick,
         };
         const took = applyPresetValues(kind, p.values);
-        // Taking one of the sets that ship marks them as seen, so a change to
+        // Taking one of the sets that come with it marks them as seen, so a change to
         // them later is worth a line and a change for somebody who has never
         // taken one is not.
-        if (kind === "notes" && isShipped(name)) markShippedSeen();
+        if (kind === "notes" && isBuiltIn(name)) markBuiltInSeen();
         // Reflect the new values in the on-screen fields without a rebuild.
         for (const k of keysForKind(kind)) {
           const fld = fieldByKey[k];
@@ -10158,9 +10195,9 @@ export function setup(ctx: Ctx, opts?: any) {
           status.textContent = "Type a name first.";
           return;
         }
-        if (isShipped(name)) {
+        if (isBuiltIn(name)) {
           status.textContent =
-            "That name belongs to a set that ships with the extension. Pick another.";
+            "That name belongs to a set that comes with the extension. Pick another.";
           return;
         }
         if (list().some((x) => x.name === name)) {
@@ -10196,9 +10233,9 @@ export function setup(ctx: Ctx, opts?: any) {
           status.textContent = "That's already its name.";
           return;
         }
-        if (isShipped(newName)) {
+        if (isBuiltIn(newName)) {
           status.textContent =
-            "That name belongs to a set that ships with the extension. Pick another.";
+            "That name belongs to a set that comes with the extension. Pick another.";
           return;
         }
         if (list().some((x) => x.name === newName)) {
@@ -10279,13 +10316,13 @@ export function setup(ctx: Ctx, opts?: any) {
         );
       });
 
-      // The sets that ship have changed since this browser last took one. Said
+      // The sets that come with it have changed since this browser last took one. Said
       // here, above the picker they are in, and only on the notes bar: the other
-      // bar has no shipped sets to change. Only while notes are on, since the
+      // bar has no built-in sets to change. Only while notes are on, since the
       // sets do nothing for somebody who has them off.
-      if (kind === "notes" && shippedMoved()) {
+      if (kind === "notes" && builtInMoved()) {
         const moved = document.createElement("div");
-        moved.setAttribute("data-lvr-shippedmoved", "1");
+        moved.setAttribute("data-lvr-builtinmoved", "1");
         moved.style.cssText =
           "display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:8px 10px;" +
           "border-radius:var(--lumiverse-radius,8px);" +
@@ -10296,11 +10333,11 @@ export function setup(ctx: Ctx, opts?: any) {
           "flex:1;min-width:180px;font-size:12px;line-height:1.45;" +
           "color:var(--lumiverse-text-muted,rgba(255,255,255,.7))";
         what.textContent =
-          "The note sets that ship with Auto Retry have changed since you last loaded one. Your own notes are untouched. To take the new wording, load a set below, which writes over the notes you have.";
+          "The note sets that come with Auto Retry have changed since you last loaded one. Your own notes are untouched. To take the new wording, load a set below, which writes over the notes you have.";
         const gotIt = smallBtn(btn("Got it", false));
-        gotIt.setAttribute("data-lvr-shippedmoved", "dismiss");
+        gotIt.setAttribute("data-lvr-builtinmoved", "dismiss");
         gotIt.addEventListener("click", () => {
-          markShippedSeen();
+          markBuiltInSeen();
           moved.remove();
         });
         moved.appendChild(what);
@@ -10841,7 +10878,7 @@ export function setup(ctx: Ctx, opts?: any) {
           const block = presetBlock(
             "notes",
             "Note presets",
-            "Save the notes above as a named set and switch between them. A set carries the notes and where they go, and nothing else: loading one never turns notes on or off. Saved to your account, so they follow you to other devices. Six sets ship with it under Ships with it, ordered from the gentlest to the most direct: load one to see the shape, then edit the boxes and save it under a name of your own.",
+            "Save the notes above as a named set and switch between them. A set carries the notes and where they go, and nothing else: loading one never turns notes on or off. Saved to your account, so they follow you to other devices. Six sets come with it under Comes with it, ordered from the gentlest to the most direct: load one to see the shape, then edit the boxes and save it under a name of your own.",
           );
           // Same switch the note boxes above hang off. With notes off there is
           // nothing here to save and nothing a loaded set would reach, so the
@@ -12462,7 +12499,7 @@ export function setup(ctx: Ctx, opts?: any) {
   }
 
   // Two settings can hold arrays (the note list), so an identity check is not
-  // enough to tell "changed" from "the same as it shipped".
+  // enough to tell "changed" from "the same as it was".
   function sameAsDefault(key: string): boolean {
     const a = cfg[key];
     const b = (CONFIG as any)[key];
@@ -12483,7 +12520,7 @@ export function setup(ctx: Ctx, opts?: any) {
     return n;
   }
 
-  // Puts the chosen parts back to what the extension shipped with, in the panel
+  // Puts the chosen parts back to the defaults, in the panel
   // only. Save keeps it, closing the panel discards it, which is the same deal
   // import already offers.
   // Presets are the exception and are called out as such in the picker: they

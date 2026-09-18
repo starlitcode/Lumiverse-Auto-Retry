@@ -1,7 +1,7 @@
 // Which build the backend says it is, driven through the file Lumiverse loads.
 //
 // The panel prints its own version in a debug report and can only print this
-// side's by asking. The two are shipped together and loaded separately, the
+// side's by asking. The two go out together and are loaded separately, the
 // frontend by the browser and this by the server, so they can differ: a tab
 // left open across an update keeps the frontend it started with. A report that
 // names one version for both sends whoever reads it to the wrong file.

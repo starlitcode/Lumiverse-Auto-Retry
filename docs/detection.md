@@ -281,9 +281,9 @@ That matters because of what used to happen without it. Picking a set only lit t
 
 Presets are saved to your account, so they follow you to other devices.
 
-### The sets that ship with it
+### The sets that come with it
 
-Six sets are in the picker under **Ships with it**, so the boxes are not blank the first time you switch notes on. They run from the gentlest to the most direct, which is what you pick by: a model that declined once by accident does not need arguing with, and one that has declined the same scene four times does need telling.
+Six sets are in the picker under **Comes with it**, so the boxes are not blank the first time you switch notes on. They run from the gentlest to the most direct, which is what you pick by: a model that declined once by accident does not need arguing with, and one that has declined the same scene four times does need telling.
 
 All of them ask rather than order, the firmest included. A note that scolds gets a more careful reply back rather than a braver one, which is the opposite of what you turned notes on for.
 

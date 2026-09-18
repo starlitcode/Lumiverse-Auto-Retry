@@ -345,7 +345,7 @@ const check = (name, ok, detail) => {
 // Where Chromium actually is.
 //
 // Left to itself Playwright looks under its own download directory for a build
-// named the way it would have downloaded it, and an image that ships a browser
+// named the way it would have downloaded it, and an image that carries a browser
 // under any other name sends it to a path that does not exist. So the
 // environment's own copy is looked for first, and CHROMIUM_PATH still wins.
 function findChromium() {
@@ -2088,7 +2088,7 @@ console.log("\nthe crisis check asks first");
     }),
   );
   check("the switch is in the panel", out.found === true, out);
-  check("and it ships off", out.startsOff === true, out);
+  check("and it starts off", out.startsOff === true, out);
   check("ticking it asks first", out.asked === true, out);
   check("the box stays off while the question is open", out.whileAsking === false, out);
   check("the warning says the extension cannot tell the two cases apart",
@@ -2901,9 +2901,17 @@ console.log("\nfloat button menu");
     const ringAfter = ringAt(btn());
     btn().click(); // the tap that release turned into, put back
 
+    // Read a hair before the hold is up, which is the moment the ring has to be
+    // closed by. It used to be given the same length as the hold, so the timer
+    // beat it by a frame every time and the menu opened over a ring stopped a
+    // few per cent short.
+    down(btn(), 130, 130);
+    await wait(470);
+    const ringNearlyUp = ringAt(btn());
+    await wait(160);
+
     // A hold opens the menu and does not toggle.
     const before = btn().getAttribute("aria-pressed");
-    down(btn(), 130, 130); await wait(620);
     const ringDone = ringAt(btn());
     const openedByHold = shown() === 1;
     const entries = items();
@@ -2979,7 +2987,7 @@ console.log("\nfloat button menu");
     const left = { ours: document.querySelectorAll('[role="menu"],[role="menuitem"]').length };
     return { wasOn, afterTap, openedByHold, entries, keys, afterHold, onScreen, onButton,
              afterDrag, resize, afterDismiss, gone, left,
-             ringIdle, ringMid, ringAfter, ringDone };
+             ringIdle, ringMid, ringAfter, ringDone, ringNearlyUp };
   });
   await page.close();
   check("a quick tap still toggles", out.afterTap.pressed !== out.wasOn, out.afterTap);
@@ -3004,6 +3012,8 @@ console.log("\nfloat button menu");
       out.ringAfter.offset === out.ringAfter.len, JSON.stringify(out.ringAfter));
   check("and a hold that reached the menu leaves none of it standing",
     out.ringDone && out.ringDone.held === null, JSON.stringify(out.ringDone));
+  check("the ring is all the way round before the menu opens",
+    out.ringNearlyUp && out.ringNearlyUp.offset === 0, JSON.stringify(out.ringNearlyUp));
   check("the ring starts at the top rather than at three o'clock",
     out.ringMid && out.ringMid.spins, JSON.stringify(out.ringMid));
   // Two, because nothing else is switched on here. The panel button and the
@@ -11686,10 +11696,10 @@ console.log("\nwhen the notes stop matching the set named in the picker");
 
 console.log("\nsaying the note sets have changed");
 {
-  const KEY = "lv-auto-retry:shipped-seen:v1";
+  const KEY = "lv-auto-retry:built-in-seen:v1";
   const line = (page) =>
     page.evaluate(() => {
-      const n = document.querySelector('#modal [data-lvr-shippedmoved="1"]');
+      const n = document.querySelector('#modal [data-lvr-builtinmoved="1"]');
       return n ? n.textContent.trim() : null;
     });
   // The bar lives in a section that starts shut, so it has to be opened before
@@ -11715,13 +11725,13 @@ console.log("\nsaying the note sets have changed");
         const opened = await openNotes(page);
         const said = await line(page);
         const after = await page.evaluate(async () => {
-          const b = document.querySelector('#modal [data-lvr-shippedmoved="dismiss"]');
+          const b = document.querySelector('#modal [data-lvr-builtinmoved="dismiss"]');
           if (!b) return { noButton: true };
           b.click();
           await new Promise((r) => setTimeout(r, 80));
           return {
-            gone: !document.querySelector('#modal [data-lvr-shippedmoved="1"]'),
-            stamped: localStorage.getItem("lv-auto-retry:shipped-seen:v1"),
+            gone: !document.querySelector('#modal [data-lvr-builtinmoved="1"]'),
+            stamped: localStorage.getItem("lv-auto-retry:built-in-seen:v1"),
           };
         });
         return { opened, said, after };
@@ -11736,6 +11746,31 @@ console.log("\nsaying the note sets have changed");
       out.after && out.after.stamped && out.after.stamped !== "notthemark",
       JSON.stringify(out.after),
     );
+    check("no console errors", errors.length === 0, errors.join(" | "));
+  }
+
+  // The same reader, upgrading from a version that wrote this under the key's
+  // old name. Losing it would swallow the one line saying the sets changed, and
+  // nothing on screen would say anything was missing.
+  {
+    const { out, errors } = await inPanel(
+      browser,
+      { settings: { refusalNote: true }, seed: { "lv-auto-retry:shipped-seen:v1": "notthemark" } },
+      async (page) => {
+        const opened = await openNotes(page);
+        const said = await line(page);
+        const keys = await page.evaluate(() => ({
+          now: localStorage.getItem("lv-auto-retry:built-in-seen:v1"),
+          old: localStorage.getItem("lv-auto-retry:shipped-seen:v1"),
+        }));
+        return { opened, said, keys };
+      },
+    );
+    check("a stamp written under the old key is still read", !!out.said, String(out.said));
+    check("and carried across to the key this version uses",
+      out.keys && out.keys.now === "notthemark", JSON.stringify(out.keys));
+    check("with the old key dropped rather than left behind",
+      out.keys && out.keys.old === null, JSON.stringify(out.keys));
     check("no console errors", errors.length === 0, errors.join(" | "));
   }
 
@@ -11759,7 +11794,7 @@ console.log("\nsaying the note sets have changed");
       await openNotes(page);
       return {
         said: await line(page),
-        stamped: await page.evaluate(() => localStorage.getItem("lv-auto-retry:shipped-seen:v1")),
+        stamped: await page.evaluate(() => localStorage.getItem("lv-auto-retry:built-in-seen:v1")),
       };
     });
     check("a browser that has never taken one is told nothing", out.said === null, String(out.said));
