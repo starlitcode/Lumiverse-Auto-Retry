@@ -40,22 +40,22 @@ If a click lands but no reply starts, which happens when a next / swipe button m
 
 Lumiverse has a **Regeneration Feedback** option. With it on, pressing regenerate opens a box asking for guidance to send with the next attempt. The reply only starts once you press a button in that box, so Auto Retry has to handle it.
 
-When a retry opens the box, Auto Retry presses **Skip**, which regenerates without guidance. The box is hidden for the moment that takes, so you shouldn't see it. It still has to open, because Auto Retry presses the real button.
+When a retry opens the box, Auto Retry presses **Skip**, which regenerates without guidance. The box is hidden for the moment that takes, so you should not see it. It still has to open, because Auto Retry presses the real button.
 
 Some limits worth knowing:
 
 - A box **you** opened is left alone. Auto Retry only acts in the moment right after its own click, so a regenerate you pressed still opens the box and waits for you to type.
-- If you tap anything, or press stop, while it's about to skip, it stops and leaves the box alone.
+- If you tap anything, or press stop, while it is about to skip, it stops and leaves the box alone.
 - It presses Skip, so a draft you saved in the box is never sent. It never presses **Cancel**.
-- If it can't close the box, it shows it again straight away. Even while hidden, the box doesn't block your taps, so the app can't lock up.
+- If it cannot close the box, it shows it again straight away. Even while hidden, the box does not block your taps, so the app cannot lock up.
 
-You don't need to change either setting. Keep Regeneration Feedback on if you use it; it still opens every time you press regenerate yourself.
+You do not need to change either setting. Keep Regeneration Feedback on if you use it; it still opens every time you press regenerate yourself.
 
 ## Extra dialog buttons it may press
 
 This is behind a switch, **My dialog's button says something else**, and off by default. The built-in list covers Lumiverse's Regeneration Feedback and every build seen so far, so almost nobody needs the box, and an option nobody needs is worth keeping out of the panel. The built-in list is used either way.
 
-Turn it on only if the Regeneration Feedback box stays on screen when a retry opens it, which means Auto Retry didn't recognize its button. It already knows `Skip`, `Regenerate`, `Confirm`, `Proceed`, `Submit` and `OK`. If yours says something else, for example in another language, add that wording here.
+Turn it on only if the Regeneration Feedback box stays on screen when a retry opens it, which means Auto Retry did not recognise its button. It already knows `Skip`, `Regenerate`, `Confirm`, `Proceed`, `Submit` and `OK`. If yours says something else, for example in another language, add that wording here.
 
 The switch genuinely gates the box: while it is off, whatever is in there is not read. Turning it off is a way to park your wording without deleting it, and turning it back on picks it up again. If you already had labels typed before the switch existed, it was switched on for you, so nothing you set has stopped working.
 
@@ -68,11 +68,11 @@ Regenerar
 
 Capitals are ignored. Anything you add is tried before the built-in list, so you can also use it to change which button Auto Retry prefers.
 
-Auto Retry only presses buttons inside a box that opened right after a retry. Putting `Continue` here won't make it press the Continue button on your toolbar.
+Auto Retry only presses buttons inside a box that opened right after a retry. Putting `Continue` here will not make it press the Continue button on your toolbar.
 
 ## Writing selectors by hand
 
-Each box takes one CSS selector, or several separated by commas as fallbacks. They're tried left to right, so put the most specific first (`data-action`, `data-testid`) and the broader ones last (`aria-label`, `title`). The first entry that finds a button you can actually click is the one used, so an entry matching only a hidden or disabled button is passed over for the next.
+Each box takes one CSS selector, or several separated by commas as fallbacks. They are tried left to right, so put the most specific first (`data-action`, `data-testid`) and the broader ones last (`aria-label`, `title`). The first entry that finds a button you can actually click is the one used, so an entry matching only a hidden or disabled button is passed over for the next.
 
 A comma inside brackets, parentheses or quotes stays part of the selector rather than splitting the list, so `:is(a, b)` and `[aria-label="Next, swipe"]` each count as one entry.
 
@@ -85,7 +85,7 @@ If retries fire (the pop-up shows) but nothing regenerates, the selector needs a
 3. Find a stable attribute on it (a data attribute, aria-label, title, or class) and write a selector that matches it.
 4. Paste it into the Regenerate selector field and hit **Test** with an AI message on screen. Save when it says it matches.
 
-A "no match" doesn't always mean the selector is wrong. A button only exists while it's showing, so a correct selector still won't match if that button isn't on screen when you test. The **Stop** button is the clearest case: it only appears while a reply is generating, so test that one mid-reply.
+A "no match" does not always mean the selector is wrong. A button only exists while it is showing, so a correct selector still will not match if that button is not on screen when you test. The **Stop** button is the clearest case: it only appears while a reply is generating, so test that one mid-reply.
 
 ---
 

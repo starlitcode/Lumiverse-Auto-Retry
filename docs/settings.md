@@ -186,8 +186,8 @@ The same options live in the CONFIG block at the top of `src/frontend.ts` and `d
 | retryDelayMs | 2000 | Wait before the first retry, in milliseconds. |
 | backoffFactor | 2 | Each wait is this many times longer than the last. |
 | maxDelayMs | 60000 | Longest it will ever wait. |
-| jitter | true | Nudges each wait randomly so retries don't all land at once. |
-| rateLimitDelayMs | 15000 | Floor wait when the server says it's busy. Most shared tiers meter per minute, so a shorter wait usually spends a try hitting the same limit. Where the server says how long to wait, that figure is used instead and it is not held under `maxDelayMs`: it is the only number here that is not a guess. An hour is the ceiling. |
+| jitter | true | Nudges each wait randomly so retries do not all arrive at once. |
+| rateLimitDelayMs | 15000 | Floor wait when the server says it is busy. Most shared tiers meter per minute, so a shorter wait usually spends a try hitting the same limit. Where the server says how long to wait, that figure is used instead and it is not held under `maxDelayMs`: it is the only number here that is not a guess. An hour is the ceiling. |
 | retryByNewReroll | true | On: a retry clicks the next / swipe button, adding a new reroll and keeping the existing ones, so a reply it was wrong to retry can be swiped back to. Off: a retry redoes the reply in place via the regenerate button, which on some builds clears the other rerolls. Applies to every retry reason. The other button is the fallback. |
 | keepReplaced | true | Keep the last reply a retry threw away in this chat, so it can be read back or copied from the Replaced tab of the on-screen panel. Held in the tab's memory only: never written down, never sent anywhere, gone when the tab closes. |
 | stuckTimeoutMs | 180000 | Started, then nothing arrived and it never finished, within this. 0 disables. |
