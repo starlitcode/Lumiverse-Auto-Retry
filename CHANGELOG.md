@@ -8,21 +8,11 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
-## 5.6.0
+## 5.7.0
 
 _2026-09-19_
 
 ### Added
-
-- **Three more reasoning formats are recognised by the refusal, empty and cut-off checks.** Gemma 4, Cohere Command A Reasoning, and Seed-OSS. Harmony was already covered.
-
-  None of these could be reached by adding a name under **Extra thinking tag names**. The three wrappers matched by tag name close on the name that opened them; in these the reasoning word sits in the content and the closer is a different token again.
-
-  An opener with nothing closing it now reads as cut off for these as well, which is what a reply that stopped inside the model's thinking looks like.
-
-- **A nudge**, a new note set and the gentlest of them, for a model that is not usually fussy. It says almost nothing, which is the point.
-
-- **Firmer with every try**, a new note set for a model that keeps declining. It opens as lightly as **A nudge**, then sends a plainer note from try 4 and a plainer one again from try 6. It replaces **Stay in the scene, firmer after a few tries**, which only had two steps and started halfway up.
 
 - **A ring fills around the floating button while you hold it.** Holding the button opens its menu, and nothing on screen said a hold was under way, so the half second before the menu appeared read as a tap that did nothing.
 
@@ -34,31 +24,19 @@ _2026-09-19_
 
 ### Changed
 
-- **The note sets that come with it are written at the refusal now, and they run from the gentlest to the most direct.** A note only ever goes out after a reply was read as a refusal, so its one job is getting the next reply written rather than declined. The old five were all pitched the same way and none of them named what had just happened.
-
-  How plainly a note asks is what you pick by. A model that declined once by accident does not need arguing with, and one that has declined the same scene four times does need telling.
-
-  All of them ask rather than order, the firmest included. A note that scolds gets a more careful reply back rather than a braver one, which is the opposite of what you switched notes on for.
-
-- **The acknowledgement notes are gone.** Every set used to answer its own note in the assistant's voice. That leaves the request ending on a turn the model has not written, which is a prefill, and providers are dropping support for it. A set built that way works until the connection behind it stops allowing it, and then it fails for a reason nobody reading the note would guess. Every built-in note is a user note now. Your own notes can still use any role the panel offers.
-
-- **Turn and role markers are removed before the checks run.** Gemma's `<|turn>model` and `<turn|>`, ChatML's `<|im_start|>` and `<|im_end|>`, Llama's header block, and Cohere's turn tokens. They are not reasoning, but until they were gone they counted towards the length checks and sat in the middle of the phrases a refusal is matched on.
-
-  This happens whether or not **Ignore the thinking / reasoning** is on. That option decides whether a refusal written inside the working counts, which is a question about the working. A turn marker is not the working.
-
 - **The four tabs on the floating panel share the row evenly.** They wrapped onto a second line on a narrow panel, and each was sized to its own label, so the gaps between them all differed and the selected one read as cramped next to the wide ones. Auto Refine's tab strip is the same now.
+
+- **No contractions in the panel's own words.** Five descriptions still had them: the backoff factor, the randomness switch, the cut-off switch, the box of phrases never to count, and the section on the buttons it clicks. The prose here does not use them, so that somebody reading it in a second language or with a reading difficulty is not working out what a shortened word stands for on top of everything else.
+
+  The settings page is caught up at the same time. **Where that panel goes** was missing from it entirely, and the row for the panel itself still said it has two tabs. It has four.
+
+- **The word "ship" is gone**, in every form. The sets that come with the extension are built-in sets, and the picker heading reads **Comes with it**. The key holding which of them you were last shown is `lv-auto-retry:built-in-seen:v1` now, and it reads the old name across once and drops it. Losing that stamp would quietly swallow the one line saying the sets changed.
 
 ### Fixed
 
 - **A tap on the floating button opened its menu.** Reported while trying the button. The end of a press was watched on the button itself, and Lumiverse captures the pointer so the button can be dragged. Once it has, the release is delivered to whatever the pointer was captured on and never reaches a listener sitting on the button, so the timer that opens the menu on a hold kept running after the finger had already lifted. Every tap became a hold. The end of a press is watched on the page now, so a tap ends the press wherever the release lands.
 
   The drift a finger is allowed during a hold went from eight pixels to ten at the same time. A thumb resting on glass moves further than eight, and each of those was a hold that quietly did nothing.
-
-- **A commentary channel closed by a tool call is no longer read as cut off.** A tool call ends on `<|call|>` rather than on `<|end|>`, and that token was missing from the list, so every reply where the model called a tool looked truncated.
-
-- **A marker with no role after it keeps the first word of the reply.** The markers that name a speaker take the name with them, and a bare one sitting straight in front of the reply was taking the first word of it instead.
-
-- **The panel said four sets come with it.** Five did, and six do now.
 
 - **A reply is given four minutes to start, not three.** The watchdog that catches a generation which began and then produced nothing was set to three minutes, which covers a local model loading weights and a long prompt being read.
 
@@ -81,6 +59,47 @@ _2026-09-19_
   The line under the picker says so once the two part company, and says where to keep the change: a set that comes with the extension cannot be written over, so it goes under a name of your own with **Save as new**.
 
   The notes stay editable while one is picked. Loading a set and changing it is how you are meant to start.
+
+- **The mark on the floating button is legible on a light theme.** It was measured at 2.49 against a floor of 3, because the sweep that checks what is readable walked text and never looked at a drawing.
+
+
+## 5.6.0
+
+_2026-09-15_
+
+### Added
+
+- **Three more reasoning formats are recognised by the refusal, empty and cut-off checks.** Gemma 4, Cohere Command A Reasoning, and Seed-OSS. Harmony was already covered.
+
+  None of these could be reached by adding a name under **Extra thinking tag names**. The three wrappers matched by tag name close on the name that opened them; in these the reasoning word sits in the content and the closer is a different token again.
+
+  An opener with nothing closing it now reads as cut off for these as well, which is what a reply that stopped inside the model's thinking looks like.
+
+- **A nudge**, a new note set and the gentlest of them, for a model that is not usually fussy. It says almost nothing, which is the point.
+
+- **Firmer with every try**, a new note set for a model that keeps declining. It opens as lightly as **A nudge**, then sends a plainer note from try 4 and a plainer one again from try 6. It replaces **Stay in the scene, firmer after a few tries**, which only had two steps and started halfway up.
+
+### Changed
+
+- **The note sets that come with it are written at the refusal now, and they run from the gentlest to the most direct.** A note only ever goes out after a reply was read as a refusal, so its one job is getting the next reply written rather than declined. The old five were all pitched the same way and none of them named what had just happened.
+
+  How plainly a note asks is what you pick by. A model that declined once by accident does not need arguing with, and one that has declined the same scene four times does need telling.
+
+  All of them ask rather than order, the firmest included. A note that scolds gets a more careful reply back rather than a braver one, which is the opposite of what you switched notes on for.
+
+- **The acknowledgement notes are gone.** Every set used to answer its own note in the assistant's voice. That leaves the request ending on a turn the model has not written, which is a prefill, and providers are dropping support for it. A set built that way works until the connection behind it stops allowing it, and then it fails for a reason nobody reading the note would guess. Every built-in note is a user note now. Your own notes can still use any role the panel offers.
+
+- **Turn and role markers are removed before the checks run.** Gemma's `<|turn>model` and `<turn|>`, ChatML's `<|im_start|>` and `<|im_end|>`, Llama's header block, and Cohere's turn tokens. They are not reasoning, but until they were gone they counted towards the length checks and sat in the middle of the phrases a refusal is matched on.
+
+  This happens whether or not **Ignore the thinking / reasoning** is on. That option decides whether a refusal written inside the working counts, which is a question about the working. A turn marker is not the working.
+
+### Fixed
+
+- **A commentary channel closed by a tool call is no longer read as cut off.** A tool call ends on `<|call|>` rather than on `<|end|>`, and that token was missing from the list, so every reply where the model called a tool looked truncated.
+
+- **A marker with no role after it keeps the first word of the reply.** The markers that name a speaker take the name with them, and a bare one sitting straight in front of the reply was taking the first word of it instead.
+
+- **The panel said four sets come with it.** Five did, and six do now.
 
 ### Removed
 
@@ -598,7 +617,6 @@ _2026-08-19_
 
 ### Changed
 
-
 - **A note about a missing permission can be put away.** Some are meant to be refused: somebody who does not want their prompt read declines the interceptor on purpose, and a panel telling them so on every visit is nagging about a decision they already made. Each note now has an × that hides it until you reload the page. Nothing is written down, so a reload brings every note back, and granting a permission and then losing it again brings its own note back too: hiding one answers the permission being off now, not for the rest of time. They are hidden by name rather than all at once, so putting away the one you chose to refuse does not also hide the next one that goes missing for a reason you did not choose. The debug report lists every permission either way.
 
 ## 4.14.1
@@ -606,7 +624,6 @@ _2026-08-19_
 _2026-08-18_
 
 ### Changed
-
 
 - **The panel marks what has focus properly.** A field used to tint one hairline of border, which is easy to lose on a busy theme and says very little across a wide box. It now carries a soft band just outside the edge and a short halo past that, both in the theme's own accent, so it follows whatever colours you run. It is kept tight on purpose: a wide halo washes over the rows above and below and reads as belonging to the row rather than to the box. All of it is painted outside the box, so nothing sits on the text and no row moves when it lands.
 - **Buttons reached by keyboard wear the same mark.** They were left with whatever outline the host's stylesheet happened to give them, which on a dark theme was often nothing you could see. A button you pressed with a pointer still wears nothing, since the press already said which one it was.
@@ -638,7 +655,6 @@ _2026-08-17_
 
 ### Changed
 
-
 - **The Prompt tab shows the whole prompt.** It used to be capped at 200 messages, 4000 characters each and 300000 in total, with a line under a long message saying how much of it was missing. That was the one thing a reader could not work around, since what was cut only ever existed on the server and was thrown away as the view was built. Every message is now listed and every character of each one is there. The cost stays where it always was: a prompt is only captured while the Prompt tab is actually open, and nothing is captured at all once you switch away or close it.
 
 ### Fixed
@@ -653,7 +669,6 @@ _2026-08-17_
 _2026-08-16_
 
 ### Changed
-
 
 - **The Extras menu entry said Auto Retry was on in a chat you had just switched off.** Three things show whether it is running: the row in the settings panel, the floating button, and this entry. The first two are repainted when anything changes. The entry cannot be relabelled once it is registered, so it is torn down and registered again instead, and that only happened when the master switch moved. It reads both switches now, says "on, but off in this chat" when that is where you are, and follows you between chats.
 
@@ -694,7 +709,6 @@ _2026-08-15_
 
 ### Changed
 
-
 - **The extension has a new mark: a reply, with the retry arrow sweeping over it.** It was a tumbling die, because Lumiverse calls a fresh attempt a reroll. A die on its own says dice, though, and dice say tabletop, which is not what this is. What the extension actually acts on is a reply: it reads one, decides it failed, and asks for another, so the reply is the shape and the arrow is what is being done to it. It appears everywhere the old one did, at the same sizes, with the same slash across it when the extension is switched off.
 
 ## 4.10.0
@@ -725,7 +739,6 @@ _2026-08-15_
 
 ### Changed
 
-
 - **Stats counts a refusal under the cause that produced it.** Everything the refusal side caught landed on one line, so the tab could tell you that a hundred replies were refused and nothing about what to do next. There are four lines now: the model declined, the model broke off rather than declining, the model left the scene to offer support, and the provider blocked it before a reply was written. Each points at a different switch, and all four take the same retry, the same cap and the same note. This is what tells you whether the support check is worth having on, which matters more there than anywhere else, since it is the one check you turn on yourself.
 
 ### Fixed
@@ -744,7 +757,6 @@ _2026-08-15_
 - **A safety page in the docs.** Who this is built for, what the support check can and cannot know, what retrying does when it is pointed at a reply somebody did not want to hear, how to reset or remove every part of it, and a closing note for anyone using it for something other than the writing.
 
 ### Changed
-
 
 - **The doubled refusal is caught: "I cannot and will not engage with content that ...".** Every pattern in the list expected the verb straight after "I can't", so putting "and will not" between them hid the most emphatic refusal a model writes. A meta object is still required, so a character saying "I cannot and will not marry him" is left alone.
 - **So is the refusal stated as a boundary.** "What I won't do is write that scene", and the offer that follows it, "here's what I can do". There is no "I can't" anywhere in either, so nothing in the list saw them. A meta object is required, so "What I won't do is leave you here" is left alone.
@@ -769,7 +781,6 @@ _2026-08-13_
 
 ### Changed
 
-
 - **The panel says who a chat is with.** The **This chat** row reads "This chat, with *name*" and the Stats tab breaks retries down by chat as well as by cause, so a card whose replies keep needing a retry is visible instead of buried in a total. This needs the new `characters` permission alongside `chats`; without it the row reads "This chat" as before and the breakdown falls back to a short chat id. A group chat is named by its primary card.
 - **The Prompt tab counts tokens rather than estimating them.** It said "roughly N tokens", worked out as characters divided by four. Where Lumiverse will do the counting it now shows the real figure and drops the "roughly". This needs no permission, and the estimate is still what you see on a build or model that will not answer. The count arrives just after the view does, so nothing waits on it.
 - **Accidental-refusal retrying is no longer marked beta.** It has been on by default for a long time while carrying a label that says to be careful with it, which are two opposite claims. The detection has not changed; the label was undersold. Find and replace keeps its beta label, because that one is off by default, edits your saved messages, cannot be undone and needs a privileged permission.
@@ -791,7 +802,6 @@ _2026-08-13_
 _2026-08-13_
 
 ### Changed
-
 
 - **The Prompt tab says plainly that only the view is shortened.** A long message was marked "(cut for display)", which reads as though the prompt had been cut before it went out. It now says how much more was sent and that only what you are looking at is capped, so there is no way to read it as the model having been given less. Copying the tab says the same: the header for a message claims its real length, and until now the text under it could be shorter with nothing saying so.
 
@@ -822,7 +832,6 @@ _2026-08-13_
 
 ### Changed
 
-
 - **The settings panel is down to eight sections from eleven, and opens on three.** Two of them were a heading over a single row, which is a heading that says nothing the row does not already say. **How it redoes a reply** was one switch and now sits at the end of **How it retries**, the section it was next to. **Watch for frozen replies** was two waits and now sits at the end of **When to count a reply as bad**, under a **Replies that freeze** heading, because a reply that never finished is a bad reply too. Nothing was renamed except **How hard it tries**, which is **How it retries** now that it also says which button a retry presses.
 - **The on-screen panel switch is in Basics.** It had an **Advanced: on-screen log** heading to itself, shut by default, so turning on the panel meant opening a collapsed Advanced section first. It is not advanced, and it is the first thing you are asked to turn on when reporting a bug. It is in Basics with the master switch and the other ways of seeing what the extension is doing.
 - **Nothing calls itself "Advanced" any more.** The five closed sections were **Advanced: refusal tuning**, **Advanced: find and replace**, and so on, and for most of them that was not true: saving your settings to a file and building a bug report are ordinary things anybody might want. The word was really doing the job of "this one starts closed", which the **▸** already says. They are now **Refusal tuning**, **Find and replace**, **Buttons it clicks**, **Debug info** and **Import / export**. They still start closed, because nothing in them is needed to use the extension, which is a different claim from being difficult.
@@ -847,7 +856,6 @@ _2026-08-07_
 
 ### Changed
 
-
 - **A dropdown is no longer left marked for having been clicked.** Clicking one used to tint its border to say it had the focus, and the tint stayed on the row after the choosing was done, until something else was clicked. It says nothing you cannot already see, since clicking a dropdown puts its menu on screen with the choice in front of you. Reaching one from the keyboard still marks it, because there is no menu then and nothing else saying where you are, and a text box is still marked either way, which is where the mark was doing its job.
 
 ## 4.5.5
@@ -855,7 +863,6 @@ _2026-08-07_
 _2026-08-07_
 
 ### Changed
-
 
 - **The description on What the notes say was nearly five times the length of a normal one, and said half of itself twice.** It explained that each note carries its own role and starting try, then explained it again a few sentences later, and it also described the two settings underneath the list, which now sit under a **For the whole list** heading that says so on its own. The heading went in a few versions back and the words it replaced were never taken out. The descriptions on **Where the notes go** and **Only send them on a regenerate or a swipe** both opened with the same redundant sentence and have lost it too.
 
@@ -868,7 +875,6 @@ _2026-08-07_
 _2026-08-07_
 
 ### Changed
-
 
 - **The dot beside the status line has three states instead of two.** Dim and flat when Auto Retry is off or paused. Lit, and still, when it is on with nothing to do. Pulsing while something is actually happening: a retry counting down, a reply arriving, the model thinking. Movement means movement rather than decoration, so glancing at the corner answers the question without reading the line. It is opacity and a glow only, and the movement is dropped for anyone whose system asks for less of it, keeping the glow, which is the part carrying the meaning.
 
@@ -918,7 +924,6 @@ What has not started counting: a `<` someone typed in a scene, `if x<y`, a bare 
 
 ### Changed
 
-
 - **The retry pop-up counts down instead of freezing.** It used to say "Retrying 2/5 (cut off) in 47.3s" once and go on saying it for the next forty-seven seconds, so the one number anyone actually watches was the one number that never moved. 4.4.0 raised the longest wait to a minute, which turned that from a small oddity into something that looks like the extension having stopped. It now reads **Cut off. Retrying in 47s (try 2 of 5)** and the number goes down. Only the text is repainted, so the Cancel button next to it cannot be swallowed by a press landing mid-redraw.
 - **One way of writing a length, everywhere.** Whole seconds, because a figure twitching four times a second is noise, then `5m 03s` and `1h 05m 03s` as the wait grows. The countdown, the panel, the Stats tab and the message announcing a pause all say a length the same way now. Hours are there because the pause after repeated failures can be set to three of them, and `180 minutes` leaves you doing the division. Smaller units keep their leading zero so the line does not change width as it counts.
 - **The on-screen panel says what is happening this second.** A line under the tabs, with a dot that lights while something is going on. It counts down a pending retry, says when a reply is arriving and roughly how much has landed, says when the model is thinking, says when it has paused itself after repeated failures, and says when there is nothing to do. It sits above all three tabs because none of them answered that question: the Log says what already happened, the Stats say what has happened overall. A retry in a chat you have moved away from is still reported, marked as being in another chat. It and the pop-up read from the same place, so they cannot disagree.
@@ -957,7 +962,6 @@ _2026-08-06_
 - **The floating button's size can be seen while you set it.** A circle beside the box is drawn at the size you type, and the real button changes with it, so you are not guessing from a number. Closing the panel without saving puts it back.
 
 ### Changed
-
 
 - **Reset is no longer all or nothing.** **Reset…** at the bottom of the panel opens a picker: tick the parts you want put back to their defaults, and anything you leave unticked is not touched. The parts are the same ones import and export use, so the names match between the two panels. Each line says how many of its settings you have actually changed, and a part still at its defaults cannot be ticked, since there would be nothing for it to do.
 - **Nothing resets without being asked first.** **Reset ticked** shows what it is about to do, naming the parts you picked, how many settings are in each, and whether presets are going with them. Nothing happens until you press **Yes, reset**. **Go back** returns to the list with your ticks kept, and Escape or a click outside closes it without touching a setting. The question is asked by the extension rather than handed to Lumiverse's own confirm dialog, because not every build has one.
@@ -1021,7 +1025,6 @@ _2026-08-04_
 
 ### Changed
 
-
 - **A filled button gets an outline when your theme's accent has all but vanished.** On a theme whose accent sits close to the panel colour, Save stayed readable but lost its edge, so nothing said it was a button. It now gets a border only when its fill has faded into the surface behind it. A theme with an ordinary accent is left exactly as it was, and the quieter secondary buttons keep the border your theme gives them.
 - **The panel says when Auto Retry itself is off.** It can be switched off from the floating button or the Extras menu without opening the settings, so it was possible to arrive here with it off and nothing saying why nothing was happening. A line at the top says so now. Nothing is hidden or greyed for it: off means paused rather than unconfigured, and setting things up while it is off is a normal thing to want to do.
 - **A setting that does nothing yet is no longer shown.** Options that only matter once something else is switched on are kept out of the panel until it is. Turning **Send a note with a refusal retry** on adds the note rows below it and turning it off takes them away, and the same goes for the short-reply threshold, the pause settings, the floating button's size, the phrase rewording and the re-swap option. Whole sections go the same way: with **It looks like an accidental refusal** off, nothing under **Advanced: refusal tuning** does anything, so the heading goes too. The switch doing the hiding never moves itself.
@@ -1052,7 +1055,6 @@ _2026-08-02_
 
 ### Changed
 
-
 - **Auto Retry has its own symbol.** A die caught mid-tumble, since a fresh attempt is a reroll. It replaces the circular arrow on the settings entry and the power symbol on the on/off entry. The floating button was drawing a text character, so its shape was whatever font your phone reached for. It is a real drawing now and holds together at every size.
 
 ### Fixed
@@ -1072,7 +1074,6 @@ _2026-07-31_
 **Reinstall required.** Renaming the repository's main branch broke the link your install used to find updates. Remove Auto Retry and install it again from the same URL and it will pick up the new name. Your settings are saved to your Lumiverse account, so they come back with it.
 
 ### Changed
-
 
 - **Main is now called `stable`, and there is a new `testing` branch.** Stable only moves when there is a real release, so installing from it means a notification when something has actually gone out. Testing is where work in progress goes, so install from there for an early look, bugs included.
 
@@ -1097,7 +1098,6 @@ _2026-07-31_
 
 ### Changed
 
-
 - **Descriptions no longer shove the list around.** Tapping a **?** used to open the description inside the row and push everything below it down the screen, and opening a second one moved everything again. It now floats just below that setting, so nothing moves and the setting you asked about stays visible. Only one shows at a time. Tap the description, tap the **?** again, tap elsewhere, scroll, or press Esc to dismiss it.
 - **Find and replace says what a preset carries.** That section is split under two headings. **Saved in a preset** holds your rules and the two options that decide how they match. **Yours, whatever preset you load** holds everything a preset leaves alone: whether swapping is on at all, which buttons appear in your Extras menu, whether a reply can be swapped twice, and whether it confirms before editing. Loading a preset cannot change any of those.
 - **Word swap presets follow your account.** They used to live only in the browser you made them in, so your settings would move to a new device and your presets would not. They now sync the same way your settings do, with a copy kept in the browser so the list is on screen instantly.
@@ -1121,7 +1121,6 @@ _2026-07-29_
 
 ### Changed
 
-
 - **Clearer settings descriptions.** Trimmed the wordier ones again so they say what the setting does without the bloat.
 - **The docs are split into pages.** The README was getting long, so it is now a short intro plus a `docs/` folder: when it retries, word swaps, all settings, buttons it clicks, import and export, reporting a bug.
 
@@ -1134,7 +1133,6 @@ _2026-07-28_
 - **Extra dialog buttons it may press.** New box in the buttons settings, for the rare case where that dialog's button says something other than Skip. Type the wording exactly as it appears, one per line. Most people will not need it.
 
 ### Changed
-
 
 - **README.** New sections on how Regeneration Feedback and Auto Retry work together, and on writing selectors by hand.
 
@@ -1164,7 +1162,6 @@ _2026-07-24_
 
 ### Changed
 
-
 - **Word swap presets stick to your rules.** A preset used to carry the whole word-swap section, so loading one could switch swapping on, remove the confirm-before-editing prompt, allow double swaps, or move buttons around in your Extras menu. It now saves your rules plus **Pick a swap at random** and **Match case exactly**, and leaves the rest alone. Exports are unchanged, and presets already saved keep working.
 
 ### Fixed
@@ -1190,7 +1187,6 @@ _2026-07-23_
 
 ### Changed
 
-
 - **Shorter description on that section.** It had grown into a wall of text. The panel now covers what you need on first read, and the README has the fallback list and selector syntax.
 - **README: word swaps.** Clearer on how the longest-match rule and the random option differ. Longest match decides which rule fires when two compete for the same spot; random decides which replacement one rule uses when several are given. Also notes that identical left sides fall back to list order.
 
@@ -1208,7 +1204,6 @@ _2026-07-23_
 - **Pause when everything is failing.** On by default. Several failed runs in a row pauses auto-retry instead of retrying on every message. Two boxes set how many and how long. A good reply ends it early.
 
 ### Changed
-
 
 - **Empty and cut-off checks no longer depend on the refusal option.** Turning off Ignore the thinking / reasoning was also switching off those two checks, so thinking-only and mid-thought replies slipped through. That option covers refusal matching only now.
 - **Selectors can contain commas.** `:is(a, b)` and `[aria-label="Next, swipe"]` each count as one entry.
@@ -1239,7 +1234,6 @@ _2026-07-22_
 
 ### Changed
 
-
 - **Selectors check in the order given.** Comma-separated selectors now evaluate left to right. Put specific selectors first, broad ones last.
 
 ### Fixed
@@ -1267,7 +1261,6 @@ _2026-07-21_
 
 ### Changed
 
-
 - **Whole-chat swapping is its own button.** The "Button swaps the whole chat" toggle is gone. A new option adds a second Extras button, **Swap words in every reply**, that applies your rules once to every generated reply in the chat, which is handy after adding a rule mid-chat or loading a different preset. Off by default, and the original swap button now always does just the latest reply.
 
 ## 2.7.0
@@ -1279,7 +1272,6 @@ _2026-07-21_
 - **Presets travel with your exports.** Advanced: import / export has a Word swap presets option. Tick it to include your presets in the export file. Importing merges them: same-named presets are replaced, new ones are added, the rest are left alone. Since presets lived on one browser at the time, this was how to move them between devices or share them. Imported presets save right away, with no Save press needed.
 
 ### Changed
-
 
 - **Shorter store description.** Trimmed to one line so it reads clean in the extension list.
 
@@ -1297,7 +1289,6 @@ _2026-07-19_
 - **Expand button on long text boxes.** Any multiline field, such as word-swap rules or refusal phrase lists, has an Expand button that opens a full-size editor. It opens without popping the keyboard, so you can read first and tap in when you want to type.
 
 ### Changed
-
 
 - **Descriptions moved into tooltips.** Each setting's explanation sits behind a small **?** next to its name. Hover on a computer, tap on a phone. Keeps the panel much more compact.
 - **Follows your theme's fonts.** Panels and the settings UI use the Lumiverse global font, headers use the bold version, and the code areas (debug preview and live log) use the mono font.
@@ -1319,7 +1310,6 @@ _2026-07-18_
 
 ### Changed
 
-
 - **Easier to debug.** Copy debug info lists which retry mode is active, and the "couldn't find your button" messages no longer assume regenerate, so they read right in either mode.
 
 ## 2.4.0
@@ -1333,7 +1323,6 @@ _2026-07-17_
 - **Ask before editing.** New toggle that makes every swap, automatic or manual, ask for confirmation before changing a reply. Off by default.
 
 ### Changed
-
 
 - **The greeting is never touched.** Word swaps only apply to generated replies. The opening message is always left alone, in both automatic and manual modes.
 - **Clearer input focus.** Text and swap-rule boxes show a soft accent glow when focused instead of a barely visible outline.
@@ -1353,7 +1342,6 @@ _2026-07-16_
 - **Custom thinking tags.** Add any wrapper your model uses under "Extra thinking tag names", one per line. New "Ignore the thinking / reasoning" toggle, on by default.
 
 ### Changed
-
 
 - **Refusals inside the model's thinking are ignored.** Only the final reply is checked. Reasoning blocks (`<think>`, `<thinking>`, `<reasoning>`, `<reflection>`, `<scratchpad>` and similar, plus `[tag]` forms) are stripped before matching.
 - **Settings sync to your Lumiverse account.** They follow you across browsers and devices instead of living in one browser. Existing settings migrate up automatically.
@@ -1395,7 +1383,6 @@ _2026-07-14_
 
 ### Changed
 
-
 - **Rules and phrases are one per line.** Word swaps, custom refusal phrases, the whitelist and reword rules are no longer separated by commas.
 - **Word swap and refusal settings use multi-line text areas.** Easier to manage lists, and Enter starts a new rule directly in the settings.
 - **Commas can be used inside your swaps.** Because rules split on line breaks, you can swap phrases and full sentences containing commas, for example `Well, she left. => He stayed quietly.` **If you have multiple comma-separated entries on one line, move them onto separate lines.**
@@ -1414,7 +1401,6 @@ _2026-07-13_
 
 ### Changed
 
-
 - **The "longest reply to treat as a refusal" cap defaults to 2000.** (was 1200). Some models write long, padded refusals (apology, "as an AI", a paragraph of reasoning, then offered alternatives) that ran past the old limit and slipped through. 2000 catches those while leaving genuinely long replies alone.
 
 ## 1.4.1
@@ -1422,7 +1408,6 @@ _2026-07-13_
 _2026-07-13_
 
 ### Changed
-
 
 - **Renamed:** the "On / off" settings group to "Basics".
 - **Renamed:** the "Notifications" import/export category to "On-screen", since it covers the retry pop-up and the live log.
@@ -1479,7 +1464,6 @@ _2026-07-12_
 
 ### Changed
 
-
 - **Advanced settings now collapse**, tucked behind a tap-to-open header so the basic switches stay front and centre.
 - **README cleaned up and updated**, reorganised, and now covering the new settings and permissions.
 
@@ -1497,7 +1481,6 @@ _2026-06-27_
 
 ### Changed
 
-
 - **The selector Test no longer overstates what it knows.** A failed match says "no match right now" instead of "not on screen right now".
 
 ## 1.1.4
@@ -1505,7 +1488,6 @@ _2026-06-27_
 _2026-06-27_
 
 ### Changed
-
 
 - **Closing settings with the X discards unsaved changes.** Before, edits took effect the moment you made them, so closing without saving still left them applied to the current session, which was confusing. Now only **Save** keeps changes, and closing with X or tapping outside throws away anything unsaved. **Reset** counts as a change you made, so it sticks.
 - **Testing an empty selector box gives a clearer message.** It says "type a selector first" instead of reporting no match right now.
@@ -1521,7 +1503,6 @@ _2026-06-27_
 _2026-06-26_
 
 ### Changed
-
 
 - **Testing a button selector is clearer.** A button only exists in the page while it is on screen, so a correct selector will not match if that button is not showing. The result now reads "not on screen right now" instead of "no match", and the settings and README explain it: the **Stop** button only appears while a reply is generating, so test that selector mid-generation rather than from an idle screen.
 - **Tightened up the wording** in the settings descriptions and README.
@@ -1541,7 +1522,6 @@ _2026-06-17_
 
 ### Changed
 
-
 - **Copy debug info includes a recent-activity log**, so a bug report shows what actually happened (generations starting, retries firing and why, a clean finish) rather than just a snapshot of your settings.
 
 ## 1.1.0
@@ -1554,7 +1534,6 @@ _2026-06-17_
 - **A Copy debug info button**, so reporting a bug is one tap with no dev tools needed.
 
 ### Changed
-
 
 - **Settings reworded in plain language**, with a short description on each group.
 - **Tuned the defaults** so a slow reply or a slow local model is not mistaken for a frozen one and retried into a pile-up.
