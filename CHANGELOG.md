@@ -50,6 +50,10 @@ _2026-09-19_
 
 ### Fixed
 
+- **A tap on the floating button opened its menu.** Reported while trying the button. The end of a press was watched on the button itself, and Lumiverse captures the pointer so the button can be dragged. Once it has, the release is delivered to whatever the pointer was captured on and never reaches a listener sitting on the button, so the timer that opens the menu on a hold kept running after the finger had already lifted. Every tap became a hold. The end of a press is watched on the page now, so a tap ends the press wherever the release lands.
+
+  The drift a finger is allowed during a hold went from eight pixels to ten at the same time. A thumb resting on glass moves further than eight, and each of those was a hold that quietly did nothing.
+
 - **A commentary channel closed by a tool call is no longer read as cut off.** A tool call ends on `<|call|>` rather than on `<|end|>`, and that token was missing from the list, so every reply where the model called a tool looked truncated.
 
 - **A marker with no role after it keeps the first word of the reply.** The markers that name a speaker take the name with them, and a bare one sitting straight in front of the reply was taking the first word of it instead.
