@@ -55,7 +55,7 @@ describe("a hint that names a default names the real one", () => {
   });
 
   for (const key of QUOTES_ITS_DEFAULT) {
-    test(key + " states its shipped value", () => {
+    test(key + " states the value it has", () => {
       const f = FIELDS.find((x) => x.key === key);
       expect(f).toBeDefined();
       expect(f!.hint).toContain(String((CONFIG as any)[key]));
@@ -64,15 +64,15 @@ describe("a hint that names a default names the real one", () => {
 
   // The catch-all, and the one that would have caught the original drift. Any
   // number of three digits or more in any hint has to be a value the extension
-  // actually ships. A hand-written 30000 next to a default of 60000 fails here
+  // actually runs. A hand-written 30000 next to a default of 60000 fails here
   // whichever setting it was written under.
-  test("no hint carries a number the extension does not ship", () => {
+  test("no hint carries a number the extension does not use", () => {
     const bad: Array<{ key: string; number: string }> = [];
     for (const f of FIELDS) {
       // Not the fractional half of a decimal. A price is written 0.075, and no
       // default is a fraction with three places on it, so a run of digits
       // sitting behind a point is an example rather than a number this
-      // extension ships.
+      // extension has.
       for (const m of f.hint.matchAll(/(?<![.\d])(\d{3,})\b/g)) {
         if (!DEFAULT_NUMBERS.has(m[1])) bad.push({ key: f.key, number: m[1] });
       }
@@ -102,19 +102,19 @@ describe("the timings read the way a person would say them", () => {
     }
   });
 
-  test("and the plain words are the ones we expect to ship", () => {
+  test("and the plain words are the ones we expect", () => {
     expect(human(CONFIG.retryDelayMs)).toBe("2 seconds");
     expect(human(CONFIG.maxDelayMs)).toBe("1 minute");
     expect(human(CONFIG.rateLimitDelayMs)).toBe("15 seconds");
-    expect(human(CONFIG.stuckTimeoutMs)).toBe("3 minutes");
+    expect(human(CONFIG.stuckTimeoutMs)).toBe("4 minutes");
     expect(human(CONFIG.idleTimeoutMs)).toBe("90 seconds");
   });
 });
 
 // dist is the file Lumiverse loads. A default changed in src and not mirrored
-// would ship the old timing behind a source that reviews as correct, and the
+// would run the old timing behind a source that reviews as correct, and the
 // panel would then describe a value the running code does not use.
-describe("dist ships the same defaults", () => {
+describe("dist carries the same defaults", () => {
   const DIST = readFileSync(new URL("../dist/frontend.js", import.meta.url), "utf8");
   const block = DIST.slice(DIST.indexOf("const CONFIG = {"));
   for (const key of ["retryDelayMs", "maxDelayMs", "rateLimitDelayMs", "stuckTimeoutMs", "idleTimeoutMs", "maxRetries"]) {
@@ -128,7 +128,7 @@ describe("dist ships the same defaults", () => {
 
 // The written table in docs/settings.md is the other place a default is spelled
 // out, and it drifted for the same reason the hints did.
-describe("the settings table matches what ships", () => {
+describe("the settings table matches what runs", () => {
   const DOC = readFileSync(new URL("../docs/settings.md", import.meta.url), "utf8");
   const rows: Record<string, string> = {};
   for (const m of DOC.matchAll(/^\|\s*(\w+)\s*\|\s*([^|]+?)\s*\|/gm)) rows[m[1]] = m[2];

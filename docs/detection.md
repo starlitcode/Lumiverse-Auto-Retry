@@ -14,7 +14,7 @@ The checks:
 
 - an unclosed code block or inline backtick
 - markup left open: a container never closed, a tag with no closing bracket, a comment with no end (see below)
-- an odd number of emphasis `*`, an open action or emphasis (bullet lists are ignored so a list doesn't look half-open)
+- an odd number of emphasis `*`, an open action or emphasis (bullet lists are ignored so a list does not look half-open)
 - an unbalanced quote, open dialogue
 - it ends on a comma or semicolon, cut mid-clause
 - it stops on a word with nothing after it (`retryOnNoPunct`, on by default)
@@ -215,7 +215,7 @@ Everything sits under **Refusal tuning** in the settings, so the basic on/off to
 - **Your own refusal phrases.** Extras that should also count, one per line, always used whether or not the built-in list is on. Paste the exact wording your model refuses with. Matched against a provider error as well as against the reply, which is how you add an error of your own.
 
   A line under three characters is ignored in every box on this page. These are matched with "does the reply contain this", so one stray letter would match almost everything. Three still leaves a provider's own codes usable.
-- **Reword the built-in phrases.** Change wording inside the built-in list with `old => new` rules, one per line. For example `assist => help` rewrites every built-in phrase that uses "assist" to use "help" instead. Handy if a built-in phrase uses a word you'd rather see worded differently, or if your model phrases the same refusal a little differently. It changes what the built-in list matches, so use wording your model actually refuses with. It never touches a reply.
+- **Reword the built-in phrases.** Change wording inside the built-in list with `old => new` rules, one per line. For example `assist => help` rewrites every built-in phrase that uses "assist" to use "help" instead. Useful if a built-in phrase uses a word you would rather see worded differently, or if your model phrases the same refusal a little differently. It changes what the built-in list matches, so use wording your model actually refuses with. It never touches a reply.
 - **Never treat these as a refusal.** A whitelist. If a reply contains any of these, one per line, it is never re-rolled. This wins over everything else.
 - **Longest reply to treat as a refusal** (2000 by default). Longer replies are assumed to be real writing and left alone. Raise it if your model writes long, padded refusals, lower it to be safer with long scenes, or set it to 0 to scan replies of any length.
 
@@ -281,9 +281,9 @@ That matters because of what used to happen without it. Picking a set only lit t
 
 Presets are saved to your account, so they follow you to other devices.
 
-### The sets that ship with it
+### The sets that come with it
 
-Six sets are in the picker under **Ships with it**, so the boxes are not blank the first time you switch notes on. They run from the gentlest to the most direct, which is what you pick by: a model that declined once by accident does not need arguing with, and one that has declined the same scene four times does need telling.
+Six sets are in the picker under **Comes with it**, so the boxes are not blank the first time you switch notes on. They run from the gentlest to the most direct, which is what you pick by: a model that declined once by accident does not need arguing with, and one that has declined the same scene four times does need telling.
 
 All of them ask rather than order, the firmest included. A note that scolds gets a more careful reply back rather than a braver one, which is the opposite of what you turned notes on for.
 
@@ -331,7 +331,7 @@ This is the fastest way to work out a phrase list. Paste a refusal your model ac
 
 ## What the built-in list looks for
 
-So you know what "Reword the built-in phrases" acts on, here is the exact phrase list. A reply is treated as a refusal if it contains any of these (case and curly apostrophes don't matter), unless it is inside quotation marks. The written-out form of each is matched too, so "I'm unable to help with that" also covers "I am unable to help with that":
+So you know what "Reword the built-in phrases" acts on, here is the exact phrase list. A reply is treated as a refusal if it contains any of these (case and curly apostrophes do not matter), unless it is inside quotation marks. The written-out form of each is matched too, so "I'm unable to help with that" also covers "I am unable to help with that":
 
 ```
 i can't help with that                i'm unable to complete that request

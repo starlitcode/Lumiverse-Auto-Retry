@@ -42,6 +42,8 @@ Two options in **Basics**, and you can use either or both:
 
 - **Floating on/off button** puts a small button over the chat that toggles it in one tap. Drag it anywhere; it snaps to the nearest edge and stays where you leave it, and you can set its size, which the button itself takes on as you type so you can see it before saving. Changing the size grows it around where it is sitting rather than moving it, though a button against an edge does come inward far enough for the bigger size to fit. Tapping it eases between on and off rather than flicking, and a device set to reduce motion gets the same change with nothing in between. Hold it, or right-click on a computer, for its menu. That menu is drawn by Lumiverse, so it arrives in your own theme and accent.
 
+  Holding it fills a ring around its edge, which closes a moment before the menu opens. Letting go early wipes it back. A press also dips the button a little, so a tap answers whether or not it changed anything: a dip on its own is a tap, a dip with the ring running is a hold. Auto Refine's floating button does the same. A device set to reduce motion opens the menu on the same hold with no ring drawn.
+
   While this button is showing, its menu holds everything that would otherwise be in the **Extras** menu. In order: **Auto Retry settings**, then **Open the Auto Retry panel** if the panel is set to live in the sidebar, then **Hide this button** at the bottom.
 - **On/off button in the Extras menu** adds a button next to the settings button. Its label says whether Auto Retry is on or off, so you can check and change it without opening the settings. It takes up no room on the screen. In a chat you have switched off, it says so, because "on" would be true of everywhere except where you are. Tapping it always switches Auto Retry on or off everywhere, wherever you tap it from, and the label says so.
 
@@ -186,11 +188,11 @@ The same options live in the CONFIG block at the top of `src/frontend.ts` and `d
 | retryDelayMs | 2000 | Wait before the first retry, in milliseconds. |
 | backoffFactor | 2 | Each wait is this many times longer than the last. |
 | maxDelayMs | 60000 | Longest it will ever wait. |
-| jitter | true | Nudges each wait randomly so retries don't all land at once. |
-| rateLimitDelayMs | 15000 | Floor wait when the server says it's busy. Most shared tiers meter per minute, so a shorter wait usually spends a try hitting the same limit. Where the server says how long to wait, that figure is used instead and it is not held under `maxDelayMs`: it is the only number here that is not a guess. An hour is the ceiling. |
+| jitter | true | Nudges each wait randomly so retries do not all arrive at once. |
+| rateLimitDelayMs | 15000 | Floor wait when the server says it is busy. Most shared tiers meter per minute, so a shorter wait usually spends a try hitting the same limit. Where the server says how long to wait, that figure is used instead and it is not held under `maxDelayMs`: it is the only number here that is not a guess. An hour is the ceiling. |
 | retryByNewReroll | true | On: a retry clicks the next / swipe button, adding a new reroll and keeping the existing ones, so a reply it was wrong to retry can be swiped back to. Off: a retry redoes the reply in place via the regenerate button, which on some builds clears the other rerolls. Applies to every retry reason. The other button is the fallback. |
 | keepReplaced | true | Keep the last reply a retry threw away in this chat, so it can be read back or copied from the Replaced tab of the on-screen panel. Held in the tab's memory only: never written down, never sent anywhere, gone when the tab closes. |
-| stuckTimeoutMs | 180000 | Started, then nothing arrived and it never finished, within this. 0 disables. |
+| stuckTimeoutMs | 240000 | Started, then nothing arrived and it never finished, within this. 0 disables. |
 | idleTimeoutMs | 90000 | Tokens flowed then stopped for this long. 0 disables. |
 | retryOnError | true | Retry provider errors. |
 | ignoreHardErrors | true | Skip permanent failures like missing models or invalid API keys. |
@@ -221,7 +223,8 @@ The same options live in the CONFIG block at the top of `src/frontend.ts` and `d
 | confirmButtonLabels | (blank) | Extra dialog button labels it may press when a dialog appears after a retry, one per line. Tried before the built-in list, which is used as well. Shown and read only while `confirmButtonsCustom` is on. |
 | stopSelector | (see file) | Host stop button, used to abort a stalled reply. |
 | toast | true | Show the little retry pop-up with its Cancel button. It counts the wait down in real time and names what the retry is for and which try it is. |
-| liveLog | false | Show the on-screen panel. Two tabs: Log for what the extension is doing, Prompt for what went to the model. |
+| liveLog | false | Show the on-screen panel. Four tabs: Log for what it is doing as it happens, Prompt for what went to the model, Stats for what it keeps retrying for, and Replaced for the last reply a retry threw away. |
+| panelHome | float | Where that panel goes. `float` is a small box over the chat you can move and resize, and where you leave it is remembered. `drawer` puts it in Lumiverse's own side panel, which never covers the reply you are reading. A Lumiverse with no side panel for extensions gets the box, and the Log says so. Shown only while `liveLog` is on. |
 | costIn | 0 | Your provider's input price per million tokens, in its own currency. The panel's Prompt tab uses it to say what retrying costs. 0 leaves the line off. |
 | costOut | 0 | The output price from the same list, for the reply a retry produces. Both at 0 leaves the line off. |
 

@@ -1,4 +1,4 @@
-// The note sets that ship with it are named twice: in the code, where the notes
+// The note sets that come with it are named twice: in the code, where the notes
 // themselves live, and in docs/detection.md, where the list is written out again
 // by hand. Nothing makes the second copy follow the first, so a set added,
 // renamed or reordered lands in one and sits in the other until somebody reads
@@ -17,11 +17,11 @@ const array = code.slice(
   code.indexOf("const BUILT_IN_NOTES"),
   code.indexOf("const builtInNote", code.indexOf("const BUILT_IN_NOTES")),
 );
-const shipped = [...array.matchAll(/\n\s+name: "([^"]+)",/g)].map((m) => m[1]);
+const builtIns = [...array.matchAll(/\n\s+name: "([^"]+)",/g)].map((m) => m[1]);
 
 // The section that lists them: everything from its heading to the next heading
 // of any depth, so bullets from further down the page are not counted as sets.
-const after = page.split("\n").slice(page.split("\n").indexOf("### The sets that ship with it") + 1);
+const after = page.split("\n").slice(page.split("\n").indexOf("### The sets that come with it") + 1);
 const end = after.findIndex((l) => l.startsWith("#"));
 const listed = after
   .slice(0, end < 0 ? after.length : end)
@@ -30,11 +30,11 @@ const listed = after
 
 describe("the detection page keeps up with the note sets", () => {
   test("the code has sets to check against", () => {
-    expect(shipped.length).toBeGreaterThanOrEqual(5);
+    expect(builtIns.length).toBeGreaterThanOrEqual(5);
   });
 
   test("the page lists every one of them, in the same order", () => {
-    expect(listed).toEqual(shipped);
+    expect(listed).toEqual(builtIns);
   });
 
   test("and says how many there are", () => {
@@ -42,7 +42,7 @@ describe("the detection page keeps up with the note sets", () => {
     // is how the page came to say four over a list of five.
     const words = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"];
     const wrong = words.filter(
-      (w, n) => n !== shipped.length && new RegExp("\\b" + w + " sets\\b", "i").test(page),
+      (w, n) => n !== builtIns.length && new RegExp("\\b" + w + " sets\\b", "i").test(page),
     );
     expect(wrong).toEqual([]);
   });

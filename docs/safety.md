@@ -1,6 +1,6 @@
 # Safety
 
-Auto Retry throws replies away and asks for new ones. There is one setting I am not willing to ship without explaining, and one way of using the extension that is worth being clear about. That is what this page is for.
+Auto Retry throws replies away and asks for new ones. There is one setting I am not willing to release without explaining, and one way of using the extension that is worth being clear about. That is what this page is for.
 
 ## Who this is for
 

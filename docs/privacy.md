@@ -80,7 +80,7 @@ Lumiverse also reports what kind of generation is running, and you can require t
 
 ## This page can change
 
-A new feature can need a permission the extension does not have yet, and when that happens this page is updated to say so before the version that needs it ships. `chats` is the one that has happened so far.
+A new feature can need a permission the extension does not have yet, and when that happens this page is updated to say so before the version that needs it goes out. `chats` is the one that has happened so far.
 
 It is not expected to happen often. What is declared now covers what the extension is for, and a new permission is a real cost rather than a formality: every user has to approve it, and the ones who read this page have to decide again whether they still want it installed. So the bar for asking is high, and "it would be tidier" does not clear it.
 
@@ -133,11 +133,11 @@ The refusal tester in the settings panel only reads the text in its box. **Use m
 
 ## Checking any of this yourself
 
-The files Lumiverse actually loads are the two named in `spindle.json`, `dist/frontend.js` and `dist/backend.js`. They are committed as readable code, with nothing minified, obfuscated or bundled. What you read is what runs, which is also why the extension installs without a build step. If you are auditing this extension, or pointing a scanner at it, those two files are the whole of what ships.
+The files Lumiverse actually loads are the two named in `spindle.json`, `dist/frontend.js` and `dist/backend.js`. They are committed as readable code, with nothing minified, obfuscated or bundled. What you read is what runs, which is also why the extension installs without a build step. If you are auditing this extension, or pointing a scanner at it, those two files are the whole of what runs.
 
 Everything else in the repo exists for working on it, and none of it reaches your browser:
 
-- `src/` is the TypeScript those two files are built from. A scanner that only parses JavaScript cannot read it and will say so. The shipped `dist/` files are plain JavaScript and parse normally.
+- `src/` is the TypeScript those two files are built from. A scanner that only parses JavaScript cannot read it and will say so. The built `dist/` files are plain JavaScript and parse normally.
 - `test/` runs only when a contributor types `bun run check`. It is not part of the install and adds nothing to its size.
 - `setup.sh` prepares a development machine. Nothing runs it at install time and nothing in the extension calls it.
 - `docs/` is these pages. None of it is code.

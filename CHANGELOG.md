@@ -10,7 +10,7 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ## 5.6.0
 
-_2026-09-15_
+_2026-09-19_
 
 ### Added
 
@@ -24,27 +24,63 @@ _2026-09-15_
 
 - **Firmer with every try**, a new note set for a model that keeps declining. It opens as lightly as **A nudge**, then sends a plainer note from try 4 and a plainer one again from try 6. It replaces **Stay in the scene, firmer after a few tries**, which only had two steps and started halfway up.
 
+- **A ring fills around the floating button while you hold it.** Holding the button opens its menu, and nothing on screen said a hold was under way, so the half second before the menu appeared read as a tap that did nothing.
+
+  The ring starts at the top and closes a moment before the menu opens. Letting go early wipes it back. A press still dips the button a little, so a tap answers whether or not it changed anything: a dip on its own is a tap, a dip with the ring running is a hold.
+
+  Auto Refine's floating button draws the same ring the same way, at the same length, so the two behave alike.
+
+  Somebody who has asked their device for less movement gets the menu on the same hold with no ring drawn.
+
 ### Changed
 
-- **The note sets that ship are written at the refusal now, and they run from the gentlest to the most direct.** A note only ever goes out after a reply was read as a refusal, so its one job is getting the next reply written rather than declined. The old five were all pitched the same way and none of them named what had just happened.
+- **The note sets that come with it are written at the refusal now, and they run from the gentlest to the most direct.** A note only ever goes out after a reply was read as a refusal, so its one job is getting the next reply written rather than declined. The old five were all pitched the same way and none of them named what had just happened.
 
   How plainly a note asks is what you pick by. A model that declined once by accident does not need arguing with, and one that has declined the same scene four times does need telling.
 
   All of them ask rather than order, the firmest included. A note that scolds gets a more careful reply back rather than a braver one, which is the opposite of what you switched notes on for.
 
-- **The acknowledgement notes are gone.** Every set used to answer its own note in the assistant's voice. That leaves the request ending on a turn the model has not written, which is a prefill, and providers are dropping support for it. A set built that way works until the connection behind it stops allowing it, and then it fails for a reason nobody reading the note would guess. Every shipped note is a user note now. Your own notes can still use any role the panel offers.
+- **The acknowledgement notes are gone.** Every set used to answer its own note in the assistant's voice. That leaves the request ending on a turn the model has not written, which is a prefill, and providers are dropping support for it. A set built that way works until the connection behind it stops allowing it, and then it fails for a reason nobody reading the note would guess. Every built-in note is a user note now. Your own notes can still use any role the panel offers.
 
 - **Turn and role markers are removed before the checks run.** Gemma's `<|turn>model` and `<turn|>`, ChatML's `<|im_start|>` and `<|im_end|>`, Llama's header block, and Cohere's turn tokens. They are not reasoning, but until they were gone they counted towards the length checks and sat in the middle of the phrases a refusal is matched on.
 
   This happens whether or not **Ignore the thinking / reasoning** is on. That option decides whether a refusal written inside the working counts, which is a question about the working. A turn marker is not the working.
 
+- **The four tabs on the floating panel share the row evenly.** They wrapped onto a second line on a narrow panel, and each was sized to its own label, so the gaps between them all differed and the selected one read as cramped next to the wide ones. Auto Refine's tab strip is the same now.
+
 ### Fixed
+
+- **A tap on the floating button opened its menu.** Reported while trying the button. The end of a press was watched on the button itself, and Lumiverse captures the pointer so the button can be dragged. Once it has, the release is delivered to whatever the pointer was captured on and never reaches a listener sitting on the button, so the timer that opens the menu on a hold kept running after the finger had already lifted. Every tap became a hold. The end of a press is watched on the page now, so a tap ends the press wherever the release lands.
+
+  The drift a finger is allowed during a hold went from eight pixels to ten at the same time. A thumb resting on glass moves further than eight, and each of those was a hold that quietly did nothing.
 
 - **A commentary channel closed by a tool call is no longer read as cut off.** A tool call ends on `<|call|>` rather than on `<|end|>`, and that token was missing from the list, so every reply where the model called a tool looked truncated.
 
 - **A marker with no role after it keeps the first word of the reply.** The markers that name a speaker take the name with them, and a bare one sitting straight in front of the reply was taking the first word of it instead.
 
-- **The panel said four sets ship with it.** Five did, and six do now.
+- **The panel said four sets come with it.** Five did, and six do now.
+
+- **A reply is given four minutes to start, not three.** The watchdog that catches a generation which began and then produced nothing was set to three minutes, which covers a local model loading weights and a long prompt being read.
+
+  It did not cover a reasoning model on an endpoint that sends nothing at all until the answer starts. A model that streams its thinking clears the watchdog on its first thinking token and was never at risk; one that keeps its thinking to itself looks identical to a dead generation, and a hard question can hold it past three minutes. The reply was then thrown away and asked for again, which is the worst of both, since the second attempt thinks just as long.
+
+  If you were still on three minutes, the panel says so at the top and offers to move you. If you had set your own number, it says nothing, because nothing of yours changed. **Take it** moves you and **Keep mine** leaves it, and either one puts the line away for good.
+
+  Auto Refine carries the same kind of line for the same reason.
+
+- **A note set that comes with the extension cannot be typed into.** Picking one locks its notes: the text, the role, the try it starts on, the remove button and the button that adds another. A line above them says why and says what to do instead.
+
+  Those sets cannot be written over, so editing them was typing into something the panel was about to refuse to save. To change one, put a name in the box under **Saved presets** and press **Save as new**. The copy is yours and opens for editing straight away.
+
+  A fresh install is not affected, since the picker starts on nothing. The text stays selectable while locked, so a line can still be copied out of a set you want to borrow wording from.
+
+  Auto Refine locks its built-in prompts the same way, and both say the same thing about it.
+
+- **A note set no longer claims to be loaded after you have changed it.** Loading one put its name in the picker and nothing cleared it, so editing a note afterwards left the picker naming a set the panel no longer held.
+
+  The line under the picker says so once the two part company, and says where to keep the change: a set that comes with the extension cannot be written over, so it goes under a name of your own with **Save as new**.
+
+  The notes stay editable while one is picked. Loading a set and changing it is how you are meant to start.
 
 ### Removed
 
@@ -52,7 +88,7 @@ _2026-09-15_
 
   Nothing about where a note goes has changed. The detection page still says where each placement lands the note and which one goes after anything your build appends.
 
-Cloud connections are unaffected by the reasoning half of this. They hand reasoning back in a field of its own, so it never reaches the reply text and there has never been anything to strip. Your own notes and your own saved sets are untouched, and the line above the picker tells you the shipped sets have moved.
+Cloud connections are unaffected by the reasoning half of this. They hand reasoning back in a field of its own, so it never reaches the reply text and there has never been anything to strip. Your own notes and your own saved sets are untouched, and the line above the picker tells you the built-in sets have moved.
 
 ## 5.5.3
 
@@ -113,12 +149,12 @@ _2026-09-13_
   A door that shuts without warning is worse than one that stays open too long, which is why the date is on the card rather than in a release note somebody has to have read.
 
 - **A token count Lumiverse called a guess was reported as a count.** It counts with a real tokeniser where it has one for the model and says so when it has none and fell back to characters over four. That flag was not read, so the Prompt tab showed a guess as an exact figure instead of saying roughly over it. The flag is read now.
-- **A shipped note assumed one character.** **Write them as written** said the sheet was the authority on who this person is, which reads wrong in a group chat or on a card holding a cast. It says the sheet is the authority here, and the rest of the note is unchanged. Notes you saved yourself are not touched.
+- **A built-in note assumed one character.** **Write them as written** said the sheet was the authority on who this person is, which reads wrong in a group chat or on a card holding a cast. It says the sheet is the authority here, and the rest of the note is unchanged. Notes you saved yourself are not touched.
 - **The note sets page said four sets and listed five.** It says five.
 
 ### Added
 
-- **It says when the note sets that ship with it have changed.** One line above the preset picker under **Refusal tuning**, with a **Got it** that puts it away for good. Your own notes are never touched by it and it never loads anything for you: loading a set writes over the notes you have, so that stays your call.
+- **It says when the note sets that come with it have changed.** One line above the preset picker under **Refusal tuning**, with a **Got it** that puts it away for good. Your own notes are never touched by it and it never loads anything for you: loading a set writes over the notes you have, so that stays your call.
 
   Only where notes are on, since the sets do nothing for anybody else. A browser that has never loaded one of the sets is told nothing and marked as up to date, so this release is quiet for everybody and the first thing it says is about the next change.
 
@@ -180,7 +216,7 @@ _2026-09-10_
 
 - **The panel says what a retry costs, both halves of it.** Put your provider's input and output prices under Basics and the Prompt tab works out what a retry comes to: the prompt from what is on that tab, and the reply reckoned at the size of the last one in that chat, which is the only honest stand-in for one nobody has written yet. Under it, what the retries fired this session come to at that size. The reply is measured with Lumiverse's own tokeniser, and only while the panel is on the Prompt tab with a price set: leave either and nothing is sent anywhere. Both prices start at 0, and with both at 0 the line is not there, and where only one half can be worked out the line says which. Price lists write these as `$5.00/M`, so type the number on its own or paste the line and the number is taken out of it. They ride with **Panel, pop-up and prices** in an export. No currency is shown, because nothing here knows which one you are billed in.
 - **At the very end**, a fourth place for a refusal note. **After the last message** stops at the end of the conversation, and some builds append their own instructions behind it; this is the only placement that puts a note after those, which is where a note has to be to answer one of them.
-- **Four note sets ship with it**, under **Ships with it** in the note preset picker. Load one to see the shape, edit the boxes, and save it under a name of your own. They cannot be renamed, changed or deleted, so they are still there after you have made a mess of one.
+- **Four note sets come with it**, under **Comes with it** in the note preset picker. Load one to see the shape, edit the boxes, and save it under a name of your own. They cannot be renamed, changed or deleted, so they are still there after you have made a mess of one.
 - **A wait the provider named is the wait it takes.** A free or shared tier that answers "retry after 23 seconds" has said exactly when the next try can work, and every wait shorter than that spent a try being told the same thing. The number is read out of what came back, in the header's own form and in the wordings providers write into an error body, and it wins over the backoff and over **Longest wait between tries**. An hour is the ceiling, because a provider naming longer than that is naming a daily quota.
 
 ### Changed
@@ -1038,7 +1074,7 @@ _2026-07-31_
 ### Changed
 
 
-- **Main is now called `stable`, and there is a new `testing` branch.** Stable only moves when there is a real release, so installing from it means a notification when something has actually shipped. Testing is where work in progress goes, so install from there for an early look, bugs included.
+- **Main is now called `stable`, and there is a new `testing` branch.** Stable only moves when there is a real release, so installing from it means a notification when something has actually gone out. Testing is where work in progress goes, so install from there for an early look, bugs included.
 
 ### Fixed
 

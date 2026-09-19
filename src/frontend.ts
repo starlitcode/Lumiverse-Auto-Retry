@@ -40,18 +40,26 @@ const STORE_KEY = "lv-auto-retry:settings:v1";
 // read before most of setup() exists, and a const declared further down is
 // not initialised yet when that happens.
 const SWIPE_FIRST_KEY = "lv-auto-retry:swipe-first:v1";
-// The note sets that ship, as they were when this browser last took one. Its own
+// The note sets that come with it, as they were when this browser last took one. Its own
 // key rather than a setting, because it is not something anybody sets and a
 // setting would carry it into an export.
-const SHIPPED_SEEN_KEY = "lv-auto-retry:shipped-seen:v1";
+const BUILT_IN_SEEN_KEY = "lv-auto-retry:built-in-seen:v1";
+// What the key above was called before. Read once, so upgrading keeps what it
+// was holding: losing it would quietly swallow the one line saying the sets
+// changed, and nothing on screen would say anything was missing.
+const OLD_SEEN_KEY = "lv-auto-retry:shipped-seen:v1";
+// Which set of moved defaults this browser has already been told about. Its own
+// key for the same two reasons, and separate from the one above so saying got it
+// to a line about a number never quietly marks the note sets as seen too.
+const MOVED_SEEN_KEY = "lv-auto-retry:moved-seen:v1";
 // The settings search field. It needs an id because the browser's own clear
 // button inside it can only be reached from a stylesheet, not inline.
 const SEARCH_ID = "__lvRetrySearch";
 
 // How long (ms) to suppress automatic retries after the user stops or cancels.
-// Long enough to swallow the stopped generation's own trailing events.
+// Long enough to cover the stopped generation's own trailing events.
 const STAND_DOWN_MS = 2500;
-const IGNORE_MAX = 16; // most aborted-generation ids kept around to swallow their late events
+const IGNORE_MAX = 16; // most aborted-generation ids kept around to ignore their late events
 
 // How long (ms) to wait after clicking a retry control before deciding the
 // click started nothing. A swipe control can move between existing rerolls
@@ -205,9 +213,16 @@ const CONFIG = {
   // half-written replies. The cost of waiting too long is that a genuinely dead
   // generation sits there a bit longer, which the user can see and stop.
   //
-  // Three minutes covers a local model loading weights, a long prompt being
+  // Four minutes covers a local model loading weights, a long prompt being
   // processed before the first token, and a queue on a shared endpoint.
-  stuckTimeoutMs: 180000, // started but never produced a token or an end. 0 disables.
+  //
+  // It also covers the case three minutes did not. A reasoning model that
+  // streams its thinking clears this watchdog on its first thinking token, so
+  // the wait only ever has to cover the thinking on an endpoint that sends
+  // nothing until the answer starts. Several of them work that way, and a hard
+  // question can hold one past three minutes, which was killing a reply that
+  // was still being thought about.
+  stuckTimeoutMs: 240000, // started but never produced a token or an end. 0 disables.
   // Ninety seconds of silence mid-stream. Reasoning models go quiet between
   // blocks, and a slow CPU model can take a minute between tokens on a long
   // context, so anything shorter re-rolls replies that were still coming.
@@ -326,6 +341,27 @@ function defaultMs(key: keyof typeof CONFIG): string {
   return ms + " = " + humanMs(ms);
 }
 const def = (key: keyof typeof CONFIG): string => String((CONFIG as any)[key]);
+
+// Defaults that moved, with the value they moved from. A reader still holding
+// the old value is told once and offered the new one; anybody who set their own
+// is told nothing, because nothing of theirs changed.
+//
+// A row stays here for as long as somebody could still be on the old value,
+// which is until the next major version, since that is a reinstall. Auto Refine
+// carries the same table for the same reason.
+const MOVED_DEFAULTS: Array<{ key: keyof typeof CONFIG; was: number; label: string; why: string }> = [
+  {
+    key: "stuckTimeoutMs",
+    was: 180000,
+    label: "Give up waiting for it to start",
+    why: "Three minutes was under what a reasoning model needs on an endpoint that sends nothing until the answer starts, so a reply still being thought about could be thrown away and asked for again. It is four minutes now.",
+  },
+];
+
+// What a browser writes down once it has been told. The values themselves
+// rather than a hash: the list is short, and a stamp somebody can read in their
+// own storage is better than one only this file can explain.
+const MOVED_MARK = MOVED_DEFAULTS.map((m) => m.key + ":" + String(m.was)).join("|");
 
 // Fields the settings UI can edit, in display order. The one place that defines
 // both the form and what gets persisted. Every option above (except the two
@@ -595,7 +631,7 @@ const SCHEMA: Group[] = [
         type: "num",
         min: 1,
         max: 10,
-        hint: "Each retry waits this many times longer than the last, so it doesn't hammer the server. 2 means the wait doubles each time. Stays at 1 or above.",
+        hint: "Each retry waits this many times longer than the last, so it does not hammer the server. 2 means the wait doubles each time. Stays at 1 or above.",
       },
       {
         key: "maxDelayMs",
@@ -622,7 +658,7 @@ const SCHEMA: Group[] = [
         run: "waits",
         label: "Add a little randomness to waits",
         type: "bool",
-        hint: "Nudges each wait by a random amount so retries don't all hit the server at the same instant. Best left on.",
+        hint: "Nudges each wait by a random amount so retries do not all hit the server at the same instant. Best left on.",
       },
       {
         key: "keepReplaced",
@@ -674,7 +710,7 @@ const SCHEMA: Group[] = [
         key: "retryOnTruncated",
         label: "It cut off mid-sentence",
         type: "bool",
-        hint: "Retry when a reply stops partway, like an open quote, an action opened with an asterisk and never closed, or a trailing comma. It's careful so it doesn't throw away good writing.",
+        hint: "Retry when a reply stops partway, like an open quote, an action opened with an asterisk and never closed, or a trailing comma. It is careful, so it does not throw away good writing.",
       },
       {
         key: "retryOnNoPunct",
@@ -712,7 +748,7 @@ const SCHEMA: Group[] = [
         int: true,
         min: 0,
         max: 600000,
-        hint: "If a reply begins but no words appear in this long, treat it as stuck and retry. The default of " + defaultMs("stuckTimeoutMs") + " is long enough for a local model to load and a long prompt to be read. Set to 0 to switch off.",
+        hint: "If a reply begins but no words appear in this long, treat it as stuck and retry. The default of " + defaultMs("stuckTimeoutMs") + " is long enough for a local model to load, a long prompt to be read, and a reasoning model to think on an endpoint that sends nothing until the answer starts. Set to 0 to switch off.",
       },
       {
         key: "idleTimeoutMs",
@@ -788,7 +824,7 @@ const SCHEMA: Group[] = [
         run: "yourWords",
         label: "Never treat these as a refusal",
         type: "text",
-        hint: "Optional. If a reply contains any of these phrases, one per line, it's never counted as a refusal. This wins over everything else. A line under three characters is ignored, since it would match almost every reply.",
+        hint: "Optional. If a reply contains any of these phrases, one per line, it is never counted as a refusal. This wins over everything else. A line under three characters is ignored, since it would match almost every reply.",
       },
       {
         key: "refusalMaxChars",
@@ -855,7 +891,7 @@ const SCHEMA: Group[] = [
   {
     title: "Buttons it clicks",
     collapsed: true,
-    desc: "It retries by clicking your own on-screen buttons, so you only need this if retries aren't happening. The quickest fix is Pick it for me: press it, then click the real button. Otherwise paste a CSS selector and press Test until it says match found, with that button on screen. The stop button only appears while a reply is generating. The README covers fallback lists and selector syntax.",
+    desc: "It retries by clicking your own on-screen buttons, so you only need this if retries are not happening. The quickest fix is Pick it for me: press it, then click the real button. Otherwise paste a CSS selector and press Test until it says match found, with that button on screen. The stop button only appears while a reply is generating. The README covers fallback lists and selector syntax.",
     fields: [
       {
         key: "swipeNextSelector",
@@ -2722,7 +2758,7 @@ function contrastRatio(a: Rgba, b: Rgba): number {
 
 // What is actually behind an element: its own background when that is opaque,
 // otherwise the ancestors' backgrounds composited underneath it.
-const PAGE_FALLBACK: Rgba = [20, 16, 30, 1]; // Lumiverse ships dark; last resort only
+const PAGE_FALLBACK: Rgba = [20, 16, 30, 1]; // Lumiverse is dark; last resort only
 // What a surface actually paints, rather than only what its background-color
 // says. Every floating panel here builds an opaque surface by painting a solid
 // colour and laying the theme's translucent tint over it as a gradient, because
@@ -3075,6 +3111,32 @@ function themeMark(): string {
 // the button does not feel broken.
 const HOLD_MS = 500;
 
+// How long the ring takes to close. Shorter than the hold on purpose.
+//
+// The timer starts the moment the finger lands. The ring cannot: it is a CSS
+// transition, and a transition only begins once the browser has recalculated
+// style for the attribute that started it, which is the next frame at best and
+// later than that on a busy page. Given the same length as the hold, the timer
+// always won by that gap, the menu opened, and the ring was wiped back a few
+// per cent short of closed. Landing early is the fix, because a ring that
+// closed and then waited a moment reads as finished, and one cut off at 95 per
+// cent reads as broken.
+const HOLD_RING_MS = HOLD_MS - 70;
+
+// How long a press has to last before the ring is drawn at all. A tap is over
+// well inside this, so tapping shows nothing and the two gestures stay apart:
+// a ring on screen means a hold is running. Without the wait every tap flashed
+// a ring, which read as the button not knowing which one you meant.
+//
+// It only holds back the fade. The ring is already filling underneath, so when
+// it does appear it appears at how far through the hold you actually are.
+const HOLD_RING_WAIT = 150;
+
+// How far a finger may drift and still be holding rather than dragging. Ten
+// pixels, because a thumb resting on glass drifts further than eight and every
+// one of those was a hold that quietly did nothing. Auto Refine allows the same.
+const HOLD_SLOP = 10;
+
 // The extension's mark: a reply, with the retry arrow sweeping over it.
 //
 // A reply is the shape and the arrow is what is being done to it, because what
@@ -3126,6 +3188,29 @@ function markSvgLive(size: number): string {
     ' width="' + size + '" height="' + size + '">' +
     MARK_BODY +
     MARK_SLASH +
+    "</svg>"
+  );
+}
+
+// The ring that fills while the button is held down. A hold opens the menu, and
+// until now nothing on screen said a hold was under way, so the half second
+// before the menu appeared read as a tap that did nothing.
+//
+// Its own square rather than part of the mark: this belongs to the button's
+// edge, and the mark is drawn at just over half the button's width. The viewBox
+// is 100 wide whatever size the button is, so one set of numbers covers every
+// size, and the stroke is held at 2 real pixels rather than being scaled with
+// the box, so it looks the same on a 28px button and a 96px one.
+//
+// Auto Refine draws the same ring the same way.
+const HOLD_RING_R = 47;
+const HOLD_RING_LEN = (2 * Math.PI * HOLD_RING_R).toFixed(1);
+
+function holdRingSvg(): string {
+  return (
+    '<svg class="lv-ar-hold" viewBox="0 0 100 100" aria-hidden="true" focusable="false">' +
+    '<circle cx="50" cy="50" r="' + HOLD_RING_R + '" fill="none" stroke="currentColor"' +
+    ' stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke" />' +
     "</svg>"
   );
 }
@@ -3532,8 +3617,8 @@ export function setup(ctx: Ctx, opts?: any) {
       // screen, its menu holds them. The Extras menu holds them only when there
       // is no floating button to.
       //
-      // Two ways to reach the same thing is one more than anybody needs, and
-      // clutters a menu that was opened for something else. With the floating
+      // One way in at a time, so a menu opened for something else stays short.
+      // With the floating
       // button hidden, or refused because ui_panels was not granted, the Extras
       // menu is the only way to reach these on a phone, so they come back.
       const inExtras = canReg && !floatCarriesEntries();
@@ -3627,7 +3712,7 @@ export function setup(ctx: Ctx, opts?: any) {
     } catch (_) {}
   }
 
-  // What the backend says it is running. The two halves ship together and load
+  // What the backend says it is running. The two halves go out together and load
   // separately, so this is not always the version above. Empty until it answers,
   // which is the honest reading on a build with no backend up.
   let backendVersion = "";
@@ -4386,10 +4471,11 @@ export function setup(ctx: Ctx, opts?: any) {
     // both are wanted in the same place.
     const tabs = document.createElement("div");
     tabs.setAttribute("role", "tablist");
-    // Wraps too. The header wrapping does nothing on its own while the strip
-    // inside it is one unbreakable row: the tabs would overflow this box rather
-    // than the header, and the last one would sit off the edge.
-    tabs.style.cssText = "display:flex;flex-wrap:wrap;gap:4px;flex:1;min-width:0";
+    // One row, with the four sharing it evenly. Wrapping dropped the last tab
+    // onto a second line on a narrow panel, and sizing each to its own label
+    // left the gaps between them all different and the selected one reading as
+    // cramped next to the wide ones. Auto Refine's tab strip is the same.
+    tabs.style.cssText = "display:flex;flex-wrap:nowrap;gap:4px;flex:1;min-width:0";
     const ORDER: Array<"log" | "prompt" | "stats" | "replaced"> = ["log", "prompt", "stats", "replaced"];
     const tabBtns: Record<string, HTMLButtonElement> = {};
     const mkTab = (id: "log" | "prompt" | "stats" | "replaced", label: string) => {
@@ -4400,13 +4486,16 @@ export function setup(ctx: Ctx, opts?: any) {
       b.id = "__lvRetryTab-" + id;
       b.setAttribute("aria-controls", "__lvRetryLogBody");
       b.style.cssText =
-        // 32px tall and padded wide enough to be a thumb target. A tab strip
-        // that only works with a mouse is the wrong way round here: this panel
-        // exists because there is no console on a phone.
+        // 32px tall and padded wide enough to be a thumb target. This panel
+        // exists because there is no console on a phone, so the tabs have to
+        // work without a mouse.
         "cursor:pointer;border:0;background:transparent;font:inherit;color:inherit;" +
-        "min-height:32px;padding:4px 12px;border-radius:var(--lumiverse-radius-sm,5px);" +
+        "min-height:32px;padding:4px 4px;border-radius:var(--lumiverse-radius-sm,5px);" +
+        // An equal share each, so the row has one rhythm and one pill size.
+        "flex:1 1 0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" +
+        "text-align:center;" +
         // The header is the drag handle, and a tap that slides a pixel would
-        // otherwise be swallowed as the start of a drag.
+        // otherwise be taken as the start of a drag.
         "touch-action:manipulation";
       b.addEventListener("click", () => showTab(id));
       tabs.appendChild(b);
@@ -4999,6 +5088,13 @@ export function setup(ctx: Ctx, opts?: any) {
   // Reassigned each time the button is rebuilt; the document listener below
   // calls through this so only one listener is ever registered.
   let holdMoveWatch: ((e: any) => void) | null = null;
+  // The same idea for the end of a press. It has to be watched on the document
+  // rather than on the button: the host captures the pointer to drag the
+  // widget, and once it has, the pointerup is delivered to whatever it captured
+  // on. A listener on the button never saw it, so the hold timer ran on after
+  // the finger left and every tap opened the menu. Auto Refine watches the
+  // window for the same reason.
+  let holdEndWatch: (() => void) | null = null;
   let floatEl: any = null;
   let floatWidgetSize = 0;
   // What the button was last painted as, so a repaint that says nothing new
@@ -5122,16 +5218,34 @@ export function setup(ctx: Ctx, opts?: any) {
     // The mark is drawn, not typed, so it is sized here rather than by font
     // size. Just over half the button leaves the ring around it looking even.
     const glyph = Math.max(14, Math.round(d * 0.56));
-    floatEl.style.background = on
-      ? "var(--lumiverse-primary-020,rgba(147,112,219,.2))"
-      : "var(--lumiverse-fill-subtle,rgba(0,0,0,.1))";
+    // The base is opaque, and the accent goes on as a layer over it rather than
+    // replacing it. A floating control sits over whatever the chat is showing,
+    // and a fill with alpha in it takes the colour of the message underneath, so
+    // the same button was muddy over one reply and clear over the next.
+    //
+    // Auto Refine's button says its own states with the same four values moving
+    // together, so somebody running both reads one control rather than two.
+    floatEl.style.backgroundColor = "var(--lumiverse-card-bg-solid,rgb(24,20,34))";
+    floatEl.style.backgroundImage = on
+      ? "linear-gradient(var(--lumiverse-primary-020,rgba(147,112,219,.2))," +
+        "var(--lumiverse-primary-020,rgba(147,112,219,.2)))," +
+        "linear-gradient(var(--lumiverse-bg-elevated,rgba(35,30,48,.9))," +
+        "var(--lumiverse-bg-elevated,rgba(35,30,48,.9)))"
+      : "linear-gradient(var(--lumiverse-bg-elevated,rgba(35,30,48,.9))," +
+        "var(--lumiverse-bg-elevated,rgba(35,30,48,.9)))";
     floatEl.style.borderColor = on
       ? "var(--lumiverse-primary-050,rgba(147,112,219,.5))"
-      : "var(--lumiverse-border,rgba(147,112,219,.12))";
-    floatEl.style.color = on
-      ? "var(--lumiverse-primary-text,rgba(186,135,255,.95))"
-      : "var(--lumiverse-text-muted,rgba(255,255,255,.65))";
-    floatEl.style.opacity = on ? "1" : "0.75";
+      : "var(--lumiverse-border-hover,rgba(147,112,219,.25))";
+    // The mark's job is to stay legible; the fill, the edge and the ring say
+    // which state it is in. Tinting the mark itself with the accent measured
+    // 2.49 against a floor of 3 on a light theme in Auto Refine, which is the
+    // same pair of colours this used.
+    floatEl.style.color = "var(--lumiverse-text,rgba(255,255,255,.9))";
+    // Off is said by the fill, the edge, the ink and the slash across the mark.
+    // Dropping the whole button to three quarters as well dimmed the mark that
+    // says which extension this is, and a faded control reads as broken rather
+    // than as switched off.
+    floatEl.style.opacity = "1";
     // Drawn once and then left alone.
     //
     // Rewriting it on every paint throws the element away and starts any
@@ -5141,7 +5255,8 @@ export function setup(ctx: Ctx, opts?: any) {
     // continuous to animate along.
     if (floatEl.getAttribute("data-ar-glyph") !== String(glyph)) {
       floatEl.setAttribute("data-ar-glyph", String(glyph));
-      floatEl.innerHTML = markSvgLive(glyph);
+      const box = floatEl.querySelector(".lv-ar-glyph");
+      if (box) box.innerHTML = markSvgLive(glyph);
     }
     floatEl.setAttribute("data-ar-on", on ? "1" : "0");
     // The first paint sets the state without moving: a button appearing already
@@ -5238,18 +5353,27 @@ export function setup(ctx: Ctx, opts?: any) {
       // browser's own callout, either of which lands on top of the menu.
       "user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;" +
       "font-family:var(--lumiverse-font-family,system-ui);" +
-      "box-shadow:var(--lumiverse-shadow-sm,0 2px 8px rgba(0,0,0,.2));";
+      // The same lift Auto Refine's button has. A control floating over the
+      // chat needs enough shadow to sit above it rather than on it.
+      "box-shadow:var(--lumiverse-shadow-md,0 8px 24px rgba(0,0,0,.4));";
     // The colours ease between the two states and the mark fades in over the one
     // it replaces, so turning it off reads as one movement rather than a
     // flicker. Only on a real change of state: repainting for a chat switch or
     // after a drag says nothing new, and a device asking for less movement gets
     // the change with none of this.
     //
-    // The button itself never moves. A scale dip on every press was here once,
-    // and it forced a compositing layer on a control whose whole job is to flip
-    // between two states; a press is also how the menu is opened, so dipping on
-    // the way in makes a hold look like a tap that took.
+    // A press dips the whole button a little, so a tap answers whether or not
+    // it changed anything. That used to be ambiguous, since a press is also how
+    // the menu is opened and a dip on the way in made a hold read as a tap that
+    // took. The ring filling around the edge is what tells the two apart now: a
+    // dip on its own is a tap, a dip with the ring running is a hold.
     el.setAttribute("data-ar-float", "1");
+    // The mark sits in its own holder and the ring sits over the whole button.
+    // Separated so repainting the mark does not throw the ring away mid-hold.
+    const glyphBox = document.createElement("span");
+    glyphBox.className = "lv-ar-glyph";
+    el.appendChild(glyphBox);
+    el.insertAdjacentHTML("beforeend", holdRingSvg());
     markOwnUI(el);
     ensureFloatStyle();
 
@@ -5266,13 +5390,21 @@ export function setup(ctx: Ctx, opts?: any) {
         pressTimer = null;
       }
       pressFrom = null;
+      try {
+        el.removeAttribute("data-ar-holding");
+      } catch (_) {}
     };
     el.addEventListener("pointerdown", (e: any) => {
       openedByHold = false;
       pressFrom = { x: e && e.clientX, y: e && e.clientY };
+      // The ring starts filling now and reaches the whole way round exactly as
+      // the menu opens, so the wait is something you watch rather than sit
+      // through. Letting go early wipes it back in a fraction of the time.
+      el.setAttribute("data-ar-holding", "1");
       pressTimer = setTimeout(() => {
         pressTimer = null;
         openedByHold = true;
+        el.removeAttribute("data-ar-holding");
         showFloatMenu();
       }, HOLD_MS);
     });
@@ -5285,9 +5417,14 @@ export function setup(ctx: Ctx, opts?: any) {
     // through the document on the way down, so this sees them either way. A
     // listener only on the button would miss a drag entirely and pop the menu
     // open in the middle of one.
+    // Every press ends here, captured pointer or not.
+    holdEndWatch = () => dropPress();
     holdMoveWatch = (e: any) => {
       if (!pressFrom || !e) return;
-      if (Math.abs(e.clientX - pressFrom.x) > 8 || Math.abs(e.clientY - pressFrom.y) > 8)
+      if (
+        Math.abs(e.clientX - pressFrom.x) > HOLD_SLOP ||
+        Math.abs(e.clientY - pressFrom.y) > HOLD_SLOP
+      )
         dropPress();
     };
     // Stopped, not just prevented. preventDefault suppresses the browser's own
@@ -5297,7 +5434,7 @@ export function setup(ctx: Ctx, opts?: any) {
     // phase so the host's own listener never runs, and stopImmediatePropagation
     // because the host may have more than one on the same element.
     //
-    // Only this event is swallowed. Pointer events still reach the host
+    // Only this event is blocked. Pointer events still reach the host
     // untouched, which is what drags the button and snaps it to an edge.
     const onMenu = (e: any) => {
       try {
@@ -5344,7 +5481,6 @@ export function setup(ctx: Ctx, opts?: any) {
     };
     el.addEventListener("pointerup", rememberFloat);
     el.addEventListener("pointercancel", rememberFloat);
-    el.addEventListener("pointerleave", dropPress);
     el.addEventListener("click", () => {
       // The hold already acted. Toggling here as well would undo it in the same
       // gesture.
@@ -5500,6 +5636,7 @@ export function setup(ctx: Ctx, opts?: any) {
     // kept a whole button's worth of handlers alive after the button was gone,
     // and every pointer move on the page went on running its hold check.
     holdMoveWatch = null;
+    holdEndWatch = null;
     // The Extras menu takes them all back, now that there is no floating
     // button. Hiding the button from its own menu is why this is needed:
     // nothing else runs afterwards, so without it the buttons that had moved
@@ -5975,7 +6112,7 @@ export function setup(ctx: Ctx, opts?: any) {
     }
   }
   // Returns whether the browser copy was actually written. A browser with site
-  // data blocked, or with no room left, throws here. Swallowed, the panel would
+  // data blocked, or with no room left, throws here. Ignored, the panel would
   // say "Saved" over settings that are gone on the next reload, which is the one
   // thing a Save button must never do. savePresets answers the same way.
   function saveSaved(): boolean {
@@ -6228,7 +6365,7 @@ export function setup(ctx: Ctx, opts?: any) {
   // function, so a kind added there needs no new UI code.
   const PRESETS_KEY = "lv-auto-retry:presets:v1";
 
-  // Note sets that ship with the extension, so the box is not blank the first
+  // Note sets that come with the extension, so the box is not blank the first
   // time somebody switches notes on. They load like any saved set and cannot be
   // renamed, changed or deleted: the way to make one your own is to load it,
   // edit the boxes, and save it under a name of your own.
@@ -6344,10 +6481,10 @@ export function setup(ctx: Ctx, opts?: any) {
   ];
   const builtInNote = (name: string) => BUILT_IN_NOTES.find((p) => p.name === name) || null;
 
-  // A short mark for the sets as they ship, so a reader can be told when they
+  // A short mark for the sets as they stand, so a reader can be told when they
   // have changed. FNV-1a: it only has to differ when they differ, and it goes in
   // storage, so short matters more than anything a hash is usually chosen for.
-  const shippedMark = (() => {
+  const builtInMark = (() => {
     const text = JSON.stringify(BUILT_IN_NOTES);
     let h = 0x811c9dc5;
     for (let i = 0; i < text.length; i++) {
@@ -6357,31 +6494,66 @@ export function setup(ctx: Ctx, opts?: any) {
     return h.toString(36);
   })();
 
+  // The moved defaults this reader is actually on. Anybody who set their own
+  // value is not on the list, because nothing about their setup moved, and a
+  // browser that has already answered the line is not on it either.
+  function movedForMe(): typeof MOVED_DEFAULTS {
+    try {
+      if (typeof localStorage === "undefined") return [];
+      if (String(localStorage.getItem(MOVED_SEEN_KEY) || "") === MOVED_MARK) return [];
+    } catch (_) {
+      return [];
+    }
+    return MOVED_DEFAULTS.filter((m) => Number((cfg as any)[m.key]) === m.was);
+  }
+
+  function markMovedSeen() {
+    try {
+      if (typeof localStorage !== "undefined") localStorage.setItem(MOVED_SEEN_KEY, MOVED_MARK);
+    } catch (_) {}
+  }
+
+  // A stamp written under the key's old name, moved over to the new one and the
+  // old one dropped. Returns what it moved, so the read it sits inside gets the
+  // answer on the same pass rather than a frame later.
+  function carryOldSeen(): string {
+    try {
+      if (typeof localStorage === "undefined") return "";
+      const was = String(localStorage.getItem(OLD_SEEN_KEY) || "");
+      if (!was) return "";
+      localStorage.setItem(BUILT_IN_SEEN_KEY, was);
+      localStorage.removeItem(OLD_SEEN_KEY);
+      return was;
+    } catch (_) {
+      return "";
+    }
+  }
+
   // Written down as seen. Called when one of the sets is loaded, when the panel
   // first comes up with nothing stored, and when the line saying they moved is
   // dismissed.
-  function markShippedSeen() {
+  function markBuiltInSeen() {
     try {
-      if (typeof localStorage !== "undefined") localStorage.setItem(SHIPPED_SEEN_KEY, shippedMark);
+      if (typeof localStorage !== "undefined") localStorage.setItem(BUILT_IN_SEEN_KEY, builtInMark);
     } catch (_) {}
   }
 
   // Whether the sets have changed since this browser last took one, and whether
   // this reader is somebody the change reaches: notes off means the sets do
   // nothing for them and a line about them is noise.
-  function shippedMoved(): boolean {
+  function builtInMoved(): boolean {
     if (!cfg.refusalNote) return false;
     try {
       if (typeof localStorage === "undefined") return false;
-      const seen = String(localStorage.getItem(SHIPPED_SEEN_KEY) || "");
+      const seen = String(localStorage.getItem(BUILT_IN_SEEN_KEY) || carryOldSeen() || "");
       // Nothing stored is a browser that has never had notes on, or one from
       // before this existed. Neither is worth a line about a change nobody can
       // point at, so it is stamped and stays quiet.
       if (!seen) {
-        markShippedSeen();
+        markBuiltInSeen();
         return false;
       }
-      return seen !== shippedMark;
+      return seen !== builtInMark;
     } catch (_) {
       return false;
     }
@@ -6422,7 +6594,7 @@ export function setup(ctx: Ctx, opts?: any) {
   }
   type Preset = { name: string; values: Record<string, any> };
   // Keep only what a preset is allowed to be, whatever the source. The same
-  // check runs on the local copy and on anything the account hands back, so a
+  // check runs on the local copy and on anything the account returns, so a
   // malformed or hand-edited store cannot put junk into the dropdown.
   function coercePresets(data: any): Record<string, Preset[]> {
     // swap is here on purpose and is not a leftover. Find and replace is gone
@@ -6493,7 +6665,7 @@ export function setup(ctx: Ctx, opts?: any) {
         const incoming = coercePresets(msg.presets);
         const local = loadPresets();
         // Per kind, not all or nothing. The account winning outright would drop
-        // a kind it has none of. Only one kind ships today, and this is
+        // a kind it has none of. Only one kind exists today, and this is
         // written per kind so a second one cannot quietly wipe the first.
         const merged: Record<string, Preset[]> = {};
         let took = 0, kept = 0;
@@ -6545,6 +6717,65 @@ export function setup(ctx: Ctx, opts?: any) {
   }
 
   // Snapshot the current values of a kind's keys.
+  // JSON with the keys in a settled order, so two values holding the same thing
+  // compare equal whatever order they were built in. A note set that comes with it is
+  // written text, role, fromTry, and one read back off the panel can carry
+  // those in another order, which a plain stringify would call a difference.
+  function settledJson(v: any): string {
+    const walk = (x: any): any => {
+      if (Array.isArray(x)) return x.map(walk);
+      if (x && typeof x === "object") {
+        const out: Record<string, any> = {};
+        for (const k of Object.keys(x).sort()) out[k] = walk(x[k]);
+        return out;
+      }
+      return x;
+    };
+    try {
+      return JSON.stringify(walk(v));
+    } catch (_) {
+      return "";
+    }
+  }
+
+  // The set the notes picker is on, when it is one that comes with the
+  // extension, and empty otherwise.
+  //
+  // Those cannot be written over, so editing the notes while one is named would
+  // be typing into something the panel is about to refuse to save. The notes
+  // editor is built outside the bar that owns the picker, so the bar writes the
+  // name here and the editor reads it. Auto Refine locks its built-in prompts
+  // the same way, and the two say the same thing about it.
+  let notesOnBuiltIn = "";
+
+  // Turns a control off and says why, so a screen reader gets the reason rather
+  // than a dead field.
+  function lockForBuiltIn(node: any) {
+    try {
+      node.disabled = true;
+      node.style.opacity = "0.55";
+      node.style.cursor = "not-allowed";
+      node.title =
+        "Part of " + notesOnBuiltIn + ", which cannot be changed. Save it as your own first.";
+    } catch (_) {}
+  }
+
+  // Anything that has to re-read cfg when a field writes into it directly.
+  //
+  // The notes editor is the one that does: it writes the whole list into cfg as
+  // you type and leaves saving to the panel's own button, so a surface watching
+  // for a change would otherwise not hear about it until the save. Cleared when
+  // the settings body is built, so a rebuild does not leave the old panel's
+  // watchers behind.
+  let cfgWatchers: Array<() => void> = [];
+  function cfgChanged() {
+    for (const w of cfgWatchers) {
+      try {
+        w();
+      } catch (_) {}
+    }
+  }
+
   function snapshotKind(kind: string): Record<string, any> {
     const values: Record<string, any> = {};
     for (const k of keysForKind(kind)) values[k] = cfg[k];
@@ -6774,8 +7005,8 @@ export function setup(ctx: Ctx, opts?: any) {
     return remembered != null && remembered !== "" ? remembered : chatOf(p);
   };
   const CHATS_MAX = 24; // chats kept before the quietest are let go
-  // Anything mid-flight has to stay: dropping it would strand a running
-  // watchdog and lose the budget for a retry that is already in the air.
+  // Anything still running has to stay: dropping it would leave a watchdog
+  // with nothing to report to, and lose the budget for a retry already sent.
   const chatIsBusy = (s: any): boolean =>
     !!(s && (s.pending || s.timer || s.startTimer || s.idleTimer || s.startWatchdog ||
       s.expectingStart || s.attempts > 0 || Date.now() < s.suppressUntil));
@@ -7590,12 +7821,35 @@ export function setup(ctx: Ctx, opts?: any) {
         // you pressed and it should be seen, and eased so it settles rather
         // than stopping dead.
         "[data-ar-float]{transition:background-color 260ms cubic-bezier(.2,.7,.3,1)," +
+        "background-image 260ms cubic-bezier(.2,.7,.3,1)," +
         "border-color 260ms cubic-bezier(.2,.7,.3,1)," +
         "color 260ms cubic-bezier(.2,.7,.3,1)," +
         "box-shadow 260ms cubic-bezier(.2,.7,.3,1)," +
         "opacity 260ms cubic-bezier(.2,.7,.3,1)," +
         "transform 260ms cubic-bezier(.2,.7,.3,1)}" +
         "[data-ar-float] svg{transform-origin:50% 50%;overflow:visible}" +
+        // The mark holder and the ring share the button's box, so the button is
+        // the thing they are positioned against.
+        "[data-ar-float]{position:relative}" +
+        "[data-ar-float] .lv-ar-glyph{display:flex;align-items:center;justify-content:center;" +
+        "line-height:0}" +
+        // The ring starts at the top and fills clockwise, which is the direction
+        // every progress ring people have already used goes.
+        "[data-ar-float] .lv-ar-hold{position:absolute;inset:0;width:100%;height:100%;" +
+        "pointer-events:none;transform:rotate(-90deg);opacity:0;" +
+        "color:var(--lumiverse-primary,rgba(147,112,219,.9));" +
+        "transition:opacity 200ms ease-out}" +
+        // Drawn at zero length when nothing is held, so there is one circle that
+        // grows rather than a circle that appears.
+        "[data-ar-float] .lv-ar-hold circle{stroke-dasharray:" + HOLD_RING_LEN + ";" +
+        "stroke-dashoffset:" + HOLD_RING_LEN + ";transition:stroke-dashoffset 160ms ease-out}" +
+        "[data-ar-float][data-ar-holding] .lv-ar-hold{opacity:1;" +
+        "transition:opacity 90ms linear " + HOLD_RING_WAIT + "ms}" +
+        // Linear, so the ring fills at one steady rate and how far round it has
+        // gone is how far through the hold you are. Eased would run ahead or
+        // behind.
+        '[data-ar-float][data-ar-holding] .lv-ar-hold circle{stroke-dashoffset:0;' +
+        "transition:stroke-dashoffset " + HOLD_RING_MS + "ms linear}" +
         // A ring while it is on, which is the panel dot's halo at button size.
         // The two say on the same way.
         '[data-ar-float][data-ar-on="1"]{' +
@@ -7617,6 +7871,10 @@ export function setup(ctx: Ctx, opts?: any) {
         "@media (prefers-reduced-motion:reduce){" +
         "[data-ar-float],[data-ar-float] .lv-ar-slash{transition:none}" +
         "[data-ar-float]:active{transform:none}" +
+        // The ring is movement and nothing else: it says how far through a hold
+        // you are and carries no state worth showing still. Somebody who asked
+        // for less movement gets the menu on the same hold with nothing drawn.
+        "[data-ar-float] .lv-ar-hold{display:none}" +
         "[data-ar-float] svg{animation:none !important}}";
       (document.head || document.documentElement).appendChild(el);
       floatStyleEl = el;
@@ -7756,7 +8014,7 @@ export function setup(ctx: Ctx, opts?: any) {
 
   // Anything dialog-shaped that has turned up since the retry click. Hidden
   // rather than removed, and with pointer events switched off so that even in
-  // the worst case an unseen dialog cannot swallow taps.
+  // the worst case an unseen dialog cannot block taps.
   function hideNewDialogs(before: Set<any>) {
     if (typeof document === "undefined") return;
     let list: any = [];
@@ -7825,7 +8083,7 @@ export function setup(ctx: Ctx, opts?: any) {
     log("a dialog opened after the retry click; confirming it");
     // Kept in the hidden list until the watch ends: if this press dismisses it
     // the element goes away and restoring it is a no-op, and if it does not the
-    // dialog reappears rather than being stranded.
+    // dialog reappears rather than staying hidden.
 
     // The observer is dropped here but the timer keeps running: our own press
     // churns the page, and reacting to that would spin. The timer looks again
@@ -7928,7 +8186,7 @@ export function setup(ctx: Ctx, opts?: any) {
       log("retry click produced no generation; resetting stale state", chatId);
       disarmRefusalNote(chatId);
       s.selfTriggered = false;
-      // The try is not handed back. A click that worked on a host slow to
+      // The try is not refunded. A click that worked on a host slow to
       // announce it looks exactly like one that did nothing, and refunding on
       // that guess let the reply arrive later and be judged on a full budget
       // again: "most tries" said two and the reply was re-rolled five times
@@ -8188,7 +8446,7 @@ export function setup(ctx: Ctx, opts?: any) {
 
   // Stalled or stuck. Halt the dead generation (best effort) and retry.
   // Any terminal events the dead generation fires next (a stop, then maybe an
-  // end) are swallowed by remembering its id, so a late one can't be mistaken
+  // end) are ignored by remembering its id, so a late one can't be mistaken
   // for a user stop or a fresh result even after the next generation begins.
   // A reply that was writing itself out and then went quiet. Two different
   // things wear that description, and only one of them is this watchdog's.
@@ -8650,7 +8908,7 @@ export function setup(ctx: Ctx, opts?: any) {
     } // user just stopped; do not retry
     if (p.error) {
       // A content-moderation block we can retry as a refusal is not a permanent
-      // failure, so don't let the hard-error skip swallow it before the refusal check.
+      // failure, so don't let the hard-error skip catch it before the refusal check.
       if (cfg.ignoreHardErrors && isHardError(p.error, cfg) && !(cfg.retryOnRefusal && looksLikeRefusalError(String(p.error), cfg))) {
         log("hard error ignored", p.error);
         showToast("Auto Retry did not retry: that error will not fix itself, so trying again would not help.");
@@ -8985,8 +9243,8 @@ export function setup(ctx: Ctx, opts?: any) {
     if (still) el.style.transition = "none";
     el.style.opacity = "1";
 
-    // Tapping the description dismisses it. On a phone that is the first thing
-    // a thumb reaches for, and it did nothing.
+    // Tapping the description dismisses it. On a phone that is the easiest
+    // place to tap, and it did nothing.
     el.addEventListener("click", () => hideHint());
     hintPop = el;
     hintAnchor = anchor;
@@ -9006,7 +9264,7 @@ export function setup(ctx: Ctx, opts?: any) {
     // A gesture that never produces one, a drag or a scroll, drops the guard on
     // its own rather than leaving it armed for the next real press.
     let eatClick: (() => void) | null = null;
-    const swallowNext = () => {
+    const blockNextClick = () => {
       const eat = (e: any) => {
         drop();
         if (!e) return;
@@ -9040,7 +9298,7 @@ export function setup(ctx: Ctx, opts?: any) {
         if (t && hintPop.contains && hintPop.contains(t)) return;
       } catch (_) {}
       hideHint();
-      swallowNext();
+      blockNextClick();
     };
     // A long description scrolls inside itself. That scroll is someone reading
     // it, not the anchor moving, so it is the one scroll that leaves it open.
@@ -9075,13 +9333,20 @@ export function setup(ctx: Ctx, opts?: any) {
       noteKind(e);
       onHintDismiss(e);
     };
+    const onHoldEnd = () => {
+      if (holdEndWatch) holdEndWatch();
+    };
     document.addEventListener("pointermove", onHoldMove, true);
+    document.addEventListener("pointerup", onHoldEnd, true);
+    document.addEventListener("pointercancel", onHoldEnd, true);
     document.addEventListener("pointerdown", onDown, true);
     document.addEventListener("scroll", onHintScroll, true);
     document.addEventListener("keydown", onHintKey, true);
     if (typeof window !== "undefined") window.addEventListener("resize", onHintResize);
     disposers.push(() => {
       try { document.removeEventListener("pointermove", onHoldMove, true); } catch (_) {}
+      try { document.removeEventListener("pointerup", onHoldEnd, true); } catch (_) {}
+      try { document.removeEventListener("pointercancel", onHoldEnd, true); } catch (_) {}
       try { document.removeEventListener("pointerdown", onDown, true); } catch (_) {}
       try { document.removeEventListener("scroll", onHintScroll, true); } catch (_) {}
       try { document.removeEventListener("keydown", onHintKey, true); } catch (_) {}
@@ -9115,7 +9380,7 @@ export function setup(ctx: Ctx, opts?: any) {
         // box's containing block starts halfway across the screen and ends at
         // the right edge, so it could never be wider than half the viewport:
         // max-width was 379px on a 412px phone and the box stopped at 206px.
-        // Messages that fit on one line wrapped, and the wrap stranded a word.
+        // Messages that fit on one line wrapped, leaving one word on its own.
         // fit-content keeps a short message from being padded out to the cap.
         "position:fixed;bottom:max(20px,env(safe-area-inset-bottom,0px));left:0;right:0;" +
         "margin-left:auto;margin-right:auto;width:fit-content;" +
@@ -9135,7 +9400,7 @@ export function setup(ctx: Ctx, opts?: any) {
     return t;
   }
   // A message too long for one line used to fill the box out to its cap, which
-  // on a phone is nearly the whole screen, and left the last line stranded well
+  // on a phone is nearly the whole screen, and left the last line ending well
   // short of the right edge. The browser evens the lines out and the box is then
   // pinned to the widest of them, so it comes out the size of what is written in
   // it rather than the size of the screen. A message that fits on one line comes
@@ -9653,6 +9918,11 @@ export function setup(ctx: Ctx, opts?: any) {
     // Everything a change to cfg needs to take effect: written to both stores,
     // then each surface that reads cfg brought into line. Saving and loading a
     // preset both end here, and missing one line is a surface left stale.
+    // One per preset bar on this build of the panel. Emptied here rather than
+    // added to, so a rebuild does not leave the old panel's bars listening.
+    cfgWatchers = [];
+    const driftSyncers: Array<() => void> = [];
+
     const applyAndSave = (): boolean => {
       const storedHere = saveSaved();
       // Switching it off has to drop what is already held, or "turn it off and
@@ -9662,6 +9932,9 @@ export function setup(ctx: Ctx, opts?: any) {
       syncLiveLog();
       syncFloat();
       syncInputBarActions();
+      // A note edited by hand is what makes the picker's name go stale, and
+      // every change lands here.
+      for (const sync of driftSyncers) sync();
       if (onSaved) onSaved();
       return storedHere;
     };
@@ -9745,6 +10018,19 @@ export function setup(ctx: Ctx, opts?: any) {
       status.style.cssText =
         "font-size:12px;line-height:1.4;color:var(--lumiverse-text-muted,rgba(255,255,255,.65));min-height:1em";
 
+      // Said once what is set stops matching the preset the picker still names.
+      //
+      // Loading one sets the picker and nothing cleared it, so changing a note
+      // afterwards left the box naming a set the panel no longer held. The
+      // fields are not locked while a set that comes with it is picked: loading one and
+      // changing it is how you are meant to start, which is what Save as new is
+      // for. What was missing was the panel saying the two had parted company.
+      const drift = document.createElement("div");
+      drift.setAttribute("data-lvr-presetdrift", "1");
+      drift.style.cssText =
+        "font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.7))";
+      drift.hidden = true;
+
       const presets = loadPresets();
       const list = () => presets[kind] || [];
       // Only this bar's own kind is this bar's to write. The store holds every
@@ -9779,14 +10065,55 @@ export function setup(ctx: Ctx, opts?: any) {
         // back nothing is a question the reader has to answer every time they
         // look at the row.
         undoBtn.hidden = !undoTo;
-        // A set that ships with the extension can be loaded and nothing else.
+        // A set that comes with the extension can be loaded and nothing else.
         // It is not stored here, so there is nothing for Update, Delete or
         // Rename to act on; the way to make one yours is pick it, edit, Save as new.
-        const mine = picked && !isShipped(select.value);
+        const mine = picked && !isBuiltIn(select.value);
         setEnabled(loadBtn, picked);
         setEnabled(update, mine);
         setEnabled(del, mine);
         setEnabled(rename, mine);
+        syncDrift();
+        // Only the notes bar owns a set that can be locked, and only it should
+        // speak for the notes editor.
+        if (kind === "notes") {
+          const now = picked && isBuiltIn(select.value) ? select.value : "";
+          if (now !== notesOnBuiltIn) {
+            notesOnBuiltIn = now;
+            // Redraw the notes through their own setter, which is what every
+            // other change to them goes through.
+            if (fieldSetters.refusalNotes) fieldSetters.refusalNotes(cfg.refusalNotes);
+          }
+        }
+      };
+
+      // Only the keys the preset actually carries. A set that comes with it holds the
+      // notes and where they go, and nothing else, so measuring it against
+      // every setting on the panel would call it changed the moment it loaded.
+      const syncDrift = () => {
+        const name = select.value;
+        const p = name ? list().find((x) => x.name === name) || builtInNote(name) : null;
+        if (!p || !p.values) {
+          drift.hidden = true;
+          return;
+        }
+        const now: Record<string, any> = cfg as any;
+        let moved = false;
+        for (const k of Object.keys(p.values)) {
+          if (settledJson(now[k]) !== settledJson(p.values[k])) {
+            moved = true;
+            break;
+          }
+        }
+        drift.hidden = !moved;
+        if (moved)
+          drift.textContent = isBuiltIn(name)
+            ? "You have changed these since loading " +
+              name +
+              ". A set that comes with the extension cannot be written over, so put a name in the box and press Save as new to keep this."
+            : "You have changed these since loading " +
+              name +
+              ". Press Update selected to keep it, or Save as new for a second copy.";
       };
       select.addEventListener("change", () => {
         // Picking loads it. Before this, picking only greyed the buttons in and
@@ -9799,21 +10126,21 @@ export function setup(ctx: Ctx, opts?: any) {
         if (name) doLoad(name, was);
       });
 
-      // The sets that ship with the extension, for this bar's kind. Only notes
+      // The sets that come with the extension, for this bar's kind. Only notes
       // has any today; a bar for another kind gets an empty list and behaves
       // exactly as it did before these existed.
-      const shipped = () => (kind === "notes" ? BUILT_IN_NOTES : []);
-      const isShipped = (name: string) => shipped().some((p) => p.name === name);
+      const builtIns = () => (kind === "notes" ? BUILT_IN_NOTES : []);
+      const isBuiltIn = (name: string) => builtIns().some((p) => p.name === name);
 
       const refreshSelect = (selectName?: string) => {
         select.innerHTML = "";
         const ph = document.createElement("option");
         ph.value = "";
-        ph.textContent = list().length || shipped().length
+        ph.textContent = list().length || builtIns().length
           ? "Pick a preset"
           : "No presets saved yet";
         select.appendChild(ph);
-        // Under a heading each, so a shipped set is never mistaken for one you
+        // Under a heading each, so a built-in set is never mistaken for one you
         // wrote and wondered where your edits went.
         const group = (label: string, items: Array<{ name: string }>) => {
           if (!items.length) return;
@@ -9827,7 +10154,7 @@ export function setup(ctx: Ctx, opts?: any) {
           }
           select.appendChild(g);
         };
-        group("Ships with it", shipped());
+        group("Comes with it", builtIns());
         group("Yours", list());
         if (selectName) select.value = selectName;
         lastPick = select.value;
@@ -9860,10 +10187,10 @@ export function setup(ctx: Ctx, opts?: any) {
           pick: wasPick === undefined ? select.value : wasPick,
         };
         const took = applyPresetValues(kind, p.values);
-        // Taking one of the sets that ship marks them as seen, so a change to
+        // Taking one of the sets that come with it marks them as seen, so a change to
         // them later is worth a line and a change for somebody who has never
         // taken one is not.
-        if (kind === "notes" && isShipped(name)) markShippedSeen();
+        if (kind === "notes" && isBuiltIn(name)) markBuiltInSeen();
         // Reflect the new values in the on-screen fields without a rebuild.
         for (const k of keysForKind(kind)) {
           const fld = fieldByKey[k];
@@ -9916,9 +10243,9 @@ export function setup(ctx: Ctx, opts?: any) {
           status.textContent = "Type a name first.";
           return;
         }
-        if (isShipped(name)) {
+        if (isBuiltIn(name)) {
           status.textContent =
-            "That name belongs to a set that ships with the extension. Pick another.";
+            "That name belongs to a set that comes with the extension. Pick another.";
           return;
         }
         if (list().some((x) => x.name === name)) {
@@ -9954,9 +10281,9 @@ export function setup(ctx: Ctx, opts?: any) {
           status.textContent = "That's already its name.";
           return;
         }
-        if (isShipped(newName)) {
+        if (isBuiltIn(newName)) {
           status.textContent =
-            "That name belongs to a set that ships with the extension. Pick another.";
+            "That name belongs to a set that comes with the extension. Pick another.";
           return;
         }
         if (list().some((x) => x.name === newName)) {
@@ -10037,13 +10364,13 @@ export function setup(ctx: Ctx, opts?: any) {
         );
       });
 
-      // The sets that ship have changed since this browser last took one. Said
+      // The sets that come with it have changed since this browser last took one. Said
       // here, above the picker they are in, and only on the notes bar: the other
-      // bar has no shipped sets to change. Only while notes are on, since the
+      // bar has no built-in sets to change. Only while notes are on, since the
       // sets do nothing for somebody who has them off.
-      if (kind === "notes" && shippedMoved()) {
+      if (kind === "notes" && builtInMoved()) {
         const moved = document.createElement("div");
-        moved.setAttribute("data-lvr-shippedmoved", "1");
+        moved.setAttribute("data-lvr-builtinmoved", "1");
         moved.style.cssText =
           "display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:8px 10px;" +
           "border-radius:var(--lumiverse-radius,8px);" +
@@ -10054,11 +10381,11 @@ export function setup(ctx: Ctx, opts?: any) {
           "flex:1;min-width:180px;font-size:12px;line-height:1.45;" +
           "color:var(--lumiverse-text-muted,rgba(255,255,255,.7))";
         what.textContent =
-          "The note sets that ship with Auto Retry have changed since you last loaded one. Your own notes are untouched. To take the new wording, load a set below, which writes over the notes you have.";
+          "The note sets that come with Auto Retry have changed since you last loaded one. Your own notes are untouched. To take the new wording, load a set below, which writes over the notes you have.";
         const gotIt = smallBtn(btn("Got it", false));
-        gotIt.setAttribute("data-lvr-shippedmoved", "dismiss");
+        gotIt.setAttribute("data-lvr-builtinmoved", "dismiss");
         gotIt.addEventListener("click", () => {
-          markShippedSeen();
+          markBuiltInSeen();
           moved.remove();
         });
         moved.appendChild(what);
@@ -10070,7 +10397,14 @@ export function setup(ctx: Ctx, opts?: any) {
       wrap.appendChild(manageRow);
       wrap.appendChild(miniLabel("Save or rename"));
       wrap.appendChild(saveRow);
+      wrap.appendChild(drift);
       wrap.appendChild(status);
+      // The picker starts on nothing, so this only has an answer once something
+      // has been loaded. Called anyway, so the line is right from the first
+      // paint rather than only after the next press.
+      syncDrift();
+      driftSyncers.push(syncDrift);
+      cfgWatchers.push(syncDrift);
       return wrap;
     }
 
@@ -10482,7 +10816,7 @@ export function setup(ctx: Ctx, opts?: any) {
       h.addEventListener("click", toggle);
       h.addEventListener("keydown", (e: any) => {
         if (!e) return;
-        // What a real button answers to. Space is swallowed as well, or it
+        // What a real button answers to. Space is blocked as well, or it
         // would page the panel down at the same time as opening the section.
         if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") {
           e.preventDefault();
@@ -10592,7 +10926,7 @@ export function setup(ctx: Ctx, opts?: any) {
           const block = presetBlock(
             "notes",
             "Note presets",
-            "Save the notes above as a named set and switch between them. A set carries the notes and where they go, and nothing else: loading one never turns notes on or off. Saved to your account, so they follow you to other devices. Six sets ship with it under Ships with it, ordered from the gentlest to the most direct: load one to see the shape, then edit the boxes and save it under a name of your own.",
+            "Save the notes above as a named set and switch between them. A set carries the notes and where they go, and nothing else: loading one never turns notes on or off. Saved to your account, so they follow you to other devices. Six sets come with it under Comes with it, ordered from the gentlest to the most direct: load one to see the shape, then edit the boxes and save it under a name of your own.",
           );
           // Same switch the note boxes above hang off. With notes off there is
           // nothing here to save and nothing a loaded set would reach, so the
@@ -11028,6 +11362,9 @@ export function setup(ctx: Ctx, opts?: any) {
     // comes and goes, so the lasting one reads first.
     panel.appendChild(buildRetiredNotice());
     panel.appendChild(buildPermissionNotice());
+    // Under the two above it. Both of those are about something that is not
+    // working; this one is about a number that is, so it reads after them.
+    panel.appendChild(buildMovedNotice());
     panel.appendChild(masterNote);
     masterNoteEl = masterNote;
     syncMasterNote();
@@ -11100,15 +11437,6 @@ export function setup(ctx: Ctx, opts?: any) {
   }
 
 
-  // What is missing, and what that costs. Drawn only while something is
-  // actually missing, so a correctly installed extension carries no panel
-  // furniture for a problem it does not have.
-  //
-  // This exists because a refused permission is the one failure that raises
-  // nothing anywhere: a gated event never fires, and a fire-and-forget
-  // registration silently does nothing. Every other fault in here reports
-  // itself somewhere. This one leaves the extension installed and apparently
-  // working while it does none of what it was asked to.
   // ---- find and replace, retired ----
   // The feature is gone. This card is the only thing left that knows it existed,
   // and it exists to hand somebody's rules back to them rather than to argue
@@ -11151,7 +11479,7 @@ export function setup(ctx: Ctx, opts?: any) {
     box.setAttribute("data-ar-retired", "1");
     const held = retiredSwaps();
     const count = held.rules.split("\n").filter((l) => l.indexOf("=>") > 0).length;
-    // Nothing to hand back, or already handed back. Somebody who never used the
+    // Nothing to restore, or already restored. Somebody who never used the
     // feature should never learn it existed. Past the date the offer ends on,
     // nobody sees it either.
     if ((!count && !held.presets.length) || swapsNoticeDone() || !swapsOffered(todayHere()))
@@ -11238,6 +11566,70 @@ export function setup(ctx: Ctx, opts?: any) {
     return box;
   }
 
+  // A default moved under somebody who was on it. Said at the top of the panel
+  // rather than tucked beside the row it belongs to, because it is about a
+  // number they are running right now and did not choose.
+  //
+  // Only reaches a reader still holding the old value. Anybody who set their own
+  // is told nothing, since nothing of theirs changed, and a fresh install starts
+  // on the new value so it never sees this at all.
+  function buildMovedNotice(): HTMLElement {
+    const box = document.createElement("div");
+    box.setAttribute("data-ar-moveddefault", "1");
+    const moved = movedForMe();
+    if (!moved.length) return box;
+    box.style.cssText =
+      "display:flex;gap:8px;flex-wrap:wrap;align-items:center;flex:none;margin-bottom:12px;" +
+      "padding:10px 12px;border-radius:var(--lumiverse-radius,8px);" +
+      "border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));" +
+      "background:var(--lumiverse-fill-subtle,rgba(0,0,0,.1))";
+    const what = document.createElement("div");
+    what.style.cssText =
+      "flex:1;min-width:180px;font-size:12px;line-height:1.5;" +
+      "color:var(--lumiverse-text-muted,rgba(255,255,255,.7))";
+    what.textContent =
+      (moved.length === 1
+        ? "A default setting has changed in this update, and you were on the old one. "
+        : "Some default settings have changed in this update, and you were on the old ones. ") +
+      moved.map((m) => m.label + ": " + m.why).join(" ") +
+      " Yours is still the old value until you take the new one.";
+    box.appendChild(what);
+    const small = (b: HTMLButtonElement) => {
+      b.style.cssText += "min-height:0;padding:7px 12px";
+      return b;
+    };
+    const take = small(btn("Take it", true));
+    take.setAttribute("data-ar-moveddefault", "take");
+    take.addEventListener("click", () => {
+      for (const m of moved) {
+        (cfg as any)[m.key] = (CONFIG as any)[m.key];
+        if (fieldSetters[m.key as string]) fieldSetters[m.key as string]((cfg as any)[m.key]);
+      }
+      markMovedSeen();
+      saveSaved();
+      saveToAccount();
+      box.remove();
+    });
+    box.appendChild(take);
+    const keep = small(btn("Keep mine", false));
+    keep.setAttribute("data-ar-moveddefault", "keep");
+    keep.addEventListener("click", () => {
+      markMovedSeen();
+      box.remove();
+    });
+    box.appendChild(keep);
+    return box;
+  }
+
+  // What is missing, and what that costs. Drawn only while something is
+  // actually missing, so a correctly installed extension carries no panel
+  // furniture for a problem it does not have.
+  //
+  // This exists because a refused permission is the one failure that raises
+  // nothing anywhere: a gated event never fires, and a fire-and-forget
+  // registration silently does nothing. Every other fault in here reports
+  // itself somewhere. This one leaves the extension installed and apparently
+  // working while it does none of what it was asked to.
   function buildPermissionNotice(): HTMLElement {
     const box = document.createElement("div");
     box.setAttribute("data-ar-perms", "1");
@@ -11589,6 +11981,7 @@ export function setup(ctx: Ctx, opts?: any) {
           role: n.role,
           fromTry: n.fromTry,
         }));
+        cfgChanged();
       };
 
       const draw = () => {
@@ -11602,6 +11995,7 @@ export function setup(ctx: Ctx, opts?: any) {
           num.textContent = notes.length > 1 ? "Note " + (i + 1) : "Note";
           num.style.cssText =
             "font-size:11px;color:var(--lumiverse-text-muted,rgba(255,255,255,.65));flex:1";
+          const held = !!notesOnBuiltIn;
           const who = document.createElement("select");
           for (const o of NOTE_ROLE_OPTIONS) {
             const opt = document.createElement("option");
@@ -11613,6 +12007,7 @@ export function setup(ctx: Ctx, opts?: any) {
           styleField(who);
           who.style.cssText += "flex:none;padding:5px 8px;font-size:12px";
           who.setAttribute("aria-label", "Who note " + (i + 1) + " comes from");
+          if (held) lockForBuiltIn(who);
           who.addEventListener("change", () => {
             note.role = coerce("pick", who.value, "system", {
               options: NOTE_ROLE_OPTIONS,
@@ -11629,6 +12024,7 @@ export function setup(ctx: Ctx, opts?: any) {
           const fromLabel = document.createElement("span");
           fromLabel.textContent = "from try";
           const from = document.createElement("input");
+          if (held) lockForBuiltIn(from);
           from.type = "number";
           from.inputMode = "numeric";
           from.min = "1";
@@ -11650,6 +12046,7 @@ export function setup(ctx: Ctx, opts?: any) {
           fromWrap.appendChild(from);
 
           const drop = btn("\u2212", false);
+          if (held) lockForBuiltIn(drop);
           drop.style.cssText += "min-height:0;padding:4px 12px;flex:none";
           drop.setAttribute("aria-label", "Remove note " + (i + 1));
           // One note is the floor. Removing the last one would leave nothing to
@@ -11691,6 +12088,14 @@ export function setup(ctx: Ctx, opts?: any) {
           bar.appendChild(drop);
 
           const ta = document.createElement("textarea");
+          // Readable rather than disabled, so a line can still be copied out of a
+          // set somebody wants to borrow wording from.
+          if (held) {
+            ta.readOnly = true;
+            ta.style.opacity = "0.75";
+            ta.title =
+              "Part of " + notesOnBuiltIn + ", which cannot be changed. Save it as your own first.";
+          }
           ta.rows = 3;
           ta.value = note.text;
           ta.setAttribute("aria-label", "Note " + (i + 1));
@@ -11754,11 +12159,33 @@ export function setup(ctx: Ctx, opts?: any) {
 
       fieldSetters[f.key] = (v: any) => {
         notes = coerce("notes", v, (CONFIG as any)[f.key], f);
+        setLocked();
         draw();
       };
+      // Adding a note, and the line above the list explaining why the rest is
+      // read-only. Both follow the pick, so they are set here rather than once
+      // at build time.
+      const heldLine = document.createElement("div");
+      heldLine.setAttribute("data-lvr-noteslocked", "1");
+      heldLine.style.cssText =
+        "font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.7))";
+      const setLocked = () => {
+        const held = !!notesOnBuiltIn;
+        heldLine.hidden = !held;
+        if (held)
+          heldLine.textContent =
+            "You are looking at " +
+            notesOnBuiltIn +
+            ", one of the sets built in. It cannot be written over, so the notes below are read-only. To change it, put a name in the box under Saved presets and press Save as new. The copy is yours and opens for editing.";
+        add.disabled = held;
+        add.style.opacity = held ? "0.55" : "1";
+        add.style.cursor = held ? "not-allowed" : "pointer";
+      };
+      setLocked();
       draw();
       foot.appendChild(add);
       foot.appendChild(count);
+      row.appendChild(heldLine);
       row.appendChild(list);
       row.appendChild(foot);
     } else if (f.type === "pick") {
@@ -12120,7 +12547,7 @@ export function setup(ctx: Ctx, opts?: any) {
   }
 
   // Two settings can hold arrays (the note list), so an identity check is not
-  // enough to tell "changed" from "the same as it shipped".
+  // enough to tell "changed" from "the same as it was".
   function sameAsDefault(key: string): boolean {
     const a = cfg[key];
     const b = (CONFIG as any)[key];
@@ -12141,7 +12568,7 @@ export function setup(ctx: Ctx, opts?: any) {
     return n;
   }
 
-  // Puts the chosen parts back to what the extension shipped with, in the panel
+  // Puts the chosen parts back to the defaults, in the panel
   // only. Save keeps it, closing the panel discards it, which is the same deal
   // import already offers.
   // Presets are the exception and are called out as such in the picker: they
@@ -13284,4 +13711,5 @@ export const __testing = {
   // first time that value is retuned, with nothing to catch it.
   CONFIG,
   SCHEMA,
+  MOVED_DEFAULTS,
 };

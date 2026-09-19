@@ -345,7 +345,7 @@ const check = (name, ok, detail) => {
 // Where Chromium actually is.
 //
 // Left to itself Playwright looks under its own download directory for a build
-// named the way it would have downloaded it, and an image that ships a browser
+// named the way it would have downloaded it, and an image that carries a browser
 // under any other name sends it to a path that does not exist. So the
 // environment's own copy is looked for first, and CHROMIUM_PATH still wins.
 function findChromium() {
@@ -2088,7 +2088,7 @@ console.log("\nthe crisis check asks first");
     }),
   );
   check("the switch is in the panel", out.found === true, out);
-  check("and it ships off", out.startsOff === true, out);
+  check("and it starts off", out.startsOff === true, out);
   check("ticking it asks first", out.asked === true, out);
   check("the box stays off while the question is open", out.whileAsking === false, out);
   check("the warning says the extension cannot tell the two cases apart",
@@ -2776,7 +2776,15 @@ console.log("\nicons");
       );
       await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       const btn = host.querySelector("button");
-      const was = btn.style.background;
+      // What is painted, not what was assigned. Reading btn.style.background
+      // only sees the shorthand, so moving the paint onto backgroundColor and
+      // backgroundImage made this look like the button had stopped answering a
+      // tap when all that changed was which property carried it.
+      const look = () => {
+        const st = getComputedStyle(btn);
+        return st.backgroundImage + "|" + st.backgroundColor + "|" + st.borderColor;
+      };
+      const was = look();
       btn.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
       const moved = btn.style.transform;
       // Duration rather than the shorthand: with nothing set, Chromium
@@ -2786,7 +2794,7 @@ console.log("\nicons");
       // The tap still has to say something, and it says it in colour.
       btn.click();
       await new Promise((r) => requestAnimationFrame(r));
-      return { moved, transition: css, recoloured: btn.style.background !== was };
+      return { moved, transition: css, recoloured: look() !== was };
     });
     await page.close();
     return { ...out, errs };
@@ -2866,15 +2874,121 @@ console.log("\nfloat button menu");
     const move = (_el, x, y) => document.dispatchEvent(new PointerEvent("pointermove", { bubbles: true, clientX: x, clientY: y }));
     const up = (el) => el.dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
 
+    // The mark on the button, measured against what is actually behind it. The
+    // contrast sweep walks text, and this button has none: its mark is an SVG
+    // drawn in currentColor. So the one part of this extension that sits over
+    // somebody else's chat, in their theme, was never measured at all, and the
+    // pair of colours it used measured 2.49 against a floor of 3 on a light
+    // theme in Auto Refine. Held to 3, which is what a graphic is asked for
+    // rather than the 4.5 asked of body text.
+    const inkRatio = (el) => {
+      const parse = (str) => {
+        const m = /rgba?\(([^)]+)\)/.exec(str || "");
+        if (!m) return null;
+        const p = m[1].split(",").map((x) => parseFloat(x.trim()));
+        return { r: p[0], g: p[1], b: p[2], a: p.length > 3 ? p[3] : 1 };
+      };
+      const over = (f, b) => ({
+        r: f.r * f.a + b.r * (1 - f.a),
+        g: f.g * f.a + b.g * (1 - f.a),
+        b: f.b * f.a + b.b * (1 - f.a),
+        a: 1,
+      });
+      const lum = (c) => {
+        const f = (v) => {
+          v /= 255;
+          return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+        };
+        return 0.2126 * f(c.r) + 0.7152 * f(c.g) + 0.0722 * f(c.b);
+      };
+      const stack = [];
+      let node = el;
+      while (node && node !== document.documentElement) {
+        const c = parse(getComputedStyle(node).backgroundColor);
+        if (c && c.a > 0) {
+          stack.push(c);
+          if (c.a >= 0.999) break;
+        }
+        node = node.parentElement;
+      }
+      let base = { r: 255, g: 255, b: 255, a: 1 };
+      const pg = parse(getComputedStyle(document.body).backgroundColor);
+      if (pg && pg.a >= 0.999) base = pg;
+      for (let i = stack.length - 1; i >= 0; i--) base = over(stack[i], base);
+      const ink = parse(getComputedStyle(el).color);
+      if (!ink) return null;
+      const a = lum(over(ink, base));
+      const b = lum(base);
+      return Math.round(((Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)) * 100) / 100;
+    };
+
+    // The ring around the edge is what says a hold is under way. Read part way
+    // through, while the finger is still down, since that is the only moment it
+    // is meant to be visible.
+    const ringAt = (el) => {
+      const r = el.querySelector(".lv-ar-hold");
+      if (!r) return null;
+      const c = r.querySelector("circle");
+      const rs = getComputedStyle(r);
+      const cs = getComputedStyle(c);
+      return {
+        held: el.getAttribute("data-ar-holding"),
+        shown: Number(rs.opacity),
+        // How far round it has drawn. Full offset is nothing drawn.
+        offset: parseFloat(cs.strokeDashoffset),
+        len: parseFloat(cs.strokeDasharray),
+        spins: /rotate\(-?90deg\)|matrix/.test(rs.transform),
+      };
+    };
+    const ringIdle = ringAt(btn());
+
     // A quick tap toggles and opens nothing.
     const wasOn = btn().getAttribute("aria-pressed");
-    down(btn(), 130, 130); await wait(60); up(btn()); btn().click();
+    const inkOn = inkRatio(btn());
+    down(btn(), 130, 130); await wait(60);
+    // Read while the finger is still down and well inside a tap. The ring is
+    // what tells a hold from a tap, so drawing one on every press is the button
+    // saying it does not know which you meant.
+    const tapRing = ringAt(btn());
+    up(btn()); btn().click();
     const afterTap = { pressed: btn().getAttribute("aria-pressed"), menu: shown() > 0 };
+    await wait(320);
+    const inkOff = inkRatio(btn());
     btn().click(); // back on
+
+    // The same tap with the host holding the pointer, which is what it does to
+    // drag the widget. Once it has, the pointerup goes to whatever it captured
+    // on, so a listener on the button never sees it. That left the hold timer
+    // running after the finger was gone and turned every tap into a hold.
+    const beforeCaptured = shown();
+    down(btn(), 130, 130);
+    await wait(60);
+    document.dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
+    await wait(620);
+    const capturedTap = { menu: shown() > beforeCaptured };
+    btn().click();
+
+    down(btn(), 130, 130);
+    await wait(250);
+    const ringMid = ringAt(btn());
+    up(btn());
+    // Long enough for the wipe back to finish, or the read catches it mid-way.
+    await wait(360);
+    const ringAfter = ringAt(btn());
+    btn().click(); // the tap that release turned into, put back
+
+    // Read a hair before the hold is up, which is the moment the ring has to be
+    // closed by. It used to be given the same length as the hold, so the timer
+    // beat it by a frame every time and the menu opened over a ring stopped a
+    // few per cent short.
+    down(btn(), 130, 130);
+    await wait(470);
+    const ringNearlyUp = ringAt(btn());
+    await wait(160);
 
     // A hold opens the menu and does not toggle.
     const before = btn().getAttribute("aria-pressed");
-    down(btn(), 130, 130); await wait(620);
+    const ringDone = ringAt(btn());
     const openedByHold = shown() === 1;
     const entries = items();
     const keys = real().map((i) => i.key);
@@ -2948,12 +3062,45 @@ console.log("\nfloat button menu");
     teardown();
     const left = { ours: document.querySelectorAll('[role="menu"],[role="menuitem"]').length };
     return { wasOn, afterTap, openedByHold, entries, keys, afterHold, onScreen, onButton,
-             afterDrag, resize, afterDismiss, gone, left };
+             afterDrag, resize, afterDismiss, gone, left,
+             ringIdle, ringMid, ringAfter, ringDone, ringNearlyUp, tapRing, capturedTap,
+             inkOn, inkOff };
   });
   await page.close();
   check("a quick tap still toggles", out.afterTap.pressed !== out.wasOn, out.afterTap);
   check("and opens no menu", !out.afterTap.menu);
+  check("the mark is readable while it is on", out.inkOn !== null && out.inkOn >= 3,
+    out.inkOn + " against 3");
+  check("and readable while it is off", out.inkOff !== null && out.inkOff >= 3,
+    out.inkOff + " against 3");
+  check("a tap draws no ring, so it never reads as a hold",
+    out.tapRing && out.tapRing.shown === 0, JSON.stringify(out.tapRing));
+  check("a tap opens no menu even when the host is holding the pointer",
+    out.capturedTap && !out.capturedTap.menu, JSON.stringify(out.capturedTap));
   check("a hold opens the menu", out.openedByHold);
+
+  // The ring that fills while the button is held. Nothing on screen used to say
+  // a hold was under way, so the half second before the menu opened read as a
+  // tap that did nothing.
+  check("there is a ring on the button", !!out.ringMid, JSON.stringify(out.ringMid));
+  check("it is out of sight until something is held",
+    out.ringIdle && out.ringIdle.shown === 0, JSON.stringify(out.ringIdle));
+  check("and drawn at no length at all",
+    out.ringIdle && out.ringIdle.offset === out.ringIdle.len, JSON.stringify(out.ringIdle));
+  check("holding the button shows it",
+    out.ringMid && out.ringMid.held === "1" && out.ringMid.shown > 0.5, JSON.stringify(out.ringMid));
+  check("and it is part way round, not all of it",
+    out.ringMid && out.ringMid.offset > 0 && out.ringMid.offset < out.ringMid.len,
+    JSON.stringify(out.ringMid));
+  check("letting go early wipes it back",
+    out.ringAfter && out.ringAfter.held === null &&
+      out.ringAfter.offset === out.ringAfter.len, JSON.stringify(out.ringAfter));
+  check("and a hold that reached the menu leaves none of it standing",
+    out.ringDone && out.ringDone.held === null, JSON.stringify(out.ringDone));
+  check("the ring is all the way round before the menu opens",
+    out.ringNearlyUp && out.ringNearlyUp.offset === 0, JSON.stringify(out.ringNearlyUp));
+  check("the ring starts at the top rather than at three o'clock",
+    out.ringMid && out.ringMid.spins, JSON.stringify(out.ringMid));
   // Two, because nothing else is switched on here. The panel button and the
   // two word swap buttons join them when their settings are on, which the
   // "where the ways into the extension live" checks cover. This is the floor.
@@ -11497,12 +11644,147 @@ console.log("\nsections open without throwing the panel");
   check("closing one: no console errors", closeErrors.length === 0, closeErrors);
 }
 
+console.log("\na note set that comes with it cannot be typed into");
+{
+  // The same rule Auto Refine keeps for its built-in prompts. A set that comes
+  // with the extension cannot be written over, so editing its notes would be
+  // typing into something the panel is about to refuse to save.
+  //
+  // A fresh install is not in this state: the picker starts on nothing, so
+  // somebody who has never opened the list can type into every note.
+  const openNotes = (page) =>
+    page.evaluate(async () => {
+      for (const b of [...document.querySelectorAll("#modal button")]) {
+        const t = (b.textContent || "").trim();
+        if (/^Refusal tuning/.test(t) && b.getAttribute("aria-expanded") === "false") b.click();
+      }
+      await new Promise((r) => setTimeout(r, 150));
+      return !!document.querySelector("#modal select");
+    });
+  const look = (page) =>
+    page.evaluate(() => {
+      // By its label, not "the first textarea in the panel": the refusal section
+      // holds several and the first is not a note.
+      const ta = document.querySelector('#modal textarea[aria-label^="Note "]');
+      const line = document.querySelector("#modal [data-lvr-noteslocked]");
+      return {
+        readOnly: ta ? !!ta.readOnly : null,
+        said: !!(line && !line.hidden),
+        text: line ? line.textContent : "",
+      };
+    });
+
+  const { out, errors } = await inPanel(
+    browser,
+    { settings: { refusalNote: true } },
+    async (page) => {
+      const opened = await openNotes(page);
+      const fresh = await look(page);
+      const picked = await page.evaluate(async () => {
+        const sel = [...document.querySelectorAll("#modal select")].find((s) =>
+          [...s.options].some((o) => /A nudge/.test(o.textContent)),
+        );
+        if (!sel) return false;
+        sel.value = [...sel.options].find((o) => /A nudge/.test(o.textContent)).value;
+        sel.dispatchEvent(new Event("change", { bubbles: true }));
+        await new Promise((r) => setTimeout(r, 300));
+        return true;
+      });
+      return { opened, fresh, picked, held: await look(page) };
+    },
+  );
+  check("the section holding the note sets opened", out.opened, JSON.stringify(out.opened));
+  check("a fresh install can type into its notes", out.fresh.readOnly === false, JSON.stringify(out.fresh));
+  check("and is told nothing about a locked set", !out.fresh.said, JSON.stringify(out.fresh));
+  check("one of the sets was picked", out.picked, JSON.stringify(out.picked));
+  check("the notes stop taking typing", out.held.readOnly === true, JSON.stringify(out.held));
+  check("a line says why", out.held.said, JSON.stringify(out.held));
+  check("and says Save as new is the way round it", /Save as new/.test(out.held.text || ""), String(out.held.text).slice(0, 200));
+  check("no console errors", errors.length === 0, errors);
+}
+
+console.log("\nwhen the notes stop matching the set named in the picker");
+{
+  // Loading a set puts its name in the picker and nothing cleared it, so
+  // changing a note afterwards left the picker naming a set the panel no longer
+  // held.
+  //
+  // The fields are not locked while a set that comes with the extension is
+  // picked. Loading one and changing it is how somebody is meant to start,
+  // which is what Save as new is for. What was missing was the panel saying the
+  // two had parted company.
+  const openNotes = (page) =>
+    page.evaluate(async () => {
+      for (const b of [...document.querySelectorAll("#modal button")]) {
+        const t = (b.textContent || "").trim();
+        if (/^Refusal tuning/.test(t) && b.getAttribute("aria-expanded") === "false") b.click();
+      }
+      await new Promise((r) => setTimeout(r, 150));
+      return !!document.querySelector("#modal select");
+    });
+  const drift = (page) =>
+    page.evaluate(() => {
+      const n = document.querySelector("#modal [data-lvr-presetdrift]");
+      return n && !n.hidden ? n.textContent.trim() : null;
+    });
+
+  const { out, errors } = await inPanel(
+    browser,
+    { settings: { refusalNote: true } },
+    async (page) => {
+      const opened = await openNotes(page);
+      // Load one of the sets that come with it.
+      const loaded = await page.evaluate(async () => {
+        const sel = [...document.querySelectorAll("#modal select")].find((s) =>
+          [...s.options].some((o) => /A nudge/.test(o.textContent)),
+        );
+        if (!sel) return { noPicker: true };
+        const opt = [...sel.options].find((o) => /A nudge/.test(o.textContent));
+        sel.value = opt.value;
+        sel.dispatchEvent(new Event("change", { bubbles: true }));
+        await new Promise((r) => setTimeout(r, 250));
+        return { name: opt.textContent.trim() };
+      });
+      const afterLoading = await drift(page);
+      // Change a note by hand, the way somebody tweaking a set would.
+      const edited = await page.evaluate(async () => {
+        const boxes = [...document.querySelectorAll("#modal textarea")];
+        const box = boxes.find((b) => /OOC/.test(b.value));
+        if (!box) return false;
+        box.focus();
+        box.value = box.value.replace("]", " And one line of my own.]");
+        box.dispatchEvent(new Event("input", { bubbles: true }));
+        box.dispatchEvent(new Event("change", { bubbles: true }));
+        box.blur();
+        box.dispatchEvent(new Event("blur", { bubbles: true }));
+        await new Promise((r) => setTimeout(r, 400));
+        return true;
+      });
+      return { opened, loaded, afterLoading, edited, afterEditing: await drift(page) };
+    },
+  );
+  check("the section holding the note sets opened", out.opened, JSON.stringify(out.opened));
+  check("one of the sets loaded", !!out.loaded && !out.loaded.noPicker, JSON.stringify(out.loaded));
+  // The half that is easy to get wrong: a set that has only just loaded matches
+  // itself, and saying otherwise would put the line up for everybody the moment
+  // they picked anything.
+  check("a freshly loaded set says nothing", out.afterLoading === null, String(out.afterLoading));
+  check("there was a note to edit", out.edited, JSON.stringify(out.edited));
+  check("editing one says the notes have changed", !!out.afterEditing, String(out.afterEditing));
+  check(
+    "and names Save as new, since a set that comes with it cannot be written over",
+    /Save as new/.test(out.afterEditing || ""),
+    String(out.afterEditing),
+  );
+  check("no console errors", errors.length === 0, errors);
+}
+
 console.log("\nsaying the note sets have changed");
 {
-  const KEY = "lv-auto-retry:shipped-seen:v1";
+  const KEY = "lv-auto-retry:built-in-seen:v1";
   const line = (page) =>
     page.evaluate(() => {
-      const n = document.querySelector('#modal [data-lvr-shippedmoved="1"]');
+      const n = document.querySelector('#modal [data-lvr-builtinmoved="1"]');
       return n ? n.textContent.trim() : null;
     });
   // The bar lives in a section that starts shut, so it has to be opened before
@@ -11528,13 +11810,13 @@ console.log("\nsaying the note sets have changed");
         const opened = await openNotes(page);
         const said = await line(page);
         const after = await page.evaluate(async () => {
-          const b = document.querySelector('#modal [data-lvr-shippedmoved="dismiss"]');
+          const b = document.querySelector('#modal [data-lvr-builtinmoved="dismiss"]');
           if (!b) return { noButton: true };
           b.click();
           await new Promise((r) => setTimeout(r, 80));
           return {
-            gone: !document.querySelector('#modal [data-lvr-shippedmoved="1"]'),
-            stamped: localStorage.getItem("lv-auto-retry:shipped-seen:v1"),
+            gone: !document.querySelector('#modal [data-lvr-builtinmoved="1"]'),
+            stamped: localStorage.getItem("lv-auto-retry:built-in-seen:v1"),
           };
         });
         return { opened, said, after };
@@ -11549,6 +11831,31 @@ console.log("\nsaying the note sets have changed");
       out.after && out.after.stamped && out.after.stamped !== "notthemark",
       JSON.stringify(out.after),
     );
+    check("no console errors", errors.length === 0, errors.join(" | "));
+  }
+
+  // The same reader, upgrading from a version that wrote this under the key's
+  // old name. Losing it would swallow the one line saying the sets changed, and
+  // nothing on screen would say anything was missing.
+  {
+    const { out, errors } = await inPanel(
+      browser,
+      { settings: { refusalNote: true }, seed: { "lv-auto-retry:shipped-seen:v1": "notthemark" } },
+      async (page) => {
+        const opened = await openNotes(page);
+        const said = await line(page);
+        const keys = await page.evaluate(() => ({
+          now: localStorage.getItem("lv-auto-retry:built-in-seen:v1"),
+          old: localStorage.getItem("lv-auto-retry:shipped-seen:v1"),
+        }));
+        return { opened, said, keys };
+      },
+    );
+    check("a stamp written under the old key is still read", !!out.said, String(out.said));
+    check("and carried across to the key this version uses",
+      out.keys && out.keys.now === "notthemark", JSON.stringify(out.keys));
+    check("with the old key dropped rather than left behind",
+      out.keys && out.keys.old === null, JSON.stringify(out.keys));
     check("no console errors", errors.length === 0, errors.join(" | "));
   }
 
@@ -11572,7 +11879,7 @@ console.log("\nsaying the note sets have changed");
       await openNotes(page);
       return {
         said: await line(page),
-        stamped: await page.evaluate(() => localStorage.getItem("lv-auto-retry:shipped-seen:v1")),
+        stamped: await page.evaluate(() => localStorage.getItem("lv-auto-retry:built-in-seen:v1")),
       };
     });
     check("a browser that has never taken one is told nothing", out.said === null, String(out.said));
