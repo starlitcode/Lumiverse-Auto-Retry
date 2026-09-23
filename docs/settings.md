@@ -196,7 +196,7 @@ The same options live in the CONFIG block at the top of `src/frontend.ts` and `d
 | idleTimeoutMs | 90000 | Tokens flowed then stopped for this long. 0 disables. |
 | retryOnError | true | Retry provider errors. |
 | ignoreHardErrors | true | Skip permanent failures like missing models or invalid API keys. |
-| hardErrorPhrases | (empty) | Your own wording for an error that will not fix itself, one per line, counted alongside the built-in list. Shown only while `ignoreHardErrors` is on. |
+| hardErrorPhrases | (blank) | Your own wording for an error that will not fix itself, one per line, counted alongside the built-in list. Shown only while `ignoreHardErrors` is on. |
 | retryOnEmpty | true | Retry empty replies and mid-reasoning cutoffs. |
 | retryOnTruncated | true | Retry a reply that ends mid-sentence. |
 | retryOnNoPunct | true | Retry a reply that stops on a word with nothing after it. Punctuation in any script counts as an ending, and so does an emoji. |
@@ -207,12 +207,12 @@ The same options live in the CONFIG block at the top of `src/frontend.ts` and `d
 | refusalCatchDisengage | true | Also catch the model breaking off ("I'll stop here", "I won't continue this conversation"). Only counted when it is how the reply ends, never inside quotation marks, and never behind a dialogue tag. Shown only while `refusalUseBuiltins` is on. |
 | refusalCatchCrisis | false | Also catch the model leaving the scene to offer real-world support and crisis resources. Two separate parts of the reply have to point that way before it counts, one of them the model addressing you rather than your character, and a line inside quotation marks never counts. The only check `refusalMaxChars` does not apply to. Ticking it opens a warning that has to be answered before it goes on. Shown only while `refusalUseBuiltins` is on, and read [Safety](safety.md) first. |
 | refusalIgnoreQuoted | true | A built-in match inside quotation marks is a character speaking, so it is not counted. Your own phrases are counted either way. |
-| refusalExtraPhrases | (empty) | Phrases that also count as a refusal, one per line. |
-| refusalPhraseSubs | (empty) | Reword the built-in phrases with "old => new" rules, one per line. Shown only while `refusalUseBuiltins` is on. |
-| refusalIgnorePhrases | (empty) | Whitelist, one per line; a reply containing any is never a refusal. |
+| refusalExtraPhrases | (blank) | Phrases that also count as a refusal, one per line. |
+| refusalPhraseSubs | (blank) | Reword the built-in phrases with "old => new" rules, one per line. Shown only while `refusalUseBuiltins` is on. |
+| refusalIgnorePhrases | (blank) | Whitelist, one per line; a reply containing any is never a refusal. |
 | refusalMaxChars | 2000 | Longest reply still treated as a possible refusal. 0 = no limit. |
 | refusalStripThinking | true | Only check the final reply, stripping known reasoning tags first. Off checks the whole raw output. |
-| refusalThinkTags | (empty) | Extra reasoning tag names, one per line, for unusual thinking wrappers. |
+| refusalThinkTags | (blank) | Extra reasoning tag names, one per line, for unusual thinking wrappers. |
 | refusalNote | false | Send a note with a refusal retry, and only a refusal retry. Needs the `interceptor` permission. |
 | refusalNotes | one empty note | The notes themselves. Each carries its own role (system, user or assistant) and its own first try, so notes can be set to escalate. Up to ten. Whichever have come due are sent together, in order. Empty ones are skipped, and nothing is sent while they all are. Shown only while `refusalNote` is on. |
 | refusalNotePlacement | after | For the whole list, not one note. Where the block of due notes goes: after the last message, before it, at the very end (past anything the build appends behind the conversation), or at the very start. Shown only while `refusalNote` is on. |
