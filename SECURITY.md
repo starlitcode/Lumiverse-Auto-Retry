@@ -30,7 +30,7 @@ Not sure which? Use an advisory. If it turns out to be nothing sensitive, you ca
 
 I will read it and reply with whether I think it is a real problem and what I intend to do.
 
-I maintain this alone in my spare time, so I cannot promise a fix by any particular date. If it is real, the fix ships as a new version and the changelog says what it was.
+I maintain this alone in my spare time, so I cannot promise a fix by any particular date. If it is real, the fix goes out in a new version and the changelog says what it was.
 
 Only the latest version is supported. I do not release fixes for older versions, so updating is how you get one.
 

@@ -4678,7 +4678,7 @@ export function setup(ctx: Ctx, opts?: any) {
                 ? eventLog.join("\n")
                 : "(nothing yet)",
       );
-      copyBtn.textContent = ok ? "Copied" : "Can't";
+      copyBtn.textContent = ok ? "Copied" : "Could not";
       setTimeout(() => {
         copyBtn.textContent = before;
       }, 1400);
@@ -10299,7 +10299,7 @@ export function setup(ctx: Ctx, opts?: any) {
         // load that did nothing reads as though something happened.
         undoTo = took ? before : null;
         syncPresetButtons();
-        status.textContent = "Loaded preset: " + name + ". It's in effect now.";
+        status.textContent = "Loaded preset: " + name + ". It is in effect now.";
         log("loaded the " + kindLabel + " preset " + JSON.stringify(name));
       };
 
@@ -10352,7 +10352,7 @@ export function setup(ctx: Ctx, opts?: any) {
         commit();
         presets[kind] = list().concat([{ name, values: snapshotKind(kind) }]);
         if (!persist()) {
-          status.textContent = "Couldn't save the preset on this browser.";
+          status.textContent = "Could not save the preset on this browser.";
           return;
         }
         nameInput.value = "";
@@ -10374,7 +10374,7 @@ export function setup(ctx: Ctx, opts?: any) {
           return;
         }
         if (newName === cur) {
-          status.textContent = "That's already its name.";
+          status.textContent = "That is already its name. Type a different one.";
           return;
         }
         if (isBuiltIn(newName)) {
@@ -10396,7 +10396,7 @@ export function setup(ctx: Ctx, opts?: any) {
         arr[i] = { name: newName, values: arr[i].values };
         presets[kind] = arr;
         if (!persist()) {
-          status.textContent = "Couldn't save on this browser.";
+          status.textContent = "Could not save on this browser.";
           return;
         }
         nameInput.value = "";
@@ -10421,7 +10421,7 @@ export function setup(ctx: Ctx, opts?: any) {
         arr[i] = { name, values: snapshotKind(kind) };
         presets[kind] = arr;
         if (!persist()) {
-          status.textContent = "Couldn't save on this browser.";
+          status.textContent = "Could not save on this browser.";
           return;
         }
         undoTo = null;
@@ -10450,7 +10450,7 @@ export function setup(ctx: Ctx, opts?: any) {
             releaseScroll(held);
             presets[kind] = list().filter((x) => x.name !== name);
             if (!persist()) {
-              status.textContent = "Couldn't save on this browser.";
+              status.textContent = "Could not save on this browser.";
               return;
             }
             refreshSelect();
@@ -10545,7 +10545,7 @@ export function setup(ctx: Ctx, opts?: any) {
         const text = lastRenderedReply();
         if (!text) {
           out.textContent =
-            "Couldn't find a reply on screen to read. Open a chat with a reply in it and try again.";
+            "Could not find a reply on screen to read. Open a chat with a reply in it and try again.";
           out.style.color = "var(--lumiverse-text-muted,rgba(255,255,255,.65))";
           ensureReadable(out, 2.6);
           return;
@@ -11119,7 +11119,7 @@ export function setup(ctx: Ctx, opts?: any) {
         const ok = await copyText(dArea.value);
         dStatus.textContent = ok
           ? "Copied. Paste it into your bug report."
-          : "Couldn't copy here; select the text and copy by hand.";
+          : "Could not copy here. Select the text and copy it by hand.";
       });
 
       body.appendChild(buildBtn);
@@ -11252,7 +11252,7 @@ export function setup(ctx: Ctx, opts?: any) {
         const ok = downloadText("auto-retry-settings.json", buildExport(ids));
         status.textContent = ok
           ? "Saved a file with the ticked parts."
-          : "Couldn't save a file here.";
+          : "Could not save a file here.";
       });
 
       const fileInput = document.createElement("input");
@@ -11284,12 +11284,12 @@ export function setup(ctx: Ctx, opts?: any) {
           for (let i = 0; i < texts.length; i++) {
             const text = texts[i];
             if (text == null) {
-              status.textContent = "Couldn't read " + which(i) + ".";
+              status.textContent = "Could not read " + which(i) + ".";
               return;
             }
             const applied = applyImport(text, ids);
             if (applied === null) {
-              status.textContent = which(i) + " isn't a valid Auto Retry export.";
+              status.textContent = which(i) + " is not a valid Auto Retry export.";
               return;
             }
             for (const one of applied) if (parts.indexOf(one) < 0) parts.push(one);
@@ -11301,7 +11301,7 @@ export function setup(ctx: Ctx, opts?: any) {
               } catch (_) {}
               const got = importPresets(data);
               if (got === -1) {
-                status.textContent = "Couldn't save the imported presets on this browser.";
+                status.textContent = "Could not save the imported presets on this browser.";
                 return;
               }
               presetCount += got;
@@ -12434,7 +12434,7 @@ export function setup(ctx: Ctx, opts?: any) {
           }
           const state = selectorState(sel);
           if (state === "invalid selector") {
-            res.textContent = "that selector isn't valid";
+            res.textContent = "that selector is not valid";
             res.style.color = "var(--lumiverse-danger,#ef4444)";
             return;
           }
@@ -13322,7 +13322,7 @@ export function setup(ctx: Ctx, opts?: any) {
       eatClick();
       const sel = deriveSelector(node);
       if (!sel) {
-        finish(null, "Couldn't identify that one. Try holding the button itself rather than an icon inside it.");
+        finish(null, "Could not identify that one. Try holding the button itself rather than an icon inside it.");
         return;
       }
       finish(sel, "Set to " + sel);

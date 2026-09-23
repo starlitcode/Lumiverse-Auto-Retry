@@ -4421,7 +4421,7 @@ console.log("\nleaving a chat for the home screen");
       history.pushState({}, "", "/");
       await wait(1200);
       const atHome = state();
-      // And back in, which is the other half of the journey.
+      // And back into the chat, which has to bring the state back.
       history.pushState({}, "", "/chat/" + chat);
       window.__handlers.CHARACTER_MESSAGE_RENDERED({ chatId: chat, messageId: "m2" });
       await frame();
@@ -4991,7 +4991,7 @@ console.log("\nbackup restore");
     window.__get = (k) => { const el = window.__ctl(k); return el ? (el.type === "checkbox" ? el.checked : el.value) : "(missing)"; };
     window.__status = () => {
       const bits = [...document.querySelectorAll("div")].map((d) => d.textContent || "");
-      return bits.filter((t) => /Imported|isn't a valid|Nothing matched|Couldn't read/.test(t)).pop() || "";
+      return bits.filter((t) => /Imported|is not a valid|Nothing matched|Could not read/.test(t)).pop() || "";
     };
     // A starting point that the file will contradict.
     window.__ctl("enabled").click();
@@ -5096,9 +5096,9 @@ console.log("\nbackup restore");
 
   check("junk is refused and nothing changes",
     afterJunk.enabled === before.enabled && afterJunk.rules === before.rules &&
-    /isn't a valid/.test(afterJunk.status), afterJunk);
+    /is not a valid/.test(afterJunk.status), afterJunk);
   check("a file from another app is refused too",
-    afterForeign.rules === before.rules && /isn't a valid/.test(afterForeign.status), afterForeign);
+    afterForeign.rules === before.rules && /is not a valid/.test(afterForeign.status), afterForeign);
   check("a category we do not know is skipped, not fatal",
     afterUnknownCat.maxRetries === "6" && /Imported/.test(afterUnknownCat.status), afterUnknownCat.status);
   check("a real backup fills the fields in", afterGood.rules === "hot => cold" &&

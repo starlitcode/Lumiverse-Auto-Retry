@@ -31,6 +31,8 @@ That covers the one reply. To stop it happening again, the reason on that tab is
 
 The Stats tab shows the same reasons as a tally, so if this keeps happening it says which check is responsible over a whole session rather than one reply.
 
+Impersonate is left alone. It writes your own turn into the input box rather than a reply, so the generation that follows a press on Lumiverse's **Impersonate** button is never judged or retried. That is recognised from the press itself, since Lumiverse does not say what kind of generation it is starting. An impersonation started some other way, such as a shortcut that does not go through that button, is judged like a reply.
+
 ## It called a reply stuck after you came back to the tab
 
 Everything the extension knows about a generation arrives over Lumiverse's socket. A tab in the background can miss those events outright, and they are not held and handed over later, they are gone. So the extension went on waiting for a first word that had already come and gone, and **Give up waiting for it to start** ran out on a reply sitting in the chat finished.

@@ -39,7 +39,7 @@ shown in Lumiverse.
 
 - No em dashes, and no en dash used as one.
 - No clichés, no metaphors, no grand phrasing.
-- Never the word "ship", in any form, as a metaphor.
+- Never the word "ship", in any form.
 - No contractions in docs, the changelog, the README or text shown in the panel.
 - Comments describe the code as it is and why. They are not change notes.
 - A hint under a field is one line, two at most. Detail goes in `docs/`.
