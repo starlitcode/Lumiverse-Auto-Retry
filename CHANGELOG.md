@@ -30,6 +30,10 @@ _2026-09-23_
 
 - **An impersonation is no longer retried as a cut-off reply.** Impersonate writes your own turn into the input box, and that generation looked like a reply to Auto Retry. A turn that stopped where you would stop read as cut off, and was retried over the top of what it had just written. Pressing Impersonate now marks the generation that follows as one to leave alone.
 
+- **A retry note is kept per chat.** One install can serve several accounts, and the note sent with a refusal retry sat in a single slot, so a note armed in one chat could replace one armed a moment earlier in another, and that retry went out without its note. Each chat now keeps its own.
+
+- **The privacy page counts the permissions correctly.** It said six, and four of them privileged. There are five, and all five are privileged.
+
 ### Changed
 
 - **Only a switch flips a switch.** Pressing a setting's name used to change the setting. A row of settings is read by running a finger or a pointer along it, so a stray tap on a name was a setting changed without meaning to. The box is the only thing that answers now, the same way the **?** is the only thing that opens a description. The reset list is the same, which matters most there, since one of its lines deletes your saved presets. The words still name each setting for a screen reader.

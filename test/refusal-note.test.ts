@@ -127,6 +127,38 @@ describe("when the note goes out", () => {
     const out = await h.run(prompt());
     expect(roles(out)).toEqual(roles(prompt()));
   });
+  // One backend can serve several accounts. A note armed in one chat must not
+  // replace a note armed a moment earlier in another.
+  test("two chats armed together each keep their own note", async () => {
+    const h = boot();
+    await h.arm({ chatId: "c1", notes: [{ text: "First chat's note.", role: "system" }] });
+    await h.arm({ chatId: "c2", notes: [{ text: "Second chat's note.", role: "system" }] });
+    const one = await h.run(prompt(), { chatId: "c1" });
+    const two = await h.run(prompt(), { chatId: "c2" });
+    expect(roles(one).join("|")).toContain("First chat's note.");
+    expect(roles(one).join("|")).not.toContain("Second chat's note.");
+    expect(roles(two).join("|")).toContain("Second chat's note.");
+  });
+
+  test("taking one chat's note back leaves the other's armed", async () => {
+    const h = boot();
+    await h.arm({ chatId: "c1" });
+    await h.arm({ chatId: "c2", notes: [{ text: "Second chat's note.", role: "system" }] });
+    await h.arm({ chatId: "c1", notes: [] });
+    expect(roles(await h.run(prompt(), { chatId: "c1" }))).toEqual(roles(prompt()));
+    expect(roles(await h.run(prompt(), { chatId: "c2" })).join("|")).toContain("Second chat's note.");
+  });
+
+  test("a generation naming no chat takes the one note there is, and none of several", async () => {
+    const h = boot();
+    await h.arm({ chatId: "c1" });
+    const lone = await h.run(prompt(), { chatId: undefined });
+    expect(roles(lone).join("|")).toContain("This was refused by mistake.");
+    const h2 = boot();
+    await h2.arm({ chatId: "c1" });
+    await h2.arm({ chatId: "c2", notes: [{ text: "Second chat's note.", role: "system" }] });
+    expect(roles(await h2.run(prompt(), { chatId: undefined }))).toEqual(roles(prompt()));
+  });
 });
 
 // The opt-in check, for a build that does report the kind properly. Off by

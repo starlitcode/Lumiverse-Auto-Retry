@@ -72,7 +72,7 @@ Auto Retry listens to Lumiverse's own generation events. When a reply fails, com
 
 A small backend module carries the settings, so they follow your account rather than living in one browser, and it holds the refusal note for the one generation the retry starts.
 
-It makes no external network calls. [Privacy](docs/privacy.md) has the detail, including the six permissions it declares, what still works without each of them, and why `chats` and `characters` grant more than the extension uses.
+It makes no external network calls. [Privacy](docs/privacy.md) has the detail, including the five permissions it declares, what still works without each of them, and why `chats` and `characters` grant more than the extension uses.
 
 Auditing it, or pointing a scanner at it? The two files Lumiverse loads are `dist/frontend.js` and `dist/backend.js`, named in `spindle.json`. They are committed as plain readable JavaScript, not minified or bundled. Everything else in the repo is for working on it, and [Privacy](docs/privacy.md#checking-any-of-this-yourself) goes through it file by file.
 

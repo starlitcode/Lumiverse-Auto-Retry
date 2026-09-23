@@ -12,7 +12,7 @@ It also never treats text as code. There is no `eval` and no `new Function` anyw
 
 ## What it can reach, and why it needs to
 
-It asks Lumiverse for six permissions. Lumiverse sorts permissions into two tiers: some are granted the moment you install, and some are privileged and do nothing at all until an admin approves them. Four of these six are privileged, so on a shared instance they may sit inactive until someone with admin turns them on.
+It asks Lumiverse for five permissions. Lumiverse sorts permissions into two tiers: some are granted the moment you install, and some are privileged and do nothing at all until an admin approves them. All five of these are privileged, so on a shared instance each one does nothing until someone with admin turns it on.
 
 None of the five is required for the extension to start, which is why each one below says what you still have if you refuse it.
 

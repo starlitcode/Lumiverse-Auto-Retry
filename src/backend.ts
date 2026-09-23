@@ -102,7 +102,10 @@ function replyTo(userId: string | undefined, msg: any): void {
 // requiring "regenerate" or "swipe" would mean no note ever goes out. Users who
 // know their build reports it properly can ask for that check with strictType.
 interface RefusalNote { chatId: string; notes: Array<{ text: string; role: string }>; placement: string; at: number; strictType: boolean; }
-let refusalNote: RefusalNote | null = null;
+// One per chat. One backend can serve several accounts, and a single slot let
+// a note armed in one account's chat replace one armed a moment earlier in
+// another's, so that retry went out without the note it was promised.
+const refusalNotes = new Map<string, RefusalNote>();
 // The chats the extension is switched off in. The frontend's list, sent here so
 // this side agrees with the panel about where it is meant to be doing anything.
 let chatsOff: Set<string> = new Set();
@@ -475,21 +478,24 @@ spindle.onFrontendMessage(async (payload: any, userId?: string) => {
         if (!text.trim()) continue;
         notes.push({ text: text, role: NOTE_ROLES.indexOf(String(n && n.role)) >= 0 ? String(n.role) : 'system' });
       }
-      refusalNote = notes.length && payload.chatId
-        ? {
-            chatId: String(payload.chatId),
-            notes: notes,
-            placement: String(payload.placement || 'after'),
-            at: Date.now(),
-            strictType: !!payload.strictType,
-          }
-        : null;
+      // Arming with nothing is how the panel takes a note back, so an empty
+      // arm clears that chat's note and leaves every other chat's alone.
+      const forChat = payload.chatId ? String(payload.chatId) : '';
+      if (forChat && notes.length)
+        refusalNotes.set(forChat, {
+          chatId: forChat,
+          notes: notes,
+          placement: String(payload.placement || 'after'),
+          at: Date.now(),
+          strictType: !!payload.strictType,
+        });
+      else if (forChat) refusalNotes.delete(forChat);
       // Acknowledged so the frontend can hold the retry click until the note is
       // actually in place. The arm travels this bridge while the click travels
       // the DOM to the host to the server, and those are independent: the click
       // could otherwise reach prompt assembly first and the note would be
       // silently dropped from that generation.
-      replyTo(userId, { type: 'note_armed', requestId: payload.requestId, armed: !!refusalNote });
+      replyTo(userId, { type: 'note_armed', requestId: payload.requestId, armed: !!forChat && refusalNotes.has(forChat) });
       return;
     }
     if (payload.type === 'save_presets' && payload.presets && typeof payload.presets === 'object') {
@@ -519,14 +525,17 @@ spindle.onFrontendMessage(async (payload: any, userId?: string) => {
 const promptInterceptor = async (messages: any[], context: any) => {
   try {
     const who = context && context.userId;
-    if (!refusalNote) {
-      snapshotPrompt(messages, context, who);
-      return messages;
-    }
-    const chatId = context && context.chatId;
+    const chatId = context && context.chatId ? String(context.chatId) : '';
     // A note armed in one chat is not for a generation in another, and it
-    // stays armed so the retry it was meant for can still collect it.
-    if (chatId && refusalNote.chatId && String(chatId) !== refusalNote.chatId) {
+    // stays armed so the retry it was meant for can still collect it. A
+    // generation that names no chat takes the one note there is, and none
+    // when there are several, since it cannot say which is its own.
+    const refusalNote = chatId
+      ? refusalNotes.get(chatId) || null
+      : refusalNotes.size === 1
+        ? refusalNotes.values().next().value || null
+        : null;
+    if (!refusalNote) {
       snapshotPrompt(messages, context, who);
       return messages;
     }
@@ -545,7 +554,7 @@ const promptInterceptor = async (messages: any[], context: any) => {
       return messages;
     }
     const armed = refusalNote;
-    refusalNote = null; // one generation, collected or not
+    refusalNotes.delete(armed.chatId); // one generation, collected or not
     if (Date.now() - armed.at > NOTE_MAX_AGE_MS) {
       try { replyTo(who, { type: 'note_skipped', reason: 'it was armed too long ago to still belong to this generation' }); } catch (__) {}
       snapshotPrompt(messages, context, who);
