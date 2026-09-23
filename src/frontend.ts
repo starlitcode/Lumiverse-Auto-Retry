@@ -77,6 +77,15 @@ const START_GRACE_MS = 15000;
 const OURS_WINDOW_MS = 90000;
 // The retry reason that carries the optional note. Named once so the arming
 // check below cannot drift away from the callers that raise it.
+// How long a retry keeps looking for a button to press before it says there
+// is none. See where it is used.
+const CONTROL_GRACE_MS = 2500;
+// Lumiverse's Impersonate button, found by its label, which stays the same
+// whichever impersonation preset is chosen; the title and the action name
+// change with the preset. And how soon after a press on it the generation that
+// starts is taken to be that impersonation.
+const IMPERSONATE_BUTTON = '[aria-label="Impersonate"], button[title^="Impersonate"]';
+const IMPERSONATE_WINDOW_MS = 5000;
 const REFUSAL_REASON = "looks like an accidental refusal";
 // The other three ways a refusal is decided, each reported under its own name.
 //
@@ -280,7 +289,11 @@ const CONFIG = {
   // host controls (the only DOM-dependent part). Use the Test buttons in settings.
   // Multiple patterns are listed so a Lumiverse build that renames one attribute
   // is still likely covered; if a build changes them all, fix it via the Test UI.
+  // The host's own mark on its regenerate action first. It is what Lumiverse
+  // itself uses to place the button in the composer, so it survives a new
+  // title or a translated label that the rest of this list would not.
   regenerateSelector:
+    '[data-composer-action="regen"] button, ' +
     '[title="Regenerate"], [data-action="regenerate"], [data-testid="regenerate"], ' +
     'button[aria-label*="regenerate" i], button[title*="regenerate" i]',
   swipeNextSelector:
@@ -2279,6 +2292,28 @@ function stripThinking(text: string, cfg?: any): string {
     if (low.indexOf(pair.needs) < 0) continue;
     t = t.replace(new RegExp(pair.open + "[\\s\\S]*?" + pair.close, "gi"), " ");
     t = t.replace(new RegExp(pair.open + "[\\s\\S]*$", "i"), " ");
+  }
+
+  // A closer with nothing opening it: the thinking began before this text did.
+  // A preset that starts the reply inside the thinking tag puts the opener in
+  // the prompt, so what the model sends back opens mid-thought and the first
+  // tag in it is the closer of one it never wrote. Everything in front of that
+  // closer is thinking. Without this, a reply that was only ever thinking, cut
+  // off before a word of the answer, read as a long finished reply and was left
+  // alone, and a reply that did get to its answer carried all of its thinking
+  // into every check as though it were the answer.
+  //
+  // Only when no opener stands in front of the closer, so an ordinary block
+  // with both ends is left to the pairs below.
+  {
+    const close = new RegExp("<\\/(?:" + alt + ")\\s*>|\\[\\/(?:" + alt + ")\\s*\\]", "i").exec(t);
+    if (close) {
+      const open = new RegExp(
+        "<(?:" + alt + ")(?:\\s[^>]*)?>|\\[(?:" + alt + ")(?:\\s[^\\]]*)?\\]|<\\|(?:" + alt + ")\\|?>",
+        "i",
+      );
+      if (!open.test(t.slice(0, close.index))) t = " " + t.slice(close.index + close[0].length);
+    }
   }
 
   // What is left of the channel format once the thinking channels are gone: the
@@ -7068,6 +7103,10 @@ export function setup(ctx: Ctx, opts?: any) {
       // began, never the reply itself. Empty means there is nothing to compare
       // against, and no conclusion is drawn from it.
       screenAtStart: "",
+      // An impersonation is running in this chat. It writes your turn into the
+      // input box rather than a reply into the chat, so none of the checks for
+      // a bad reply mean anything against it. Cleared when it ends or stops.
+      impersonating: false,
       ignored: new Set(),
       // Generations whose ending has already been judged. One ending, one
       // verdict: a build that reports the same generation as ended twice would
@@ -7461,10 +7500,18 @@ export function setup(ctx: Ctx, opts?: any) {
     return true;
   };
 
-  const find = (selector: string): any => {
+  const find = (selector: string, builtIn?: string): any => {
     // Checked in list order, not DOM order, so the first entry that yields a
     // usable control wins wherever it sits on the page.
+    //
+    // The built-in list stands behind whatever was typed, as it does for the
+    // input box in Auto Refine. A saved list is a copy of the defaults as they
+    // were when it was saved, so a selector added since never reached anybody
+    // who had one, and a list that matched nothing any more hid the button that
+    // the built-in one would have found.
     const parts = splitSelectorList(selector);
+    if (builtIn)
+      for (const extra of splitSelectorList(builtIn)) if (parts.indexOf(extra) < 0) parts.push(extra);
     if (typeof document === "undefined") return null;
     for (const part of parts) {
       let list: any = null;
@@ -7487,6 +7534,9 @@ export function setup(ctx: Ctx, opts?: any) {
   // Set while the extension clicks a host control itself, so the document-level
   // stop-press catcher can tell our synthetic click from the user's.
   let selfClicking = 0;
+  // When the host's Impersonate button was last pressed, so the generation it
+  // starts can be left alone. Nought when there is none waiting.
+  let impersonateAt = 0;
   const clickHostControl = (el: any): boolean => {
     if (!el) return false;
     selfClicking += 1;
@@ -7508,15 +7558,15 @@ export function setup(ctx: Ctx, opts?: any) {
     const swipeFirst = !!cfg.retryByNewReroll;
     const order = swipeFirst
       ? [
-          { sel: cfg.swipeNextSelector, via: "swipe" },
-          { sel: cfg.regenerateSelector, via: "regenerate" },
+          { sel: cfg.swipeNextSelector, own: CONFIG.swipeNextSelector, via: "swipe" },
+          { sel: cfg.regenerateSelector, own: CONFIG.regenerateSelector, via: "regenerate" },
         ]
       : [
-          { sel: cfg.regenerateSelector, via: "regenerate" },
-          { sel: cfg.swipeNextSelector, via: "swipe" },
+          { sel: cfg.regenerateSelector, own: CONFIG.regenerateSelector, via: "regenerate" },
+          { sel: cfg.swipeNextSelector, own: CONFIG.swipeNextSelector, via: "swipe" },
         ];
     for (const step of order) {
-      const btn = find(step.sel);
+      const btn = find(step.sel, step.own);
       if (btn) return { btn: btn, via: step.via };
     }
     return null;
@@ -8420,6 +8470,14 @@ export function setup(ctx: Ctx, opts?: any) {
       // finding that out, and for the length of that wait the backend held a
       // note armed for a generation that was never going to happen. A DOM query
       // is free and answers the question before any of that starts.
+      // A moment's grace before deciding there is nothing to click. The host
+      // swaps its stop button back for its own controls on its own schedule, and
+      // a retry that looked once, at the wrong instant, reported the button
+      // missing while it was sitting on screen a breath later.
+      for (let waited = 0; !pickRetryControl() && waited < CONTROL_GRACE_MS; waited += 150) {
+        if (Date.now() < s.suppressUntil) break;
+        await new Promise((r) => setTimeout(r, 150));
+      }
       if (pickRetryControl()) await armRefusalNote(chatId, reason, s.attempts);
       // Stop or Cancel can land during that wait, and the click below would
       // restart a reply the user had just called off.
@@ -8541,6 +8599,21 @@ export function setup(ctx: Ctx, opts?: any) {
     // after a minute, because a start arriving later than that on the back of
     // our own click reads as the reader asking for a reply themselves, which
     // hands the tries back and lets the same reply be re-rolled past the cap.
+    // An impersonation, told apart by the press on the host's own Impersonate
+    // button just before it: the events a generation raises say nothing about
+    // what kind it is. It writes your turn into the input box, in your voice,
+    // and every check here is written for a reply in the character's. Judged as
+    // one, a turn that stopped where you would stop read as cut off, and was
+    // retried over the top of what it had just written for you.
+    if (impersonateAt > 0 && Date.now() - impersonateAt < IMPERSONATE_WINDOW_MS) {
+      impersonateAt = 0;
+      s.impersonating = true;
+      s.ignored.add(p.generationId);
+      rememberGeneration(p.generationId, chatId);
+      clearTimers(s);
+      log("an impersonation started, which writes your turn into the input box, so it is left alone");
+      return;
+    }
     const ours =
       s.selfTriggered ||
       (s.retryClickAt > 0 && Date.now() - s.retryClickAt < OURS_WINDOW_MS);
@@ -8815,6 +8888,9 @@ export function setup(ctx: Ctx, opts?: any) {
     // decides the chat here rather than whatever the token itself says.
     const chatId = chatForGeneration(p);
     const s = st(chatId);
+    // Nothing to watch: no watchdog is armed for an impersonation, and its text
+    // is going into the input box rather than into a reply.
+    if (s.impersonating) return;
     // Text arriving is the only proof that beats every guess: if anything above
     // decided this reply was over and it was not, this puts it right.
     if (!s.live) s.liveSince = Date.now();
@@ -8905,6 +8981,10 @@ export function setup(ctx: Ctx, opts?: any) {
     const streamed = String(s.buf || "");
     s.buf = "";
     paintNow();
+    if (s.impersonating) {
+      s.impersonating = false;
+      return;
+    }
     if (s.ignored.has(p.generationId)) return; // aborted gen's trailing event, retry already scheduled
     clearTimers(s);
     if (Date.now() < s.suppressUntil) {
@@ -9025,6 +9105,10 @@ export function setup(ctx: Ctx, opts?: any) {
     // down is the one thing that must never fail to find the state.
     const chatId = chatForGeneration(p);
     const s = st(chatId);
+    if (s.impersonating) {
+      s.impersonating = false;
+      return;
+    }
     if (s.ignored.has(p.generationId)) return; // our own abort, not a user stop
     log("user stop", p.generationId);
     standDown(chatId, true); // a real user stop, so nothing is retried after it
@@ -9045,6 +9129,11 @@ export function setup(ctx: Ctx, opts?: any) {
       // user is driving. Back off rather than press a dialog button underneath
       // them, which could take a feedback prompt they opened themselves.
       clearConfirmWatch();
+      // The host's Impersonate button. Noted rather than acted on: the
+      // generation it starts is the one to leave alone, and that has not
+      // started yet.
+      if (e && e.target && e.target.closest && e.target.closest(IMPERSONATE_BUTTON))
+        impersonateAt = Date.now();
       const tgt =
         e && e.target && e.target.closest
           ? e.target.closest(cfg.stopSelector)
@@ -9877,13 +9966,14 @@ export function setup(ctx: Ctx, opts?: any) {
     wrap.style.cssText = "display:flex;flex-direction:column;gap:6px";
     const checks: Array<{ id: string; input: HTMLInputElement }> = [];
     for (const it of items) {
-      const row = document.createElement("label");
-      row.style.cssText =
-        "display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer";
+      // The box and only the box, the same as every switch on the panel.
+      const row = document.createElement("div");
+      row.style.cssText = "display:flex;align-items:center;gap:8px;font-size:13px";
       const cb = checkBox();
       cb.checked = true;
       const txt = document.createElement("span");
       txt.textContent = it.label;
+      cb.setAttribute("aria-label", it.label);
       row.appendChild(cb);
       row.appendChild(txt);
       wrap.appendChild(row);
@@ -11842,10 +11932,15 @@ export function setup(ctx: Ctx, opts?: any) {
     const labelWrap = document.createElement("div");
     labelWrap.style.cssText =
       "display:flex;align-items:center;gap:6px;min-width:0";
-    const name = document.createElement(forId ? "label" : "span");
-    if (forId) (name as HTMLLabelElement).htmlFor = forId;
+    // A name, not a label. Only the control changes the setting: words that
+    // answered a press turned a stray tap on a setting's name into a switch
+    // flipped or a box focused without meaning to, the same as the "?" beside
+    // them answers a press on itself and nowhere else. The control still takes
+    // these words as its name for a screen reader, through aria-labelledby.
+    const name = document.createElement("span");
+    if (forId) name.id = forId + "-name";
     name.textContent = f.label;
-    name.style.cssText = "font-size:13.5px" + (forId ? ";cursor:pointer" : "");
+    name.style.cssText = "font-size:13.5px";
     labelWrap.appendChild(name);
     if (f.hint) {
       ensurePanelStyle();
@@ -11938,7 +12033,10 @@ export function setup(ctx: Ctx, opts?: any) {
 
     if (f.type === "bool") {
       const input = checkBox();
-      if (forId) input.id = forId;
+      if (forId) {
+        input.id = forId;
+        input.setAttribute("aria-labelledby", forId + "-name");
+      }
       input.checked = !!cfg[f.key];
       input.addEventListener("change", () => {
         // Turning the crisis check on is the one tick that has to be answered
@@ -12196,7 +12294,10 @@ export function setup(ctx: Ctx, opts?: any) {
       row.appendChild(foot);
     } else if (f.type === "pick") {
       const sel = document.createElement("select");
-      if (forId) sel.id = forId;
+      if (forId) {
+        sel.id = forId;
+        sel.setAttribute("aria-labelledby", forId + "-name");
+      }
       for (const o of f.options || []) {
         const opt = document.createElement("option");
         opt.value = o.value;
@@ -12221,7 +12322,10 @@ export function setup(ctx: Ctx, opts?: any) {
       row.appendChild(top);
     } else if (f.type === "num") {
       const input = document.createElement("input");
-      if (forId) input.id = forId;
+      if (forId) {
+        input.id = forId;
+        input.setAttribute("aria-labelledby", forId + "-name");
+      }
       input.type = "number";
       // A box with no step is one the browser holds to whole numbers, and
       // "numeric" is the keypad with no decimal point on it. Every setting here
@@ -12656,16 +12760,18 @@ export function setup(ctx: Ctx, opts?: any) {
     const checks: Array<{ id: string; input: HTMLInputElement }> = [];
     for (const part of parts) {
       const n = changedCount(part.keys);
-      const row = document.createElement("label");
+      // A row, not a label: only the box ticks a part for putting back. A stray
+      // press on a name in a list that undoes settings is the last place a
+      // press should count.
+      const row = document.createElement("div");
       row.setAttribute("data-ar-reset", part.id);
       // No opacity for the disabled state. The contrast sweep reads colour
       // against background and cannot see through an opacity, so a faded row on
       // a hostile theme is one it has no way to repair. The disabled box and
       // the "already default" note beside it say it well enough.
-      row.style.cssText =
-        "display:flex;align-items:center;gap:8px;font-size:13px;cursor:" +
-        (n ? "pointer" : "default");
+      row.style.cssText = "display:flex;align-items:center;gap:8px;font-size:13px";
       const cb = checkBox();
+      cb.setAttribute("aria-label", part.label);
       cb.checked = false;
       // A part already at its defaults is nothing to press. Left tickable it
       // reads as an action that did nothing when the count came back zero.
@@ -12695,12 +12801,11 @@ export function setup(ctx: Ctx, opts?: any) {
     const presetStore = loadPresets();
     const presetCount = Object.keys(presetStore)
       .reduce((n, k) => n + (presetStore[k] || []).length, 0);
-    const presetRow = document.createElement("label");
+    const presetRow = document.createElement("div");
     presetRow.setAttribute("data-ar-reset", "presets");
-    presetRow.style.cssText =
-      "flex:none;display:flex;align-items:center;gap:8px;font-size:13px;cursor:" +
-      (presetCount ? "pointer" : "default");
+    presetRow.style.cssText = "flex:none;display:flex;align-items:center;gap:8px;font-size:13px";
     const presetCb = checkBox();
+    presetCb.setAttribute("aria-label", "Delete saved presets");
     presetCb.checked = false;
     presetCb.disabled = presetCount === 0;
     if (!presetCount) presetCb.style.cursor = "default";

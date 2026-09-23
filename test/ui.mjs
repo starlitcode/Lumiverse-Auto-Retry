@@ -991,11 +991,10 @@ console.log("\nthe picker and the browser's own long press");
 
 // ---- what each part of a row answers to ----
 {
-  // A label with no `for` names the first labelable element inside it, and a
-  // button is one, so the "?" on these rows took the label off the setting:
-  // A wrong target here would open the description instead of flipping the
-  // switch, leaving the switch with only its own small box to press. The "?"
-  // alone cannot show that, so this presses the words too.
+  // Only the switch flips the switch. The words beside it name it for a screen
+  // reader but do not answer a press, because a stray tap on a setting's name
+  // used to change the setting. The "?" opens the description and does nothing
+  // else. Both are pressed here, not only read.
   const { out, errors } = await inPanel(
     browser,
     { viewport: { width: 480, height: 1030 }, touch: true },
@@ -1021,15 +1020,16 @@ console.log("\nthe picker and the browser's own long press");
           const tick = row.querySelector("[data-ar-check]");
           const name = String(row.getAttribute("data-ar-row") || "").slice(0, 26);
           if (row.tagName === "LABEL") out.wrong.push("the whole row is the label: " + name);
-          const words = row.querySelector("label");
-          if (!words) out.wrong.push("the words are not a label: " + name);
-          else if (words.control !== tick) out.wrong.push("the words name the wrong control: " + name);
+          const words = tick && document.getElementById(tick.getAttribute("aria-labelledby") || "");
+          if (!words) out.wrong.push("nothing names the switch: " + name);
+          else if (!row.contains(words)) out.wrong.push("the switch is named by another row's words: " + name);
+          if (row.querySelector("label")) out.wrong.push("the words are a label, so pressable: " + name);
         }
         // And pressed, on a few, both ways.
         for (const row of rows.slice(0, 6)) {
           const tick = row.querySelector("[data-ar-check]");
           const q = row.querySelector("button[data-ar-hint]");
-          const words = row.querySelector("label");
+          const words = tick && document.getElementById(tick.getAttribute("aria-labelledby") || "");
           if (!words) continue;
           out.pressed++;
           const name = String(row.getAttribute("data-ar-row") || "").slice(0, 26);
@@ -1039,12 +1039,9 @@ console.log("\nthe picker and the browser's own long press");
           press(words);
           await frame();
           await new Promise((r) => setTimeout(r, 250));
-          if (tick.checked === was) out.bad.push("the words did not flip it: " + name);
+          if (tick.checked !== was) out.bad.push("the words flipped it: " + name);
           if (document.querySelector('[role="tooltip"]'))
             out.bad.push("the words opened the description: " + name);
-          press(words);
-          await frame();
-          await new Promise((r) => setTimeout(r, 250));
           was = tick.checked;
           press(q);
           await frame();
@@ -1062,13 +1059,13 @@ console.log("\nthe picker and the browser's own long press");
   );
   check("there are tick rows with a ? to check", out.n >= 10, out.n);
   check(
-    `on all ${out.n}, the words name the switch and not the ?`,
+    `on all ${out.n}, the words name the switch without being pressable`,
     out.wrong.length === 0,
     out.wrong.slice(0, 4),
   );
   check(
-    `pressing the words on ${out.pressed} of them flips the switch, and the ? opens the description`,
-    out.bad.length === 0,
+    `pressing the words on ${out.pressed} of them leaves the switch alone, and the ? opens the description`,
+    out.pressed >= 4 && out.bad.length === 0,
     out.bad.slice(0, 4),
   );
   check("no console errors", errors.length === 0, errors);
@@ -6286,6 +6283,124 @@ console.log("\na retry never clicks the extension's own panel");
     out.retried === true, out);
   check("the extension marks what it owns", out.ownUiMarked === true, out);
   check("no console errors", errors.length === 0, errors);
+}
+
+// ---- finding the button to press ----
+// A saved list is a copy of the defaults as they were when it was saved, so it
+// can match nothing on a newer Lumiverse while the button sits on screen. The
+// built-in list stands behind it. And the host swaps its stop button back for
+// its own controls on its own schedule, so a retry that looked once, at the
+// wrong instant, called a button missing that appeared a moment later.
+console.log("\nfinding the button to press");
+{
+  const run = async (markup, settings, later) => {
+    const page = await browser.newPage();
+    const errors = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    await stage(page, "<div id=modal></div>" + markup);
+    await page.addScriptTag({ content: SOURCE, type: "module" });
+    await page.waitForFunction(() => !!window.__setup);
+    const out = await page.evaluate(async ([settings, later]) => {
+      const h = {};
+      let clicks = 0;
+      const hook = () => {
+        const b = document.querySelector("[data-composer-action=regen] button");
+        if (b && !b.__hooked) {
+          b.__hooked = true;
+          b.addEventListener("click", () => clicks++);
+        }
+      };
+      hook();
+      window.__setup(
+        { events: { on: (n, f) => { h[n] = f; return () => {}; } },
+          ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }) } },
+        Object.assign({ toast: false, retryDelayMs: 10, backoffFactor: 1, maxDelayMs: 10, jitter: false,
+          maxRetries: 4, stuckTimeoutMs: 0, idleTimeoutMs: 0, pauseWhenFailing: false }, settings),
+      );
+      if (later) {
+        // Not there when the retry comes due, there a moment after.
+        setTimeout(() => {
+          const unit = document.createElement("span");
+          unit.setAttribute("data-composer-action", "regen");
+          unit.style.display = "contents";
+          unit.innerHTML = '<button type="button" aria-label="Neu generieren">R</button>';
+          document.body.appendChild(unit);
+          hook();
+        }, later);
+      }
+      h.GENERATION_STARTED({ chatId: "B", generationId: "b1" });
+      await new Promise((r) => setTimeout(r, 10));
+      h.GENERATION_ENDED({ chatId: "B", generationId: "b1", error: "boom" });
+      await new Promise((r) => setTimeout(r, (later || 0) + 700));
+      return { clicks };
+    }, [settings, later]);
+    await page.close();
+    return { out, errors };
+  };
+  // Lumiverse's own composer button, labelled in another language, so the only
+  // thing that can find it is the host's mark on the action.
+  const REGEN = '<span data-composer-action="regen" style="display:contents"><button type="button" aria-label="Neu generieren">R</button></span>';
+
+  const stale = await run(REGEN, {
+    regenerateSelector: ".saved-long-ago",
+    swipeNextSelector: ".also-saved-long-ago",
+    retryByNewReroll: false,
+  });
+  check("a saved list that matches nothing still reaches the host's button", stale.out.clicks === 1, stale.out);
+  check("no console errors", stale.errors.length === 0, stale.errors);
+
+  const late = await run("", {}, 800);
+  check("a button that turns up a moment late is still pressed", late.out.clicks === 1, late.out);
+  check("no console errors", late.errors.length === 0, late.errors);
+}
+
+// ---- an impersonation is not a reply ----
+// Impersonate writes your own turn into the input box. Judged as a reply, a turn
+// that stopped where you would stop read as cut off and was retried over the
+// top of what it had just written. The press on the host's button is what
+// marks the generation that follows as one to leave alone.
+console.log("\nan impersonation is not a reply");
+{
+  const run = async (pressFirst) => {
+    const page = await browser.newPage();
+    const errors = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    await stage(
+      page,
+      "<div id=modal></div>" +
+        '<button data-testid="regenerate">Regenerate</button>' +
+        '<span data-composer-action="oneliner" style="display:contents">' +
+        '<button type="button" title="Impersonate: One-liner" aria-label="Impersonate">I</button></span>',
+    );
+    await page.addScriptTag({ content: SOURCE, type: "module" });
+    await page.waitForFunction(() => !!window.__setup);
+    const out = await page.evaluate(async (pressFirst) => {
+      const h = {};
+      let clicks = 0;
+      document.querySelector('[data-testid="regenerate"]').addEventListener("click", () => clicks++);
+      window.__setup(
+        { events: { on: (n, f) => { h[n] = f; return () => {}; } },
+          ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }) } },
+        { toast: false, retryDelayMs: 10, backoffFactor: 1, maxDelayMs: 10, jitter: false,
+          maxRetries: 4, stuckTimeoutMs: 0, idleTimeoutMs: 0, pauseWhenFailing: false,
+          retryOnTruncated: true, retryByNewReroll: false },
+      );
+      if (pressFirst) document.querySelector('[aria-label="Impersonate"]').click();
+      h.GENERATION_STARTED({ chatId: "B", generationId: "i1" });
+      await new Promise((r) => setTimeout(r, 10));
+      // Stops mid-sentence, which is what a cut-off reply looks like.
+      h.GENERATION_ENDED({ chatId: "B", generationId: "i1", content: "I lean on the counter and watch the" });
+      await new Promise((r) => setTimeout(r, 400));
+      return { clicks };
+    }, pressFirst);
+    await page.close();
+    return { out, errors };
+  };
+  const plain = await run(false);
+  check("a reply that stops mid-sentence is retried, as it should be", plain.out.clicks === 1, plain.out);
+  const imp = await run(true);
+  check("the same text after pressing Impersonate is left alone", imp.out.clicks === 0, imp.out);
+  check("no console errors", plain.errors.length === 0 && imp.errors.length === 0, plain.errors.concat(imp.errors));
 }
 
 // ---- a reply that stopped partway is a cut-off reply ----
