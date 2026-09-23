@@ -43,6 +43,19 @@ shown in Lumiverse.
 - No contractions in docs, the changelog, the README or text shown in the panel.
 - Comments describe the code as it is and why. They are not change notes.
 - A hint under a field is one line, two at most. Detail goes in `docs/`.
+- Write plainly and literally, for readers with a learning disability or
+  dyslexia: short sentences, one idea each, steps and bullets over long
+  paragraphs. No figurative words such as "quietly", "hammers" or "breathes".
+- No clichés such as "deliberate", and no grand, old-fashioned or showy words.
+- No dry, generic AI phrasing and no filler. Say the fact and stop.
+- No opinions, moral or otherwise, in code, comments or docs. State what the
+  code does. Advice that helps a user is fine.
+- No announcements in comments. A comment never says what is new or what
+  something used to do.
+- Keep the panel and GitHub pages organised: short sections with headings,
+  and detail in `docs/` rather than in the README.
+- Every host call and every outside call handles failure and says what went
+  wrong in words a user understands.
 
 ## The changelog
 
@@ -70,7 +83,11 @@ No credits in the Discord post. They stay in the changelog.
 
 ## Rules from the owner
 
-- Never mention anyone else's extension, in code, docs or anywhere else.
+- Never mention anyone else's extension, in code, docs or anywhere else,
+  unless the owner asks for it, as in the README credits. Never say that
+  something was taken from another extension.
+- If a page, file or doc cannot be opened or read, stop and ask the owner for
+  a PDF or a copy of it. Do not guess what it says.
 - Test fixtures use their own made-up characters and their own thinking format.
   Do not copy the owner's character names or thinking format into tests.
 - Something that is inconsistent and wrong can be fixed without asking first.

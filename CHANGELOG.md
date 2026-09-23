@@ -14,35 +14,31 @@ _2026-09-23_
 
 ### Fixed
 
-- **"No retry control found" while the button is on screen.** Three things could cause it, and each is fixed.
+- **"No retry control found" while the button is on screen.** Three causes, all fixed:
+  - A button list saved in an older version could match nothing after Lumiverse changed its buttons. The built-in list is now always tried after yours.
+  - The built-in list now starts with the mark Lumiverse puts on its own Regenerate button, so it keeps working if the button's title or language changes.
+  - A retry looked for the button only once, sometimes a moment before Lumiverse showed it. It now keeps looking for a couple of seconds.
 
-  A saved list of button selectors is a copy of the defaults as they were when you saved it, so one written before Lumiverse changed its buttons could match nothing at all while the button sat there. The built-in list now stands behind whatever is in the box, the way Auto Refine already does for the input box, so a stale list can no longer hide the button and a selector added to the built-in list reaches everybody.
+- **A reply that was only thinking is retried when the thinking tag was opened in the prompt.** Some presets start the reply inside the thinking tag, so the reply has a closing tag but no opening one. That thinking is now recognised, so a reply that never got past it is retried. A reply that did reach its answer is judged on the answer alone.
+  - One case is still out of reach: thinking that started in the prompt and was cut off before its closing tag. The reply then has no tag at all to go by.
 
-  The built-in list now starts with Lumiverse's own mark on its Regenerate button in the composer. That is what the host uses to place the button, so it keeps working through a new title or a translated label.
+- **Impersonate is no longer retried as a cut-off reply.** Impersonate writes your own turn into the input box, and it could look cut off and be retried over the top of what it wrote. The generation after you press **Impersonate** is now left alone.
 
-  And a retry looked for the button exactly once. Lumiverse swaps its stop button back for its own controls on its own schedule, and a look at the wrong instant called the button missing a moment before it appeared. It now keeps looking for a couple of seconds before it says so.
+- **A retry note is kept per chat.** On an install shared by several accounts, a note set up in one chat could replace another chat's note, so that retry went out without it.
 
-- **A reply that was only thinking is retried when the thinking tag was opened in the prompt.** A preset can start the reply inside the thinking tag, so what the model sends back opens mid-thought and the first tag in it is the closer of one it never wrote. Nothing was recognised as thinking, so a reply that stopped before a word of its answer read as a long reply that had finished on a full stop, and was left alone. Everything in front of a closer with nothing opening it now counts as thinking.
-
-  A reply that did get to its answer is judged on the answer alone now, rather than on its thinking and its answer together.
-
-  One case this cannot reach: thinking whose opener was in the prompt and that was cut off before its closer. There is then no tag anywhere in the reply, and nothing in the text says where the thinking would have ended.
-
-- **An impersonation is no longer retried as a cut-off reply.** Impersonate writes your own turn into the input box, and that generation looked like a reply to Auto Retry. A turn that stopped where you would stop read as cut off, and was retried over the top of what it had just written. Pressing Impersonate now marks the generation that follows as one to leave alone.
-
-- **A retry note is kept per chat.** One install can serve several accounts, and the note sent with a refusal retry sat in a single slot, so a note armed in one chat could replace one armed a moment earlier in another, and that retry went out without its note. Each chat now keeps its own.
-
-- **The privacy page counts the permissions correctly.** It said six, and four of them privileged. There are five, and all five are privileged.
+- **The privacy page counts the permissions correctly.** It said six, four of them privileged. There are five, all privileged.
 
 ### Changed
 
-- **Only a switch flips a switch.** Pressing a setting's name used to change the setting. A row of settings is read by running a finger or a pointer along it, so a stray tap on a name was a setting changed without meaning to. The box is the only thing that answers now, the same way the **?** is the only thing that opens a description. The reset list is the same, which matters most there, since one of its lines deletes your saved presets. The words still name each setting for a screen reader.
+- **Only a switch flips a switch.** Pressing a setting's name no longer changes it. Only the box does. This matters most in the reset list, where one line deletes your saved presets.
 
-- **The README says plainly that Auto Retry is not for sexual content involving minors, and exactly what the extension does.** It never reads a story to judge it and never changes a word of it. A retry asks the same model for the same reply, and stops at the retry limit. A refusal about a character's age is recognised because models sometimes misread an adult character, written as an adult, as a minor. Auto Retry cannot tell a mistaken refusal from a correct one, so every refusal it recognises is retried the same way, and it is not there to get sexual content involving a minor past a model. The retry notes, off by default, mention no age and no subject.
+- **Panel messages are written out in full**, such as "Could not save" instead of "Couldn't save".
 
-- **The refusal checks say what their words about age are for.** The comments beside them, and the page on how a refusal is recognised, described an age refusal as one aimed at your cast rather than at your request, which could be read as treating every refusal about age as a mistake. They name the false positive they are there for now. Nothing about what is recognised, or what is done about it, has changed.
+- **The README says exactly what Auto Retry does about refusals involving age.** It never judges or changes your story. A retry asks the same model again, up to the retry limit. It recognises a refusal about a character's age because models sometimes misread an adult character as a minor, but it cannot tell a mistaken refusal from a correct one, so any refusal it recognises is retried the same way. The retry notes, off by default, mention no age and no subject.
 
-- **A comment in the code that was not accurate is gone.** It said a retry changes what a model is willing to write no more than clicking twice does. A new attempt does sometimes come back different, which is the reason this extension exists.
+- **The comments and docs on the refusal checks say what the words about age are for:** a model that misreads an adult character as a minor. What is recognised, and what is done about it, has not changed.
+
+- **An inaccurate comment is gone.** It said a retry changes what a model will write no more than clicking twice does. A new attempt can come back different, which is why this extension exists.
 
 ---
 
