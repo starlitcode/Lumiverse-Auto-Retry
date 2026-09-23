@@ -4294,7 +4294,7 @@ console.log("\npreset controls");
       const empty = { picked: sel ? sel.value : null, buttons: state(), options: sel ? sel.options.length : 0 };
 
       // Save one, which selects it, and everything should come alive.
-      document.querySelector('input[placeholder="Preset name"]').value = "trial";
+      document.querySelector('input[placeholder="A name for this preset"]').value = "trial";
       by("Save as new").click();
       await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       const saved = { picked: sel.value, buttons: state(), options: sel.options.length };
@@ -4357,7 +4357,7 @@ console.log("\none preset bar, holding only its own keys");
       [...document.querySelectorAll("button")].find((x) => x.textContent.trim() === "Save").click();
       await frame();
       const b = bar("notes");
-      b.querySelector('input[placeholder="Preset name"]').value = "noteset";
+      b.querySelector('input[placeholder="A name for this preset"]').value = "noteset";
       press(b, "Save as new");
       await frame();
       const store = JSON.parse(localStorage.getItem("lv-auto-retry:presets:v1"));
@@ -4594,7 +4594,7 @@ console.log("\npicking a preset loads it, so a save cannot land on the wrong one
         await frame();
       };
       const saveAs = async (name) => {
-        bar.querySelector('input[placeholder="Preset name"]').value = name;
+        bar.querySelector('input[placeholder="A name for this preset"]').value = name;
         press("Save as new");
         await frame();
       };
@@ -4790,7 +4790,7 @@ console.log("\npreset boundary");
       // Saved, and saved with wording that could not be mistaken for a default.
       set("refusalNotes", "please try that again");
       by("Save").click(); await frame();
-      bar.querySelector('input[placeholder="Preset name"]').value = "A";
+      bar.querySelector('input[placeholder="A name for this preset"]').value = "A";
       inBar("Save as new").click(); await frame();
 
       // Changed, and the switch that decides whether notes go at all turned off.
@@ -10833,7 +10833,7 @@ console.log("\nreset confirmation");
         .dispatchEvent(new Event("change", { bubbles: true }));
       // Scoped: the note preset bar is identical and sits in an earlier section.
       const swapBar = document.querySelector('[data-ar-presets="notes"]');
-      swapBar.querySelector('input[placeholder="Preset name"]').value = "trial";
+      swapBar.querySelector('input[placeholder="A name for this preset"]').value = "trial";
       [...swapBar.querySelectorAll("button")].find((b) => b.textContent.trim() === "Save as new").click();
       await frame();
       [...document.querySelectorAll("button")].find((b) => /^Reset/.test(b.textContent.trim())).click();
@@ -10877,7 +10877,7 @@ console.log("\nreset confirmation");
         .dispatchEvent(new Event("change", { bubbles: true }));
       // Scoped: the note preset bar is identical and sits in an earlier section.
       const swapBar = document.querySelector('[data-ar-presets="notes"]');
-      swapBar.querySelector('input[placeholder="Preset name"]').value = "trial";
+      swapBar.querySelector('input[placeholder="A name for this preset"]').value = "trial";
       [...swapBar.querySelectorAll("button")].find((b) => b.textContent.trim() === "Save as new").click();
       await frame();
       const before = JSON.parse(localStorage.getItem("lv-auto-retry:presets:v1")).notes.length;
@@ -10933,7 +10933,7 @@ console.log("\nreset urgency");
         .dispatchEvent(new Event("change", { bubbles: true }));
       // Scoped: the note preset bar is identical and sits in an earlier section.
       const swapBar = document.querySelector('[data-ar-presets="notes"]');
-      swapBar.querySelector('input[placeholder="Preset name"]').value = "trial";
+      swapBar.querySelector('input[placeholder="A name for this preset"]').value = "trial";
       [...swapBar.querySelectorAll("button")].find((b) => b.textContent.trim() === "Save as new").click();
       await frame();
 

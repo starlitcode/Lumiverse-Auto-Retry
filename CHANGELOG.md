@@ -32,7 +32,7 @@ _2026-09-23_
 
 - **Only a switch flips a switch.** Pressing a setting's name no longer changes it. Only the box does. This matters most in the reset list, where one line deletes your saved presets.
 
-- **Panel messages are written out in full**, such as "Could not save" instead of "Couldn't save".
+- **Panel messages are written out in full**, such as "Could not save" instead of "Couldn't save". The preset name box says "A name for this preset".
 
 - **The README says exactly what Auto Retry does about refusals involving age.** It never judges or changes your story. A retry asks the same model again, up to the retry limit. It recognises a refusal about a character's age because models sometimes misread an adult character as a minor, but it cannot tell a mistaken refusal from a correct one, so any refusal it recognises is retried the same way. The retry notes, off by default, mention no age and no subject.
 

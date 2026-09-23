@@ -10094,7 +10094,7 @@ export function setup(ctx: Ctx, opts?: any) {
       // Save direction: the current settings into a new preset, or rename one.
       const nameInput = document.createElement("input");
       nameInput.type = "text";
-      nameInput.placeholder = "Preset name";
+      nameInput.placeholder = "A name for this preset";
       nameInput.style.cssText = "flex:1;min-width:150px";
       styleField(nameInput);
       const saveNew = smallBtn(btn("Save as new", false));

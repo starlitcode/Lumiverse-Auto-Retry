@@ -1,179 +1,233 @@
 # All settings
 
-Switching Auto Retry itself off changes nothing in here. Every setting stays where it is and stays editable, because off means paused rather than unconfigured, and setting it up while it is off is a normal thing to want to do. A line at the top says it is off and that your settings are saved.
+This page covers how the settings panel works, the on-screen panel, and every option with its default.
 
-The settings panel is the easy path. There are about fifty options below, so the quickest way to reach one is the **Search settings** box at the top: type part of a name or a description and it shows the rows that match, opening whichever closed section they are in. Clear the box to put the panel back as it was.
+## Finding a setting
 
-There are eight sections. Three are open when the panel opens:
+There are about fifty options. The quickest way to reach one is the **Search settings** box at the top of the panel:
 
-- **Basics** is the master switch and every way of reaching or watching it: the floating button, the Extras entry, the retry pop-up, the on-screen panel, and the switch for the chat you are in.
-- **How it retries** is how persistent it is, how long it waits between tries, when it pauses itself, and whether a retry redoes the reply in place or adds a new reroll.
-- **When to count a reply as bad** is which kinds of bad reply set off a retry, ending with the two waits for a reply that freezes or never arrives.
+- Type part of a name or a description. Only the rows that match are shown, and any closed section they are in opens.
+- Clear the box to put the panel back as it was.
 
-Four start shut, each with a **▸** to open it: **Refusal tuning**, **Buttons it clicks**, **Debug info** and **Import / export**. They are closed because nothing in them is needed to use the extension, not because they are difficult.
+The panel has eight sections. Three are open when the panel opens:
 
-The longer sections are split under headings, so you can find the part you want without reading every row. **How it retries** runs from the cap on one message through **When it gives up** and **How long it waits between tries**. **When to count a reply as bad** opens on **Errors** and ends with **Replies that freeze**. **Refusal tuning** goes **What counts as one**, **Wording you supply**, **How far it looks**, then the note rows. Each heading carries a line saying what its rows have in common.
+- **Basics**: the main switch, the floating button, the Extras entry, the retry pop-up, the on-screen panel, and the switch for the chat you are in.
+- **How it retries**: how many tries, how long it waits between them, when it pauses itself, and whether a retry adds a new reroll or redoes the reply.
+- **When to count a reply as bad**: which kinds of bad reply start a retry, and the two waits for a reply that freezes or never arrives.
+
+Four start closed. Press **▸** to open one. Nothing in them is needed to use the extension.
+
+- **Refusal tuning**
+- **Buttons it clicks**
+- **Debug info**
+- **Import / export**
+
+The longer sections have headings inside them, each with a line saying what its rows are for:
+
+- **How it retries**: **When it gives up**, then **How long it waits between tries**.
+- **When to count a reply as bad**: starts at **Errors** and ends at **Replies that freeze**.
+- **Refusal tuning**: **What counts as one**, **Wording you supply**, **How far it looks**, then the note rows.
+
+Every section header is a button, so a closed section also opens with Enter or Space on a keyboard.
+
+Switching Auto Retry off does not change anything in the panel. Every setting stays editable, so you can set it up while it is off. A line at the top says it is off and that your settings are saved.
 
 ## The **?** on each option
 
-It shows that option's description in a small popover just below it, floating over the panel, so the rows stay where they are and the setting you are reading about is never hidden.
+Press **?** to read what an option does. The description opens in a small box just below the option, over the panel, so nothing moves.
 
-Where it opens is fixed per setting rather than decided as you go, so a description is always in the same place. The one exception is **What the notes say**, which opens above: that row holds the whole note list, its roles, its buttons and its counter, so below it would be a long way from the **?** you pressed.
-
-A description too long for the room on its side scrolls inside itself, and never jumps to the other side. Only one shows at a time. Tap the description, tap the **?** again, tap elsewhere, scroll the panel, or press Esc to close it.
+- **What the notes say** is the one exception. Its description opens above, because the row below it is long.
+- A long description scrolls inside its box.
+- Only one shows at a time.
+- To close it, tap it, tap the **?** again, tap somewhere else, scroll the panel, or press Esc.
 
 ## Rows that come and go
 
-A setting that does nothing until something else is switched on is not shown until it is. Whole sections work that way too: turning **It looks like an accidental refusal** off takes the entire **Refusal tuning** section with it, heading included, because nothing under it does anything meanwhile. Turning **Send a note with a refusal retry** on adds the note rows, and off takes them away again.
+A setting that does nothing until another one is switched on stays hidden until then.
 
-The switch doing the hiding never moves itself.
+- Turning off **It looks like an accidental refusal** hides the whole **Refusal tuning** section, because nothing in it does anything while that is off.
+- Turning on **Send a note with a refusal retry** shows the note rows.
+- The switch that hides the rows never moves itself.
 
-The search box ignores all of this and finds a setting whichever way its switch is set, so nothing is hidden from you when you go looking by name. A row found that way says which switch it is waiting on, so changing it never looks like it did nothing.
+The search box still finds a hidden setting by name. A row found that way says which switch it is waiting on.
+
+`refusalThinkTags` is the one to know about. It hides with the rest of **Refusal tuning**, but the blank-reply and short-reply checks still read it to find where the reply starts. Search for it by name to reach it while the section is hidden.
 
 ## Saving
 
-Only **Save** keeps what you changed. Closing with the X or tapping outside discards it, so you can try things freely.
+Only **Save** keeps your changes. Closing with the X, or tapping outside the panel, throws them away, so you can try things freely.
 
-Saved settings sync to your Lumiverse account, so they follow you to other browsers and devices, and they apply from the next reply onward. Long text boxes, like your own refusal phrases, have an **Expand** button that opens a full-size editor.
+- Saved settings follow your Lumiverse account to other browsers and devices.
+- They apply from the next reply.
+- Long text boxes, like your own refusal phrases, have an **Expand** button that opens a bigger editor.
 
 ## Turning it off everywhere
 
-Two options in **Basics**, and you can use either or both:
+**Basics** has two ways to switch Auto Retry on and off without opening the settings. You can use either or both.
 
-- **Floating on/off button** puts a small button over the chat that toggles it in one tap. Drag it anywhere; it snaps to the nearest edge and stays where you leave it, and you can set its size, which the button itself takes on as you type so you can see it before saving. Changing the size grows it around where it is sitting rather than moving it, though a button against an edge does come inward far enough for the bigger size to fit. Tapping it eases between on and off rather than flicking, and a device set to reduce motion gets the same change with nothing in between. Hold it, or right-click on a computer, for its menu. That menu is drawn by Lumiverse, so it arrives in your own theme and accent.
+### Floating on/off button
 
-  Holding it fills a ring around its edge, which closes a moment before the menu opens. Letting go early wipes it back. A press also dips the button a little, so a tap answers whether or not it changed anything: a dip on its own is a tap, a dip with the ring running is a hold. Auto Refine's floating button does the same. A device set to reduce motion opens the menu on the same hold with no ring drawn.
+A small button over the chat. One tap switches Auto Retry on or off.
 
-  While this button is showing, its menu holds everything that would otherwise be in the **Extras** menu. In order: **Auto Retry settings**, then **Open the Auto Retry panel** if the panel is set to live in the sidebar, then **Hide this button** at the bottom.
-- **On/off button in the Extras menu** adds a button next to the settings button. Its label says whether Auto Retry is on or off, so you can check and change it without opening the settings. It takes up no room on the screen. In a chat you have switched off, it says so, because "on" would be true of everywhere except where you are. Tapping it always switches Auto Retry on or off everywhere, wherever you tap it from, and the label says so.
+- Drag it anywhere. It moves to the nearest edge and stays where you leave it.
+- You can set its size. The button changes size as you type, so you can see it before you save. A button against an edge moves inward if it needs to, to fit.
+- Hold it, or right-click on a computer, to open its menu. A ring fills around the button while you hold. Let go early and nothing opens.
+- A tap makes the button dip a little, so you can tell your tap was felt.
+- If your device is set to reduce motion, no ring is drawn. Holding still opens the menu.
 
-  This button is hidden while the floating button is on. The floating button is the same on/off switch and one tap does it, so having both would be two buttons for one thing. Turn the floating button off and this one comes back.
+Its menu has, in order: **Auto Retry settings**, **Open the Auto Retry panel** (only when the panel lives in the sidebar), and **Hide this button**. Lumiverse draws the menu, so it uses your theme.
+
+Auto Refine's floating button works the same way.
+
+### On/off button in the Extras menu
+
+A button in the chat input's Extras menu, next to the settings button. It takes up no room on screen.
+
+- Its label says whether Auto Retry is on or off.
+- In a chat you switched off, the label says so.
+- Tapping it always switches Auto Retry on or off everywhere.
+- It is hidden while the floating button is on, because the two do the same job. Turn the floating button off and this one comes back.
 
 ## Turning it off in one chat
 
-The master switch is all or nothing, which is the wrong shape for a scene where the model is meant to refuse, or a chat you are using to test something.
+Use this for a scene where the model is meant to refuse, or a chat you are using to test something.
 
-In the settings panel, under **Basics**, the **This chat** row has a **Turn off here** button. That chat is left alone and every other chat carries on, and the button becomes **Turn on here**. This is the only place that switch lives. It is not in the floating button's menu, which is kept to the settings, the panel and hiding the button itself.
+1. Open the settings.
+2. Under **Basics**, find the **This chat** row.
+3. Press **Turn off here**.
 
-Everything that shows whether Auto Retry is running says so together: that button, the line under the panel's tabs, and whichever of the floating button and the Extras entry you have on. All of them follow you between chats, so none reads "on" in a chat you have switched off.
+That chat is left alone, and every other chat carries on. The button changes to **Turn on here**. This is the only place the switch is.
 
-Outside a chat, on the home screen or the character browser, the button is greyed out and the row says **No chat is open**. There is nothing to switch there, and the row will not go on naming the last chat you were in.
+Everything that shows whether Auto Retry is running follows the chat you are in: this button, the line under the on-screen panel's tabs, the floating button, and the Extras entry. None of them says "on" in a chat you switched off.
 
-Walking out of a chat is noticed from your browser's address, which carries the chat's id while you are in one. Lumiverse can also be asked outright, but that question is answered on the server and comes back with the most recent chat on your account, which on the home screen is the chat you just left, so the address gets the last word. On a Lumiverse whose addresses do not carry the chat id, the row waits to be told instead, as below.
+While you are in a chat you switched off, a line at the top of the settings says so. This is there because a chat switched off weeks ago looks the same as the extension not working.
 
-If the button is greyed out while you are in a chat, it has not been told which chat that is yet. With the `chats` permission granted it asks outright and this clears on its own. Without it, it waits to be told: a reply arriving, a message sent, or switching away and back all do it. The case where you will see it waiting is updating the extension without leaving the chat, since nothing re-renders and so nothing announces where you are.
+**Outside a chat**, on the home screen or the character browser, the button is greyed out and the row says **No chat is open**.
 
-It is written down in your browser, so it survives a reload. It is not a setting: it is a list of chat ids, which would mean nothing on another account, so it is not synced and not included in an export.
+How it knows which chat you are in:
 
-A temporary chat is the exception. Switching one off works the same way, and it is the one place you are most likely to want it, since you are watching what the model does and a retry re-rolls the thing you were looking at. It is not written down, because a temporary chat is discarded when you leave it and the next one is a different chat: a remembered entry could never apply to anything again. The row says so while you are in one, and the switch lasts as long as the chat does.
+- It checks the address in your browser. While you are in a chat, the address contains the chat's id.
+- Lumiverse can also be asked, but it answers with your most recent chat. On the home screen, that is the chat you just left. So the address wins.
+- If your Lumiverse's addresses do not contain the chat id, it waits to be told instead.
 
-While you are in a chat that is switched off, a line at the top of the settings panel says so. It is there because a chat you switched off weeks ago and forgot about looks exactly like the extension having stopped working. It is words only, and the **This chat** row is where you change it back.
+**If the button is greyed out inside a chat**, it has not been told which chat this is yet. With the `chats` permission it asks and this clears by itself. Without it, sending a message, a reply arriving, or switching chats and back will fix it. You will usually only see this right after updating the extension without leaving the chat.
+
+**Where it is kept:** the list of chats you switched off is saved in this browser, so it survives a reload. It is only a list of chat ids, so it is not synced to your account and not included in an export.
+
+**Temporary chats** can be switched off the same way, but it is not saved, because a temporary chat is gone when you leave it. The row says so, and the switch lasts as long as the chat.
 
 ## Resetting
 
-**Reset…** at the bottom of the panel opens a picker rather than putting everything back at once. Tick the parts you want returned to their defaults; anything you leave unticked is not touched. The parts are the same ones import and export use, so the names match between the two.
+**Reset…** at the bottom of the panel opens a list. Nothing is reset until you choose.
 
-Each line says how many of its settings have actually been changed from the default. A part still at its defaults cannot be ticked, because there would be nothing for it to do. **Tick every setting** ticks all the parts that have something to reset.
+1. Tick the parts you want back at their defaults. Anything unticked is not touched. The parts have the same names as in import and export.
+2. Each line says how many of its settings you have changed. A part with nothing changed cannot be ticked. **Tick every setting** ticks every part that has something to reset.
+3. Press **Reset ticked**. It shows what you picked and how many settings are in each part.
+4. Press **Yes, reset** to go ahead, or **Go back** to change your ticks. Esc or a click outside closes it with nothing changed.
 
-**Reset ticked** asks before it does anything. It shows you the parts you picked, how many settings are in each, and whether presets are going with them, and nothing happens until you press **Yes, reset**. **Go back** returns to the list with your ticks where you left them, and Escape or a click outside closes the whole thing without touching a setting. The ticks are held while it is asking, so what it describes and what it does cannot come apart.
+A reset fills in the defaults but does not save them, the same as an import. Press **Save** to keep them, or close the panel to undo the reset.
 
-The question is asked by the extension rather than handed to Lumiverse's own confirm dialog. Not every Lumiverse build has one, and the old reset treated a missing dialog as a yes.
+**Delete saved presets** sits apart from the rest, and it is the one thing closing the panel does not undo. Presets are stored separately from settings, so they are deleted straight away. **Tick every setting** never ticks it.
 
-A reset fills the settings in behind the box without saving them, the same as an import does, so you can look at what it did first. Press **Save** to keep it, or close the panel to discard it. If you press Reset by mistake, closing the panel undoes it.
-
-**Delete saved presets** sits below a rule of its own, and it is the one thing in the picker that is not undone by closing the panel: presets are stored separately from your settings, so deleting them happens straight away. **Tick every setting** never ticks it.
-
-Nothing a reset does goes near your chats, your replies or your characters. Auto Retry only ever reads replies, and a reset does not touch them at all.
-
-Only settings the extension genuinely ignores are hidden this way. Some options look dependent and are not: the extra thinking tag names still find the reply when stripping is off, so they stay put.
-
-One setting inside the refusal tuning section is an exception worth knowing about. `refusalThinkTags` goes away with the rest of that section, but it is still used with accidental-refusal retrying off: the blank-reply and short-reply checks read it to find where the reply starts. Search for it by name to reach it while the section is hidden.
-
-The find-and-replace section is split under two headings, **Saved in a preset** and **Yours, whatever preset you load**, so it is clear which of those options loading a preset will change.
-
-Every section header is a proper button, so the closed sections open with Enter or Space if you are working from the keyboard rather than a pointer.
+A reset never touches your chats, your replies or your characters.
 
 ## The on-screen panel
 
-One switch, **Show the on-screen panel**, turns it on. It has four tabs, and **Where that panel goes** decides where it appears. Both choices are the same panel with the same tabs; only the frame around it differs.
+Turn on **Show the on-screen panel** under **Basics**. **Where that panel goes** picks where it appears. It is the same panel either way.
 
-**Floating over the chat** is the original: a small box in the corner. Drag the header to move it, drag the bottom-right corner to resize it. Both work with a mouse and with a finger.
+- **Floating over the chat**: a small box. Drag the header to move it, and drag the bottom-right corner to resize it. This works with a mouse or a finger. Its place, size and open tab are remembered in this browser, so an update does not move it. If it was placed on a bigger screen, it is moved back onto the screen it opens on.
+- **In the sidebar drawer**: a tab in Lumiverse's own drawer. It cannot cover the reply you are reading. While a retry is running, the tab shows a dot. If your Lumiverse has no drawer for extensions, you get the floating box, and the Log says why.
 
-Where you leave it is remembered, along with its size and which tab was open, so an update does not put it back in the corner. The floating button is the same. Both are checked against the screen they open on, so a layout saved on a desktop window cannot strand the panel off the edge of a phone. Nothing offers to move the button back to its corner, because dragging it there is fewer taps and the check above already stops it stranding itself.
+Changing this moves the panel straight away. Closing the settings without saving puts it back.
 
-This is kept in your browser rather than in your settings, like the list of chats you have switched Auto Retry off in. A position belongs to the screen you are sitting at, so it does not follow you between devices and it is not included in an export.
+**To open the panel from the sidebar:** hold the floating button and choose **Open the Auto Retry panel**. With the floating button off, the same button is in the **Extras** menu. On a computer, **Ctrl+K** then typing `Auto Retry` also works. The floating panel does not need opening, because it is already on screen.
 
-**In the sidebar drawer** puts it in Lumiverse's own drawer instead, next to the app's own tabs. Lumiverse places, sizes and themes it, so there is nothing to drag and nothing to remember, and it cannot cover the reply you are reading. While a retry is running the tab carries a dot, so you can see something is happening without opening it.
-
-Changing this moves the panel as you pick, before you save. Closing the settings without saving puts it back. If your Lumiverse build has no drawer for extensions, asking for the sidebar gets you the floating panel and a line in the Log saying why.
-
-To open it: hold the floating button and choose **Open the Auto Retry panel**. With the floating button turned off, that button is in the **Extras** menu instead, next to the settings button, so there is always exactly one way in. On a computer, **Ctrl+K** and typing `Auto Retry` does the same. None of them is offered while the panel is floating, because it is already on screen. If your version of Lumiverse is too old to open the floating button's menu, the button stays in the Extras menu, since there would be no menu to put it in.
-
-### The Replaced tab
-
-The reply the last retry in this chat threw away, with what it was thrown away for and how long ago. It is there for the case where the retry was a mistake and you want the old reply back: read it, or press **Copy** to take it.
-
-Retrying by adding a reroll already leaves the old reply in the chat to swipe back to, but a reroll is not a safe place to leave it. You can tidy your rerolls away, and an extension whose job is tidying them will. [Swipe Scrubber](https://codeberg.org/targren/SwipeScrubber) is the case this was built for: it removes every reroll but the current one, and its per-message button and **Scrub all** take the newest message too. This tab is the copy nothing outside your browser tab can reach.
-
-It holds one reply per chat, for the last eight chats. Press **Clear** to drop the one you are looking at. Turn the whole thing off with **Keep the reply a retry replaced**, under How it retries.
+The panel has four tabs. Switch tabs by tapping, or with the left and right arrow keys. **Copy** and **Clear** act on the tab you are on.
 
 ### The line under the tabs
 
-It says what is happening this second, with a dot beside it. It sits above all four tabs because the answer is the same whichever one you are reading, and because none of them answered it: the Log says what already happened, the Stats say what has happened overall.
+This line says what is happening right now, with a dot beside it. It is the same on every tab.
 
-The dot is dim and flat when Auto Retry is off or paused, lit and still when it is on with nothing to do, and pulsing while something is actually happening, so a glance at the corner answers the question without reading the line. The pulse is dropped if your system asks for less movement; the glow stays.
+The dot:
 
-What the line reports:
+- **dim**: Auto Retry is off or paused
+- **lit and still**: on, with nothing to do
+- **pulsing**: something is happening. If your device is set to reduce motion, it glows without pulsing.
 
-- a pending retry, counted down in hours, minutes and seconds as each is needed (`47s`, `5m 03s`, `1h 05m 03s`)
+The line reports:
+
+- a retry that is waiting, with a countdown (`47s`, `5m 03s`, `1h 05m 03s`)
 - what that retry is for, and which try it is
-- a reply arriving, and roughly how much of it has landed
+- a reply arriving, and roughly how much has come in
 - the model thinking
-- the extension having paused itself after repeated failures
+- that it has paused itself after repeated failures
 
-When nothing is happening it says so. A retry running in a chat you have since moved away from is still reported, marked as being in another chat.
+A retry in a chat you have since left is still shown, marked as being in another chat. The line and the retry pop-up read from the same place, so they always agree.
 
-The line and the pop-up read from the same place, so they never disagree. Both stop the moment the panel is closed, so nothing is being redrawn for a panel nobody is looking at.
+### Log
 
-**Log** is what the extension is doing as it happens: generations starting, retries and why, replies that came back fine, notes going out.
+What the extension is doing as it happens: replies starting, retries and why, replies that came back fine, and notes being sent. It keeps the last twenty lines.
 
-**Stats** is what it has been doing since you opened the tab: replies that came back fine, retries fired, messages it gave up on, and a breakdown of what it retried for, with a bar for each so the shape reads at a glance.
+### Stats
 
-**Watching for** counts up while you are looking at it, in the same `1h 05m 03s` form as everything else here. It also says how often a reply needed a retry at all, and tells you when it has paused itself after repeated failures, which is the state that otherwise looks like it having stopped working. **Clear** on this tab starts the counting again.
+What it has done since the page loaded:
 
-**Prompt** is the whole prompt that went to the model. Every message in order, with its role, how large it is, and whether it came from your chat or was added around it. Tap one to read it. Nothing is trimmed: every message is listed and every character of each one is there, however long the chat.
+- replies that came back fine
+- retries
+- messages it gave up on
+- what it retried for, with a bar for each reason
 
-**Rendered** and **Raw** are the two ways to read the prompt, and the button under the message and character count switches between them. Rendered is the readable view described above, and where it starts: a row per message, its role, its size, whether it came from your chat or was wrapped around it, and your notes marked. Raw takes all of that off and shows the prompt as the data the model was handed, role and content, which is the form to read when the question is about structure rather than wording, and the form to paste somewhere else. **Copy** follows whichever you are on, so on raw it copies the data. Whichever you pick is remembered.
+**Watching for** shows how long it has been counting. It also shows how often a reply needed a retry, and says when it has paused itself after repeated failures. **Clear** starts the counting again.
 
-**What a retry costs** sits under that count once you have filled in the two prices under Basics. **Input** and **output** are your provider's own words, which is what the price list you are copying from will call them: input is what you send, output is what the model writes back.
+### Prompt
 
-A retry pays twice, so both halves are counted. The prompt is the one on this tab. The reply has not been written yet, so it is reckoned at the size of the last reply in this chat, which is the only honest stand-in there is. The line says that is what it is doing, and says **roughly** when that size is the panel's own estimate rather than a count. A chat with no reply in it yet is priced on the prompt alone, and says so. Under it, what the retries fired so far this session come to at that size.
+The whole prompt that went to the model, after your settings, world info, persona and every extension have added to it. This is different from Lumiverse's **Prompt Breakdown**, which shows what your chat is built from.
 
-Both prices start at 0, and with both at 0 the line is not there. Fill in one and the line says which half it is pricing. With the output price the only one filled in and no reply in this chat yet, there is nothing left to price, and the line says that rather than showing a total of nothing. They are your provider's own numbers, in your provider's own currency: nothing here knows what a model charges and nothing converts anything.
+- Every message is listed in order, with its role, its size, and whether it came from your chat or was added around it. Tap one to read it. Nothing is cut: every message and every character is there.
+- **Your refusal notes are marked** in your accent colour and opened for you. A line at the top says how many went and where they were added.
+- The button under the message count switches between **Rendered** and **Raw**. Rendered is the readable list. Raw is the prompt as the model received it, role and content. **Copy** copies whichever you are looking at. Your choice is remembered.
 
-**What to type.** Price lists write these as `$5.00/M` or `$0.075/M`, which already means per million tokens, so the number is the number: type `5` or `0.075`. You can also paste the whole thing, `$` and `/M` included, and the number is taken out of it. Decimals matter here, since the cheap models are priced in fractions of a penny.
+**When it captures:** nothing is captured until you open this tab. After that it keeps up while the panel is open, even on another tab. Close the panel and it stops. There is no separate switch for this.
 
-**Read the figure as a ceiling rather than your bill,** which is what the line under it says. Whatever your provider wraps around your prompt is missing from the number, and it prices every token at the full rate, which is the most you could be charged rather than what you will be.
+**Permission:** reading the prompt needs the `interceptor` permission, which an admin must approve. Without it the tab stays empty and says so after your next reply. If you opened the tab partway through a reply, it asks you to send another, because that prompt was built before the tab was open.
 
-The tokens are counted by Lumiverse, with its own tokeniser for the model rather than the counter your provider bills you against. Where it has no tokeniser for a model it says so, and the panel says roughly rather than giving you a figure that looks exact.
+**Two tabs open:** if you have two chats open in two browser tabs, both receive every prompt. The tab only shows the prompt for the chat you are in, and says so when one belongs to another chat.
 
-Your **refusal notes are marked** in that list, in the accent colour, and opened for you. A line at the top says how many went and where in the prompt they landed. That is the thing the Prompt view is most likely to be open for: seeing exactly how and where a note was inserted.
+The prompt stays on your device. It is not sent anywhere or written to disk, and it goes when you close the tab.
 
-This is what actually went, after your setup, your world info, your persona and every extension have had their turn at it. That is a different question from the one Lumiverse's own **Prompt Breakdown** answers, which is what your chat is built from.
+### What a retry costs
 
-**Copy** and **Clear** act on whichever tab you are looking at. Copy takes everything that tab is showing, in the order it is shown: the whole log, every counter and the retry breakdown, or the whole prompt with its summary, where your notes landed, and which message carried one.
+This line sits under the message count on the **Prompt** tab once you fill in the two prices under **Basics**. **Input** and **output** are the words your provider's price list uses: input is what you send, output is what the model writes back.
 
-Switching tabs works by tapping, and from a keyboard with the left and right arrows.
+**What to type:** price lists write prices as `$5.00/M` or `$0.075/M`, meaning per million tokens. Type the number: `5` or `0.075`. You can also paste the whole thing, and the number is taken out of it.
 
-What it shows is the prompt for the chat you are in. A captured prompt goes to you rather than to one window, so if you have two chats open in two tabs, both receive every prompt either one produces. The tab says so rather than showing you the other chat's, and walking back into the chat a prompt belongs to brings it back.
+How it works it out:
 
-Nothing is captured until you open this tab. Once you have, it keeps up for as long as the panel stays open, including while you are reading one of the other views, so a reply sent while you were on Log is waiting for you when you come back. Close the panel and nothing is captured at all, and the next time you open it, it waits to be asked again. That is why there is no separate switch for it: a setting left on would go on paying for itself in every chat long after you looked once.
+- A retry pays for the prompt and the new reply, so both are counted.
+- The prompt is the one on this tab.
+- The new reply has not been written yet, so it uses the size of the last reply in this chat. The line says so.
+- A chat with no reply yet is priced on the prompt only, and says so.
+- Under it is what the retries so far this session come to.
 
-Reading the prompt is the one thing in the panel that needs a permission. The assembled prompt is only visible to an extension through the `interceptor`, which is privileged, so an admin has to approve it. Without it the tab stays empty and says so after your next reply, instead of going on telling you to send one. It only says that about a reply the tab was open for from the start: a prompt is assembled as a reply begins, so opening the tab partway through cannot catch that one, and the tab asks for another instead of blaming the permission.
+**Read it as the most it could cost, not your bill.** It prices every token at the full rate, and it leaves out anything your provider adds around your prompt.
 
-What is captured is captured on your device and shown to you. Nothing is sent anywhere, nothing is written to disk, and it goes when you close the tab. A very long prompt is trimmed for display and says so, so you are never shown part of one silently.
+- Tokens are counted by Lumiverse's own tokeniser for the model. Where it has none, the line says **roughly**.
+- Both prices start at 0, and while both are 0 the line is hidden.
+- Prices are in your provider's own currency. Nothing is converted.
 
-The same options live in the CONFIG block at the top of `src/frontend.ts` and `dist/frontend.js`. `dist/frontend.js` is the file the host actually loads, so editing CONFIG there takes effect with no rebuild; editing `src/frontend.ts` needs a `bun run build`.
+### Replaced
+
+The reply the last retry in this chat threw away, with the reason and how long ago. Use it when a retry was a mistake: read the old reply, or press **Copy** to take it.
+
+A retry that adds a reroll already leaves the old reply to swipe back to. But rerolls can be deleted, by you or by another extension. This tab keeps its own copy.
+
+- It keeps one reply per chat, for the last eight chats.
+- **Clear** drops the one you are looking at.
+- Turn it off with **Keep the reply a retry replaced**, under **How it retries**.
+
+## Every option and its default
+
+These are the defaults for a new install. They are in the `CONFIG` block at the top of `src/frontend.ts` and `dist/frontend.js`. `dist/frontend.js` is the file Lumiverse loads.
 
 | Option | Default | Meaning |
 | --- | --- | --- |
@@ -217,22 +271,29 @@ The same options live in the CONFIG block at the top of `src/frontend.ts` and `d
 | refusalNotes | one empty note | The notes themselves. Each carries its own role (system, user or assistant) and its own first try, so notes can be set to escalate. Up to ten. Whichever have come due are sent together, in order. Empty ones are skipped, and nothing is sent while they all are. Shown only while `refusalNote` is on. |
 | refusalNotePlacement | after | For the whole list, not one note. Where the block of due notes goes: after the last message, before it, at the very end (past anything the build appends behind the conversation), or at the very start. Shown only while `refusalNote` is on. |
 | refusalNoteStrictType | false | For the whole list, not one note: it decides whether any of them are sent at all. Only attach them when Lumiverse reports the generation as a regenerate or a swipe. Most builds report every generation as "normal", and on those this stops the note going out at all, which is why it is off. Shown only while `refusalNote` is on. |
-| regenerateSelector | (see file) | Host button. See below. |
-| swipeNextSelector | (see file) | Backup button if your build retries by swiping. |
-| confirmButtonsCustom | false | Read the box below. Off, only the built-in dialog button list is used, and the box is not shown. |
+| regenerateSelector | (see file) | Your regenerate button. See [Buttons it clicks](buttons.md). |
+| swipeNextSelector | (see file) | Your next / swipe button, which a retry presses first while `retryByNewReroll` is on. |
+| confirmButtonsCustom | false | Lets you add your own dialog button words. Off: only the built-in list is used, and the box is hidden. |
 | confirmButtonLabels | (blank) | Extra dialog button labels it may press when a dialog appears after a retry, one per line. Tried before the built-in list, which is used as well. Shown and read only while `confirmButtonsCustom` is on. |
-| stopSelector | (see file) | Host stop button, used to abort a stalled reply. |
+| stopSelector | (see file) | Your stop button, used to stop a reply that has frozen. |
 | toast | true | Show the little retry pop-up with its Cancel button. It counts the wait down in real time and names what the retry is for and which try it is. |
 | liveLog | false | Show the on-screen panel. Four tabs: Log for what it is doing as it happens, Prompt for what went to the model, Stats for what it keeps retrying for, and Replaced for the last reply a retry threw away. |
 | panelHome | float | Where that panel goes. `float` is a small box over the chat you can move and resize, and where you leave it is remembered. `drawer` puts it in Lumiverse's own side panel, which never covers the reply you are reading. A Lumiverse with no side panel for extensions gets the box, and the Log says so. Shown only while `liveLog` is on. |
 | costIn | 0 | Your provider's input price per million tokens, in its own currency. The panel's Prompt tab uses it to say what retrying costs. 0 leaves the line off. |
 | costOut | 0 | The output price from the same list, for the reply a retry produces. Both at 0 leaves the line off. |
 
-The two watchdog waits (`stuckTimeoutMs`, `idleTimeoutMs`) are long, and the defaults assume a slow model rather than a fast one. A watchdog that fires early on a model that is slow but healthy is worse than one that fires late: it throws away a reply that was still arriving, and the replacement comes from the same slow model, so it fires again on that one too. If your provider is fast and you want quicker recovery, lower them.
+### The two waits for a frozen reply
 
-`idleTimeoutMs` needs streaming to be on. It watches for text that was arriving and then stopped, so with streaming off there is nothing arriving to go quiet and a stall cannot be seen at all. A reply that hangs is then caught by `stuckTimeoutMs`, which covers a generation that produces neither text nor an ending. Everything else works the same either way: the checks for an error, an empty reply, a cut-off reply and a refusal all read the finished reply, which arrives whether or not it streamed.
+`stuckTimeoutMs` and `idleTimeoutMs` are long on purpose, so a slow model has time to answer.
 
-These defaults only apply to a fresh install. Settings already saved to your account keep the values they had, so if you have been using an earlier version and want the new timings, open **Reset…** and tick **Retrying and its buttons**.
+- A wait that runs out too early throws away a reply that was still coming. The retry then goes to the same slow model, so it runs out again.
+- If your provider is fast and you want quicker retries, lower them.
+
+`idleTimeoutMs` needs streaming on. It watches for text that stopped arriving, and with streaming off no text arrives until the end. A reply that hangs is then caught by `stuckTimeoutMs` instead. Every other check reads the finished reply, so it works with streaming on or off.
+
+### After an update
+
+Defaults only apply to a new install. Settings already saved to your account keep their values. To get the newer defaults, open **Reset…** and tick the part you want.
 
 ---
 
