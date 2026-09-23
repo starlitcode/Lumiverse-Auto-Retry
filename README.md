@@ -41,7 +41,15 @@ To switch it off for one chat, or everywhere, see [Turning it off](docs/settings
 
 Auto Retry is not intended for sexual content involving minors, and I do not condone or support anybody using it for that.
 
-It recognises a refusal about a character's age for one reason: models sometimes misread an adult character, written as an adult, as a minor, and that refusal should not have happened. It is not there to get sexual content involving a minor past a model.
+So nobody has to guess what that means for their own chats, here is exactly what it does:
+
+- **It never reads your story to judge it, and never changes a word of it.** It watches how a reply ended and, when that looks wrong, presses Lumiverse's own retry button. It has no rules about what a story may contain.
+- **A retry asks your model again for the same reply.** Whether anything is written is still up to your model and your provider. Retries stop at **Most tries per message**, 4 by default.
+- **It recognises a refusal about a character's age for one reason:** models sometimes misread an adult character, written as an adult, as a minor, and that refusal should not have happened. It cannot tell a mistaken refusal from a correct one, so with **It looks like an accidental refusal** on, which it is by default, any refusal it recognises is retried the same way, up to that limit. It is not there to get sexual content involving a minor past a model.
+- **A provider that blocks a request before anything is written is treated as a refusal too**, for the same reason, and with the same limit.
+- **The retry notes are off by default.** Switched on, one is sent with a refusal retry. None of them mentions age or any subject, and every word of each is on the panel before you pick it.
+
+The words it recognises refusals by, including the ones about age, are listed on [When it retries](docs/detection.md). None of them reaches a prompt.
 
 I cannot control what somebody does with an extension once they have it. What I can do is say plainly where I stand.
 
