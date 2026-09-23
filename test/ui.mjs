@@ -6352,6 +6352,40 @@ console.log("\nfinding the button to press");
   const late = await run("", {}, 800);
   check("a button that turns up a moment late is still pressed", late.out.clicks === 1, late.out);
   check("no console errors", late.errors.length === 0, late.errors);
+
+  // Lumiverse's own next-swipe arrow, exactly as it renders, hashed class and
+  // all. With a retry adding a swipe, which is the default, this is the button
+  // pressed, and only the one on the newest message.
+  {
+    const page = await browser.newPage();
+    const errors = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    const ARROW =
+      '<button type="button" class="_btn_12fwn_8" aria-label="Next swipe"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-right"><path d="m9 18 6-6-6-6"></path></svg></button>';
+    await stage(page, "<div id=modal></div><div class=older>" + ARROW + "</div><div class=newest>" + ARROW + "</div>");
+    await page.addScriptTag({ content: SOURCE, type: "module" });
+    await page.waitForFunction(() => !!window.__setup);
+    const out = await page.evaluate(async () => {
+      const h = {};
+      const hits = { older: 0, newest: 0 };
+      document.querySelector(".older button").addEventListener("click", () => hits.older++);
+      document.querySelector(".newest button").addEventListener("click", () => hits.newest++);
+      window.__setup(
+        { events: { on: (n, f) => { h[n] = f; return () => {}; } },
+          ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }) } },
+        { toast: false, retryDelayMs: 10, backoffFactor: 1, maxDelayMs: 10, jitter: false,
+          maxRetries: 4, stuckTimeoutMs: 0, idleTimeoutMs: 0, pauseWhenFailing: false, retryByNewReroll: true },
+      );
+      h.GENERATION_STARTED({ chatId: "B", generationId: "s1" });
+      await new Promise((r) => setTimeout(r, 10));
+      h.GENERATION_ENDED({ chatId: "B", generationId: "s1", error: "boom" });
+      await new Promise((r) => setTimeout(r, 700));
+      return hits;
+    });
+    await page.close();
+    check("Lumiverse's own swipe arrow is pressed on the newest message", out.newest === 1 && out.older === 0, out);
+    check("no console errors", errors.length === 0, errors);
+  }
 }
 
 // ---- an impersonation is not a reply ----
