@@ -30,6 +30,8 @@ _2026-09-23_
 
 - **On-screen panel tab names are no longer cut short.** **Replaced** showed as "Repl…" even in a computer's sidebar, and **Prompt** was cut short on a phone. Each tab now starts at the width of its name. On a small phone, **Copy** and **Clear** move to the line below together.
 
+- **Buttons it clicks says to press and hold.** Its intro said to press **Pick it for me** and then click the real button. A short press on the real button just works as normal. Picking needs a press and hold.
+
 - **A long line in the Log wraps.** The settings line the Log prints when it starts has no spaces, and it ran off the right edge of the panel.
 
 ### Changed
@@ -37,6 +39,8 @@ _2026-09-23_
 - **Only a switch flips a switch.** Pressing a setting's name no longer changes it. Only the box does. This matters most in the reset list, where one line deletes your saved presets.
 
 - **The docs are written in plain language:** shorter sentences, lists and numbered steps. Some wrong details were corrected on the way. For example, the settings page said a long prompt is trimmed on the Prompt tab. Every character is shown.
+
+- **Shorter descriptions.** The longest descriptions behind **?** are cut to a sentence or two. The detail is in the docs.
 
 - **Panel messages are written out in full**, such as "Could not save" instead of "Couldn't save". The preset name box says "A name for this preset".
 

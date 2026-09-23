@@ -124,7 +124,7 @@ const MAX_NOTES = 10;
 // The roles a note may carry, and how each is offered in the panel. One list,
 // because the picker was written out twice: once to build the dropdown and
 // again to check what came back out of it, so adding a role in one place would
-// have made the other silently reject it.
+// have made the other reject it with no message.
 // Named for the role each is actually sent as, which is also what every other
 // tool that builds a prompt calls them. You and The character read as friendlier
 // and were worse: a chat can have a cast on it, so the reply role is not one
@@ -444,7 +444,7 @@ interface Group {
   collapsed?: boolean;
   // Something built by hand that belongs under this heading, after its rows.
   // Named here rather than matched on the title, so a rename cannot leave the
-  // tester or the preset bar silently unbuilt.
+  // tester or the preset bar unbuilt with no message.
   // Extra pieces the section renders under its rows. More than one is allowed,
   // since refusal tuning carries both the tester and its own preset bar.
   extra?: ExtraKind | ExtraKind[];
@@ -551,7 +551,7 @@ const SCHEMA: Group[] = [
           { value: "float", label: "Floating over the chat" },
           { value: "drawer", label: "In the sidebar drawer" },
         ],
-        hint: "Floating is a small box in the corner you can move and resize, and where you leave it is remembered. In the sidebar puts it in Lumiverse's own side panel, which never covers the reply you are reading. A Lumiverse with no side panel for extensions gets the box, and the Log says so.",
+        hint: "Floating is a box over the chat you can move and resize. In the sidebar puts it in Lumiverse's own side panel, so it never covers the reply.",
       },
       // A retry is a whole generation paid for twice, so the Prompt tab can say
       // what one costs. Nothing here knows what a model charges and no two
@@ -565,7 +565,7 @@ const SCHEMA: Group[] = [
         type: "num",
         min: 0,
         max: 10000,
-        hint: "What your provider charges for what you send it, which for a retry is the whole prompt again. Its price list calls this input, and writes it as $5.00/M or $0.075/M. Type the number on its own, or paste the whole thing and the number is taken out of it.",
+        hint: "Your provider's input price per million tokens. A retry sends the whole prompt again. Type the number, like 5 or 0.075, or paste the whole line.",
       },
       {
         key: "costOut",
@@ -644,7 +644,7 @@ const SCHEMA: Group[] = [
         type: "num",
         min: 1,
         max: 10,
-        hint: "Each retry waits this many times longer than the last, so it does not hammer the server. 2 means the wait doubles each time. Stays at 1 or above.",
+        hint: "Each retry waits this many times longer than the last, so the server is not asked again too fast. 2 means the wait doubles each time. Stays at 1 or above.",
       },
       {
         key: "maxDelayMs",
@@ -711,7 +711,7 @@ const SCHEMA: Group[] = [
         needs: ["ignoreHardErrors"],
         label: "Your own hard failures",
         type: "text",
-        hint: "Wording your provider uses for an error that will not fix itself, one per line, counted alongside the built-in list. Case does not matter, and a line under three characters is ignored. A phrase that is also in Your own refusal phrases is retried as a refusal instead, since that one is worth another try.",
+        hint: "Wording for an error that will not fix itself, one per line, used with the built-in list. A phrase also in Your own refusal phrases is retried as a refusal.",
       },
       {
         key: "retryOnEmpty",
@@ -822,7 +822,7 @@ const SCHEMA: Group[] = [
         run: "yourWords",
         label: "Your own refusal phrases",
         type: "text",
-        hint: "Extra phrases that count as a refusal, one per line, used whether or not the built-in list above is on. Case does not matter, so paste the exact wording your model refuses with. Matched against a provider error as well as against the reply, so wording from an error that Skip hard failures would otherwise write off is retried instead. A line under three characters is ignored, since it would match almost every reply.",
+        hint: "Extra wording that counts as a refusal, one per line. Always used, even with the built-in list off, and also checked against error text. Lines under three characters are ignored.",
       },
       {
         key: "refusalPhraseSubs",
@@ -875,7 +875,7 @@ const SCHEMA: Group[] = [
         hintAbove: true,
         label: "What the notes say",
         type: "notes",
-        hint: "Your notes go to the model exactly as you typed them, up to ten of them. Each carries its own Role and its own From try, and the ones that are due go out together, in the order you wrote them. Keep each one to a line or two: a note is read alongside the whole prompt, and a short one that says one thing gets followed where a paragraph gets averaged in with everything else.",
+        hint: "Sent exactly as you type them, up to ten. Each has its own Role and From try. Keep each to a line or two, so the model follows it.",
       },
       {
         key: "refusalNotePlacement",
@@ -889,7 +889,7 @@ const SCHEMA: Group[] = [
           { value: "start", label: "At the very start" },
           { value: "end", label: "At the very end" },
         ],
-        hint: "Whichever notes are due go in together as one block. After the last message puts it right before the point the reply continues from. At the very end goes past anything your build appends behind the conversation, which is the one that can answer it.",
+        hint: "Where the due notes go, as one block. After the last message puts them right before the reply. At the very end goes after anything your Lumiverse adds behind the chat.",
       },
       {
         key: "refusalNoteStrictType",
@@ -904,7 +904,7 @@ const SCHEMA: Group[] = [
   {
     title: "Buttons it clicks",
     collapsed: true,
-    desc: "It retries by clicking your own on-screen buttons, so you only need this if retries are not happening. The quickest fix is Pick it for me: press it, then click the real button. Otherwise paste a CSS selector and press Test until it says match found, with that button on screen. The stop button only appears while a reply is generating. The README covers fallback lists and selector syntax.",
+    desc: "A retry presses your own swipe or regenerate button. You only need this if retries are not happening. Press Pick it for me, then press and hold the real button. The docs page Buttons it clicks covers the rest.",
     fields: [
       {
         key: "swipeNextSelector",
@@ -2015,8 +2015,8 @@ const CRISIS_ADDRESS: RegExp[] = [
   /\bif this is (?:an emergency|a mental health emergency)\b/i,
   /\bif you(?:'re| are) (?:thinking about|considering) (?:suicide|self-?harm|hurting yourself|ending your life)\b/i,
   // "If you or someone you know is in immediate danger" is the commonest form
-  // of this line and the one an earlier version missed, because it only knew
-  // the sentence where "you" is the subject all the way through.
+  // of this line. Its subject is not always "you" alone, so up to forty
+  // characters may sit between the subject and "is" or "are".
   /\bif (?:you|someone|anyone)\b[^.?!\n]{0,40}?\b(?:is|are) in (?:immediate |any )?danger\b/i,
   /\bif you(?:'re| are) in (?:immediate |any )?danger\b/i,
   // The line that introduces the list. It is the single most reliable tell
@@ -3233,9 +3233,9 @@ function markSvgLive(size: number): string {
   );
 }
 
-// The ring that fills while the button is held down. A hold opens the menu, and
-// until now nothing on screen said a hold was under way, so the half second
-// before the menu appeared read as a tap that did nothing.
+// The ring that fills while the button is held down. A hold opens the menu.
+// Without the ring, the half second before the menu appears reads as a tap
+// that did nothing.
 //
 // Its own square rather than part of the mark: this belongs to the button's
 // edge, and the mark is drawn at just over half the button's width. The viewBox
@@ -3578,9 +3578,8 @@ export function setup(ctx: Ctx, opts?: any) {
     try {
       const canReg = !!(ctx && (ctx as any).ui && typeof (ctx as any).ui.registerInputBarAction === "function");
       const on = cfg.enabled !== false;
-      // Off in the chat you are in is off, whatever the master switch says, and
-      // the entry showed "on" through it until now. The float button has said
-      // both since it was built and this is the same sentence.
+      // Off in the chat you are in is off, whatever the master switch says. The
+      // floating button says the same sentence.
       const hereOff = on && chatIsOff(lastChatId);
       // Hidden while the floating button is on, and not moved into that
       // button's menu either. The floating button is already this same on/off
@@ -7471,7 +7470,7 @@ export function setup(ctx: Ctx, opts?: any) {
   };
 
   // A control only does something when it is enabled and actually laid out.
-  // A hidden or disabled button accepts .click() and silently does nothing,
+  // A hidden or disabled button accepts .click() and does nothing,
   // which would otherwise be counted as a retry that fired.
   // Everything the extension itself puts on the page carries this, and nothing
   // it clicks may sit inside one.
@@ -7513,9 +7512,9 @@ export function setup(ctx: Ctx, opts?: any) {
     //
     // The built-in list stands behind whatever was typed, as it does for the
     // input box in Auto Refine. A saved list is a copy of the defaults as they
-    // were when it was saved, so a selector added since never reached anybody
-    // who had one, and a list that matched nothing any more hid the button that
-    // the built-in one would have found.
+    // were when it was saved. Without this, a selector added to the built-in
+    // list would never reach anybody with a saved list, and a saved list that
+    // matches nothing would hide a button the built-in list finds.
     const parts = splitSelectorList(selector);
     if (builtIn)
       for (const extra of splitSelectorList(builtIn)) if (parts.indexOf(extra) < 0) parts.push(extra);
@@ -8283,8 +8282,8 @@ export function setup(ctx: Ctx, opts?: any) {
   // Resolves once the backend confirms the note is in place. The arm travels the
   // frontend-to-backend bridge while the retry click travels the DOM to the host
   // to the server, and those are independent: the click could reach prompt
-  // assembly first, the interceptor would find nothing armed, and the note was
-  // silently dropped from that generation. Waiting on the acknowledgement
+  // assembly first, the interceptor would find nothing armed, and the note
+  // would be left out of that generation with no message. Waiting on the acknowledgement
   // removes the race. The timeout means a host with no backend bridge, or a slow
   // one, still gets its retry.
   function armRefusalNote(
@@ -8760,10 +8759,10 @@ export function setup(ctx: Ctx, opts?: any) {
       timer = setTimeout(finish, CHAT_ASK_MS);
       (ctx as any).sendToBackend({ type: "get_active_chat", requestId: reqId, chatId: forChat || null });
     } catch (_) {
-      // A host that refuses to carry the question answers it by throwing. Left
-      // to the empty catch this never called back at all, so anything waiting on
-      // the answer waited for ever and the button did nothing, silently, which
-      // is the exact fault this whole path exists to stop.
+      // A host that refuses to carry the question answers it by throwing. An
+      // empty catch would never call back, so anything waiting on the answer
+      // would wait for ever and the button would do nothing, which is the fault
+      // this whole path exists to stop.
       reply({ answered: false, resolved: false, chatId: null });
     }
   }
@@ -10118,11 +10117,10 @@ export function setup(ctx: Ctx, opts?: any) {
 
       // Said once what is set stops matching the preset the picker still names.
       //
-      // Loading one sets the picker and nothing cleared it, so changing a note
-      // afterwards left the box naming a set the panel no longer held. The
-      // fields are not locked while a set that comes with it is picked: loading one and
-      // changing it is how you are meant to start, which is what Save as new is
-      // for. What was missing was the panel saying the two had parted company.
+      // Loading one sets the picker, and changing a note afterwards does not
+      // clear it, so this line is what says the two differ. The notes stay
+      // editable while a built-in set is picked: loading one and changing it
+      // is how you start, and Save as new keeps the result.
       const drift = document.createElement("div");
       drift.setAttribute("data-lvr-presetdrift", "1");
       drift.style.cssText =
@@ -11482,7 +11480,7 @@ export function setup(ctx: Ctx, opts?: any) {
       "flex:1;min-width:120px;font-size:12px;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
 
     // Opens the picker rather than resetting on the spot. There is no confirm
-    // dialog in front of it any more: the picker itself is the confirmation,
+    // dialog in front of it: the picker itself is the confirmation,
     // it says what each part would change before anything happens, and what it
     // does is undone by closing the panel instead of pressing Save.
     const reset = btn("Reset…", false);
@@ -11724,7 +11722,7 @@ export function setup(ctx: Ctx, opts?: any) {
   //
   // This exists because a refused permission is the one failure that raises
   // nothing anywhere: a gated event never fires, and a fire-and-forget
-  // registration silently does nothing. Every other fault in here reports
+  // registration does nothing and says nothing. Every other fault in here reports
   // itself somewhere. This one leaves the extension installed and apparently
   // working while it does none of what it was asked to.
   function buildPermissionNotice(): HTMLElement {
@@ -12646,7 +12644,7 @@ export function setup(ctx: Ctx, opts?: any) {
   // The parts are the same ones import and export already use, so there is one
   // definition of what a part is and the names match between the two panels.
   //
-  // Nothing is reset silently. The picker says, per part, how many settings
+  // Nothing is reset without asking. The picker says, per part, how many settings
   // would actually change, so a part already at its defaults is visibly nothing
   // to press, and it says in plain words what it does not touch.
   function resetPartsFor(): Array<{ id: string; label: string; keys: string[] }> {

@@ -75,7 +75,7 @@ async function writeUserJson(file: string, value: any, userId?: string): Promise
     try {
       await spindle.userStorage.setJson(file, value, { userId: userId });
       return;
-    } catch (_) { /* fall through so a save is never silently lost */ }
+    } catch (_) { /* fall through so a save is never lost with no message */ }
   }
   await spindle.storage.write(file, JSON.stringify(value));
 }
@@ -494,7 +494,7 @@ spindle.onFrontendMessage(async (payload: any, userId?: string) => {
       // actually in place. The arm travels this bridge while the click travels
       // the DOM to the host to the server, and those are independent: the click
       // could otherwise reach prompt assembly first and the note would be
-      // silently dropped from that generation.
+      // left out of that generation with no message.
       replyTo(userId, { type: 'note_armed', requestId: payload.requestId, armed: !!forChat && refusalNotes.has(forChat) });
       return;
     }
@@ -564,7 +564,7 @@ const promptInterceptor = async (messages: any[], context: any) => {
     const built = armed.notes.map((n) => ({ role: n.role, content: n.text }));
     const placed = placeNotes(messages, built, armed.placement);
     // Named in the Prompt Breakdown so each note is inspectable rather than
-    // something that silently happened to the prompt.
+    // something that happened to the prompt with no record.
     const breakdown = built.map((_, i) => ({
       messageIndex: placed.from + i,
       name: built.length > 1 ? 'Auto Retry refusal note ' + (i + 1) : 'Auto Retry refusal note',
@@ -592,8 +592,8 @@ const promptInterceptor = async (messages: any[], context: any) => {
 // register twice.
 // Every permission this extension asks for, and what stops working without it.
 // A missing permission is the one failure that raises nothing to catch: a gated
-// event simply never fires and a fire-and-forget registration silently does
-// nothing, so an extension with the wrong grants stays installed and looks
+// event never fires and a fire-and-forget registration does nothing and
+// says nothing, so an extension with the wrong grants stays installed and looks
 // like it is working. The panel asks for this and says which are missing.
 const PERMISSIONS: Array<{ name: string; costs: string }> = [
   { name: 'generation', costs: 'Everything. Retries run off the generation events, and without this none of them arrive, so nothing is ever retried.' },
