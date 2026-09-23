@@ -1,6 +1,6 @@
 # Auto Retry
 
-A Lumiverse extension. It quietly re-runs an AI reply when it fails, comes back empty, stalls partway, gets cut off mid-sentence, or refuses by mistake, so you do not have to catch it and press regenerate yourself.
+A Lumiverse extension. It re-runs an AI reply when it fails, comes back empty, stalls partway, gets cut off mid-sentence, or refuses by mistake, so you do not have to catch it and press regenerate yourself.
 
 It is the companion to [Auto Refine](https://github.com/starlitcode/Lumiverse-Auto-Refine): this one decides whether a reply is worth keeping, that one improves the ones that are.
 

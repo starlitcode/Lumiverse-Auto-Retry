@@ -1487,7 +1487,7 @@ describe("what a refusal is counted as", () => {
 // The phrase list is printed in full in docs/detection.md, so somebody can see
 // what the reword field acts on. Two copies of the same list is two copies that
 // drift, and a phrase added to one and not the other is invisible: the docs
-// quietly describe a version of the extension that does not exist.
+// describe a version of the extension that does not exist.
 describe("the printed phrase list is the built-in phrase list", () => {
   const DOC = readFileSync(new URL("../docs/detection.md", import.meta.url), "utf8");
   const printed = (() => {

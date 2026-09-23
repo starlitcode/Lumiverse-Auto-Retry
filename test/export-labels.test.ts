@@ -45,7 +45,7 @@ describe("every tick box is named after what it carries", () => {
 
   // Each rule is: a part holding any of these keys has to have this word in
   // its name. Adding a key to a part it does not fit is then a failing test
-  // rather than a label that quietly stops being true.
+  // rather than a label that stops being true.
   const rules: Array<{ word: RegExp; keys: string[]; why: string }> = [
     {
       word: /button/i,

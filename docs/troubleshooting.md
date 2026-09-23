@@ -12,7 +12,7 @@ The first two lines are always there and cannot be ticked off. They name the ver
 
 The parts are **Your settings**, **Buttons and selectors**, **Permissions, browser and screen**, and **Session totals and recent activity**. Each name covers everything in that part, so leaving one out never drops something you did not know was in it. Your permissions ride with the browser part, and the selectors you wrote ride with whether they match.
 
-The settings it reports come straight from the option list, so every setting is always in it. There is no second list to fall out of date and quietly leave something out.
+The settings it reports come straight from the option list, so every setting is always in it. There is no second list that could go out of date and leave something out.
 
 **Session totals** count how many replies came back fine, how many retries fired, how many messages it gave up on, and a breakdown of retries by cause since the page loaded. Those answer the question a bug report usually cannot: "it retries too much" becomes "ninety retries, all of them for a cut-off reply".
 

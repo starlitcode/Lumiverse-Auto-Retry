@@ -40,12 +40,12 @@ const SWIPE_FIRST_KEY = "lv-auto-retry:swipe-first:v1";
 // setting would carry it into an export.
 const BUILT_IN_SEEN_KEY = "lv-auto-retry:built-in-seen:v1";
 // What the key above was called before. Read once, so upgrading keeps what it
-// was holding: losing it would quietly swallow the one line saying the sets
+// was holding: losing it would swallow the one line saying the sets
 // changed, and nothing on screen would say anything was missing.
 const OLD_SEEN_KEY = "lv-auto-retry:shipped-seen:v1";
 // Which set of moved defaults this browser has already been told about. Its own
 // key for the same two reasons, and separate from the one above so saying got it
-// to a line about a number never quietly marks the note sets as seen too.
+// to a line about a number never marks the note sets as seen too.
 const MOVED_SEEN_KEY = "lv-auto-retry:moved-seen:v1";
 // The settings search field. It needs an id because the browser's own clear
 // button inside it can only be reached from a stylesheet, not inline.
@@ -396,7 +396,7 @@ const SCHEMA = [
                 key: "enabled",
                 label: "Turn Auto Retry on",
                 type: "bool",
-                hint: "When on, it quietly tries again whenever a reply fails or gets cut off. Turn it off and it does nothing.",
+                hint: "When on, it tries again by itself whenever a reply fails or gets cut off. Turn it off and it does nothing.",
             },
             {
                 key: "showFloatingToggle",
@@ -2558,7 +2558,7 @@ function splitSelectorList(raw) {
     return out.filter((p) => p.length > 0);
 }
 // Class and id names Lumiverse generates per build (like _card_19912_336).
-// They change on every release, so a selector built on one quietly stops
+// They change on every release, so a selector built on one stops
 // matching after an app update. Skipped when building a selector from a click.
 const UNSTABLE_NAME = /(^_)|(_[a-z0-9]{4,}_\d+$)|(_[a-z0-9]{6,}$)|([-_][a-f0-9]{6,}$)/i;
 const SAFE_NAME = /^[A-Za-z_-][\w-]*$/;
@@ -3032,7 +3032,7 @@ const HOLD_RING_MS = HOLD_MS - 70;
 const HOLD_RING_WAIT = 150;
 // How far a finger may drift and still be holding rather than dragging. Ten
 // pixels, because a thumb resting on glass drifts further than eight and every
-// one of those was a hold that quietly did nothing. Auto Refine allows the same.
+// one of those was a hold that did nothing. Auto Refine allows the same.
 const HOLD_SLOP = 10;
 // The extension's mark: a reply, with the retry arrow sweeping over it.
 //
@@ -3165,7 +3165,7 @@ export function setup(ctx, opts) {
                     // Held before the coercion below, which walks the panel's own fields
                     // and so drops anything no longer in it. Word swap rules are exactly
                     // that now: somebody whose settings live in their account and not in
-                    // this browser would otherwise have theirs quietly disappear with
+                    // this browser would otherwise have theirs disappear with
                     // nothing offering them a copy.
                     if (typeof s.replaceRules === "string" && s.replaceRules.trim())
                         accountSwaps = s.replaceRules;
@@ -3600,7 +3600,7 @@ export function setup(ctx, opts) {
     let promptUnclaimed = null;
     // What the host has actually granted, as the backend sees it. Held rather
     // than guessed at: a missing permission raises nothing, so without asking,
-    // the only evidence is a feature quietly doing nothing.
+    // the only evidence is a feature doing nothing.
     let permGranted = {};
     let permList = [];
     let permPaint = null;
@@ -4175,7 +4175,7 @@ export function setup(ctx, opts) {
             cost.style.cssText =
                 "margin-bottom:6px;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
             // Which half of the sum is real. One price left at 0 is a price nobody
-            // gave rather than a cost of nothing, and a total that quietly leaves
+            // gave rather than a cost of nothing, and a total that leaves
             // half out is worse than one that says what it covers.
             const covers = Number(cfg.costIn) <= 0
                 ? " Only the reply is priced, since the input price is 0."
@@ -4447,7 +4447,7 @@ export function setup(ctx, opts) {
         // Copy and Clear act on whichever view is showing, so the buttons mean the
         // same thing as what is in front of them.
         // Copy takes everything the tab is showing, in the order it is shown.
-        // Anything on screen and missing from here is the button quietly lying
+        // Anything on screen and missing from here is the button lying
         // about what it did, and the counts left out were the ones somebody would
         // be copying the tab to report.
         const statsAsText = () => {
@@ -5293,11 +5293,10 @@ export function setup(ctx, opts) {
         // after a drag says nothing new, and a device asking for less movement gets
         // the change with none of this.
         //
-        // A press dips the whole button a little, so a tap answers whether or not
-        // it changed anything. That used to be ambiguous, since a press is also how
-        // the menu is opened and a dip on the way in made a hold read as a tap that
-        // took. The ring filling around the edge is what tells the two apart now: a
-        // dip on its own is a tap, a dip with the ring running is a hold.
+        // A press dips the whole button a little, so a tap always shows it was
+        // felt. A hold also starts with a press, so the ring filling around the
+        // edge is what tells the two apart: a dip on its own is a tap, a dip with
+        // the ring running is a hold.
         el.setAttribute("data-ar-float", "1");
         // The mark sits in its own holder and the ring sits over the whole button.
         // Separated so repainting the mark does not throw the ring away mid-hold.
@@ -6028,7 +6027,7 @@ export function setup(ctx, opts) {
         }
         // The switch that gates the extra dialog labels is off by default, so a
         // saved set of labels with no switch beside it predates the switch. Turning
-        // it on for them keeps those labels working rather than quietly dropping
+        // it on for them keeps those labels working rather than dropping
         // them.
         if (parsed.confirmButtonsCustom == null &&
             String(parsed.confirmButtonLabels || "").trim())
@@ -6654,7 +6653,7 @@ export function setup(ctx, opts) {
                 const local = loadPresets();
                 // Per kind, not all or nothing. The account winning outright would drop
                 // a kind it has none of. Only one kind exists today, and this is
-                // written per kind so a second one cannot quietly wipe the first.
+                // written per kind so a second one cannot wipe the first.
                 const merged = {};
                 let took = 0, kept = 0;
                 for (const kind of Object.keys(local)) {
@@ -6846,7 +6845,7 @@ export function setup(ctx, opts) {
     // itself either: that read happens before any user is known, so it finds
     // nothing and stays at its own defaults.
     //
-    // So a chat switched off quietly started being acted on again after a
+    // So a chat switched off started being acted on again after a
     // restart, and nothing said so, because from the reader's side nothing
     // happened: the tab was closed and opened again.
     //
@@ -7373,7 +7372,7 @@ export function setup(ctx, opts) {
     //
     // Enough of a reply to be one. A build that puts a placeholder in the message
     // while it waits, an ellipsis or a name, would otherwise count as the reply
-    // having arrived on every generation, and quietly stand the whole watchdog
+    // having arrived on every generation, and stand the whole watchdog
     // down. Anything the reader would call a reply clears this; a spinner does
     // not. It only has to hold where the events went missing, since a reply the
     // events did arrive for is judged properly on its own ending.
@@ -7557,7 +7556,7 @@ export function setup(ctx, opts) {
     const fireRetry = () => {
         const picked = pickRetryControl();
         // Said out loud when the button it wanted was not there. With swiping
-        // preferred, a build whose swipe selector matches nothing quietly retries
+        // preferred, a build whose swipe selector matches nothing retries
         // by regenerating instead, which is the one that can take the old reply
         // with it. That is worth knowing from the log rather than working out from
         // a reroll that went missing.
@@ -8251,7 +8250,7 @@ export function setup(ctx, opts) {
     // The chat a note is currently armed for, or null when none is. A chat id
     // rather than a flag, because a retry called off in one chat says nothing
     // about a note waiting on a click in another, and taking that one back would
-    // quietly drop a note the user is still owed. The backend holds one at a
+    // drop a note the user is still owed. The backend holds one at a
     // time, so one id is enough to describe the whole state.
     let armedNoteChat = null;
     // Take a note back when the click it was armed for never happened. The
@@ -9262,12 +9261,9 @@ export function setup(ctx, opts) {
         const r = row.getBoundingClientRect();
         // No wider than the setting it belongs to.
         //
-        // The cap used to be room on the screen, which is the wrong thing to
-        // measure: the panel is a modal narrower than the screen, so 300 on a phone
-        // came out wider than the panel and hung off the side of it. Sized to the
-        // row instead, it lands in the same column as the setting with the panel's
-        // own gutter either side, which is what makes it read as belonging to that
-        // row rather than floating over everything.
+        // Capped by the row, not the screen. The panel is narrower than the screen,
+        // so a cap based on the screen can come out wider than the panel. Sized to
+        // the row, it lines up with the setting it belongs to.
         //
         // The row is the whole width of the panel, so on a wide screen this is the
         // 300 cap as before and nothing changes there.
@@ -9565,12 +9561,10 @@ export function setup(ctx, opts) {
         }
         return t;
     }
-    // A message too long for one line used to fill the box out to its cap, which
-    // on a phone is nearly the whole screen, and left the last line ending well
-    // short of the right edge. The browser evens the lines out and the box is then
-    // pinned to the widest of them, so it comes out the size of what is written in
-    // it rather than the size of the screen. A message that fits on one line comes
-    // out that size on its own, so there is usually nothing to pin.
+    // A message too long for one line would otherwise fill the box out to its
+    // cap, which on a phone is nearly the whole screen. The browser evens the
+    // lines out and the box is pinned to the widest of them, so the box is the
+    // size of what is written in it. A one-line message is already that size.
     // keepWidth is for a message being rewritten in place rather than a new one
     // going up. The box only ever widens then, never narrows: a countdown loses a
     // digit twice on its way down, and letting the box shrink with it moves the
@@ -10013,7 +10007,7 @@ export function setup(ctx, opts) {
     // a tap outside puts these back, so nothing sticks unless Save is pressed.
     // Held out here rather than inside openSettings because the on/off switch can
     // also be flipped from the floating button while the panel is open, and that
-    // has to land here too or dismissing the panel would quietly undo it.
+    // has to land here too or dismissing the panel would undo it.
     let modalBaseline = null;
     // Close function for the open expand-editor overlay, if any, so it can be shut
     // when the settings modal closes instead of being left floating.
@@ -10268,9 +10262,8 @@ export function setup(ctx, opts) {
                             ". Press Update selected to keep it, or Save as new for a second copy.";
             };
             select.addEventListener("change", () => {
-                // Picking loads it. Before this, picking only greyed the buttons in and
-                // out, so Update selected wrote whatever was set over the preset that
-                // had just been picked, and that preset was gone.
+                // Picking loads it, so what is set is always the preset the picker
+                // names, and Update selected cannot save one over another.
                 const was = lastPick;
                 lastPick = select.value;
                 const name = select.value;
@@ -11340,7 +11333,7 @@ export function setup(ctx, opts) {
         // ---- the search box ----
         // Sits above the scroll area so it stays put while the results move. An
         // empty box puts everything back exactly as it was, including which sections
-        // the user had open, so searching never quietly rearranges the panel.
+        // the user had open, so searching never rearranges the panel.
         const searchWrap = document.createElement("div");
         searchWrap.style.cssText =
             "display:flex;flex-direction:column;gap:6px;flex:none;margin-bottom:12px";
@@ -12216,7 +12209,7 @@ export function setup(ctx, opts) {
                 if (notes.length >= MAX_NOTES)
                     return;
                 // A new note copies the last one's role and its starting try, so
-                // adding one does not quietly change when anything goes out. Move it
+                // adding one does not change when anything goes out. Move it
                 // later by hand to make it an escalation.
                 const prev = notes.length ? notes[notes.length - 1] : null;
                 notes.push({
@@ -12298,7 +12291,7 @@ export function setup(ctx, opts) {
                 cfg[f.key] = coerce("pick", sel.value, CONFIG[f.key], f);
                 // Honoured here as well as on a number box. Wired up for numbers alone,
                 // a dropdown asking to apply as it is picked is accepted by the schema
-                // and then quietly does nothing.
+                // and then does nothing.
                 if (f.live)
                     onLiveEdit(String(f.key));
             });
@@ -12339,7 +12332,7 @@ export function setup(ctx, opts) {
             // or not the button was even switched on.
             // A price is copied off a provider's own page, where it reads $5.00/M or
             // $0.075/M. A number box takes none of that: the paste lands as nothing
-            // and the setting quietly stays at its default, which reads as the
+            // and the setting stays at its default, which reads as the
             // feature being broken. The number is lifted out of whatever was pasted.
             input.addEventListener("paste", (e) => {
                 const raw = e && e.clipboardData && e.clipboardData.getData("text");

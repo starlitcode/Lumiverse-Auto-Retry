@@ -84,7 +84,7 @@ A new feature can need a permission the extension does not have yet, and when th
 
 It is not expected to happen often. What is declared now covers what the extension is for, and a new permission is a real cost rather than a formality: every user has to approve it, and the ones who read this page have to decide again whether they still want it installed. So the bar for asking is high, and "it would be tidier" does not clear it.
 
-Two things will not change. The extension will not start making network calls, and it will not start sending anything anywhere. Those are not features waiting on a permission; they are the point of the thing.
+Two things will not change. The extension will not start making network calls, and it will not start sending anything anywhere. Neither of those is waiting on a permission. The extension is built not to do them.
 
 If you want to know exactly what a release asks for, `spindle.json` in the repository lists the permissions, and the changelog says when one is added and why.
 
@@ -143,7 +143,7 @@ Everything else in the repo exists for working on it, and none of it reaches you
 - `docs/` is these pages. None of it is code.
 - `.github/workflows/` runs the checks on pull requests. Its actions are pinned to commit hashes rather than to movable tags, and the checkout step keeps no credentials in the build environment.
 
-Those checks rebuild `dist/` from `src/` on every pull request and fail if the result differs from what is committed, so the readable files you are auditing cannot quietly drift from the source they claim to come from.
+Those checks rebuild `dist/` from `src/` on every pull request and fail if the result differs from what is committed, so the readable files you are auditing cannot differ from the source they are built from.
 
 ---
 

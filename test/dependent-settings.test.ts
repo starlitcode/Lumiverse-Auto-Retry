@@ -178,7 +178,7 @@ describe("a switch that hides a box also stops it being read", () => {
 });
 
 // Turning a setting that was always read into one behind a switch means anyone
-// who had it set would find it quietly stopped working. The switch is off by
+// who had it set would find it stopped working. The switch is off by
 // default, so it has to be turned on for them when their old value is there.
 describe("settings saved before a switch existed keep working", () => {
   test("labels with no switch saved turn the switch on", () => {
@@ -194,7 +194,7 @@ describe("settings saved before a switch existed keep working", () => {
 // Several of these settings would stop the extension doing its job if they
 // could reach zero, and doing it that way is silent: the master switch and the
 // per-chat switch both put a line on screen saying they are the reason, and a
-// number quietly set to zero says nothing at all. The extension would sit there
+// number set to zero says nothing at all. The extension would sit there
 // lit up and watching, and never retry anything.
 describe("a setting cannot be used as a hidden off switch", () => {
   const fields = () => {

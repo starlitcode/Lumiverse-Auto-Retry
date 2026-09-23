@@ -1295,7 +1295,7 @@ console.log("\nkeyboard and search");
     }),
   );
   // Four sections start shut: refusal tuning, buttons, debug info and
-  // import / export. The count is asserted exactly, so a section that quietly
+  // import / export. The count is asserted exactly, so a section that
   // stops being collapsible is caught here.
   check("every section header is focusable", out.focusable && out.sections === 4, out.sections);
   check("Enter opens a section", out.afterEnter.exp === "true" && out.afterEnter.vis === 1, out.afterEnter);
@@ -6263,7 +6263,7 @@ console.log("\na retry never clicks the extension's own panel");
     await new Promise((r) => setTimeout(r, 60));
 
     // The panel really does hold something the built-in swipe pattern matches,
-    // so this cannot pass by the trap having quietly gone away.
+    // so this cannot pass by the trap having gone away.
     const SWIPE = '[aria-label="Next swipe"], [data-action="swipe-right"], [data-testid="swipe-right"], ' +
       'button[aria-label*="next swipe" i], button[aria-label*="swipe right" i], ' +
       'button[aria-label*="reroll" i], button[title*="swipe" i]';
@@ -9432,7 +9432,7 @@ console.log("\nprompt viewer");
   const half = await run({ liveLog: true, toast: false, costIn: 3 });
   check("with no output price, only the prompt is counted",
     /About 0\.003 a retry at this size/.test(half.out), half.out.slice(0, 260));
-  check("and the line says so rather than leaving half out quietly",
+  check("and the line says so rather than leaving half out without saying so",
     /Only the prompt is priced/.test(half.out), half.out.slice(0, 260));
 
   // A reply from another chat is not a stand-in for the next one here, and the

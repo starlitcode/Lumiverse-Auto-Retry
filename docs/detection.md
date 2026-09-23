@@ -273,7 +273,7 @@ A set carries the notes themselves and **Where the notes go**, and nothing else.
 
 **Picking a set loads it.** The moment you choose one in the list, its wording is in the boxes and in effect.
 
-That matters because of what used to happen without it. Picking a set only lit the buttons up and left your notes alone, so the panel showed one set while the picker named another. Pressing **Update selected** then wrote what was in the boxes over the set you had just picked, and the set you overwrote was gone.
+This means the notes in the boxes are always the set the picker names. So **Update selected** can never save one set's notes over another by mistake.
 
 **Put it back** appears beside the picker after a pick has loaded over what you had. One press restores exactly what was there before, the picker included, so you can look inside a set without losing wording you had not saved. It only shows when there is something to put back, and it goes once you save.
 
@@ -291,7 +291,7 @@ All of them ask rather than order, the firmest included. A note that scolds gets
 - **Stay in the scene**, for a model that steps out of the story to comment on it.
 - **Write them as written**, for a model that softens a character away from their sheet.
 - **Finish the turn**, for a model that summarises or fades out instead of writing the scene.
-- **Write it at full strength**, for the reply that is not a refusal at all: the scene gets written and quietly watered down. It is the hardest one to catch by eye, because what arrives reads fine until you notice what is missing from it.
+- **Write it at full strength**, for the reply that is not a refusal at all: the scene gets written, but weaker than you asked for. It is the hardest one to catch by eye, because what arrives reads fine until you notice what is missing from it.
 - **Firmer with every try**, for a model that keeps declining. It opens as lightly as **A nudge** and carries two more notes that only go out from try 4 and try 6, each one plainer than the last while staying kind. Nothing extra is sent while a retry is working.
 
 Every one of them is a user note. None of them ends on an assistant note, on purpose: an assistant note placed last leaves the request ending on a turn the model has not written, which is a prefill, and providers are dropping support for it. Your own notes can still use any role the panel offers.

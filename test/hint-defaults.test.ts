@@ -175,7 +175,7 @@ describe("defaults quoted in the docs", () => {
   // Every page in docs, read off the folder rather than listed here. A written
   // list skips what it does not name and says nothing about it: this one still
   // held word-swaps.md long after that page was deleted, and would have gone on
-  // ignoring a new page just as quietly.
+  // ignoring a new page without saying so.
   const docFiles = readdirSync(new URL("../docs/", import.meta.url))
     .filter((f) => f.slice(-3) === ".md")
     .sort();
@@ -188,7 +188,7 @@ describe("defaults quoted in the docs", () => {
   }
 
   // Without this the two below pass on an empty list, which is the failure this
-  // whole file exists to stop happening quietly.
+  // whole file exists to catch.
   test("there are claims to check, and settings to check them against", () => {
     expect(claims.length).toBeGreaterThan(0);
     expect(Object.keys(scalars).length).toBeGreaterThan(20);
