@@ -4364,11 +4364,13 @@ export function setup(ctx, opts) {
         // both are wanted in the same place.
         const tabs = document.createElement("div");
         tabs.setAttribute("role", "tablist");
-        // One row, with the four sharing it evenly. Wrapping dropped the last tab
-        // onto a second line on a narrow panel, and sizing each to its own label
-        // left the gaps between them all different and the selected one reading as
-        // cramped next to the wide ones. Auto Refine's tab strip is the same.
-        tabs.style.cssText = "display:flex;flex-wrap:nowrap;gap:4px;flex:1;min-width:0";
+        // One row. Wrapping dropped the last tab onto a second line on a narrow
+        // panel. Each tab starts at the width of its name and the room left over is
+        // shared equally, so no name is cut short while there is room for it.
+        // Auto Refine's tab strip is the same. The strip itself starts at the width
+        // its names need, so on a small phone Copy and Clear move to the line below
+        // rather than squeezing the names.
+        tabs.style.cssText = "display:flex;flex-wrap:nowrap;gap:4px;flex:1 1 auto;min-width:0";
         const ORDER = ["log", "prompt", "stats", "replaced"];
         const tabBtns = {};
         const mkTab = (id, label) => {
@@ -4384,8 +4386,9 @@ export function setup(ctx, opts) {
                 // work without a mouse.
                 "cursor:pointer;border:0;background:transparent;font:inherit;color:inherit;" +
                     "min-height:32px;padding:4px 4px;border-radius:var(--lumiverse-radius-sm,5px);" +
-                    // An equal share each, so the row has one rhythm and one pill size.
-                    "flex:1 1 0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" +
+                    // Equal widths cut "Replaced" and "Prompt" short, so each starts at
+                    // its name and shares out what is left.
+                    "flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" +
                     "text-align:center;" +
                     // The header is the drag handle, and a tap that slides a pixel would
                     // otherwise be taken as the start of a drag.
@@ -4563,8 +4566,13 @@ export function setup(ctx, opts) {
                 eventLog.length = 0;
             renderLiveLog();
         });
-        head.appendChild(copyBtn);
-        head.appendChild(clearBtn);
+        // Held together, so on a narrow panel the pair moves to the next line as
+        // one rather than Clear on its own.
+        const acts = document.createElement("span");
+        acts.style.cssText = "display:flex;gap:8px;flex:none;margin-left:auto";
+        acts.appendChild(copyBtn);
+        acts.appendChild(clearBtn);
+        head.appendChild(acts);
         // A line saying what is happening this second, above all four tabs
         // because the answer is the same whichever one you are reading. The Log
         // tells you what already happened and the Stats tell you what has happened
@@ -4614,7 +4622,7 @@ export function setup(ctx, opts) {
         const bodyEl = document.createElement("div");
         bodyEl.id = "__lvRetryLogBody";
         bodyEl.style.cssText =
-            "flex:1;padding:7px 9px;overflow:auto;white-space:pre-wrap;line-height:1.4;font-family:var(--lumiverse-font-mono,ui-monospace,monospace) !important";
+            "flex:1;padding:7px 9px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.4;font-family:var(--lumiverse-font-mono,ui-monospace,monospace) !important";
         return {
             head: head,
             statusEl: statusEl,

@@ -1921,6 +1921,18 @@ console.log("\nthe drawer panel on phone and desktop");
         noSideScroll: head.scrollWidth <= head.clientWidth + 1 &&
                       host.scrollWidth <= host.clientWidth + 1,
         tabH: Math.round(head.querySelector('[role="tab"]').getBoundingClientRect().height),
+        // A line with no spaces in it, like the settings the log prints when
+        // it starts, wraps inside the log rather than running off its edge.
+        logWraps: body.scrollWidth <= body.clientWidth + 1,
+        // Copy and Clear stay on one line together.
+        pairTogether: (() => {
+          const bs = [...head.querySelectorAll("button")].filter((b) => /^(Copy|Clear)$/.test(b.textContent.trim()));
+          return bs.length === 2 && Math.abs(bs[0].getBoundingClientRect().top - bs[1].getBoundingClientRect().top) < 2;
+        })(),
+        // Tab names cut short to "Rep..." are hard to read.
+        cut: [...head.querySelectorAll('[role="tab"]')]
+          .filter((t) => t.scrollWidth > t.clientWidth)
+          .map((t) => t.textContent + " " + t.scrollWidth + ">" + t.clientWidth),
         // The log scrolls inside itself rather than growing the drawer, which
         // only means anything when the drawer has a height to be bounded by.
         bodyScrolls: getComputedStyle(body).overflow === "auto",
@@ -1935,6 +1947,11 @@ console.log("\nthe drawer panel on phone and desktop");
     check(name + ": the header's tabs and buttons stay inside it", out.headFits, out);
     check(name + ": nothing has to be scrolled sideways to reach", out.noSideScroll, out);
     check(name + ": the tabs stay a finger-sized target", out.tabH >= 30, out);
+    // 200px is the floor the panel can be dragged to, where something has to
+    // give. From a small phone up, every name fits.
+    if (drawerW >= 320) check(name + ": no tab name is cut short", out.cut.length === 0, out.cut);
+    check(name + ": a long log line wraps instead of running off the edge", out.logWraps, out);
+    check(name + ": Copy and Clear stay together", out.pairTogether, out);
     check(name + ": the status line still says what it is waiting for", /Retrying in/.test(out.text), out);
     check(name + ": the dot keeps its size", out.dotW >= 6, out);
     check(name + ": the log scrolls inside the panel", out.bodyScrolls, out);
