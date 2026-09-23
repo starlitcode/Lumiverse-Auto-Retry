@@ -48,6 +48,9 @@ shown in Lumiverse.
 
 - Only released behaviour. A bug that was made and fixed between two releases
   never reached anyone and is not listed.
+- Before writing "Fixed" or "Changed", check the thing existed in the last
+  version on `stable`. Something added in this version is described as it is
+  now, under "Added", never as a fix to something users had before.
 - A released entry is not rewritten. Corrections go in the next version.
 - Credit for a report goes in the changelog, for example "Reported by a Discord
   user". Credit goes only to people the owner names.

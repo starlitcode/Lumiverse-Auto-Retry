@@ -42,7 +42,7 @@ _2026-09-23_
 
 - **The refusal checks say what their words about age are for.** The comments beside them, and the page on how a refusal is recognised, described an age refusal as one aimed at your cast rather than at your request, which could be read as treating every refusal about age as a mistake. They name the false positive they are there for now. Nothing about what is recognised, or what is done about it, has changed.
 
-- **One sentence about retrying that was not accurate is gone.** It said a new attempt changes what a model is willing to write no more than pressing the button twice does. A new attempt does sometimes come back different, which is the reason this extension exists, so the sentence was saying the opposite of what the extension is for.
+- **A comment in the code that was not accurate is gone.** It said a retry changes what a model is willing to write no more than clicking twice does. A new attempt does sometimes come back different, which is the reason this extension exists.
 
 ---
 
