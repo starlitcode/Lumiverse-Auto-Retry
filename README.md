@@ -37,6 +37,14 @@ Pressing your **Stop** button, or tapping **Cancel** on the retry pop-up, stops 
 
 To switch it off for one chat, or everywhere, see [Turning it off](docs/settings.md#turning-it-off-in-one-chat).
 
+## Not for sexual content involving minors
+
+Auto Retry is not intended for sexual content involving minors, and I do not condone or support anybody using it for that.
+
+It recognises a refusal about a character's age for one reason: models sometimes misread an adult character, written as an adult, as a minor, and that refusal should not have happened. It is not there to get sexual content involving a minor past a model.
+
+I cannot control what somebody does with an extension once they have it. What I can do is say plainly where I stand.
+
 ## Documentation
 
 - [When it retries](docs/detection.md) - cut-off detection and accidental-refusal detection

@@ -127,7 +127,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.7.0";
+const VERSION = "5.7.1";
 // The addresses the extension points at. Pinned to the released branch rather
 // than to a tag, so an old install still opens the page as it stands today.
 const SAFETY_URL = "https://github.com/starlitcode/Lumiverse-Auto-Retry/blob/stable/docs/safety.md";
@@ -1486,9 +1486,12 @@ const REFUSAL_STRONG = [
     // part left out. Nobody in a scene talks about continuing the narrative.
     /\bcontinue the (?:narrative|story|scene|roleplay) with a focus on\b/i,
     /\bwithout (?:the )?(?:explicit|graphic) (?:anatomical|sexual|physical) (?:details?|descriptions?)\b/i,
-    // The model deciding a character is too young, which is a refusal aimed at
-    // your cast rather than at your request. Nobody in a scene says a character
-    // reads as underage.
+    // The model deciding a character is under age. This is here for the false
+    // positive: an adult character, written as an adult, that a model has
+    // misread as a minor, which is a refusal that should not have happened. It
+    // is not here to get sexual content involving a minor past a model, and
+    // nothing in this extension is meant for that. Nobody in a scene says a
+    // character reads as underage, which is what keeps it off ordinary writing.
     /\b(?:appears? to be|reads as|is described as|seems to be|may be) (?:a |an )?(?:minor|underage|child)\b/i,
     // The same thing with the reason in front of the refusal. The refusal has to
     // follow it, because "that would be illegal, he said, and went back to
@@ -1594,9 +1597,12 @@ const REFUSAL_STRONG = [
 // extension produces, asks for, or helps anybody get. Nothing here reaches a
 // prompt. All a match does is decide that a reply was a refusal rather than
 // writing, which makes the extension press regenerate, the same key you would
-// press yourself. A model that means a refusal gives it again on the next
-// attempt, and the attempt cap ends it: re-rolling changes what a model is
-// willing to write no more than clicking twice does.
+// press yourself, and the attempt cap ends it.
+//
+// The words about age are here for one reason: an adult character that a
+// model has misread as a minor, which is a refusal that should not have
+// happened. This extension is not meant for sexual content involving minors,
+// and does not support anybody using it for that.
 //
 // Every pattern above needs a meta object, a request or a prompt or a roleplay,
 // because those are words a character never uses. A refusal that names what it

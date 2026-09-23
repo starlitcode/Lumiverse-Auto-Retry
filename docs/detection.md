@@ -399,11 +399,13 @@ The subjects are what a model declines a roleplay over:
 - consent framings, including dubious and non-consensual
 - kink and BDSM
 - the family framings read as incest whether or not they are
-- the ages a model decides a character is
+- an adult character a model misreads as a minor
 - content it calls illegal
 - the horror side: graphic violence, gore, mutilation, body horror, animal cruelty and the rest
 
-That list is words that turn up in refusal messages, kept so a refusal can be recognised as one. It is not a list of things the extension produces or helps anybody get. Nothing in it reaches a prompt, and a match only decides that a reply was a refusal rather than writing, which makes the extension press regenerate. A model that means a refusal gives the same one back on the next attempt, and the cap ends it.
+That list is words that turn up in refusal messages, kept so a refusal can be recognised as one. It is not a list of things the extension produces or helps anybody get. Nothing in it reaches a prompt, and a match only decides that a reply was a refusal rather than writing, which makes the extension press regenerate, and the cap ends it.
+
+The words about age are there for the false positive: an adult character, written as an adult, that a model has misread as a minor. Auto Retry is not meant for sexual content involving minors, and does not support anybody using it for that.
 
 Subjects are listed in the forms a refusal uses them in, not only as bare nouns, since a reply about somebody's past declines to write "a character is raped" rather than "rape".
 

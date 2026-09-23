@@ -8,6 +8,20 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.7.1
+
+_2026-09-23_
+
+### Changed
+
+- **The README says plainly that Auto Retry is not for sexual content involving minors.** It also says why a refusal about a character's age is recognised at all: models sometimes misread an adult character, written as an adult, as a minor, and that refusal should not have happened. It is not there to get sexual content involving a minor past a model.
+
+- **The refusal checks say what their words about age are for.** The comments beside them, and the page on how a refusal is recognised, described an age refusal as one aimed at your cast rather than at your request, which could be read as treating every refusal about age as a mistake. They name the false positive they are there for now. Nothing about what is recognised, or what is done about it, has changed.
+
+- **One sentence about retrying that was not accurate is gone.** It said a new attempt changes what a model is willing to write no more than pressing the button twice does. A new attempt does sometimes come back different, which is the reason this extension exists, so the sentence was saying the opposite of what the extension is for.
+
+---
+
 ## 5.7.0
 
 _2026-09-19_
