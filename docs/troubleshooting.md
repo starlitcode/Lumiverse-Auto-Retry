@@ -1,79 +1,90 @@
 # Reporting a bug
 
-Two things here: a snapshot you can paste into a bug report, and a panel for watching the extension work while it happens.
+This page covers the debug report you can paste into a bug report, the on-screen panel for watching the extension work, and some common questions.
+
+## If it seems to do nothing
+
+Check the top of the settings panel first. A permission that was never granted causes no error: the events the extension listens for simply never arrive, so it looks installed and working.
+
+- When a permission is missing, the panel says which one and what it stops.
+- If you refused one on purpose, press the × on its note to hide it until you reload.
+- The debug report always lists every permission.
 
 ## Debug info
 
-If the extension seems to do nothing at all, check the top of the settings panel first. A permission that was never granted is the one fault that raises no error anywhere: the events the extension listens for simply never arrive, so it sits there looking installed and working. When one is missing, the panel says which and what it costs, and the debug report lists all of them. If you turned one off on purpose, each note has an × that hides it until you reload the page. Nothing is written down, so a reload brings them back, and so does granting a permission and then losing it again. The debug report lists every permission either way.
+**Debug info**, in the settings panel, builds a short plain-text report:
 
-**Debug info** in the settings panel is the main tool. Tick the parts you want, press **Build preview**, then edit the text to take out anything private before you copy it. What you get is a short plain-text snapshot, no developer tools needed, and nothing leaves your device until you paste it somewhere.
+1. Tick the parts you want.
+2. Press **Build preview**.
+3. Edit the text to take out anything private.
+4. Copy it.
 
-The first two lines are always there and cannot be ticked off. They name the version the panel is running and the version the server side is running. Those are usually the same. They differ when you update while a tab is open and have not reloaded that tab since, and a report that says so saves the first round of questions.
+Nothing leaves your device until you paste it somewhere.
 
-The parts are **Your settings**, **Buttons and selectors**, **Permissions, browser and screen**, and **Session totals and recent activity**. Each name covers everything in that part, so leaving one out never drops something you did not know was in it. Your permissions ride with the browser part, and the selectors you wrote ride with whether they match.
-
-The settings it reports come straight from the option list, so every setting is always in it. There is no second list to fall out of date and quietly leave something out.
-
-**Session totals** count how many replies came back fine, how many retries fired, how many messages it gave up on, and a breakdown of retries by cause since the page loaded. Those answer the question a bug report usually cannot: "it retries too much" becomes "ninety retries, all of them for a cut-off reply".
-
-Under that is the **activity timeline**, the last twenty things it did, kept whether or not console logging is on.
+- **The first two lines** are always included. They name the version of the panel and the version of the backend. These only differ if you updated without reloading the tab.
+- **The parts** are **Your settings**, **Buttons and selectors**, **Permissions, browser and screen**, and **Session totals and recent activity**. Each covers everything in that part.
+- **Your settings** comes straight from the full list of options, so no setting is ever left out.
+- **Session totals** count replies that came back fine, retries, messages it gave up on, and retries by reason, since the page loaded. So "it retries too much" becomes "ninety retries, all for a cut-off reply".
+- **The activity timeline** is the last twenty things it did.
 
 ## It retried a reply you wanted to keep
 
-Open the on-screen panel and go to the **Replaced** tab. The reply it threw away is there, with what it was thrown away for. Press **Copy** to take it back.
+Open the on-screen panel and go to the **Replaced** tab. The reply it threw away is there, with the reason. Press **Copy** to take it back.
 
-That covers the one reply. To stop it happening again, the reason on that tab is what to act on, because each one has its own switch under **When to count a reply as bad**:
+To stop it happening again, look at the reason. Each has its own switch under **When to count a reply as bad**:
 
-- **cut off** or **stalled**: turn off **It cut off mid-sentence**. That one switch covers both, since a reply that stops partway with text already in it is a cut-off reply whichever way it stopped.
+- **cut off** or **stalled**: turn off **It cut off mid-sentence**. It covers both.
 - **short**: turn off **It was very short**, or lower **What counts as "very short"**.
-- **refusal**, **breaking off** or **crisis**: the [refusal tuning](detection.md) page covers narrowing these. Adding the wording it caught to **Never treat these as a refusal** is usually the quickest fix.
-- **empty**, **cut off mid-reasoning** or **thinking only, no reply**: turn off **It came back blank**, which governs all three. Worth checking your model is not being cut short by a token limit first.
+- **refusal**, **breaking off** or **crisis**: see [When it retries](detection.md). Adding the wording it caught to **Never treat these as a refusal** is usually the quickest fix.
+- **empty**, **cut off mid-reasoning** or **thinking only, no reply**: turn off **It came back blank**, which covers all three. First check your model is not being cut short by a token limit.
 
-The Stats tab shows the same reasons as a tally, so if this keeps happening it says which check is responsible over a whole session rather than one reply.
+The **Stats** tab counts the reasons over the whole session, so you can see which check keeps firing.
+
+**Impersonate is never retried.** It writes your own turn into the input box, not a reply. Lumiverse does not say what kind of generation is starting, so Auto Retry notices the press on Lumiverse's **Impersonate** button. An impersonation started another way, such as a shortcut that skips that button, is judged like a reply.
 
 ## It called a reply stuck after you came back to the tab
 
-Everything the extension knows about a generation arrives over Lumiverse's socket. A tab in the background can miss those events outright, and they are not held and handed over later, they are gone. So the extension went on waiting for a first word that had already come and gone, and **Give up waiting for it to start** ran out on a reply sitting in the chat finished.
+A tab in the background can miss Lumiverse's events completely. So the extension could wait for a first word that had already arrived. Two things prevent a wrong retry here, and neither needs setting:
 
-Two things stop that now, and neither needs setting.
+- **It checks the page before acting.** If the reply on screen has changed since the generation started, words arrived, so it does not retry. It writes a line saying so.
+- **Time the tab spent asleep does not count.** A background tab's timers are held back or frozen. When you come back, the wait starts again from that moment, and the panel says why.
 
-Before either wait acts, it looks at the page. The reply on screen when the generation started is remembered, and if what is on screen has changed, words arrived, whatever reached the tab. It stands down and writes a line saying so. It is not counted as a reply that came back fine, because it was never checked: nothing about it reached the tab to check.
-
-A wait is also not judged over time the page spent asleep. A background tab has its timers held back, and one the browser freezes runs nothing at all and then delivers everything at once when you come back, so a wait coming due then is measuring the time you were away. Coming back starts the wait again from that moment, and the panel says why.
-
-A generation that really produced nothing is still re-rolled either way.
+A generation that really produced nothing is still retried.
 
 ## "No chat is open"
 
-Anything that acts on the chat you are in has to know which chat that is, and the Extras menu and the floating button are both reachable from the chat list with nothing open. Asked there, they say **No chat is open** rather than acting on the chat you were last in.
+The Extras menu and the floating button can be reached from the chat list, with no chat open. There they say **No chat is open** instead of acting on the chat you were last in.
 
-How it knows is worth saying, because one of the two answers is not as good as it looks. Lumiverse can be asked which chat is open, but that question is answered on the server, and what comes back is the most recent chat on your account rather than the page in front of you. On the home screen it names the chat you just left. What actually tells the two apart is the address in your browser: while you are in a chat, the address carries that chat's id, and when it stops carrying it you are somewhere else. Auto Retry checks that a few times a second while it is holding a chat, and stops as soon as it is not.
+How it knows which chat you are in:
 
-If your Lumiverse uses addresses that do not carry the chat id, that signal is not there and nothing tries to guess. The extension then falls back to the last chat it saw you in, which is what it has always done when it cannot look.
+- Lumiverse can be asked which chat is open, but it answers with your account's most recent chat, not the page you are looking at. On the home screen, that is the chat you just left.
+- So Auto Retry also checks the address in your browser. While you are in a chat, the address contains its id. When it does not, you are somewhere else.
+- If your Lumiverse's addresses do not contain the chat id, it falls back to the last chat it saw you in.
 
-The **Turn off here** row works from the same answer. Outside a chat it is greyed out and reads **No chat is open**, rather than going on naming the chat you left.
+**Turn off here** follows the same answer. Outside a chat it is greyed out and says **No chat is open**.
 
 ## When Lumiverse does not say which chat you are in
 
-Rarely, Lumiverse reports a reply without saying which chat it belongs to. Retrying still works, and three things that need a chat by name do not:
+Sometimes Lumiverse reports a reply without saying which chat it is in. Retrying still works, but three things that need the chat do not:
 
-- **Turn off here** is greyed out, with a note saying it is waiting to find out which chat this is. Sending a message, or switching to another chat and back, is usually enough. Use the main **Auto Retry** switch in the meantime.
-- **The retry note is not added.** The note is held for one named chat and collected when the next reply is built, so with no chat to attach it to it could land on a reply somewhere else. The retry still happens, and the log says why the note was left out.
-- **Anything named for the chat you are in** says **No chat is open**, since there is nothing for it to name.
+- **Turn off here** is greyed out, with a note that it is waiting to find out which chat this is. Sending a message, or switching chats and back, usually fixes it. Use the main **Auto Retry** switch meanwhile.
+- **The retry note is not added.** A note belongs to one chat, and without a chat it could land on a reply somewhere else. The retry still happens, and the log says why the note was left out.
+- **Anything that names the chat you are in** says **No chat is open**.
 
-In the Stats tab, any retries from this state are counted together on a row called **Chats without an id**.
+On the **Stats** tab, these retries are counted on a row called **Chats without an id**.
 
 ## The on-screen panel
 
-For watching it work live, turn on **Show the on-screen panel** under Basics, and pick where it goes with the row underneath: floating over the chat, or in Lumiverse's sidebar drawer. It is useful on a phone, where the browser console is out of reach.
+Turn on **Show the on-screen panel** under Basics to watch it work live. The row under it chooses where it goes: floating over the chat, or in Lumiverse's sidebar drawer. It is useful on a phone, where there is no browser console.
 
-Three tabs:
+It has four tabs:
 
-- **Log** updates as generations run and retries fire.
-- **Prompt** shows the whole prompt that went to the model, with your refusal notes marked where they were inserted. This is the quickest way to answer "did my note go, and where". It needs the `interceptor` permission, and it tells you so if it is empty after a reply.
+- **Log** updates as replies arrive and retries happen.
+- **Prompt** shows the whole prompt that went to the model, with your retry notes marked where they were added. It needs the `interceptor` permission, and says so if it is empty.
 - **Stats** shows what it has been doing and what it keeps retrying for, and says when it has paused itself after repeated failures.
+- **Replaced** shows the last reply a retry threw away in this chat.
 
-Drag the panel by its header and resize it from the bottom corner. **Copy** and **Clear** act on whichever tab you are looking at. The toggle is the only thing controlling it, so turning that off makes it disappear.
+Drag the panel by its header, and resize it from the bottom corner. **Copy** and **Clear** act on the tab you are looking at. Turning off **Show the on-screen panel** hides it. More about each tab is in [All settings](settings.md#the-on-screen-panel).
 
 ---
 

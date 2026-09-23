@@ -991,11 +991,10 @@ console.log("\nthe picker and the browser's own long press");
 
 // ---- what each part of a row answers to ----
 {
-  // A label with no `for` names the first labelable element inside it, and a
-  // button is one, so the "?" on these rows took the label off the setting:
-  // A wrong target here would open the description instead of flipping the
-  // switch, leaving the switch with only its own small box to press. The "?"
-  // alone cannot show that, so this presses the words too.
+  // Only the switch flips the switch. The words beside it name it for a screen
+  // reader but do not answer a press, because a stray tap on a setting's name
+  // used to change the setting. The "?" opens the description and does nothing
+  // else. Both are pressed here, not only read.
   const { out, errors } = await inPanel(
     browser,
     { viewport: { width: 480, height: 1030 }, touch: true },
@@ -1021,15 +1020,16 @@ console.log("\nthe picker and the browser's own long press");
           const tick = row.querySelector("[data-ar-check]");
           const name = String(row.getAttribute("data-ar-row") || "").slice(0, 26);
           if (row.tagName === "LABEL") out.wrong.push("the whole row is the label: " + name);
-          const words = row.querySelector("label");
-          if (!words) out.wrong.push("the words are not a label: " + name);
-          else if (words.control !== tick) out.wrong.push("the words name the wrong control: " + name);
+          const words = tick && document.getElementById(tick.getAttribute("aria-labelledby") || "");
+          if (!words) out.wrong.push("nothing names the switch: " + name);
+          else if (!row.contains(words)) out.wrong.push("the switch is named by another row's words: " + name);
+          if (row.querySelector("label")) out.wrong.push("the words are a label, so pressable: " + name);
         }
         // And pressed, on a few, both ways.
         for (const row of rows.slice(0, 6)) {
           const tick = row.querySelector("[data-ar-check]");
           const q = row.querySelector("button[data-ar-hint]");
-          const words = row.querySelector("label");
+          const words = tick && document.getElementById(tick.getAttribute("aria-labelledby") || "");
           if (!words) continue;
           out.pressed++;
           const name = String(row.getAttribute("data-ar-row") || "").slice(0, 26);
@@ -1039,12 +1039,9 @@ console.log("\nthe picker and the browser's own long press");
           press(words);
           await frame();
           await new Promise((r) => setTimeout(r, 250));
-          if (tick.checked === was) out.bad.push("the words did not flip it: " + name);
+          if (tick.checked !== was) out.bad.push("the words flipped it: " + name);
           if (document.querySelector('[role="tooltip"]'))
             out.bad.push("the words opened the description: " + name);
-          press(words);
-          await frame();
-          await new Promise((r) => setTimeout(r, 250));
           was = tick.checked;
           press(q);
           await frame();
@@ -1062,13 +1059,13 @@ console.log("\nthe picker and the browser's own long press");
   );
   check("there are tick rows with a ? to check", out.n >= 10, out.n);
   check(
-    `on all ${out.n}, the words name the switch and not the ?`,
+    `on all ${out.n}, the words name the switch without being pressable`,
     out.wrong.length === 0,
     out.wrong.slice(0, 4),
   );
   check(
-    `pressing the words on ${out.pressed} of them flips the switch, and the ? opens the description`,
-    out.bad.length === 0,
+    `pressing the words on ${out.pressed} of them leaves the switch alone, and the ? opens the description`,
+    out.pressed >= 4 && out.bad.length === 0,
     out.bad.slice(0, 4),
   );
   check("no console errors", errors.length === 0, errors);
@@ -1298,7 +1295,7 @@ console.log("\nkeyboard and search");
     }),
   );
   // Four sections start shut: refusal tuning, buttons, debug info and
-  // import / export. The count is asserted exactly, so a section that quietly
+  // import / export. The count is asserted exactly, so a section that
   // stops being collapsible is caught here.
   check("every section header is focusable", out.focusable && out.sections === 4, out.sections);
   check("Enter opens a section", out.afterEnter.exp === "true" && out.afterEnter.vis === 1, out.afterEnter);
@@ -1924,6 +1921,18 @@ console.log("\nthe drawer panel on phone and desktop");
         noSideScroll: head.scrollWidth <= head.clientWidth + 1 &&
                       host.scrollWidth <= host.clientWidth + 1,
         tabH: Math.round(head.querySelector('[role="tab"]').getBoundingClientRect().height),
+        // A line with no spaces in it, like the settings the log prints when
+        // it starts, wraps inside the log rather than running off its edge.
+        logWraps: body.scrollWidth <= body.clientWidth + 1,
+        // Copy and Clear stay on one line together.
+        pairTogether: (() => {
+          const bs = [...head.querySelectorAll("button")].filter((b) => /^(Copy|Clear)$/.test(b.textContent.trim()));
+          return bs.length === 2 && Math.abs(bs[0].getBoundingClientRect().top - bs[1].getBoundingClientRect().top) < 2;
+        })(),
+        // Tab names cut short to "Rep..." are hard to read.
+        cut: [...head.querySelectorAll('[role="tab"]')]
+          .filter((t) => t.scrollWidth > t.clientWidth)
+          .map((t) => t.textContent + " " + t.scrollWidth + ">" + t.clientWidth),
         // The log scrolls inside itself rather than growing the drawer, which
         // only means anything when the drawer has a height to be bounded by.
         bodyScrolls: getComputedStyle(body).overflow === "auto",
@@ -1938,6 +1947,11 @@ console.log("\nthe drawer panel on phone and desktop");
     check(name + ": the header's tabs and buttons stay inside it", out.headFits, out);
     check(name + ": nothing has to be scrolled sideways to reach", out.noSideScroll, out);
     check(name + ": the tabs stay a finger-sized target", out.tabH >= 30, out);
+    // 200px is the floor the panel can be dragged to, where something has to
+    // give. From a small phone up, every name fits.
+    if (drawerW >= 320) check(name + ": no tab name is cut short", out.cut.length === 0, out.cut);
+    check(name + ": a long log line wraps instead of running off the edge", out.logWraps, out);
+    check(name + ": Copy and Clear stay together", out.pairTogether, out);
     check(name + ": the status line still says what it is waiting for", /Retrying in/.test(out.text), out);
     check(name + ": the dot keeps its size", out.dotW >= 6, out);
     check(name + ": the log scrolls inside the panel", out.bodyScrolls, out);
@@ -4297,7 +4311,7 @@ console.log("\npreset controls");
       const empty = { picked: sel ? sel.value : null, buttons: state(), options: sel ? sel.options.length : 0 };
 
       // Save one, which selects it, and everything should come alive.
-      document.querySelector('input[placeholder="Preset name"]').value = "trial";
+      document.querySelector('input[placeholder="A name for this preset"]').value = "trial";
       by("Save as new").click();
       await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       const saved = { picked: sel.value, buttons: state(), options: sel.options.length };
@@ -4360,7 +4374,7 @@ console.log("\none preset bar, holding only its own keys");
       [...document.querySelectorAll("button")].find((x) => x.textContent.trim() === "Save").click();
       await frame();
       const b = bar("notes");
-      b.querySelector('input[placeholder="Preset name"]').value = "noteset";
+      b.querySelector('input[placeholder="A name for this preset"]').value = "noteset";
       press(b, "Save as new");
       await frame();
       const store = JSON.parse(localStorage.getItem("lv-auto-retry:presets:v1"));
@@ -4424,7 +4438,7 @@ console.log("\nleaving a chat for the home screen");
       history.pushState({}, "", "/");
       await wait(1200);
       const atHome = state();
-      // And back in, which is the other half of the journey.
+      // And back into the chat, which has to bring the state back.
       history.pushState({}, "", "/chat/" + chat);
       window.__handlers.CHARACTER_MESSAGE_RENDERED({ chatId: chat, messageId: "m2" });
       await frame();
@@ -4597,7 +4611,7 @@ console.log("\npicking a preset loads it, so a save cannot land on the wrong one
         await frame();
       };
       const saveAs = async (name) => {
-        bar.querySelector('input[placeholder="Preset name"]').value = name;
+        bar.querySelector('input[placeholder="A name for this preset"]').value = name;
         press("Save as new");
         await frame();
       };
@@ -4793,7 +4807,7 @@ console.log("\npreset boundary");
       // Saved, and saved with wording that could not be mistaken for a default.
       set("refusalNotes", "please try that again");
       by("Save").click(); await frame();
-      bar.querySelector('input[placeholder="Preset name"]').value = "A";
+      bar.querySelector('input[placeholder="A name for this preset"]').value = "A";
       inBar("Save as new").click(); await frame();
 
       // Changed, and the switch that decides whether notes go at all turned off.
@@ -4994,7 +5008,7 @@ console.log("\nbackup restore");
     window.__get = (k) => { const el = window.__ctl(k); return el ? (el.type === "checkbox" ? el.checked : el.value) : "(missing)"; };
     window.__status = () => {
       const bits = [...document.querySelectorAll("div")].map((d) => d.textContent || "");
-      return bits.filter((t) => /Imported|isn't a valid|Nothing matched|Couldn't read/.test(t)).pop() || "";
+      return bits.filter((t) => /Imported|is not a valid|Nothing matched|Could not read/.test(t)).pop() || "";
     };
     // A starting point that the file will contradict.
     window.__ctl("enabled").click();
@@ -5099,9 +5113,9 @@ console.log("\nbackup restore");
 
   check("junk is refused and nothing changes",
     afterJunk.enabled === before.enabled && afterJunk.rules === before.rules &&
-    /isn't a valid/.test(afterJunk.status), afterJunk);
+    /is not a valid/.test(afterJunk.status), afterJunk);
   check("a file from another app is refused too",
-    afterForeign.rules === before.rules && /isn't a valid/.test(afterForeign.status), afterForeign);
+    afterForeign.rules === before.rules && /is not a valid/.test(afterForeign.status), afterForeign);
   check("a category we do not know is skipped, not fatal",
     afterUnknownCat.maxRetries === "6" && /Imported/.test(afterUnknownCat.status), afterUnknownCat.status);
   check("a real backup fills the fields in", afterGood.rules === "hot => cold" &&
@@ -6266,7 +6280,7 @@ console.log("\na retry never clicks the extension's own panel");
     await new Promise((r) => setTimeout(r, 60));
 
     // The panel really does hold something the built-in swipe pattern matches,
-    // so this cannot pass by the trap having quietly gone away.
+    // so this cannot pass by the trap having gone away.
     const SWIPE = '[aria-label="Next swipe"], [data-action="swipe-right"], [data-testid="swipe-right"], ' +
       'button[aria-label*="next swipe" i], button[aria-label*="swipe right" i], ' +
       'button[aria-label*="reroll" i], button[title*="swipe" i]';
@@ -6286,6 +6300,158 @@ console.log("\na retry never clicks the extension's own panel");
     out.retried === true, out);
   check("the extension marks what it owns", out.ownUiMarked === true, out);
   check("no console errors", errors.length === 0, errors);
+}
+
+// ---- finding the button to press ----
+// A saved list is a copy of the defaults as they were when it was saved, so it
+// can match nothing on a newer Lumiverse while the button sits on screen. The
+// built-in list stands behind it. And the host swaps its stop button back for
+// its own controls on its own schedule, so a retry that looked once, at the
+// wrong instant, called a button missing that appeared a moment later.
+console.log("\nfinding the button to press");
+{
+  const run = async (markup, settings, later) => {
+    const page = await browser.newPage();
+    const errors = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    await stage(page, "<div id=modal></div>" + markup);
+    await page.addScriptTag({ content: SOURCE, type: "module" });
+    await page.waitForFunction(() => !!window.__setup);
+    const out = await page.evaluate(async ([settings, later]) => {
+      const h = {};
+      let clicks = 0;
+      const hook = () => {
+        const b = document.querySelector("[data-composer-action=regen] button");
+        if (b && !b.__hooked) {
+          b.__hooked = true;
+          b.addEventListener("click", () => clicks++);
+        }
+      };
+      hook();
+      window.__setup(
+        { events: { on: (n, f) => { h[n] = f; return () => {}; } },
+          ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }) } },
+        Object.assign({ toast: false, retryDelayMs: 10, backoffFactor: 1, maxDelayMs: 10, jitter: false,
+          maxRetries: 4, stuckTimeoutMs: 0, idleTimeoutMs: 0, pauseWhenFailing: false }, settings),
+      );
+      if (later) {
+        // Not there when the retry comes due, there a moment after.
+        setTimeout(() => {
+          const unit = document.createElement("span");
+          unit.setAttribute("data-composer-action", "regen");
+          unit.style.display = "contents";
+          unit.innerHTML = '<button type="button" aria-label="Neu generieren">R</button>';
+          document.body.appendChild(unit);
+          hook();
+        }, later);
+      }
+      h.GENERATION_STARTED({ chatId: "B", generationId: "b1" });
+      await new Promise((r) => setTimeout(r, 10));
+      h.GENERATION_ENDED({ chatId: "B", generationId: "b1", error: "boom" });
+      await new Promise((r) => setTimeout(r, (later || 0) + 700));
+      return { clicks };
+    }, [settings, later]);
+    await page.close();
+    return { out, errors };
+  };
+  // Lumiverse's own composer button, labelled in another language, so the only
+  // thing that can find it is the host's mark on the action.
+  const REGEN = '<span data-composer-action="regen" style="display:contents"><button type="button" aria-label="Neu generieren">R</button></span>';
+
+  const stale = await run(REGEN, {
+    regenerateSelector: ".saved-long-ago",
+    swipeNextSelector: ".also-saved-long-ago",
+    retryByNewReroll: false,
+  });
+  check("a saved list that matches nothing still reaches the host's button", stale.out.clicks === 1, stale.out);
+  check("no console errors", stale.errors.length === 0, stale.errors);
+
+  const late = await run("", {}, 800);
+  check("a button that turns up a moment late is still pressed", late.out.clicks === 1, late.out);
+  check("no console errors", late.errors.length === 0, late.errors);
+
+  // Lumiverse's own next-swipe arrow, exactly as it renders, hashed class and
+  // all. With a retry adding a swipe, which is the default, this is the button
+  // pressed, and only the one on the newest message.
+  {
+    const page = await browser.newPage();
+    const errors = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    const ARROW =
+      '<button type="button" class="_btn_12fwn_8" aria-label="Next swipe"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-right"><path d="m9 18 6-6-6-6"></path></svg></button>';
+    await stage(page, "<div id=modal></div><div class=older>" + ARROW + "</div><div class=newest>" + ARROW + "</div>");
+    await page.addScriptTag({ content: SOURCE, type: "module" });
+    await page.waitForFunction(() => !!window.__setup);
+    const out = await page.evaluate(async () => {
+      const h = {};
+      const hits = { older: 0, newest: 0 };
+      document.querySelector(".older button").addEventListener("click", () => hits.older++);
+      document.querySelector(".newest button").addEventListener("click", () => hits.newest++);
+      window.__setup(
+        { events: { on: (n, f) => { h[n] = f; return () => {}; } },
+          ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }) } },
+        { toast: false, retryDelayMs: 10, backoffFactor: 1, maxDelayMs: 10, jitter: false,
+          maxRetries: 4, stuckTimeoutMs: 0, idleTimeoutMs: 0, pauseWhenFailing: false, retryByNewReroll: true },
+      );
+      h.GENERATION_STARTED({ chatId: "B", generationId: "s1" });
+      await new Promise((r) => setTimeout(r, 10));
+      h.GENERATION_ENDED({ chatId: "B", generationId: "s1", error: "boom" });
+      await new Promise((r) => setTimeout(r, 700));
+      return hits;
+    });
+    await page.close();
+    check("Lumiverse's own swipe arrow is pressed on the newest message", out.newest === 1 && out.older === 0, out);
+    check("no console errors", errors.length === 0, errors);
+  }
+}
+
+// ---- an impersonation is not a reply ----
+// Impersonate writes your own turn into the input box. Judged as a reply, a turn
+// that stopped where you would stop read as cut off and was retried over the
+// top of what it had just written. The press on the host's button is what
+// marks the generation that follows as one to leave alone.
+console.log("\nan impersonation is not a reply");
+{
+  const run = async (pressFirst) => {
+    const page = await browser.newPage();
+    const errors = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    await stage(
+      page,
+      "<div id=modal></div>" +
+        '<button data-testid="regenerate">Regenerate</button>' +
+        '<span data-composer-action="oneliner" style="display:contents">' +
+        '<button type="button" title="Impersonate: One-liner" aria-label="Impersonate">I</button></span>',
+    );
+    await page.addScriptTag({ content: SOURCE, type: "module" });
+    await page.waitForFunction(() => !!window.__setup);
+    const out = await page.evaluate(async (pressFirst) => {
+      const h = {};
+      let clicks = 0;
+      document.querySelector('[data-testid="regenerate"]').addEventListener("click", () => clicks++);
+      window.__setup(
+        { events: { on: (n, f) => { h[n] = f; return () => {}; } },
+          ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }) } },
+        { toast: false, retryDelayMs: 10, backoffFactor: 1, maxDelayMs: 10, jitter: false,
+          maxRetries: 4, stuckTimeoutMs: 0, idleTimeoutMs: 0, pauseWhenFailing: false,
+          retryOnTruncated: true, retryByNewReroll: false },
+      );
+      if (pressFirst) document.querySelector('[aria-label="Impersonate"]').click();
+      h.GENERATION_STARTED({ chatId: "B", generationId: "i1" });
+      await new Promise((r) => setTimeout(r, 10));
+      // Stops mid-sentence, which is what a cut-off reply looks like.
+      h.GENERATION_ENDED({ chatId: "B", generationId: "i1", content: "I lean on the counter and watch the" });
+      await new Promise((r) => setTimeout(r, 400));
+      return { clicks };
+    }, pressFirst);
+    await page.close();
+    return { out, errors };
+  };
+  const plain = await run(false);
+  check("a reply that stops mid-sentence is retried, as it should be", plain.out.clicks === 1, plain.out);
+  const imp = await run(true);
+  check("the same text after pressing Impersonate is left alone", imp.out.clicks === 0, imp.out);
+  check("no console errors", plain.errors.length === 0 && imp.errors.length === 0, plain.errors.concat(imp.errors));
 }
 
 // ---- a reply that stopped partway is a cut-off reply ----
@@ -9283,7 +9449,7 @@ console.log("\nprompt viewer");
   const half = await run({ liveLog: true, toast: false, costIn: 3 });
   check("with no output price, only the prompt is counted",
     /About 0\.003 a retry at this size/.test(half.out), half.out.slice(0, 260));
-  check("and the line says so rather than leaving half out quietly",
+  check("and the line says so rather than leaving half out without saying so",
     /Only the prompt is priced/.test(half.out), half.out.slice(0, 260));
 
   // A reply from another chat is not a stand-in for the next one here, and the
@@ -10684,7 +10850,7 @@ console.log("\nreset confirmation");
         .dispatchEvent(new Event("change", { bubbles: true }));
       // Scoped: the note preset bar is identical and sits in an earlier section.
       const swapBar = document.querySelector('[data-ar-presets="notes"]');
-      swapBar.querySelector('input[placeholder="Preset name"]').value = "trial";
+      swapBar.querySelector('input[placeholder="A name for this preset"]').value = "trial";
       [...swapBar.querySelectorAll("button")].find((b) => b.textContent.trim() === "Save as new").click();
       await frame();
       [...document.querySelectorAll("button")].find((b) => /^Reset/.test(b.textContent.trim())).click();
@@ -10728,7 +10894,7 @@ console.log("\nreset confirmation");
         .dispatchEvent(new Event("change", { bubbles: true }));
       // Scoped: the note preset bar is identical and sits in an earlier section.
       const swapBar = document.querySelector('[data-ar-presets="notes"]');
-      swapBar.querySelector('input[placeholder="Preset name"]').value = "trial";
+      swapBar.querySelector('input[placeholder="A name for this preset"]').value = "trial";
       [...swapBar.querySelectorAll("button")].find((b) => b.textContent.trim() === "Save as new").click();
       await frame();
       const before = JSON.parse(localStorage.getItem("lv-auto-retry:presets:v1")).notes.length;
@@ -10784,7 +10950,7 @@ console.log("\nreset urgency");
         .dispatchEvent(new Event("change", { bubbles: true }));
       // Scoped: the note preset bar is identical and sits in an earlier section.
       const swapBar = document.querySelector('[data-ar-presets="notes"]');
-      swapBar.querySelector('input[placeholder="Preset name"]').value = "trial";
+      swapBar.querySelector('input[placeholder="A name for this preset"]').value = "trial";
       [...swapBar.querySelectorAll("button")].find((b) => b.textContent.trim() === "Save as new").click();
       await frame();
 

@@ -1,91 +1,97 @@
-# Fixing the regenerate button
+# Buttons it clicks
 
-Lumiverse has no built-in way for an extension to regenerate a reply, so the re-fire clicks your own on-screen regenerate or swipe button. The defaults match common Lumiverse builds, but a future update could rename those buttons.
+Lumiverse has no way for an extension to regenerate a reply directly. So a retry presses your own swipe or regenerate button on the screen. The built-in list finds these on current versions of Lumiverse, but a future update could change them.
 
-There are three button fields, listed in the order a retry tries them:
+## The three buttons
 
-- **next / swipe** adds a reroll. This is the one it tries first.
-- **regenerate** redoes the reply where it stands. This is the fallback.
-- **stop** halts a frozen reply.
+There are three button settings, in the order a retry uses them:
 
-Each takes one CSS selector, the kind you would pass to `document.querySelector`. You can list several separated by commas, and each one after the first is a fallback.
+- **next / swipe** adds a new reroll. A retry tries this first.
+- **regenerate** redoes the reply in place. This is the backup.
+- **stop** stops a reply that has frozen.
 
-They are checked in the exact order you write them, so put your most specific selectors first, such as data attributes, and broader ones last, such as aria-label or title.
+How a retry finds the button:
 
-By default a retry clicks the next / swipe button, which adds a new reroll and leaves the existing ones in place. That way a retry the extension should not have made can be undone: the reply it re-rolled is still there to swipe back to. This is **Retry by adding a new reroll**, at the end of "How it retries" in settings.
+- Your own selectors are tried first, then the built-in list. So a list you saved in an older version can never hide a button the built-in list would find.
+- The built-in list starts with the mark Lumiverse puts on its own Regenerate button. It keeps working if the button's title or language changes.
+- It presses the button on the newest message.
+- A button that is hidden or greyed out is skipped, because pressing it would do nothing and waste a retry.
+- If no button is on screen yet, it keeps looking for a couple of seconds. Lumiverse sometimes shows its buttons a moment after a reply ends.
 
-Turn it off and a retry uses the regenerate button instead, which redoes the reply in place and on some builds clears the other rerolls on that message. It is the faster of the two and the one to pick if your build has no swipe button worth clicking, but a reply it takes away is gone.
+## Swipe or regenerate
 
-Whichever button the toggle prefers, the other one is the fallback, and the choice is made at the moment of the click from what is on screen and actually clickable. A button that is present but disabled or hidden is skipped rather than clicked, since clicking one of those does nothing and would burn a retry.
+By default, a retry presses the **next / swipe** button. This adds a new reroll and keeps the old ones, so if a retry should not have happened, you can swipe back to the reply it replaced. This is **Retry by adding a new reroll**, at the end of "How it retries" in the settings.
 
-This applies to every reason a retry fires, including empty replies and errors, so the toggle does what it says on all of them. If your build has no next / swipe button, fill in the **regenerate** box: a retry falls back to it and writes a line in the log saying it had to, so a reroll that goes missing is not a mystery.
+Turn it off, and a retry presses **regenerate** instead. This redoes the reply in place. On some versions it also clears the other rerolls on that message, so a reply it replaces is gone. It is a little faster, and the one to use if your version has no swipe button.
 
-## Setting the buttons without writing a selector
+- Whichever button the switch prefers, the other is the backup.
+- This applies to every reason for a retry, including empty replies and errors.
+- If a retry has to use the backup, the log says so.
+- If a press lands but no reply starts, it presses the other button once before giving up on that try. This happens when a swipe button moves between existing rerolls instead of making a new one.
 
-Each button setting has a **Pick it for me** button next to **Test**. Press it and the settings panel hides. Press and hold the real button in Lumiverse, and the selector is filled in for you.
+## Setting a button without writing a selector
 
-The press itself is blocked, so picking your stop or regenerate button does not also press it.
+Each button setting has a **Pick it for me** button next to **Test**.
 
-A press that is not held does what it always does. That is how you reach a button that only appears once a reply is running: send one normally, then hold the stop button.
+1. Press **Pick it for me**. The settings panel hides.
+2. Press and hold the real button in Lumiverse. The selector is filled in for you.
 
-Selecting text is off while the picker is up. A long press is also how the browser starts a selection and raises its own menu, and it decides that at about the moment the hold finishes.
+- The press is blocked, so picking your stop or regenerate button does not also press it.
+- A short press works as normal. Use this to reach a button that only appears while a reply is running: send a message, then hold the stop button.
+- Text selection is turned off while picking, because a long press also starts a selection.
+- Press **Cancel**, or Esc on a keyboard, to stop picking.
 
-Press Cancel on the prompt to back out, or Esc if you are on a keyboard.
-
-It builds the selector from what is most likely to survive an app update, preferring `aria-label`, `title` and `data-` attributes over class names. Lumiverse rebuilds its class names on every release, so a selector based on one stops matching the next time the app updates. Those are skipped. If the element it lands on has nothing dependable, it says so rather than saving something that will break; clicking the button itself rather than an icon inside it usually fixes that.
-
-If a click lands but no reply starts, which happens when a next / swipe button moves between rerolls that already exist rather than making a new one, it clicks the other button once before giving that attempt up.
+It builds the selector from things that survive Lumiverse updates: `aria-label`, `title` and `data-` attributes. It never uses class names, because Lumiverse changes them every release. If the element has nothing it can use, it says so instead of saving something that will break. Holding the button itself, not the icon inside it, usually fixes that.
 
 ## Regeneration Feedback
 
-Lumiverse has a **Regeneration Feedback** option. With it on, pressing regenerate opens a box asking for guidance to send with the next attempt. The reply only starts once you press a button in that box, so Auto Retry has to handle it.
+Lumiverse has a **Regeneration Feedback** option. With it on, pressing regenerate opens a box asking for guidance for the next attempt, and the reply only starts once a button in the box is pressed.
 
-When a retry opens the box, Auto Retry presses **Skip**, which regenerates without guidance. The box is hidden for the moment that takes, so you should not see it. It still has to open, because Auto Retry presses the real button.
+When a retry opens the box, Auto Retry presses **Skip**, which regenerates without guidance. The box is hidden while it does this, so you should not see it.
 
-Some limits worth knowing:
+- **A box you opened yourself is left alone.** Auto Retry only acts right after its own press, so your own regenerate still opens the box and waits for you.
+- If you tap anything, or press stop, just before it skips, it stops and leaves the box alone.
+- It only ever presses **Skip**, never **Cancel**, so a draft you typed in the box is never sent.
+- If it cannot close the box, it shows it again straight away. The hidden box never blocks your taps.
 
-- A box **you** opened is left alone. Auto Retry only acts in the moment right after its own click, so a regenerate you pressed still opens the box and waits for you to type.
-- If you tap anything, or press stop, while it is about to skip, it stops and leaves the box alone.
-- It presses Skip, so a draft you saved in the box is never sent. It never presses **Cancel**.
-- If it cannot close the box, it shows it again straight away. Even while hidden, the box does not block your taps, so the app cannot lock up.
-
-You do not need to change either setting. Keep Regeneration Feedback on if you use it; it still opens every time you press regenerate yourself.
+You do not need to change any setting for this.
 
 ## Extra dialog buttons it may press
 
-This is behind a switch, **My dialog's button says something else**, and off by default. The built-in list covers Lumiverse's Regeneration Feedback and every build seen so far, so almost nobody needs the box, and an option nobody needs is worth keeping out of the panel. The built-in list is used either way.
+This is behind a switch, **My dialog's button says something else**, which is off by default. Almost nobody needs it.
 
-Turn it on only if the Regeneration Feedback box stays on screen when a retry opens it, which means Auto Retry did not recognise its button. It already knows `Skip`, `Regenerate`, `Confirm`, `Proceed`, `Submit` and `OK`. If yours says something else, for example in another language, add that wording here.
+Turn it on only if the Regeneration Feedback box stays on screen after a retry opens it. That means Auto Retry did not recognise its button. It already knows `Skip`, `Regenerate`, `Confirm`, `Proceed`, `Submit` and `OK`. If your button says something else, for example in another language, add that word here.
 
-The switch genuinely gates the box: while it is off, whatever is in there is not read. Turning it off is a way to park your wording without deleting it, and turning it back on picks it up again. If you already had labels typed before the switch existed, it was switched on for you, so nothing you set has stopped working.
+- Type the button's text exactly as shown, one per line. Capitals do not matter. **Expand** opens a bigger editor.
 
-Type the button's text exactly as it appears, one per line. **Expand** opens a bigger editor if the box is too small:
+  ```
+  Omitir
+  Regenerar
+  ```
 
-```
-Omitir
-Regenerar
-```
-
-Capitals are ignored. Anything you add is tried before the built-in list, so you can also use it to change which button Auto Retry prefers.
-
-Auto Retry only presses buttons inside a box that opened right after a retry. Putting `Continue` here will not make it press the Continue button on your toolbar.
+- Your words are tried before the built-in list.
+- While the switch is off, the box is not read. Your words are kept, so you can turn it back on later.
+- It only presses buttons in a box that opened right after a retry. Adding `Continue` here will not press a Continue button on your toolbar.
 
 ## Writing selectors by hand
 
-Each box takes one CSS selector, or several separated by commas as fallbacks. They are tried left to right, so put the most specific first (`data-action`, `data-testid`) and the broader ones last (`aria-label`, `title`). The first entry that finds a button you can actually click is the one used, so an entry matching only a hidden or disabled button is passed over for the next.
+Each button setting takes CSS selectors, the kind you would pass to `document.querySelector`.
 
-A comma inside brackets, parentheses or quotes stays part of the selector rather than splitting the list, so `:is(a, b)` and `[aria-label="Next, swipe"]` each count as one entry.
+- Separate several with commas. They are tried left to right, and the first that finds a button you can press is used.
+- Put the most exact ones first, like `data-action` or `data-testid`, and broader ones last, like `aria-label` or `title`.
+- A comma inside brackets, parentheses or quotes is part of that selector. So `:is(a, b)` and `[aria-label="Next, swipe"]` each count as one.
+- Do not use class names. Lumiverse changes them with every release.
 
-If you have overwritten one of these with the wrong element, **Reset…** at the bottom of the panel puts them back. Tick **Button selectors** in the picker and nothing else, and every other setting is left as it is. It fills the boxes, so press Save to keep it. There is more on the picker in [All settings](settings.md#resetting).
+If a retry happens (the pop-up shows) but nothing regenerates, fix the selector:
 
-If retries fire (the pop-up shows) but nothing regenerates, the selector needs adjusting:
+1. Open your browser's developer tools (F12) with an AI message on screen.
+2. Right-click the regenerate button and choose **Inspect**.
+3. Find a stable attribute on it: a `data-` attribute, `aria-label` or `title`. Write a selector that matches it.
+4. Paste it into the regenerate setting, and press **Test** with an AI message on screen. Save when it says it matches.
 
-1. Open developer tools (F12) with an AI message visible so its buttons are on screen.
-2. Right-click the regenerate button and choose Inspect.
-3. Find a stable attribute on it (a data attribute, aria-label, title, or class) and write a selector that matches it.
-4. Paste it into the Regenerate selector field and hit **Test** with an AI message on screen. Save when it says it matches.
+"No match" does not always mean the selector is wrong. A button only exists while it is showing. The **stop** button, for example, only appears while a reply is being written, so test it then.
 
-A "no match" does not always mean the selector is wrong. A button only exists while it is showing, so a correct selector still will not match if that button is not on screen when you test. The **Stop** button is the clearest case: it only appears while a reply is generating, so test that one mid-reply.
+To put the built-in selectors back, open **Reset…** at the bottom of the panel, tick only **Button selectors**, and press **Save**. Every other setting is left alone. See [Resetting](settings.md#resetting).
 
 ---
 

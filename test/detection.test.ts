@@ -416,6 +416,45 @@ describe("refusal detection ignores the model's thinking", () => {
     expect(looksLikeRefusal(text, withCfg({ refusalStripThinking: false }))).toBe(true);
   });
 
+  // A preset can start the reply inside the thinking tag, which puts the opener
+  // in the prompt rather than in what the model sends back. The reply then opens
+  // mid-thought, and the first tag in it is the closer of one it never wrote.
+  // Everything before that closer is thinking.
+  describe("thinking whose opener was in the prompt", () => {
+    const thought =
+      "# I. The Plan\nThe courier wants the map before dawn.\n\n# II. The Hand-off\nEnd on the door. Stop on action.";
+    const answer = 'The kettle had gone cold.\n\n<font color="#3A7BD5">"You came back,"</font> she said.';
+
+    test("is taken out, up to its closer", () => {
+      expect(stripThinking(thought + "\n</think>\n\n" + answer, {}).trim()).toBe(answer);
+    });
+
+    // Empty is what gets it retried as thinking with no reply. Before this the
+    // whole of the thinking was left standing and read as a long reply that had
+    // finished on a full stop.
+    test("so a reply that was only thinking has nothing left in it", () => {
+      expect(stripThinking(thought + "\n</think>", {}).trim()).toBe("");
+    });
+
+    test("and the checks on a reply that did answer read the answer alone", () => {
+      const text = thought + "\nI cannot assist with that.\n</think>\n\n" + answer;
+      expect(looksLikeRefusal(text, cfg)).toBe(false);
+    });
+
+    test("the square-bracket closer counts the same", () => {
+      expect(stripThinking(thought + "\n[/think]\n\n" + answer, {}).trim()).toBe(answer);
+    });
+
+    test("a block with both ends is left to the usual rule", () => {
+      const text = "Before.\n<think>weighing it</think>\nAfter.";
+      expect(stripThinking(text, {}).replace(/\s+/g, " ").trim()).toBe("Before. After.");
+    });
+
+    test("and a reply with no closer anywhere is untouched", () => {
+      expect(stripThinking(answer, {}).trim()).toBe(answer);
+    });
+  });
+
   test("stripThinking removes an unclosed opener running to the end", () => {
     expect(stripThinking("<think>weighing it up", {}).trim()).toBe("");
   });
@@ -1448,7 +1487,7 @@ describe("what a refusal is counted as", () => {
 // The phrase list is printed in full in docs/detection.md, so somebody can see
 // what the reword field acts on. Two copies of the same list is two copies that
 // drift, and a phrase added to one and not the other is invisible: the docs
-// quietly describe a version of the extension that does not exist.
+// describe a version of the extension that does not exist.
 describe("the printed phrase list is the built-in phrase list", () => {
   const DOC = readFileSync(new URL("../docs/detection.md", import.meta.url), "utf8");
   const printed = (() => {

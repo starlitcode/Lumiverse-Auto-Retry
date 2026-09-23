@@ -4,7 +4,7 @@
 // added on top. They are data rather than code, which is exactly why nothing
 // caught a wrong role or a try number out of range: a set with a role the
 // loader does not know becomes a system note without a word about it, and a set
-// nobody notices is broken is one somebody loads and quietly gets nothing from.
+// nobody notices is broken is one somebody loads and gets nothing from.
 import { test, expect, describe } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";

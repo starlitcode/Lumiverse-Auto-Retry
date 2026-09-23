@@ -8,6 +8,50 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.7.1
+
+_2026-09-23_
+
+### Fixed
+
+- **"No retry control found" while the button is on screen.** Three causes, all fixed:
+  - A button list saved in an older version could match nothing after Lumiverse changed its buttons. The built-in list is now always tried after yours.
+  - The built-in list now starts with the mark Lumiverse puts on its own Regenerate button, so it keeps working if the button's title or language changes.
+  - A retry looked for the button only once, sometimes a moment before Lumiverse showed it. It now keeps looking for a couple of seconds.
+
+- **A reply that was only thinking is retried when the thinking tag was opened in the prompt.** Some presets start the reply inside the thinking tag, so the reply has a closing tag but no opening one. That thinking is now recognised, so a reply that never got past it is retried. A reply that did reach its answer is judged on the answer alone.
+  - One case is still out of reach: thinking that started in the prompt and was cut off before its closing tag. The reply then has no tag at all to go by.
+
+- **Impersonate is no longer retried as a cut-off reply.** Impersonate writes your own turn into the input box, and it could look cut off and be retried over the top of what it wrote. The generation after you press **Impersonate** is now left alone.
+
+- **A retry note is kept per chat.** On an install shared by several accounts, a note set up in one chat could replace another chat's note, so that retry went out without it.
+
+- **The privacy page counts the permissions correctly.** It said six, four of them privileged. There are five, all privileged.
+
+- **On-screen panel tab names are no longer cut short.** **Replaced** showed as "Repl…" even in a computer's sidebar, and **Prompt** was cut short on a phone. Each tab now starts at the width of its name. On a small phone, **Copy** and **Clear** move to the line below together.
+
+- **Buttons it clicks says to press and hold.** Its intro said to press **Pick it for me** and then click the real button. A short press on the real button just works as normal. Picking needs a press and hold.
+
+- **A long line in the Log wraps.** The settings line the Log prints when it starts has no spaces, and it ran off the right edge of the panel.
+
+### Changed
+
+- **Only a switch flips a switch.** Pressing a setting's name no longer changes it. Only the box does. This matters most in the reset list, where one line deletes your saved presets.
+
+- **The docs are written in plain language:** shorter sentences, lists and numbered steps. Some wrong details were corrected on the way. For example, the settings page said a long prompt is trimmed on the Prompt tab. Every character is shown.
+
+- **Shorter descriptions.** The longest descriptions behind **?** are cut to a sentence or two. The detail is in the docs.
+
+- **Panel messages are written out in full**, such as "Could not save" instead of "Couldn't save". The preset name box says "A name for this preset".
+
+- **The README says exactly what Auto Retry does about refusals involving age.** It never judges or changes your story. A retry asks the same model again, up to the retry limit. It recognises a refusal about a character's age because models sometimes misread an adult character as a minor, but it cannot tell a mistaken refusal from a correct one, so any refusal it recognises is retried the same way. The retry notes, off by default, mention no age and no subject.
+
+- **The comments and docs on the refusal checks say what the words about age are for:** a model that misreads an adult character as a minor. What is recognised, and what is done about it, has not changed.
+
+- **An inaccurate comment is gone.** It said a retry changes what a model will write no more than clicking twice does. A new attempt can come back different, which is why this extension exists.
+
+---
+
 ## 5.7.0
 
 _2026-09-19_

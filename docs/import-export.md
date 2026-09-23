@@ -1,45 +1,51 @@
 # Import and export
 
-You can save your settings to a file and load them back later. In the settings modal, open **Import / export**. There are two lists of ticks: **What to put in the file** decides what **Export to file** writes, and **What to accept from one** decides what **Import from files** is allowed to change. They are asked separately because they are different questions, and sharing one list meant setting the ticks twice to export everything and then take back one part.
+You can save your settings to a file and load them back later.
 
-**Import from files** takes more than one at a time. Pick several and they are applied as one import with one count at the end, so two files carrying a preset each report two presets rather than one twice. They go on in the order you picked them, so where two files carry the same setting the last one is what stands. A file that cannot be read stops the whole import and names which one.
+Your settings and saved presets already follow your Lumiverse account to other browsers. A file is for keeping a backup, sharing a setup with someone, or copying it to another account.
 
-Your settings and your saved presets already follow your Lumiverse account across browsers on their own, so this is mainly for keeping a backup, sharing a setup with someone else, or copying between accounts.
+## How to do it
+
+In the settings window, open **Import / export**. It has two lists of ticks:
+
+- **What to put in the file** decides what **Export to file** saves.
+- **What to accept from one** decides what **Import from files** is allowed to change.
+
+The two lists are separate, so you can export everything but import only one part.
+
+**Import from files** can take several files at once:
+
+- They are applied as one import, with one count at the end.
+- They are applied in the order you picked them, so if two files set the same thing, the last one wins.
+- If one file cannot be read, nothing is imported, and the panel says which file it was.
 
 ## What you can tick
 
-The parts are grouped so you only move what you mean to:
-
 - **Retrying and its buttons**, including whether the floating button and the Extras entry are shown
-- **Refusals and notes**, everything that decides a reply was a refusal, plus the note wording sent on the retry
+- **Refusals and notes**: everything that decides a reply was a refusal, and the note wording sent with a retry
 - **Button selectors**
-- **Panel, pop-up and prices**, the on-screen panel, the message on each retry, and the two prices the panel works costs out from
+- **Panel, pop-up and prices**: the on-screen panel, the message on each retry, and the two prices used to work out costs
 - **All presets**, both kinds at once
 
-Each name covers everything in that part, so nothing rides along unnamed.
+Together these cover every setting, so an export is a full backup. A setting that is not in a named group is saved with retry behaviour, so a newer option is never left out.
 
-For sharing a detection setup, tick just refusal detection and leave the rest, since button selectors in particular are tied to one person's Lumiverse build.
-
-Between them the groups cover every setting, so an export is a complete backup of your setup. Any setting that is not in one of the named groups is carried with retry behavior rather than dropped, so a new option can never go missing from a backup made before it was added.
+To share a refusal setup, tick only **Refusals and notes**. Button selectors in particular depend on one person's version of Lumiverse.
 
 ## What importing does
 
-Import puts the values from the file into the settings without saving them, so you can look them over and press **Save** to keep them, or close the modal to discard them.
+- Imported settings are filled into the window but not saved yet. Press **Save** to keep them, or close the window to throw them away.
+- Imported presets are the exception. They are saved straight away. A preset with the same name as one of yours replaces it. New ones are added.
+- Every imported value is checked the same way your normal settings are. A file can only set known options to safe values. Anything it does not recognise is ignored.
 
-Imported presets are the exception: they are saved as soon as they come in, with same-named presets replaced and new ones added.
+## If you used find and replace
 
-Every imported value runs through the same checks as your normal settings, so a file can only set known options to safe values, and anything it does not recognize is ignored.
+Find and replace was removed in 5.0.0. [Auto Refine](https://github.com/starlitcode/Lumiverse-Auto-Refine) does that job now.
+
+- Your old rules and word presets are still in this browser and your account.
+- The **Download my old word swaps** button, on this card, is the last place that gives them to you as a file.
+- **The button goes away on 15 October 2026.** Your rules are not deleted that day, but nothing in the panel will offer them to you after that. Take the copy while you can.
+- If you never used find and replace, you will never see the button.
 
 ---
 
 [Back to the README](../README.md)
-
-## If you used find and replace
-
-It was retired in 5.0.0. [Auto Refine](https://github.com/starlitcode/Lumiverse-Auto-Refine) does that job now.
-
-Your old rules and word presets are still in this browser and in your account, and the **Download my old word swaps** button here is the last place that hands them over as a file. **It goes on 15 October 2026.**
-
-Your rules are not wiped that day. The button and the card stop being drawn, and after that nothing in the panel will offer them to you, so take the copy while it is there.
-
-If you never used it you have never seen either of them, and you will not.

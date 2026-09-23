@@ -188,7 +188,7 @@ describe("the sections of the settings panel", () => {
 
 // A field can ask to apply as it is edited rather than waiting for Save. That
 // was wired up for number boxes only, so a dropdown asking for it was accepted
-// by the schema and then quietly did nothing. Both honour it now, and this
+// by the schema and then did nothing. Both honour it now, and this
 // fails if a third kind of field asks for something no handler acts on.
 describe("applying a setting as it is edited", () => {
   const HONOURED = ["num", "pick"];

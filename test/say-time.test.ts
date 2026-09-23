@@ -96,7 +96,7 @@ describe("what it does with input it should never get", () => {
   });
 
   // NaN slips past every comparison in here and would land on screen as
-  // "NaNs", which is worse than being wrong quietly.
+  // "NaNs", which is worse than a wrong number that at least reads as one.
   test("nonsense reads as none left rather than reaching the screen", () => {
     for (const v of [null, undefined, NaN, "", {}, [], Infinity, "soon"]) {
       expect(() => sayTime(v as any)).not.toThrow();

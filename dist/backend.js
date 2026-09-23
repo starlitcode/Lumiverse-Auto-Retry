@@ -22,7 +22,7 @@
 // with while this side comes back on the new build. A debug report naming only
 // the panel's version would be speaking for a file it cannot see, so the panel
 // asks for this one and prints both.
-const VERSION = '5.7.0';
+const VERSION = '5.7.1';
 const SETTINGS_FILE = 'settings.json';
 // Presets, kept in account storage next to the settings so they
 // follow the user between devices. The browser copy is a fast local cache, not
@@ -80,7 +80,7 @@ async function writeUserJson(file, value, userId) {
             await spindle.userStorage.setJson(file, value, { userId: userId });
             return;
         }
-        catch (_) { /* fall through so a save is never silently lost */ }
+        catch (_) { /* fall through so a save is never lost with no message */ }
     }
     await spindle.storage.write(file, JSON.stringify(value));
 }
@@ -93,7 +93,10 @@ function replyTo(userId, msg) {
     }
     catch (_) { }
 }
-let refusalNote = null;
+// One per chat. One backend can serve several accounts, and a single slot let
+// a note armed in one account's chat replace one armed a moment earlier in
+// another's, so that retry went out without the note it was promised.
+const refusalNotes = new Map();
 // The chats the extension is switched off in. The frontend's list, sent here so
 // this side agrees with the panel about where it is meant to be doing anything.
 let chatsOff = new Set();
@@ -471,21 +474,25 @@ spindle.onFrontendMessage(async (payload, userId) => {
                     continue;
                 notes.push({ text: text, role: NOTE_ROLES.indexOf(String(n && n.role)) >= 0 ? String(n.role) : 'system' });
             }
-            refusalNote = notes.length && payload.chatId
-                ? {
-                    chatId: String(payload.chatId),
+            // Arming with nothing is how the panel takes a note back, so an empty
+            // arm clears that chat's note and leaves every other chat's alone.
+            const forChat = payload.chatId ? String(payload.chatId) : '';
+            if (forChat && notes.length)
+                refusalNotes.set(forChat, {
+                    chatId: forChat,
                     notes: notes,
                     placement: String(payload.placement || 'after'),
                     at: Date.now(),
                     strictType: !!payload.strictType,
-                }
-                : null;
+                });
+            else if (forChat)
+                refusalNotes.delete(forChat);
             // Acknowledged so the frontend can hold the retry click until the note is
             // actually in place. The arm travels this bridge while the click travels
             // the DOM to the host to the server, and those are independent: the click
             // could otherwise reach prompt assembly first and the note would be
-            // silently dropped from that generation.
-            replyTo(userId, { type: 'note_armed', requestId: payload.requestId, armed: !!refusalNote });
+            // left out of that generation with no message.
+            replyTo(userId, { type: 'note_armed', requestId: payload.requestId, armed: !!forChat && refusalNotes.has(forChat) });
             return;
         }
         if (payload.type === 'save_presets' && payload.presets && typeof payload.presets === 'object') {
@@ -527,14 +534,17 @@ spindle.onFrontendMessage(async (payload, userId) => {
 const promptInterceptor = async (messages, context) => {
     try {
         const who = context && context.userId;
-        if (!refusalNote) {
-            snapshotPrompt(messages, context, who);
-            return messages;
-        }
-        const chatId = context && context.chatId;
+        const chatId = context && context.chatId ? String(context.chatId) : '';
         // A note armed in one chat is not for a generation in another, and it
-        // stays armed so the retry it was meant for can still collect it.
-        if (chatId && refusalNote.chatId && String(chatId) !== refusalNote.chatId) {
+        // stays armed so the retry it was meant for can still collect it. A
+        // generation that names no chat takes the one note there is, and none
+        // when there are several, since it cannot say which is its own.
+        const refusalNote = chatId
+            ? refusalNotes.get(chatId) || null
+            : refusalNotes.size === 1
+                ? refusalNotes.values().next().value || null
+                : null;
+        if (!refusalNote) {
             snapshotPrompt(messages, context, who);
             return messages;
         }
@@ -556,7 +566,7 @@ const promptInterceptor = async (messages, context) => {
             return messages;
         }
         const armed = refusalNote;
-        refusalNote = null; // one generation, collected or not
+        refusalNotes.delete(armed.chatId); // one generation, collected or not
         if (Date.now() - armed.at > NOTE_MAX_AGE_MS) {
             try {
                 replyTo(who, { type: 'note_skipped', reason: 'it was armed too long ago to still belong to this generation' });
@@ -570,7 +580,7 @@ const promptInterceptor = async (messages, context) => {
         const built = armed.notes.map((n) => ({ role: n.role, content: n.text }));
         const placed = placeNotes(messages, built, armed.placement);
         // Named in the Prompt Breakdown so each note is inspectable rather than
-        // something that silently happened to the prompt.
+        // something that happened to the prompt with no record.
         const breakdown = built.map((_, i) => ({
             messageIndex: placed.from + i,
             name: built.length > 1 ? 'Auto Retry refusal note ' + (i + 1) : 'Auto Retry refusal note',
@@ -601,8 +611,8 @@ const promptInterceptor = async (messages, context) => {
 // register twice.
 // Every permission this extension asks for, and what stops working without it.
 // A missing permission is the one failure that raises nothing to catch: a gated
-// event simply never fires and a fire-and-forget registration silently does
-// nothing, so an extension with the wrong grants stays installed and looks
+// event never fires and a fire-and-forget registration does nothing and
+// says nothing, so an extension with the wrong grants stays installed and looks
 // like it is working. The panel asks for this and says which are missing.
 const PERMISSIONS = [
     { name: 'generation', costs: 'Everything. Retries run off the generation events, and without this none of them arrive, so nothing is ever retried.' },

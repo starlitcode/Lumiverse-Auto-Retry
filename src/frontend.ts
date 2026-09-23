@@ -45,12 +45,12 @@ const SWIPE_FIRST_KEY = "lv-auto-retry:swipe-first:v1";
 // setting would carry it into an export.
 const BUILT_IN_SEEN_KEY = "lv-auto-retry:built-in-seen:v1";
 // What the key above was called before. Read once, so upgrading keeps what it
-// was holding: losing it would quietly swallow the one line saying the sets
+// was holding: losing it would swallow the one line saying the sets
 // changed, and nothing on screen would say anything was missing.
 const OLD_SEEN_KEY = "lv-auto-retry:shipped-seen:v1";
 // Which set of moved defaults this browser has already been told about. Its own
 // key for the same two reasons, and separate from the one above so saying got it
-// to a line about a number never quietly marks the note sets as seen too.
+// to a line about a number never marks the note sets as seen too.
 const MOVED_SEEN_KEY = "lv-auto-retry:moved-seen:v1";
 // The settings search field. It needs an id because the browser's own clear
 // button inside it can only be reached from a stylesheet, not inline.
@@ -77,6 +77,15 @@ const START_GRACE_MS = 15000;
 const OURS_WINDOW_MS = 90000;
 // The retry reason that carries the optional note. Named once so the arming
 // check below cannot drift away from the callers that raise it.
+// How long a retry keeps looking for a button to press before it says there
+// is none. See where it is used.
+const CONTROL_GRACE_MS = 2500;
+// Lumiverse's Impersonate button, found by its label, which stays the same
+// whichever impersonation preset is chosen; the title and the action name
+// change with the preset. And how soon after a press on it the generation that
+// starts is taken to be that impersonation.
+const IMPERSONATE_BUTTON = '[aria-label="Impersonate"], button[title^="Impersonate"]';
+const IMPERSONATE_WINDOW_MS = 5000;
 const REFUSAL_REASON = "looks like an accidental refusal";
 // The other three ways a refusal is decided, each reported under its own name.
 //
@@ -115,7 +124,7 @@ const MAX_NOTES = 10;
 // The roles a note may carry, and how each is offered in the panel. One list,
 // because the picker was written out twice: once to build the dropdown and
 // again to check what came back out of it, so adding a role in one place would
-// have made the other silently reject it.
+// have made the other reject it with no message.
 // Named for the role each is actually sent as, which is also what every other
 // tool that builds a prompt calls them. You and The character read as friendlier
 // and were worse: a chat can have a cast on it, so the reply role is not one
@@ -138,7 +147,7 @@ const STREAM_BUF_MAX = 200000;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.7.0";
+const VERSION = "5.7.1";
 
 // The addresses the extension points at. Pinned to the released branch rather
 // than to a tag, so an old install still opens the page as it stands today.
@@ -280,7 +289,11 @@ const CONFIG = {
   // host controls (the only DOM-dependent part). Use the Test buttons in settings.
   // Multiple patterns are listed so a Lumiverse build that renames one attribute
   // is still likely covered; if a build changes them all, fix it via the Test UI.
+  // The host's own mark on its regenerate action first. It is what Lumiverse
+  // itself uses to place the button in the composer, so it survives a new
+  // title or a translated label that the rest of this list would not.
   regenerateSelector:
+    '[data-composer-action="regen"] button, ' +
     '[title="Regenerate"], [data-action="regenerate"], [data-testid="regenerate"], ' +
     'button[aria-label*="regenerate" i], button[title*="regenerate" i]',
   swipeNextSelector:
@@ -431,7 +444,7 @@ interface Group {
   collapsed?: boolean;
   // Something built by hand that belongs under this heading, after its rows.
   // Named here rather than matched on the title, so a rename cannot leave the
-  // tester or the preset bar silently unbuilt.
+  // tester or the preset bar unbuilt with no message.
   // Extra pieces the section renders under its rows. More than one is allowed,
   // since refusal tuning carries both the tester and its own preset bar.
   extra?: ExtraKind | ExtraKind[];
@@ -491,7 +504,7 @@ const SCHEMA: Group[] = [
         key: "enabled",
         label: "Turn Auto Retry on",
         type: "bool",
-        hint: "When on, it quietly tries again whenever a reply fails or gets cut off. Turn it off and it does nothing.",
+        hint: "When on, it tries again by itself whenever a reply fails or gets cut off. Turn it off and it does nothing.",
       },
       {
         key: "showFloatingToggle",
@@ -538,7 +551,7 @@ const SCHEMA: Group[] = [
           { value: "float", label: "Floating over the chat" },
           { value: "drawer", label: "In the sidebar drawer" },
         ],
-        hint: "Floating is a small box in the corner you can move and resize, and where you leave it is remembered. In the sidebar puts it in Lumiverse's own side panel, which never covers the reply you are reading. A Lumiverse with no side panel for extensions gets the box, and the Log says so.",
+        hint: "Floating is a box over the chat you can move and resize. In the sidebar puts it in Lumiverse's own side panel, so it never covers the reply.",
       },
       // A retry is a whole generation paid for twice, so the Prompt tab can say
       // what one costs. Nothing here knows what a model charges and no two
@@ -552,7 +565,7 @@ const SCHEMA: Group[] = [
         type: "num",
         min: 0,
         max: 10000,
-        hint: "What your provider charges for what you send it, which for a retry is the whole prompt again. Its price list calls this input, and writes it as $5.00/M or $0.075/M. Type the number on its own, or paste the whole thing and the number is taken out of it.",
+        hint: "Your provider's input price per million tokens. A retry sends the whole prompt again. Type the number, like 5 or 0.075, or paste the whole line.",
       },
       {
         key: "costOut",
@@ -631,7 +644,7 @@ const SCHEMA: Group[] = [
         type: "num",
         min: 1,
         max: 10,
-        hint: "Each retry waits this many times longer than the last, so it does not hammer the server. 2 means the wait doubles each time. Stays at 1 or above.",
+        hint: "Each retry waits this many times longer than the last, so the server is not asked again too fast. 2 means the wait doubles each time. Stays at 1 or above.",
       },
       {
         key: "maxDelayMs",
@@ -698,7 +711,7 @@ const SCHEMA: Group[] = [
         needs: ["ignoreHardErrors"],
         label: "Your own hard failures",
         type: "text",
-        hint: "Wording your provider uses for an error that will not fix itself, one per line, counted alongside the built-in list. Case does not matter, and a line under three characters is ignored. A phrase that is also in Your own refusal phrases is retried as a refusal instead, since that one is worth another try.",
+        hint: "Wording for an error that will not fix itself, one per line, used with the built-in list. A phrase also in Your own refusal phrases is retried as a refusal.",
       },
       {
         key: "retryOnEmpty",
@@ -809,7 +822,7 @@ const SCHEMA: Group[] = [
         run: "yourWords",
         label: "Your own refusal phrases",
         type: "text",
-        hint: "Extra phrases that count as a refusal, one per line, used whether or not the built-in list above is on. Case does not matter, so paste the exact wording your model refuses with. Matched against a provider error as well as against the reply, so wording from an error that Skip hard failures would otherwise write off is retried instead. A line under three characters is ignored, since it would match almost every reply.",
+        hint: "Extra wording that counts as a refusal, one per line. Always used, even with the built-in list off, and also checked against error text. Lines under three characters are ignored.",
       },
       {
         key: "refusalPhraseSubs",
@@ -862,7 +875,7 @@ const SCHEMA: Group[] = [
         hintAbove: true,
         label: "What the notes say",
         type: "notes",
-        hint: "Your notes go to the model exactly as you typed them, up to ten of them. Each carries its own Role and its own From try, and the ones that are due go out together, in the order you wrote them. Keep each one to a line or two: a note is read alongside the whole prompt, and a short one that says one thing gets followed where a paragraph gets averaged in with everything else.",
+        hint: "Sent exactly as you type them, up to ten. Each has its own Role and From try. Keep each to a line or two, so the model follows it.",
       },
       {
         key: "refusalNotePlacement",
@@ -876,7 +889,7 @@ const SCHEMA: Group[] = [
           { value: "start", label: "At the very start" },
           { value: "end", label: "At the very end" },
         ],
-        hint: "Whichever notes are due go in together as one block. After the last message puts it right before the point the reply continues from. At the very end goes past anything your build appends behind the conversation, which is the one that can answer it.",
+        hint: "Where the due notes go, as one block. After the last message puts them right before the reply. At the very end goes after anything your Lumiverse adds behind the chat.",
       },
       {
         key: "refusalNoteStrictType",
@@ -891,7 +904,7 @@ const SCHEMA: Group[] = [
   {
     title: "Buttons it clicks",
     collapsed: true,
-    desc: "It retries by clicking your own on-screen buttons, so you only need this if retries are not happening. The quickest fix is Pick it for me: press it, then click the real button. Otherwise paste a CSS selector and press Test until it says match found, with that button on screen. The stop button only appears while a reply is generating. The README covers fallback lists and selector syntax.",
+    desc: "A retry presses your own swipe or regenerate button. You only need this if retries are not happening. Press Pick it for me, then press and hold the real button. The docs page Buttons it clicks covers the rest.",
     fields: [
       {
         key: "swipeNextSelector",
@@ -1599,9 +1612,12 @@ const REFUSAL_STRONG: RegExp[] = [
   // part left out. Nobody in a scene talks about continuing the narrative.
   /\bcontinue the (?:narrative|story|scene|roleplay) with a focus on\b/i,
   /\bwithout (?:the )?(?:explicit|graphic) (?:anatomical|sexual|physical) (?:details?|descriptions?)\b/i,
-  // The model deciding a character is too young, which is a refusal aimed at
-  // your cast rather than at your request. Nobody in a scene says a character
-  // reads as underage.
+  // The model deciding a character is under age. This is here for the false
+  // positive: an adult character, written as an adult, that a model has
+  // misread as a minor, which is a refusal that should not have happened. It
+  // is not here to get sexual content involving a minor past a model, and
+  // nothing in this extension is meant for that. Nobody in a scene says a
+  // character reads as underage, which is what keeps it off ordinary writing.
   /\b(?:appears? to be|reads as|is described as|seems to be|may be) (?:a |an )?(?:minor|underage|child)\b/i,
   // The same thing with the reason in front of the refusal. The refusal has to
   // follow it, because "that would be illegal, he said, and went back to
@@ -1708,9 +1724,12 @@ const REFUSAL_STRONG: RegExp[] = [
 // extension produces, asks for, or helps anybody get. Nothing here reaches a
 // prompt. All a match does is decide that a reply was a refusal rather than
 // writing, which makes the extension press regenerate, the same key you would
-// press yourself. A model that means a refusal gives it again on the next
-// attempt, and the attempt cap ends it: re-rolling changes what a model is
-// willing to write no more than clicking twice does.
+// press yourself, and the attempt cap ends it.
+//
+// The words about age are here for one reason: an adult character that a
+// model has misread as a minor, which is a refusal that should not have
+// happened. This extension is not meant for sexual content involving minors,
+// and does not support anybody using it for that.
 //
 // Every pattern above needs a meta object, a request or a prompt or a roleplay,
 // because those are words a character never uses. A refusal that names what it
@@ -1996,8 +2015,8 @@ const CRISIS_ADDRESS: RegExp[] = [
   /\bif this is (?:an emergency|a mental health emergency)\b/i,
   /\bif you(?:'re| are) (?:thinking about|considering) (?:suicide|self-?harm|hurting yourself|ending your life)\b/i,
   // "If you or someone you know is in immediate danger" is the commonest form
-  // of this line and the one an earlier version missed, because it only knew
-  // the sentence where "you" is the subject all the way through.
+  // of this line. Its subject is not always "you" alone, so up to forty
+  // characters may sit between the subject and "is" or "are".
   /\bif (?:you|someone|anyone)\b[^.?!\n]{0,40}?\b(?:is|are) in (?:immediate |any )?danger\b/i,
   /\bif you(?:'re| are) in (?:immediate |any )?danger\b/i,
   // The line that introduces the list. It is the single most reliable tell
@@ -2273,6 +2292,28 @@ function stripThinking(text: string, cfg?: any): string {
     if (low.indexOf(pair.needs) < 0) continue;
     t = t.replace(new RegExp(pair.open + "[\\s\\S]*?" + pair.close, "gi"), " ");
     t = t.replace(new RegExp(pair.open + "[\\s\\S]*$", "i"), " ");
+  }
+
+  // A closer with nothing opening it: the thinking began before this text did.
+  // A preset that starts the reply inside the thinking tag puts the opener in
+  // the prompt, so what the model sends back opens mid-thought and the first
+  // tag in it is the closer of one it never wrote. Everything in front of that
+  // closer is thinking. Without this, a reply that was only ever thinking, cut
+  // off before a word of the answer, read as a long finished reply and was left
+  // alone, and a reply that did get to its answer carried all of its thinking
+  // into every check as though it were the answer.
+  //
+  // Only when no opener stands in front of the closer, so an ordinary block
+  // with both ends is left to the pairs below.
+  {
+    const close = new RegExp("<\\/(?:" + alt + ")\\s*>|\\[\\/(?:" + alt + ")\\s*\\]", "i").exec(t);
+    if (close) {
+      const open = new RegExp(
+        "<(?:" + alt + ")(?:\\s[^>]*)?>|\\[(?:" + alt + ")(?:\\s[^\\]]*)?\\]|<\\|(?:" + alt + ")\\|?>",
+        "i",
+      );
+      if (!open.test(t.slice(0, close.index))) t = " " + t.slice(close.index + close[0].length);
+    }
   }
 
   // What is left of the channel format once the thinking channels are gone: the
@@ -2659,7 +2700,7 @@ function splitSelectorList(raw: string): string[] {
 }
 
 // Class and id names Lumiverse generates per build (like _card_19912_336).
-// They change on every release, so a selector built on one quietly stops
+// They change on every release, so a selector built on one stops
 // matching after an app update. Skipped when building a selector from a click.
 const UNSTABLE_NAME = /(^_)|(_[a-z0-9]{4,}_\d+$)|(_[a-z0-9]{6,}$)|([-_][a-f0-9]{6,}$)/i;
 const SAFE_NAME = /^[A-Za-z_-][\w-]*$/;
@@ -3134,7 +3175,7 @@ const HOLD_RING_WAIT = 150;
 
 // How far a finger may drift and still be holding rather than dragging. Ten
 // pixels, because a thumb resting on glass drifts further than eight and every
-// one of those was a hold that quietly did nothing. Auto Refine allows the same.
+// one of those was a hold that did nothing. Auto Refine allows the same.
 const HOLD_SLOP = 10;
 
 // The extension's mark: a reply, with the retry arrow sweeping over it.
@@ -3192,9 +3233,9 @@ function markSvgLive(size: number): string {
   );
 }
 
-// The ring that fills while the button is held down. A hold opens the menu, and
-// until now nothing on screen said a hold was under way, so the half second
-// before the menu appeared read as a tap that did nothing.
+// The ring that fills while the button is held down. A hold opens the menu.
+// Without the ring, the half second before the menu appears reads as a tap
+// that did nothing.
 //
 // Its own square rather than part of the mark: this belongs to the button's
 // edge, and the mark is drawn at just over half the button's width. The viewBox
@@ -3283,7 +3324,7 @@ export function setup(ctx: Ctx, opts?: any) {
           // Held before the coercion below, which walks the panel's own fields
           // and so drops anything no longer in it. Word swap rules are exactly
           // that now: somebody whose settings live in their account and not in
-          // this browser would otherwise have theirs quietly disappear with
+          // this browser would otherwise have theirs disappear with
           // nothing offering them a copy.
           if (typeof s.replaceRules === "string" && s.replaceRules.trim())
             accountSwaps = s.replaceRules;
@@ -3537,9 +3578,8 @@ export function setup(ctx: Ctx, opts?: any) {
     try {
       const canReg = !!(ctx && (ctx as any).ui && typeof (ctx as any).ui.registerInputBarAction === "function");
       const on = cfg.enabled !== false;
-      // Off in the chat you are in is off, whatever the master switch says, and
-      // the entry showed "on" through it until now. The float button has said
-      // both since it was built and this is the same sentence.
+      // Off in the chat you are in is off, whatever the master switch says. The
+      // floating button says the same sentence.
       const hereOff = on && chatIsOff(lastChatId);
       // Hidden while the floating button is on, and not moved into that
       // button's menu either. The floating button is already this same on/off
@@ -3683,7 +3723,7 @@ export function setup(ctx: Ctx, opts?: any) {
   let promptUnclaimed: { watchers: number; named: boolean } | null = null;
   // What the host has actually granted, as the backend sees it. Held rather
   // than guessed at: a missing permission raises nothing, so without asking,
-  // the only evidence is a feature quietly doing nothing.
+  // the only evidence is a feature doing nothing.
   let permGranted: Record<string, boolean | null> = {};
   let permList: Array<{ name: string; costs: string }> = [];
   let permPaint: (() => void) | null = null;
@@ -4277,7 +4317,7 @@ export function setup(ctx: Ctx, opts?: any) {
       cost.style.cssText =
         "margin-bottom:6px;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
       // Which half of the sum is real. One price left at 0 is a price nobody
-      // gave rather than a cost of nothing, and a total that quietly leaves
+      // gave rather than a cost of nothing, and a total that leaves
       // half out is worse than one that says what it covers.
       const covers =
         Number(cfg.costIn) <= 0
@@ -4471,11 +4511,13 @@ export function setup(ctx: Ctx, opts?: any) {
     // both are wanted in the same place.
     const tabs = document.createElement("div");
     tabs.setAttribute("role", "tablist");
-    // One row, with the four sharing it evenly. Wrapping dropped the last tab
-    // onto a second line on a narrow panel, and sizing each to its own label
-    // left the gaps between them all different and the selected one reading as
-    // cramped next to the wide ones. Auto Refine's tab strip is the same.
-    tabs.style.cssText = "display:flex;flex-wrap:nowrap;gap:4px;flex:1;min-width:0";
+    // One row. Wrapping dropped the last tab onto a second line on a narrow
+    // panel. Each tab starts at the width of its name and the room left over is
+    // shared equally, so no name is cut short while there is room for it.
+    // Auto Refine's tab strip is the same. The strip itself starts at the width
+    // its names need, so on a small phone Copy and Clear move to the line below
+    // rather than squeezing the names.
+    tabs.style.cssText = "display:flex;flex-wrap:nowrap;gap:4px;flex:1 1 auto;min-width:0";
     const ORDER: Array<"log" | "prompt" | "stats" | "replaced"> = ["log", "prompt", "stats", "replaced"];
     const tabBtns: Record<string, HTMLButtonElement> = {};
     const mkTab = (id: "log" | "prompt" | "stats" | "replaced", label: string) => {
@@ -4491,8 +4533,9 @@ export function setup(ctx: Ctx, opts?: any) {
         // work without a mouse.
         "cursor:pointer;border:0;background:transparent;font:inherit;color:inherit;" +
         "min-height:32px;padding:4px 4px;border-radius:var(--lumiverse-radius-sm,5px);" +
-        // An equal share each, so the row has one rhythm and one pill size.
-        "flex:1 1 0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" +
+        // Equal widths cut "Replaced" and "Prompt" short, so each starts at
+        // its name and shares out what is left.
+        "flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" +
         "text-align:center;" +
         // The header is the drag handle, and a tap that slides a pixel would
         // otherwise be taken as the start of a drag.
@@ -4546,7 +4589,7 @@ export function setup(ctx: Ctx, opts?: any) {
     // Copy and Clear act on whichever view is showing, so the buttons mean the
     // same thing as what is in front of them.
     // Copy takes everything the tab is showing, in the order it is shown.
-    // Anything on screen and missing from here is the button quietly lying
+    // Anything on screen and missing from here is the button lying
     // about what it did, and the counts left out were the ones somebody would
     // be copying the tab to report.
     const statsAsText = () => {
@@ -4637,7 +4680,7 @@ export function setup(ctx: Ctx, opts?: any) {
                 ? eventLog.join("\n")
                 : "(nothing yet)",
       );
-      copyBtn.textContent = ok ? "Copied" : "Can't";
+      copyBtn.textContent = ok ? "Copied" : "Could not";
       setTimeout(() => {
         copyBtn.textContent = before;
       }, 1400);
@@ -4666,8 +4709,13 @@ export function setup(ctx: Ctx, opts?: any) {
       } else eventLog.length = 0;
       renderLiveLog();
     });
-    head.appendChild(copyBtn);
-    head.appendChild(clearBtn);
+    // Held together, so on a narrow panel the pair moves to the next line as
+    // one rather than Clear on its own.
+    const acts = document.createElement("span");
+    acts.style.cssText = "display:flex;gap:8px;flex:none;margin-left:auto";
+    acts.appendChild(copyBtn);
+    acts.appendChild(clearBtn);
+    head.appendChild(acts);
     // A line saying what is happening this second, above all four tabs
     // because the answer is the same whichever one you are reading. The Log
     // tells you what already happened and the Stats tell you what has happened
@@ -4717,7 +4765,7 @@ export function setup(ctx: Ctx, opts?: any) {
     const bodyEl = document.createElement("div");
     bodyEl.id = "__lvRetryLogBody";
     bodyEl.style.cssText =
-      "flex:1;padding:7px 9px;overflow:auto;white-space:pre-wrap;line-height:1.4;font-family:var(--lumiverse-font-mono,ui-monospace,monospace) !important";
+      "flex:1;padding:7px 9px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.4;font-family:var(--lumiverse-font-mono,ui-monospace,monospace) !important";
     return {
       head: head,
       statusEl: statusEl,
@@ -5362,11 +5410,10 @@ export function setup(ctx: Ctx, opts?: any) {
     // after a drag says nothing new, and a device asking for less movement gets
     // the change with none of this.
     //
-    // A press dips the whole button a little, so a tap answers whether or not
-    // it changed anything. That used to be ambiguous, since a press is also how
-    // the menu is opened and a dip on the way in made a hold read as a tap that
-    // took. The ring filling around the edge is what tells the two apart now: a
-    // dip on its own is a tap, a dip with the ring running is a hold.
+    // A press dips the whole button a little, so a tap always shows it was
+    // felt. A hold also starts with a press, so the ring filling around the
+    // edge is what tells the two apart: a dip on its own is a tap, a dip with
+    // the ring running is a hold.
     el.setAttribute("data-ar-float", "1");
     // The mark sits in its own holder and the ring sits over the whole button.
     // Separated so repainting the mark does not throw the ring away mid-hold.
@@ -6066,7 +6113,7 @@ export function setup(ctx: Ctx, opts?: any) {
     }
     // The switch that gates the extra dialog labels is off by default, so a
     // saved set of labels with no switch beside it predates the switch. Turning
-    // it on for them keeps those labels working rather than quietly dropping
+    // it on for them keeps those labels working rather than dropping
     // them.
     if (
       parsed.confirmButtonsCustom == null &&
@@ -6666,7 +6713,7 @@ export function setup(ctx: Ctx, opts?: any) {
         const local = loadPresets();
         // Per kind, not all or nothing. The account winning outright would drop
         // a kind it has none of. Only one kind exists today, and this is
-        // written per kind so a second one cannot quietly wipe the first.
+        // written per kind so a second one cannot wipe the first.
         const merged: Record<string, Preset[]> = {};
         let took = 0, kept = 0;
         for (const kind of Object.keys(local)) {
@@ -6844,7 +6891,7 @@ export function setup(ctx: Ctx, opts?: any) {
   // itself either: that read happens before any user is known, so it finds
   // nothing and stays at its own defaults.
   //
-  // So a chat switched off quietly started being acted on again after a
+  // So a chat switched off started being acted on again after a
   // restart, and nothing said so, because from the reader's side nothing
   // happened: the tab was closed and opened again.
   //
@@ -7062,6 +7109,10 @@ export function setup(ctx: Ctx, opts?: any) {
       // began, never the reply itself. Empty means there is nothing to compare
       // against, and no conclusion is drawn from it.
       screenAtStart: "",
+      // An impersonation is running in this chat. It writes your turn into the
+      // input box rather than a reply into the chat, so none of the checks for
+      // a bad reply mean anything against it. Cleared when it ends or stops.
+      impersonating: false,
       ignored: new Set(),
       // Generations whose ending has already been judged. One ending, one
       // verdict: a build that reports the same generation as ended twice would
@@ -7359,7 +7410,7 @@ export function setup(ctx: Ctx, opts?: any) {
   //
   // Enough of a reply to be one. A build that puts a placeholder in the message
   // while it waits, an ellipsis or a name, would otherwise count as the reply
-  // having arrived on every generation, and quietly stand the whole watchdog
+  // having arrived on every generation, and stand the whole watchdog
   // down. Anything the reader would call a reply clears this; a spinner does
   // not. It only has to hold where the events went missing, since a reply the
   // events did arrive for is judged properly on its own ending.
@@ -7419,7 +7470,7 @@ export function setup(ctx: Ctx, opts?: any) {
   };
 
   // A control only does something when it is enabled and actually laid out.
-  // A hidden or disabled button accepts .click() and silently does nothing,
+  // A hidden or disabled button accepts .click() and does nothing,
   // which would otherwise be counted as a retry that fired.
   // Everything the extension itself puts on the page carries this, and nothing
   // it clicks may sit inside one.
@@ -7455,10 +7506,18 @@ export function setup(ctx: Ctx, opts?: any) {
     return true;
   };
 
-  const find = (selector: string): any => {
+  const find = (selector: string, builtIn?: string): any => {
     // Checked in list order, not DOM order, so the first entry that yields a
     // usable control wins wherever it sits on the page.
+    //
+    // The built-in list stands behind whatever was typed, as it does for the
+    // input box in Auto Refine. A saved list is a copy of the defaults as they
+    // were when it was saved. Without this, a selector added to the built-in
+    // list would never reach anybody with a saved list, and a saved list that
+    // matches nothing would hide a button the built-in list finds.
     const parts = splitSelectorList(selector);
+    if (builtIn)
+      for (const extra of splitSelectorList(builtIn)) if (parts.indexOf(extra) < 0) parts.push(extra);
     if (typeof document === "undefined") return null;
     for (const part of parts) {
       let list: any = null;
@@ -7481,6 +7540,9 @@ export function setup(ctx: Ctx, opts?: any) {
   // Set while the extension clicks a host control itself, so the document-level
   // stop-press catcher can tell our synthetic click from the user's.
   let selfClicking = 0;
+  // When the host's Impersonate button was last pressed, so the generation it
+  // starts can be left alone. Nought when there is none waiting.
+  let impersonateAt = 0;
   const clickHostControl = (el: any): boolean => {
     if (!el) return false;
     selfClicking += 1;
@@ -7502,15 +7564,15 @@ export function setup(ctx: Ctx, opts?: any) {
     const swipeFirst = !!cfg.retryByNewReroll;
     const order = swipeFirst
       ? [
-          { sel: cfg.swipeNextSelector, via: "swipe" },
-          { sel: cfg.regenerateSelector, via: "regenerate" },
+          { sel: cfg.swipeNextSelector, own: CONFIG.swipeNextSelector, via: "swipe" },
+          { sel: cfg.regenerateSelector, own: CONFIG.regenerateSelector, via: "regenerate" },
         ]
       : [
-          { sel: cfg.regenerateSelector, via: "regenerate" },
-          { sel: cfg.swipeNextSelector, via: "swipe" },
+          { sel: cfg.regenerateSelector, own: CONFIG.regenerateSelector, via: "regenerate" },
+          { sel: cfg.swipeNextSelector, own: CONFIG.swipeNextSelector, via: "swipe" },
         ];
     for (const step of order) {
-      const btn = find(step.sel);
+      const btn = find(step.sel, step.own);
       if (btn) return { btn: btn, via: step.via };
     }
     return null;
@@ -7520,7 +7582,7 @@ export function setup(ctx: Ctx, opts?: any) {
   const fireRetry = (): string | null => {
     const picked = pickRetryControl();
     // Said out loud when the button it wanted was not there. With swiping
-    // preferred, a build whose swipe selector matches nothing quietly retries
+    // preferred, a build whose swipe selector matches nothing retries
     // by regenerating instead, which is the one that can take the old reply
     // with it. That is worth knowing from the log rather than working out from
     // a reroll that went missing.
@@ -8198,7 +8260,7 @@ export function setup(ctx: Ctx, opts?: any) {
   // The chat a note is currently armed for, or null when none is. A chat id
   // rather than a flag, because a retry called off in one chat says nothing
   // about a note waiting on a click in another, and taking that one back would
-  // quietly drop a note the user is still owed. The backend holds one at a
+  // drop a note the user is still owed. The backend holds one at a
   // time, so one id is enough to describe the whole state.
   let armedNoteChat: string | null = null;
 
@@ -8220,8 +8282,8 @@ export function setup(ctx: Ctx, opts?: any) {
   // Resolves once the backend confirms the note is in place. The arm travels the
   // frontend-to-backend bridge while the retry click travels the DOM to the host
   // to the server, and those are independent: the click could reach prompt
-  // assembly first, the interceptor would find nothing armed, and the note was
-  // silently dropped from that generation. Waiting on the acknowledgement
+  // assembly first, the interceptor would find nothing armed, and the note
+  // would be left out of that generation with no message. Waiting on the acknowledgement
   // removes the race. The timeout means a host with no backend bridge, or a slow
   // one, still gets its retry.
   function armRefusalNote(
@@ -8414,6 +8476,14 @@ export function setup(ctx: Ctx, opts?: any) {
       // finding that out, and for the length of that wait the backend held a
       // note armed for a generation that was never going to happen. A DOM query
       // is free and answers the question before any of that starts.
+      // A moment's grace before deciding there is nothing to click. The host
+      // swaps its stop button back for its own controls on its own schedule, and
+      // a retry that looked once, at the wrong instant, reported the button
+      // missing while it was sitting on screen a breath later.
+      for (let waited = 0; !pickRetryControl() && waited < CONTROL_GRACE_MS; waited += 150) {
+        if (Date.now() < s.suppressUntil) break;
+        await new Promise((r) => setTimeout(r, 150));
+      }
       if (pickRetryControl()) await armRefusalNote(chatId, reason, s.attempts);
       // Stop or Cancel can land during that wait, and the click below would
       // restart a reply the user had just called off.
@@ -8535,6 +8605,21 @@ export function setup(ctx: Ctx, opts?: any) {
     // after a minute, because a start arriving later than that on the back of
     // our own click reads as the reader asking for a reply themselves, which
     // hands the tries back and lets the same reply be re-rolled past the cap.
+    // An impersonation, told apart by the press on the host's own Impersonate
+    // button just before it: the events a generation raises say nothing about
+    // what kind it is. It writes your turn into the input box, in your voice,
+    // and every check here is written for a reply in the character's. Judged as
+    // one, a turn that stopped where you would stop read as cut off, and was
+    // retried over the top of what it had just written for you.
+    if (impersonateAt > 0 && Date.now() - impersonateAt < IMPERSONATE_WINDOW_MS) {
+      impersonateAt = 0;
+      s.impersonating = true;
+      s.ignored.add(p.generationId);
+      rememberGeneration(p.generationId, chatId);
+      clearTimers(s);
+      log("an impersonation started, which writes your turn into the input box, so it is left alone");
+      return;
+    }
     const ours =
       s.selfTriggered ||
       (s.retryClickAt > 0 && Date.now() - s.retryClickAt < OURS_WINDOW_MS);
@@ -8674,10 +8759,10 @@ export function setup(ctx: Ctx, opts?: any) {
       timer = setTimeout(finish, CHAT_ASK_MS);
       (ctx as any).sendToBackend({ type: "get_active_chat", requestId: reqId, chatId: forChat || null });
     } catch (_) {
-      // A host that refuses to carry the question answers it by throwing. Left
-      // to the empty catch this never called back at all, so anything waiting on
-      // the answer waited for ever and the button did nothing, silently, which
-      // is the exact fault this whole path exists to stop.
+      // A host that refuses to carry the question answers it by throwing. An
+      // empty catch would never call back, so anything waiting on the answer
+      // would wait for ever and the button would do nothing, which is the fault
+      // this whole path exists to stop.
       reply({ answered: false, resolved: false, chatId: null });
     }
   }
@@ -8809,6 +8894,9 @@ export function setup(ctx: Ctx, opts?: any) {
     // decides the chat here rather than whatever the token itself says.
     const chatId = chatForGeneration(p);
     const s = st(chatId);
+    // Nothing to watch: no watchdog is armed for an impersonation, and its text
+    // is going into the input box rather than into a reply.
+    if (s.impersonating) return;
     // Text arriving is the only proof that beats every guess: if anything above
     // decided this reply was over and it was not, this puts it right.
     if (!s.live) s.liveSince = Date.now();
@@ -8899,6 +8987,10 @@ export function setup(ctx: Ctx, opts?: any) {
     const streamed = String(s.buf || "");
     s.buf = "";
     paintNow();
+    if (s.impersonating) {
+      s.impersonating = false;
+      return;
+    }
     if (s.ignored.has(p.generationId)) return; // aborted gen's trailing event, retry already scheduled
     clearTimers(s);
     if (Date.now() < s.suppressUntil) {
@@ -9019,6 +9111,10 @@ export function setup(ctx: Ctx, opts?: any) {
     // down is the one thing that must never fail to find the state.
     const chatId = chatForGeneration(p);
     const s = st(chatId);
+    if (s.impersonating) {
+      s.impersonating = false;
+      return;
+    }
     if (s.ignored.has(p.generationId)) return; // our own abort, not a user stop
     log("user stop", p.generationId);
     standDown(chatId, true); // a real user stop, so nothing is retried after it
@@ -9039,6 +9135,11 @@ export function setup(ctx: Ctx, opts?: any) {
       // user is driving. Back off rather than press a dialog button underneath
       // them, which could take a feedback prompt they opened themselves.
       clearConfirmWatch();
+      // The host's Impersonate button. Noted rather than acted on: the
+      // generation it starts is the one to leave alone, and that has not
+      // started yet.
+      if (e && e.target && e.target.closest && e.target.closest(IMPERSONATE_BUTTON))
+        impersonateAt = Date.now();
       const tgt =
         e && e.target && e.target.closest
           ? e.target.closest(cfg.stopSelector)
@@ -9141,12 +9242,9 @@ export function setup(ctx: Ctx, opts?: any) {
     const r = row.getBoundingClientRect();
     // No wider than the setting it belongs to.
     //
-    // The cap used to be room on the screen, which is the wrong thing to
-    // measure: the panel is a modal narrower than the screen, so 300 on a phone
-    // came out wider than the panel and hung off the side of it. Sized to the
-    // row instead, it lands in the same column as the setting with the panel's
-    // own gutter either side, which is what makes it read as belonging to that
-    // row rather than floating over everything.
+    // Capped by the row, not the screen. The panel is narrower than the screen,
+    // so a cap based on the screen can come out wider than the panel. Sized to
+    // the row, it lines up with the setting it belongs to.
     //
     // The row is the whole width of the panel, so on a wide screen this is the
     // 300 cap as before and nothing changes there.
@@ -9399,12 +9497,10 @@ export function setup(ctx: Ctx, opts?: any) {
     }
     return t;
   }
-  // A message too long for one line used to fill the box out to its cap, which
-  // on a phone is nearly the whole screen, and left the last line ending well
-  // short of the right edge. The browser evens the lines out and the box is then
-  // pinned to the widest of them, so it comes out the size of what is written in
-  // it rather than the size of the screen. A message that fits on one line comes
-  // out that size on its own, so there is usually nothing to pin.
+  // A message too long for one line would otherwise fill the box out to its
+  // cap, which on a phone is nearly the whole screen. The browser evens the
+  // lines out and the box is pinned to the widest of them, so the box is the
+  // size of what is written in it. A one-line message is already that size.
   // keepWidth is for a message being rewritten in place rather than a new one
   // going up. The box only ever widens then, never narrows: a countdown loses a
   // digit twice on its way down, and letting the box shrink with it moves the
@@ -9852,7 +9948,7 @@ export function setup(ctx: Ctx, opts?: any) {
   // a tap outside puts these back, so nothing sticks unless Save is pressed.
   // Held out here rather than inside openSettings because the on/off switch can
   // also be flipped from the floating button while the panel is open, and that
-  // has to land here too or dismissing the panel would quietly undo it.
+  // has to land here too or dismissing the panel would undo it.
   let modalBaseline: any = null;
   // Close function for the open expand-editor overlay, if any, so it can be shut
   // when the settings modal closes instead of being left floating.
@@ -9871,13 +9967,14 @@ export function setup(ctx: Ctx, opts?: any) {
     wrap.style.cssText = "display:flex;flex-direction:column;gap:6px";
     const checks: Array<{ id: string; input: HTMLInputElement }> = [];
     for (const it of items) {
-      const row = document.createElement("label");
-      row.style.cssText =
-        "display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer";
+      // The box and only the box, the same as every switch on the panel.
+      const row = document.createElement("div");
+      row.style.cssText = "display:flex;align-items:center;gap:8px;font-size:13px";
       const cb = checkBox();
       cb.checked = true;
       const txt = document.createElement("span");
       txt.textContent = it.label;
+      cb.setAttribute("aria-label", it.label);
       row.appendChild(cb);
       row.appendChild(txt);
       wrap.appendChild(row);
@@ -10004,7 +10101,7 @@ export function setup(ctx: Ctx, opts?: any) {
       // Save direction: the current settings into a new preset, or rename one.
       const nameInput = document.createElement("input");
       nameInput.type = "text";
-      nameInput.placeholder = "Preset name";
+      nameInput.placeholder = "A name for this preset";
       nameInput.style.cssText = "flex:1;min-width:150px";
       styleField(nameInput);
       const saveNew = smallBtn(btn("Save as new", false));
@@ -10020,11 +10117,10 @@ export function setup(ctx: Ctx, opts?: any) {
 
       // Said once what is set stops matching the preset the picker still names.
       //
-      // Loading one sets the picker and nothing cleared it, so changing a note
-      // afterwards left the box naming a set the panel no longer held. The
-      // fields are not locked while a set that comes with it is picked: loading one and
-      // changing it is how you are meant to start, which is what Save as new is
-      // for. What was missing was the panel saying the two had parted company.
+      // Loading one sets the picker, and changing a note afterwards does not
+      // clear it, so this line is what says the two differ. The notes stay
+      // editable while a built-in set is picked: loading one and changing it
+      // is how you start, and Save as new keeps the result.
       const drift = document.createElement("div");
       drift.setAttribute("data-lvr-presetdrift", "1");
       drift.style.cssText =
@@ -10116,9 +10212,8 @@ export function setup(ctx: Ctx, opts?: any) {
               ". Press Update selected to keep it, or Save as new for a second copy.";
       };
       select.addEventListener("change", () => {
-        // Picking loads it. Before this, picking only greyed the buttons in and
-        // out, so Update selected wrote whatever was set over the preset that
-        // had just been picked, and that preset was gone.
+        // Picking loads it, so what is set is always the preset the picker
+        // names, and Update selected cannot save one over another.
         const was = lastPick;
         lastPick = select.value;
         const name = select.value;
@@ -10203,7 +10298,7 @@ export function setup(ctx: Ctx, opts?: any) {
         // load that did nothing reads as though something happened.
         undoTo = took ? before : null;
         syncPresetButtons();
-        status.textContent = "Loaded preset: " + name + ". It's in effect now.";
+        status.textContent = "Loaded preset: " + name + ". It is in effect now.";
         log("loaded the " + kindLabel + " preset " + JSON.stringify(name));
       };
 
@@ -10256,7 +10351,7 @@ export function setup(ctx: Ctx, opts?: any) {
         commit();
         presets[kind] = list().concat([{ name, values: snapshotKind(kind) }]);
         if (!persist()) {
-          status.textContent = "Couldn't save the preset on this browser.";
+          status.textContent = "Could not save the preset on this browser.";
           return;
         }
         nameInput.value = "";
@@ -10278,7 +10373,7 @@ export function setup(ctx: Ctx, opts?: any) {
           return;
         }
         if (newName === cur) {
-          status.textContent = "That's already its name.";
+          status.textContent = "That is already its name. Type a different one.";
           return;
         }
         if (isBuiltIn(newName)) {
@@ -10300,7 +10395,7 @@ export function setup(ctx: Ctx, opts?: any) {
         arr[i] = { name: newName, values: arr[i].values };
         presets[kind] = arr;
         if (!persist()) {
-          status.textContent = "Couldn't save on this browser.";
+          status.textContent = "Could not save on this browser.";
           return;
         }
         nameInput.value = "";
@@ -10325,7 +10420,7 @@ export function setup(ctx: Ctx, opts?: any) {
         arr[i] = { name, values: snapshotKind(kind) };
         presets[kind] = arr;
         if (!persist()) {
-          status.textContent = "Couldn't save on this browser.";
+          status.textContent = "Could not save on this browser.";
           return;
         }
         undoTo = null;
@@ -10354,7 +10449,7 @@ export function setup(ctx: Ctx, opts?: any) {
             releaseScroll(held);
             presets[kind] = list().filter((x) => x.name !== name);
             if (!persist()) {
-              status.textContent = "Couldn't save on this browser.";
+              status.textContent = "Could not save on this browser.";
               return;
             }
             refreshSelect();
@@ -10449,7 +10544,7 @@ export function setup(ctx: Ctx, opts?: any) {
         const text = lastRenderedReply();
         if (!text) {
           out.textContent =
-            "Couldn't find a reply on screen to read. Open a chat with a reply in it and try again.";
+            "Could not find a reply on screen to read. Open a chat with a reply in it and try again.";
           out.style.color = "var(--lumiverse-text-muted,rgba(255,255,255,.65))";
           ensureReadable(out, 2.6);
           return;
@@ -11023,7 +11118,7 @@ export function setup(ctx: Ctx, opts?: any) {
         const ok = await copyText(dArea.value);
         dStatus.textContent = ok
           ? "Copied. Paste it into your bug report."
-          : "Couldn't copy here; select the text and copy by hand.";
+          : "Could not copy here. Select the text and copy it by hand.";
       });
 
       body.appendChild(buildBtn);
@@ -11156,7 +11251,7 @@ export function setup(ctx: Ctx, opts?: any) {
         const ok = downloadText("auto-retry-settings.json", buildExport(ids));
         status.textContent = ok
           ? "Saved a file with the ticked parts."
-          : "Couldn't save a file here.";
+          : "Could not save a file here.";
       });
 
       const fileInput = document.createElement("input");
@@ -11188,12 +11283,12 @@ export function setup(ctx: Ctx, opts?: any) {
           for (let i = 0; i < texts.length; i++) {
             const text = texts[i];
             if (text == null) {
-              status.textContent = "Couldn't read " + which(i) + ".";
+              status.textContent = "Could not read " + which(i) + ".";
               return;
             }
             const applied = applyImport(text, ids);
             if (applied === null) {
-              status.textContent = which(i) + " isn't a valid Auto Retry export.";
+              status.textContent = which(i) + " is not a valid Auto Retry export.";
               return;
             }
             for (const one of applied) if (parts.indexOf(one) < 0) parts.push(one);
@@ -11205,7 +11300,7 @@ export function setup(ctx: Ctx, opts?: any) {
               } catch (_) {}
               const got = importPresets(data);
               if (got === -1) {
-                status.textContent = "Couldn't save the imported presets on this browser.";
+                status.textContent = "Could not save the imported presets on this browser.";
                 return;
               }
               presetCount += got;
@@ -11262,7 +11357,7 @@ export function setup(ctx: Ctx, opts?: any) {
     // ---- the search box ----
     // Sits above the scroll area so it stays put while the results move. An
     // empty box puts everything back exactly as it was, including which sections
-    // the user had open, so searching never quietly rearranges the panel.
+    // the user had open, so searching never rearranges the panel.
     const searchWrap = document.createElement("div");
     searchWrap.style.cssText =
       "display:flex;flex-direction:column;gap:6px;flex:none;margin-bottom:12px";
@@ -11385,7 +11480,7 @@ export function setup(ctx: Ctx, opts?: any) {
       "flex:1;min-width:120px;font-size:12px;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
 
     // Opens the picker rather than resetting on the spot. There is no confirm
-    // dialog in front of it any more: the picker itself is the confirmation,
+    // dialog in front of it: the picker itself is the confirmation,
     // it says what each part would change before anything happens, and what it
     // does is undone by closing the panel instead of pressing Save.
     const reset = btn("Reset…", false);
@@ -11627,7 +11722,7 @@ export function setup(ctx: Ctx, opts?: any) {
   //
   // This exists because a refused permission is the one failure that raises
   // nothing anywhere: a gated event never fires, and a fire-and-forget
-  // registration silently does nothing. Every other fault in here reports
+  // registration does nothing and says nothing. Every other fault in here reports
   // itself somewhere. This one leaves the extension installed and apparently
   // working while it does none of what it was asked to.
   function buildPermissionNotice(): HTMLElement {
@@ -11836,10 +11931,15 @@ export function setup(ctx: Ctx, opts?: any) {
     const labelWrap = document.createElement("div");
     labelWrap.style.cssText =
       "display:flex;align-items:center;gap:6px;min-width:0";
-    const name = document.createElement(forId ? "label" : "span");
-    if (forId) (name as HTMLLabelElement).htmlFor = forId;
+    // A name, not a label. Only the control changes the setting: words that
+    // answered a press turned a stray tap on a setting's name into a switch
+    // flipped or a box focused without meaning to, the same as the "?" beside
+    // them answers a press on itself and nowhere else. The control still takes
+    // these words as its name for a screen reader, through aria-labelledby.
+    const name = document.createElement("span");
+    if (forId) name.id = forId + "-name";
     name.textContent = f.label;
-    name.style.cssText = "font-size:13.5px" + (forId ? ";cursor:pointer" : "");
+    name.style.cssText = "font-size:13.5px";
     labelWrap.appendChild(name);
     if (f.hint) {
       ensurePanelStyle();
@@ -11932,7 +12032,10 @@ export function setup(ctx: Ctx, opts?: any) {
 
     if (f.type === "bool") {
       const input = checkBox();
-      if (forId) input.id = forId;
+      if (forId) {
+        input.id = forId;
+        input.setAttribute("aria-labelledby", forId + "-name");
+      }
       input.checked = !!cfg[f.key];
       input.addEventListener("change", () => {
         // Turning the crisis check on is the one tick that has to be answered
@@ -12135,7 +12238,7 @@ export function setup(ctx: Ctx, opts?: any) {
         addedWith = "";
         if (notes.length >= MAX_NOTES) return;
         // A new note copies the last one's role and its starting try, so
-        // adding one does not quietly change when anything goes out. Move it
+        // adding one does not change when anything goes out. Move it
         // later by hand to make it an escalation.
         const prev = notes.length ? notes[notes.length - 1] : null;
         notes.push({
@@ -12190,7 +12293,10 @@ export function setup(ctx: Ctx, opts?: any) {
       row.appendChild(foot);
     } else if (f.type === "pick") {
       const sel = document.createElement("select");
-      if (forId) sel.id = forId;
+      if (forId) {
+        sel.id = forId;
+        sel.setAttribute("aria-labelledby", forId + "-name");
+      }
       for (const o of f.options || []) {
         const opt = document.createElement("option");
         opt.value = o.value;
@@ -12205,7 +12311,7 @@ export function setup(ctx: Ctx, opts?: any) {
         cfg[f.key] = coerce("pick", sel.value, (CONFIG as any)[f.key], f);
         // Honoured here as well as on a number box. Wired up for numbers alone,
         // a dropdown asking to apply as it is picked is accepted by the schema
-        // and then quietly does nothing.
+        // and then does nothing.
         if (f.live) onLiveEdit(String(f.key));
       });
       fieldSetters[f.key] = (v: any) => {
@@ -12215,7 +12321,10 @@ export function setup(ctx: Ctx, opts?: any) {
       row.appendChild(top);
     } else if (f.type === "num") {
       const input = document.createElement("input");
-      if (forId) input.id = forId;
+      if (forId) {
+        input.id = forId;
+        input.setAttribute("aria-labelledby", forId + "-name");
+      }
       input.type = "number";
       // A box with no step is one the browser holds to whole numbers, and
       // "numeric" is the keypad with no decimal point on it. Every setting here
@@ -12241,7 +12350,7 @@ export function setup(ctx: Ctx, opts?: any) {
       // or not the button was even switched on.
       // A price is copied off a provider's own page, where it reads $5.00/M or
       // $0.075/M. A number box takes none of that: the paste lands as nothing
-      // and the setting quietly stays at its default, which reads as the
+      // and the setting stays at its default, which reads as the
       // feature being broken. The number is lifted out of whatever was pasted.
       input.addEventListener("paste", (e: any) => {
         const raw = e && e.clipboardData && e.clipboardData.getData("text");
@@ -12324,7 +12433,7 @@ export function setup(ctx: Ctx, opts?: any) {
           }
           const state = selectorState(sel);
           if (state === "invalid selector") {
-            res.textContent = "that selector isn't valid";
+            res.textContent = "that selector is not valid";
             res.style.color = "var(--lumiverse-danger,#ef4444)";
             return;
           }
@@ -12535,7 +12644,7 @@ export function setup(ctx: Ctx, opts?: any) {
   // The parts are the same ones import and export already use, so there is one
   // definition of what a part is and the names match between the two panels.
   //
-  // Nothing is reset silently. The picker says, per part, how many settings
+  // Nothing is reset without asking. The picker says, per part, how many settings
   // would actually change, so a part already at its defaults is visibly nothing
   // to press, and it says in plain words what it does not touch.
   function resetPartsFor(): Array<{ id: string; label: string; keys: string[] }> {
@@ -12650,16 +12759,18 @@ export function setup(ctx: Ctx, opts?: any) {
     const checks: Array<{ id: string; input: HTMLInputElement }> = [];
     for (const part of parts) {
       const n = changedCount(part.keys);
-      const row = document.createElement("label");
+      // A row, not a label: only the box ticks a part for putting back. A stray
+      // press on a name in a list that undoes settings is the last place a
+      // press should count.
+      const row = document.createElement("div");
       row.setAttribute("data-ar-reset", part.id);
       // No opacity for the disabled state. The contrast sweep reads colour
       // against background and cannot see through an opacity, so a faded row on
       // a hostile theme is one it has no way to repair. The disabled box and
       // the "already default" note beside it say it well enough.
-      row.style.cssText =
-        "display:flex;align-items:center;gap:8px;font-size:13px;cursor:" +
-        (n ? "pointer" : "default");
+      row.style.cssText = "display:flex;align-items:center;gap:8px;font-size:13px";
       const cb = checkBox();
+      cb.setAttribute("aria-label", part.label);
       cb.checked = false;
       // A part already at its defaults is nothing to press. Left tickable it
       // reads as an action that did nothing when the count came back zero.
@@ -12689,12 +12800,11 @@ export function setup(ctx: Ctx, opts?: any) {
     const presetStore = loadPresets();
     const presetCount = Object.keys(presetStore)
       .reduce((n, k) => n + (presetStore[k] || []).length, 0);
-    const presetRow = document.createElement("label");
+    const presetRow = document.createElement("div");
     presetRow.setAttribute("data-ar-reset", "presets");
-    presetRow.style.cssText =
-      "flex:none;display:flex;align-items:center;gap:8px;font-size:13px;cursor:" +
-      (presetCount ? "pointer" : "default");
+    presetRow.style.cssText = "flex:none;display:flex;align-items:center;gap:8px;font-size:13px";
     const presetCb = checkBox();
+    presetCb.setAttribute("aria-label", "Delete saved presets");
     presetCb.checked = false;
     presetCb.disabled = presetCount === 0;
     if (!presetCount) presetCb.style.cursor = "default";
@@ -13211,7 +13321,7 @@ export function setup(ctx: Ctx, opts?: any) {
       eatClick();
       const sel = deriveSelector(node);
       if (!sel) {
-        finish(null, "Couldn't identify that one. Try holding the button itself rather than an icon inside it.");
+        finish(null, "Could not identify that one. Try holding the button itself rather than an icon inside it.");
         return;
       }
       finish(sel, "Set to " + sel);
