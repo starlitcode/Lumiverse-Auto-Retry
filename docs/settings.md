@@ -59,6 +59,8 @@ Only **Save** keeps your changes. Closing with the X, or tapping outside the pan
 
 - Saved settings follow your Lumiverse account to other browsers and devices.
 - A tab left open catches up. Opening the settings, or coming back to the tab after more than 30 seconds, loads your settings and presets from your account first. So a tab left open on your phone does not save older settings over newer ones.
+- Saves reach your account in the order you make them, so an older save never ends up as the stored copy.
+- If the settings open before the extension's server side has started, they ask your account again once that side is ready.
 - They apply from the next reply.
 - Long text boxes, like your own refusal phrases, have an **Expand** button that opens a bigger editor.
 

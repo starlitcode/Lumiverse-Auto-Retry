@@ -22,7 +22,7 @@
 // with while this side comes back on the new build. A debug report naming only
 // the panel's version would be speaking for a file it cannot see, so the panel
 // asks for this one and prints both.
-const VERSION = '5.8.1';
+const VERSION = '5.8.2';
 const SETTINGS_FILE = 'settings.json';
 // Presets, kept in account storage next to the settings so they
 // follow the user between devices. The browser copy is a fast local cache, not
@@ -83,6 +83,27 @@ async function writeUserJson(file, value, userId) {
         catch (_) { /* fall through so a save is never lost with no message */ }
     }
     await spindle.storage.write(file, JSON.stringify(value));
+}
+// Writes for one account, one after another. A save runs only once the one
+// before it has finished, so the last one sent is the last one written. Two
+// saves close together, written at once, can finish the older one last and
+// leave it as the copy every browser loads. Settings and presets each have
+// their own line, so a save of one never waits on a save of the other.
+const settingsWrites = new Map();
+const presetWrites = new Map();
+function inTurn(queue, userId, job) {
+    const k = String(userId == null ? '' : userId);
+    const before = queue.get(k) || Promise.resolve();
+    const next = before.then(job, job);
+    const held = next.catch(() => { });
+    queue.set(k, held);
+    // Dropped once it is the last in line, so the map holds nothing for an
+    // account that is not saving.
+    held.then(() => {
+        if (queue.get(k) === held)
+            queue.delete(k);
+    });
+    return next;
 }
 // Replying without a userId broadcasts to every connected user on an
 // operator-scoped install, so every reply to a frontend message carries the id
@@ -315,16 +336,18 @@ spindle.onFrontendMessage(async (payload, userId) => {
             // devices. It is caught here rather than falling to the catch at the
             // bottom, which logs on the server where the affected user cannot see it
             // while the panel claims the save worked.
-            try {
-                await writeUserJson(SETTINGS_FILE, payload.settings, userId);
-            }
-            catch (e) {
+            await inTurn(settingsWrites, userId, async () => {
                 try {
-                    spindle.log.warn('auto-retry: could not save settings to the account');
+                    await writeUserJson(SETTINGS_FILE, payload.settings, userId);
                 }
-                catch (__) { }
-                replyTo(userId, { type: 'account_save_failed', what: 'settings' });
-            }
+                catch (e) {
+                    try {
+                        spindle.log.warn('auto-retry: could not save settings to the account');
+                    }
+                    catch (__) { }
+                    replyTo(userId, { type: 'account_save_failed', what: 'settings' });
+                }
+            });
             return;
         }
         if (payload.type === 'load_settings') {
@@ -496,16 +519,18 @@ spindle.onFrontendMessage(async (payload, userId) => {
             return;
         }
         if (payload.type === 'save_presets' && payload.presets && typeof payload.presets === 'object') {
-            try {
-                await writeUserJson(PRESETS_FILE, payload.presets, userId);
-            }
-            catch (e) {
+            await inTurn(presetWrites, userId, async () => {
                 try {
-                    spindle.log.warn('auto-retry: could not save presets to the account');
+                    await writeUserJson(PRESETS_FILE, payload.presets, userId);
                 }
-                catch (__) { }
-                replyTo(userId, { type: 'account_save_failed', what: 'presets' });
-            }
+                catch (e) {
+                    try {
+                        spindle.log.warn('auto-retry: could not save presets to the account');
+                    }
+                    catch (__) { }
+                    replyTo(userId, { type: 'account_save_failed', what: 'presets' });
+                }
+            });
             return;
         }
         if (payload.type === 'load_presets') {

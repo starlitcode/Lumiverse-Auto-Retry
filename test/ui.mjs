@@ -3861,6 +3861,41 @@ console.log("\nan old tab catches up with the account");
   check("no console errors", errors.length === 0, errors);
 }
 
+console.log("\nan unanswered ask is sent again when the backend comes up");
+{
+  // An ask sent before the backend was listening gets no answer. The backend
+  // announcing itself is the cue to ask again, or the panel runs on this
+  // browser's copy for the whole visit and its next save writes that copy over
+  // the account's.
+  const { out, errors } = await inPanel(browser, {}, (page) =>
+    page.evaluate(async () => {
+      const ids = (type) => window.__sent.filter((m) => m.type === type).map((m) => m.requestId);
+      const firstSettings = ids("load_settings");
+      const firstPresets = ids("load_presets");
+      const listeners = window.__backs.length;
+      window.__fromBackend({ type: "backend_ready" });
+      const againSettings = ids("load_settings");
+      const againPresets = ids("load_presets");
+      const listenersAfter = window.__backs.length;
+      const newest = againSettings[againSettings.length - 1];
+      window.__fromBackend({ type: "loaded_settings", requestId: newest, settings: { maxRetries: 7 } });
+      window.__fromBackend({ type: "loaded_presets", requestId: againPresets[againPresets.length - 1], presets: null });
+      const took = JSON.parse(localStorage.getItem("lv-auto-retry:settings:v1") || "{}").maxRetries;
+      window.__fromBackend({ type: "backend_ready" });
+      const answeredThen = { settings: ids("load_settings").length, presets: ids("load_presets").length };
+      return { firstSettings, firstPresets, againSettings, againPresets, listeners, listenersAfter, took, answeredThen };
+    }),
+  );
+  check("an unanswered settings ask is sent again, under a new id",
+    out.againSettings.length === out.firstSettings.length + 1 && out.firstSettings.indexOf(out.againSettings[out.againSettings.length - 1]) < 0, out);
+  check("and so is an unanswered presets ask", out.againPresets.length === out.firstPresets.length + 1, out);
+  check("the listener for the old ask comes off rather than piling up", out.listenersAfter === out.listeners, out);
+  check("the answer to the new ask is taken", out.took === 7, out);
+  check("an answered ask is not sent again when the backend comes back up",
+    out.answeredThen.settings === out.againSettings.length && out.answeredThen.presets === out.againPresets.length, out);
+  check("no console errors", errors.length === 0, errors);
+}
+
 console.log("\npop-ups come up and go down");
 {
   // The retry message rises into place as it fades in and sinks as it goes.

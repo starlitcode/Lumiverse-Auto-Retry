@@ -136,7 +136,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.8.1";
+const VERSION = "5.8.2";
 // The addresses the extension points at. Pinned to the released branch rather
 // than to a tag, so an old install still opens the page as it stands today.
 const SAFETY_URL = "https://github.com/starlitcode/Lumiverse-Auto-Retry/blob/stable/docs/safety.md";
@@ -3159,11 +3159,19 @@ export function setup(ctx, opts) {
         loadFromAccount();
         loadPresetsFromAccount();
     }
+    // The listener for an ask still waiting on its answer, one for settings and
+    // one for presets. An ask sent before the backend was listening is never
+    // answered, so backend_ready sends it again, and the listener for the old
+    // one comes off first rather than waiting for teardown.
+    let settingsWaiting = null;
+    let presetsWaiting = null;
     function loadFromAccount() {
         try {
             if (!ctx || typeof ctx.sendToBackend !== "function" || typeof ctx.onBackendMessage !== "function")
                 return;
             accountAskedAt = Date.now();
+            if (settingsWaiting)
+                settingsWaiting();
             const reqId = "ar-load-" + Date.now() + "-" + Math.random().toString(36).slice(2);
             const off = ctx.onBackendMessage((msg) => {
                 if (!msg || msg.type !== "loaded_settings" || msg.requestId !== reqId)
@@ -3172,6 +3180,7 @@ export function setup(ctx, opts) {
                     off && off();
                 }
                 catch (_) { }
+                settingsWaiting = null;
                 const s = msg.settings;
                 if (s && typeof s === "object" && Object.keys(s).length) {
                     // Held before the coercion below, which walks the panel's own fields
@@ -3207,6 +3216,13 @@ export function setup(ctx, opts) {
                     catch (_) { }
                 }
             });
+            settingsWaiting = () => {
+                try {
+                    off && off();
+                }
+                catch (_) { }
+                settingsWaiting = null;
+            };
             disposers.push(() => { try {
                 off && off();
             }
@@ -6659,6 +6675,8 @@ export function setup(ctx, opts) {
         try {
             if (!ctx || typeof ctx.sendToBackend !== "function" || typeof ctx.onBackendMessage !== "function")
                 return;
+            if (presetsWaiting)
+                presetsWaiting();
             const reqId = "ar-presets-" + Date.now() + "-" + Math.random().toString(36).slice(2);
             const off = ctx.onBackendMessage((msg) => {
                 if (!msg || msg.type !== "loaded_presets" || msg.requestId !== reqId)
@@ -6667,6 +6685,7 @@ export function setup(ctx, opts) {
                     off && off();
                 }
                 catch (_) { }
+                presetsWaiting = null;
                 const incoming = coercePresets(msg.presets);
                 const local = loadPresets();
                 // Per kind, not all or nothing. The account winning outright would drop
@@ -6702,6 +6721,13 @@ export function setup(ctx, opts) {
                     log("sent " + kept + (kept === 1 ? " preset" : " presets") + " up to the account");
                 }
             });
+            presetsWaiting = () => {
+                try {
+                    off && off();
+                }
+                catch (_) { }
+                presetsWaiting = null;
+            };
             disposers.push(() => { try {
                 off && off();
             }
@@ -13675,6 +13701,14 @@ export function setup(ctx, opts) {
                     // nothing is what it would already be getting.
                     if (msg.type === "backend_ready") {
                         armBackend();
+                        // An ask sent before the backend was listening is never answered.
+                        // Without asking again, the panel would run on this browser's copy
+                        // for the whole visit, and its next save would write that copy over
+                        // the account's.
+                        if (settingsWaiting)
+                            loadFromAccount();
+                        if (presetsWaiting)
+                            loadPresetsFromAccount();
                         askForPermissions();
                         askForBackendVersion();
                         if (promptsAsked) {
