@@ -147,7 +147,7 @@ const STREAM_BUF_MAX = 200000;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.7.1";
+const VERSION = "5.7.2";
 
 // The addresses the extension points at. Pinned to the released branch rather
 // than to a tag, so an old install still opens the page as it stands today.
@@ -5928,17 +5928,16 @@ export function setup(ctx: Ctx, opts?: any) {
       // Read the layout between the two, or the browser sees one value being set
       // and nothing to travel between.
       void node.offsetWidth;
-      // Out rather than in. Easing in puts the longest step at the end, so the
-      // panel travels gently and then stops dead, which is the part that reads
-      // as a jump; easing out spends the distance early and lands softly.
+      // Ease-out, so it moves on the first frame and lands softly. At 45 frames
+      // a second each frame takes 16%, 15%, 14% and so on of the travel, and no
+      // step is much bigger than the one before it.
       //
-      // The curve eases in a little as well as out. A pure ease-out spends its
-      // distance at the very start, so the first frame was the largest step of
-      // the whole travel; this leans into it over two or three frames and then
-      // has a long tail to land on. Longer than the panel's other movements
-      // because this one carries the page with it, and the same distance over
-      // more frames is a smaller step in each.
-      const ease = "240ms cubic-bezier(.4,0,.2,1)";
+      // A curve that also eases in holds still for its first few frames and
+      // then covers a quarter of the travel in one. On a phone that reads as
+      // the row sticking and then jumping shut. Longer than the panel's other
+      // movements because this one carries the page with it, and the same
+      // distance over more frames is a smaller step in each.
+      const ease = "220ms ease-out";
       node.style.transition =
         "height " + ease + ",opacity " + ease + ",margin-bottom " + ease +
         ",padding-top " + ease + ",padding-bottom " + ease +

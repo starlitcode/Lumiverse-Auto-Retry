@@ -771,6 +771,10 @@ console.log("\nhints");
           (b) => b.getAttribute("aria-label") === "Add another note",
         );
         if (!add) return { skipped: true };
+        // Every section open, so the note has a height to close from. The
+        // notes sit in a section that starts closed.
+        for (const h of modal.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+        await new Promise((r) => setTimeout(r, 400));
         // Two of them, since the last one cannot be removed.
         add.click();
         await frame();
@@ -783,20 +787,41 @@ console.log("\nhints");
         const afterOne = notes();
         const said = (document.getElementById("__lvRetryToast") || {}).textContent || "";
         const again = modal.querySelector('[data-ar-note-drop="1"]');
+        // Every box around the button, kept from before the press, so the one
+        // that closes can be found by what it does rather than by its markup.
+        const around = [];
+        for (let n = again; n && n !== modal; n = n.parentElement) around.push({ n });
         if (again) {
           again.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerType: "touch" }));
           again.click();
         }
+        // The note has to be on its way from the first frame. A curve that
+        // eases in holds still for its first few frames and then jumps, which
+        // on a phone reads as the note sticking. Read off the curve the
+        // browser is running rather than timed, since a timed sample moves
+        // with the machine's frame rate.
+        const atRest = (tf) => {
+          const first = String(tf || "").split(",")[0].trim();
+          const named = { ease: [0.25, 0.1], "ease-in": [0.42, 0], "ease-out": [0, 0], "ease-in-out": [0.42, 0], linear: [0, 0] };
+          const m = /^cubic-bezier\(([^,]+),([^,]+)/.exec(String(tf || "").replace(/\s/g, ""));
+          const p = m ? [Number(m[1]), Number(m[2])] : named[first];
+          // A first control point along the time axis with no rise is a curve
+          // that starts at a standstill.
+          return !p || (p[0] > 0 && p[1] === 0);
+        };
+        const going = around.find((x) => /height/.test(x.n.style.transition || ""));
+        const early = going ? { curve: getComputedStyle(going.n).transitionTimingFunction, rest: atRest(getComputedStyle(going.n).transitionTimingFunction) } : null;
         await frame();
         // Past the travel that closes its space.
         await new Promise((r) => setTimeout(r, 420));
-        return { had, afterOne, said, afterTwo: notes() };
+        return { had, afterOne, said, afterTwo: notes(), early };
       }),
   );
   check("there are two notes to work with", out.had === 2, out);
   check("one press removes nothing", out.afterOne === out.had, out);
   check("and it says what a second press would do", /press it again/i.test(out.said), out.said);
   check("the second press removes it", out.afterTwo === out.had - 1, out);
+  check("its space starts closing straight away rather than sticking", out.early != null && !out.early.rest, out.early);
   check("no console errors", errors.length === 0, errors);
 }
 

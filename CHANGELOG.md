@@ -8,6 +8,16 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.7.2
+
+_2026-09-24_
+
+### Fixed
+
+- **A removed retry note stuck and then jumped shut.** The space it left now starts closing straight away.
+
+---
+
 ## 5.7.1
 
 _2026-09-23_
