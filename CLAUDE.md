@@ -12,6 +12,10 @@ behaves, goes into both.
 - A release is dated the day it goes to `stable`.
 - Versions follow semver. A patch only fixes things. Adding anything is a minor
   version. Bump `spindle.json`, `package.json` and the `VERSION` constants together.
+- A version is released once the owner says it is announced, not when it goes to
+  `stable`. Until then, new work joins that same version and its changelog entry,
+  even if it is already on `stable`. Only start a new version after the owner
+  says the last one is announced.
 
 ## Build and checks
 
@@ -62,9 +66,9 @@ shown in Lumiverse.
 - Only released behaviour. A bug that was made and fixed between two releases
   never reached anyone and is not listed.
 - Before writing "Fixed" or "Changed", check the thing existed in the last
-  version on `stable`. Something added in this version is described as it is
+  announced version. Something added in this version is described as it is
   now, under "Added", never as a fix to something users had before.
-- A released entry is not rewritten. Corrections go in the next version.
+- An announced entry is not rewritten. Corrections go in the next version.
 - Credit for a report goes in the changelog, for example "Reported by a Discord
   user". Credit goes only to people the owner names.
 
