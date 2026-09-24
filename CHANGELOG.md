@@ -8,6 +8,16 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.8.1
+
+_2026-09-24_
+
+### Fixed
+
+- **An old tab could save older settings over newer ones.** Settings were read from your account only when the page first loaded. A tab left open on your phone showed the settings it had then, and pressing **Save** there put them back on every device. Now opening the settings, or coming back to a tab after more than 30 seconds, reads your settings and presets from your account first.
+
+---
+
 ## 5.8.0
 
 _2026-09-24_
