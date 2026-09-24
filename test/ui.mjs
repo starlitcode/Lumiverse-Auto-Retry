@@ -3819,6 +3819,48 @@ console.log("\npop-up goes away");
 // shorter, and a box that shrinks with it takes the Cancel button sideways under
 // a thumb already on its way there. So a message being rewritten in place may
 // widen and may not narrow.
+console.log("\nan old tab catches up with the account");
+{
+  // Save writes every setting, so a tab left open on a phone must not show or
+  // save the copy it had yesterday. Back after a while, it asks the account
+  // again, and so does opening the settings. Back after a moment, it does not.
+  const { out, errors } = await inPanel(browser, {}, (page) =>
+    page.evaluate(async () => {
+      const asks = () => ({
+        settings: window.__sent.filter((m) => m.type === "load_settings").length,
+        presets: window.__sent.filter((m) => m.type === "load_presets").length,
+      });
+      const real = Date.now.bind(Date);
+      let ahead = 0;
+      Date.now = () => real() + ahead;
+      const show = (state) => {
+        Object.defineProperty(document, "visibilityState", { configurable: true, get: () => state });
+        document.dispatchEvent(new Event("visibilitychange"));
+      };
+      const start = asks();
+      show("hidden");
+      show("visible");
+      const soon = asks();
+      ahead = 31000;
+      show("hidden");
+      show("visible");
+      const later = asks();
+      ahead = 62000;
+      window.__acts["auto-retry-settings"].cb();
+      const opened = asks();
+      window.__acts["auto-retry-settings"].cb();
+      const openedAgain = asks();
+      return { start, soon, later, opened, openedAgain };
+    }),
+  );
+  check("a tab back after a moment does not ask again", out.soon.settings === out.start.settings, out);
+  check("a tab back after a while asks for its settings and presets again",
+    out.later.settings === out.start.settings + 1 && out.later.presets === out.start.presets + 1, out);
+  check("opening the settings after a while asks again", out.opened.settings === out.later.settings + 1, out);
+  check("and opening them again straight after does not", out.openedAgain.settings === out.opened.settings, out);
+  check("no console errors", errors.length === 0, errors);
+}
+
 console.log("\npop-ups come up and go down");
 {
   // The retry message rises into place as it fades in and sinks as it goes.

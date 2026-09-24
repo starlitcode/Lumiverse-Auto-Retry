@@ -147,7 +147,7 @@ const STREAM_BUF_MAX = 200000;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.8.0";
+const VERSION = "5.8.1";
 
 // The addresses the extension points at. Pinned to the released branch rather
 // than to a tag, so an old install still opens the page as it stands today.
@@ -3312,9 +3312,20 @@ export function setup(ctx: Ctx, opts?: any) {
   // Pull account-synced settings on load. localStorage is a fast local cache and
   // offline fallback; the account copy wins when present. If the account has
   // nothing yet but this browser does, migrate this browser's settings up.
+  // When the account was last asked, so a page left open can ask again before
+  // its settings are shown or saved. Save writes every setting, so an old tab
+  // on a phone saving yesterday's copy would put it back on every device.
+  const STALE_AFTER_MS = 30000;
+  let accountAskedAt = 0;
+  function refreshFromAccount() {
+    if (Date.now() - accountAskedAt < STALE_AFTER_MS) return;
+    loadFromAccount();
+    loadPresetsFromAccount();
+  }
   function loadFromAccount() {
     try {
       if (!ctx || typeof (ctx as any).sendToBackend !== "function" || typeof (ctx as any).onBackendMessage !== "function") return;
+      accountAskedAt = Date.now();
       const reqId = "ar-load-" + Date.now() + "-" + Math.random().toString(36).slice(2);
       const off = (ctx as any).onBackendMessage((msg: any) => {
         if (!msg || msg.type !== "loaded_settings" || msg.requestId !== reqId) return;
@@ -13457,6 +13468,9 @@ export function setup(ctx: Ctx, opts?: any) {
       modalSnapshot = snapshot;
 
       buildSettingsBody(modal.root, snapshot);
+      // The account's copy, if this page has held its own for a while. It
+      // redraws the panel and becomes what Save and closing compare against.
+      refreshFromAccount();
       modal.onDismiss(() => {
         hideHint();
         if (closeExpandEditor) {
@@ -13568,6 +13582,23 @@ export function setup(ctx: Ctx, opts?: any) {
   chaseActiveChat();
   loadFromAccount();
   loadPresetsFromAccount();
+  // A tab brought back after a while asks the account again, so what it shows
+  // and what it would save is the newest copy.
+  try {
+    if (typeof document !== "undefined" && document.addEventListener) {
+      const onVisible = () => {
+        try {
+          if (document.visibilityState === "visible") refreshFromAccount();
+        } catch (_) {}
+      };
+      document.addEventListener("visibilitychange", onVisible);
+      disposers.push(() => {
+        try {
+          document.removeEventListener("visibilitychange", onVisible);
+        } catch (_) {}
+      });
+    }
+  } catch (_) {}
   syncInputBarActions();
   try {
     if (ctx && typeof (ctx as any).onBackendMessage === "function") {
