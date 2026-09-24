@@ -69,6 +69,9 @@ shown in Lumiverse.
   announced version. Something added in this version is described as it is
   now, under "Added", never as a fix to something users had before.
 - An announced entry is not rewritten. Corrections go in the next version.
+- A fix that an announced version claimed and that did not work is listed
+  again in the next version, as "Fixed again", saying which version claimed
+  it and what it missed. The Discord post uses "Fixed again" as its lead.
 - Credit for a report goes in the changelog, for example "Reported by a Discord
   user". Credit goes only to people the owner names.
 
@@ -80,6 +83,7 @@ A code block, in this shape and nothing else:
 **Auto Retry vX.Y.Z**
 - **Added: bold lead.** Plain prose.
 - **Fixed: bold lead.** Plain prose.
+- **Fixed again: bold lead.** Plain prose.
 - **Changed: bold lead.** Plain prose.
 ```
 
