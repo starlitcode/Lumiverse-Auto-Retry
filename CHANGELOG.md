@@ -8,6 +8,17 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.8.2
+
+_2026-09-24_
+
+### Fixed
+
+- **Two saves close together could leave the older one in your account.** Saves of your settings and presets could finish out of order, so the next load from your account brought back the older copy. They are now written one at a time, in the order you made them.
+- **The panel could miss your account's settings for a whole visit.** If it opened before the extension's server side had started, its request for your account's copy got no answer, and it was not asked again. The panel then ran on this browser's copy, which can be older, and the next save wrote that older copy to your account. Now the panel asks again as soon as the server side is ready. See [Saving](docs/settings.md#saving).
+
+---
+
 ## 5.8.1
 
 _2026-09-24_

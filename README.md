@@ -1,3 +1,5 @@
+![Auto Retry: a cracked chat bubble fades away while a new one is caught under a purple night sky.](docs/banner.png)
+
 # Auto Retry
 
 A Lumiverse extension. It re-runs an AI reply when it fails, comes back empty, stalls partway, gets cut off mid-sentence, or refuses by mistake, so you do not have to catch it and press regenerate yourself.
