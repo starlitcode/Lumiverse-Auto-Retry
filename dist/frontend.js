@@ -136,7 +136,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.7.1";
+const VERSION = "5.8.0";
 // The addresses the extension points at. Pinned to the released branch rather
 // than to a tag, so an old install still opens the page as it stands today.
 const SAFETY_URL = "https://github.com/starlitcode/Lumiverse-Auto-Retry/blob/stable/docs/safety.md";
@@ -5845,17 +5845,16 @@ export function setup(ctx, opts) {
             // Read the layout between the two, or the browser sees one value being set
             // and nothing to travel between.
             void node.offsetWidth;
-            // Out rather than in. Easing in puts the longest step at the end, so the
-            // panel travels gently and then stops dead, which is the part that reads
-            // as a jump; easing out spends the distance early and lands softly.
+            // Ease-out, so it moves on the first frame and lands softly. At 45 frames
+            // a second each frame takes 16%, 15%, 14% and so on of the travel, and no
+            // step is much bigger than the one before it.
             //
-            // The curve eases in a little as well as out. A pure ease-out spends its
-            // distance at the very start, so the first frame was the largest step of
-            // the whole travel; this leans into it over two or three frames and then
-            // has a long tail to land on. Longer than the panel's other movements
-            // because this one carries the page with it, and the same distance over
-            // more frames is a smaller step in each.
-            const ease = "240ms cubic-bezier(.4,0,.2,1)";
+            // A curve that also eases in holds still for its first few frames and
+            // then covers a quarter of the travel in one. On a phone that reads as
+            // the row sticking and then jumping shut. Longer than the panel's other
+            // movements because this one carries the page with it, and the same
+            // distance over more frames is a smaller step in each.
+            const ease = "220ms ease-out";
             node.style.transition =
                 "height " + ease + ",opacity " + ease + ",margin-bottom " + ease +
                     ",padding-top " + ease + ",padding-bottom " + ease +
@@ -9532,6 +9531,55 @@ export function setup(ctx, opts) {
         });
     }
     // ---- toast with an optional Cancel button ----
+    // The box rises into place as it fades in and sinks a little as it fades
+    // out. Coming in it slows as it lands and goes slightly past its place before
+    // settling; going out it speeds up, since nobody watches something leave.
+    // Only the fade is used when the reader asks for less motion.
+    const TOAST_EASE = "opacity 200ms ease-out,transform 260ms cubic-bezier(.2,.9,.3,1.15)";
+    const TOAST_EASE_OUT = "opacity 160ms ease-in,transform 160ms ease-in";
+    const TOAST_AWAY = "translateY(10px) scale(.96)";
+    const toastStill = () => {
+        try {
+            return typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+        }
+        catch (_) {
+            return false;
+        }
+    };
+    // Where the box waits while hidden: below its place when it sits at the
+    // bottom of the screen, above it when it sits at the top.
+    const toastAwayFor = (t) => {
+        if (toastStill())
+            return "none";
+        return t && t.style.bottom === "auto" ? "translateY(-10px) scale(.96)" : TOAST_AWAY;
+    };
+    function toastIn(t) {
+        const was = t.style.opacity === "1";
+        if (!was) {
+            // From the waiting place, with no travel, then to its own place.
+            t.style.transition = "none";
+            t.style.transform = toastAwayFor(t);
+            void t.offsetWidth;
+            t.style.transition = TOAST_EASE;
+        }
+        t.style.transform = "none";
+        t.style.opacity = "1";
+        // A new message in a box that is already up gets a small pulse, so the
+        // change is seen. A countdown rewriting its own words does not come
+        // through here.
+        if (was && !toastStill()) {
+            try {
+                t.animate([{ transform: "scale(1.035)" }, { transform: "none" }], { duration: 220, easing: "ease-out" });
+            }
+            catch (_) { }
+        }
+    }
+    function toastOut(t) {
+        t.style.transition = TOAST_EASE_OUT;
+        t.style.transform = toastAwayFor(t);
+        t.style.opacity = "0";
+        t.style.pointerEvents = "none";
+    }
     function ensureToast() {
         if (typeof document === "undefined")
             return null;
@@ -9562,8 +9610,9 @@ export function setup(ctx, opts) {
                     "color:var(--lumiverse-text,#fff);" +
                     "background-color:var(--lumiverse-card-bg-solid,rgb(24,20,34));background-image:linear-gradient(var(--lumiverse-bg-elevated,rgba(35,30,48,.94)),var(--lumiverse-bg-elevated,rgba(35,30,48,.94)));" +
                     "border:1px solid var(--lumiverse-border,rgba(255,255,255,.18));" +
-                    "box-shadow:var(--lumiverse-shadow-md,0 8px 24px rgba(0,0,0,.4));transition:opacity var(--lumiverse-transition,200ms ease);" +
-                    "opacity:0;max-width:min(92vw,460px);text-align:left";
+                    "box-shadow:var(--lumiverse-shadow-md,0 8px 24px rgba(0,0,0,.4));" +
+                    "transition:" + TOAST_EASE + ";" +
+                    "opacity:0;transform:" + TOAST_AWAY + ";max-width:min(92vw,460px);text-align:left";
             (document.body || document.documentElement).appendChild(t);
         }
         return t;
@@ -9633,8 +9682,7 @@ export function setup(ctx, opts) {
             document.getElementById("__lvRetryToast");
         if (t) {
             clearTimeout(t.__h);
-            t.style.opacity = "0";
-            t.style.pointerEvents = "none";
+            toastOut(t);
         }
     }
     // Rewrites what the toast says, leaving the box and its Cancel button where
@@ -9764,14 +9812,11 @@ export function setup(ctx, opts) {
             // before the fit, which reads it.
             t.__holds = !!(opts && (opts.cancel || opts.sticky));
             hugToast(t);
-            t.style.opacity = "1";
+            toastIn(t);
             ensureReadableTree(t);
             clearTimeout(t.__h);
             if (!(opts && opts.sticky)) {
-                t.__h = setTimeout(() => {
-                    t.style.opacity = "0";
-                    t.style.pointerEvents = "none";
-                }, 3200);
+                t.__h = setTimeout(() => toastOut(t), 3200);
             }
         }
         catch (_) { }
@@ -10837,90 +10882,20 @@ export function setup(ctx, opts) {
         // caret, the remembered open state and the announced state cannot drift
         // apart.
         function makeCollapsible(h, body, caret, title) {
-            // moved is for a section somebody opened. Every section is applied once
-            // while the panel is being built, and animating those would have the
-            // whole panel shimmer itself into existence.
-            // A section is most of a screen, so its height travels rather than
-            // arriving whole: a body that appeared at full height would move
-            // everything below it by twelve hundred pixels between two frames. The
-            // fade goes along with the height.
-            let sizing = null;
-            const sizeOff = () => {
-                if (sizing)
-                    clearTimeout(sizing);
-                sizing = null;
-                body.style.height = "";
-                body.style.overflow = "";
-                body.style.transition = "";
-            };
-            const apply = (v, moved) => {
-                // Wrapped, like every other reading of it here. A host that has the
-                // function and throws on the query would otherwise take the section
-                // open-and-shut down with it.
-                let still = false;
-                try {
-                    still =
-                        typeof matchMedia === "function" &&
-                            matchMedia("(prefers-reduced-motion: reduce)").matches;
-                }
-                catch (_) { }
-                // Closing travels too. The header stays where your finger left it and
-                // everything under it rises, which is the same jump read upwards.
-                if (!v && moved && !still && body.style.display !== "none") {
-                    const tall = body.getBoundingClientRect().height;
-                    if (tall > 0) {
-                        sizeOff();
-                        body.style.overflow = "hidden";
-                        body.style.height = tall + "px";
-                        void body.offsetWidth;
-                        body.style.transition = "height 160ms ease-in";
-                        body.style.height = "0px";
-                        caret.textContent = CARET_SHUT;
-                        h.setAttribute("aria-expanded", "false");
-                        body.removeAttribute("data-ar-arrive");
-                        sizing = setTimeout(() => {
-                            sizeOff();
-                            body.style.display = "none";
-                        }, 180);
-                        return;
-                    }
-                }
-                sizeOff();
+            // Shown or hidden in one step, with no animation. A section is most of a
+            // screen, and one that travels open or shut moves everything under it
+            // for the length of the travel.
+            const apply = (v) => {
                 body.style.display = v ? "flex" : "none";
+                body.removeAttribute("data-ar-arrive");
                 caret.textContent = v ? CARET_OPEN : CARET_SHUT;
                 h.setAttribute("aria-expanded", v ? "true" : "false");
-                if (!v || !moved) {
-                    body.removeAttribute("data-ar-arrive");
-                    return;
-                }
-                try {
-                    // Off, then the layout read, then on. Without the read between them
-                    // the browser sees one value set and treats it as the animation that
-                    // already finished.
-                    body.removeAttribute("data-ar-arrive");
-                    void body.offsetWidth;
-                    body.setAttribute("data-ar-arrive", "1");
-                    if (still)
-                        return;
-                    const tall = body.getBoundingClientRect().height;
-                    if (!(tall > 0))
-                        return;
-                    body.style.overflow = "hidden";
-                    body.style.height = "0px";
-                    void body.offsetWidth;
-                    body.style.transition = "height 180ms ease-out";
-                    body.style.height = tall + "px";
-                    // Its own height back afterwards, or a section holding a box that
-                    // grows as you type would be pinned to whatever it measured here.
-                    sizing = setTimeout(sizeOff, 260);
-                }
-                catch (_) { }
             };
             h.setAttribute("role", "button");
             h.setAttribute("tabindex", "0");
             const toggle = () => {
                 const open = body.style.display !== "none";
-                apply(!open, true);
+                apply(!open);
                 if (!open)
                     openGroups.add(title);
                 else
@@ -12713,6 +12688,25 @@ export function setup(ctx, opts) {
         syncInputBarActions();
         return { settings: settings, presets: presets };
     }
+    // A dialog coming up: the dimmed backdrop fades in, and the box rises a
+    // little and grows to its size as it fades in, slowing as it lands. Played
+    // with the browser's own animation, so nothing is left set on the box when
+    // it finishes. Skipped when the reader asks for less motion.
+    function popIn(overlay, box) {
+        try {
+            if (typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches)
+                return;
+        }
+        catch (_) { }
+        try {
+            overlay.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 180, easing: "ease-out" });
+            box.animate([
+                { opacity: 0, transform: "translateY(12px) scale(.96)" },
+                { opacity: 1, transform: "none" },
+            ], { duration: 260, easing: "cubic-bezier(.2,.9,.3,1.1)" });
+        }
+        catch (_) { }
+    }
     // Open at a time, so a second press replaces the first rather than stacking.
     let closeResetPicker = null;
     function openResetPicker(onApplied) {
@@ -13043,6 +13037,7 @@ export function setup(ctx, opts) {
         box.appendChild(row);
         overlay.appendChild(box);
         (document.body || document.documentElement).appendChild(overlay);
+        popIn(overlay, box);
         ensureReadableTree(box, 2.6);
         try {
             box.focus({ preventScroll: true });
@@ -13116,6 +13111,7 @@ export function setup(ctx, opts) {
         box.appendChild(row);
         overlay.appendChild(box);
         (document.body || document.documentElement).appendChild(overlay);
+        popIn(overlay, box);
         ensureReadableTree(box);
         closeExpandEditor = close;
         // The textarea is not focused, so opening it doesn't pop the
@@ -13230,6 +13226,7 @@ export function setup(ctx, opts) {
         box.appendChild(row);
         overlay.appendChild(box);
         (document.body || document.documentElement).appendChild(overlay);
+        popIn(overlay, box);
         ensureReadableTree(box);
         try {
             box.focus();

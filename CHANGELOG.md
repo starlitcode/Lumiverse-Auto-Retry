@@ -8,6 +8,28 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.8.0
+
+_2026-09-24_
+
+### Added
+
+- **Pop-ups come up and go down smoothly.**
+  - The retry message and every other message at the bottom of the screen rise into place as they fade in, and sink a little as they fade out.
+  - A new message in a box that is already up gives a small pulse, so you can see it changed. A countdown does not.
+  - The reset list, the Expand editor and the warning before the crisis-support setting grow to their size as they come up, over a dimmed background that fades in.
+  - If your device is set to reduce motion, they only fade.
+
+### Changed
+
+- **Sections in the settings open and close at once.** Refusal tuning, Buttons it clicks, Debug info, Import / export and the rest have no animation now. Everything else keeps its animation.
+
+### Fixed
+
+- **A removed retry note stuck and then jumped shut.** The space it left now starts closing straight away.
+
+---
+
 ## 5.7.1
 
 _2026-09-23_
