@@ -68,7 +68,9 @@ shown in Lumiverse.
 - Before writing "Fixed" or "Changed", check the thing existed in the last
   announced version. Something added in this version is described as it is
   now, under "Added", never as a fix to something users had before.
-- An announced entry is not rewritten. Corrections go in the next version.
+- An announced entry keeps what it says. Wording in it that breaks the
+  writing rules can be fixed at any time, as long as the facts stay the
+  same. A correction of fact goes in the next version.
 - A fix that an announced version claimed and that did not work is listed
   again in the next version, as "Fixed again", saying which version claimed
   it and what it missed. The Discord post uses "Fixed again" as its lead.
