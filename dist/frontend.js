@@ -739,7 +739,7 @@ const SCHEMA = [
                 int: true,
                 min: 0,
                 max: 100000,
-                hint: "Replies longer than this are treated as real writing, not a refusal, and left alone. The default of " + def("refusalMaxChars") + " suits most cases. Set to 0 to check replies of any length.",
+                hint: "Replies longer than this are treated as real writing and left alone. The default of " + def("refusalMaxChars") + " suits most cases. Set to 0 to check replies of any length.",
             },
             {
                 key: "refusalStripThinking",

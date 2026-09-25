@@ -40,7 +40,7 @@ To stop it happening again, look at the reason. Each has its own switch under **
 
 The **Stats** tab counts the reasons over the whole session, so you can see which check keeps firing.
 
-**Impersonate is never retried.** It writes your own turn into the input box, not a reply. Lumiverse does not say what kind of generation is starting, so Auto Retry notices the press on Lumiverse's **Impersonate** button. An impersonation started another way, such as a shortcut that skips that button, is judged like a reply.
+**Impersonate is never retried.** It writes your own turn into the input box. Lumiverse does not say what kind of generation is starting, so Auto Retry notices the press on Lumiverse's **Impersonate** button. An impersonation started another way, such as a shortcut that skips that button, is judged like a reply.
 
 ## It called a reply stuck after you came back to the tab
 
