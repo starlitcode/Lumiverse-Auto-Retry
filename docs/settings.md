@@ -255,7 +255,8 @@ These are the defaults for a new install. They are in the `CONFIG` block at the 
 | ignoreHardErrors | true | Skip permanent failures like missing models or invalid API keys. |
 | hardErrorPhrases | (blank) | Your own wording for an error that will not fix itself, one per line, counted alongside the built-in list. Shown only while `ignoreHardErrors` is on. |
 | retryOnEmpty | true | Retry empty replies and mid-reasoning cutoffs. |
-| retryOnSpam | true | Retry when the thinking or the reply is one character over and over, such as `!!!!!!!!`. |
+| retryOnSpam | true | Retry when the reply is one character over and over, such as `!!!!!!!!`. |
+| retryOnSpamThinking | true | Retry when the thinking is one character over and over, even when the reply after it looks fine. |
 | retryOnTruncated | true | Retry a reply that ends mid-sentence. |
 | retryOnNoPunct | true | Retry a reply that stops on a word with nothing after it. Punctuation in any script counts as an ending, and so does an emoji. |
 | retryOnShort | false | Retry short replies. Off unless you mean it. |
