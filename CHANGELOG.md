@@ -117,13 +117,13 @@ _2026-09-19_
 
   The settings page is caught up at the same time. **Where that panel goes** was missing from it entirely, and the row for the panel itself still said it has two tabs. It has four.
 
-- **The word "ship" is gone**, in every form. The sets that come with the extension are built-in sets, and the picker heading reads **Comes with it**. The key holding which of them you were last shown is `lv-auto-retry:built-in-seen:v1` now, and it reads the old name across once and drops it. Losing that stamp would quietly swallow the one line saying the sets changed.
+- **The picker heading Ships with it is now Comes with it**, and the sets that come with the extension are called built-in sets. The key holding which of them you were last shown is `lv-auto-retry:built-in-seen:v1` now, and it reads the old name across once and drops it. Without it, the line saying the sets changed would not show.
 
 ### Fixed
 
 - **A tap on the floating button opened its menu.** Reported while trying the button. The end of a press was watched on the button itself, and Lumiverse captures the pointer so the button can be dragged. Once it has, the release is delivered to whatever the pointer was captured on and never reaches a listener sitting on the button, so the timer that opens the menu on a hold kept running after the finger had already lifted. Every tap became a hold. The end of a press is watched on the page now, so a tap ends the press wherever the release lands.
 
-  The drift a finger is allowed during a hold went from eight pixels to ten at the same time. A thumb resting on glass moves further than eight, and each of those was a hold that quietly did nothing.
+  The drift a finger is allowed during a hold went from eight pixels to ten at the same time. A thumb resting on glass moves further than eight, and each of those was a hold that did nothing.
 
 - **A reply is given four minutes to start, not three.** The watchdog that catches a generation which began and then produced nothing was set to three minutes, which covers a local model loading weights and a long prompt being read.
 
@@ -304,7 +304,7 @@ _2026-09-11_
 
 ### Added
 
-- **A fifth note set, Write it at full strength.** The other four answer a model that steps out of the scene, writes a character against their sheet, or cuts the turn short. This one answers the reply that is not a refusal at all: the scene gets written and quietly watered down. It is the hardest of them to catch by eye, because what arrives reads fine until you notice what is missing from it.
+- **A fifth note set, Write it at full strength.** The other four answer a model that steps out of the scene, writes a character against their sheet, or cuts the turn short. This one answers the reply that is not a refusal at all: the scene gets written, but watered down. It is the hardest of them to catch by eye, because what arrives reads fine until you notice what is missing from it.
 
 ### Changed
 
@@ -322,7 +322,7 @@ _2026-09-10_
 
 - **The panel says what a retry costs, both halves of it.** Put your provider's input and output prices under Basics and the Prompt tab works out what a retry comes to: the prompt from what is on that tab, and the reply reckoned at the size of the last one in that chat, which is the only honest stand-in for one nobody has written yet. Under it, what the retries fired this session come to at that size. The reply is measured with Lumiverse's own tokeniser, and only while the panel is on the Prompt tab with a price set: leave either and nothing is sent anywhere. Both prices start at 0, and with both at 0 the line is not there, and where only one half can be worked out the line says which. Price lists write these as `$5.00/M`, so type the number on its own or paste the line and the number is taken out of it. They ride with **Panel, pop-up and prices** in an export. No currency is shown, because nothing here knows which one you are billed in.
 - **At the very end**, a fourth place for a refusal note. **After the last message** stops at the end of the conversation, and some builds append their own instructions behind it; this is the only placement that puts a note after those, which is where a note has to be to answer one of them.
-- **Four note sets come with it**, under **Comes with it** in the note preset picker. Load one to see the shape, edit the boxes, and save it under a name of your own. They cannot be renamed, changed or deleted, so they are still there after you have made a mess of one.
+- **Four note sets come with it**, under **Ships with it** in the note preset picker. Load one to see the shape, edit the boxes, and save it under a name of your own. They cannot be renamed, changed or deleted, so they are still there after you have made a mess of one.
 - **A wait the provider named is the wait it takes.** A free or shared tier that answers "retry after 23 seconds" has said exactly when the next try can work, and every wait shorter than that spent a try being told the same thing. The number is read out of what came back, in the header's own form and in the wordings providers write into an error body, and it wins over the backoff and over **Longest wait between tries**. An hour is the ceiling, because a provider naming longer than that is naming a daily quota.
 
 ### Changed
@@ -473,7 +473,7 @@ _2026-08-26_
 
 ### Fixed
 
-- **A retry says in the log when the button it wanted was not there.** With swiping preferred, a build whose next / swipe selector matches nothing quietly retries by regenerating instead, which is the one that can take the old reply with it. The log now says so and points at the buttons section, rather than leaving a missing reroll to be worked out.
+- **A retry says in the log when the button it wanted was not there.** With swiping preferred, a build whose next / swipe selector matches nothing retries by regenerating instead, without saying so, which is the one that can take the old reply with it. The log now says so and points at the buttons section, rather than leaving a missing reroll to be worked out.
 - **A reply was re-rolled far past your Most tries setting.** Reported by a Discord user. Giving up hands the budget back so your next reply starts fresh. On a build that reports one generation as ended twice, the second ending landed after the giving up and took that fresh budget with it, so a cap of four could re-roll a reply over and over until the failure breaker caught it. One ending now gets one verdict. A second route did the same thing: a retry click on a host slow to announce the generation was written off as having done nothing, and the reply it really did start was then counted as one you asked for, which also hands the tries back. A generation that follows one of our own clicks is treated as ours whether or not the wait for it was given up on.
 - **A finished reply was re-rolled when the ending reported it as empty text.** Not every build puts the reply on the ending. One that reports an empty string for a reply that really streamed is contradicting the screen, and it was believed, so whole replies sitting there finished were counted as blank and thrown away. What the extension watched arrive is used instead, since that is what you are looking at.
 - **A retry could click the extension's own settings panel instead of your regenerate button.** The button selectors are patterns rather than addresses, and the panel's own description button for **Retry by adding a new reroll** matches the built-in swipe pattern word for word. With the panel open, a retry opened that description and did nothing else, which is worst for the person most likely to hit it: the one watching the log to see what the extension is doing. Nothing the extension puts on the page can be clicked by a retry now.
@@ -898,7 +898,7 @@ _2026-08-13_
 
 ### Removed
 
-- **"Move back to the corner" is gone from the floating button's menu.** The button's saved position is checked against the screen every time it is drawn and it snaps to the nearest edge, so it cannot end up somewhere you can't reach, which is what that entry was for. Dragging it back is fewer taps than opening a menu. The menu is two entries now.
+- **"Move back to the corner" is gone from the floating button's menu.** The button's saved position is checked against the screen every time it is drawn and it snaps to the nearest edge, so it cannot end up somewhere you cannot reach, which is what that entry was for. Dragging it back is fewer taps than opening a menu. The menu is two entries now.
 
 ## 4.6.1
 
@@ -1094,7 +1094,7 @@ _2026-08-05_
 ### Fixed
 
 - **The refusal note was often never sent.** The note was handed to the backend at the same moment the retry button was clicked, and those travel by different routes. The click regularly reached the model first, so the note was not in place yet and the prompt went out without it: nothing in the reply, nothing in the Prompt Breakdown, nothing in the log. The retry now waits for the backend to confirm the note is in place before clicking. If the host has no backend bridge the retry still fires, after a short wait, exactly as before.
-- **The note now says when it was skipped and why.** It is only ever attached to a regenerate or a swipe. If the host called the generation something else, that is now written to the log with the name it used, instead of the note quietly not appearing. The log also says when a note was held back because it does not start until a later try, which is the default.
+- **The note now says when it was skipped and why.** It is only ever attached to a regenerate or a swipe. If the host called the generation something else, that is now written to the log with the name it used, instead of the note not appearing with no reason given. The log also says when a note was held back because it does not start until a later try, which is the default.
 - **A swapped reply sometimes did not appear until you left the chat and came back.** The chat view only redraws when a message is saved with its swipe details named. A reply carrying no usable swipe list was saved with its text alone, which the view ignores, so the swap was correctly stored and invisible. Those saves now name the active swipe, which is enough for the redraw and changes nothing about the message.
 - **A deferred swap no longer undoes another extension's edit.** Swaps used to be worked out from the reply as it stood when it finished generating. Anything that rewrote the reply after that was replaced by the older text. The rules are now applied to the message as it stands at the moment of the swap.
 - **The swap buttons work in a chat you have not generated in yet.** They learn the current chat from the chat itself now, rather than only from a generation, so opening an older chat and pressing swap no longer reports that there is no reply to swap.
@@ -1146,7 +1146,7 @@ _2026-08-02_
 
 ### Fixed
 
-- **Word swaps work in every language now.** A rule for a single word only worked if that word started and ended with a plain English letter. Everything else was read, accepted, and then quietly did nothing: no error, nothing in the log. `café => bar`, `über => over`, `résumé`, `fiancé`, and every word in Greek, Cyrillic, Japanese, Turkish, Polish or Czech. A word with the accent in the middle, like `naïve` or `señor`, was fine, which is why this went unnoticed for so long. Phrases were never affected. If you have a rule like that sitting in your list doing nothing, it will start working after this update.
+- **Word swaps work in every language now.** A rule for a single word only worked if that word started and ended with a plain English letter. Everything else was read, accepted, and then did nothing: no error, nothing in the log. `café => bar`, `über => over`, `résumé`, `fiancé`, and every word in Greek, Cyrillic, Japanese, Turkish, Polish or Czech. A word with the accent in the middle, like `naïve` or `señor`, was fine, which is why this went unnoticed for so long. Phrases were never affected. If you have a rule like that sitting in your list doing nothing, it will start working after this update.
 - **Unchecked boxes were white blocks.** A checkbox is drawn by the browser, which picks its colours from the page rather than from your theme, so an unchecked one came out as a bright white square on a dark panel. The off state was the loudest thing on screen and the on state receded. The panel now measures what it is sitting on and tells the browser which way round it is, so a light theme still gets light controls.
 - **The full-size editor, the live log and the retry pop-up were see-through.** Open the editor over the settings and you could read the rows behind it, Save included. All three were painted with a colour that is 90% opaque, meant to tint a surface rather than be one. Every panel that floats over something else is solid now.
 - **Five settings showed a number with no unit.** "Wait before the first retry" read 1200 with nothing saying whether that meant milliseconds, seconds or minutes, while "How long to pause (minutes)" right above it named its unit. All five say (ms) now.
@@ -1196,7 +1196,7 @@ _2026-07-31_
 
 - **Button labels stay readable on any theme.** On a theme whose accent colour sits close to white, the label on a filled button like Save washed out and was hard to make out. The panel now checks as it draws whether each label stands out from what is behind it, and repaints only the ones that do not. Everything else is left exactly as the theme set it.
 - **The retry pop-up was nearly see-through.** It was painted with a colour meant to tint a surface rather than be one, so it came out as a faint smudge over the chat instead of a solid pill.
-- **Backups were quietly dropping four settings.** Pause when everything is failing, Failed runs before pausing, How long to pause, and Extra dialog buttons it may press were all missing from import and export, so a backup came back without them. They are included now, and any setting added in future is carried automatically.
+- **Backups were leaving out four settings.** Pause when everything is failing, Failed runs before pausing, How long to pause, and Extra dialog buttons it may press were all missing from import and export, so a backup came back without them. They are included now, and any setting added in future is carried automatically.
 - **The debug report was missing the same four.** It now reads the list straight from the options themselves, so every setting is always in it and there is no second list to fall out of date.
 - **Duplicate swap-whole-chat button.** That Extras entry was not being cleaned up when the extension reloaded, so it stacked up another copy each time.
 
@@ -1418,7 +1418,7 @@ _2026-07-17_
 
 ### Fixed
 
-- **Sturdier under bad input.** A single malformed swap rule is skipped on its own instead of quietly disabling all your swaps, plus general error-handling hardening.
+- **Sturdier under bad input.** A single malformed swap rule is skipped on its own instead of turning off all your swaps with no message, plus general error-handling hardening.
 
 ## 2.3.0
 
@@ -1582,7 +1582,7 @@ _2026-06-27_
 
 ### Fixed
 
-- **Number settings cannot be left blank or broken.** Empty, non-numeric, negative or absurd values snap back to a sensible default or the nearest allowed limit, whether you blur the box, hit Save mid-edit, or load saved settings. Before, clearing a box could quietly save a zero.
+- **Number settings cannot be left blank or broken.** Empty, non-numeric, negative or absurd values snap back to a sensible default or the nearest allowed limit, whether you blur the box, hit Save mid-edit, or load saved settings. Before, clearing a box could save a zero without saying so.
 - **A rare timing bug where a retry could cancel itself.** If a stalled reply was aborted and its "stopped" signal arrived late, the extension could mistake it for you pressing Stop and cancel the retry it had just started. It now remembers aborted replies properly, so their late signals are ignored even after the next reply has begun.
 
 ## 1.1.3
