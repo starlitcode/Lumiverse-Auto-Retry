@@ -8,6 +8,17 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.8.3
+
+_2026-09-25_
+
+### Fixed
+
+- **The docs and one panel hint leaned on the same few sentence shapes.** Lines such as "not X, not Y" and three-item lists are rewritten plainly in the detection, settings, safety and troubleshooting docs and the README. The refusal length hint now reads "Replies longer than this are treated as real writing and left alone." The facts are the same.
+- **The docs did not warn about ending on an Assistant note.** A note sent as **Assistant** at the very end of a request is a prefill, and many newer models no longer accept one. The **Role** explainer now says so. See [Each note's own settings](docs/detection.md#each-notes-own-settings).
+
+---
+
 ## 5.8.2
 
 _2026-09-24_
