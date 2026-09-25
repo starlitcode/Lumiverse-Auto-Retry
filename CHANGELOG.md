@@ -8,6 +8,19 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.8.4
+
+_2026-09-25_
+
+### Fixed
+
+- **A broken colour tag could make a finished reply look cut off.** Models sometimes write a tag with its closing quotation mark missing, like `<font color="#c0a060>`. That lone quotation mark counted as dialogue opened and never closed, so the reply was retried. Tags like this are now left out of the count. See [Code and trackers](docs/detection.md#code-and-trackers).
+- **A broken colour tag could hide a refusal.** The same lone quotation mark made a refusal after it look like a character speaking. The refusal check now reads the reply without its tags. See [Quotation marks](docs/detection.md#quotation-marks).
+- **HTML tags counted toward the refusal length limit.** A short refusal wrapped in a lot of markup could pass the 2000-character limit and be left alone. The length now counts only the text.
+- **A status bar on one line made a finished reply look cut off.** A tracker such as `📍 The pier | 🕘 9:40 PM | 🌧 Rain` has no full stop at the end, so the reply was retried. A last line with two or more `|` now counts as a finished ending. See [Code and trackers](docs/detection.md#code-and-trackers).
+
+---
+
 ## 5.8.3
 
 _2026-09-25_

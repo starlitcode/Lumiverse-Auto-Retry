@@ -37,12 +37,15 @@ Two kinds of text are not prose, so the prose checks leave them out.
 
 **HTML that was closed.** Some cards draw a whole screen in every reply, like a chat window or a profile card. The text inside is not prose: a height written `6'2"` has one quotation mark with no partner. If the model reached the closing tag, nothing inside was cut off, so the inside is not counted. A reply cut off inside the card never reaches the closing tag, so it is still caught. Text after the card is checked as normal.
 
+**The tags themselves.** The quotation marks inside a tag, like `<font color="#c0a060">`, are not dialogue, so they are not counted. A broken tag with its closing mark missing, like `<font color="#c0a060>`, is not counted either. Models write these sometimes.
+
 **A row of stars** with a space on each side, like `Mood: ***` or a divider line, does not count as emphasis. Emphasis touches the words it marks, so `*He nods*` and `**bold**` are still counted.
 
-**Trackers.** Some cards print a tracker at the end of every reply, such as a weather box or a status line. These do not end on a full stop. Without this rule, every reply would count as cut off, and it would retry until it hit the limit. These three endings count as finished:
+**Trackers.** Some cards print a tracker at the end of every reply, such as a weather box or a status line. These do not end on a full stop. Without this rule, every reply would count as cut off, and it would retry until it hit the limit. These four endings count as finished:
 
 - a closing or self-closing HTML tag at the very end, like `</div>`, `</table>` or `<br/>`
 - a table row: the last line starts and ends with `|`
+- a status bar on one line, with two or more `|` between its fields, like `📍 The pier | 🕘 9:40 PM | 🌧 Rain`
 - two or more label lines in a row, like `HP: 20/20` over `Time: 14:00`, with or without bold on the label
 
 It needs at least two label lines, because a normal sentence can have a colon in it. So a reply cut off after "he said:" is still caught. Prose that stops mid-sentence after a tracker is also still caught: this rule is about how the reply ends.
@@ -107,6 +110,7 @@ How it decides:
 - It counts the quotation marks between the start of the line and the match. An odd number means the match is inside a quote.
 - A new line closes every quote, so a refusal in its own paragraph is never read as speech.
 - An apostrophe is not a quotation mark.
+- Quotation marks inside HTML tags are not counted. This includes a broken tag like `<font color="#c0a060>`, where the closing mark is missing.
 
 **Ignore refusals inside quotation marks** (on by default) turns this on and off. Turn it off only if your model puts its own refusals in quotation marks, which almost none do.
 
@@ -215,7 +219,7 @@ Everything is under **Refusal tuning** in the settings.
 - **Your own refusal phrases.** Wording that should also count, one per line. Always used. Paste the exact words your model refuses with. Also checked against errors.
 - **Reword the built-in phrases.** Change words in the built-in list with `old => new`, one per line. For example, `assist => help` changes every built-in phrase with "assist" to use "help". It changes what the list looks for. It never changes a reply.
 - **Never treat these as a refusal.** If a reply contains any of these, one per line, it is never retried. This wins over everything else.
-- **Longest reply to treat as a refusal** (2000 by default). Longer replies are left alone. Raise it if your model writes long refusals. Lower it to be safer with long scenes. Set it to 0 for no limit.
+- **Longest reply to treat as a refusal** (2000 by default). Longer replies are left alone. HTML tags are not counted in the length. Raise it if your model writes long refusals. Lower it to be safer with long scenes. Set it to 0 for no limit.
 
 In every box on this page, a line under three characters is ignored. The boxes check whether a reply contains the line, so one letter would match almost everything.
 
