@@ -44,7 +44,7 @@ None of these automatically means that you are doing something wrong. They are s
 
 ## If some of that applies to you
 
-My honest recommendation is to uninstall it. Not just switch it off for now. Uninstall it. This extension is designed to make asking again easier, and there are situations where making that easier is not helpful.
+My honest recommendation is to uninstall it completely, instead of switching it off for now. This extension is designed to make asking again easier, and there are situations where making that easier is not helpful.
 
 To remove it properly: open **Reset** at the bottom of the settings panel, tick every part, tick **Delete saved presets** underneath, press **Save**, then uninstall. Clearing this site's storage in your browser also removes the remaining local settings, including where the panel was left on screen and the list of chats you switched it off in. Your chats and characters belong to Lumiverse, and the extension does not send them anywhere.
 
@@ -58,7 +58,7 @@ The model writes well. That is one of the things it is good at, and I am not cri
 
 A response can sound personal without actually being based on personal knowledge of you.
 
-If you have kept a reply because it agreed with something very negative you believe about yourself, that reply is not evidence that the belief is true. It was one generated response. Another generation from the same model could produce a completely different response. The fact that one response agreed with you does not make it more accurate.
+If you have kept a reply because it agreed with something very negative you believe about yourself, that reply does not show the belief is true. It was one generated response, and another generation from the same model could say something completely different. One response agreeing with you does not make it more accurate.
 
 Writing something down is not the same as wanting it. Fiction is often used to explore ideas, feelings, situations, and subjects that are not things the writer actually wants in their own life.
 

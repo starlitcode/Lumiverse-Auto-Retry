@@ -115,7 +115,7 @@ How it knows which chat you are in:
 
 **If the button is greyed out inside a chat**, it has not been told which chat this is yet. With the `chats` permission it asks and this clears by itself. Without it, sending a message, a reply arriving, or switching chats and back will fix it. You will usually only see this right after updating the extension without leaving the chat.
 
-**Where it is kept:** the list of chats you switched off is saved in this browser, so it survives a reload. It is only a list of chat ids, so it is not synced to your account and not included in an export.
+**Where it is kept:** the list of chats you switched off is saved in this browser, so it survives a reload. It is only a list of chat ids. It stays in this browser, and exports leave it out.
 
 **Temporary chats** can be switched off the same way, but it is not saved, because a temporary chat is gone when you leave it. The row says so, and the switch lasts as long as the chat.
 

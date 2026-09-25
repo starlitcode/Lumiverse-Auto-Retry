@@ -8,6 +8,17 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.8.3
+
+_2026-09-25_
+
+### Fixed
+
+- **The docs and one panel hint leaned on the same few sentence shapes.** Lines such as "not X, not Y" and three-item lists are rewritten plainly in the detection, settings, safety and troubleshooting docs and the README. The refusal length hint now reads "Replies longer than this are treated as real writing and left alone." The facts are the same.
+- **The docs did not warn about ending on an Assistant note.** A note sent as **Assistant** at the very end of a request is a prefill, and many newer models no longer accept one. The **Role** explainer now says so. See [Each note's own settings](docs/detection.md#each-notes-own-settings).
+
+---
+
 ## 5.8.2
 
 _2026-09-24_
@@ -715,7 +726,7 @@ _2026-08-18_
 - **The panel marks what has focus properly.** A field used to tint one hairline of border, which is easy to lose on a busy theme and says very little across a wide box. It now carries a soft band just outside the edge and a short halo past that, both in the theme's own accent, so it follows whatever colours you run. It is kept tight on purpose: a wide halo washes over the rows above and below and reads as belonging to the row rather than to the box. All of it is painted outside the box, so nothing sits on the text and no row moves when it lands.
 - **Buttons reached by keyboard wear the same mark.** They were left with whatever outline the host's stylesheet happened to give them, which on a dark theme was often nothing you could see. A button you pressed with a pointer still wears nothing, since the press already said which one it was.
 - **Fields lift their border under the pointer**, so a box reads as something you can put a cursor in before you have.
-- **The search box stays quiet.** It takes none of the marks the rows below it do: no lift under the pointer, no ring, no tinted border. It sits alone above the scroll area with nothing beside it to be told apart from, and it answers every keystroke by filtering the list underneath, so it says where you are without being lit. Its clear button is unchanged.
+- **The search box stays quiet.** It takes none of the marks the rows below it do, such as the lift under the pointer or the tinted border. It sits alone above the scroll area with nothing beside it to be told apart from, and it answers every keystroke by filtering the list underneath, so it says where you are without being lit. Its clear button is unchanged.
 - **The browser's own arrows are off the number boxes.** They are drawn by the browser rather than the theme, so on a dark panel they arrived as a pair of grey chevrons belonging to no design here. The value is typed, and a box you are in still steps with the arrow keys. The rule is scoped to this extension's own boxes, so nothing else in Lumiverse is touched.
 - **A rule under each section heading.** Sections were text sitting above rows with nothing between them, so on a long panel one ran into the next and a heading read as another row rather than as a break. Drawn in the theme's own border colour, which is faint by design: enough to separate, not enough to become furniture.
 

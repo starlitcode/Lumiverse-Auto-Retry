@@ -81,7 +81,7 @@ I cannot control what somebody does with an extension once they have it. What I 
 - Pressing that button is the only part that depends on the page layout. If a Lumiverse update moves the buttons, [Buttons it clicks](docs/buttons.md) shows how to point it at the new ones.
 - A small backend keeps your settings with your account, not in one browser, and holds the retry note for the one reply it is meant for.
 - It makes no network calls of its own. [Privacy](docs/privacy.md) covers the five permissions it asks for and what still works without each one.
-- The files Lumiverse loads are `dist/frontend.js` and `dist/backend.js`. They are plain, readable JavaScript, not minified. [Privacy](docs/privacy.md#checking-any-of-this-yourself) goes through the rest of the repo file by file.
+- The files Lumiverse loads are `dist/frontend.js` and `dist/backend.js`. They are plain, readable JavaScript. Nothing is minified. [Privacy](docs/privacy.md#checking-any-of-this-yourself) goes through the rest of the repo file by file.
 
 ## Credits
 

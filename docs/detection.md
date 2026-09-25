@@ -1,6 +1,6 @@
 # When it retries
 
-Most reasons for a retry are simple: an error, a blank reply, or a reply that froze. Each has an on/off switch and nothing more.
+Most reasons for a retry are simple, like an error or a blank reply. Each of those has an on/off switch and nothing more.
 
 This page covers the two checks that read the text of a finished reply:
 
@@ -37,15 +37,15 @@ Two kinds of text are not prose, so the prose checks leave them out.
 
 **HTML that was closed.** Some cards draw a whole screen in every reply, like a chat window or a profile card. The text inside is not prose: a height written `6'2"` has one quotation mark with no partner. If the model reached the closing tag, nothing inside was cut off, so the inside is not counted. A reply cut off inside the card never reaches the closing tag, so it is still caught. Text after the card is checked as normal.
 
-**A row of stars** with a space on each side, like `Mood: ***` or a divider line, is not emphasis and is not counted. Emphasis touches the words it marks, so `*He nods*` and `**bold**` are still counted.
+**A row of stars** with a space on each side, like `Mood: ***` or a divider line, does not count as emphasis. Emphasis touches the words it marks, so `*He nods*` and `**bold**` are still counted.
 
-**Trackers.** Some cards print a tracker at the end of every reply: a weather box, a stat list, a status line. These do not end on a full stop. Without this rule, every reply would count as cut off, and it would retry until it hit the limit. These three endings count as finished:
+**Trackers.** Some cards print a tracker at the end of every reply, such as a weather box or a status line. These do not end on a full stop. Without this rule, every reply would count as cut off, and it would retry until it hit the limit. These three endings count as finished:
 
 - a closing or self-closing HTML tag at the very end, like `</div>`, `</table>` or `<br/>`
 - a table row: the last line starts and ends with `|`
 - two or more label lines in a row, like `HP: 20/20` over `Time: 14:00`, with or without bold on the label
 
-It needs two label lines, not one, because a normal sentence can have a colon in it. So a reply cut off after "he said:" is still caught. Prose that stops mid-sentence after a tracker is also still caught: this rule is about how the reply ends.
+It needs at least two label lines, because a normal sentence can have a colon in it. So a reply cut off after "he said:" is still caught. Prose that stops mid-sentence after a tracker is also still caught: this rule is about how the reply ends.
 
 ### When the code itself is cut off
 
@@ -81,7 +81,7 @@ A made-up tag is the hardest case. Cards ask for a planning block wrapped in a t
 
 Sometimes a model steps out of the story and declines something it would normally write. This is usually a safety filter being wrong, or a moderation call that changes from one try to the next. Sending the same request again often gets a normal reply. `retryOnRefusal` (on by default) retries these like any other bad reply.
 
-**It sends the same request again, unchanged.** Nothing in the prompt, the wording or the message roles is changed. If the model keeps refusing, it stops at your retry limit and leaves the refusal in place.
+**It sends the same request again, unchanged.** The prompt and the message roles stay exactly as they were. If the model keeps refusing, it stops at your retry limit and leaves the refusal in place.
 
 The one exception is [Send a note with a refusal retry](#sending-a-note-with-the-retry). It is off by default. When it is on, a note you write is added to the prompt for a refusal retry only.
 
@@ -170,7 +170,7 @@ The Stats tab groups retries by reason. A refusal can be one of four, and each i
 - **left the scene to offer support**: the check you switch on yourself.
 - **blocked before it was written**: the provider refused before any text existed, and sent an error.
 
-All four get the same retry, the same limit and the same note, if you send one.
+All four are treated alike, including the retry limit and the note, if you send one.
 
 ## Thinking and reasoning
 
@@ -234,6 +234,7 @@ Ten is the limit because each note is a whole extra message in the prompt. Too m
 ### Each note's own settings
 
 - **Role**: which role the note is sent as. **System** is with your setup's instructions. **User** is the same role as your messages. **Assistant** is the same role as the replies. Models treat them differently, so try what works for yours.
+  - **Be careful with Assistant.** A note sent as **Assistant** at the very end of the request is a prefill. Many newer models no longer accept a prefill, and some return an error. This is changing fast. Use it only if you know your model accepts one.
 - **From try**: the retry it starts on. At 2, the first retry sends no note and this note joins from the second. At 1, it goes on every refusal retry. Setting different tries lets notes build up: a gentle note from try 2 and a firmer one from try 4 means the firmer one is only sent if the gentle one did not work.
 
 ### Settings for the whole list
@@ -261,7 +262,7 @@ Turn it on only if your Lumiverse reports regenerates and swipes correctly. If n
 
 Turn on the on-screen panel (**Basics**, **Show the on-screen panel**). On the retry that carried a note, the Log says the note was sent and how many went.
 
-It may not show in Lumiverse's **Prompt Breakdown**. The note is not a message in your chat, and the breakdown lists what your chat is built from. It being missing there does not mean it was not sent. The Log is the answer.
+It may not show in Lumiverse's **Prompt Breakdown**. The note is not a message in your chat, and the breakdown lists what your chat is built from. So a note can be missing from the breakdown and still have been sent. The Log is the answer.
 
 ### Saving a set of notes
 

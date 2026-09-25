@@ -147,7 +147,7 @@ const STREAM_BUF_MAX = 200000;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.8.2";
+const VERSION = "5.8.3";
 
 // The addresses the extension points at. Pinned to the released branch rather
 // than to a tag, so an old install still opens the page as it stands today.
@@ -847,7 +847,7 @@ const SCHEMA: Group[] = [
         int: true,
         min: 0,
         max: 100000,
-        hint: "Replies longer than this are treated as real writing, not a refusal, and left alone. The default of " + def("refusalMaxChars") + " suits most cases. Set to 0 to check replies of any length.",
+        hint: "Replies longer than this are treated as real writing and left alone. The default of " + def("refusalMaxChars") + " suits most cases. Set to 0 to check replies of any length.",
       },
       {
         key: "refusalStripThinking",
