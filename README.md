@@ -12,6 +12,7 @@ It watches each reply and tries again when:
 
 - the provider sends back an error (by default it skips errors that will not go away, like a wrong API key)
 - the reply comes back empty, including one that "thinks" but never writes anything
+- the thinking or the reply is one character over and over, like `!!!!!!!!` (see [One character over and over](docs/detection.md#one-character-over-and-over))
 - the reply is cut off mid-sentence (see [Cut-off detection](docs/detection.md#cut-off-detection))
 - the reply is an accidental out-of-character refusal, or the model breaks off mid-scene
   (see [Accidental-refusal detection](docs/detection.md#accidental-refusal-detection))

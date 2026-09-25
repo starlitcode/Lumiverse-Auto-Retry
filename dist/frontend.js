@@ -136,7 +136,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.8.4";
+const VERSION = "5.9.0";
 // The addresses the extension points at. Pinned to the released branch rather
 // than to a tag, so an old install still opens the page as it stands today.
 const SAFETY_URL = "https://github.com/starlitcode/Lumiverse-Auto-Retry/blob/stable/docs/safety.md";
@@ -221,6 +221,7 @@ const CONFIG = {
     ignoreHardErrors: true,
     hardErrorPhrases: "", // your own wording for an error that will not fix itself, one per line. Counted alongside the built-in list, and only while Skip hard failures is on.
     retryOnEmpty: true, // also catches a generation cut off mid-reasoning (reasoning seen, content empty)
+    retryOnSpam: true, // the thinking or the reply is one character over and over, such as "!!!!!!!!" (see spamVerdict)
     retryOnTruncated: true, // final content present but cut off mid-sentence (structural heuristic, see looksTruncated)
     // Also treat "the reply stops on a letter" as cut off. This was off because
     // it was wrong too often: the test for an ending was a list of Latin
@@ -610,6 +611,12 @@ const SCHEMA = [
                 label: "It came back blank",
                 type: "bool",
                 hint: "Retry when nothing comes back, including a reply that thinks but never writes anything.",
+            },
+            {
+                key: "retryOnSpam",
+                label: "It was one character over and over",
+                type: "bool",
+                hint: "Retry when the thinking or the reply is only something like !!!!!!!!. Some free or busy providers send this.",
             },
             {
                 key: "retryOnTruncated",
@@ -1321,6 +1328,72 @@ function looksTruncated(text, retryOnNoPunct, cfg) {
     if (retryOnNoPunct && !endsOnPunctuation(t) && !endsOnABlock(shown, t))
         return true;
     return false;
+}
+// A reply or its thinking that is one character over and over, such as
+// "!!!!!!!!". Some free or busy providers send this when the model breaks down.
+//
+// It asks whether a single character makes up most of the text, rather than
+// looking for a long run. A long run on its own is common in good replies: a
+// divider line of "=" or "─", or a row of stars in a tracker. Those are a small
+// share of the reply around them. The spam is nearly all of it.
+//
+// White space is not counted, so line breaks between rows of "!" change nothing.
+// SPAM_MIN_COUNT keeps a short line such as "..." or "!!!" out of it.
+const SPAM_MIN_COUNT = 30;
+const SPAM_MIN_SHARE = 0.8;
+// How many times each character appears, by code point, white space left out.
+function charCounts(text) {
+    const counts = new Map();
+    for (const c of Array.from(String(text == null ? "" : text))) {
+        if (/\s/.test(c))
+            continue;
+        counts.set(c, (counts.get(c) || 0) + 1);
+    }
+    return counts;
+}
+// The character that fills these counts, or "" when none does.
+function spamChar(counts) {
+    let total = 0;
+    let top = "";
+    let most = 0;
+    counts.forEach((n, c) => {
+        total += n;
+        if (n > most) {
+            most = n;
+            top = c;
+        }
+    });
+    return most >= SPAM_MIN_COUNT && most >= total * SPAM_MIN_SHARE ? top : "";
+}
+// Which part of a reply is one character over and over: "thinking", "reply",
+// or "" for neither.
+//
+// The thinking is read from two places. A model that streams it separately
+// sends it apart from the reply, and that text arrives here as `reasoning`. A
+// model that writes it inline puts it inside the reply, in a <think> block or
+// one of the other forms stripThinking knows. For that one, the counts of the
+// visible reply are taken away from the counts of the whole text, and what is
+// left is the thinking and its tags. So the thinking is judged on its own and
+// a normal reply after it does not hide it.
+function spamVerdict(content, reasoning, cfg) {
+    const whole = String(content == null ? "" : content);
+    if (spamChar(charCounts(reasoning)))
+        return "thinking";
+    const visible = stripMarkup(stripThinkingAlways(whole, cfg));
+    const shown = charCounts(visible);
+    const inline = charCounts(whole);
+    shown.forEach((n, c) => {
+        const left = (inline.get(c) || 0) - n;
+        if (left > 0)
+            inline.set(c, left);
+        else
+            inline.delete(c);
+    });
+    if (spamChar(inline))
+        return "thinking";
+    if (spamChar(shown))
+        return "reply";
+    return "";
 }
 // An out-of-character refusal: the model dropping the scene to say it's an AI,
 // or that it can't help / continue. Targets accidental refusals, where re-running
@@ -6234,6 +6307,7 @@ export function setup(ctx, opts) {
                 "ignoreHardErrors",
                 "hardErrorPhrases",
                 "retryOnEmpty",
+                "retryOnSpam",
                 "retryOnTruncated",
                 "retryOnNoPunct",
                 "retryOnShort",
@@ -7131,6 +7205,7 @@ export function setup(ctx, opts) {
             sawReasoning: false,
             sawContent: false,
             buf: "", // streamed reply text, used when the end event carries no content
+            thinkBuf: "", // streamed thinking text, read by the check for one character over and over
             // A fingerprint of the reply the page was showing when this generation
             // began, never the reply itself. Empty means there is nothing to compare
             // against, and no conclusion is drawn from it.
@@ -7666,6 +7741,7 @@ export function setup(ctx, opts) {
         // A stopped reply does not end, so nothing else would drop the half of it
         // that streamed. It has no use once the retry is off.
         s.buf = "";
+        s.thinkBuf = "";
         s.suppressUntil = Date.now() + STAND_DOWN_MS;
         // Unconditionally, not only when something was pending. The pop-up carries
         // the Cancel button that leads here, so it staying on screen after Cancel
@@ -8702,6 +8778,7 @@ export function setup(ctx, opts) {
         s.sawReasoning = false;
         s.sawContent = false;
         s.buf = "";
+        s.thinkBuf = "";
         // The page as it stands before this reply writes anything, which is what a
         // watchdog compares against rather than trusting that silence means silence.
         s.screenAtStart = screenMark(lastRenderedReply());
@@ -8987,8 +9064,15 @@ export function setup(ctx, opts) {
         // Matched by shape, not an exact string, so a build that labels these
         // "reasoning_content" or "thinking" is not counted as visible reply text.
         sawStreaming = true;
-        if (REASONING_TOKEN.test(String((p && p.type) || "")))
+        if (REASONING_TOKEN.test(String((p && p.type) || ""))) {
             s.sawReasoning = true;
+            const thought = tokenText(p);
+            if (thought) {
+                s.thinkBuf += thought;
+                if (s.thinkBuf.length > STREAM_BUF_MAX)
+                    s.thinkBuf = s.thinkBuf.slice(-STREAM_BUF_MAX);
+            }
+        }
         else {
             s.sawContent = true;
             const piece = tokenText(p);
@@ -9071,6 +9155,12 @@ export function setup(ctx, opts) {
         // idle. Nothing below reads s.buf, so taking it here loses nothing.
         const streamed = String(s.buf || "");
         s.buf = "";
+        // The thinking, for the same reason. The end event carries it on some
+        // builds; where it does not, what streamed stands in for it.
+        const thought = typeof p.reasoning === "string" && p.reasoning.trim()
+            ? p.reasoning
+            : String(s.thinkBuf || "");
+        s.thinkBuf = "";
         paintNow();
         if (s.impersonating) {
             s.impersonating = false;
@@ -9147,6 +9237,14 @@ export function setup(ctx, opts) {
             stripThinkingAlways(content, cfg).trim().length === 0) {
             scheduleRetry(chatId, "thinking only, no reply");
             return;
+        }
+        if (cfg.retryOnSpam) {
+            const where = spamVerdict(content, thought, cfg);
+            if (where) {
+                log("the " + where + " was one character over and over");
+                scheduleRetry(chatId, "one character over and over");
+                return;
+            }
         }
         if (cfg.retryOnTruncated && looksTruncated(content, cfg.retryOnNoPunct, cfg)) {
             scheduleRetry(chatId, "cut off");
@@ -13980,6 +14078,7 @@ export const __testing = {
     looksLikeRefusalError,
     isHardError,
     looksTruncated,
+    spamVerdict,
     sayTime,
     normalizeForMatch,
     splitPhrases,

@@ -1995,6 +1995,64 @@ describe("a reply that ends on a one-line status bar", () => {
   });
 });
 
+// A broken provider sends one character over and over, in the thinking, the
+// reply, or both. A divider or a row of stars inside a real reply is not that.
+describe("one character over and over", () => {
+  const T: any = __testing;
+  const SPAM = "!".repeat(32);
+  const REPLY =
+    'Ollo set the lantern on the crate. "We leave at dawn," he said, and pulled the map closer.';
+
+  test("thinking sent apart from the reply is caught", () => {
+    expect(T.spamVerdict(REPLY, SPAM, {})).toBe("thinking");
+  });
+
+  test("thinking inside the reply is caught, with a normal reply after it", () => {
+    const text = "<think>\n" + "!".repeat(200) + "\n</think>\n\n" + REPLY;
+    expect(T.spamVerdict(text, "", {})).toBe("thinking");
+  });
+
+  test("a reply that is only the character is caught", () => {
+    expect(T.spamVerdict(SPAM, "", {})).toBe("reply");
+  });
+
+  test("line breaks between rows do not hide it", () => {
+    expect(T.spamVerdict("  !!!!!!\n\n".repeat(6), "", {})).toBe("reply");
+  });
+
+  test("tags around it do not hide it", () => {
+    expect(T.spamVerdict('<font color="#ffffff">' + SPAM + "</font>", "", {})).toBe("reply");
+  });
+
+  test("an emoji counts as one character", () => {
+    expect(T.spamVerdict("\u{1F62D}".repeat(40), "", {})).toBe("reply");
+  });
+
+  test("a normal reply with normal thinking is left alone", () => {
+    const text = "<think>He is tired. Keep it short.</think>\n\n" + REPLY;
+    expect(T.spamVerdict(text, "Plan: one line of dialogue, then the map.", {})).toBe("");
+  });
+
+  test("a divider line in a longer reply is left alone", () => {
+    expect(T.spamVerdict(REPLY + "\n\n" + "=".repeat(40) + "\n" + REPLY, "", {})).toBe("");
+  });
+
+  test("a row of stars in a tracker is left alone", () => {
+    expect(T.spamVerdict(REPLY + "\n\nMood: ***\nTrust: *****", "", {})).toBe("");
+  });
+
+  test("a short line of it is left alone", () => {
+    expect(T.spamVerdict("!!!", "", {})).toBe("");
+    expect(T.spamVerdict(REPLY, "...", {})).toBe("");
+  });
+
+  test("the end of a reply runs the check with the streamed thinking", () => {
+    const src = readFileSync(new URL("../src/frontend.ts", import.meta.url), "utf8");
+    expect(src).toMatch(/cfg\.retryOnSpam\)\s*\{\s*const where = spamVerdict\(content, thought, cfg\)/);
+    expect(src).toMatch(/s\.thinkBuf \+= thought/);
+  });
+});
+
 // What a name typed into Extra thinking tag names may contain. The box accepts
 // anything, and what it does with the rest is not obvious: a space is not part
 // of a tag name in any markup, so it is dropped rather than refused, and typing
