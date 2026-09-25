@@ -234,6 +234,7 @@ Ten is the limit because each note is a whole extra message in the prompt. Too m
 ### Each note's own settings
 
 - **Role**: which role the note is sent as. **System** is with your setup's instructions. **User** is the same role as your messages. **Assistant** is the same role as the replies. Models treat them differently, so try what works for yours.
+  - **Be careful with Assistant.** A note sent as **Assistant** at the very end of the request is a prefill. Many newer models no longer accept a prefill, and some return an error. This is changing fast. Use it only if you know your model accepts one.
 - **From try**: the retry it starts on. At 2, the first retry sends no note and this note joins from the second. At 1, it goes on every refusal retry. Setting different tries lets notes build up: a gentle note from try 2 and a firmer one from try 4 means the firmer one is only sent if the gentle one did not work.
 
 ### Settings for the whole list
