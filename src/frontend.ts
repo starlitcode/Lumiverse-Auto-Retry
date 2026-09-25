@@ -147,7 +147,7 @@ const STREAM_BUF_MAX = 200000;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.9.0";
+const VERSION = "5.10.0";
 
 // The addresses the extension points at. Pinned to the released branch rather
 // than to a tag, so an old install still opens the page as it stands today.
@@ -242,7 +242,8 @@ const CONFIG = {
   ignoreHardErrors: true,
   hardErrorPhrases: "", // your own wording for an error that will not fix itself, one per line. Counted alongside the built-in list, and only while Skip hard failures is on.
   retryOnEmpty: true, // also catches a generation cut off mid-reasoning (reasoning seen, content empty)
-  retryOnSpam: true, // the thinking or the reply is one character over and over, such as "!!!!!!!!" (see spamVerdict)
+  retryOnSpam: true, // the reply is one character over and over, such as "!!!!!!!!" (see spamVerdict)
+  retryOnSpamThinking: true, // the thinking is one character over and over, even when the reply after it looks fine
   retryOnTruncated: true, // final content present but cut off mid-sentence (structural heuristic, see looksTruncated)
   // Also treat "the reply stops on a letter" as cut off. This was off because
   // it was wrong too often: the test for an ending was a list of Latin
@@ -724,7 +725,13 @@ const SCHEMA: Group[] = [
         key: "retryOnSpam",
         label: "It was one character over and over",
         type: "bool",
-        hint: "Retry when the thinking or the reply is only something like !!!!!!!!. Some free or busy providers send this.",
+        hint: "Retry when the reply is only something like !!!!!!!!. Some free or busy providers send this.",
+      },
+      {
+        key: "retryOnSpamThinking",
+        label: "Its thinking was one character over and over",
+        type: "bool",
+        hint: "Retry when the thinking is only something like !!!!!!!!, even when the reply after it looks fine.",
       },
       {
         key: "retryOnTruncated",
@@ -1474,7 +1481,9 @@ function spamChar(counts: Map<string, number>): string {
 }
 
 // Which part of a reply is one character over and over: "thinking", "reply",
-// or "" for neither.
+// or "" for neither. `look` says which parts to check, and both are checked
+// when it is left out. The two have separate switches, because a reply can
+// look fine after thinking that was only "!!!!!!!!".
 //
 // The thinking is read from two places. A model that streams it separately
 // sends it apart from the reply, and that text arrives here as `reasoning`. A
@@ -1483,9 +1492,16 @@ function spamChar(counts: Map<string, number>): string {
 // visible reply are taken away from the counts of the whole text, and what is
 // left is the thinking and its tags. So the thinking is judged on its own and
 // a normal reply after it does not hide it.
-function spamVerdict(content: string, reasoning: string, cfg?: any): string {
+function spamVerdict(
+  content: string,
+  reasoning: string,
+  cfg?: any,
+  look?: { thinking?: boolean; reply?: boolean },
+): string {
+  const thinking = !look || look.thinking !== false;
+  const reply = !look || look.reply !== false;
   const whole = String(content == null ? "" : content);
-  if (spamChar(charCounts(reasoning))) return "thinking";
+  if (thinking && spamChar(charCounts(reasoning))) return "thinking";
   const visible = stripMarkup(stripThinkingAlways(whole, cfg));
   const shown = charCounts(visible);
   const inline = charCounts(whole);
@@ -1494,9 +1510,19 @@ function spamVerdict(content: string, reasoning: string, cfg?: any): string {
     if (left > 0) inline.set(c, left);
     else inline.delete(c);
   });
-  if (spamChar(inline)) return "thinking";
-  if (spamChar(shown)) return "reply";
+  if (thinking && spamChar(inline)) return "thinking";
+  if (reply && spamChar(shown)) return "reply";
   return "";
+}
+
+// Settings saved before the thinking had a switch of its own. The one switch
+// then covered the reply and the thinking, so somebody who turned it off keeps
+// both off rather than finding the thinking check back on after updating.
+function carrySpamSwitch(saved: any): any {
+  if (!saved || typeof saved !== "object") return saved;
+  if (saved.retryOnSpam === false && !("retryOnSpamThinking" in saved))
+    return Object.assign({}, saved, { retryOnSpamThinking: false });
+  return saved;
 }
 
 // An out-of-character refusal: the model dropping the scene to say it's an AI,
@@ -6232,6 +6258,7 @@ export function setup(ctx: Ctx, opts?: any) {
       String(parsed.confirmButtonLabels || "").trim()
     )
       parsed = Object.assign({}, parsed, { confirmButtonsCustom: true });
+    parsed = carrySpamSwitch(parsed);
     for (const g of SCHEMA)
       for (const f of g.fields) {
         if (!(f.key in parsed)) continue;
@@ -6376,6 +6403,7 @@ export function setup(ctx: Ctx, opts?: any) {
         "hardErrorPhrases",
         "retryOnEmpty",
         "retryOnSpam",
+        "retryOnSpamThinking",
         "retryOnTruncated",
         "retryOnNoPunct",
         "retryOnShort",
@@ -6950,6 +6978,7 @@ export function setup(ctx: Ctx, opts?: any) {
   // Copy a preset's stored values into the live config, coercing each key.
   function applyPresetValues(kind: string, values: any): number {
     let n = 0;
+    values = carrySpamSwitch(values);
     for (const k of keysForKind(kind)) {
       if (!values || !(k in values)) continue;
       const v = coerceKey(k, values[k]);
@@ -9203,11 +9232,13 @@ export function setup(ctx: Ctx, opts?: any) {
       scheduleRetry(chatId, "thinking only, no reply");
       return;
     }
-    if (cfg.retryOnSpam) {
-      const where = spamVerdict(content, thought, cfg);
+    if (cfg.retryOnSpam || cfg.retryOnSpamThinking) {
+      const where = spamVerdict(content, thought, cfg, {
+        thinking: !!cfg.retryOnSpamThinking,
+        reply: !!cfg.retryOnSpam,
+      });
       if (where) {
-        log("the " + where + " was one character over and over");
-        scheduleRetry(chatId, "one character over and over");
+        scheduleRetry(chatId, where === "thinking" ? "thinking was one character over and over" : "one character over and over");
         return;
       }
     }
@@ -13975,6 +14006,7 @@ export const __testing = {
   isHardError,
   looksTruncated,
   spamVerdict,
+  carrySpamSwitch,
   sayTime,
   normalizeForMatch,
   splitPhrases,

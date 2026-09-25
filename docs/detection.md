@@ -10,7 +10,14 @@ This page covers the checks that read the text of a finished reply:
 
 ## One character over and over
 
-Some free or busy providers send a broken reply: the same character over and over, like `!!!!!!!!`. It can be in the thinking, in the reply, or both. `retryOnSpam` (on by default) retries it.
+Some free or busy providers send a broken reply: the same character over and over, like `!!!!!!!!`. It can be in the thinking, in the reply, or both.
+
+There are two switches, both on by default:
+
+- **It was one character over and over** (`retryOnSpam`) retries when the reply is broken.
+- **Its thinking was one character over and over** (`retryOnSpamThinking`) retries when the thinking is broken, even when the reply after it looks fine.
+
+Turn off the second one to keep a reply that looks fine after broken thinking.
 
 It counts as broken when one character is:
 
@@ -19,13 +26,12 @@ It counts as broken when one character is:
 
 Spaces and line breaks are not counted.
 
-It checks three places:
+The thinking switch checks two places:
 
 - the thinking the model sends apart from the reply
 - thinking written inside the reply, like a `<think>` block
-- the reply itself, without its HTML tags
 
-The thinking is checked on its own. So a reply that looks normal is still retried if the thinking before it was only `!!!!!!!!`.
+The reply switch checks the reply itself, without its thinking and its HTML tags.
 
 **What it leaves alone:**
 
@@ -35,7 +41,7 @@ The thinking is checked on its own. So a reply that looks normal is still retrie
 
 These are a small part of the reply around them.
 
-The switch is **It was one character over and over**, under **When to count a reply as bad**.
+Both switches are under **When to count a reply as bad**.
 
 ## Cut-off detection
 

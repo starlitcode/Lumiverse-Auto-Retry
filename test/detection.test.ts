@@ -2046,9 +2046,24 @@ describe("one character over and over", () => {
     expect(T.spamVerdict(REPLY, "...", {})).toBe("");
   });
 
+  test("each switch checks only its own part", () => {
+    const text = "<think>" + "!".repeat(200) + "</think>\n\n" + REPLY;
+    expect(T.spamVerdict(text, "", {}, { thinking: false, reply: true })).toBe("");
+    expect(T.spamVerdict(REPLY, SPAM, {}, { thinking: false, reply: true })).toBe("");
+    expect(T.spamVerdict(text, "", {}, { thinking: true, reply: false })).toBe("thinking");
+    expect(T.spamVerdict(SPAM, "", {}, { thinking: true, reply: false })).toBe("");
+    expect(T.spamVerdict(SPAM, "", {}, { thinking: false, reply: true })).toBe("reply");
+  });
+
+  test("somebody who turned the check off in 5.9.0 keeps the thinking check off too", () => {
+    expect(T.carrySpamSwitch({ retryOnSpam: false })).toEqual({ retryOnSpam: false, retryOnSpamThinking: false });
+    expect(T.carrySpamSwitch({ retryOnSpam: true })).toEqual({ retryOnSpam: true });
+    expect(T.carrySpamSwitch({ retryOnSpam: false, retryOnSpamThinking: true })).toEqual({ retryOnSpam: false, retryOnSpamThinking: true });
+  });
+
   test("the end of a reply runs the check with the streamed thinking", () => {
     const src = readFileSync(new URL("../src/frontend.ts", import.meta.url), "utf8");
-    expect(src).toMatch(/cfg\.retryOnSpam\)\s*\{\s*const where = spamVerdict\(content, thought, cfg\)/);
+    expect(src).toMatch(/cfg\.retryOnSpam \|\| cfg\.retryOnSpamThinking\)\s*\{\s*const where = spamVerdict\(content, thought, cfg, \{\s*thinking: !!cfg\.retryOnSpamThinking,\s*reply: !!cfg\.retryOnSpam,/);
     expect(src).toMatch(/s\.thinkBuf \+= thought/);
   });
 });

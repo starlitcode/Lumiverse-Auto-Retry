@@ -8,6 +8,20 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.10.0
+
+_2026-09-25_
+
+### Added
+
+- **A separate switch for broken thinking.** **Its thinking was one character over and over** retries when the thinking is only something like `!!!!!!!!`, even when the reply after it looks fine. It is on by default. Turn it off to keep a reply that looks fine. See [One character over and over](docs/detection.md#one-character-over-and-over).
+
+### Changed
+
+- **It was one character over and over now checks the reply only.** In 5.9.0 it checked the thinking and the reply together. The thinking has its own switch now. If you had turned it off, the new switch starts off too, so nothing is turned back on.
+
+---
+
 ## 5.9.0
 
 _2026-09-25_
