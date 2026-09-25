@@ -34,6 +34,7 @@ Open the on-screen panel and go to the **Replaced** tab. The reply it threw away
 To stop it happening again, look at the reason. Each has its own switch under **When to count a reply as bad**:
 
 - **cut off** or **stalled**: turn off **It cut off mid-sentence**. It covers both.
+- **one character over and over**: turn off **It was one character over and over**. This only fires when one character is most of the thinking or the reply.
 - **short**: turn off **It was very short**, or lower **What counts as "very short"**.
 - **refusal**, **breaking off** or **crisis**: see [When it retries](detection.md). Adding the wording it caught to **Never treat these as a refusal** is usually the quickest fix.
 - **empty**, **cut off mid-reasoning** or **thinking only, no reply**: turn off **It came back blank**, which covers all three. First check your model is not being cut short by a token limit.

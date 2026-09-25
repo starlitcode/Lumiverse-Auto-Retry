@@ -8,9 +8,13 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
-## 5.8.4
+## 5.9.0
 
 _2026-09-25_
+
+### Added
+
+- **A retry for a reply that is one character over and over.** Some free or busy providers send broken output, like `!!!!!!!!`, in the thinking, the reply, or both. **It was one character over and over**, on by default, retries it. The thinking is checked on its own, so a reply that looks normal is still retried when the thinking before it was only `!!!!!!!!`. A divider line or a row of stars in a normal reply is left alone. See [One character over and over](docs/detection.md#one-character-over-and-over).
 
 ### Fixed
 

@@ -2,10 +2,40 @@
 
 Most reasons for a retry are simple, like an error or a blank reply. Each of those has an on/off switch and nothing more.
 
-This page covers the two checks that read the text of a finished reply:
+This page covers the checks that read the text of a finished reply:
 
+- [One character over and over](#one-character-over-and-over): the model sent `!!!!!!!!` or similar.
 - [Cut-off detection](#cut-off-detection): the reply stopped part way.
 - [Accidental-refusal detection](#accidental-refusal-detection): the model stepped out of the story and declined.
+
+## One character over and over
+
+Some free or busy providers send a broken reply: the same character over and over, like `!!!!!!!!`. It can be in the thinking, in the reply, or both. `retryOnSpam` (on by default) retries it.
+
+It counts as broken when one character is:
+
+- at least 80% of the text, and
+- at least 30 characters long in total.
+
+Spaces and line breaks are not counted.
+
+It checks three places:
+
+- the thinking the model sends apart from the reply
+- thinking written inside the reply, like a `<think>` block
+- the reply itself, without its HTML tags
+
+The thinking is checked on its own. So a reply that looks normal is still retried if the thinking before it was only `!!!!!!!!`.
+
+**What it leaves alone:**
+
+- a divider line, like `==========` or `──────────`, in a longer reply
+- a row of stars in a tracker
+- a short line like `...` or `!!!`
+
+These are a small part of the reply around them.
+
+The switch is **It was one character over and over**, under **When to count a reply as bad**.
 
 ## Cut-off detection
 
