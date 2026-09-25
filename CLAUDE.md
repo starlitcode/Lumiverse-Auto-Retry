@@ -71,6 +71,9 @@ shown in Lumiverse.
 - An announced entry keeps what it says. Wording in it that breaks the
   writing rules can be fixed at any time, as long as the facts stay the
   same. A correction of fact goes in the next version.
+- An entry names a button, heading or setting as it was called in that
+  version, even when the name holds a word the writing rules now ban, such
+  as "Ships with it". A later rename goes in the version that made it.
 - A fix that an announced version claimed and that did not work is listed
   again in the next version, as "Fixed again", saying which version claimed
   it and what it missed. The Discord post uses "Fixed again" as its lead.
