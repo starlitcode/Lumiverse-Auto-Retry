@@ -47,8 +47,8 @@ shown in Lumiverse.
 - No contractions in docs, the changelog, the README or text shown in the panel.
 - Comments describe the code as it is and why. They are not change notes.
 - A hint under a field is one line, two at most. Detail goes in `docs/`.
-- Write plainly and literally, for readers with a learning disability or
-  dyslexia: short sentences, one idea each, steps and bullets over long
+- Write plainly and literally, for readers with a learning disability,
+  dyslexia or autism: short sentences, one idea each, steps and bullets over long
   paragraphs. No figurative words such as "quietly", "hammers" or "breathes".
 - No clichés such as "deliberate", and no grand, old-fashioned or showy words.
 - No dry, generic AI phrasing and no filler. Say the fact and stop.
