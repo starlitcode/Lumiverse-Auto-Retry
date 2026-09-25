@@ -147,7 +147,7 @@ const STREAM_BUF_MAX = 200000;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.8.3";
+const VERSION = "5.8.4";
 
 // The addresses the extension points at. Pinned to the released branch rather
 // than to a tag, so an old install still opens the page as it stands today.
@@ -965,8 +965,18 @@ const HTML_TAG = /<\/?[a-zA-Z][a-zA-Z0-9-]*(?:"[^"]*"|'[^']*'|[^'">]){0,400}>/g;
 // Also what a length check measures: a line of dialogue wrapped in
 // <font color="#ffff00"> carries about thirty characters of markup around what
 // was actually said, so counting the tags measures the wrong thing.
+//
+// A tag with a quotation mark that is never closed, such as
+// <font color="#c0a060>, is left behind by HTML_TAG. Its lone quotation mark
+// then reads as dialogue opened and never closed: a finished reply looks cut
+// off, and a refusal after it looks like a character speaking. So a second pass
+// removes any tag that still holds a quotation mark, up to its first ">". The
+// well-formed tags are gone by then, so what is left is broken. It needs a
+// quotation mark inside, so prose such as "3 < 4 and 5 > 2" is kept.
+const BROKEN_TAG = /<\/?[a-zA-Z][a-zA-Z0-9-]*\s[^<>"']{0,200}["'][^<>]{0,400}>/g;
+
 function stripMarkup(text: string): string {
-  return String(text == null ? "" : text).replace(HTML_TAG, "");
+  return String(text == null ? "" : text).replace(HTML_TAG, "").replace(BROKEN_TAG, "");
 }
 
 // Containers whose closing tag is not optional, and which a model only ever
@@ -1172,6 +1182,13 @@ function endsOnABlock(shown: string, visible: string): boolean {
   if (!lines.length) return false;
   // A markdown table row.
   if (/^\|.*\|$/.test(lines[lines.length - 1])) return true;
+  // A status bar on one line, with its fields split by "|": "📍 The pier |
+  // 🕘 9:40 PM | 🌧 Rain". Two bars or more, since prose almost never has one
+  // and a tracker with two fields is a label pair, which the rule below reads.
+  // A line that starts with "|" is a table row, and one of those that does not
+  // end with "|" was cut off in the middle, so it is left to the check.
+  const lastLine = lines[lines.length - 1];
+  if (lastLine[0] !== "|" && (lastLine.match(/\|/g) || []).length >= 2) return true;
 
   // A bullet or numbered list. A reply that ends on its last item has ended,
   // and the item is a fragment rather than a sentence, so the check for closing
@@ -2405,12 +2422,14 @@ interface RefusalVerdict {
 }
 
 function refusalVerdict(text: string, cfg?: any): RefusalVerdict {
-  const raw = stripThinking(String(text == null ? "" : text), cfg).trim();
+  // Markup is removed first. The quotation marks in a tag's attributes are not
+  // dialogue, and the length limit below is about what the reply says.
+  const raw = stripMarkup(stripThinking(String(text == null ? "" : text), cfg)).trim();
   // empty is handled by the empty branch
   if (!raw)
     return {
       refusal: false,
-      reason: "there is no reply text left once the thinking is removed",
+      reason: "there is no reply text left once the thinking and markup are removed",
     };
   const norm = normalizeForMatch(raw);
   const lower = norm.toLowerCase();

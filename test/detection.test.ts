@@ -1943,6 +1943,58 @@ describe("a short reply is measured by its words, not its tags", () => {
   });
 });
 
+// Models sometimes write a colour tag with its closing quotation mark missing,
+// such as <font color="#c0a060>. That lone mark is not dialogue, and counting it
+// as dialogue re-rolled finished replies and hid refusals.
+describe("a colour tag with a missing quotation mark", () => {
+  const T: any = __testing;
+  const BROKEN = '<font color="#c0a060>';
+
+  test("is removed along with the rest of the markup", () => {
+    expect(T.stripMarkup(BROKEN + '"Stay here,"</font> Mara said.')).toBe('"Stay here," Mara said.');
+  });
+
+  test("does not make a finished reply look cut off", () => {
+    const reply = "Mara set the cup down. " + BROKEN + '"Stay here,"</font> she said. "Fine," Ollo said.';
+    expect(T.looksTruncated(reply, true, {})).toBe(false);
+  });
+
+  test("does not hide a refusal", () => {
+    const v = T.refusalVerdict(BROKEN + "I can't continue with this request.</font>", {});
+    expect(v.refusal).toBe(true);
+  });
+
+  test("a refusal is measured without its tags", () => {
+    const tags = '<font color="#ffffff">a</font>'.repeat(80);
+    const reply = tags + " I can't continue with this request.";
+    expect(reply.length).toBeGreaterThan(2000);
+    expect(T.refusalVerdict(reply, {}).refusal).toBe(true);
+  });
+
+  test("prose with angle brackets is kept", () => {
+    expect(T.stripMarkup('she was 3 < 4 and "glad" > 2')).toBe('she was 3 < 4 and "glad" > 2');
+  });
+});
+
+// A tracker the model writes on one line at the end of a reply. It has no
+// closing punctuation, and it is a finished reply.
+describe("a reply that ends on a one-line status bar", () => {
+  const T: any = __testing;
+  const BODY = 'Mara set the cup down. "Stay here," she said.\n\n';
+
+  test("with its fields split by bars, is finished", () => {
+    expect(T.looksTruncated(BODY + "📍 The pier | 🕘 9:40 PM | 🌧 Rain", true, {})).toBe(false);
+  });
+
+  test("in bold, is finished", () => {
+    expect(T.looksTruncated(BODY + "**Mara** | wary | cold hands", true, {})).toBe(false);
+  });
+
+  test("a sentence cut off with one bar in it is still caught", () => {
+    expect(T.looksTruncated(BODY + "She drew a line | and then she", true, {})).toBe(true);
+  });
+});
+
 // What a name typed into Extra thinking tag names may contain. The box accepts
 // anything, and what it does with the rest is not obvious: a space is not part
 // of a tag name in any markup, so it is dropped rather than refused, and typing
