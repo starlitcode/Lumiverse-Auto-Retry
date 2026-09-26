@@ -8,6 +8,16 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.10.2
+
+_2026-09-26_
+
+### Changed
+
+- **The note sets stop reading their "seen" mark from its old storage name.** The name changed in 5.7.0. A browser that has not run 5.7.0 or later since then does not get the line saying the note sets changed, once. Nothing else is different.
+
+---
+
 ## 5.10.1
 
 _2026-09-26_
