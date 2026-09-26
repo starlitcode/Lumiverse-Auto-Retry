@@ -1,4 +1,4 @@
-![Auto Retry: a cracked chat bubble fades away while a new one is caught under a purple night sky.](docs/banner.png)
+![Auto Retry: on a rooftop at night, a woman smiles up at a new glowing chat bubble above her hand while an old cracked one turns to dust.](docs/banner.png)
 
 # Auto Retry
 
