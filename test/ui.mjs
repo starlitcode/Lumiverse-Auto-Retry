@@ -7234,6 +7234,80 @@ console.log("\nleaving a chat with nothing said about it");
 // as if they said "you are here" walked the panel back into a chat the user had
 // already left, and the answer to a question nobody answers has to stop
 // listening at some point or every switch leaves a handler behind.
+console.log("\nan answer that lands after a chat event");
+{
+  // The panel asks which chat is open, and the answer is held back. Before it
+  // lands, an event names a chat. The answer is older than the event, so a
+  // "none" in it must not put the row back on "No chat is open", and a chat it
+  // names must not replace the one the event named.
+  const page = await browser.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  page.on("console", (m) => { if (m.type() === "error") errors.push("console: " + m.text()); });
+  await stage(page, '<div id=modal></div><button data-testid="regenerate">R</button>');
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  const out = await page.evaluate(async () => {
+    window.__acts = {}; window.__handlers = {};
+    const held = [], listeners = [];
+    const deliver = (m) => listeners.slice().forEach((f) => { try { f(m); } catch (_) {} });
+    window.__setup({
+      events: { on: (n, f) => { window.__handlers[n] = f; return () => {}; } },
+      sendToBackend: (m) => { if (m && m.type === "get_active_chat") held.push(m); },
+      onBackendMessage: (cb) => {
+        listeners.push(cb);
+        return () => { const i = listeners.indexOf(cb); if (i >= 0) listeners.splice(i, 1); };
+      },
+      ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+            registerInputBarAction: (o) => { const a = { onClick: (cb) => { a.cb = cb; return () => {}; }, destroy: () => {} }; window.__acts[o.id] = a; return a; } },
+    }, { toast: false, stuckTimeoutMs: 0, idleTimeoutMs: 0 });
+    const tick = () => new Promise((r) => setTimeout(r, 80));
+    const row = () => document.getElementById("modal").querySelector("[data-ar-chat-switch]");
+    const act = () => row() && row().querySelector("button");
+    const state = () => ({
+      disabled: act() ? !!act().disabled : null,
+      note: row() ? (row().innerText || "") : "",
+    });
+    const answer = (m, chatId, name) =>
+      deliver({ type: "active_chat", requestId: m.requestId, chatId: chatId, character: name || null, resolved: true, hasCharacter: !!name });
+    const where = () => held.filter((m) => !m.chatId);
+
+    window.__acts["auto-retry-settings"].cb();
+    await tick();
+    const asked = where().slice();
+    window.__handlers.CHARACTER_MESSAGE_RENDERED({ chatId: "c-new", messageId: "m1" });
+    await tick();
+    // Every "which chat is open" asked before the event, answered "none".
+    asked.forEach((m) => answer(m, null));
+    await tick();
+    const afterNone = state();
+    // Asked again, from inside that chat this time. An event moves to another
+    // chat, and the older answer names a third.
+    document.getElementById("modal").innerHTML = "";
+    const before = where().length;
+    window.__acts["auto-retry-settings"].cb();
+    await tick();
+    const again = where().slice(before);
+    window.__handlers.CHARACTER_MESSAGE_RENDERED({ chatId: "c-next", messageId: "m2" });
+    await tick();
+    again.forEach((m) => answer(m, "c-old", "Bartholomew"));
+    await tick();
+    // Built again, so the row names whichever chat the panel now holds.
+    document.getElementById("modal").innerHTML = "";
+    window.__acts["auto-retry-settings"].cb();
+    await tick();
+    return { asked: asked.length, again: again.length, afterNone, afterOther: state() };
+  });
+  await page.close();
+  check("the panel asked which chat is open before the event", out.asked > 0, out.asked);
+  check("an older \"none\" leaves the row live in the chat the event named",
+    out.afterNone.disabled === false && !/no chat is open/i.test(out.afterNone.note), out.afterNone);
+  check("and asked again on opening the panel", out.again > 0, out.again);
+  check("an older answer naming another chat does not replace it",
+    out.afterOther.disabled === false && !/Bartholomew/.test(out.afterOther.note), out.afterOther);
+  check("no console errors", errors.length === 0, errors);
+}
+
 console.log("\na late answer cannot drag you back");
 {
   const page = await browser.newPage();

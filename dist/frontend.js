@@ -132,7 +132,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.10.2";
+const VERSION = "5.10.3";
 // The addresses the extension points at. Pinned to the released branch rather
 // than to a tag, so an old install still opens the page as it stands today.
 const SAFETY_URL = "https://github.com/starlitcode/Lumiverse-Auto-Retry/blob/stable/docs/safety.md";
@@ -8814,6 +8814,10 @@ export function setup(ctx, opts) {
                 return;
             }
             const reqId = "ar-chat-" + Date.now() + "-" + Math.random().toString(36).slice(2);
+            // The chat held when this was asked. An event that names a chat before
+            // the answer lands is newer than the answer, so the answer does not get
+            // to say which chat is open, or that none is.
+            const heldAtAsk = lastChatId;
             let done = false;
             let timer = null;
             let off = null;
@@ -8843,11 +8847,12 @@ export function setup(ctx, opts) {
                 // nothing came back when something just did.
                 reply({ answered: true, resolved: resolved, chatId: chatId });
                 finish();
+                const movedOn = lastChatId != null && String(lastChatId) !== String(heldAtAsk);
                 // "Which chat is open" answered with "none", from a backend that could
                 // actually look, means the user has left the chat. Some builds never
                 // say so on their own, and the id we were holding is now the chat they
                 // walked away from.
-                if (!forChat && resolved && !chatId)
+                if (!forChat && resolved && !chatId && !movedOn)
                     leftTheChat();
                 if (!msg.chatId)
                     return;
@@ -8893,7 +8898,7 @@ export function setup(ctx, opts) {
                         leftTheChat();
                     return;
                 }
-                if (!forChat)
+                if (!forChat && !movedOn)
                     noteChat(msg.chatId);
             });
             chatAsks.add(finish);
