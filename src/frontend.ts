@@ -44,10 +44,6 @@ const SWIPE_FIRST_KEY = "lv-auto-retry:swipe-first:v1";
 // key rather than a setting, because it is not something anybody sets and a
 // setting would carry it into an export.
 const BUILT_IN_SEEN_KEY = "lv-auto-retry:built-in-seen:v1";
-// What the key above was called before. Read once, so upgrading keeps what it
-// was holding: losing it would swallow the one line saying the sets
-// changed, and nothing on screen would say anything was missing.
-const OLD_SEEN_KEY = "lv-auto-retry:shipped-seen:v1";
 // Which set of moved defaults this browser has already been told about. Its own
 // key for the same two reasons, and separate from the one above so saying got it
 // to a line about a number never marks the note sets as seen too.
@@ -147,7 +143,7 @@ const STREAM_BUF_MAX = 200000;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.10.1";
+const VERSION = "5.10.2";
 
 // The addresses the extension points at. Pinned to the released branch rather
 // than to a tag, so an old install still opens the page as it stands today.
@@ -225,12 +221,10 @@ const CONFIG = {
   // Four minutes covers a local model loading weights, a long prompt being
   // processed before the first token, and a queue on a shared endpoint.
   //
-  // It also covers the case three minutes did not. A reasoning model that
-  // streams its thinking clears this watchdog on its first thinking token, so
-  // the wait only ever has to cover the thinking on an endpoint that sends
-  // nothing until the answer starts. Several of them work that way, and a hard
-  // question can hold one past three minutes, which was killing a reply that
-  // was still being thought about.
+  // It also covers a reasoning model on an endpoint that sends nothing until
+  // the answer starts. One that streams its thinking clears this watchdog on
+  // its first thinking token, but several send none of it, and a hard question
+  // can hold one past three minutes of thinking before the first word.
   stuckTimeoutMs: 240000, // started but never produced a token or an end. 0 disables.
   // Ninety seconds of silence mid-stream. Reasoning models go quiet between
   // blocks, and a slow CPU model can take a minute between tokens on a long
@@ -245,14 +239,12 @@ const CONFIG = {
   retryOnSpam: true, // the reply is one character over and over, such as "!!!!!!!!" (see spamVerdict)
   retryOnSpamThinking: true, // the thinking is one character over and over, even when the reply after it looks fine
   retryOnTruncated: true, // final content present but cut off mid-sentence (structural heuristic, see looksTruncated)
-  // Also treat "the reply stops on a letter" as cut off. This was off because
-  // it was wrong too often: the test for an ending was a list of Latin
-  // characters, so a scene closing on an emoji, or on a Japanese, Chinese,
-  // Greek or Arabic full stop, counted as having no ending at all. It reads any
-  // script's punctuation now, so the only thing it fires on is a reply that
-  // stops mid-word, which is what it was always meant to catch.
+  // Also treat "the reply stops on a letter" as cut off. The test for an
+  // ending reads any script's punctuation, and an emoji, so a scene closing on
+  // a Japanese, Chinese, Greek or Arabic full stop has an ending. What is left
+  // for this to fire on is a reply that stops mid-word.
   retryOnNoPunct: true,
-  retryOnShort: false, // off by default. Caused endless regen in the original.
+  retryOnShort: false, // off by default. A short reply is often a finished one, and retrying each one spends the retry limit on replies that were fine.
   minChars: 24,
   retryOnRefusal: true, // final content is an out-of-character refusal (see refusalVerdict). Re-fires the SAME request, capped by maxRetries. Does not alter the request.
   refusalExtraPhrases: "", // your own extra refusal phrases, one per line. Any reply containing one counts as a refusal.
@@ -1866,7 +1858,7 @@ const REFUSED_SUBJECT =
   // Consent, which is refused by name as often as by act.
   "non-?consensual\\w*|non-?consent\\w*|noncon|dubcon|dubious consent|questionable consent|" +
   "unclear consent|consent (?:is|being) (?:unclear|ambiguous|absent|dubious)|coerc\\w+|" +
-  // Kink, which was the largest hole: none of this was recognised at all.
+  // Kink, by the words a refusal uses for it.
   // "choking" is left out on purpose, since a scene can choke on smoke.
   "bdsm|bondage|sadomasochis\\w*|sadis\\w*|masochis\\w*|degradation|humiliation|" +
   "breath ?play|impact play|age ?play|pet ?play|kinks?|fetish\\w*|power exchange|" +
@@ -3468,8 +3460,7 @@ export function setup(ctx: Ctx, opts?: any) {
           syncLiveLog();
           syncFloat();
           // Settings arriving from the account can switch any of the Extras
-          // entries on or off, and this was the one path that did not re-read
-          // them. It got away with it because syncFloat happens to run the
+          // entries on or off, so they are read again here. syncFloat runs the
           // same sync on its way past, which is not a thing to rely on.
           syncInputBarActions();
           if (modalHandle && modalRoot) { if (modalSnapshot) modalSnapshot(); buildSettingsBody(modalRoot, modalSnapshot); }
@@ -4634,10 +4625,9 @@ export function setup(ctx: Ctx, opts?: any) {
   } {
     const head = document.createElement("div");
     head.style.cssText =
-      // Wraps rather than overflowing. Three tabs plus Copy and Clear fitted
-      // the 200px a floating panel can be shrunk to, and a fourth does not, so
-      // the row that was always one row is now a row that becomes two when it
-      // has to. Overflowing instead would push Clear off the edge of a phone
+      // Wraps rather than overflowing. Three tabs plus Copy and Clear fit the
+      // 200px a floating panel can be shrunk to, and a fourth tab does not, so
+      // the row becomes two when it has to. Overflowing instead would push Clear off the edge of a phone
       // with nothing to scroll it back into view, and the panel exists for the
       // phone. The body below gives up the height.
       "display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:7px 9px;border-bottom:1px solid var(--lumiverse-border,rgba(255,255,255,.12));font-weight:600;user-select:none;" +
@@ -6701,22 +6691,6 @@ export function setup(ctx: Ctx, opts?: any) {
     } catch (_) {}
   }
 
-  // A stamp written under the key's old name, moved over to the new one and the
-  // old one dropped. Returns what it moved, so the read it sits inside gets the
-  // answer on the same pass rather than a frame later.
-  function carryOldSeen(): string {
-    try {
-      if (typeof localStorage === "undefined") return "";
-      const was = String(localStorage.getItem(OLD_SEEN_KEY) || "");
-      if (!was) return "";
-      localStorage.setItem(BUILT_IN_SEEN_KEY, was);
-      localStorage.removeItem(OLD_SEEN_KEY);
-      return was;
-    } catch (_) {
-      return "";
-    }
-  }
-
   // Written down as seen. Called when one of the sets is loaded, when the panel
   // first comes up with nothing stored, and when the line saying they moved is
   // dismissed.
@@ -6733,7 +6707,7 @@ export function setup(ctx: Ctx, opts?: any) {
     if (!cfg.refusalNote) return false;
     try {
       if (typeof localStorage === "undefined") return false;
-      const seen = String(localStorage.getItem(BUILT_IN_SEEN_KEY) || carryOldSeen() || "");
+      const seen = String(localStorage.getItem(BUILT_IN_SEEN_KEY) || "");
       // Nothing stored is a browser that has never had notes on, or one from
       // before this existed. Neither is worth a line about a change nobody can
       // point at, so it is stamped and stays quiet.
