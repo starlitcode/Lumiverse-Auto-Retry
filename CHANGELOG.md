@@ -8,6 +8,16 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.10.1
+
+_2026-09-26_
+
+### Fixed
+
+- **The note buttons were not locked on a built-in note set.** With a built-in set picked, the notes are read-only, but the **+** and **−** buttons stayed bright and still worked. So a note could be added to or removed from a set that cannot be saved. Both buttons are now greyed out and switched off while a built-in set is picked. Save the set under your own name to change it.
+
+---
+
 ## 5.10.0
 
 _2026-09-25_

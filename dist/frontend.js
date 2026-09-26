@@ -136,7 +136,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.10.0";
+const VERSION = "5.10.1";
 // The addresses the extension points at. Pinned to the released branch rather
 // than to a tag, so an old install still opens the page as it stands today.
 const SAFETY_URL = "https://github.com/starlitcode/Lumiverse-Auto-Retry/blob/stable/docs/safety.md";
@@ -12290,11 +12290,14 @@ export function setup(ctx, opts) {
                     drop.style.cssText += "min-height:0;padding:4px 12px;flex:none";
                     drop.setAttribute("aria-label", "Remove note " + (i + 1));
                     // One note is the floor. Removing the last one would leave nothing to
-                    // type into and no way back except the plus button.
-                    const canDrop = notes.length > 1;
-                    drop.disabled = !canDrop;
-                    drop.style.opacity = canDrop ? "1" : "0.45";
-                    drop.style.cursor = canDrop ? "pointer" : "not-allowed";
+                    // type into and no way back except the plus button. On a set that
+                    // comes with it the lock above stands, whatever the count.
+                    if (!held) {
+                        const canDrop = notes.length > 1;
+                        drop.disabled = !canDrop;
+                        drop.style.opacity = canDrop ? "1" : "0.45";
+                        drop.style.cursor = canDrop ? "pointer" : "not-allowed";
+                    }
                     drop.setAttribute("data-ar-note-drop", String(i));
                     drop.addEventListener("click", () => {
                         if (notes.length <= 1)
@@ -12345,10 +12348,13 @@ export function setup(ctx, opts) {
                     wrap.appendChild(ta);
                     list.appendChild(wrap);
                 });
+                // Set here and nowhere else. Every change to the notes or to the lock
+                // ends in a redraw, so a second place setting it would be undone here.
                 const room = notes.length < MAX_NOTES;
-                add.disabled = !room;
-                add.style.opacity = room ? "1" : "0.45";
-                add.style.cursor = room ? "pointer" : "not-allowed";
+                const onSet = !!notesOnBuiltIn;
+                add.disabled = onSet || !room;
+                add.style.opacity = onSet ? "0.55" : room ? "1" : "0.45";
+                add.style.cursor = onSet || !room ? "not-allowed" : "pointer";
                 count.textContent = room
                     ? notes.length + " of " + MAX_NOTES
                     : MAX_NOTES + " is the most one retry can carry";
@@ -12406,9 +12412,8 @@ export function setup(ctx, opts) {
                 setLocked();
                 draw();
             };
-            // Adding a note, and the line above the list explaining why the rest is
-            // read-only. Both follow the pick, so they are set here rather than once
-            // at build time.
+            // The line above the list explaining why the notes are read-only. It
+            // follows the pick, so it is set here rather than once at build time.
             const heldLine = document.createElement("div");
             heldLine.setAttribute("data-lvr-noteslocked", "1");
             heldLine.style.cssText =
@@ -12421,9 +12426,6 @@ export function setup(ctx, opts) {
                         "You are looking at " +
                             notesOnBuiltIn +
                             ", one of the sets built in. It cannot be written over, so the notes below are read-only. To change it, put a name in the box under Saved presets and press Save as new. The copy is yours and opens for editing.";
-                add.disabled = held;
-                add.style.opacity = held ? "0.55" : "1";
-                add.style.cursor = held ? "not-allowed" : "pointer";
             };
             setLocked();
             draw();

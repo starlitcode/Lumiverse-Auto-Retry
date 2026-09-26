@@ -12040,6 +12040,46 @@ console.log("\na note set that comes with it cannot be typed into");
   check("no console errors", errors.length === 0, errors);
 }
 
+console.log("\na note set that comes with it cannot be added to or taken from");
+{
+  // Picked by name: this set has three notes, so a minus button left enabled
+  // by the one-note floor cannot pass for the lock.
+  const { out, errors } = await inPanel(
+    browser,
+    { settings: { refusalNote: true } },
+    async (page) =>
+      page.evaluate(async () => {
+        for (const b of [...document.querySelectorAll("#modal button")]) {
+          const t = (b.textContent || "").trim();
+          if (/^Refusal tuning/.test(t) && b.getAttribute("aria-expanded") === "false") b.click();
+        }
+        await new Promise((r) => setTimeout(r, 150));
+        const sel = [...document.querySelectorAll("#modal select")].find((s) =>
+          [...s.options].some((o) => /Firmer with every try/.test(o.textContent)),
+        );
+        if (!sel) return { picked: false };
+        sel.value = [...sel.options].find((o) => /Firmer with every try/.test(o.textContent)).value;
+        sel.dispatchEvent(new Event("change", { bubbles: true }));
+        await new Promise((r) => setTimeout(r, 300));
+        const add = [...document.querySelectorAll("#modal button")].find(
+          (b) => b.getAttribute("aria-label") === "Add another note",
+        );
+        const drops = [...document.querySelectorAll("#modal [data-ar-note-drop]")];
+        const looks = (b) => ({ disabled: b.disabled, opacity: getComputedStyle(b).opacity });
+        return { picked: true, add: add ? looks(add) : null, drops: drops.map(looks) };
+      }),
+  );
+  check("the three-note set was picked", out.picked, JSON.stringify(out));
+  check("its plus is switched off and greyed", !!out.add && out.add.disabled && Number(out.add.opacity) < 1, JSON.stringify(out.add));
+  check("it shows all three notes", (out.drops || []).length === 3, JSON.stringify(out.drops));
+  check(
+    "every minus is switched off and greyed",
+    (out.drops || []).length > 0 && out.drops.every((d) => d.disabled && Number(d.opacity) < 1),
+    JSON.stringify(out.drops),
+  );
+  check("no console errors", errors.length === 0, errors);
+}
+
 console.log("\nwhen the notes stop matching the set named in the picker");
 {
   // Loading a set puts its name in the picker and nothing cleared it, so
