@@ -143,7 +143,7 @@ const STREAM_BUF_MAX = 200000;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.10.2";
+const VERSION = "5.10.3";
 
 // The addresses the extension points at. Pinned to the released branch rather
 // than to a tag, so an old install still opens the page as it stands today.
@@ -8812,6 +8812,10 @@ export function setup(ctx: Ctx, opts?: any) {
       if (!ctx || typeof (ctx as any).sendToBackend !== "function") { reply({ answered: false, resolved: false, chatId: null }); return; }
       if (typeof (ctx as any).onBackendMessage !== "function") { reply({ answered: false, resolved: false, chatId: null }); return; }
       const reqId = "ar-chat-" + Date.now() + "-" + Math.random().toString(36).slice(2);
+      // The chat held when this was asked. An event that names a chat before
+      // the answer lands is newer than the answer, so the answer does not get
+      // to say which chat is open, or that none is.
+      const heldAtAsk = lastChatId;
       let done = false;
       let timer: any = null;
       let off: any = null;
@@ -8836,11 +8840,12 @@ export function setup(ctx: Ctx, opts?: any) {
         // nothing came back when something just did.
         reply({ answered: true, resolved: resolved, chatId: chatId });
         finish();
+        const movedOn = lastChatId != null && String(lastChatId) !== String(heldAtAsk);
         // "Which chat is open" answered with "none", from a backend that could
         // actually look, means the user has left the chat. Some builds never
         // say so on their own, and the id we were holding is now the chat they
         // walked away from.
-        if (!forChat && resolved && !chatId) leftTheChat();
+        if (!forChat && resolved && !chatId && !movedOn) leftTheChat();
         if (!msg.chatId) return;
         // An empty answer from a backend that looked is still an answer, and
         // caching it stops the same question going out again every time you
@@ -8878,7 +8883,7 @@ export function setup(ctx: Ctx, opts?: any) {
           if (idInUrl() == null && !outsideAnyChat()) leftTheChat();
           return;
         }
-        if (!forChat) noteChat(msg.chatId);
+        if (!forChat && !movedOn) noteChat(msg.chatId);
       });
       chatAsks.add(finish);
       timer = setTimeout(finish, CHAT_ASK_MS);

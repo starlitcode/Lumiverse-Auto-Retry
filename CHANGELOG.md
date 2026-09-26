@@ -8,6 +8,16 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.10.3
+
+_2026-09-26_
+
+### Fixed
+
+- **This chat could say no chat is open while you were in one.** When the panel asked which chat is open, and a reply arrived in a chat before the answer came back, an answer of "none" put the **This chat** row back on "No chat is open". It stayed that way until the panel asked again. An answer that arrives after a chat event is now not used to decide which chat is open.
+
+---
+
 ## 5.10.2
 
 _2026-09-26_
