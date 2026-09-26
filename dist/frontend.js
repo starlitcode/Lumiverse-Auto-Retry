@@ -205,12 +205,10 @@ const CONFIG = {
     // Four minutes covers a local model loading weights, a long prompt being
     // processed before the first token, and a queue on a shared endpoint.
     //
-    // It also covers the case three minutes did not. A reasoning model that
-    // streams its thinking clears this watchdog on its first thinking token, so
-    // the wait only ever has to cover the thinking on an endpoint that sends
-    // nothing until the answer starts. Several of them work that way, and a hard
-    // question can hold one past three minutes, which was killing a reply that
-    // was still being thought about.
+    // It also covers a reasoning model on an endpoint that sends nothing until
+    // the answer starts. One that streams its thinking clears this watchdog on
+    // its first thinking token, but several send none of it, and a hard question
+    // can hold one past three minutes of thinking before the first word.
     stuckTimeoutMs: 240000, // started but never produced a token or an end. 0 disables.
     // Ninety seconds of silence mid-stream. Reasoning models go quiet between
     // blocks, and a slow CPU model can take a minute between tokens on a long
@@ -224,14 +222,12 @@ const CONFIG = {
     retryOnSpam: true, // the reply is one character over and over, such as "!!!!!!!!" (see spamVerdict)
     retryOnSpamThinking: true, // the thinking is one character over and over, even when the reply after it looks fine
     retryOnTruncated: true, // final content present but cut off mid-sentence (structural heuristic, see looksTruncated)
-    // Also treat "the reply stops on a letter" as cut off. This was off because
-    // it was wrong too often: the test for an ending was a list of Latin
-    // characters, so a scene closing on an emoji, or on a Japanese, Chinese,
-    // Greek or Arabic full stop, counted as having no ending at all. It reads any
-    // script's punctuation now, so the only thing it fires on is a reply that
-    // stops mid-word, which is what it was always meant to catch.
+    // Also treat "the reply stops on a letter" as cut off. The test for an
+    // ending reads any script's punctuation, and an emoji, so a scene closing on
+    // a Japanese, Chinese, Greek or Arabic full stop has an ending. What is left
+    // for this to fire on is a reply that stops mid-word.
     retryOnNoPunct: true,
-    retryOnShort: false, // off by default. Caused endless regen in the original.
+    retryOnShort: false, // off by default. A short reply is often a finished one, and retrying each one spends the retry limit on replies that were fine.
     minChars: 24,
     retryOnRefusal: true, // final content is an out-of-character refusal (see refusalVerdict). Re-fires the SAME request, capped by maxRetries. Does not alter the request.
     refusalExtraPhrases: "", // your own extra refusal phrases, one per line. Any reply containing one counts as a refusal.
@@ -1748,7 +1744,7 @@ const REFUSED_SUBJECT = "(?:" +
     // Consent, which is refused by name as often as by act.
     "non-?consensual\\w*|non-?consent\\w*|noncon|dubcon|dubious consent|questionable consent|" +
     "unclear consent|consent (?:is|being) (?:unclear|ambiguous|absent|dubious)|coerc\\w+|" +
-    // Kink, which was the largest hole: none of this was recognised at all.
+    // Kink, by the words a refusal uses for it.
     // "choking" is left out on purpose, since a scene can choke on smoke.
     "bdsm|bondage|sadomasochis\\w*|sadis\\w*|masochis\\w*|degradation|humiliation|" +
     "breath ?play|impact play|age ?play|pet ?play|kinks?|fetish\\w*|power exchange|" +
@@ -3308,8 +3304,7 @@ export function setup(ctx, opts) {
                     syncLiveLog();
                     syncFloat();
                     // Settings arriving from the account can switch any of the Extras
-                    // entries on or off, and this was the one path that did not re-read
-                    // them. It got away with it because syncFloat happens to run the
+                    // entries on or off, so they are read again here. syncFloat runs the
                     // same sync on its way past, which is not a thing to rely on.
                     syncInputBarActions();
                     if (modalHandle && modalRoot) {
@@ -4488,10 +4483,9 @@ export function setup(ctx, opts) {
     function buildPanelParts(draggable) {
         const head = document.createElement("div");
         head.style.cssText =
-            // Wraps rather than overflowing. Three tabs plus Copy and Clear fitted
-            // the 200px a floating panel can be shrunk to, and a fourth does not, so
-            // the row that was always one row is now a row that becomes two when it
-            // has to. Overflowing instead would push Clear off the edge of a phone
+            // Wraps rather than overflowing. Three tabs plus Copy and Clear fit the
+            // 200px a floating panel can be shrunk to, and a fourth tab does not, so
+            // the row becomes two when it has to. Overflowing instead would push Clear off the edge of a phone
             // with nothing to scroll it back into view, and the panel exists for the
             // phone. The body below gives up the height.
             "display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:7px 9px;border-bottom:1px solid var(--lumiverse-border,rgba(255,255,255,.12));font-weight:600;user-select:none;" +
