@@ -44,10 +44,6 @@ const SWIPE_FIRST_KEY = "lv-auto-retry:swipe-first:v1";
 // key rather than a setting, because it is not something anybody sets and a
 // setting would carry it into an export.
 const BUILT_IN_SEEN_KEY = "lv-auto-retry:built-in-seen:v1";
-// What the key above was called before. Read once, so upgrading keeps what it
-// was holding: losing it would swallow the one line saying the sets
-// changed, and nothing on screen would say anything was missing.
-const OLD_SEEN_KEY = "lv-auto-retry:shipped-seen:v1";
 // Which set of moved defaults this browser has already been told about. Its own
 // key for the same two reasons, and separate from the one above so saying got it
 // to a line about a number never marks the note sets as seen too.
@@ -6695,22 +6691,6 @@ export function setup(ctx: Ctx, opts?: any) {
     } catch (_) {}
   }
 
-  // A stamp written under the key's old name, moved over to the new one and the
-  // old one dropped. Returns what it moved, so the read it sits inside gets the
-  // answer on the same pass rather than a frame later.
-  function carryOldSeen(): string {
-    try {
-      if (typeof localStorage === "undefined") return "";
-      const was = String(localStorage.getItem(OLD_SEEN_KEY) || "");
-      if (!was) return "";
-      localStorage.setItem(BUILT_IN_SEEN_KEY, was);
-      localStorage.removeItem(OLD_SEEN_KEY);
-      return was;
-    } catch (_) {
-      return "";
-    }
-  }
-
   // Written down as seen. Called when one of the sets is loaded, when the panel
   // first comes up with nothing stored, and when the line saying they moved is
   // dismissed.
@@ -6727,7 +6707,7 @@ export function setup(ctx: Ctx, opts?: any) {
     if (!cfg.refusalNote) return false;
     try {
       if (typeof localStorage === "undefined") return false;
-      const seen = String(localStorage.getItem(BUILT_IN_SEEN_KEY) || carryOldSeen() || "");
+      const seen = String(localStorage.getItem(BUILT_IN_SEEN_KEY) || "");
       // Nothing stored is a browser that has never had notes on, or one from
       // before this existed. Neither is worth a line about a change nobody can
       // point at, so it is stamped and stays quiet.

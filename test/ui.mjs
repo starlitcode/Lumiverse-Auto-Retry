@@ -12211,31 +12211,6 @@ console.log("\nsaying the note sets have changed");
     check("no console errors", errors.length === 0, errors.join(" | "));
   }
 
-  // The same reader, upgrading from a version that wrote this under the key's
-  // old name. Losing it would swallow the one line saying the sets changed, and
-  // nothing on screen would say anything was missing.
-  {
-    const { out, errors } = await inPanel(
-      browser,
-      { settings: { refusalNote: true }, seed: { "lv-auto-retry:shipped-seen:v1": "notthemark" } },
-      async (page) => {
-        const opened = await openNotes(page);
-        const said = await line(page);
-        const keys = await page.evaluate(() => ({
-          now: localStorage.getItem("lv-auto-retry:built-in-seen:v1"),
-          old: localStorage.getItem("lv-auto-retry:shipped-seen:v1"),
-        }));
-        return { opened, said, keys };
-      },
-    );
-    check("a stamp written under the old key is still read", !!out.said, String(out.said));
-    check("and carried across to the key this version uses",
-      out.keys && out.keys.now === "notthemark", JSON.stringify(out.keys));
-    check("with the old key dropped rather than left behind",
-      out.keys && out.keys.old === null, JSON.stringify(out.keys));
-    check("no console errors", errors.length === 0, errors.join(" | "));
-  }
-
   // Notes off. The sets do nothing for them, so neither does a line about the
   // sets changing.
   {
