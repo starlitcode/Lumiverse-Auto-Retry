@@ -9,13 +9,17 @@ behaves, goes into both.
 
 - Work happens on `testing`. `stable` is what users install, and it only moves when
   the owner says to release.
-- A release is dated the day it goes to `stable`.
+- A release is dated the day it first goes to `stable`, in US Eastern time
+  (America/New_York), not UTC. A release late in the evening Eastern time is
+  still that day.
 - Versions follow semver. A patch only fixes things. Adding anything is a minor
   version. Bump `spindle.json`, `package.json` and the `VERSION` constants together.
 - A version is released once the owner says it is announced, not when it goes to
   `stable`. Until then, new work joins that same version and its changelog entry,
   even if it is already on `stable`. Only start a new version after the owner
   says the last one is announced.
+- When the owner says a version is released, that means it is announced. Work
+  after that goes into the next version, even on the same day.
 
 ## Build and checks
 

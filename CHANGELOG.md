@@ -10,7 +10,7 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ## 5.10.4
 
-_2026-09-27_
+_2026-09-26_
 
 ### Fixed
 
@@ -180,7 +180,7 @@ _2026-09-23_
 
 ## 5.7.0
 
-_2026-09-19_
+_2026-09-18_
 
 ### Added
 
@@ -235,7 +235,7 @@ _2026-09-19_
 
 ## 5.6.0
 
-_2026-09-15_
+_2026-09-14_
 
 ### Added
 
@@ -691,7 +691,7 @@ Nothing about when a retry should happen has changed. A reply that never starts,
 
 ## 4.18.0
 
-_2026-08-21_
+_2026-08-20_
 
 ### Changed
 
