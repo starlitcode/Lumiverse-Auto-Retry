@@ -50,6 +50,8 @@ shown in Lumiverse.
 - Write plainly and literally, for readers with a learning disability,
   dyslexia or autism: short sentences, one idea each, steps and bullets over long
   paragraphs. No figurative words such as "quietly", "hammers" or "breathes".
+  This covers words borrowed from other crafts, such as "beats" for the events
+  in a scene. Say "events" or "what happens".
 - No clichés such as "deliberate", and no grand, old-fashioned or showy words.
 - No dry, generic AI phrasing and no filler. Say the fact and stop.
 - No opinions, moral or otherwise, in code, comments or docs. State what the
@@ -95,6 +97,10 @@ A code block, in this shape and nothing else:
 No credits in the Discord post. They stay in the changelog.
 
 ## Rules from the owner
+
+- The extensions are about giving people control. Nothing sent to a model is
+  hidden: every built-in prompt, check and instruction can be read in the panel
+  and changed there, with a way back to the built-in version.
 
 - Never mention anyone else's extension, in code, docs or anywhere else,
   unless the owner asks for it, as in the README credits. Never say that
