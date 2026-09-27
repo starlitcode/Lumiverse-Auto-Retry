@@ -103,6 +103,10 @@ No credits in the Discord post. They stay in the changelog.
   a PDF or a copy of it. Do not guess what it says.
 - Test fixtures use their own made-up characters and their own thinking format.
   Do not copy the owner's character names or thinking format into tests.
+- Examples are made up fresh, in prompts, checks, docs, tests, the changelog and
+  panel text. When the owner shows a line or an example to explain a problem,
+  do not reuse it or a close copy of it. Write a new one that shows the same
+  thing.
 - Something that is inconsistent and wrong can be fixed without asking first.
 - Refusal and false-positive handling stays broad: the owner wants every false
   refusal caught for users. Wording in prompts, comments and docs must never read
