@@ -3017,9 +3017,8 @@ console.log("\nfloat button menu");
     btn().click(); // the tap that release turned into, put back
 
     // Read a hair before the hold is up, which is the moment the ring has to be
-    // closed by. It used to be given the same length as the hold, so the timer
-    // beat it by a frame every time and the menu opened over a ring stopped a
-    // few per cent short.
+    // closed by. A ring timed to the same length as the hold finishes a frame
+    // after it, and the menu opens over a ring a few per cent short.
     down(btn(), 130, 130);
     await wait(470);
     const ringNearlyUp = ringAt(btn());
