@@ -143,7 +143,21 @@ const STREAM_BUF_MAX = 200000;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.10.3";
+const VERSION = "5.10.4";
+
+// Whether two saved settings hold the same values, whatever order their keys
+// were written in. A key left undefined counts as not there, the way it is
+// when saved. Used to tell an update or a put-back that would change nothing.
+function sameSettings(a: any, b: any): boolean {
+  const norm = (v: any): any => {
+    if (Array.isArray(v)) return v.map(norm);
+    if (!v || typeof v !== "object") return v;
+    const out: Record<string, any> = {};
+    for (const k of Object.keys(v).sort()) if (v[k] !== undefined) out[k] = norm(v[k]);
+    return out;
+  };
+  return JSON.stringify(norm(a)) === JSON.stringify(norm(b));
+}
 
 // The addresses the extension points at. Pinned to the released branch rather
 // than to a tag, so an old install still opens the page as it stands today.
@@ -10512,6 +10526,12 @@ export function setup(ctx: Ctx, opts?: any) {
       undoBtn.addEventListener("click", () => {
         const back = undoTo;
         if (!back) return;
+        if (back.pick === select.value && sameSettings(back.values, snapshotKind(kind))) {
+          undoTo = null;
+          syncPresetButtons();
+          status.textContent = "This is already what was here before. Nothing changed.";
+          return;
+        }
         applyPresetValues(kind, back.values);
         for (const k of keysForKind(kind)) {
           const fld = fieldByKey[k];
@@ -10615,6 +10635,10 @@ export function setup(ctx: Ctx, opts?: any) {
           return;
         }
         commit();
+        if (sameSettings(arr[i].values, snapshotKind(kind))) {
+          status.textContent = name + " already holds these settings. Nothing changed.";
+          return;
+        }
         arr[i] = { name, values: snapshotKind(kind) };
         presets[kind] = arr;
         if (!persist()) {
@@ -13978,6 +14002,7 @@ export function setup(ctx: Ctx, opts?: any) {
 // whether a colour pairing is readable. All of them are pure functions of their
 // input, so they can be checked without a browser.
 export const __testing = {
+  sameSettings,
   parseColor,
   blendColor,
   relLuminance,

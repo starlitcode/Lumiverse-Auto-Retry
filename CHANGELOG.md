@@ -8,6 +8,17 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.10.4
+
+_2026-09-27_
+
+### Fixed
+
+- **Update selected said it updated a preset when nothing had changed.** When the preset picked already holds the settings on the panel, the line under the preset buttons now says so, and nothing is saved. It works the same way as a name already in use.
+- **Put it back said it put something back when nothing had changed.** When what is on the panel is already what was there before the load, the line now says so.
+
+---
+
 ## 5.10.3
 
 _2026-09-26_
