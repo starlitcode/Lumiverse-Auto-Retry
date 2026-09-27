@@ -4820,6 +4820,8 @@ console.log("\npicking a preset loads it, so a save cannot land on the wrong one
       const afterPick = phrases().value;
       press("Update selected");
       await frame();
+      // Beta was just loaded, so updating it changes nothing, and says so.
+      const updateSaid = bar.textContent;
       await forceLoad("Alpha");
       await forceLoad("Beta");
       const betaNow = phrases().value;
@@ -4838,7 +4840,7 @@ console.log("\npicking a preset loads it, so a save cannot land on the wrong one
         undo.click();
         await frame();
       }
-      return {
+      const res = {
         onAlpha,
         afterPick,
         betaNow,
@@ -4856,6 +4858,18 @@ console.log("\npicking a preset loads it, so a save cannot land on the wrong one
         // the button must not be sitting there offering to do it.
         undoHiddenAtRest: startedHidden,
       };
+      // Loading the preset already on screen again, then putting it back,
+      // changes nothing either, and says so.
+      await forceLoad("Alpha");
+      const again = [...bar.querySelectorAll("button")].find(
+        (x) => x.textContent.trim() === "Put it back",
+      );
+      if (seen(again)) {
+        again.click();
+        await frame();
+      }
+      const putBackSaid = bar.textContent;
+      return { ...res, updateSaid, putBackSaid };
     }),
   );
 
@@ -4872,6 +4886,10 @@ console.log("\npicking a preset loads it, so a save cannot land on the wrong one
   check("and takes the picker back with it", out.pickAfterUndo === "Beta", out);
   check("with nothing left to put back", out.undoGoneAfter, out);
   check("and it was not sitting there before any pick", out.undoHiddenAtRest, out);
+  check("updating with nothing changed says it already holds these settings",
+    /Beta already holds these settings/.test(out.updateSaid), out.updateSaid);
+  check("putting back a load that changed nothing says so",
+    /already what was here before/.test(out.putBackSaid), out.putBackSaid);
   for (const e of errors) check("no console errors", false, e);
   if (!errors.length) check("no console errors", true);
 }
