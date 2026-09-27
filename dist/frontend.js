@@ -5211,7 +5211,7 @@ export function setup(ctx, opts) {
     // its top entry lit if a key was pressed in the chat beforehand.
     //
     // The attribute below says this focus came from us rather than from the
-    // reader, and it beats the guess. It comes off at the first key pressed on
+    // reader, and it takes priority over the guess. It comes off at the first key pressed on
     // the element and when focus leaves it, so tabbing and the arrow keys still
     // mark.
     const QUIET_ATTR = "data-ar-quiet";
@@ -6133,9 +6133,9 @@ export function setup(ctx, opts) {
             });
         }
         catch (_) { }
-        const beat = setInterval(themeMoved, THEME_TICK_MS);
+        const themeTick = setInterval(themeMoved, THEME_TICK_MS);
         disposers.push(() => {
-            clearInterval(beat);
+            clearInterval(themeTick);
             if (themeTimer)
                 clearTimeout(themeTimer);
             themeTimer = null;
@@ -9074,7 +9074,7 @@ export function setup(ctx, opts) {
         // is going into the input box rather than into a reply.
         if (s.impersonating)
             return;
-        // Text arriving is the only proof that beats every guess: if anything above
+        // Text arriving is the one proof that outranks every guess: if anything above
         // decided this reply was over and it was not, this puts it right.
         if (!s.live)
             s.liveSince = Date.now();
