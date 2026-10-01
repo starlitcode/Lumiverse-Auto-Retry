@@ -676,11 +676,9 @@ console.log("\nhints");
         );
         const before = below.getBoundingClientRect().top;
         infos[0].click();
-        // Straight after the press. It is there in full at once: no fade, so
-        // nothing animates on a phone that is already busy.
+        // Straight after the press, before the fade has run.
         const early = document.querySelector('[role="tooltip"]');
-        const atOnce = !!early && Number(getComputedStyle(early).opacity) === 1 &&
-          /^0s$/.test(getComputedStyle(early).transitionDuration);
+        const faded = !!early && Number(getComputedStyle(early).opacity) < 1;
         await frame();
         await new Promise((r) => setTimeout(r, 220));
         const moved = Math.round(below.getBoundingClientRect().top - before);
@@ -721,7 +719,7 @@ console.log("\nhints");
         const lr = last && last.getBoundingClientRect();
         return {
           count: infos.length,
-          atOnce,
+          faded,
           moved,
           onScreen,
           afterSecond,
@@ -735,7 +733,7 @@ console.log("\nhints");
       }),
   );
   check("a hint moves nothing below it", out.moved === 0, out.moved);
-  check("and appears at once, with no fade", out.atOnce, out);
+  check("and fades in rather than appearing", out.faded, out);
   check("the popover lands on screen", out.onScreen);
   // It covers the row it is explaining. At anything under full opacity that
   // row's text reads through the description sitting on top of it, which no

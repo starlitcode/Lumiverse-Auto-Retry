@@ -295,6 +295,7 @@ Ten is the limit because each note is a whole extra message in the prompt. Too m
 - It only goes with a refusal retry. Every other retry sends your request unchanged.
 - It is used for one retry only. It is set up just before the retry button is pressed, and cleared after, whether or not that retry used it.
 - It belongs to one chat, and is never added to a reply in another chat.
+- A background call that another extension makes, which Lumiverse marks as "quiet", never takes it.
 - It expires after 45 seconds. If the retry press started nothing, it is taken back straight away. If there is no retry button to press, no note is set up at all.
 
 This needs the `interceptor` permission, which lets an extension add to a prompt. Without it, everything else works and no note is sent.

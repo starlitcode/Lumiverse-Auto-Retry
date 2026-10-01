@@ -853,6 +853,12 @@ spindle.onFrontendMessage(async (payload, userId) => {
 // choosing.
 const promptInterceptor = async (messages, context) => {
     try {
+        // A quiet generation is a background call, such as another extension's
+        // rewrite or one of this extension's own tries at once. It is not a reply
+        // in the chat, so it does not take the refusal note, replace the kept
+        // prompt, or take the Prompt tab's place.
+        if (String((context && context.generationType) || '').toLowerCase() === 'quiet')
+            return messages;
         const who = context && context.userId;
         const chatId = context && context.chatId ? String(context.chatId) : '';
         // Before the note goes in, so a later try only carries a note when one is

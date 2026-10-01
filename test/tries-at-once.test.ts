@@ -152,6 +152,19 @@ describe("the prompt is kept only for somebody who asked", () => {
     expect(h.stage("sent")[0].msg.from).toBe("built");
   });
 
+  // Another extension's background call in the same chat, such as a rewrite.
+  // Its prompt is not one a new reply would be sent with.
+  test("a quiet generation does not replace the kept prompt", async () => {
+    const h = boot();
+    await h.on(true);
+    await h.run(prompt(), { chatId: "c1" });
+    await h.run([{ role: "system", content: "Rewrite this passage." }], { chatId: "c1", generationType: "quiet" });
+    await h.tell({ type: "try_at_once", requestId: "r1", chatId: "c1", count: 2 });
+    await h.settle();
+    expect(h.stage("sent")[0].msg.from).toBe("kept");
+    expect(h.quietCalls[0].messages[0].content).toBe("You run a lighthouse.");
+  });
+
   test("one person's prompt is not sent for another", async () => {
     const h = boot();
     await h.on(true, "alice");

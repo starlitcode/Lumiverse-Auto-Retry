@@ -196,6 +196,8 @@ The whole prompt that went to the model, after your settings, world info, person
 
 **Two tabs open:** if you have two chats open in two browser tabs, both receive every prompt. The tab only shows the prompt for the chat you are in, and says so when one belongs to another chat.
 
+**Background calls are not shown.** A call that Lumiverse marks as "quiet", such as a rewrite by another extension, does not replace the prompt on this tab.
+
 The prompt stays on your device. It is not sent anywhere or written to disk, and it goes when you close the tab.
 
 ### What a retry costs

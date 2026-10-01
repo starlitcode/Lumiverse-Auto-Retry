@@ -55,9 +55,10 @@ The note is the only thing in the extension that changes what the model is asked
 - It carries only the text you typed. Your prompt is not read, copied or stored, and nothing is written to your chat.
 - Because it is not a message in your chat, it may not appear in Lumiverse's Prompt Breakdown. The on-screen panel writes a line naming the note on the retry that carried it.
 
-It is added just before the extension presses your retry button, and five things keep it to that one reply:
+It is added just before the extension presses your retry button, and six things keep it to that one reply:
 
 - It belongs to one chat, and is never added to a reply in another chat.
+- A background call that another extension makes, which Lumiverse marks as "quiet", never takes it.
 - It is cleared after one retry, whether or not that retry used it.
 - It expires after 45 seconds.
 - If the retry press started nothing, it is taken back straight away. If there is no retry button to press, no note is set up at all.
