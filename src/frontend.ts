@@ -13241,26 +13241,6 @@ export function setup(ctx: Ctx, opts?: any) {
     return { settings: settings, presets: presets };
   }
 
-  // A dialog coming up: the dimmed backdrop fades in, and the box rises a
-  // little and grows to its size as it fades in, slowing as it lands. Played
-  // with the browser's own animation, so nothing is left set on the box when
-  // it finishes. Skipped when the reader asks for less motion.
-  function popIn(overlay: any, box: any) {
-    try {
-      if (typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    } catch (_) {}
-    try {
-      overlay.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 180, easing: "ease-out" });
-      box.animate(
-        [
-          { opacity: 0, transform: "translateY(12px) scale(.96)" },
-          { opacity: 1, transform: "none" },
-        ],
-        { duration: 260, easing: "cubic-bezier(.2,.9,.3,1.1)" },
-      );
-    } catch (_) {}
-  }
-
   // Open at a time, so a second press replaces the first rather than stacking.
   let closeResetPicker: (() => void) | null = null;
 
@@ -13586,7 +13566,6 @@ export function setup(ctx: Ctx, opts?: any) {
     box.appendChild(row);
     overlay.appendChild(box);
     (document.body || document.documentElement).appendChild(overlay);
-    popIn(overlay, box);
     ensureReadableTree(box, 2.6);
     try { box.focus({ preventScroll: true }); } catch (_) {}
     closeResetPicker = close;
@@ -13655,7 +13634,6 @@ export function setup(ctx: Ctx, opts?: any) {
     box.appendChild(row);
     overlay.appendChild(box);
     (document.body || document.documentElement).appendChild(overlay);
-    popIn(overlay, box);
     ensureReadableTree(box);
     closeExpandEditor = close;
     // The textarea is not focused, so opening it doesn't pop the
@@ -13763,7 +13741,6 @@ export function setup(ctx: Ctx, opts?: any) {
     box.appendChild(row);
     overlay.appendChild(box);
     (document.body || document.documentElement).appendChild(overlay);
-    popIn(overlay, box);
     ensureReadableTree(box);
     try { box.focus(); } catch (_) {}
     // Shut without an answer, by teardown or by the panel closing, is a no: the

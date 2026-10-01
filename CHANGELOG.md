@@ -19,7 +19,7 @@ _2026-10-01_
 
 ### Changed
 
-- **The description under each ? appears at once.** It used to fade in and out. The pop-up for a retry, an error or switching on and off is unchanged.
+- **Pop-ups appear at once.** The **Reset…** dialog, the full-size editor, the warning before the crisis-support setting, and the description under each **?** used to grow or fade in. They now appear with no animation. The pop-up for a retry, an error or switching on and off is unchanged.
 
 ### Fixed
 

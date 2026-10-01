@@ -4110,8 +4110,9 @@ console.log("\npop-ups come up and go down");
         return dialog ? dialog.getAnimations({ subtree: true }).length : -1;
       });
     });
-    if (reducedMotion === "reduce") check("with less motion asked for, a dialog just appears", out === 0, out);
-    else check("a dialog grows to its size as it comes up", out > 0, out);
+    // Pop-ups appear at once, whatever the motion setting. Only the retry
+    // message above moves.
+    check((reducedMotion === "reduce" ? "with less motion asked for, " : "") + "a dialog appears at once, with no animation", out === 0, out);
     check("the dialog: no console errors", errors.length === 0, errors);
   }
 }
