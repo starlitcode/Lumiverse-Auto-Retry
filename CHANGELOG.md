@@ -26,7 +26,7 @@ _2026-10-01_
 ### Fixed
 
 - **A background call could take the retry note.** Lumiverse marks a call that an extension makes in the background, such as a rewrite, as "quiet". If one ran while a note was waiting for its retry, it could take the note, and the retry then went out without it. Quiet calls are now skipped: they never take the note, and they do not replace the prompt shown on the **Prompt** tab.
-- **Saving unlocked the notes of a set that comes with it.** Save closes the panel, and opening it again forgot which note set was picked. The set's notes were then open to editing as if they were yours. The panel now opens on the set that was picked, with its notes still locked, as long as the notes are still that set's.
+- **Saving unlocked the notes of a set that comes with it.** Save closes the panel, and opening it again forgot which note set was picked. Your own presets arriving from your account as the panel opened made it forget too. The set's notes were then open to editing as if they were yours. The panel now opens on the set that was picked, with its notes still locked, as long as the notes are still that set's.
 - **Your own hard failures did nothing for an error written as the reply.** Some providers write their error into the reply text instead of reporting an error. That reply was retried as short or cut off, whatever **Your own hard failures** held. Your phrases are now checked against the reply too, before any other reason to retry. The built-in list is not, so a story is not mistaken for an error.
 - **An error sent as an object could never match Your own hard failures.** It was read as "[object Object]". Its message is now read instead.
 

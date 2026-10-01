@@ -12552,6 +12552,42 @@ console.log("\na set that comes with it stays picked after Save");
   check("and its notes are still locked", out.locked === true, out);
   check("no console errors", errors.length === 0, errors);
 }
+// The same, with presets of your own on the account. Opening the panel asks
+// the account for them, and their arrival rebuilds the preset lists. That
+// rebuild has to keep the set that was picked.
+{
+  const { out, errors } = await inPanel(browser, { settings: { retryOnRefusal: true, refusalNote: true } }, async (page) =>
+    page.evaluate(async () => {
+      const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const open = async () => { for (let k = 0; k < 2; k++) { for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click(); await new Promise((r) => setTimeout(r, 260)); } await frame(); };
+      const bar = () => document.querySelector('[data-ar-presets="notes"]');
+      const state = () => ({ pick: bar().querySelector("select").value, locked: [...document.querySelectorAll('[data-ar-row="refusalNotes"] textarea')].every((x) => x.disabled || x.readOnly) });
+      const account = { notes: [{ name: "Lighthouse keeper's note", values: { refusalNotes: [{ text: "Carry on with the storm scene.", role: "system", from: 2 }] } }] };
+      const answerPresets = async () => {
+        const asks = window.__sent.filter((m) => m.type === "load_presets");
+        const last = asks[asks.length - 1];
+        if (last) window.__fromBackend({ type: "loaded_presets", requestId: last.requestId, presets: account });
+        await new Promise((r) => setTimeout(r, 200));
+        await frame();
+      };
+      await open();
+      const sel = bar().querySelector("select");
+      sel.value = "A nudge"; sel.dispatchEvent(new Event("change", { bubbles: true })); await frame();
+      [...document.querySelectorAll("button")].find((x) => x.textContent.trim() === "Save").click();
+      await new Promise((r) => setTimeout(r, 300));
+      document.getElementById("modal").innerHTML = "";
+      window.__acts["auto-retry-settings"].cb();
+      await new Promise((r) => setTimeout(r, 300));
+      await open();
+      await answerPresets();
+      const mine = [...bar().querySelectorAll("option")].some((o) => o.value === "Lighthouse keeper's note");
+      return { ...state(), mine };
+    }));
+  check("with your own presets arriving from the account, they are listed", out.mine === true, out);
+  check("and the set that comes with it is still picked", out.pick === "A nudge", out);
+  check("and its notes are still locked", out.locked === true, out);
+  check("no console errors", errors.length === 0, errors);
+}
 
 console.log("\nthe settings on a phone and under a mouse");
 // On a phone: nothing scrolls sideways and everything that can be pressed is

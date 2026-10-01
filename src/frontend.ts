@@ -10898,10 +10898,15 @@ export function setup(ctx: Ctx, opts?: any) {
       refreshSelect(was && stillHolds(was) ? was : undefined);
       // Re-read storage and rebuild the dropdown, for when an import adds
       // presets while this bar is on screen.
+      // The pick is kept while the settings still hold it. Presets arriving
+      // from the account when the panel opens run this too, and a rebuild that
+      // named nothing let go of a set that comes with the extension, which
+      // unlocked its notes.
       presetBarRefreshers.push(() => {
         const fresh = loadPresets();
         presets[kind] = fresh[kind] || [];
-        refreshSelect();
+        const keep = select.value || readPick(kind);
+        refreshSelect(keep && stillHolds(keep) ? keep : undefined);
       });
 
       // Loading, from a pick or from the button. One function, because a pick
