@@ -179,6 +179,13 @@ Some providers send a refusal as an error instead of reply text. An error retry 
 
 **Skip hard failures** does the opposite job. An error that will be the same next time, like a missing model or a wrong key, is not retried. The built-in list cannot know every provider's wording, so **Your own hard failures** lets you add wording, one per line. It only shows while **Skip hard failures** is on.
 
+Some providers do not report an error at all. They write the error as the reply, as if a character had said it. **Your own hard failures** is checked against the reply's text too:
+
+- A reply that contains one of your phrases is not retried, for any reason.
+- Only your own phrases are checked against a reply. The built-in list is not, because it holds words such as "permission" that a story can use.
+- Copy a short, unusual part of the error, such as an error code in brackets. A whole sentence can change from one error to the next.
+- A phrase that is also in **Your own refusal phrases** is still retried as a refusal when it comes as an error.
+
 **Your own refusal phrases are also checked against error text.** Paste an error your setup keeps hitting, and it is retried as a refusal. This wins over **Skip hard failures**. A phrase in both boxes is retried. Refusal retries must be on for this.
 
 ## Stopping to offer support

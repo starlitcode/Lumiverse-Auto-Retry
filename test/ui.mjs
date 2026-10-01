@@ -12330,6 +12330,51 @@ console.log("\nsaying the note sets have changed");
   }
 }
 
+// ---- a provider error written into the reply ----
+// Some providers write their error as the reply instead of reporting one. A
+// phrase from your own hard failures has to stop that reply being retried, or
+// the error is paid for again on every attempt.
+console.log("\na provider error written into the reply");
+{
+  const errLines = [];
+  const once = async (content, phrases) => {
+    const page = await browser.newPage();
+    page.on("pageerror", (e) => errLines.push(e.message));
+    await stage(page, '<div id=modal></div><button data-testid="regenerate">Regenerate</button>');
+    await page.addScriptTag({ content: SOURCE, type: "module" });
+    await page.waitForFunction(() => !!window.__setup);
+    const clicks = await page.evaluate(async ([content, phrases]) => {
+      const handlers = {};
+      let clicks = 0;
+      document.querySelector("[data-testid=regenerate]").addEventListener("click", () => clicks++);
+      window.__setup(
+        {
+          events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
+          sendToBackend: () => {},
+          onBackendMessage: () => () => {},
+          ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+                registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) },
+        },
+        { retryDelayMs: 10, backoffFactor: 1, maxDelayMs: 10, jitter: false, maxRetries: 2, toast: false,
+          stuckTimeoutMs: 0, idleTimeoutMs: 0, pauseWhenFailing: false, retryOnShort: true, minChars: 400,
+          ignoreHardErrors: true, hardErrorPhrases: phrases },
+      );
+      handlers.GENERATION_STARTED({ chatId: "c1", generationId: "g" });
+      handlers.GENERATION_ENDED({ chatId: "c1", generationId: "g", content });
+      await new Promise((r) => setTimeout(r, 150));
+      return clicks;
+    }, [content, phrases]);
+    await page.close();
+    return clicks;
+  };
+  const said = "The gateway could not finish this request (free_tier_cap). Free accounts can use 5000 a day.";
+  const without = await once(said, "");
+  const withIt = await once(said, "free_tier_cap");
+  check("without the phrase, the short error reply is retried", without === 1, without);
+  check("with the phrase in your hard failures, it is not", withIt === 0, withIt);
+  check("no console errors", errLines.length === 0, errLines);
+}
+
 await browser.close();
 console.log(failures ? `\n${failures} FAILED` : "\nall browser checks passed");
 process.exit(failures ? 1 : 0);

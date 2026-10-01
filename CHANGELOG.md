@@ -8,6 +8,17 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.10.5
+
+_2026-10-01_
+
+### Fixed
+
+- **Your own hard failures did nothing for an error written as the reply.** Some providers write their error into the reply text instead of reporting an error. That reply was retried as short or cut off, whatever **Your own hard failures** held. Your phrases are now checked against the reply too, before any other reason to retry. The built-in list is not, so a story is not mistaken for an error.
+- **An error sent as an object could never match Your own hard failures.** It was read as "[object Object]". Its message is now read instead.
+
+---
+
 ## 5.10.4
 
 _2026-09-26_

@@ -132,7 +132,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.10.4";
+const VERSION = "5.10.5";
 // Whether two saved settings hold the same values, whatever order their keys
 // were written in. A key left undefined counts as not there, the way it is
 // when saved. Used to tell an update or a put-back that would change nothing.
@@ -614,7 +614,7 @@ const SCHEMA = [
                 needs: ["ignoreHardErrors"],
                 label: "Your own hard failures",
                 type: "text",
-                hint: "Wording for an error that will not fix itself, one per line, used with the built-in list. A phrase also in Your own refusal phrases is retried as a refusal.",
+                hint: "Wording for an error that will not fix itself, one per line. Also checked against a reply, for providers that write their error as the reply.",
             },
             {
                 key: "retryOnEmpty",
@@ -2595,11 +2595,45 @@ const statedWait = (err) => {
 // Your own wording is checked first and counts the same as the built-in list.
 // Providers word these however they like, and a list in here can only ever
 // carry the ones somebody has already hit.
+// The words of an error, whatever shape it arrives in. A build can send the
+// error as an object rather than as text, and String() of an object is
+// "[object Object]", which no phrase ever matches.
+function errorText(err) {
+    if (err == null)
+        return "";
+    if (typeof err === "string")
+        return err;
+    try {
+        const inner = err.error && typeof err.error === "object" ? err.error : null;
+        const said = err.message || (inner && inner.message) || err.error || err.detail;
+        if (typeof said === "string" && said)
+            return said;
+        const whole = JSON.stringify(err);
+        if (whole && whole !== "{}")
+            return whole;
+    }
+    catch (_) { }
+    return String(err);
+}
+// Whether a reply's own text is one of your hard failures. Some providers put
+// their error into the reply instead of reporting an error, and a reply like
+// that would otherwise be retried as short, cut off or a refusal. Only your
+// own list is read here: the built-in one names words such as "permission"
+// that a story can use.
+function isOwnHardFailure(text, cfg) {
+    const lower = normalizeForMatch(String(text == null ? "" : text)).toLowerCase();
+    if (!lower)
+        return false;
+    for (const p of splitPhrases(cfg && cfg.hardErrorPhrases))
+        if (lower.includes(p))
+            return true;
+    return false;
+}
 function isHardError(err, cfg) {
     if (!err)
         return false;
-    const text = String(err);
-    const lower = text.toLowerCase();
+    const text = errorText(err);
+    const lower = normalizeForMatch(text).toLowerCase();
     for (const p of splitPhrases(cfg && cfg.hardErrorPhrases))
         if (lower.includes(p))
             return true;
@@ -9195,8 +9229,8 @@ export function setup(ctx, opts) {
         if (p.error) {
             // A content-moderation block we can retry as a refusal is not a permanent
             // failure, so don't let the hard-error skip catch it before the refusal check.
-            if (cfg.ignoreHardErrors && isHardError(p.error, cfg) && !(cfg.retryOnRefusal && looksLikeRefusalError(String(p.error), cfg))) {
-                log("hard error ignored", p.error);
+            if (cfg.ignoreHardErrors && isHardError(p.error, cfg) && !(cfg.retryOnRefusal && looksLikeRefusalError(errorText(p.error), cfg))) {
+                log("hard error ignored", errorText(p.error));
                 showToast("Auto Retry did not retry: that error will not fix itself, so trying again would not help.");
                 s.attempts = 0;
                 return;
@@ -9205,7 +9239,7 @@ export function setup(ctx, opts) {
                 scheduleRetry(chatId, "error", p.error);
                 return;
             }
-            if (cfg.retryOnRefusal && looksLikeRefusalError(String(p.error), cfg)) {
+            if (cfg.retryOnRefusal && looksLikeRefusalError(errorText(p.error), cfg)) {
                 // No reply text ever existed for this one: the provider refused before
                 // anything was written, so it is not the phrase list that caught it.
                 scheduleRetry(chatId, BLOCKED_REASON);
@@ -9244,6 +9278,15 @@ export function setup(ctx, opts) {
         }
         if (content.length === 0) {
             log("the reply ended with no text to read, so leaving it alone");
+            s.attempts = 0;
+            return;
+        }
+        // A provider error written into the reply, matching one of your own hard
+        // failures. Checked before every other reason, since each of them would
+        // read an error message as a bad reply and try again.
+        if (cfg.ignoreHardErrors && isOwnHardFailure(content, cfg)) {
+            log("the reply is one of your hard failures, so not retrying");
+            showToast("Auto Retry did not retry: the reply matches one of your hard failures, so trying again would not help.");
             s.attempts = 0;
             return;
         }
@@ -14110,6 +14153,8 @@ export const __testing = {
     refusalVerdict,
     looksLikeRefusalError,
     isHardError,
+    isOwnHardFailure,
+    errorText,
     looksTruncated,
     spamVerdict,
     carrySpamSwitch,
