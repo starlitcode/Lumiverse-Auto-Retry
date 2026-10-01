@@ -1,7 +1,7 @@
 /*
  * Auto Retry backend.
  *
- * Two jobs.
+ * Three jobs.
  *
  * It keeps the whole settings object in per-user account storage, so somebody's
  * settings follow them across browsers and devices instead of living in one
@@ -12,8 +12,12 @@
  * clicks retry, collected by the prompt interceptor on the generation that
  * click starts, then thrown away. One generation only.
  *
- * Needs the `generation` permission to hear when a reply finishes, and
- * `interceptor` for the refusal note.
+ * And it sends the prompt several times at once when "Several tries at once"
+ * is on, then adds the reply the panel picks to the chat as a new reroll.
+ *
+ * Needs the `generation` permission to hear when a reply finishes and to send
+ * the tries, `interceptor` for the refusal note, and `chat_mutation` to add a
+ * reroll.
  */
 
 declare const spindle: any;
@@ -30,7 +34,7 @@ declare function clearTimeout(handle: any): void;
 // with while this side comes back on the new build. A debug report naming only
 // the panel's version would be speaking for a file it cannot see, so the panel
 // asks for this one and prints both.
-const VERSION = '5.10.5';
+const VERSION = '5.11.0';
 
 const SETTINGS_FILE = 'settings.json';
 // Presets, kept in account storage next to the settings so they
@@ -287,6 +291,247 @@ function snapshotPrompt(messages: any[], context: any, userId?: string, noteAt?:
   } catch (_) { /* a viewer must never cost anyone their generation */ }
 }
 
+// ---- several tries at once ----
+// With "Several tries at once" on, a retry from the second try on sends the
+// prompt the failed reply went out with several times at the same moment,
+// through generate.quiet, and the panel keeps the first reply that passes its
+// checks. Lumiverse runs one reply per chat at a time, so pressing its button
+// cannot do this. The calls have to come from here.
+//
+// The prompt is the one the interceptor saw for the last reply in the chat,
+// taken before the refusal note goes in, so a note is only ever in it when the
+// panel arms one for this try. It is kept only for people who have the setting
+// on, in memory, one per chat, for a limited time, and it is dropped the moment
+// the setting goes off. Where there is none, Lumiverse is asked to build the
+// prompt with generate.dryRun. That one skips the council and anything another
+// extension adds with an interceptor, which is why the kept one comes first.
+const atOnceUsers = new Set<string>();
+interface KeptPrompt { messages: any[]; at: number; }
+const keptPrompts = new Map<string, KeptPrompt>();
+// Enough for someone moving between a handful of chats. The oldest goes first.
+const KEPT_MAX = 12;
+// A retry that comes later than this is not part of the same run of tries,
+// and the chat may have moved on, so the prompt is built again instead.
+const KEPT_MAX_AGE_MS = 30 * 60 * 1000;
+// The panel offers up to this many at once. A hand-edited request cannot
+// go past it.
+const MAX_AT_ONCE = 5;
+// The calls in flight, by the request that started them, so Stop can end
+// them. Each records who started it, so one account cannot stop another's.
+const atOnceRuns = new Map<string, { controller: any; who: string }>();
+// Stop can arrive while the prompt is still being built, before there is a
+// run to stop. Those requests are remembered here so their calls never go out.
+const stoppedEarly = new Map<string, string>();
+const STOPPED_EARLY_MAX = 50;
+
+const keptKey = (who: string, chatId: string) => who + '\n' + chatId;
+
+// Same matching as the prompt viewer: the interceptor's context does not name
+// the user on every build, and on a server with one such user that is who it is.
+function atOnceUserFor(userId?: string): string | null {
+  const k = watcherKey(userId);
+  if (atOnceUsers.has(k)) return k;
+  if (atOnceUsers.size !== 1) return null;
+  const only = atOnceUsers.values().next().value as string;
+  return k === '' || only === '' ? only : null;
+}
+
+function setAtOnce(userId: string | undefined, on: boolean): void {
+  const k = watcherKey(userId);
+  if (on) {
+    atOnceUsers.add(k);
+    return;
+  }
+  atOnceUsers.delete(k);
+  for (const key of Array.from(keptPrompts.keys()))
+    if (key.indexOf(k + '\n') === 0) keptPrompts.delete(key);
+}
+
+// Only the parts a model reads. The host's own markers stay out of a request
+// that does not go through prompt assembly.
+function plainMessages(messages: any[]): any[] {
+  const out: any[] = [];
+  for (const m of messages) {
+    if (!m) continue;
+    const one: any = { role: String(m.role == null ? 'user' : m.role), content: m.content == null ? '' : m.content };
+    if (typeof m.name === 'string' && m.name) one.name = m.name;
+    out.push(one);
+  }
+  return out;
+}
+
+function keepPrompt(messages: any[], context: any, userId?: string): void {
+  try {
+    if (!atOnceUsers.size || !Array.isArray(messages)) return;
+    const who = atOnceUserFor(userId);
+    const chatId = context && context.chatId ? String(context.chatId) : '';
+    if (who == null || !chatId) return;
+    const type = String((context && context.generationType) || '').toLowerCase();
+    // An impersonation writes your turn and a continue adds to the reply on
+    // screen. Neither prompt is the one a new reply would be sent with, so the
+    // kept one is dropped and the next try builds its own.
+    if (type === 'impersonate' || type === 'continue') {
+      keptPrompts.delete(keptKey(who, chatId));
+      return;
+    }
+    const key = keptKey(who, chatId);
+    keptPrompts.delete(key);
+    keptPrompts.set(key, { messages: plainMessages(messages), at: Date.now() });
+    while (keptPrompts.size > KEPT_MAX) keptPrompts.delete(keptPrompts.keys().next().value as string);
+  } catch (_) { /* keeping a copy must never cost anyone their generation */ }
+}
+
+// What went wrong, in words a user can act on. A host error can be a string,
+// an Error, or an object with the message further in.
+function sayError(e: any): string {
+  if (!e) return 'no reason was given';
+  if (typeof e === 'string') return e;
+  const m = e.message || (e.error && (e.error.message || e.error)) || '';
+  return m ? String(m) : 'no reason was given';
+}
+
+// The reply a try is for: the last message in the chat, which has to be the
+// reply that failed its check. Anything else means the chat has moved on.
+async function lastReply(chatId: string): Promise<{ id: string; swipes: string[] } | { why: string }> {
+  if (!spindle.chat || typeof spindle.chat.getMessages !== 'function')
+    return { why: 'this Lumiverse cannot add a reroll for an extension' };
+  let list: any[];
+  try {
+    list = await spindle.chat.getMessages(chatId);
+  } catch (e) {
+    return { why: 'Auto Retry could not read the chat. Check that the chat_mutation permission is granted (' + sayError(e) + ')' };
+  }
+  const last = Array.isArray(list) && list.length ? list[list.length - 1] : null;
+  if (!last || last.role !== 'assistant' || !last.id) return { why: 'the last message in the chat is not a reply' };
+  const swipes = Array.isArray(last.swipes) && last.swipes.length
+    ? last.swipes.map((x: any) => String(x == null ? '' : x))
+    : [String(last.content == null ? '' : last.content)];
+  return { id: String(last.id), swipes: swipes };
+}
+
+async function tryAtOnce(payload: any, userId?: string): Promise<void> {
+  const requestId = String(payload.requestId || '');
+  const chatId = payload.chatId ? String(payload.chatId) : '';
+  const count = Math.max(1, Math.min(MAX_AT_ONCE, Math.round(Number(payload.count)) || 1));
+  const say = (m: any) => replyTo(userId, Object.assign({ type: 'at_once', requestId: requestId }, m));
+  if (!requestId) return;
+  if (!chatId) return say({ stage: 'failed', why: 'the host did not say which chat this is' });
+  const target = await lastReply(chatId);
+  if ('why' in target) return say({ stage: 'failed', why: target.why });
+
+  const who = watcherKey(userId);
+  const kept = keptPrompts.get(keptKey(atOnceUserFor(userId) || who, chatId));
+  let messages: any[] | null = kept && Date.now() - kept.at < KEPT_MAX_AGE_MS ? kept.messages : null;
+  let from = 'kept';
+  if (!messages) {
+    from = 'built';
+    if (!spindle.generate || typeof spindle.generate.dryRun !== 'function')
+      return say({ stage: 'failed', why: 'this Lumiverse cannot build a prompt for an extension' });
+    try {
+      const dry = await spindle.generate.dryRun({ chatId: chatId, generationType: 'swipe' }, userId);
+      messages = dry && Array.isArray(dry.messages) ? plainMessages(dry.messages) : null;
+    } catch (e) {
+      return say({ stage: 'failed', why: 'Lumiverse could not build the prompt (' + sayError(e) + ')' });
+    }
+  }
+  if (!messages || !messages.length) return say({ stage: 'failed', why: 'there was no prompt to send' });
+
+  // The refusal note armed for this try, placed the same way the interceptor
+  // places it, and used up the same way.
+  let notes = 0;
+  const armed = refusalNotes.get(chatId);
+  if (armed) {
+    refusalNotes.delete(chatId);
+    if (Date.now() - armed.at <= NOTE_MAX_AGE_MS) {
+      const built = armed.notes.map((n) => ({ role: n.role, content: n.text }));
+      messages = placeNotes(messages, built, armed.placement).list;
+      notes = built.length;
+    }
+  }
+
+  if (stoppedEarly.get(requestId) === who) {
+    stoppedEarly.delete(requestId);
+    return say({ stage: 'failed', why: 'you stopped it' });
+  }
+
+  const Ctl = (globalThis as any).AbortController;
+  const controller = typeof Ctl === 'function' ? new Ctl() : null;
+  atOnceRuns.set(requestId, { controller: controller, who: who });
+  say({ stage: 'sent', count: count, from: from, notes: notes, messageId: target.id, swipeCount: target.swipes.length });
+  let left = count;
+  for (let i = 0; i < count; i++) {
+    const req: any = { messages: messages };
+    if (userId) req.userId = userId;
+    if (controller) req.signal = controller.signal;
+    let call: Promise<any>;
+    try {
+      call = Promise.resolve(spindle.generate.quiet(req));
+    } catch (e) {
+      call = Promise.reject(e);
+    }
+    call
+      .then((res: any) => say({
+        stage: 'reply',
+        index: i,
+        content: String((res && res.content) || ''),
+        reasoning: res && typeof res.reasoning === 'string' ? res.reasoning : '',
+      }))
+      .catch((e: any) => {
+        const stopped = !!(e && e.name === 'AbortError');
+        say({ stage: 'reply', index: i, stopped: stopped, error: stopped ? 'stopped' : sayError(e) });
+      })
+      .then(() => {
+        left -= 1;
+        if (left > 0) return;
+        atOnceRuns.delete(requestId);
+        say({ stage: 'done' });
+      });
+  }
+}
+
+function stopAtOnce(requestId: string, userId?: string): void {
+  const run = atOnceRuns.get(requestId);
+  if (!run) {
+    if (!requestId) return;
+    stoppedEarly.set(requestId, watcherKey(userId));
+    while (stoppedEarly.size > STOPPED_EARLY_MAX) stoppedEarly.delete(stoppedEarly.keys().next().value as string);
+    return;
+  }
+  if (run.who !== watcherKey(userId)) return;
+  atOnceRuns.delete(requestId);
+  try { if (run.controller) run.controller.abort(); } catch (_) {}
+}
+
+// The reply that passed goes on the failed reply as a new reroll and is shown.
+// The chat is read again first: if a message was sent or the reply deleted
+// while the tries were out, the reply is not put on the wrong message.
+async function addReroll(payload: any): Promise<{ ok: boolean; why?: string }> {
+  const chatId = payload.chatId ? String(payload.chatId) : '';
+  const text = String(payload.text == null ? '' : payload.text);
+  if (!chatId || !text.trim()) return { ok: false, why: 'there was nothing to add' };
+  const target = await lastReply(chatId);
+  if ('why' in target) return { ok: false, why: target.why };
+  if (target.id !== String(payload.messageId || '') || target.swipes.length !== Number(payload.swipeCount))
+    return { ok: false, why: 'the reply changed while the tries were out' };
+  try {
+    await spindle.chat.updateMessage(chatId, target.id, {
+      swipes: target.swipes.concat([text]),
+      swipe_id: target.swipes.length,
+    });
+  } catch (e) {
+    return { ok: false, why: 'Lumiverse would not add the reroll (' + sayError(e) + ')' };
+  }
+  const reasoning = String(payload.reasoning == null ? '' : payload.reasoning);
+  if (reasoning.trim()) {
+    try {
+      await spindle.chat.updateMessage(chatId, target.id, { reasoning: { text: reasoning, duration: null } });
+    } catch (_) {
+      try { spindle.log.warn('auto-retry: the reroll was added, but its thinking could not be saved with it'); } catch (__) {}
+    }
+  }
+  return { ok: true };
+}
+
 // Where the note sits relative to the conversation. __isChatHistory marks the
 // messages that came from stored chat turns, so "after the last message" means
 // after the last real one rather than after whatever the host appended behind
@@ -353,6 +598,7 @@ spindle.onFrontendMessage(async (payload: any, userId?: string) => {
   try {
     if (!payload) return;
     if (payload.type === 'save_settings' && payload.settings && typeof payload.settings === 'object') {
+      setAtOnce(userId, payload.settings.tryAtOnce === true);
       // This write is the account copy, the one that carries settings between
       // devices. It is caught here rather than falling to the catch at the
       // bottom, which logs on the server where the affected user cannot see it
@@ -433,6 +679,7 @@ spindle.onFrontendMessage(async (payload: any, userId?: string) => {
     }
     if (payload.type === 'set_settings' && payload.settings && typeof payload.settings === 'object') {
       // The panel handing back what this module knew before it restarted.
+      setAtOnce(userId, payload.settings.tryAtOnce === true);
       return;
     }
     if (payload.type === 'set_chats_off') {
@@ -521,6 +768,28 @@ spindle.onFrontendMessage(async (payload: any, userId?: string) => {
       replyTo(userId, { type: 'note_armed', requestId: payload.requestId, armed: !!forChat && refusalNotes.has(forChat) });
       return;
     }
+    if (payload.type === 'try_at_once') {
+      // Not awaited: the replies come back one at a time as they finish, and
+      // this handler should not hold the bridge for the length of a reply.
+      tryAtOnce(payload, userId).catch((e) => {
+        replyTo(userId, { type: 'at_once', requestId: String(payload.requestId || ''), stage: 'failed', why: sayError(e) });
+      });
+      return;
+    }
+    if (payload.type === 'stop_at_once') {
+      stopAtOnce(String(payload.requestId || ''), userId);
+      return;
+    }
+    if (payload.type === 'add_reroll') {
+      let done: { ok: boolean; why?: string };
+      try {
+        done = await addReroll(payload);
+      } catch (e) {
+        done = { ok: false, why: sayError(e) };
+      }
+      replyTo(userId, { type: 'reroll_added', requestId: payload.requestId, ok: done.ok, why: done.why || '' });
+      return;
+    }
     if (payload.type === 'save_presets' && payload.presets && typeof payload.presets === 'object') {
       await inTurn(presetWrites, userId, async () => {
         try {
@@ -551,6 +820,9 @@ const promptInterceptor = async (messages: any[], context: any) => {
   try {
     const who = context && context.userId;
     const chatId = context && context.chatId ? String(context.chatId) : '';
+    // Before the note goes in, so a later try only carries a note when one is
+    // armed for it.
+    keepPrompt(messages, context, who);
     // A note armed in one chat is not for a generation in another, and it
     // stays armed so the retry it was meant for can still collect it. A
     // generation that names no chat takes the one note there is, and none
@@ -620,12 +892,14 @@ const promptInterceptor = async (messages: any[], context: any) => {
 // event never fires and a fire-and-forget registration does nothing and
 // says nothing, so an extension with the wrong grants stays installed and looks
 // like it is working. The panel asks for this and says which are missing.
-const PERMISSIONS: Array<{ name: string; costs: string }> = [
+// onlyFor names the setting a permission is for, when only one setting uses it.
+const PERMISSIONS: Array<{ name: string; costs: string; onlyFor?: string }> = [
   { name: 'generation', costs: 'Everything. Retries run off the generation events, and without this none of them arrive, so nothing is ever retried.' },
   { name: 'interceptor', costs: 'The refusal note, and the Prompt tab.' },
   { name: 'chats', costs: 'The chat name in the log, and knowing which chat you are in without a reply first.' },
   { name: 'characters', costs: 'The character name in the log.' },
   { name: 'ui_panels', costs: 'The floating button. The on-screen panel falls back to its own window.' },
+  { name: 'chat_mutation', costs: 'Several tries at once, which adds the reply that passes as a new reroll. Everything else works without it.', onlyFor: 'tryAtOnce' },
 ];
 // null where the host is too old to say, which is not the same as denied and is
 // not worth showing as one.

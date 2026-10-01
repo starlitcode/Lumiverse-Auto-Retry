@@ -5,13 +5,14 @@ This page explains what Auto Retry can reach, what it keeps, and what it cannot 
 ## It works entirely on your own device
 
 - **It has no networking.** It never opens a connection, never contacts a server of mine or anyone else's, and has no analytics. Everything happens inside your copy of Lumiverse.
+- **One setting asks Lumiverse to send a prompt.** With **Several tries at once** on, Auto Retry asks Lumiverse to send your chat's prompt to your own model connection, the same one your replies use. Lumiverse sends it, as it does when you press retry. It is off by default. See [Several tries at once](#several-tries-at-once) below.
 - **You can check this.** Search the two source files for `fetch(`, `XMLHttpRequest`, `WebSocket`, `sendBeacon` or `EventSource`. None of them appear, and those are the only ways a browser extension can send anything out.
 - **It never runs text as code.** There is no `eval` and no `new Function`, so nothing in a reply, a character card, or your settings can run.
 - **There is one link**, in the warning before the crisis-support setting. It points at the safety page in this repository. Showing it fetches nothing. Tapping it opens GitHub in your browser.
 
 ## What it can reach, and why
 
-It asks Lumiverse for five permissions. All five are privileged: on a shared server, each one does nothing until an admin approves it. None is needed for the extension to start.
+It asks Lumiverse for six permissions. All six are privileged: on a shared server, each one does nothing until an admin approves it. None is needed for the extension to start.
 
 | Permission | What it is for | Without it |
 | --- | --- | --- |
@@ -20,23 +21,32 @@ It asks Lumiverse for five permissions. All five are privileged: on a shared ser
 | `chats` | Asking which chat you are looking at. | Everything works. **Turn off here** waits to be told which chat you are in. |
 | `characters` | Turning a chat's card id into a name, so the panel can say who a chat is with. It reads one card, for the chat you are in. | Everything works. The panel says "This chat" instead of a name. |
 | `interceptor` | Adding the retry note to a prompt, and showing the whole prompt on the panel's **Prompt** tab. | Everything works. No retry note is sent, and the Prompt tab stays empty and says so. |
+| `chat_mutation` | **Several tries at once** only: reading the messages in the chat to find the failed reply, and adding the reply that passed to it as a new reroll. | Everything works. With **Several tries at once** on, each try presses the retry button instead. |
 
 **About `chats`:** Lumiverse puts reading, creating and deleting chats into one permission, with no narrower one to ask for. Auto Retry only uses one call from it: which chat is open. It never creates, deletes or changes a chat.
 
 **About `characters`:** it never creates, edits or deletes a card.
 
+**About `chat_mutation`:** Lumiverse puts reading, adding, changing and deleting messages into one permission. Auto Retry reads the messages in a chat and adds a reroll to the last reply. It never deletes a message, never changes the text of a reroll that is already there, and never sends a message as you.
+
 ### The Lumiverse features it uses
 
-Behind those permissions it uses eight Lumiverse features and nothing else:
+Behind those permissions it uses these Lumiverse features and nothing else:
 
-- reading the messages in a chat
-- updating a message
+- seeing replies start, stream and end
 - asking which chat is open
 - reading the name on one character card
 - counting the tokens in a prompt
 - reading its own settings
 - saving its own settings
 - adding the retry note to a prompt
+
+With **Several tries at once** on, it also uses these:
+
+- building the prompt for a new reroll
+- sending a prompt to your model connection
+- reading the messages in a chat
+- adding a reroll to a reply
 
 ### The note sent with a refusal retry
 
@@ -53,13 +63,23 @@ It is added just before the extension presses your retry button, and five things
 - If the retry press started nothing, it is taken back straight away. If there is no retry button to press, no note is set up at all.
 - Optionally, **Only send them on a regenerate or a swipe** also requires Lumiverse to call the reply a regenerate or a swipe. It is off by default, because most versions of Lumiverse call every reply "normal", and the note would then never be sent.
 
+### Several tries at once
+
+Off by default. With it on:
+
+- **It keeps the last prompt in each chat**, so a try can send the same prompt again. The copy is in memory on the server, for up to 12 chats, for 30 minutes. It is not written to disk. Turning the setting off drops every copy.
+- **The prompt goes to your own model connection**, the same one your replies use, several times at once. Lumiverse sends it. Auto Retry does not open a connection of its own.
+- **The replies come back to the panel**, so they can be checked. The one that passes is added to your chat as a new reroll. The others are not kept.
+
+[Several tries at once](tries-at-once.md) explains the rest, including the cost.
+
 ## This page can change
 
 A new feature can need a new permission. If that happens, this page says so before the version that needs it is released. `spindle.json` lists the permissions, and the changelog says when one is added and why.
 
 A new permission is a real cost, because every user has to approve it again, so it is only asked for when a feature truly needs it.
 
-Two things will never change: the extension will not make network calls, and it will not send anything anywhere.
+Two things will never change: the extension will not make network calls of its own, and it will not send anything anywhere except to the model connection you set up in Lumiverse, and only with **Several tries at once** on.
 
 ## What it cannot reach
 
@@ -97,6 +117,8 @@ Neither of these is in an export, because a screen position or a chat id means n
 - **the last prompt**, only while you have the panel's **Prompt** tab open. It is the text of your chat, so it is only kept after you open that tab. One prompt at a time. Close the panel and nothing is kept.
 
 None of these is written to disk, synced, or sent anywhere.
+
+**In memory on the server, only with Several tries at once on:** the last prompt in each chat, for up to 12 chats and 30 minutes each. Turning the setting off drops every copy, and so does a restart. It is not written to disk. See [Several tries at once](#several-tries-at-once).
 
 ## One thing to be careful with
 

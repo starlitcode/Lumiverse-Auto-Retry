@@ -12,7 +12,7 @@ There are about fifty options. The quickest way to reach one is the **Search set
 The panel has eight sections. Three are open when the panel opens:
 
 - **Basics**: the main switch, the floating button, the Extras entry, the retry pop-up, the on-screen panel, and the switch for the chat you are in.
-- **How it retries**: how many tries, how long it waits between them, when it pauses itself, and whether a retry adds a new reroll or redoes the reply.
+- **How it retries**: how many tries, whether to send several at once, how long it waits between them, when it pauses itself, and whether a retry adds a new reroll or redoes the reply.
 - **When to count a reply as bad**: which kinds of bad reply start a retry, and the two waits for a reply that freezes or never arrives.
 
 Four start closed. Press **▸** to open one. Nothing in them is needed to use the extension.
@@ -239,6 +239,8 @@ These are the defaults for a new install. They are in the `CONFIG` block at the 
 | floatingToggleSize | 44 | How wide that floating button is, in pixels (28-96). The button on the chat resizes as you type, so the size can be seen before it is saved, and closing the settings without saving puts it back. Shown only while `showFloatingToggle` is on. |
 | showExtrasToggle | false | Add an on/off button to the chat input's Extras menu. Its label says whether Auto Retry is on or off. Hidden while the floating button is on. |
 | maxRetries | 4 | Hard cap per message. Nothing retries past this. The lowest is 1: to stop it retrying, switch it off rather than setting this to 0. |
+| tryAtOnce | false | From the second try, send the same prompt several times at once and add the first reply that passes as a new reroll. Each one costs a whole reply. Needs the `chat_mutation` permission. See [Several tries at once](tries-at-once.md). |
+| tryAtOnceMax | 3 | The most replies sent at once (2-5). The second try sends 2, the third 3, and so on up to this. Shown only while `tryAtOnce` is on. |
 | pauseWhenFailing | true | Pause auto-retry after several whole runs give up in a row. Cleared by the next reply that comes back fine. |
 | breakerRuns | 3 | How many failed runs in a row trigger the pause. A run is one message that used up all its tries. Shown only while `pauseWhenFailing` is on. |
 | breakerPauseMins | 5 | How long the pause lasts, in minutes. A reply that comes back fine ends it early. Shown only while `pauseWhenFailing` is on. |

@@ -1,5 +1,5 @@
 {
-  "version": "5.10.5",
+  "version": "5.11.0",
   "name": "Auto Retry",
   "identifier": "auto_retry",
   "author": "starlitcode",
@@ -11,7 +11,8 @@
     "chats",
     "characters",
     "ui_panels",
-    "interceptor"
+    "interceptor",
+    "chat_mutation"
   ],
   "entry_frontend": "dist/frontend.js",
   "entry_backend": "dist/backend.js",

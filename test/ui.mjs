@@ -2310,6 +2310,127 @@ console.log("\nretrying");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- several tries at once ----
+// The panel's half: from the second try it asks the backend for several
+// replies instead of pressing the button, judges each as it comes back, adds
+// the first that passes, and falls back to the button when the backend cannot
+// run them. The backend's half has its own checks in tries-at-once.test.ts.
+console.log("\nseveral tries at once");
+{
+  const page = await browser.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await stage(page, '<div id=modal></div><button data-testid="regenerate">Regenerate</button>');
+  await page.addStyleTag({ content: THEME });
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  const out = await page.evaluate(async () => {
+    const handlers = {};
+    const sent = [];
+    let backs = [];
+    let clicks = 0;
+    document.querySelector("[data-testid=regenerate]").addEventListener("click", () => clicks++);
+    window.__setup(
+      {
+        events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
+        sendToBackend: (m) => sent.push(m),
+        onBackendMessage: (fn) => { backs.push(fn); return () => { backs = backs.filter((f) => f !== fn); }; },
+        ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+              registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) },
+      },
+      { retryDelayMs: 10, backoffFactor: 1, maxDelayMs: 10, jitter: false, maxRetries: 3,
+        toast: false, stuckTimeoutMs: 0, idleTimeoutMs: 0, pauseWhenFailing: false,
+        tryAtOnce: true, tryAtOnceMax: 3 },
+    );
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const answer = (m) => { for (const f of backs.slice()) { try { f(m); } catch (_) {} } };
+    const asks = (chatId) => sent.filter((m) => m.type === "try_at_once" && m.chatId === chatId);
+    const REFUSAL = "I'm sorry, but I can't create that content.";
+    const GOOD = "The keeper climbed the stairs, wiped the glass, and lit the lamp again.";
+    // A reply that fails, its retry click, and that retry failing too, which
+    // is what brings a chat to its second try.
+    const twoFailures = async (chatId, end) => {
+      handlers.GENERATION_STARTED({ chatId, generationId: chatId + "-0" });
+      handlers.GENERATION_ENDED(Object.assign({ chatId, generationId: chatId + "-0" }, end));
+      await wait(60);
+      handlers.GENERATION_STARTED({ chatId, generationId: chatId + "-1" });
+      handlers.GENERATION_ENDED(Object.assign({ chatId, generationId: chatId + "-1" }, end));
+      await wait(60);
+    };
+
+    // One passes: it is added, and the others are stopped.
+    const c0 = clicks;
+    await twoFailures("pass", { content: REFUSAL });
+    const passAsk = asks("pass")[0] || null;
+    const clicksBeforeAtOnce = clicks - c0;
+    if (passAsk) {
+      answer({ type: "at_once", requestId: passAsk.requestId, stage: "sent", count: 2, from: "kept", messageId: "m2", swipeCount: 2 });
+      answer({ type: "at_once", requestId: passAsk.requestId, stage: "reply", index: 0, content: REFUSAL });
+      answer({ type: "at_once", requestId: passAsk.requestId, stage: "reply", index: 1, content: GOOD });
+    }
+    await wait(20);
+    const reroll = sent.find((m) => m.type === "add_reroll") || null;
+    const stopped = !!passAsk && sent.some((m) => m.type === "stop_at_once" && m.requestId === passAsk.requestId);
+    if (reroll) answer({ type: "reroll_added", requestId: reroll.requestId, ok: true });
+    await wait(40);
+    const clicksAfterPass = clicks - c0;
+
+    // None pass: one failed try, and the next asks for more at once.
+    await twoFailures("none", { content: REFUSAL });
+    const first = asks("none")[0] || null;
+    if (first) {
+      answer({ type: "at_once", requestId: first.requestId, stage: "sent", count: 2, from: "kept", messageId: "m2", swipeCount: 2 });
+      answer({ type: "at_once", requestId: first.requestId, stage: "reply", index: 0, content: REFUSAL });
+      answer({ type: "at_once", requestId: first.requestId, stage: "reply", index: 1, content: REFUSAL });
+      answer({ type: "at_once", requestId: first.requestId, stage: "done" });
+    }
+    await wait(60);
+    const second = asks("none")[1] || null;
+
+    // The backend cannot run them: the button is pressed instead.
+    const c3 = clicks;
+    await twoFailures("fallback", { content: REFUSAL });
+    const fbAsk = asks("fallback")[0] || null;
+    const fbBefore = clicks - c3;
+    if (fbAsk) answer({ type: "at_once", requestId: fbAsk.requestId, stage: "failed", why: "the last message in the chat is not a reply" });
+    await wait(40);
+    const fbAfter = clicks - c3;
+
+    // A reply the reader starts stops the tries still out.
+    await twoFailures("taken", { content: REFUSAL });
+    const takenAsk = asks("taken")[0] || null;
+    handlers.GENERATION_STARTED({ chatId: "taken", generationId: "mine" });
+    await wait(20);
+    const takenStopped = !!takenAsk && sent.some((m) => m.type === "stop_at_once" && m.requestId === takenAsk.requestId);
+
+    // An error is never sent several at once.
+    const c5 = clicks;
+    await twoFailures("error", { error: "upstream connection reset" });
+    const errorAsks = asks("error").length;
+    const errorClicks = clicks - c5;
+
+    return {
+      passCount: passAsk && passAsk.count, clicksBeforeAtOnce, clicksAfterPass,
+      reroll: reroll && { text: reroll.text, messageId: reroll.messageId, swipeCount: reroll.swipeCount },
+      stopped,
+      firstCount: first && first.count, secondCount: second && second.count,
+      fbBefore, fbAfter, takenStopped, errorAsks, errorClicks,
+    };
+  });
+  await page.close();
+  check("the first try presses the button", out.clicksBeforeAtOnce === 1, out);
+  check("the second try asks for 2 at once instead", out.passCount === 2, out);
+  check("the reply that passed is added as a reroll", !!out.reroll && /lit the lamp again/.test(out.reroll.text), out.reroll);
+  check("on the reply the tries were for", !!out.reroll && out.reroll.messageId === "m2" && out.reroll.swipeCount === 2, out.reroll);
+  check("the rest are stopped once one passes", out.stopped === true, out);
+  check("nothing is pressed after a reply passed", out.clicksAfterPass === 1, out);
+  check("none passing asks again with one more", out.firstCount === 2 && out.secondCount === 3, out);
+  check("a backend that cannot run them falls back to the button", out.fbBefore === 1 && out.fbAfter === 2, out);
+  check("a reply the reader starts stops the tries", out.takenStopped === true, out);
+  check("an error is never sent several at once", out.errorAsks === 0 && out.errorClicks === 2, out);
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- a chat the host does not name ----
 // Everything in the extension is keyed by chat, so a reply arriving with no
 // chatId has to be handled rather than dropped: no retry, no watchdog and

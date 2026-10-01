@@ -8,9 +8,14 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
-## 5.10.5
+## 5.11.0
 
 _2026-10-01_
+
+### Added
+
+- **Several tries at once.** A new setting under **How it retries**, off by default. From the second try, Auto Retry sends the same prompt to your model several times at once: 2 on the second try, 3 on the third, up to **Most at once**. Each reply is checked with your usual rules, and the first one that passes is added as a new reroll. The rest are stopped. Each reply sent costs a whole reply, so read [Several tries at once](docs/tries-at-once.md) before turning it on.
+- **A new permission, `chat_mutation`.** Several tries at once uses it to add the reply that passed as a reroll. Without it, each try presses the retry button as before, and everything else works. The panel only asks for it while the setting is on.
 
 ### Fixed
 
