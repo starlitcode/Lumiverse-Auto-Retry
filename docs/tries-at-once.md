@@ -66,6 +66,20 @@ The prompt is the one your failed reply was sent with.
 - **Stop** or **Cancel** stops every reply still being written. Nothing is added after that.
 - Sending a new message yourself stops them too.
 
+## With Auto Refine
+
+Lumiverse does not announce a reroll an extension adds as a finished reply. So Auto Retry tells [Auto Refine](https://github.com/starlitcode/Lumiverse-Auto-Refine) in the page when it adds one.
+
+- With Auto Refine 1.26.0 or later and its automatic pass on, the added reroll is refined like any new reply.
+- With an older Auto Refine, or the automatic pass off, the reroll is left as it is. You can still refine it yourself.
+
+## Most tries per message
+
+**Several tries at once** works inside **Most tries per message**. It does not replace it.
+
+- The first try is always a normal retry. Several at once starts from the second try.
+- So **Most tries per message** has to be 2 or more for it to do anything. At the default of 4, tries 2, 3 and 4 are sent at once.
+
 ## The permission it needs
 
 Adding a reroll needs the `chat_mutation` permission. Lumiverse asks for it after updating to a version with this setting.

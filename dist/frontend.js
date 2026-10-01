@@ -111,6 +111,9 @@ const MAX_NOTES = 10;
 // The most replies "Several tries at once" sends together. The backend has the
 // same cap.
 const AT_ONCE_MAX = 5;
+// The page event raised when Several tries at once adds a reroll. Auto Refine
+// listens for it, so the new reply is refined like one that ended.
+const REROLL_EVENT = "auto-retry:reroll-added";
 // The roles a note may carry, and how each is offered in the panel. One list,
 // because the picker was written out twice: once to build the dropdown and
 // again to check what came back out of it, so adding a role in one place would
@@ -9045,6 +9048,16 @@ export function setup(ctx, opts) {
                 s.attempts = 0;
                 log("added a reply that passed as a new reroll", content.length + " chars");
                 showToast("Auto Retry added a reply that passed, as a new reroll.");
+                // Lumiverse raises no end event for a reroll an extension writes, so
+                // anything that acts on a finished reply, such as Auto Refine, is told
+                // in the page.
+                try {
+                    if (typeof window !== "undefined" && typeof CustomEvent === "function")
+                        window.dispatchEvent(new CustomEvent(REROLL_EVENT, {
+                            detail: { chatId: String(chatId), messageId: run.messageId, swipe: run.swipeCount },
+                        }));
+                }
+                catch (_) { }
                 return;
             }
             log("a reply passed, but it could not be added: " + why);
@@ -9757,16 +9770,17 @@ export function setup(ctx, opts) {
     let hintPop = null;
     let hintAnchor = null;
     let hintReset = null;
-    // How long the description takes to arrive and to leave.
-    const HINT_FADE = 140;
-    // The ones still fading out, so teardown does not leave a box on the page
-    // waiting on a timer that will never be allowed to run.
+    // How long a closed description stays in the page before it is taken out.
+    // Nothing fades: it disappears the moment it is closed.
+    const HINT_FADE = 0;
+    // The ones closed and waiting to be taken out, so teardown does not leave a
+    // box on the page waiting on a timer that will never be allowed to run.
     const hintGoing = new Set();
     function hideHint() {
         const going = hintPop;
-        // Cleared before the fade, not after. What is on its way out is no longer
-        // the open description: a press during the fade must open a new one rather
-        // than find this still standing and decide it is already open.
+        // Cleared first. What is on its way out is no longer the open description:
+        // a press must open a new one rather than find this still standing and
+        // decide it is already open.
         hintPop = null;
         hintAnchor = null;
         if (hintReset) {
@@ -9778,8 +9792,8 @@ export function setup(ctx, opts) {
         hintReset = null;
         if (!going)
             return;
-        // And it stops being a tooltip to anything reading the page, which is what
-        // it is: a box finishing its fade is not something to announce.
+        // And it stops being a tooltip to anything reading the page: a closed box
+        // waiting to be taken out is not something to announce.
         try {
             going.removeAttribute("role");
             going.style.opacity = "0";
@@ -9817,11 +9831,8 @@ export function setup(ctx, opts) {
                 "border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));" +
                 "box-shadow:var(--lumiverse-shadow-md,0 8px 24px rgba(0,0,0,.4));" +
                 "color:var(--lumiverse-text,#eee);font:12px/1.45 var(--lumiverse-font-family,system-ui);" +
-                // Fades in where it opens and out where it stood, rather than appearing
-                // and vanishing between two frames. It arrives on top of the rows below
-                // the one it belongs to, and something landing over what you were reading
-                // with no travel at all reads as the page having flinched.
-                "opacity:0;transition:opacity 140ms ease-out;" +
+                // Hidden until it has been placed, then shown at once, with no fade.
+                "opacity:0;" +
                 // Off screen until it has been measured, so it is never seen in the wrong
                 // place for a frame.
                 "left:0;top:-9999px";
@@ -9924,17 +9935,6 @@ export function setup(ctx, opts) {
         if (room <= 0)
             el.style.display = "none";
         placeFixed(el, left, top);
-        // Reading the layout between building it and turning the opacity up is what
-        // makes the browser treat this as a fade rather than as a value that was
-        // always one. The read is the placement above, which has already asked for
-        // the box's rect.
-        let still = false;
-        try {
-            still = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
-        }
-        catch (_) { }
-        if (still)
-            el.style.transition = "none";
         el.style.opacity = "1";
         // Tapping the description dismisses it. On a phone that is the easiest
         // place to tap, and it did nothing.

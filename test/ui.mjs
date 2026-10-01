@@ -676,9 +676,11 @@ console.log("\nhints");
         );
         const before = below.getBoundingClientRect().top;
         infos[0].click();
-        // Straight after the press, before the fade has run.
+        // Straight after the press. It is there in full at once: no fade, so
+        // nothing animates on a phone that is already busy.
         const early = document.querySelector('[role="tooltip"]');
-        const faded = !!early && Number(getComputedStyle(early).opacity) < 1;
+        const atOnce = !!early && Number(getComputedStyle(early).opacity) === 1 &&
+          /^0s$/.test(getComputedStyle(early).transitionDuration);
         await frame();
         await new Promise((r) => setTimeout(r, 220));
         const moved = Math.round(below.getBoundingClientRect().top - before);
@@ -719,7 +721,7 @@ console.log("\nhints");
         const lr = last && last.getBoundingClientRect();
         return {
           count: infos.length,
-          faded,
+          atOnce,
           moved,
           onScreen,
           afterSecond,
@@ -733,7 +735,7 @@ console.log("\nhints");
       }),
   );
   check("a hint moves nothing below it", out.moved === 0, out.moved);
-  check("and fades in rather than appearing", out.faded, out);
+  check("and appears at once, with no fade", out.atOnce, out);
   check("the popover lands on screen", out.onScreen);
   // It covers the row it is explaining. At anything under full opacity that
   // row's text reads through the description sitting on top of it, which no
@@ -2359,6 +2361,8 @@ console.log("\nseveral tries at once");
     };
 
     // One passes: it is added, and the others are stopped.
+    const told = [];
+    window.addEventListener("auto-retry:reroll-added", (e) => told.push(e.detail));
     const c0 = clicks;
     await twoFailures("pass", { content: REFUSAL });
     const passAsk = asks("pass")[0] || null;
@@ -2430,6 +2434,7 @@ console.log("\nseveral tries at once");
       reroll: reroll && { text: reroll.text, reasoning: reroll.reasoning, messageId: reroll.messageId, swipeCount: reroll.swipeCount },
       stopped,
       firstCount: first && first.count, secondCount: second && second.count,
+      told,
       fbBefore, fbAfter, takenStopped, errorAsks, errorClicks, allErrAsks, allErrClicks,
     };
   });
@@ -2441,6 +2446,9 @@ console.log("\nseveral tries at once");
     !!out.reroll && !/think/.test(out.reroll.text) && out.reroll.reasoning === "Keep the lamp lit.", out.reroll);
   check("on the reply the tries were for", !!out.reroll && out.reroll.messageId === "m2" && out.reroll.swipeCount === 2, out.reroll);
   check("the rest are stopped once one passes", out.stopped === true, out);
+  // Lumiverse raises no end event for it, so the page is told, for anything
+  // that acts on a finished reply.
+  check("the page is told a reroll was added", out.told.length === 1 && out.told[0].chatId === "pass" && out.told[0].messageId === "m2" && out.told[0].swipe === 2, out.told);
   check("nothing is pressed after a reply passed", out.clicksAfterPass === 1, out);
   check("none passing asks again with one more", out.firstCount === 2 && out.secondCount === 3, out);
   check("a backend that cannot run them falls back to the button", out.fbBefore === 1 && out.fbAfter === 2, out);
