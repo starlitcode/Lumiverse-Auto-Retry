@@ -16,8 +16,7 @@ It watches each reply and tries again when:
 - the reply is cut off mid-sentence (see [Cut-off detection](docs/detection.md#cut-off-detection))
 - the reply is an accidental out-of-character refusal, or the model breaks off mid-scene
   (see [Accidental-refusal detection](docs/detection.md#accidental-refusal-detection))
-- the reply stops arriving partway and nothing more comes for a while
-- a reply never starts or never finishes
+- a reply never starts, or stops partway and nothing more comes for a while
 - (optional, off by default) the reply is very short
 - (optional, off by default) the model leaves the scene to offer real-world support
   (see [Stopping to offer support](docs/detection.md#stopping-to-offer-support), and [Safety](docs/safety.md) before switching it on)
@@ -26,6 +25,7 @@ Also:
 
 - Every retry waits a little longer than the last, and longer again when the server says it is busy.
 - All the reasons share one retry limit, so no reply is retried more than you allow, and it can never loop forever.
+- (optional, off by default) From the second try, it can send several tries at once and keep the first reply that passes. See [Several tries at once](docs/tries-at-once.md).
 - A reply written by **Impersonate** into your input box is never retried.
 
 ## Install
@@ -67,6 +67,7 @@ I cannot control what somebody does with an extension once they have it. What I 
 
 - [When it retries](docs/detection.md): cut-off detection and accidental-refusal detection
 - [All settings](docs/settings.md): every option with its default, the panel, and turning it off
+- [Several tries at once](docs/tries-at-once.md): what it does, what it costs, and when it is used
 - [Buttons it clicks](docs/buttons.md): fixing the regenerate button, Regeneration Feedback, writing selectors
 - [The on-screen panel](docs/settings.md#the-on-screen-panel): the log, the prompt viewer and the stats
 - [Import and export](docs/import-export.md): moving your setup between devices
@@ -81,7 +82,8 @@ I cannot control what somebody does with an extension once they have it. What I 
 - It listens to Lumiverse's own generation events. When a reply goes wrong, it presses your swipe or regenerate button to try again.
 - Pressing that button is the only part that depends on the page layout. If a Lumiverse update moves the buttons, [Buttons it clicks](docs/buttons.md) shows how to point it at the new ones.
 - A small backend keeps your settings with your account, not in one browser, and holds the retry note for the one reply it is meant for.
-- It makes no network calls of its own. [Privacy](docs/privacy.md) covers the five permissions it asks for and what still works without each one.
+- With **Several tries at once** on, the backend also asks Lumiverse to send the prompt to your model several times, and adds the reply that passes as a new reroll.
+- It makes no network calls of its own. [Privacy](docs/privacy.md) covers the six permissions it asks for and what still works without each one.
 - The files Lumiverse loads are `dist/frontend.js` and `dist/backend.js`. They are plain, readable JavaScript. Nothing is minified. [Privacy](docs/privacy.md#checking-any-of-this-yourself) goes through the rest of the repo file by file.
 
 ## Credits

@@ -8,6 +8,30 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.11.0
+
+_2026-10-01_
+
+### Added
+
+- **Several tries at once.** A new setting under **How it retries**, off by default. From the second try, Auto Retry sends the same prompt to your model several times at once: 2 on the second try, 3 on the third, up to **Most at once**. Each reply is checked with your usual rules, and the first one that passes is added as a new reroll. The rest are stopped. Each reply sent costs a whole reply, so read [Several tries at once](docs/tries-at-once.md) before turning it on. Lumiverse does not announce the added reroll as a finished reply, so Auto Retry tells Auto Refine 1.26.0 or later, which then refines it like any new reply. Suggested by a Discord user.
+- **A new permission, `chat_mutation`.** Several tries at once uses it to add the reply that passed as a reroll. Without it, each try presses the retry button as before, and everything else works. The panel only asks for it while the setting is on.
+
+### Changed
+
+- **Easier to use on a phone and with a mouse.** On a phone, the **?** buttons, **Expand**, **Add another note**, the section headings and the lists are at least 32 pixels, and a tick box answers a tap just around it. With a mouse, the tick boxes, lists, **?** buttons and section headings light up when you point at them.
+- **Shorter descriptions.** Most of the long descriptions under the **?** buttons are shorter and plainer. The table of settings in the docs uses plain words in place of terms such as "master switch" and "whitelist".
+- **Pop-ups appear at once.** The **Reset…** dialog, the full-size editor and the warning before the crisis-support setting used to grow or fade in. They now appear with no animation. The description under each **?** still fades in and out. The pop-up for a retry, an error or switching on and off is unchanged.
+
+### Fixed
+
+- **A background call could take the retry note.** Lumiverse marks a call that an extension makes in the background, such as a rewrite, as "quiet". If one ran while a note was waiting for its retry, it could take the note, and the retry then went out without it. Quiet calls are now skipped: they never take the note, and they do not replace the prompt shown on the **Prompt** tab.
+- **Saving unlocked the notes of a set that comes with it.** Save closes the panel, and opening it again forgot which note set was picked. The set's notes were then open to editing as if they were yours. The panel now opens on the set that was picked, with its notes still locked, as long as the notes are still that set's.
+- **Your own hard failures did nothing for an error written as the reply.** Some providers write their error into the reply text instead of reporting an error. That reply was retried as short or cut off, whatever **Your own hard failures** held. Your phrases are now checked against the reply too, before any other reason to retry. The built-in list is not, so a story is not mistaken for an error.
+- **An error sent as an object could never match Your own hard failures.** It was read as "[object Object]". Its message is now read instead.
+
+---
+
 ## 5.10.4
 
 _2026-09-26_

@@ -4,7 +4,7 @@ This page covers the debug report you can paste into a bug report, the on-screen
 
 ## If it seems to do nothing
 
-Check the top of the settings panel first. A permission that was never granted causes no error: the events the extension listens for simply never arrive, so it looks installed and working.
+Check the top of the settings panel first. A permission that was never granted causes no error: the events the extension listens for never arrive, so it looks installed and working.
 
 - When a permission is missing, the panel says which one and what it stops.
 - If you refused one on purpose, press the × on its note to hide it until you reload.

@@ -35,6 +35,9 @@ const Z_HINT = 2147483300;
 const Z_OVERLAY = 2147483600;
 
 const STORE_KEY = "lv-auto-retry:settings:v1";
+// Which preset each preset bar was last on, in this browser only. A screen
+// position and a pick mean nothing on another device, so neither is synced.
+const PICK_KEY = "lv-auto-retry:preset-pick:v1";
 // Written the first time this version runs, so the one-time switch to
 // swiping happens once. Up here with the other keys because the settings are
 // read before most of setup() exists, and a const declared further down is
@@ -117,6 +120,12 @@ const NOTE_ACK_MS = 4000;
 // above it the notes start costing more than they buy on every single retry.
 // Use fewer by adding fewer: one is the floor and it is the default.
 const MAX_NOTES = 10;
+// The most replies "Several tries at once" sends together. The backend has the
+// same cap.
+const AT_ONCE_MAX = 5;
+// The page event raised when Several tries at once adds a reroll. Auto Refine
+// listens for it, so the new reply is refined like one that ended.
+const REROLL_EVENT = "auto-retry:reroll-added";
 // The roles a note may carry, and how each is offered in the panel. One list,
 // because the picker was written out twice: once to build the dropdown and
 // again to check what came back out of it, so adding a role in one place would
@@ -143,7 +152,7 @@ const STREAM_BUF_MAX = 200000;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.10.4";
+const VERSION = "5.11.0";
 
 // Whether two saved settings hold the same values, whatever order their keys
 // were written in. A key left undefined counts as not there, the way it is
@@ -189,6 +198,10 @@ const CONFIG = {
 
   // retry budget
   maxRetries: 4,
+  // From the second try on, send the prompt several times at once and keep the
+  // first reply that passes. Off by default: each one is a whole reply to pay for.
+  tryAtOnce: false,
+  tryAtOnceMax: 3,
   // stop retrying for a while after several whole runs fail in a row: at that
   // point the provider is down rather than the reply being unlucky, and more
   // tries only burn tokens. Cleared by the next reply that comes back fine.
@@ -518,7 +531,7 @@ const SCHEMA: Group[] = [
         key: "showFloatingToggle",
         label: "Floating on/off button",
         type: "bool",
-        hint: "Off by default. Puts a small round button on top of the chat: tap it to turn Auto Retry on or off, drag it anywhere, hold or right-click it for a menu. While it is on, the settings and the panel live in that menu instead of in Extras.",
+        hint: "Off by default. A round button over the chat. Tap it to turn Auto Retry on or off, drag it to move it, or hold it for a menu with the settings and the panel.",
       },
       {
         key: "floatingToggleSize",
@@ -529,25 +542,25 @@ const SCHEMA: Group[] = [
         min: 28,
         max: 96,
         live: true,
-        hint: "How wide the floating button is, in pixels. The default of " + def("floatingToggleSize") + " is about a comfortable thumb. The button resizes as you type, so you can see it on the chat before you save.",
+        hint: "How wide the floating button is, in pixels. The default is " + def("floatingToggleSize") + ". It changes size as you type, so you can see it before you save.",
       },
       {
         key: "showExtrasToggle",
         label: "On/off button in the Extras menu",
         type: "bool",
-        hint: "Off by default. Adds an Auto Retry on/off button to the chat input's Extras menu, which takes up no room on the screen. It is hidden while the floating button is on, since that is the same switch.",
+        hint: "Off by default. Adds an on/off button to the Extras menu by the chat box. It is hidden while the floating button is on.",
       },
       {
         key: "toast",
         label: "Show a pop-up on each retry",
         type: "bool",
-        hint: "A small message telling you it is retrying, with a Cancel button to stop it. It counts the wait down as it goes, and says what the retry is for and which try it is, so a long wait looks like a wait rather than like nothing happening.",
+        hint: "A small message that says it is retrying, why, and which try it is. It counts down the wait and has a Cancel button.",
       },
       {
         key: "liveLog",
         label: "Show the on-screen panel",
         type: "bool",
-        hint: "A panel with four tabs. Log is what it is doing as it happens, Prompt is what went to the model, Stats is what it keeps retrying for, and Replaced is the last reply a retry threw away. Handy on a phone, where there is no console to open.",
+        hint: "A panel with four tabs: Log, Prompt, Stats and Replaced. It shows what Auto Retry is doing, which helps on a phone with no console.",
       },
       {
         key: "panelHome",
@@ -583,7 +596,7 @@ const SCHEMA: Group[] = [
         type: "num",
         min: 0,
         max: 10000,
-        hint: "What it charges for the reply the model writes. Its price list calls this output, and it is usually the dearer of the two. Same as above: the number on its own, or paste the line and let it take the number out.",
+        hint: "Your provider's price for the text the model writes, per million tokens. Type the number, or paste the whole line.",
       },
     ],
   },
@@ -604,14 +617,30 @@ const SCHEMA: Group[] = [
         // not a third one.
         min: 1,
         max: 50,
-        hint: "How many times it retries one message before giving up. 3 to 5 suits most people. The lowest is 1, since 0 would leave the extension on and never retrying; to stop it retrying, switch it off instead, either everywhere or in this chat.",
+        hint: "How many times it retries one message before it gives up. 3 to 5 suits most people. To stop retrying, turn Auto Retry off instead of using 0.",
+      },
+      {
+        key: "tryAtOnce",
+        label: "Several tries at once",
+        type: "bool",
+        hint: "Off by default. From the second try, sends the same prompt several times at once and keeps the first reply that passes. Each one costs a whole reply.",
+      },
+      {
+        key: "tryAtOnceMax",
+        needs: ["tryAtOnce"],
+        label: "Most at once",
+        type: "num",
+        int: true,
+        min: 2,
+        max: AT_ONCE_MAX,
+        hint: "The second try sends 2 at once, the third sends 3, and so on, up to this number.",
       },
       {
         key: "pauseWhenFailing",
         run: "givingUp",
         label: "Pause when everything is failing",
         type: "bool",
-        hint: "On by default. Several whole runs giving up in a row usually means the provider is down, so Auto Retry pauses instead of retrying on every message. The next reply that works clears it, and you can still send by hand.",
+        hint: "On by default. If several messages in a row use up all their tries, Auto Retry pauses. The next reply that works ends the pause.",
       },
       {
         key: "breakerRuns",
@@ -622,7 +651,7 @@ const SCHEMA: Group[] = [
         int: true,
         min: 1,
         max: 20,
-        hint: "How many whole runs have to give up back to back before it pauses. A run is one message that used up all its tries. At the default of " + def("breakerRuns") + ", with the try limit at " + def("maxRetries") + ", that is " + (CONFIG.breakerRuns * CONFIG.maxRetries) + " retries before it stops.",
+        hint: "How many messages in a row have to use up all their tries before it pauses. The default is " + def("breakerRuns") + ".",
       },
       {
         key: "breakerPauseMins",
@@ -633,7 +662,7 @@ const SCHEMA: Group[] = [
         int: true,
         min: 1,
         max: 180,
-        hint: "How long Auto Retry stays off once it pauses. A short pause suits a provider that drops out for a moment and comes back. A long one suits a real outage. Any reply that comes back fine ends the pause early, whatever this is set to.",
+        hint: "How long Auto Retry stays off after it pauses. Any reply that comes back fine ends the pause early.",
       },
       {
         key: "retryDelayMs",
@@ -652,7 +681,7 @@ const SCHEMA: Group[] = [
         type: "num",
         min: 1,
         max: 10,
-        hint: "Each retry waits this many times longer than the last, so the server is not asked again too fast. 2 means the wait doubles each time. Stays at 1 or above.",
+        hint: "Each retry waits this many times longer than the one before. 2 doubles the wait each time. The lowest is 1.",
       },
       {
         key: "maxDelayMs",
@@ -672,7 +701,7 @@ const SCHEMA: Group[] = [
         int: true,
         min: 0,
         max: 600000,
-        hint: 'If the server says "too many requests," it waits at least this long. The default is ' + defaultMs("rateLimitDelayMs") + '. Most shared and free tiers count per minute, so a shorter wait usually spends another try hitting the same limit.',
+        hint: 'If the server says "too many requests", it waits at least this long. The default is ' + defaultMs("rateLimitDelayMs") + '. A shorter wait often hits the same limit again.',
       },
       {
         key: "jitter",
@@ -685,13 +714,13 @@ const SCHEMA: Group[] = [
         key: "keepReplaced",
         label: "Keep the reply a retry replaced",
         type: "bool",
-        hint: "Holds on to the last reply a retry threw away in this chat, to read back from the panel's Replaced tab. Kept in this tab's memory only: never written down, never sent anywhere, and gone when you close the tab.",
+        hint: "Keeps the last reply a retry replaced in this chat, to read on the panel's Replaced tab. It is only kept in this browser tab, and is gone when you close it.",
       },
       {
         key: "retryByNewReroll",
         label: "Retry by adding a new reroll",
         type: "bool",
-        hint: "On, the default: a retry adds a reroll with your next / swipe button, so a reply it was wrong to retry is still there to swipe back to. Off: it redoes the reply in place, which on some setups clears the other rerolls.",
+        hint: "On by default. A retry adds a new reroll, so you can swipe back to the old reply. Off: it redoes the reply in place, which can clear other rerolls.",
       },
     ],
   },
@@ -719,7 +748,7 @@ const SCHEMA: Group[] = [
         needs: ["ignoreHardErrors"],
         label: "Your own hard failures",
         type: "text",
-        hint: "Wording for an error that will not fix itself, one per line, used with the built-in list. A phrase also in Your own refusal phrases is retried as a refusal.",
+        hint: "Wording for an error that will not fix itself, one per line. Also checked against a reply, for providers that write their error as the reply.",
       },
       {
         key: "retryOnEmpty",
@@ -743,13 +772,13 @@ const SCHEMA: Group[] = [
         key: "retryOnTruncated",
         label: "It cut off mid-sentence",
         type: "bool",
-        hint: "Retry when a reply stops partway, like an open quote, an action opened with an asterisk and never closed, or a trailing comma. It is careful, so it does not throw away good writing.",
+        hint: "Retry when a reply stops partway, such as an open quote, an unclosed asterisk, or a trailing comma.",
       },
       {
         key: "retryOnNoPunct",
         label: "It stops on a word, with nothing after it",
         type: "bool",
-        hint: "On by default. Catches a reply that stops on a word with nothing after it. Punctuation in any script counts as an ending, and so does an emoji, so a scene finishing on one is left alone.",
+        hint: "On by default. Catches a reply that ends on a word with no punctuation after it. An emoji or any punctuation counts as an ending.",
       },
       {
         key: "retryOnShort",
@@ -765,13 +794,13 @@ const SCHEMA: Group[] = [
         int: true,
         min: 0,
         max: 100000,
-        hint: "Replies with fewer characters than this count as too short. Only the words you read are counted, so a reasoning block and the markup around a line are both left out.",
+        hint: "Replies with fewer characters than this count as too short. Thinking and markup are not counted.",
       },
       {
         key: "retryOnRefusal",
         label: "It looks like an accidental refusal",
         type: "bool",
-        hint: "Retry when the model breaks character to decline: says it is an AI, or that it cannot help or continue. It stays narrow, so an in-character \"I can't do that\" is left alone.",
+        hint: "Retry when the model steps out of the story to decline, such as saying it is an AI or cannot continue. A character saying no is left alone.",
       },
       {
         key: "stuckTimeoutMs",
@@ -781,7 +810,7 @@ const SCHEMA: Group[] = [
         int: true,
         min: 0,
         max: 600000,
-        hint: "If a reply begins but no words appear in this long, treat it as stuck and retry. The default of " + defaultMs("stuckTimeoutMs") + " is long enough for a local model to load, a long prompt to be read, and a reasoning model to think on an endpoint that sends nothing until the answer starts. Set to 0 to switch off.",
+        hint: "If a reply starts but no words come in this long, it retries. The default is " + defaultMs("stuckTimeoutMs") + ", to give slow and thinking models time. 0 turns it off.",
       },
       {
         key: "idleTimeoutMs",
@@ -791,7 +820,7 @@ const SCHEMA: Group[] = [
         int: true,
         min: 0,
         max: 600000,
-        hint: "If words were appearing and then stop for this long, treat it as frozen and retry. The default of " + defaultMs("idleTimeoutMs") + " allows for a reasoning model going quiet between blocks. Shorter than this re-rolls replies that were still coming. Set to 0 to switch off.",
+        hint: "If words stop coming for this long partway through a reply, it retries. The default is " + defaultMs("idleTimeoutMs") + ". 0 turns it off.",
       },
     ],
   },
@@ -820,7 +849,7 @@ const SCHEMA: Group[] = [
         needs: ["refusalUseBuiltins"],
         label: "Also catch the model breaking off",
         type: "bool",
-        hint: "On by default. Catches a reply that stops rather than declines: \"I'll stop here\", \"let's change the subject\". Only counted when it is how the reply ends, and never when a character says it out loud.",
+        hint: "On by default. Catches a reply that ends by stopping the scene, like \"I'll stop here\". A character saying it in the story does not count.",
       },
       {
         key: "refusalCatchCrisis",
@@ -828,7 +857,7 @@ const SCHEMA: Group[] = [
         needs: ["refusalUseBuiltins"],
         label: "Also catch it stopping to offer support",
         type: "bool",
-        hint: "Off by default, and it asks you to read a warning first. Catches a reply that leaves the story to speak to you rather than to your character. Read the safety page in the docs before turning it on.",
+        hint: "Off by default. Catches a reply that leaves the story to talk to you. Read the safety page in the docs before turning it on.",
       },
       {
         key: "refusalIgnoreQuoted",
@@ -842,7 +871,7 @@ const SCHEMA: Group[] = [
         run: "yourWords",
         label: "Your own refusal phrases",
         type: "text",
-        hint: "Extra wording that counts as a refusal, one per line. Always used, even with the built-in list off, and also checked against error text. Lines under three characters are ignored.",
+        hint: "Extra wording that counts as a refusal, one per line. Used even with the built-in list off. Lines under three characters are ignored.",
       },
       {
         key: "refusalPhraseSubs",
@@ -850,14 +879,14 @@ const SCHEMA: Group[] = [
         needs: ["refusalUseBuiltins"],
         label: "Reword the built-in phrases",
         type: "text",
-        hint: 'Optional. Reword the built-in phrases using "old => new" rules, one per line. Example: assist => help. This changes what the built-in list matches, so use wording your model actually refuses with. It never touches a reply.',
+        hint: "Optional. Changes the wording of the built-in phrases, one \"old => new\" rule per line, for example assist => help. It never changes a reply.",
       },
       {
         key: "refusalIgnorePhrases",
         run: "yourWords",
         label: "Never treat these as a refusal",
         type: "text",
-        hint: "Optional. If a reply contains any of these phrases, one per line, it is never counted as a refusal. This wins over everything else. A line under three characters is ignored, since it would match almost every reply.",
+        hint: "Optional, one phrase per line. A reply with any of these is never counted as a refusal. Lines under three characters are ignored.",
       },
       {
         key: "refusalMaxChars",
@@ -867,27 +896,27 @@ const SCHEMA: Group[] = [
         int: true,
         min: 0,
         max: 100000,
-        hint: "Replies longer than this are treated as real writing and left alone. The default of " + def("refusalMaxChars") + " suits most cases. Set to 0 to check replies of any length.",
+        hint: "Replies longer than this are never counted as a refusal. The default is " + def("refusalMaxChars") + ". 0 checks replies of any length.",
       },
       {
         key: "refusalStripThinking",
         run: "howFar",
         label: "Ignore the thinking / reasoning",
         type: "bool",
-        hint: "On by default. Only the final reply is checked for a refusal, never the thinking, so one the model weighs up and leaves out will not cause a retry. Refusal matching only: the empty and cut-off checks always look past it.",
+        hint: "On by default. Only the reply is checked for a refusal, not the thinking. The checks for blank and cut-off replies always skip the thinking.",
       },
       {
         key: "refusalThinkTags",
         run: "howFar",
         label: "Extra thinking tag names",
         type: "text",
-        hint: "Optional, one per line, just the name with no brackets or pipes. The common reasoning tags are handled already, and a name you add is recognised in all four wrappers.",
+        hint: "Optional. One tag name per line, with no brackets. The common thinking tags are already known.",
       },
       {
         key: "refusalNote",
         label: "Send a note with a refusal retry",
         type: "bool",
-        hint: "Off by default. Adds your note to the prompt for one retry. It goes to the model only: nothing is written to your chat. Needs the interceptor permission, and does nothing while the box below is empty.",
+        hint: "Off by default. Adds your note to the prompt for a retry. Only the model sees it. Needs the interceptor permission.",
       },
       {
         key: "refusalNotes",
@@ -909,7 +938,7 @@ const SCHEMA: Group[] = [
           { value: "start", label: "At the very start" },
           { value: "end", label: "At the very end" },
         ],
-        hint: "Where the due notes go, as one block. After the last message puts them right before the reply. At the very end goes after anything your Lumiverse adds behind the chat.",
+        hint: "Where the notes go in the prompt. After the last message puts them just before the reply. At the very end puts them after everything else.",
       },
       {
         key: "refusalNoteStrictType",
@@ -917,7 +946,7 @@ const SCHEMA: Group[] = [
         run: "wholeList",
         label: "Only send them on a regenerate or a swipe",
         type: "bool",
-        hint: "Off by default, and best left off. Most builds call every generation \"normal\", including a regenerate, so turning this on stops notes going out at all.",
+        hint: "Off by default. Best left off: Lumiverse marks most replies as normal, even a regenerate, so this can stop notes going out at all.",
       },
     ],
   },
@@ -931,14 +960,14 @@ const SCHEMA: Group[] = [
         label: "Your next / swipe button",
         type: "text",
         selector: true,
-        hint: "The button it clicks first, because a swipe adds a reroll and leaves the reply that was there. Set this one even if you never swipe by hand: it is what keeps a retry from overwriting a reply it should not have touched.",
+        hint: "The button it clicks first. A swipe adds a new reroll, so the old reply stays. Set it even if you never swipe yourself.",
       },
       {
         key: "regenerateSelector",
         label: "Your regenerate button",
         type: "text",
         selector: true,
-        hint: "The one it falls back to, and the one it clicks first if you turn the setting at the bottom off. It redoes the reply where it stands, so what was there is replaced.",
+        hint: "Used when there is no swipe button, or when Retry by adding a new reroll is off. It replaces the reply.",
       },
       {
         key: "stopSelector",
@@ -951,7 +980,7 @@ const SCHEMA: Group[] = [
         key: "confirmButtonsCustom",
         label: "My dialog's button says something else",
         type: "bool",
-        hint: "Leave this off unless a retry opens a dialog Auto Retry does not get past. It already knows Skip, Regenerate, Confirm, Proceed, Submit and OK, and that list is used either way.",
+        hint: "Leave this off unless a retry opens a dialog that Auto Retry cannot get past. It already knows Skip, Regenerate, Confirm, Proceed, Submit and OK.",
       },
       {
         key: "confirmButtonLabels",
@@ -2764,10 +2793,102 @@ const statedWait = (err: any): number => {
 // Your own wording is checked first and counts the same as the built-in list.
 // Providers word these however they like, and a list in here can only ever
 // carry the ones somebody has already hit.
+// The words of an error, whatever shape it arrives in. A build can send the
+// error as an object rather than as text, and String() of an object is
+// "[object Object]", which no phrase ever matches.
+function errorText(err: any): string {
+  if (err == null) return "";
+  if (typeof err === "string") return err;
+  try {
+    const inner = err.error && typeof err.error === "object" ? err.error : null;
+    const said = err.message || (inner && inner.message) || err.error || err.detail;
+    if (typeof said === "string" && said) return said;
+    const whole = JSON.stringify(err);
+    if (whole && whole !== "{}") return whole;
+  } catch (_) {}
+  return String(err);
+}
+
+// Whether a reply's own text is one of your hard failures. Some providers put
+// their error into the reply instead of reporting an error, and a reply like
+// that would otherwise be retried as short, cut off or a refusal. Only your
+// own list is read here: the built-in one names words such as "permission"
+// that a story can use.
+function isOwnHardFailure(text: any, cfg?: any): boolean {
+  const lower = normalizeForMatch(String(text == null ? "" : text)).toLowerCase();
+  if (!lower) return false;
+  for (const p of splitPhrases(cfg && cfg.hardErrorPhrases)) if (lower.includes(p)) return true;
+  return false;
+}
+
+// What a reply with text in it should be retried for, in the order the checks
+// run, or "" when it passes. HARD_FAILURE means one of your own hard failures,
+// which is never retried. Used for a reply that ended in the chat and for each
+// reply that comes back from several tries at once, so both are judged the same.
+const HARD_FAILURE = "hard failure";
+function replyProblem(content: string, thought: string, cfg: any): string {
+  // A provider error written into the reply, matching one of your own hard
+  // failures. Checked before every other reason, since each of them would read
+  // an error message as a bad reply and try again.
+  if (cfg.ignoreHardErrors && isOwnHardFailure(content, cfg)) return HARD_FAILURE;
+  // Inline-reasoning models can put everything, refusal included, inside a
+  // think block and never write a reply. The raw content is not empty then,
+  // but nothing outside the thinking is, so it counts as empty.
+  if (cfg.retryOnEmpty && stripThinkingAlways(content, cfg).trim().length === 0)
+    return "thinking only, no reply";
+  if (cfg.retryOnSpam || cfg.retryOnSpamThinking) {
+    const where = spamVerdict(content, thought, cfg, {
+      thinking: !!cfg.retryOnSpamThinking,
+      reply: !!cfg.retryOnSpam,
+    });
+    if (where)
+      return where === "thinking" ? "thinking was one character over and over" : "one character over and over";
+  }
+  if (cfg.retryOnTruncated && looksTruncated(content, cfg.retryOnNoPunct, cfg)) return "cut off";
+  if (cfg.retryOnRefusal) {
+    const verdict = refusalVerdict(content, cfg);
+    if (verdict.refusal)
+      return verdict.kind === "crisis"
+        ? CRISIS_REASON
+        : verdict.kind === "breakoff"
+          ? BREAKOFF_REASON
+          : REFUSAL_REASON;
+  }
+  // Measured on the visible reply, not the raw output. A reasoning block can
+  // run to hundreds of characters, and markup adds tens per line, so counting
+  // either would let a two-word reply pass a length test set for prose.
+  if (
+    cfg.retryOnShort &&
+    stripMarkup(stripThinkingAlways(content, cfg)).trim().length < cfg.minChars
+  )
+    return "short";
+  return "";
+}
+
+// A model that writes its thinking into the reply text, ahead of the reply.
+// Lumiverse takes that apart for a reply it streams, and does not for text an
+// extension adds, so it is taken apart here: the thinking goes in the
+// reroll's own thinking, where Lumiverse shows it, and the reply in the
+// reroll. Thinking anywhere but at the start is left where it is.
+function splitLeadingThinking(content: string, thought: string, cfg: any): { text: string; thinking: string } {
+  const visible = stripThinkingAlways(content, cfg).trim();
+  if (!visible || visible === content) return { text: content, thinking: thought };
+  const at = content.lastIndexOf(visible);
+  if (at <= 0 || at + visible.length !== content.length) return { text: content, thinking: thought };
+  if (thought.trim()) return { text: visible, thinking: thought };
+  // The tags around it go: what is left is what the model thought.
+  const inner = content
+    .slice(0, at)
+    .trim()
+    .replace(/^<[^>\n]*>\s*/, "")
+    .replace(/\s*<[^>\n]*>$/, "")
+    .trim();
+  return { text: visible, thinking: inner };
+}
 function isHardError(err: any, cfg?: any): boolean {
   if (!err) return false;
-  const text = String(err);
-  const lower = text.toLowerCase();
+  const text = errorText(err);
+  const lower = normalizeForMatch(text).toLowerCase();
   for (const p of splitPhrases(cfg && cfg.hardErrorPhrases)) if (lower.includes(p)) return true;
   return /\b(?:400|401|402|403|404|405|406|411|413|415|422|invalid api key|authentication|unauthorized|not found|does not exist|model missing|insufficient balance|permission|forbidden|not allowed)\b/i.test(
     text,
@@ -3869,7 +3990,7 @@ export function setup(ctx: Ctx, opts?: any) {
   // than guessed at: a missing permission raises nothing, so without asking,
   // the only evidence is a feature doing nothing.
   let permGranted: Record<string, boolean | null> = {};
-  let permList: Array<{ name: string; costs: string }> = [];
+  let permList: Array<{ name: string; costs: string; onlyFor?: string }> = [];
   let permPaint: (() => void) | null = null;
   // Permissions whose note has been put away. Some of these are meant to be
   // refused: somebody who does not want their prompt read declines the
@@ -4486,7 +4607,10 @@ export function setup(ctx: Ctx, opts?: any) {
         : "About " + money(one) + " a retry at this size." +
           (stats.retries
             ? " The " + stats.retries + (stats.retries === 1 ? " retry" : " retries") +
-              " this session come to about " + money(one * stats.retries) + "."
+              (stats.extraReplies
+                ? ", and " + stats.extraReplies + " more " + (stats.extraReplies === 1 ? "reply" : "replies") + " sent at once,"
+                : "") +
+              " this session come to about " + money(one * (stats.retries + stats.extraReplies)) + "."
             : "") +
           covers;
       body.appendChild(cost);
@@ -4842,6 +4966,7 @@ export function setup(ctx: Ctx, opts?: any) {
         // Counting starts again from now, so the clock resets with the counts
         // or the rate below them would be measured against the wrong window.
         stats.retries = 0;
+        stats.extraReplies = 0;
         stats.gaveUp = 0;
         stats.good = 0;
         stats.notesSent = 0;
@@ -6390,6 +6515,8 @@ export function setup(ctx: Ctx, opts?: any) {
         "floatingToggleSize",
         "showExtrasToggle",
         "maxRetries",
+        "tryAtOnce",
+        "tryAtOnceMax",
         "pauseWhenFailing",
         "breakerRuns",
         "breakerPauseMins",
@@ -7260,6 +7387,8 @@ export function setup(ctx: Ctx, opts?: any) {
       suppressUntil: 0,
       startWatchdog: null,
       expectingStart: 0,
+      // Several tries at once that are still out, or null.
+      atOnce: null,
     };
     chats.set(key, s);
     evictIdleChats();
@@ -7288,6 +7417,9 @@ export function setup(ctx: Ctx, opts?: any) {
   // "it retries too much".
   const stats = {
     retries: 0,
+    // Replies sent beyond the first by several tries at once. Each is a whole
+    // reply to pay for, so the cost line counts them with the retries.
+    extraReplies: 0,
     gaveUp: 0,
     good: 0,
     // Notes the backend confirmed it attached, and notes it dropped with the
@@ -7323,6 +7455,10 @@ export function setup(ctx: Ctx, opts?: any) {
   // What one chat is doing, or nothing if it is doing nothing worth saying.
   function chatStatus(s: any): { text: string; busy: boolean } | null {
     if (!s) return null;
+    // The count of replies back only moves when one lands, and a reply can take
+    // a minute, so how long the tries have been out is said as well.
+    if (s.atOnce)
+      return { text: atOnceText(s.atOnce) + ", " + sayTime(Date.now() - s.atOnce.at), busy: true };
     // Read from when the retry is due rather than from the timer that fires it.
     // The timer is assigned after the message is built, so asking for the timer
     // meant the first paint fell through to whatever else was true and the
@@ -7752,7 +7888,10 @@ export function setup(ctx: Ctx, opts?: any) {
   // what makes Stop and Cancel actually stop things.
   function standDown(chatId: string, announce?: boolean) {
     const s = st(chatId);
-    const hadPending = s.pending || !!s.timer || s.attempts > 0;
+    const hadPending = s.pending || !!s.timer || s.attempts > 0 || !!s.atOnce;
+    // Tries still out are stopped, so nothing is added after the reader has
+    // taken over.
+    endAtOnce(s, true);
     // Otherwise a dialog raised by the retry that was just called off could
     // still be confirmed, starting a reply the user had stopped.
     clearConfirmWatch();
@@ -8161,8 +8300,8 @@ export function setup(ctx: Ctx, opts?: any) {
         // The "?" beside each setting. Its size is here rather than inline on
         // the button because an inline style cannot be answered by a media
         // query, and this needs one: 18px is comfortable under a mouse and
-        // small under a thumb, so a screen that is touched gets 28px, which
-        // clears the 24px minimum target size. A computer keeps the smaller
+        // small under a thumb, so a screen that is touched gets 32px, the
+        // smallest tap target this panel uses. A computer keeps the smaller
         // one, where the pointer is precise and the rows are read a screenful
         // at a time.
         //
@@ -8172,7 +8311,27 @@ export function setup(ctx: Ctx, opts?: any) {
         // setting it explains.
         "button[data-ar-hint]{width:18px;height:18px;font-size:11px}" +
         "@media (pointer:coarse){" +
-        "button[data-ar-hint]{width:28px;height:28px;font-size:14px}}";
+        "button[data-ar-hint]{width:32px;height:32px;font-size:14px}}" +
+        // Under a mouse, everything that can be pressed answers the pointer,
+        // the same as the buttons already do. A ring for the tick boxes and
+        // the "?", since a box that is ticked already wears the accent edge.
+        // Only where the device can hover: a phone has none, and a tap does
+        // the work either way.
+        "@media (hover:hover){" +
+        "[data-ar-check]:hover:not(:disabled){box-shadow:0 0 0 3px var(--lumiverse-primary-020,rgba(147,112,219,.2))}" +
+        "button[data-ar-hint]:hover{box-shadow:0 0 0 2px var(--lumiverse-primary-050,rgba(147,112,219,.5))}" +
+        "[data-ar-sechead]:hover{background:var(--lumiverse-fill-subtle,rgba(128,128,128,.08))}" +
+        "select[data-ar-field]:hover:not(:focus):not(:disabled){" +
+        "border-color:var(--lumiverse-border-hover,rgba(147,112,219,.25))!important}}" +
+        // A finger needs room. A tick box keeps its size and answers a tap a
+        // little way around it; the buttons, section headings and lists are at
+        // least 32px high. Marked important because some of the buttons are
+        // made smaller inline for a mouse.
+        "@media (pointer:coarse){" +
+        "[data-ar-check]::before{content:\"\";position:absolute;inset:-6px}" +
+        "button[data-ar-btn]{min-height:32px!important}" +
+        "[data-ar-sechead]{min-height:32px;box-sizing:border-box}" +
+        "select[data-ar-field]{min-height:32px}}";
       (document.head || document.documentElement).appendChild(el);
       panelStyleEl = el;
     } catch (_) {}
@@ -8510,7 +8669,8 @@ export function setup(ctx: Ctx, opts?: any) {
 
   function scheduleRetry(chatId: string, reason: string, err?: any) {
     const s = st(chatId);
-    if (!cfg.enabled || s.pending) return;
+    // Tries at once still out are this chat's retry already.
+    if (!cfg.enabled || s.pending || s.atOnce) return;
     if (chatIsOff(chatId)) {
       log("this chat is switched off, not retrying", chatId);
       return;
@@ -8600,56 +8760,321 @@ export function setup(ctx: Ctx, opts?: any) {
     });
     startToastCountdown(s);
     paintNow();
-    s.timer = setTimeout(async () => {
+    s.timer = setTimeout(() => {
       s.timer = null;
       s.retryAt = 0;
       s.pending = false;
-      s.selfTriggered = true;
-      s.retryClickAt = Date.now();
-      // Before the click, and awaited, so the note is in place by the time the
-      // generation starts rather than racing it.
-      //
-      // Asked first whether there is anything to click at all. Arming and then
-      // taking it back worked, but it spent the whole acknowledgement wait
-      // finding that out, and for the length of that wait the backend held a
-      // note armed for a generation that was never going to happen. A DOM query
-      // is free and answers the question before any of that starts.
-      // A moment's grace before deciding there is nothing to click. The host
-      // swaps its stop button back for its own controls on its own schedule, and
-      // a retry that looked once, at the wrong instant, reported the button
-      // missing while it was sitting on screen a breath later.
-      for (let waited = 0; !pickRetryControl() && waited < CONTROL_GRACE_MS; waited += 150) {
-        if (Date.now() < s.suppressUntil) break;
-        await new Promise((r) => setTimeout(r, 150));
-      }
-      if (pickRetryControl()) await armRefusalNote(chatId, reason, s.attempts);
-      // Stop or Cancel can land during that wait, and the click below would
-      // restart a reply the user had just called off.
-      if (Date.now() < s.suppressUntil) {
-        disarmRefusalNote(chatId);
-        s.selfTriggered = false;
-        return;
-      }
-      // Marked before the click, not after: some builds dispatch the start event
-      // straight off the click, and that start has to be able to cancel the
-      // watchdog rather than land before it exists.
-      s.expectingStart = Date.now();
-      const before = confirmSnapshot();
-      // Armed before the click, not after: a build that puts its dialog on
-      // screen during the click itself would otherwise not be seen until the
-      // backstop timer, and the dialog would visibly linger.
-      watchForConfirm(before);
-      const via = fireRetry();
-      if (!via) {
-        disarmRefusalNote(chatId);
-        clearConfirmWatch();
-        s.expectingStart = 0;
-        s.selfTriggered = false;
-        s.attempts = 0;
-        return;
-      }
-      armStartWatchdog(chatId, via, true);
+      if (atOnceFits(chatId, reason, s.attempts)) runAtOnce(chatId, reason);
+      else clickRetry(chatId, reason);
     }, delay);
+  }
+
+  // The usual retry: press the host's own button and watch for the reply it
+  // starts.
+  async function clickRetry(chatId: string, reason: string) {
+    const s = st(chatId);
+    s.selfTriggered = true;
+    s.retryClickAt = Date.now();
+    // Before the click, and awaited, so the note is in place by the time the
+    // generation starts rather than racing it.
+    //
+    // Asked first whether there is anything to click at all. Arming and then
+    // taking it back worked, but it spent the whole acknowledgement wait
+    // finding that out, and for the length of that wait the backend held a
+    // note armed for a generation that was never going to happen. A DOM query
+    // is free and answers the question before any of that starts.
+    // A moment's grace before deciding there is nothing to click. The host
+    // swaps its stop button back for its own controls on its own schedule, and
+    // a retry that looked once, at the wrong instant, reported the button
+    // missing while it was sitting on screen a breath later.
+    for (let waited = 0; !pickRetryControl() && waited < CONTROL_GRACE_MS; waited += 150) {
+      if (Date.now() < s.suppressUntil) break;
+      await new Promise((r) => setTimeout(r, 150));
+    }
+    if (pickRetryControl()) await armRefusalNote(chatId, reason, s.attempts);
+    // Stop or Cancel can land during that wait, and the click below would
+    // restart a reply the user had just called off.
+    if (Date.now() < s.suppressUntil) {
+      disarmRefusalNote(chatId);
+      s.selfTriggered = false;
+      return;
+    }
+    // Marked before the click, not after: some builds dispatch the start event
+    // straight off the click, and that start has to be able to cancel the
+    // watchdog rather than land before it exists.
+    s.expectingStart = Date.now();
+    const before = confirmSnapshot();
+    // Armed before the click, not after: a build that puts its dialog on
+    // screen during the click itself would otherwise not be seen until the
+    // backstop timer, and the dialog would visibly linger.
+    watchForConfirm(before);
+    const via = fireRetry();
+    if (!via) {
+      disarmRefusalNote(chatId);
+      clearConfirmWatch();
+      s.expectingStart = 0;
+      s.selfTriggered = false;
+      s.attempts = 0;
+      return;
+    }
+    armStartWatchdog(chatId, via, true);
+  }
+
+  // ---- several tries at once ----
+  // From the second try on, with the setting on, the backend sends the prompt
+  // the failed reply went out with as many times as the try number, up to the
+  // most at once, and each reply is checked here as it comes back. The first
+  // one that passes is added to the failed reply as a new reroll and the rest
+  // are stopped. When none pass, that counts as one failed try and the next is
+  // scheduled as usual.
+  //
+  // Only for a reply that came back and failed a check. An error or a stall
+  // is a provider in trouble, and several calls at once would add to it.
+  const AT_ONCE_REASONS = new Set<string>([
+    "empty",
+    "cut off mid-reasoning",
+    "thinking only, no reply",
+    "thinking was one character over and over",
+    "one character over and over",
+    "cut off",
+    REFUSAL_REASON,
+    BREAKOFF_REASON,
+    CRISIS_REASON,
+    "short",
+  ]);
+  // How long to wait for the backend to say it has sent the tries. Building a
+  // prompt for a long chat can take a few seconds on a busy server.
+  const AT_ONCE_ACK_MS = 20000;
+  function atOnceMost(): number {
+    return Math.max(2, Math.min(AT_ONCE_MAX, Math.round(Number(cfg.tryAtOnceMax)) || CONFIG.tryAtOnceMax));
+  }
+  // A chat the host did not name has no messages to read, so it has nothing
+  // to add a reroll to.
+  function atOnceFits(chatId: string, reason: string, attempt: number): boolean {
+    return !!cfg.tryAtOnce && chatId !== NO_CHAT && attempt >= 2 && AT_ONCE_REASONS.has(reason);
+  }
+  function atOnceText(run: any): string {
+    return (
+      "Trying " + run.count + " at once (try " + run.attempt + " of " + cfg.maxRetries + "), " +
+      run.back + " of " + run.count + " back"
+    );
+  }
+  // Ends a run: no more messages are read for it, and any calls still out are
+  // stopped. Safe to call more than once.
+  function endAtOnce(s: any, stopCalls: boolean) {
+    const run = s.atOnce;
+    if (!run) return;
+    s.atOnce = null;
+    run.over = true;
+    clearTimeout(run.timer);
+    try { run.off && run.off(); } catch (_) {}
+    if (stopCalls) {
+      try {
+        if (ctx && typeof (ctx as any).sendToBackend === "function")
+          (ctx as any).sendToBackend({ type: "stop_at_once", requestId: run.requestId });
+      } catch (_) {}
+    }
+    paintNow();
+  }
+  async function runAtOnce(chatId: string, reason: string) {
+    const s = st(chatId);
+    if (!ctx || typeof (ctx as any).sendToBackend !== "function" || typeof (ctx as any).onBackendMessage !== "function") {
+      log("several tries at once needs the backend, which is not there, so pressing the retry button instead");
+      return clickRetry(chatId, reason);
+    }
+    const attempt = s.attempts;
+    const count = Math.min(attempt, atOnceMost());
+    // The note for this try, armed the same way as for a click. The backend
+    // puts it into these calls and uses it up.
+    await armRefusalNote(chatId, reason, attempt);
+    if (Date.now() < s.suppressUntil) {
+      disarmRefusalNote(chatId);
+      return;
+    }
+    const requestId = "ar-once-" + Date.now() + "-" + Math.random().toString(36).slice(2);
+    const run: any = {
+      requestId: requestId,
+      at: Date.now(),
+      count: count,
+      attempt: attempt,
+      back: 0,
+      reason: reason,
+      lastText: "",
+      // Replies that came back with text to judge, and the last error. When
+      // every reply was an error, the next try is an error retry, which
+      // presses the button and waits as long as an error asks for.
+      judged: 0,
+      lastError: null,
+      messageId: "",
+      swipeCount: 0,
+      adding: false,
+      over: false,
+      off: null,
+      timer: null,
+    };
+    endAtOnce(s, true);
+    s.atOnce = run;
+    const fallBack = (why: string) => {
+      if (run.over) return;
+      endAtOnce(s, true);
+      hideToast();
+      log("several tries at once did not run: " + why + ". Pressing the retry button instead.");
+      clickRetry(chatId, reason);
+    };
+    try {
+      run.off = (ctx as any).onBackendMessage((msg: any) => {
+        try {
+          if (!msg || msg.type !== "at_once" || msg.requestId !== requestId || run.over) return;
+          onAtOnce(chatId, run, msg, fallBack);
+        } catch (_) {}
+      });
+    } catch (_) {
+      return fallBack("the panel could not listen for the replies");
+    }
+    run.timer = setTimeout(() => fallBack("the backend did not answer"), AT_ONCE_ACK_MS);
+    showToast(atOnceText(run), { cancel: () => standDown(chatId, true), sticky: true });
+    // Ticked like the countdown before a retry, and taken down once the run is
+    // over, whatever ended it.
+    if (cfg.toast) {
+      stopToastCountdown();
+      toastTick = () => {
+        if (s.atOnce !== run) {
+          hideToast();
+          return;
+        }
+        const now = chatStatus(s);
+        if (now) setToastText(now.text);
+      };
+      addTicker(toastTick);
+    }
+    paintNow();
+    (ctx as any).sendToBackend({ type: "try_at_once", requestId: requestId, chatId: chatId, count: count });
+  }
+  function onAtOnce(chatId: string, run: any, msg: any, fallBack: (why: string) => void) {
+    const s = st(chatId);
+    if (msg.stage === "failed") return fallBack(String(msg.why || "no reason was given"));
+    if (msg.stage === "sent") {
+      clearTimeout(run.timer);
+      run.timer = null;
+      run.messageId = String(msg.messageId || "");
+      run.swipeCount = Number(msg.swipeCount) || 0;
+      stats.extraReplies += Math.max(0, run.count - 1);
+      // The backend has used the note up, so there is nothing left to take back.
+      if (armedNoteChat === String(chatId)) armedNoteChat = null;
+      log(
+        "sent " + run.count + " at once, with the prompt " +
+          (msg.from === "kept" ? "the last reply went out with" : "Lumiverse built for a new reroll") +
+          (msg.notes ? ", and the refusal note" : ""),
+      );
+      return;
+    }
+    if (msg.stage === "reply") {
+      if (msg.stopped || run.adding) return;
+      run.back += 1;
+      paintNow();
+      if (msg.error) {
+        run.lastError = String(msg.error);
+        log("reply " + run.back + " of " + run.count + " failed: " + run.lastError);
+        return;
+      }
+      run.judged += 1;
+      const content = String(msg.content || "").trim();
+      const thought = String(msg.reasoning || "");
+      noteReplySize(content, chatId);
+      const problem = content ? replyProblem(content, thought, cfg) : "empty";
+      if (problem === HARD_FAILURE) {
+        endAtOnce(s, true);
+        hideToast();
+        s.attempts = 0;
+        log("a reply is one of your hard failures, so not retrying");
+        showToast("Auto Retry did not retry: a reply matches one of your hard failures, so trying again would not help.");
+        return;
+      }
+      if (problem) {
+        run.reason = problem;
+        run.lastText = content;
+        log("reply " + run.back + " of " + run.count + ": " + problem);
+        return;
+      }
+      run.adding = true;
+      const parts = splitLeadingThinking(content, thought, cfg);
+      addAtOnceReply(chatId, run, parts.text, parts.thinking);
+      return;
+    }
+    if (msg.stage === "done") {
+      if (run.adding) return;
+      endAtOnce(s, false);
+      hideToast();
+      log("none of the " + run.count + " replies passed");
+      if (run.lastText) s.lastText = run.lastText.slice(-STREAM_BUF_MAX);
+      if (!run.judged && run.lastError) scheduleRetry(chatId, "error", run.lastError);
+      else scheduleRetry(chatId, run.reason);
+    }
+  }
+  function addAtOnceReply(chatId: string, run: any, content: string, thought: string) {
+    const s = st(chatId);
+    const reqId = "ar-reroll-" + Date.now() + "-" + Math.random().toString(36).slice(2);
+    let off: any = null;
+    let timer: any = null;
+    const finish = (ok: boolean, why: string) => {
+      try { off && off(); } catch (_) {}
+      off = null;
+      clearTimeout(timer);
+      // Stood down while the reroll was being added: the reader has taken
+      // over, so the outcome is only logged.
+      const current = s.atOnce === run;
+      if (current) {
+        endAtOnce(s, false);
+        hideToast();
+      }
+      if (ok && !current) {
+        log("a reply that passed was added as a new reroll after you stopped the retry");
+        return;
+      }
+      if (ok) {
+        failedRuns = 0;
+        pausedUntil = 0;
+        stats.good += 1;
+        s.attempts = 0;
+        log("added a reply that passed as a new reroll", content.length + " chars");
+        showToast("Auto Retry added a reply that passed, as a new reroll.");
+        // Lumiverse raises no end event for a reroll an extension writes, so
+        // anything that acts on a finished reply, such as Auto Refine, is told
+        // in the page.
+        try {
+          if (typeof window !== "undefined" && typeof CustomEvent === "function")
+            window.dispatchEvent(new CustomEvent(REROLL_EVENT, {
+              detail: { chatId: String(chatId), messageId: run.messageId, swipe: run.swipeCount },
+            }));
+        } catch (_) {}
+        return;
+      }
+      log("a reply passed, but it could not be added: " + why);
+      if (!current) return;
+      s.lastText = content.slice(-STREAM_BUF_MAX);
+      scheduleRetry(chatId, run.reason);
+    };
+    // The rest are not needed once one has passed.
+    try { (ctx as any).sendToBackend({ type: "stop_at_once", requestId: run.requestId }); } catch (_) {}
+    try {
+      off = (ctx as any).onBackendMessage((msg: any) => {
+        if (msg && msg.type === "reroll_added" && msg.requestId === reqId) finish(!!msg.ok, String(msg.why || "no reason was given"));
+      });
+    } catch (_) {}
+    timer = setTimeout(() => finish(false, "the backend did not answer"), AT_ONCE_ACK_MS);
+    try {
+      (ctx as any).sendToBackend({
+        type: "add_reroll",
+        requestId: reqId,
+        chatId: chatId,
+        messageId: run.messageId,
+        swipeCount: run.swipeCount,
+        text: content,
+        reasoning: thought,
+      });
+    } catch (_) {
+      finish(false, "the panel could not reach the backend");
+    }
   }
 
   // Stalled or stuck. Halt the dead generation (best effort) and retry.
@@ -8767,6 +9192,12 @@ export function setup(ctx: Ctx, opts?: any) {
       ours ? "(auto-retry)" : "(user)",
     );
     if (!ours) {
+      // A reply the reader started replaces the one the tries were for.
+      if (s.atOnce) {
+        endAtOnce(s, true);
+        hideToast();
+        log("a new reply started, so the tries at once were stopped");
+      }
       s.attempts = 0;
       s.suppressUntil = 0;
     } // fresh, user-initiated generation
@@ -9159,8 +9590,8 @@ export function setup(ctx: Ctx, opts?: any) {
     if (p.error) {
       // A content-moderation block we can retry as a refusal is not a permanent
       // failure, so don't let the hard-error skip catch it before the refusal check.
-      if (cfg.ignoreHardErrors && isHardError(p.error, cfg) && !(cfg.retryOnRefusal && looksLikeRefusalError(String(p.error), cfg))) {
-        log("hard error ignored", p.error);
+      if (cfg.ignoreHardErrors && isHardError(p.error, cfg) && !(cfg.retryOnRefusal && looksLikeRefusalError(errorText(p.error), cfg))) {
+        log("hard error ignored", errorText(p.error));
         showToast("Auto Retry did not retry: that error will not fix itself, so trying again would not help.");
         s.attempts = 0;
         return;
@@ -9169,7 +9600,7 @@ export function setup(ctx: Ctx, opts?: any) {
         scheduleRetry(chatId, "error", p.error);
         return;
       }
-      if (cfg.retryOnRefusal && looksLikeRefusalError(String(p.error), cfg)) {
+      if (cfg.retryOnRefusal && looksLikeRefusalError(errorText(p.error), cfg)) {
         // No reply text ever existed for this one: the provider refused before
         // anything was written, so it is not the phrase list that caught it.
         scheduleRetry(chatId, BLOCKED_REASON);
@@ -9214,53 +9645,15 @@ export function setup(ctx: Ctx, opts?: any) {
       s.attempts = 0;
       return;
     }
-    // Inline-reasoning models can put everything, refusal included, inside a
-    // think block and never write a reply. The raw content isn't empty then,
-    // but nothing outside the thinking is, so treat it as empty and retry.
-    if (
-      cfg.retryOnEmpty &&
-      content.length > 0 &&
-      stripThinkingAlways(content, cfg).trim().length === 0
-    ) {
-      scheduleRetry(chatId, "thinking only, no reply");
+    const problem = replyProblem(content, thought, cfg);
+    if (problem === HARD_FAILURE) {
+      log("the reply is one of your hard failures, so not retrying");
+      showToast("Auto Retry did not retry: the reply matches one of your hard failures, so trying again would not help.");
+      s.attempts = 0;
       return;
     }
-    if (cfg.retryOnSpam || cfg.retryOnSpamThinking) {
-      const where = spamVerdict(content, thought, cfg, {
-        thinking: !!cfg.retryOnSpamThinking,
-        reply: !!cfg.retryOnSpam,
-      });
-      if (where) {
-        scheduleRetry(chatId, where === "thinking" ? "thinking was one character over and over" : "one character over and over");
-        return;
-      }
-    }
-    if (cfg.retryOnTruncated && looksTruncated(content, cfg.retryOnNoPunct, cfg)) {
-      scheduleRetry(chatId, "cut off");
-      return;
-    }
-    if (cfg.retryOnRefusal) {
-      const verdict = refusalVerdict(content, cfg);
-      if (verdict.refusal) {
-        scheduleRetry(
-          chatId,
-          verdict.kind === "crisis"
-            ? CRISIS_REASON
-            : verdict.kind === "breakoff"
-              ? BREAKOFF_REASON
-              : REFUSAL_REASON,
-        );
-        return;
-      }
-    }
-    // Measured on the visible reply, not the raw output. A reasoning block can
-    // run to hundreds of characters, and markup adds tens per line, so counting
-    // either would let a two-word reply pass a length test set for prose.
-    if (
-      cfg.retryOnShort &&
-      stripMarkup(stripThinkingAlways(content, cfg)).trim().length < cfg.minChars
-    ) {
-      scheduleRetry(chatId, "short");
+    if (problem) {
+      scheduleRetry(chatId, problem);
       return;
     }
     // A reply that came back fine means whatever was wrong has cleared.
@@ -9353,8 +9746,8 @@ export function setup(ctx: Ctx, opts?: any) {
     }
     hintReset = null;
     if (!going) return;
-    // And it stops being a tooltip to anything reading the page, which is what
-    // it is: a box finishing its fade is not something to announce.
+    // And it stops being a tooltip to anything reading the page: a box
+    // finishing its fade is not something to announce.
     try {
       going.removeAttribute("role");
       going.style.opacity = "0";
@@ -10046,6 +10439,7 @@ export function setup(ctx: Ctx, opts?: any) {
       lines.push("  watching for: " + sayTime(Date.now() - stats.since));
       lines.push("  replies that came back fine: " + stats.good);
       lines.push("  retries fired: " + stats.retries);
+      if (stats.extraReplies) lines.push("  more replies sent at once: " + stats.extraReplies);
       lines.push("  messages it gave up on: " + stats.gaveUp);
       // Only when the feature is in use, so a report from someone who has never
       // touched it is not padded with two zeroes.
@@ -10251,8 +10645,30 @@ export function setup(ctx: Ctx, opts?: any) {
     // A preset switcher: pick a saved preset and Load it into the settings, or
     // save the current settings as a preset. Load updates the on-screen fields in
     // place (no rebuild), so it never jumps the scroll or closes open sections.
+    function readPick(kind: string): string {
+      try {
+        if (typeof localStorage === "undefined") return "";
+        const all = JSON.parse(localStorage.getItem(PICK_KEY) || "{}");
+        return all && typeof all[kind] === "string" ? all[kind] : "";
+      } catch (_) {
+        return "";
+      }
+    }
+    function writePick(kind: string, name: string) {
+      try {
+        if (typeof localStorage === "undefined") return;
+        const all = JSON.parse(localStorage.getItem(PICK_KEY) || "{}") || {};
+        if ((all[kind] || "") === name) return;
+        all[kind] = name;
+        localStorage.setItem(PICK_KEY, JSON.stringify(all));
+      } catch (_) {}
+    }
     function buildPresetBar(kind: string): HTMLElement {
       const wrap = document.createElement("div");
+      // The preset this bar was last on, kept across the panel closing and
+      // across a reload. Saving closes the panel, and a bar that came back
+      // naming nothing let go of a set that comes with the extension: its
+      // notes were still on screen, and unlocked, as if they were yours.
       // What this bar's settings held before the last pick loaded a preset over
       // them, so a pick made to see what is in a preset can be taken back. One
       // step, not a history. Cleared by a save, since Put it back after saving
@@ -10290,6 +10706,7 @@ export function setup(ctx: Ctx, opts?: any) {
 
       // Load direction: a saved preset into the settings.
       const select = document.createElement("select");
+      select.setAttribute("data-ar-field", "1");
       select.style.cssText =
         "flex:1;min-width:150px;padding:8px 10px;border-radius:var(--lumiverse-radius,8px);border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));background:var(--lumiverse-fill-subtle,rgba(0,0,0,.1));color:var(--lumiverse-text,#eee);font:13px var(--lumiverse-font-family,system-ui)";
       // Picking already loads, so this is only for loading the one already
@@ -10369,6 +10786,7 @@ export function setup(ctx: Ctx, opts?: any) {
       };
       const syncPresetButtons = () => {
         const picked = !!select.value;
+        writePick(kind, select.value);
         // Hidden rather than greyed: an always-present button offering to put
         // back nothing is a question the reader has to answer every time they
         // look at the row.
@@ -10467,7 +10885,17 @@ export function setup(ctx: Ctx, opts?: any) {
         lastPick = select.value;
         syncPresetButtons();
       };
-      refreshSelect();
+      // Back on the preset it was on, but only while what is set is still
+      // exactly that preset. Anything changed since, by an import or a reset,
+      // means the panel no longer holds it, and naming it would be untrue.
+      const stillHolds = (name: string): boolean => {
+        const p = list().find((x) => x.name === name) || builtInNote(name);
+        if (!p || !p.values) return false;
+        const now: Record<string, any> = cfg as any;
+        return Object.keys(p.values).every((k) => settledJson(now[k]) === settledJson(p.values[k]));
+      };
+      const was = readPick(kind);
+      refreshSelect(was && stillHolds(was) ? was : undefined);
       // Re-read storage and rebuild the dropdown, for when an import adds
       // presets while this bar is on screen.
       presetBarRefreshers.push(() => {
@@ -11059,6 +11487,7 @@ export function setup(ctx: Ctx, opts?: any) {
       };
       h.setAttribute("role", "button");
       h.setAttribute("tabindex", "0");
+      h.setAttribute("data-ar-sechead", "1");
       const toggle = () => {
         const open = body.style.display !== "none";
         apply(!open);
@@ -11887,8 +12316,10 @@ export function setup(ctx: Ctx, opts?: any) {
     box.setAttribute("data-ar-perms", "1");
     const paint = () => {
       box.replaceChildren();
+      // A permission only one setting uses is only missing while that setting
+      // is on.
       const missing = permList.filter(
-        (p) => permIs(p.name) === false && !permIsHidden(p.name),
+        (p) => permIs(p.name) === false && !permIsHidden(p.name) && (!p.onlyFor || !!cfg[p.onlyFor]),
       );
       if (!missing.length) {
         box.style.display = "none";
@@ -12654,6 +13085,7 @@ export function setup(ctx: Ctx, opts?: any) {
     opts?: { mark?: boolean },
   ) {
     const mark = !opts || opts.mark !== false;
+    input.setAttribute("data-ar-field", "1");
     input.style.cssText +=
       "padding:9px 10px;border-radius:var(--lumiverse-radius,8px);" +
       "border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));" +
@@ -12877,26 +13309,6 @@ export function setup(ctx: Ctx, opts?: any) {
     syncFloat();
     syncInputBarActions();
     return { settings: settings, presets: presets };
-  }
-
-  // A dialog coming up: the dimmed backdrop fades in, and the box rises a
-  // little and grows to its size as it fades in, slowing as it lands. Played
-  // with the browser's own animation, so nothing is left set on the box when
-  // it finishes. Skipped when the reader asks for less motion.
-  function popIn(overlay: any, box: any) {
-    try {
-      if (typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    } catch (_) {}
-    try {
-      overlay.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 180, easing: "ease-out" });
-      box.animate(
-        [
-          { opacity: 0, transform: "translateY(12px) scale(.96)" },
-          { opacity: 1, transform: "none" },
-        ],
-        { duration: 260, easing: "cubic-bezier(.2,.9,.3,1.1)" },
-      );
-    } catch (_) {}
   }
 
   // Open at a time, so a second press replaces the first rather than stacking.
@@ -13224,7 +13636,6 @@ export function setup(ctx: Ctx, opts?: any) {
     box.appendChild(row);
     overlay.appendChild(box);
     (document.body || document.documentElement).appendChild(overlay);
-    popIn(overlay, box);
     ensureReadableTree(box, 2.6);
     try { box.focus({ preventScroll: true }); } catch (_) {}
     closeResetPicker = close;
@@ -13293,7 +13704,6 @@ export function setup(ctx: Ctx, opts?: any) {
     box.appendChild(row);
     overlay.appendChild(box);
     (document.body || document.documentElement).appendChild(overlay);
-    popIn(overlay, box);
     ensureReadableTree(box);
     closeExpandEditor = close;
     // The textarea is not focused, so opening it doesn't pop the
@@ -13401,7 +13811,6 @@ export function setup(ctx: Ctx, opts?: any) {
     box.appendChild(row);
     overlay.appendChild(box);
     (document.body || document.documentElement).appendChild(overlay);
-    popIn(overlay, box);
     ensureReadableTree(box);
     try { box.focus(); } catch (_) {}
     // Shut without an answer, by teardown or by the panel closing, is a no: the
@@ -13982,6 +14391,9 @@ export function setup(ctx: Ctx, opts?: any) {
     tickers.clear();
     retick();
     chats.forEach(clearTimers);
+    // Tries still out would otherwise go on and add a reroll for a panel that
+    // is gone.
+    chats.forEach((s: any) => endAtOnce(s, true));
     chats.clear();
     eventLog.length = 0;
     try {
@@ -14002,6 +14414,9 @@ export function setup(ctx: Ctx, opts?: any) {
 // whether a colour pairing is readable. All of them are pure functions of their
 // input, so they can be checked without a browser.
 export const __testing = {
+  replyProblem,
+  HARD_FAILURE,
+  splitLeadingThinking,
   sameSettings,
   parseColor,
   blendColor,
@@ -14010,6 +14425,8 @@ export const __testing = {
   refusalVerdict,
   looksLikeRefusalError,
   isHardError,
+  isOwnHardFailure,
+  errorText,
   looksTruncated,
   spamVerdict,
   carrySpamSwitch,

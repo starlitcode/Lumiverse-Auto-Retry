@@ -2310,6 +2310,152 @@ console.log("\nretrying");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- several tries at once ----
+// The panel's half: from the second try it asks the backend for several
+// replies instead of pressing the button, judges each as it comes back, adds
+// the first that passes, and falls back to the button when the backend cannot
+// run them. The backend's half has its own checks in tries-at-once.test.ts.
+console.log("\nseveral tries at once");
+{
+  const page = await browser.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await stage(page, '<div id=modal></div><button data-testid="regenerate">Regenerate</button>');
+  await page.addStyleTag({ content: THEME });
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  const out = await page.evaluate(async () => {
+    const handlers = {};
+    const sent = [];
+    let backs = [];
+    let clicks = 0;
+    document.querySelector("[data-testid=regenerate]").addEventListener("click", () => clicks++);
+    window.__setup(
+      {
+        events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
+        sendToBackend: (m) => sent.push(m),
+        onBackendMessage: (fn) => { backs.push(fn); return () => { backs = backs.filter((f) => f !== fn); }; },
+        ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+              registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) },
+      },
+      { retryDelayMs: 10, backoffFactor: 1, maxDelayMs: 10, jitter: false, maxRetries: 3,
+        toast: false, stuckTimeoutMs: 0, idleTimeoutMs: 0, pauseWhenFailing: false,
+        tryAtOnce: true, tryAtOnceMax: 3 },
+    );
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const answer = (m) => { for (const f of backs.slice()) { try { f(m); } catch (_) {} } };
+    const asks = (chatId) => sent.filter((m) => m.type === "try_at_once" && m.chatId === chatId);
+    const REFUSAL = "I'm sorry, but I can't create that content.";
+    const GOOD = "The keeper climbed the stairs, wiped the glass, and lit the lamp again.";
+    // A reply that fails, its retry click, and that retry failing too, which
+    // is what brings a chat to its second try.
+    const twoFailures = async (chatId, end) => {
+      handlers.GENERATION_STARTED({ chatId, generationId: chatId + "-0" });
+      handlers.GENERATION_ENDED(Object.assign({ chatId, generationId: chatId + "-0" }, end));
+      await wait(60);
+      handlers.GENERATION_STARTED({ chatId, generationId: chatId + "-1" });
+      handlers.GENERATION_ENDED(Object.assign({ chatId, generationId: chatId + "-1" }, end));
+      await wait(60);
+    };
+
+    // One passes: it is added, and the others are stopped.
+    const told = [];
+    window.addEventListener("auto-retry:reroll-added", (e) => told.push(e.detail));
+    const c0 = clicks;
+    await twoFailures("pass", { content: REFUSAL });
+    const passAsk = asks("pass")[0] || null;
+    const clicksBeforeAtOnce = clicks - c0;
+    if (passAsk) {
+      answer({ type: "at_once", requestId: passAsk.requestId, stage: "sent", count: 2, from: "kept", messageId: "m2", swipeCount: 2 });
+      answer({ type: "at_once", requestId: passAsk.requestId, stage: "reply", index: 0, content: REFUSAL });
+      // Thinking written ahead of the reply, as some models do.
+      answer({ type: "at_once", requestId: passAsk.requestId, stage: "reply", index: 1, content: "<think>Keep the lamp lit.</think>\n" + GOOD });
+    }
+    await wait(20);
+    const reroll = sent.find((m) => m.type === "add_reroll") || null;
+    const stopped = !!passAsk && sent.some((m) => m.type === "stop_at_once" && m.requestId === passAsk.requestId);
+    if (reroll) answer({ type: "reroll_added", requestId: reroll.requestId, ok: true });
+    await wait(40);
+    const clicksAfterPass = clicks - c0;
+
+    // None pass: one failed try, and the next asks for more at once.
+    await twoFailures("none", { content: REFUSAL });
+    const first = asks("none")[0] || null;
+    if (first) {
+      answer({ type: "at_once", requestId: first.requestId, stage: "sent", count: 2, from: "kept", messageId: "m2", swipeCount: 2 });
+      answer({ type: "at_once", requestId: first.requestId, stage: "reply", index: 0, content: REFUSAL });
+      answer({ type: "at_once", requestId: first.requestId, stage: "reply", index: 1, content: REFUSAL });
+      answer({ type: "at_once", requestId: first.requestId, stage: "done" });
+    }
+    await wait(60);
+    const second = asks("none")[1] || null;
+
+    // The backend cannot run them: the button is pressed instead.
+    const c3 = clicks;
+    await twoFailures("fallback", { content: REFUSAL });
+    const fbAsk = asks("fallback")[0] || null;
+    const fbBefore = clicks - c3;
+    if (fbAsk) answer({ type: "at_once", requestId: fbAsk.requestId, stage: "failed", why: "the last message in the chat is not a reply" });
+    await wait(40);
+    const fbAfter = clicks - c3;
+
+    // Every reply an error: the next try is an error retry, which presses
+    // the button rather than sending several more into a provider in trouble.
+    const c4 = clicks;
+    await twoFailures("allerr", { content: REFUSAL });
+    const errAsk = asks("allerr")[0] || null;
+    if (errAsk) {
+      answer({ type: "at_once", requestId: errAsk.requestId, stage: "sent", count: 2, from: "kept", messageId: "m2", swipeCount: 2 });
+      answer({ type: "at_once", requestId: errAsk.requestId, stage: "reply", index: 0, error: "upstream connection reset" });
+      answer({ type: "at_once", requestId: errAsk.requestId, stage: "reply", index: 1, error: "upstream connection reset" });
+      answer({ type: "at_once", requestId: errAsk.requestId, stage: "done" });
+    }
+    await wait(60);
+    const allErrAsks = asks("allerr").length;
+    const allErrClicks = clicks - c4;
+
+    // A reply the reader starts stops the tries still out.
+    await twoFailures("taken", { content: REFUSAL });
+    const takenAsk = asks("taken")[0] || null;
+    handlers.GENERATION_STARTED({ chatId: "taken", generationId: "mine" });
+    await wait(20);
+    const takenStopped = !!takenAsk && sent.some((m) => m.type === "stop_at_once" && m.requestId === takenAsk.requestId);
+
+    // An error is never sent several at once.
+    const c5 = clicks;
+    await twoFailures("error", { error: "upstream connection reset" });
+    const errorAsks = asks("error").length;
+    const errorClicks = clicks - c5;
+
+    return {
+      passCount: passAsk && passAsk.count, clicksBeforeAtOnce, clicksAfterPass,
+      reroll: reroll && { text: reroll.text, reasoning: reroll.reasoning, messageId: reroll.messageId, swipeCount: reroll.swipeCount },
+      stopped,
+      firstCount: first && first.count, secondCount: second && second.count,
+      told,
+      fbBefore, fbAfter, takenStopped, errorAsks, errorClicks, allErrAsks, allErrClicks,
+    };
+  });
+  await page.close();
+  check("the first try presses the button", out.clicksBeforeAtOnce === 1, out);
+  check("the second try asks for 2 at once instead", out.passCount === 2, out);
+  check("the reply that passed is added as a reroll", !!out.reroll && /lit the lamp again/.test(out.reroll.text), out.reroll);
+  check("its thinking goes in the reroll's thinking, not its text",
+    !!out.reroll && !/think/.test(out.reroll.text) && out.reroll.reasoning === "Keep the lamp lit.", out.reroll);
+  check("on the reply the tries were for", !!out.reroll && out.reroll.messageId === "m2" && out.reroll.swipeCount === 2, out.reroll);
+  check("the rest are stopped once one passes", out.stopped === true, out);
+  // Lumiverse raises no end event for it, so the page is told, for anything
+  // that acts on a finished reply.
+  check("the page is told a reroll was added", out.told.length === 1 && out.told[0].chatId === "pass" && out.told[0].messageId === "m2" && out.told[0].swipe === 2, out.told);
+  check("nothing is pressed after a reply passed", out.clicksAfterPass === 1, out);
+  check("none passing asks again with one more", out.firstCount === 2 && out.secondCount === 3, out);
+  check("a backend that cannot run them falls back to the button", out.fbBefore === 1 && out.fbAfter === 2, out);
+  check("every reply an error makes the next try press the button", out.allErrAsks === 1 && out.allErrClicks === 2, out);
+  check("a reply the reader starts stops the tries", out.takenStopped === true, out);
+  check("an error is never sent several at once", out.errorAsks === 0 && out.errorClicks === 2, out);
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- a chat the host does not name ----
 // Everything in the extension is keyed by chat, so a reply arriving with no
 // chatId has to be handled rather than dropped: no retry, no watchdog and
@@ -3962,8 +4108,9 @@ console.log("\npop-ups come up and go down");
         return dialog ? dialog.getAnimations({ subtree: true }).length : -1;
       });
     });
-    if (reducedMotion === "reduce") check("with less motion asked for, a dialog just appears", out === 0, out);
-    else check("a dialog grows to its size as it comes up", out > 0, out);
+    // Pop-ups appear at once, whatever the motion setting. Only the retry
+    // message above moves.
+    check((reducedMotion === "reduce" ? "with less motion asked for, " : "") + "a dialog appears at once, with no animation", out === 0, out);
     check("the dialog: no console errors", errors.length === 0, errors);
   }
 }
@@ -7731,7 +7878,7 @@ console.log("\nwhere the ways into the extension live");
 
 // ---- the "?" is bigger where a thumb has to hit it ----
 // 18px is comfortable under a mouse and small under a thumb. On a screen that
-// is touched it is 28px, which clears the 24px minimum target size, and a
+// is touched it is 32px, the smallest tap target the panel uses, and a
 // computer keeps the smaller one so the panel stays as dense as it was.
 //
 // The button grows rather than an invisible hit area being laid over it: each
@@ -7741,7 +7888,7 @@ console.log("\nthe description button is sized for what is pointing at it");
 {
   for (const [name, opts, want, rowFloor] of [
     ["with a mouse", { viewport: { width: 1280, height: 800 } }, 18, 26],
-    ["with a finger", { viewport: { width: 412, height: 800 }, hasTouch: true, isMobile: true }, 28, 28],
+    ["with a finger", { viewport: { width: 412, height: 800 }, hasTouch: true, isMobile: true }, 32, 32],
   ]) {
     const page = await browser.newPage(opts);
     const errors = [];
@@ -9902,11 +10049,12 @@ console.log("\nhint placement");
     // default, and so is the note list, which opens above on purpose.
     //
     // The height is what leaves less room under the row than the description
-    // needs, so the cap has something to fire on. Measured at 98 of room
-    // against 122 of description. Shorten the descriptions again and this has
-    // to come down with them, or the cap stops being exercised.
+    // needs, so the cap has something to fire on. At 280 the longest one fits.
+    // At 240 it does not, and 220 leaves a margin below that.
+    // Shorten the descriptions again and this has to come down with them, or
+    // the cap stops being exercised.
     const { out, errors } = await inPanel(
-      browser, { css: PANEL, viewport: { width: 393, height: 280 }, settings: { refusalNote: true } },
+      browser, { css: PANEL, viewport: { width: 393, height: 220 }, settings: { refusalNote: true } },
       async (page) => page.evaluate(async (want) => {
         const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
         for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
@@ -12328,6 +12476,136 @@ console.log("\nsaying the note sets have changed");
     check("a browser that has never taken one is told nothing", out.said === null, String(out.said));
     check("and is stamped, so the next change is the first thing it says", !!out.stamped, String(out.stamped));
   }
+}
+
+// ---- a provider error written into the reply ----
+// Some providers write their error as the reply instead of reporting one. A
+// phrase from your own hard failures has to stop that reply being retried, or
+// the error is paid for again on every attempt.
+console.log("\na provider error written into the reply");
+{
+  const errLines = [];
+  const once = async (content, phrases) => {
+    const page = await browser.newPage();
+    page.on("pageerror", (e) => errLines.push(e.message));
+    await stage(page, '<div id=modal></div><button data-testid="regenerate">Regenerate</button>');
+    await page.addScriptTag({ content: SOURCE, type: "module" });
+    await page.waitForFunction(() => !!window.__setup);
+    const clicks = await page.evaluate(async ([content, phrases]) => {
+      const handlers = {};
+      let clicks = 0;
+      document.querySelector("[data-testid=regenerate]").addEventListener("click", () => clicks++);
+      window.__setup(
+        {
+          events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
+          sendToBackend: () => {},
+          onBackendMessage: () => () => {},
+          ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+                registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) },
+        },
+        { retryDelayMs: 10, backoffFactor: 1, maxDelayMs: 10, jitter: false, maxRetries: 2, toast: false,
+          stuckTimeoutMs: 0, idleTimeoutMs: 0, pauseWhenFailing: false, retryOnShort: true, minChars: 400,
+          ignoreHardErrors: true, hardErrorPhrases: phrases },
+      );
+      handlers.GENERATION_STARTED({ chatId: "c1", generationId: "g" });
+      handlers.GENERATION_ENDED({ chatId: "c1", generationId: "g", content });
+      await new Promise((r) => setTimeout(r, 150));
+      return clicks;
+    }, [content, phrases]);
+    await page.close();
+    return clicks;
+  };
+  const said = "The gateway could not finish this request (free_tier_cap). Free accounts can use 5000 a day.";
+  const without = await once(said, "");
+  const withIt = await once(said, "free_tier_cap");
+  check("without the phrase, the short error reply is retried", without === 1, without);
+  check("with the phrase in your hard failures, it is not", withIt === 0, withIt);
+  check("no console errors", errLines.length === 0, errLines);
+}
+
+console.log("\na set that comes with it stays picked after Save");
+// Save closes the panel. Opening it again has to come back on the set that
+// was picked, with its notes still locked, rather than naming nothing and
+// leaving the set's own notes open to editing as if they were yours.
+{
+  const { out, errors } = await inPanel(browser, { settings: { retryOnRefusal: true, refusalNote: true } }, async (page) =>
+    page.evaluate(async () => {
+      const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const open = async () => { for (let k = 0; k < 2; k++) { for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click(); await new Promise((r) => setTimeout(r, 260)); } await frame(); };
+      const bar = () => document.querySelector('[data-ar-presets="notes"]');
+      const state = () => ({ pick: bar().querySelector("select").value, locked: [...document.querySelectorAll('[data-ar-row="refusalNotes"] textarea')].every((x) => x.disabled || x.readOnly) });
+      const reopen = async () => {
+        document.getElementById("modal").innerHTML = "";
+        window.__acts["auto-retry-settings"].cb();
+        await new Promise((r) => setTimeout(r, 300));
+        await open();
+      };
+      await open();
+      const sel = bar().querySelector("select");
+      sel.value = "A nudge"; sel.dispatchEvent(new Event("change", { bubbles: true })); await frame();
+      [...document.querySelectorAll("button")].find((x) => x.textContent.trim() === "Save").click();
+      await new Promise((r) => setTimeout(r, 300));
+      await reopen();
+      return state();
+    }));
+  check("after Save and opening again, the set is still picked", out.pick === "A nudge", out);
+  check("and its notes are still locked", out.locked === true, out);
+  check("no console errors", errors.length === 0, errors);
+}
+
+console.log("\nthe settings on a phone and under a mouse");
+// On a phone: nothing scrolls sideways and everything that can be pressed is
+// at least 32 pixels, with the tick boxes answering a tap just around them.
+// Under a mouse: each kind of control answers the pointer.
+{
+  const S = { retryOnRefusal: true, refusalNote: true, tryAtOnce: true, retryOnShort: true };
+  const openAll = (page) => page.evaluate(async () => { for (let k = 0; k < 3; k++) { for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click(); await new Promise((r) => setTimeout(r, 300)); } });
+  const phone = await inPanel(browser, { viewport: { width: 375, height: 812 }, touch: true, settings: S }, async (page) => {
+    await openAll(page);
+    return page.evaluate(() => {
+      const root = document.getElementById("modal");
+      const pressable = [...root.querySelectorAll('button, [role="button"], input[type=checkbox], select, a[href]')].filter((n) => {
+        if (n.closest("[hidden]") || n.disabled) return false;
+        const r = n.getBoundingClientRect();
+        return r.width > 1 && r.height > 1 && getComputedStyle(n).visibility !== "hidden" && getComputedStyle(n).display !== "none";
+      });
+      const small = pressable.filter((n) => !n.matches("[data-ar-check]")).filter((n) => { const r = n.getBoundingClientRect(); return r.width < 32 || r.height < 32; }).map((n) => (n.getAttribute("aria-label") || n.textContent || "").trim().slice(0, 40));
+      const c = root.querySelector("[data-ar-check]");
+      let around = true;
+      if (c) { const r = c.getBoundingClientRect(); around = document.elementFromPoint(r.left - 4, r.top + r.height / 2) === c; }
+      return { sideways: document.documentElement.scrollWidth > window.innerWidth + 1, small, around };
+    });
+  });
+  check("phone: nothing scrolls sideways", !phone.out.sideways, phone.out);
+  check("phone: everything pressable is at least 32 pixels", !phone.out.small.length, phone.out.small.slice(0, 5));
+  check("phone: a tick box answers a tap just beside it", phone.out.around, phone.out);
+  const mouse = await inPanel(browser, { viewport: { width: 1280, height: 900 }, settings: S }, async (page) => {
+    await openAll(page);
+    // The first one that is on screen, since some of each kind are in rows
+    // that are hidden until a switch is on.
+    const pick = (sel) => page.evaluate((sel) => {
+      const n = [...document.querySelectorAll(sel)].find((x) => !x.closest("[hidden]") && x.getBoundingClientRect().width > 1 && !x.disabled);
+      if (!n) return null;
+      n.scrollIntoView({ block: "center" });
+      window.__probe = n;
+      const r = n.getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    }, sel);
+    const look = () => page.evaluate(() => { const cs = getComputedStyle(window.__probe); return [cs.backgroundColor, cs.borderColor, cs.boxShadow].join("|"); });
+    const out = {};
+    for (const [name, sel] of [["a tick box", "#modal [data-ar-check]"], ["a list", '#modal select[data-ar-field]'], ['a "?"', "#modal button[data-ar-hint]"], ["a section heading", "#modal [data-ar-sechead]"]]) {
+      const at = await pick(sel);
+      if (!at) { out[name] = false; continue; }
+      const before = await look();
+      await page.mouse.move(at.x, at.y);
+      await page.waitForTimeout(250);
+      out[name] = before !== (await look());
+      await page.mouse.move(2, 2);
+    }
+    return out;
+  });
+  for (const name of Object.keys(mouse.out)) check("under a mouse, " + name + " answers the pointer", mouse.out[name], mouse.out);
+  check("no console errors", phone.errors.length + mouse.errors.length === 0, phone.errors.concat(mouse.errors));
 }
 
 await browser.close();

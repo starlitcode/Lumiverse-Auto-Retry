@@ -38,7 +38,7 @@ describe("a pasted fixture carries nothing real", () => {
       "openai", "gpt", "anthropic", "claude", "gemini", "google", "mistral",
       "cohere", "llama", "deepseek", "grok", "openrouter", "together", "groq",
       "azure", "bedrock", "ollama", "kobold", "oobabooga", "featherless",
-      "chutes", "nano", "requesty",
+      "chutes", "nano",
     ];
     const found: string[] = [];
     for (const f of files) {

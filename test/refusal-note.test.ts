@@ -149,6 +149,19 @@ describe("when the note goes out", () => {
     expect(roles(await h.run(prompt(), { chatId: "c2" })).join("|")).toContain("Second chat's note.");
   });
 
+  // A quiet generation is a background call made by an extension, not a
+  // reply in the chat. It leaves the note armed for the retry it was made for.
+  test("a quiet generation never takes it", async () => {
+    const h = boot();
+    await h.arm();
+    const quiet = await h.run(prompt(), { generationType: "quiet" });
+    expect(roles(quiet)).toEqual(roles(prompt()));
+    const quietNoChat = await h.run(prompt(), { generationType: "quiet", chatId: undefined });
+    expect(roles(quietNoChat)).toEqual(roles(prompt()));
+    const retry = await h.run(prompt(), { generationType: "swipe" });
+    expect(roles(retry).join("|")).toContain("This was refused by mistake.");
+  });
+
   test("a generation naming no chat takes the one note there is, and none of several", async () => {
     const h = boot();
     await h.arm({ chatId: "c1" });

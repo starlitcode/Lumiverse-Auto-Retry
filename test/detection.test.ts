@@ -15,6 +15,8 @@ const {
   refusalVerdict,
   looksLikeRefusalError,
   isHardError,
+  isOwnHardFailure,
+  errorText,
   looksTruncated,
   normalizeForMatch,
   splitPhrases,
@@ -595,6 +597,23 @@ describe("a phrase too short to mean anything", () => {
   test("a provider's own code is still long enough to use", () => {
     expect(splitPhrases("402")).toEqual(["402"]);
     expect(isHardError("billing says 402", withCfg({ hardErrorPhrases: "402" }))).toBe(true);
+  });
+});
+
+describe("an error in a shape other than text", () => {
+  test("an error sent as an object is read by its message", () => {
+    const own = withCfg({ hardErrorPhrases: "free_tier_cap" });
+    expect(isHardError({ message: "stopped (free_tier_cap)" }, own)).toBe(true);
+    expect(isHardError({ error: { message: "stopped (free_tier_cap)" } }, own)).toBe(true);
+    expect(errorText({ message: "stopped" })).toBe("stopped");
+  });
+
+  test("a reply that is one of your own hard failures is read as one", () => {
+    const own = withCfg({ hardErrorPhrases: "free_tier_cap" });
+    expect(isOwnHardFailure("The gateway could not finish this (free_tier_cap).", own)).toBe(true);
+    expect(isOwnHardFailure("She opened the gate and stepped through.", own)).toBe(false);
+    // The built-in list is never read against a reply.
+    expect(isOwnHardFailure("permission was not given", withCfg({}))).toBe(false);
   });
 });
 

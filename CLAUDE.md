@@ -100,6 +100,34 @@ A code block, in this shape and nothing else:
 
 No credits in the Discord post. They stay in the changelog.
 
+## Phones and laptops
+
+Every change to the panel or the page has to work on a phone and on a laptop.
+
+- Check it at a phone width (about 360 to 420 pixels, touch) and at a laptop
+  width (about 1280 pixels, mouse). A browser check or a screenshot at each
+  counts. Say which was done.
+- Nothing may run off the side, overlap, or need sideways scrolling.
+- Tap targets on a phone are at least 32 pixels high.
+- Use hover where hover helps on a laptop, such as a highlight or a title on a
+  button. Hover is only ever an extra. Phones have no hover, so everything a
+  hover shows or does must also work with a click or a tap.
+- Use a click or a tap for anything that does something or opens something.
+
+## Talking to the owner
+
+The owner has a learning disability. Contradictions are confusing.
+
+- Say what was changed, plainly, in one statement. Do not say something is
+  meant to work one way and then change it to work another way in the same
+  message.
+- If something the owner reports is working as designed, say so and ask
+  whether to change it. Do not change it and also defend the old way.
+- When a report is about how something looks or behaves, the fix is what the
+  owner asked for. Reword a message instead only if the owner agrees.
+- After a change, say exactly what is different now, not what it used to be
+  meant to do.
+
 ## Rules from the owner
 
 - The extensions are about giving people control. Nothing sent to a model is

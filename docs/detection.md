@@ -179,6 +179,13 @@ Some providers send a refusal as an error instead of reply text. An error retry 
 
 **Skip hard failures** does the opposite job. An error that will be the same next time, like a missing model or a wrong key, is not retried. The built-in list cannot know every provider's wording, so **Your own hard failures** lets you add wording, one per line. It only shows while **Skip hard failures** is on.
 
+Some providers do not report an error at all. They write the error as the reply, as if a character had said it. **Your own hard failures** is checked against the reply's text too:
+
+- A reply that contains one of your phrases is not retried, for any reason.
+- Only your own phrases are checked against a reply. The built-in list is not, because it holds words such as "permission" that a story can use.
+- Copy a short, unusual part of the error, such as an error code in brackets. A whole sentence can change from one error to the next.
+- A phrase that is also in **Your own refusal phrases** is still retried as a refusal when it comes as an error.
+
 **Your own refusal phrases are also checked against error text.** Paste an error your setup keeps hitting, and it is retried as a refusal. This wins over **Skip hard failures**. A phrase in both boxes is retried. Refusal retries must be on for this.
 
 ## Stopping to offer support
@@ -286,8 +293,9 @@ Ten is the limit because each note is a whole extra message in the prompt. Too m
 
 - It is never written to your chat. Nothing appears in your history, and no message is edited.
 - It only goes with a refusal retry. Every other retry sends your request unchanged.
-- It is used once. It is set up just before the retry button is pressed, and thrown away after, whether it was used or not.
+- It is used for one retry only. It is set up just before the retry button is pressed, and cleared after, whether or not that retry used it.
 - It belongs to one chat, and is never added to a reply in another chat.
+- A background call that another extension makes, which Lumiverse marks as "quiet", never takes it.
 - It expires after 45 seconds. If the retry press started nothing, it is taken back straight away. If there is no retry button to press, no note is set up at all.
 
 This needs the `interceptor` permission, which lets an extension add to a prompt. Without it, everything else works and no note is sent.
@@ -353,7 +361,7 @@ The note is only there for one retry. The next reply is back to your normal prom
 
 ## Trying it on a reply
 
-At the bottom of **Refusal tuning** is a box to paste a reply into, and a **Check this text** button. It says whether that reply would count as a refusal, and why: which phrase matched, which pattern fired, or why it was skipped (too long, on your whitelist, or built-ins off).
+At the bottom of **Refusal tuning** is a box to paste a reply into, and a **Check this text** button. It says whether that reply would count as a refusal, and why: which phrase matched, which pattern fired, or why it was skipped (too long, in **Never treat these as a refusal**, or the built-in list is off).
 
 - **Use my last reply** fills the box with the reply on screen, so you do not have to copy it. It reads the reply when you press it and keeps nothing.
 - It uses the values in the boxes, not the saved ones, so you can try a change before you press **Save**.
