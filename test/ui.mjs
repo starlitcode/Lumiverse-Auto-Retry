@@ -7880,7 +7880,7 @@ console.log("\nwhere the ways into the extension live");
 
 // ---- the "?" is bigger where a thumb has to hit it ----
 // 18px is comfortable under a mouse and small under a thumb. On a screen that
-// is touched it is 28px, which clears the 24px minimum target size, and a
+// is touched it is 32px, the smallest tap target the panel uses, and a
 // computer keeps the smaller one so the panel stays as dense as it was.
 //
 // The button grows rather than an invisible hit area being laid over it: each
@@ -7890,7 +7890,7 @@ console.log("\nthe description button is sized for what is pointing at it");
 {
   for (const [name, opts, want, rowFloor] of [
     ["with a mouse", { viewport: { width: 1280, height: 800 } }, 18, 26],
-    ["with a finger", { viewport: { width: 412, height: 800 }, hasTouch: true, isMobile: true }, 28, 28],
+    ["with a finger", { viewport: { width: 412, height: 800 }, hasTouch: true, isMobile: true }, 32, 32],
   ]) {
     const page = await browser.newPage(opts);
     const errors = [];
@@ -12522,6 +12522,91 @@ console.log("\na provider error written into the reply");
   check("without the phrase, the short error reply is retried", without === 1, without);
   check("with the phrase in your hard failures, it is not", withIt === 0, withIt);
   check("no console errors", errLines.length === 0, errLines);
+}
+
+console.log("\na set that comes with it stays picked after Save");
+// Save closes the panel. Opening it again has to come back on the set that
+// was picked, with its notes still locked, rather than naming nothing and
+// leaving the set's own notes open to editing as if they were yours.
+{
+  const { out, errors } = await inPanel(browser, { settings: { retryOnRefusal: true, refusalNote: true } }, async (page) =>
+    page.evaluate(async () => {
+      const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const open = async () => { for (let k = 0; k < 2; k++) { for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click(); await new Promise((r) => setTimeout(r, 260)); } await frame(); };
+      const bar = () => document.querySelector('[data-ar-presets="notes"]');
+      const state = () => ({ pick: bar().querySelector("select").value, locked: [...document.querySelectorAll('[data-ar-row="refusalNotes"] textarea')].every((x) => x.disabled || x.readOnly) });
+      const reopen = async () => {
+        document.getElementById("modal").innerHTML = "";
+        window.__acts["auto-retry-settings"].cb();
+        await new Promise((r) => setTimeout(r, 300));
+        await open();
+      };
+      await open();
+      const sel = bar().querySelector("select");
+      sel.value = "A nudge"; sel.dispatchEvent(new Event("change", { bubbles: true })); await frame();
+      [...document.querySelectorAll("button")].find((x) => x.textContent.trim() === "Save").click();
+      await new Promise((r) => setTimeout(r, 300));
+      await reopen();
+      return state();
+    }));
+  check("after Save and opening again, the set is still picked", out.pick === "A nudge", out);
+  check("and its notes are still locked", out.locked === true, out);
+  check("no console errors", errors.length === 0, errors);
+}
+
+console.log("\nthe settings on a phone and under a mouse");
+// On a phone: nothing scrolls sideways and everything that can be pressed is
+// at least 32 pixels, with the tick boxes answering a tap just around them.
+// Under a mouse: each kind of control answers the pointer.
+{
+  const S = { retryOnRefusal: true, refusalNote: true, tryAtOnce: true, retryOnShort: true };
+  const openAll = (page) => page.evaluate(async () => { for (let k = 0; k < 3; k++) { for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click(); await new Promise((r) => setTimeout(r, 300)); } });
+  const phone = await inPanel(browser, { viewport: { width: 375, height: 812 }, touch: true, settings: S }, async (page) => {
+    await openAll(page);
+    return page.evaluate(() => {
+      const root = document.getElementById("modal");
+      const pressable = [...root.querySelectorAll('button, [role="button"], input[type=checkbox], select, a[href]')].filter((n) => {
+        if (n.closest("[hidden]") || n.disabled) return false;
+        const r = n.getBoundingClientRect();
+        return r.width > 1 && r.height > 1 && getComputedStyle(n).visibility !== "hidden" && getComputedStyle(n).display !== "none";
+      });
+      const small = pressable.filter((n) => !n.matches("[data-ar-check]")).filter((n) => { const r = n.getBoundingClientRect(); return r.width < 32 || r.height < 32; }).map((n) => (n.getAttribute("aria-label") || n.textContent || "").trim().slice(0, 40));
+      const c = root.querySelector("[data-ar-check]");
+      let around = true;
+      if (c) { const r = c.getBoundingClientRect(); around = document.elementFromPoint(r.left - 4, r.top + r.height / 2) === c; }
+      return { sideways: document.documentElement.scrollWidth > window.innerWidth + 1, small, around };
+    });
+  });
+  check("phone: nothing scrolls sideways", !phone.out.sideways, phone.out);
+  check("phone: everything pressable is at least 32 pixels", !phone.out.small.length, phone.out.small.slice(0, 5));
+  check("phone: a tick box answers a tap just beside it", phone.out.around, phone.out);
+  const mouse = await inPanel(browser, { viewport: { width: 1280, height: 900 }, settings: S }, async (page) => {
+    await openAll(page);
+    // The first one that is on screen, since some of each kind are in rows
+    // that are hidden until a switch is on.
+    const pick = (sel) => page.evaluate((sel) => {
+      const n = [...document.querySelectorAll(sel)].find((x) => !x.closest("[hidden]") && x.getBoundingClientRect().width > 1 && !x.disabled);
+      if (!n) return null;
+      n.scrollIntoView({ block: "center" });
+      window.__probe = n;
+      const r = n.getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    }, sel);
+    const look = () => page.evaluate(() => { const cs = getComputedStyle(window.__probe); return [cs.backgroundColor, cs.borderColor, cs.boxShadow].join("|"); });
+    const out = {};
+    for (const [name, sel] of [["a tick box", "#modal [data-ar-check]"], ["a list", '#modal select[data-ar-field]'], ['a "?"', "#modal button[data-ar-hint]"], ["a section heading", "#modal [data-ar-sechead]"]]) {
+      const at = await pick(sel);
+      if (!at) { out[name] = false; continue; }
+      const before = await look();
+      await page.mouse.move(at.x, at.y);
+      await page.waitForTimeout(250);
+      out[name] = before !== (await look());
+      await page.mouse.move(2, 2);
+    }
+    return out;
+  });
+  for (const name of Object.keys(mouse.out)) check("under a mouse, " + name + " answers the pointer", mouse.out[name], mouse.out);
+  check("no console errors", phone.errors.length + mouse.errors.length === 0, phone.errors.concat(mouse.errors));
 }
 
 await browser.close();

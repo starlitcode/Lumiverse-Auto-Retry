@@ -30,6 +30,9 @@ const Z_TOAST = 2147483100;
 const Z_HINT = 2147483300;
 const Z_OVERLAY = 2147483600;
 const STORE_KEY = "lv-auto-retry:settings:v1";
+// Which preset each preset bar was last on, in this browser only. A screen
+// position and a pick mean nothing on another device, so neither is synced.
+const PICK_KEY = "lv-auto-retry:preset-pick:v1";
 // Written the first time this version runs, so the one-time switch to
 // swiping happens once. Up here with the other keys because the settings are
 // read before most of setup() exists, and a const declared further down is
@@ -8305,8 +8308,8 @@ export function setup(ctx, opts) {
                     // The "?" beside each setting. Its size is here rather than inline on
                     // the button because an inline style cannot be answered by a media
                     // query, and this needs one: 18px is comfortable under a mouse and
-                    // small under a thumb, so a screen that is touched gets 28px, which
-                    // clears the 24px minimum target size. A computer keeps the smaller
+                    // small under a thumb, so a screen that is touched gets 32px, the
+                    // smallest tap target this panel uses. A computer keeps the smaller
                     // one, where the pointer is precise and the rows are read a screenful
                     // at a time.
                     //
@@ -8316,7 +8319,27 @@ export function setup(ctx, opts) {
                     // setting it explains.
                     "button[data-ar-hint]{width:18px;height:18px;font-size:11px}" +
                     "@media (pointer:coarse){" +
-                    "button[data-ar-hint]{width:28px;height:28px;font-size:14px}}";
+                    "button[data-ar-hint]{width:32px;height:32px;font-size:14px}}" +
+                    // Under a mouse, everything that can be pressed answers the pointer,
+                    // the same as the buttons already do. A ring for the tick boxes and
+                    // the "?", since a box that is ticked already wears the accent edge.
+                    // Only where the device can hover: a phone has none, and a tap does
+                    // the work either way.
+                    "@media (hover:hover){" +
+                    "[data-ar-check]:hover:not(:disabled){box-shadow:0 0 0 3px var(--lumiverse-primary-020,rgba(147,112,219,.2))}" +
+                    "button[data-ar-hint]:hover{box-shadow:0 0 0 2px var(--lumiverse-primary-050,rgba(147,112,219,.5))}" +
+                    "[data-ar-sechead]:hover{background:var(--lumiverse-fill-subtle,rgba(128,128,128,.08))}" +
+                    "select[data-ar-field]:hover:not(:focus):not(:disabled){" +
+                    "border-color:var(--lumiverse-border-hover,rgba(147,112,219,.25))!important}}" +
+                    // A finger needs room. A tick box keeps its size and answers a tap a
+                    // little way around it; the buttons, section headings and lists are at
+                    // least 32px high. Marked important because some of the buttons are
+                    // made smaller inline for a mouse.
+                    "@media (pointer:coarse){" +
+                    "[data-ar-check]::before{content:\"\";position:absolute;inset:-6px}" +
+                    "button[data-ar-btn]{min-height:32px!important}" +
+                    "[data-ar-sechead]{min-height:32px;box-sizing:border-box}" +
+                    "select[data-ar-field]{min-height:32px}}";
             (document.head || document.documentElement).appendChild(el);
             panelStyleEl = el;
         }
@@ -10719,8 +10742,35 @@ export function setup(ctx, opts) {
         // A preset switcher: pick a saved preset and Load it into the settings, or
         // save the current settings as a preset. Load updates the on-screen fields in
         // place (no rebuild), so it never jumps the scroll or closes open sections.
+        function readPick(kind) {
+            try {
+                if (typeof localStorage === "undefined")
+                    return "";
+                const all = JSON.parse(localStorage.getItem(PICK_KEY) || "{}");
+                return all && typeof all[kind] === "string" ? all[kind] : "";
+            }
+            catch (_) {
+                return "";
+            }
+        }
+        function writePick(kind, name) {
+            try {
+                if (typeof localStorage === "undefined")
+                    return;
+                const all = JSON.parse(localStorage.getItem(PICK_KEY) || "{}") || {};
+                if ((all[kind] || "") === name)
+                    return;
+                all[kind] = name;
+                localStorage.setItem(PICK_KEY, JSON.stringify(all));
+            }
+            catch (_) { }
+        }
         function buildPresetBar(kind) {
             const wrap = document.createElement("div");
+            // The preset this bar was last on, kept across the panel closing and
+            // across a reload. Saving closes the panel, and a bar that came back
+            // naming nothing let go of a set that comes with the extension: its
+            // notes were still on screen, and unlocked, as if they were yours.
             // What this bar's settings held before the last pick loaded a preset over
             // them, so a pick made to see what is in a preset can be taken back. One
             // step, not a history. Cleared by a save, since Put it back after saving
@@ -10757,6 +10807,7 @@ export function setup(ctx, opts) {
             };
             // Load direction: a saved preset into the settings.
             const select = document.createElement("select");
+            select.setAttribute("data-ar-field", "1");
             select.style.cssText =
                 "flex:1;min-width:150px;padding:8px 10px;border-radius:var(--lumiverse-radius,8px);border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));background:var(--lumiverse-fill-subtle,rgba(0,0,0,.1));color:var(--lumiverse-text,#eee);font:13px var(--lumiverse-font-family,system-ui)";
             // Picking already loads, so this is only for loading the one already
@@ -10831,6 +10882,7 @@ export function setup(ctx, opts) {
             };
             const syncPresetButtons = () => {
                 const picked = !!select.value;
+                writePick(kind, select.value);
                 // Hidden rather than greyed: an always-present button offering to put
                 // back nothing is a question the reader has to answer every time they
                 // look at the row.
@@ -10930,7 +10982,18 @@ export function setup(ctx, opts) {
                 lastPick = select.value;
                 syncPresetButtons();
             };
-            refreshSelect();
+            // Back on the preset it was on, but only while what is set is still
+            // exactly that preset. Anything changed since, by an import or a reset,
+            // means the panel no longer holds it, and naming it would be untrue.
+            const stillHolds = (name) => {
+                const p = list().find((x) => x.name === name) || builtInNote(name);
+                if (!p || !p.values)
+                    return false;
+                const now = cfg;
+                return Object.keys(p.values).every((k) => settledJson(now[k]) === settledJson(p.values[k]));
+            };
+            const was = readPick(kind);
+            refreshSelect(was && stillHolds(was) ? was : undefined);
             // Re-read storage and rebuild the dropdown, for when an import adds
             // presets while this bar is on screen.
             presetBarRefreshers.push(() => {
@@ -11476,6 +11539,7 @@ export function setup(ctx, opts) {
             };
             h.setAttribute("role", "button");
             h.setAttribute("tabindex", "0");
+            h.setAttribute("data-ar-sechead", "1");
             const toggle = () => {
                 const open = body.style.display !== "none";
                 apply(!open);
@@ -13041,6 +13105,7 @@ export function setup(ctx, opts) {
     // list underneath it.
     function styleField(input, opts) {
         const mark = !opts || opts.mark !== false;
+        input.setAttribute("data-ar-field", "1");
         input.style.cssText +=
             "padding:9px 10px;border-radius:var(--lumiverse-radius,8px);" +
                 "border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));" +
