@@ -2859,6 +2859,26 @@ function replyProblem(content: string, thought: string, cfg: any): string {
   return "";
 }
 
+// A model that writes its thinking into the reply text, ahead of the reply.
+// Lumiverse takes that apart for a reply it streams, and does not for text an
+// extension adds, so it is taken apart here: the thinking goes in the
+// reroll's own thinking, where Lumiverse shows it, and the reply in the
+// reroll. Thinking anywhere but at the start is left where it is.
+function splitLeadingThinking(content: string, thought: string, cfg: any): { text: string; thinking: string } {
+  const visible = stripThinkingAlways(content, cfg).trim();
+  if (!visible || visible === content) return { text: content, thinking: thought };
+  const at = content.lastIndexOf(visible);
+  if (at <= 0 || at + visible.length !== content.length) return { text: content, thinking: thought };
+  if (thought.trim()) return { text: visible, thinking: thought };
+  // The tags around it go: what is left is what the model thought.
+  const inner = content
+    .slice(0, at)
+    .trim()
+    .replace(/^<[^>\n]*>\s*/, "")
+    .replace(/\s*<[^>\n]*>$/, "")
+    .trim();
+  return { text: visible, thinking: inner };
+}
 function isHardError(err: any, cfg?: any): boolean {
   if (!err) return false;
   const text = errorText(err);
@@ -4581,7 +4601,10 @@ export function setup(ctx: Ctx, opts?: any) {
         : "About " + money(one) + " a retry at this size." +
           (stats.retries
             ? " The " + stats.retries + (stats.retries === 1 ? " retry" : " retries") +
-              " this session come to about " + money(one * stats.retries) + "."
+              (stats.extraReplies
+                ? ", and " + stats.extraReplies + " more " + (stats.extraReplies === 1 ? "reply" : "replies") + " sent at once,"
+                : "") +
+              " this session come to about " + money(one * (stats.retries + stats.extraReplies)) + "."
             : "") +
           covers;
       body.appendChild(cost);
@@ -4937,6 +4960,7 @@ export function setup(ctx: Ctx, opts?: any) {
         // Counting starts again from now, so the clock resets with the counts
         // or the rate below them would be measured against the wrong window.
         stats.retries = 0;
+        stats.extraReplies = 0;
         stats.gaveUp = 0;
         stats.good = 0;
         stats.notesSent = 0;
@@ -7387,6 +7411,9 @@ export function setup(ctx: Ctx, opts?: any) {
   // "it retries too much".
   const stats = {
     retries: 0,
+    // Replies sent beyond the first by several tries at once. Each is a whole
+    // reply to pay for, so the cost line counts them with the retries.
+    extraReplies: 0,
     gaveUp: 0,
     good: 0,
     // Notes the backend confirmed it attached, and notes it dropped with the
@@ -8847,6 +8874,11 @@ export function setup(ctx: Ctx, opts?: any) {
       back: 0,
       reason: reason,
       lastText: "",
+      // Replies that came back with text to judge, and the last error. When
+      // every reply was an error, the next try is an error retry, which
+      // presses the button and waits as long as an error asks for.
+      judged: 0,
+      lastError: null,
       messageId: "",
       swipeCount: 0,
       adding: false,
@@ -8900,6 +8932,7 @@ export function setup(ctx: Ctx, opts?: any) {
       run.timer = null;
       run.messageId = String(msg.messageId || "");
       run.swipeCount = Number(msg.swipeCount) || 0;
+      stats.extraReplies += Math.max(0, run.count - 1);
       // The backend has used the note up, so there is nothing left to take back.
       if (armedNoteChat === String(chatId)) armedNoteChat = null;
       log(
@@ -8914,9 +8947,11 @@ export function setup(ctx: Ctx, opts?: any) {
       run.back += 1;
       paintNow();
       if (msg.error) {
-        log("reply " + run.back + " of " + run.count + " failed: " + String(msg.error));
+        run.lastError = String(msg.error);
+        log("reply " + run.back + " of " + run.count + " failed: " + run.lastError);
         return;
       }
+      run.judged += 1;
       const content = String(msg.content || "").trim();
       const thought = String(msg.reasoning || "");
       noteReplySize(content, chatId);
@@ -8936,7 +8971,8 @@ export function setup(ctx: Ctx, opts?: any) {
         return;
       }
       run.adding = true;
-      addAtOnceReply(chatId, run, content, thought);
+      const parts = splitLeadingThinking(content, thought, cfg);
+      addAtOnceReply(chatId, run, parts.text, parts.thinking);
       return;
     }
     if (msg.stage === "done") {
@@ -8945,7 +8981,8 @@ export function setup(ctx: Ctx, opts?: any) {
       hideToast();
       log("none of the " + run.count + " replies passed");
       if (run.lastText) s.lastText = run.lastText.slice(-STREAM_BUF_MAX);
-      scheduleRetry(chatId, run.reason);
+      if (!run.judged && run.lastError) scheduleRetry(chatId, "error", run.lastError);
+      else scheduleRetry(chatId, run.reason);
     }
   }
   function addAtOnceReply(chatId: string, run: any, content: string, thought: string) {
@@ -10367,6 +10404,7 @@ export function setup(ctx: Ctx, opts?: any) {
       lines.push("  watching for: " + sayTime(Date.now() - stats.since));
       lines.push("  replies that came back fine: " + stats.good);
       lines.push("  retries fired: " + stats.retries);
+      if (stats.extraReplies) lines.push("  more replies sent at once: " + stats.extraReplies);
       lines.push("  messages it gave up on: " + stats.gaveUp);
       // Only when the feature is in use, so a report from someone who has never
       // touched it is not padded with two zeroes.
@@ -14330,6 +14368,7 @@ export function setup(ctx: Ctx, opts?: any) {
 export const __testing = {
   replyProblem,
   HARD_FAILURE,
+  splitLeadingThinking,
   sameSettings,
   parseColor,
   blendColor,

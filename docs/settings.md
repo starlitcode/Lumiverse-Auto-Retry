@@ -210,7 +210,7 @@ How it works it out:
 - The prompt is the one on this tab.
 - The new reply has not been written yet, so it uses the size of the last reply in this chat. The line says so.
 - A chat with no reply yet is priced on the prompt only, and says so.
-- Under it is what the retries so far this session come to.
+- Under it is what the retries so far this session come to. With **Several tries at once** on, each reply sent at once counts as one more.
 
 **Read it as the most it could cost, not your bill.** It prices every token at the full rate, and it leaves out anything your provider adds around your prompt.
 

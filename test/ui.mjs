@@ -2366,7 +2366,8 @@ console.log("\nseveral tries at once");
     if (passAsk) {
       answer({ type: "at_once", requestId: passAsk.requestId, stage: "sent", count: 2, from: "kept", messageId: "m2", swipeCount: 2 });
       answer({ type: "at_once", requestId: passAsk.requestId, stage: "reply", index: 0, content: REFUSAL });
-      answer({ type: "at_once", requestId: passAsk.requestId, stage: "reply", index: 1, content: GOOD });
+      // Thinking written ahead of the reply, as some models do.
+      answer({ type: "at_once", requestId: passAsk.requestId, stage: "reply", index: 1, content: "<think>Keep the lamp lit.</think>\n" + GOOD });
     }
     await wait(20);
     const reroll = sent.find((m) => m.type === "add_reroll") || null;
@@ -2396,6 +2397,21 @@ console.log("\nseveral tries at once");
     await wait(40);
     const fbAfter = clicks - c3;
 
+    // Every reply an error: the next try is an error retry, which presses
+    // the button rather than sending several more into a provider in trouble.
+    const c4 = clicks;
+    await twoFailures("allerr", { content: REFUSAL });
+    const errAsk = asks("allerr")[0] || null;
+    if (errAsk) {
+      answer({ type: "at_once", requestId: errAsk.requestId, stage: "sent", count: 2, from: "kept", messageId: "m2", swipeCount: 2 });
+      answer({ type: "at_once", requestId: errAsk.requestId, stage: "reply", index: 0, error: "upstream connection reset" });
+      answer({ type: "at_once", requestId: errAsk.requestId, stage: "reply", index: 1, error: "upstream connection reset" });
+      answer({ type: "at_once", requestId: errAsk.requestId, stage: "done" });
+    }
+    await wait(60);
+    const allErrAsks = asks("allerr").length;
+    const allErrClicks = clicks - c4;
+
     // A reply the reader starts stops the tries still out.
     await twoFailures("taken", { content: REFUSAL });
     const takenAsk = asks("taken")[0] || null;
@@ -2411,21 +2427,24 @@ console.log("\nseveral tries at once");
 
     return {
       passCount: passAsk && passAsk.count, clicksBeforeAtOnce, clicksAfterPass,
-      reroll: reroll && { text: reroll.text, messageId: reroll.messageId, swipeCount: reroll.swipeCount },
+      reroll: reroll && { text: reroll.text, reasoning: reroll.reasoning, messageId: reroll.messageId, swipeCount: reroll.swipeCount },
       stopped,
       firstCount: first && first.count, secondCount: second && second.count,
-      fbBefore, fbAfter, takenStopped, errorAsks, errorClicks,
+      fbBefore, fbAfter, takenStopped, errorAsks, errorClicks, allErrAsks, allErrClicks,
     };
   });
   await page.close();
   check("the first try presses the button", out.clicksBeforeAtOnce === 1, out);
   check("the second try asks for 2 at once instead", out.passCount === 2, out);
   check("the reply that passed is added as a reroll", !!out.reroll && /lit the lamp again/.test(out.reroll.text), out.reroll);
+  check("its thinking goes in the reroll's thinking, not its text",
+    !!out.reroll && !/think/.test(out.reroll.text) && out.reroll.reasoning === "Keep the lamp lit.", out.reroll);
   check("on the reply the tries were for", !!out.reroll && out.reroll.messageId === "m2" && out.reroll.swipeCount === 2, out.reroll);
   check("the rest are stopped once one passes", out.stopped === true, out);
   check("nothing is pressed after a reply passed", out.clicksAfterPass === 1, out);
   check("none passing asks again with one more", out.firstCount === 2 && out.secondCount === 3, out);
   check("a backend that cannot run them falls back to the button", out.fbBefore === 1 && out.fbAfter === 2, out);
+  check("every reply an error makes the next try press the button", out.allErrAsks === 1 && out.allErrClicks === 2, out);
   check("a reply the reader starts stops the tries", out.takenStopped === true, out);
   check("an error is never sent several at once", out.errorAsks === 0 && out.errorClicks === 2, out);
   check("no console errors", errors.length === 0, errors);

@@ -36,10 +36,15 @@ function boot(opts?: {
         { id: "m1", role: "user", content: "The rain picked up." },
         { id: "m2", role: "assistant", content: "I cannot continue this.", swipes: ["I cannot continue this."] },
       ];
+  let account: any = null;
   const spindle: any = {
     storage: {
       read: async () => { throw new Error("empty"); },
       write: async () => {},
+    },
+    userStorage: {
+      getJson: async (file: string) => (file === "settings.json" ? account : null),
+      setJson: async () => {},
     },
     onFrontendMessage: (fn: any) => { onFrontend = fn; },
     sendToFrontend: (msg: any, userId?: any) => sent.push({ msg, userId }),
@@ -76,6 +81,7 @@ function boot(opts?: {
     dryCalls,
     updates,
     setMessages: (m: Msg[]) => { messages = m; },
+    setAccount: (v: any) => { account = v; },
     tell: (payload: any, userId?: string) => onFrontend(payload, userId),
     run: (msgs: any[], context?: any) => interceptor(msgs, context || {}),
     on: (on: boolean, userId?: string) =>
@@ -368,3 +374,43 @@ describe("the shared verdict", () => {
     expect(T.replyProblem("He nods.", "", cfg)).toBe("short");
   });
 });
+
+// Lumiverse takes thinking out of a reply it streams, and not out of text an
+// extension adds, so a reroll added from several tries at once has to do it.
+describe("thinking written into the reply text", () => {
+  const T: any = __testing;
+  const cfg = {};
+
+  test("thinking at the start goes into the reroll's own thinking", () => {
+    expect(T.splitLeadingThinking("<think>Keep the storm loud.</think>\n\nThe shutters banged twice.", "", cfg)).toEqual({
+      text: "The shutters banged twice.",
+      thinking: "Keep the storm loud.",
+    });
+  });
+  test("thinking Lumiverse already handed over is kept, and the text is still cleaned", () => {
+    expect(T.splitLeadingThinking("<think>draft</think>The shutters banged twice.", "Keep the storm loud.", cfg)).toEqual({
+      text: "The shutters banged twice.",
+      thinking: "Keep the storm loud.",
+    });
+  });
+  test("a reply with no thinking in it is left as it is", () => {
+    expect(T.splitLeadingThinking("The shutters banged twice.", "", cfg)).toEqual({
+      text: "The shutters banged twice.",
+      thinking: "",
+    });
+  });
+});
+
+describe("a new device", () => {
+  test("the switch is read from the account copy when the panel loads", async () => {
+    const h = boot();
+    // The account copy says on, and the panel has said nothing yet.
+    (h as any).setAccount({ tryAtOnce: true });
+    await h.tell({ type: "load_settings", requestId: "l1" }, "alice");
+    await h.run(prompt(), { chatId: "c1", userId: "alice" });
+    await h.tell({ type: "try_at_once", requestId: "r1", chatId: "c1", count: 2 }, "alice");
+    await h.settle();
+    expect(h.stage("sent")[0].msg.from).toBe("kept");
+  });
+});
+

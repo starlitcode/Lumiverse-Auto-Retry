@@ -616,6 +616,10 @@ spindle.onFrontendMessage(async (payload: any, userId?: string) => {
     if (payload.type === 'load_settings') {
       let settings: any = null;
       try { settings = await readUserJson(SETTINGS_FILE, userId); } catch (__) { settings = null; }
+      // A panel on a new device has none of this person's settings yet and
+      // tells this side nothing until it saves, so the switch is read from the
+      // account copy here.
+      if (settings && typeof settings === 'object') setAtOnce(userId, settings.tryAtOnce === true);
       // This runs on every page load and it is the only path that arrives with
       // a userId, so it is the one that can resolve per-user storage. The
       // startup read above cannot: it has no user to read for.
