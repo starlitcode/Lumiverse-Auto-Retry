@@ -2,7 +2,7 @@
 
 This page explains what Auto Retry can reach, what it keeps, and what it cannot get at. To report a security problem, see [SECURITY.md](../SECURITY.md).
 
-## It works entirely on your own device
+## It works inside your own Lumiverse
 
 - **It has no networking.** It never opens a connection, never contacts a server of mine or anyone else's, and has no analytics. Everything happens inside your copy of Lumiverse.
 - **One setting asks Lumiverse to send a prompt.** With **Several tries at once** on, Auto Retry asks Lumiverse to send your chat's prompt to your own model connection, the same one your replies use. Lumiverse sends it, as it does when you press retry. It is off by default. See [Several tries at once](#several-tries-at-once) below.
@@ -58,7 +58,7 @@ The note is the only thing in the extension that changes what the model is asked
 It is added just before the extension presses your retry button, and five things keep it to that one reply:
 
 - It belongs to one chat, and is never added to a reply in another chat.
-- It is used once, then cleared, whether it was used or not.
+- It is cleared after one retry, whether or not that retry used it.
 - It expires after 45 seconds.
 - If the retry press started nothing, it is taken back straight away. If there is no retry button to press, no note is set up at all.
 - Optionally, **Only send them on a regenerate or a swipe** also requires Lumiverse to call the reply a regenerate or a swipe. It is off by default, because most versions of Lumiverse call every reply "normal", and the note would then never be sent.
@@ -69,7 +69,7 @@ Off by default. With it on:
 
 - **It keeps the last prompt in each chat**, so a try can send the same prompt again. The copy is in memory on the server, for up to 12 chats, for 30 minutes. It is not written to disk. Turning the setting off drops every copy.
 - **The prompt goes to your own model connection**, the same one your replies use, several times at once. Lumiverse sends it. Auto Retry does not open a connection of its own.
-- **The replies come back to the panel**, so they can be checked. The one that passes is added to your chat as a new reroll. The others are not kept.
+- **The replies come back to Auto Retry in your browser**, so they can be checked. The one that passes is added to your chat as a new reroll. The others are not kept.
 
 [Several tries at once](tries-at-once.md) explains the rest, including the cost.
 

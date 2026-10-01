@@ -16,8 +16,7 @@ It watches each reply and tries again when:
 - the reply is cut off mid-sentence (see [Cut-off detection](docs/detection.md#cut-off-detection))
 - the reply is an accidental out-of-character refusal, or the model breaks off mid-scene
   (see [Accidental-refusal detection](docs/detection.md#accidental-refusal-detection))
-- the reply stops arriving partway and nothing more comes for a while
-- a reply never starts or never finishes
+- a reply never starts, or stops partway and nothing more comes for a while
 - (optional, off by default) the reply is very short
 - (optional, off by default) the model leaves the scene to offer real-world support
   (see [Stopping to offer support](docs/detection.md#stopping-to-offer-support), and [Safety](docs/safety.md) before switching it on)

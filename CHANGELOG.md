@@ -20,6 +20,7 @@ _2026-10-01_
 ### Changed
 
 - **Easier to use on a phone and with a mouse.** On a phone, the **?** buttons, **Expand**, **Add another note**, the section headings and the lists are at least 32 pixels, and a tick box answers a tap just around it. With a mouse, the tick boxes, lists, **?** buttons and section headings light up when you point at them.
+- **Shorter descriptions.** Most of the long descriptions under the **?** buttons are shorter and plainer. The table of settings in the docs uses plain words in place of terms such as "master switch" and "whitelist".
 - **Pop-ups appear at once.** The **Reset…** dialog, the full-size editor, the warning before the crisis-support setting, and the description under each **?** used to grow or fade in. They now appear with no animation. The pop-up for a retry, an error or switching on and off is unchanged.
 
 ### Fixed

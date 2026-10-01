@@ -2,7 +2,7 @@
 
 This page explains the **Several tries at once** setting: what it does, what it costs, and when it is used.
 
-It is off by default. Turn it on under **How it retries**.
+It is off by default. Turn it on under **How it retries**. You do not need to change **Most tries per message** to use it.
 
 ## What it does
 
@@ -29,7 +29,12 @@ The try number decides how many are sent, up to **Most at once**:
 | 3 | 3 |
 | 4 | 3 |
 
-**Most at once** can be set from 2 to 5. **Most tries per message** still counts tries, not replies.
+**Most at once** can be set from 2 to 5.
+
+**Most tries per message** still decides how many tries there are. It counts tries, not replies.
+
+- Several at once starts from the second try, so **Most tries per message** has to be 2 or more for it to do anything.
+- At the default of 4, tries 2, 3 and 4 are sent at once.
 
 ## What it costs
 
@@ -72,13 +77,6 @@ Lumiverse does not announce a reroll an extension adds as a finished reply. So A
 
 - With Auto Refine 1.26.0 or later and its automatic pass on, the added reroll is refined like any new reply.
 - With an older Auto Refine, or the automatic pass off, the reroll is left as it is. You can still refine it yourself.
-
-## Most tries per message
-
-**Several tries at once** works inside **Most tries per message**. It does not replace it.
-
-- The first try is always a normal retry. Several at once starts from the second try.
-- So **Most tries per message** has to be 2 or more for it to do anything. At the default of 4, tries 2, 3 and 4 are sent at once.
 
 ## The permission it needs
 

@@ -234,57 +234,57 @@ These are the defaults for a new install. They are in the `CONFIG` block at the 
 
 | Option | Default | Meaning |
 | --- | --- | --- |
-| enabled | true | Master switch. |
+| enabled | true | Turns Auto Retry on or off everywhere. |
 | showFloatingToggle | false | Put a small draggable on/off button over the chat. |
 | floatingToggleSize | 44 | How wide that floating button is, in pixels (28-96). The button on the chat resizes as you type, so the size can be seen before it is saved, and closing the settings without saving puts it back. Shown only while `showFloatingToggle` is on. |
 | showExtrasToggle | false | Add an on/off button to the chat input's Extras menu. Its label says whether Auto Retry is on or off. Hidden while the floating button is on. |
-| maxRetries | 4 | Hard cap per message. Nothing retries past this. The lowest is 1: to stop it retrying, switch it off rather than setting this to 0. |
+| maxRetries | 4 | The most tries for one message. Nothing retries past this. The lowest is 1. To stop it retrying, switch it off instead. |
 | tryAtOnce | false | From the second try, send the same prompt several times at once and add the first reply that passes as a new reroll. Each one costs a whole reply. Needs the `chat_mutation` permission. See [Several tries at once](tries-at-once.md). |
 | tryAtOnceMax | 3 | The most replies sent at once (2-5). The second try sends 2, the third 3, and so on up to this. Shown only while `tryAtOnce` is on. |
-| pauseWhenFailing | true | Pause auto-retry after several whole runs give up in a row. Cleared by the next reply that comes back fine. |
-| breakerRuns | 3 | How many failed runs in a row trigger the pause. A run is one message that used up all its tries. Shown only while `pauseWhenFailing` is on. |
+| pauseWhenFailing | true | Pause Auto Retry after several messages in a row use up all their tries. The next reply that comes back fine ends the pause. |
+| breakerRuns | 3 | How many messages in a row have to use up all their tries before it pauses. Shown only while `pauseWhenFailing` is on. |
 | breakerPauseMins | 5 | How long the pause lasts, in minutes. A reply that comes back fine ends it early. Shown only while `pauseWhenFailing` is on. |
 | retryDelayMs | 2000 | Wait before the first retry, in milliseconds. |
 | backoffFactor | 2 | Each wait is this many times longer than the last. |
 | maxDelayMs | 60000 | Longest it will ever wait. |
-| jitter | true | Nudges each wait randomly so retries do not all arrive at once. |
-| rateLimitDelayMs | 15000 | Floor wait when the server says it is busy. Most shared tiers meter per minute, so a shorter wait usually spends a try hitting the same limit. Where the server says how long to wait, that figure is used instead and it is not held under `maxDelayMs`: it is the only number here that is not a guess. An hour is the ceiling. |
-| retryByNewReroll | true | On: a retry clicks the next / swipe button, adding a new reroll and keeping the existing ones, so a reply it was wrong to retry can be swiped back to. Off: a retry redoes the reply in place via the regenerate button, which on some builds clears the other rerolls. Applies to every retry reason. The other button is the fallback. |
-| keepReplaced | true | Keep the last reply a retry threw away in this chat, so it can be read back or copied from the Replaced tab of the on-screen panel. Held in the tab's memory only: never written down, never sent anywhere, gone when the tab closes. |
-| stuckTimeoutMs | 240000 | Started, then nothing arrived and it never finished, within this. 0 disables. |
-| idleTimeoutMs | 90000 | Tokens flowed then stopped for this long. 0 disables. |
+| jitter | true | Changes each wait by a small random amount, so retries do not all reach the server at the same moment. |
+| rateLimitDelayMs | 15000 | The shortest wait when the server says it is busy. A shorter wait often hits the same limit again. When the server says how long to wait, that time is used instead, even if it is longer than `maxDelayMs`, up to an hour. |
+| retryByNewReroll | true | On: a retry clicks the next / swipe button, adding a new reroll and keeping the existing ones, so a reply it was wrong to retry can be swiped back to. Off: a retry redoes the reply in place with the regenerate button, which on some setups clears the other rerolls. Applies to every retry reason. The other button is the fallback. |
+| keepReplaced | true | Keep the last reply a retry replaced in this chat, to read or copy on the Replaced tab of the on-screen panel. It is kept in this browser tab only. It is never saved or sent anywhere, and it is gone when the tab closes. |
+| stuckTimeoutMs | 240000 | A reply started, but no text came within this time. It is retried. 0 turns this off. |
+| idleTimeoutMs | 90000 | Text was coming in, then stopped for this long. It is retried. 0 turns this off. |
 | retryOnError | true | Retry provider errors. |
 | ignoreHardErrors | true | Skip permanent failures like missing models or invalid API keys. |
 | hardErrorPhrases | (blank) | Your own wording for an error that will not fix itself, one per line, counted alongside the built-in list. Shown only while `ignoreHardErrors` is on. |
-| retryOnEmpty | true | Retry empty replies and mid-reasoning cutoffs. |
+| retryOnEmpty | true | Retry empty replies, and replies cut off while the model is still thinking. |
 | retryOnSpam | true | Retry when the reply is one character over and over, such as `!!!!!!!!`. |
 | retryOnSpamThinking | true | Retry when the thinking is one character over and over, even when the reply after it looks fine. |
 | retryOnTruncated | true | Retry a reply that ends mid-sentence. |
 | retryOnNoPunct | true | Retry a reply that stops on a word with nothing after it. Punctuation in any script counts as an ending, and so does an emoji. |
-| retryOnShort | false | Retry short replies. Off unless you mean it. |
-| minChars | 24 | Short threshold, used when retryOnShort is on. Counts the words you read only: any reasoning block is left out, and so are HTML tags, so a line wrapped in markup is measured by what it says. Shown only while `retryOnShort` is on. |
+| retryOnShort | false | Retry short replies. Off by default, because short replies are often fine. |
+| minChars | 24 | Replies with fewer characters than this count as short. Only the text you read is counted. Thinking and HTML tags are left out. Shown only while `retryOnShort` is on. |
 | retryOnRefusal | true | Retry an accidental out-of-character refusal. |
-| refusalUseBuiltins | true | Use the built-in English refusal lists. Off = only your own phrases. |
+| refusalUseBuiltins | true | Use the built-in English refusal lists. Off: only your own phrases are used. |
 | refusalCatchDisengage | true | Also catch the model breaking off ("I'll stop here", "I won't continue this conversation"). Only counted when it is how the reply ends, never inside quotation marks, and never behind a dialogue tag. Shown only while `refusalUseBuiltins` is on. |
 | refusalCatchCrisis | false | Also catch the model leaving the scene to offer real-world support and crisis resources. Two separate parts of the reply have to point that way before it counts, one of them the model addressing you rather than your character, and a line inside quotation marks never counts. The only check `refusalMaxChars` does not apply to. Ticking it opens a warning that has to be answered before it goes on. Shown only while `refusalUseBuiltins` is on, and read [Safety](safety.md) first. |
 | refusalIgnoreQuoted | true | A built-in match inside quotation marks is a character speaking, so it is not counted. Your own phrases are counted either way. |
 | refusalExtraPhrases | (blank) | Phrases that also count as a refusal, one per line. |
 | refusalPhraseSubs | (blank) | Reword the built-in phrases with "old => new" rules, one per line. Shown only while `refusalUseBuiltins` is on. |
-| refusalIgnorePhrases | (blank) | Whitelist, one per line; a reply containing any is never a refusal. |
+| refusalIgnorePhrases | (blank) | Phrases that are never a refusal, one per line. A reply with any of them is never counted as a refusal. |
 | refusalMaxChars | 2000 | Longest reply still treated as a possible refusal. 0 = no limit. |
-| refusalStripThinking | true | Only check the final reply, stripping known reasoning tags first. Off checks the whole raw output. |
-| refusalThinkTags | (blank) | Extra reasoning tag names, one per line, for unusual thinking wrappers. |
+| refusalStripThinking | true | Only check the reply for a refusal, not the thinking. Off: the thinking is checked too. |
+| refusalThinkTags | (blank) | Extra thinking tag names, one per line, for a model that uses an unusual tag. |
 | refusalNote | false | Send a note with a refusal retry, and only a refusal retry. Needs the `interceptor` permission. |
 | refusalNotes | one empty note | The notes themselves. Each carries its own role (system, user or assistant) and its own first try, so notes can be set to escalate. Up to ten. Whichever have come due are sent together, in order. Empty ones are skipped, and nothing is sent while they all are. Shown only while `refusalNote` is on. |
-| refusalNotePlacement | after | For the whole list, not one note. Where the block of due notes goes: after the last message, before it, at the very end (past anything the build appends behind the conversation), or at the very start. Shown only while `refusalNote` is on. |
-| refusalNoteStrictType | false | For the whole list, not one note: it decides whether any of them are sent at all. Only attach them when Lumiverse reports the generation as a regenerate or a swipe. Most builds report every generation as "normal", and on those this stops the note going out at all, which is why it is off. Shown only while `refusalNote` is on. |
+| refusalNotePlacement | after | For the whole list, not one note. Where the notes that are due go: after the last message, before it, at the very end (after anything Lumiverse adds behind the chat), or at the very start. Shown only while `refusalNote` is on. |
+| refusalNoteStrictType | false | For the whole list, not one note: it decides whether any of them are sent at all. Only attach them when Lumiverse reports the generation as a regenerate or a swipe. Lumiverse reports most replies as "normal", even a regenerate, so this can stop notes going out at all. That is why it is off. Shown only while `refusalNote` is on. |
 | regenerateSelector | (see file) | Your regenerate button. See [Buttons it clicks](buttons.md). |
 | swipeNextSelector | (see file) | Your next / swipe button, which a retry presses first while `retryByNewReroll` is on. |
 | confirmButtonsCustom | false | Lets you add your own dialog button words. Off: only the built-in list is used, and the box is hidden. |
 | confirmButtonLabels | (blank) | Extra dialog button labels it may press when a dialog appears after a retry, one per line. Tried before the built-in list, which is used as well. Shown and read only while `confirmButtonsCustom` is on. |
 | stopSelector | (see file) | Your stop button, used to stop a reply that has frozen. |
-| toast | true | Show the little retry pop-up with its Cancel button. It counts the wait down in real time and names what the retry is for and which try it is. |
-| liveLog | false | Show the on-screen panel. Four tabs: Log for what it is doing as it happens, Prompt for what went to the model, Stats for what it keeps retrying for, and Replaced for the last reply a retry threw away. |
+| toast | true | Show the retry pop-up with its Cancel button. It counts down the wait and says what the retry is for and which try it is. |
+| liveLog | false | Show the on-screen panel. It has four tabs: Log (what it is doing), Prompt (what went to the model), Stats (what it retried for) and Replaced (the last reply a retry replaced). |
 | panelHome | float | Where that panel goes. `float` is a small box over the chat you can move and resize, and where you leave it is remembered. `drawer` puts it in Lumiverse's own side panel, which never covers the reply you are reading. A Lumiverse with no side panel for extensions gets the box, and the Log says so. Shown only while `liveLog` is on. |
 | costIn | 0 | Your provider's input price per million tokens, in its own currency. The panel's Prompt tab uses it to say what retrying costs. 0 leaves the line off. |
 | costOut | 0 | The output price from the same list, for the reply a retry produces. Both at 0 leaves the line off. |

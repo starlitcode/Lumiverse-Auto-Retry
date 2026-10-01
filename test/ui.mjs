@@ -10051,11 +10051,12 @@ console.log("\nhint placement");
     // default, and so is the note list, which opens above on purpose.
     //
     // The height is what leaves less room under the row than the description
-    // needs, so the cap has something to fire on. Measured at 98 of room
-    // against 122 of description. Shorten the descriptions again and this has
-    // to come down with them, or the cap stops being exercised.
+    // needs, so the cap has something to fire on. At 280 the longest one fits.
+    // At 240 it does not, and 220 leaves a margin below that.
+    // Shorten the descriptions again and this has to come down with them, or
+    // the cap stops being exercised.
     const { out, errors } = await inPanel(
-      browser, { css: PANEL, viewport: { width: 393, height: 280 }, settings: { refusalNote: true } },
+      browser, { css: PANEL, viewport: { width: 393, height: 220 }, settings: { refusalNote: true } },
       async (page) => page.evaluate(async (want) => {
         const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
         for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();

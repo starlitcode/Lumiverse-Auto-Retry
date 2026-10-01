@@ -293,7 +293,7 @@ Ten is the limit because each note is a whole extra message in the prompt. Too m
 
 - It is never written to your chat. Nothing appears in your history, and no message is edited.
 - It only goes with a refusal retry. Every other retry sends your request unchanged.
-- It is used once. It is set up just before the retry button is pressed, and thrown away after, whether it was used or not.
+- It is used for one retry only. It is set up just before the retry button is pressed, and cleared after, whether or not that retry used it.
 - It belongs to one chat, and is never added to a reply in another chat.
 - It expires after 45 seconds. If the retry press started nothing, it is taken back straight away. If there is no retry button to press, no note is set up at all.
 
@@ -360,7 +360,7 @@ The note is only there for one retry. The next reply is back to your normal prom
 
 ## Trying it on a reply
 
-At the bottom of **Refusal tuning** is a box to paste a reply into, and a **Check this text** button. It says whether that reply would count as a refusal, and why: which phrase matched, which pattern fired, or why it was skipped (too long, on your whitelist, or built-ins off).
+At the bottom of **Refusal tuning** is a box to paste a reply into, and a **Check this text** button. It says whether that reply would count as a refusal, and why: which phrase matched, which pattern fired, or why it was skipped (too long, in **Never treat these as a refusal**, or the built-in list is off).
 
 - **Use my last reply** fills the box with the reply on screen, so you do not have to copy it. It reads the reply when you press it and keeps nothing.
 - It uses the values in the boxes, not the saved ones, so you can try a change before you press **Save**.
