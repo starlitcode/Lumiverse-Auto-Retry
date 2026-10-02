@@ -9,6 +9,9 @@ behaves, goes into both.
 
 - Work happens on `testing`. `stable` is what users install, and it only moves when
   the owner says to release.
+- After a release, bring `stable` into `testing` with a merge. Never reset or
+  force-push `testing`. People install from it, and Lumiverse cannot update a copy
+  whose branch history was replaced.
 - A release is dated the day it first goes to `stable`, in US Eastern time
   (America/New_York), not UTC. A release late in the evening Eastern time is
   still that day.

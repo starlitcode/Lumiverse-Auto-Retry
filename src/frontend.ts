@@ -152,7 +152,7 @@ const STREAM_BUF_MAX = 200000;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.11.1";
+const VERSION = "5.11.2";
 
 // Whether two saved settings hold the same values, whatever order their keys
 // were written in. A key left undefined counts as not there, the way it is
@@ -11376,6 +11376,12 @@ export function setup(ctx: Ctx, opts?: any) {
       // Ahead of the search guard: whether the master switch is off has nothing
       // to do with what is being searched for, and this must not go stale.
       syncMasterNote();
+      // A permission only one setting uses is missing from the moment that
+      // setting is switched on, not from the next time the panel opens.
+      if (permPaint)
+        try {
+          permPaint();
+        } catch (_) {}
       if (searchBox && String(searchBox.value || "").trim()) {
         // The rows stay where the search put them, but the line naming the
         // switch a row is waiting on does not: turning that switch on from the
