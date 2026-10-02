@@ -117,6 +117,10 @@ A code block, in this shape and nothing else:
 
 No credits in the Discord post. They stay in the changelog.
 
+Write the Discord post each time a version is pushed to `stable`, and give it
+to the owner in the reply. A push that changes nothing users see, such as a
+change to CLAUDE.md, has no post.
+
 ## Phones and laptops
 
 Every change to the panel or the page has to work on a phone and on a laptop.
