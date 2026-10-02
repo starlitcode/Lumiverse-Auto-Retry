@@ -141,7 +141,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.11.0";
+const VERSION = "5.11.1";
 // Whether two saved settings hold the same values, whatever order their keys
 // were written in. A key left undefined counts as not there, the way it is
 // when saved. Used to tell an update or a put-back that would change nothing.
@@ -766,7 +766,7 @@ const SCHEMA = [
                 run: "yourWords",
                 label: "Your own refusal phrases",
                 type: "text",
-                hint: "Extra wording that counts as a refusal, one per line. Used even with the built-in list off. Lines under three characters are ignored.",
+                hint: "Extra wording that counts as a refusal, one per line. Used even with the built-in list off, and also checked against error text. Lines under three characters are ignored.",
             },
             {
                 key: "refusalPhraseSubs",
