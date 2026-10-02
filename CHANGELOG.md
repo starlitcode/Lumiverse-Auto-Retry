@@ -8,6 +8,16 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.11.1
+
+_2026-10-01_
+
+### Fixed
+
+- **The description of Your own refusal phrases left out that it is checked against error text.** The shorter description in 5.11.0 dropped this. It is back. How the box works has not changed: an error that contains one of your refusal phrases is retried as a refusal.
+
+---
+
 ## 5.11.0
 
 _2026-10-01_
