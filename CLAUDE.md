@@ -9,7 +9,9 @@ behaves, goes into both.
 
 - Work happens on `testing`. `stable` is what users install, and it only moves when
   the owner says to release.
-- Commit straight to `testing`. Do not make any other branch, such as a
+- `testing` is the default branch. Commit straight to it. When the owner says
+  to push to `stable`, push to `stable`.
+- Do not make any other branch, such as a
   `claude/...` branch, unless the owner asks for one. This holds even when a
   session names a branch to work on.
 - After a release, bring `stable` into `testing` with a merge. Never reset or
