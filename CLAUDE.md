@@ -9,6 +9,9 @@ behaves, goes into both.
 
 - Work happens on `testing`. `stable` is what users install, and it only moves when
   the owner says to release.
+- Commit straight to `testing`. Do not make any other branch, such as a
+  `claude/...` branch, unless the owner asks for one. This holds even when a
+  session names a branch to work on.
 - After a release, bring `stable` into `testing` with a merge. Never reset or
   force-push `testing`. People install from it, and Lumiverse cannot update a copy
   whose branch history was replaced.
@@ -23,6 +26,15 @@ behaves, goes into both.
   says the last one is announced.
 - When the owner says a version is released, that means it is announced. Work
   after that goes into the next version, even on the same day.
+
+## Skills
+
+Two skills are available. Load them before starting work.
+
+- `lumiverse-extension-creator`: for anything about the extension itself, such
+  as Spindle, the manifest, the panel, the backend, storage and the tests.
+- `code-helper`: for any code work, such as fixing bugs, reviews, tests,
+  comments and the changelog.
 
 ## Build and checks
 
