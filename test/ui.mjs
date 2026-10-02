@@ -12589,6 +12589,45 @@ console.log("\na set that comes with it stays picked after Save");
   check("no console errors", errors.length === 0, errors);
 }
 
+console.log("\na permission notice follows its setting while the panel is open");
+// chat_mutation is only used by Several tries at once, so its notice shows only
+// while that is on. Switching it on in the open panel has to bring the notice
+// up then, not the next time the panel opens.
+{
+  const { out, errors } = await inPanel(browser, { settings: { tryAtOnce: false } }, async (page) =>
+    page.evaluate(async () => {
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      await wait(300);
+      window.__fromBackend({
+        type: "permissions",
+        list: [
+          { name: "generation", costs: "Everything." },
+          { name: "chat_mutation", costs: "Several tries at once.", onlyFor: "tryAtOnce" },
+        ],
+        granted: { generation: true, chat_mutation: false },
+      });
+      await wait(100);
+      const shown = () => {
+        const box = document.querySelector("[data-ar-perms]");
+        return !!box && getComputedStyle(box).display !== "none" && /chat_mutation/.test(box.textContent);
+      };
+      const box = () => document.querySelector('[data-ar-row="tryAtOnce"] input[type="checkbox"]');
+      const off = shown();
+      box().click();
+      await wait(100);
+      const on = shown();
+      box().click();
+      await wait(100);
+      const offAgain = shown();
+      return { off, on, offAgain };
+    }));
+  check("with the setting off, no notice", out.off === false, out);
+  check("switching the setting on shows the notice at once", out.on === true, out);
+  check("and switching it off takes the notice away", out.offAgain === false, out);
+  check("no console errors", errors.length === 0, errors);
+}
+
 console.log("\nthe settings on a phone and under a mouse");
 // On a phone: nothing scrolls sideways and everything that can be pressed is
 // at least 32 pixels, with the tick boxes answering a tap just around them.

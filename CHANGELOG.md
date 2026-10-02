@@ -8,6 +8,16 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.11.2
+
+_2026-10-02_
+
+### Fixed
+
+- **Turning on Several tries at once did not warn about a missing permission until the settings were opened again.** With `chat_mutation` not granted, switching on **Several tries at once** now shows the notice at once, and switching it off takes the notice away.
+
+---
+
 ## 5.11.1
 
 _2026-10-01_
