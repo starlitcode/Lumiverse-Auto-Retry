@@ -8532,6 +8532,73 @@ console.log("\nAndroid asking for the menu twice");
 // The menu is the host's, and a build that predates it has no showContextMenu
 // at all. Opening nothing would read as the button being broken, so it says
 // where the settings actually are.
+console.log("\nthe floating button after an update made while the page stays open");
+{
+  // An update made while the page stays open can take the button's stylesheet
+  // away, or leave an old button on the page after its copy of the extension
+  // was shut down. The button puts its stylesheet back and draws its mark
+  // itself, and a left-over button takes itself away instead of switching
+  // anything. Checked at a phone width.
+  const page = await browser.newPage({ viewport: { width: 412, height: 800 }, hasTouch: true, isMobile: true });
+  const errors = [];
+  page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
+  await stage(page, "<div id=modal></div><div id=host></div>");
+  await page.addStyleTag({ content: THEME });
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  const out = await page.evaluate(async () => {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const host = document.getElementById("host");
+    host.style.cssText = "position:fixed;left:60px;top:60px";
+    const handlers = {};
+    const sent = [];
+    const teardown = window.__setup(
+      { events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
+        sendToBackend: (m) => sent.push(m),
+        onBackendMessage: () => () => {},
+        ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+              registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }),
+              showContextMenu: () => Promise.resolve({ selectedKey: null }),
+              createFloatWidget: () => ({ root: host, destroy: () => {}, setPosition: () => {} }) } },
+      { enabled: true, showFloatingToggle: true, floatingToggleSize: 44 },
+    );
+    handlers.CHARACTER_MESSAGE_RENDERED && handlers.CHARACTER_MESSAGE_RENDERED({ chatId: "A", messageId: "m1" });
+    await wait(100);
+    const b = () => host.querySelector("button");
+    const slashOffset = () => {
+      const l = b() && b().querySelector(".lv-ar-slash");
+      return l ? getComputedStyle(l).strokeDashoffset : "";
+    };
+    const sheet = () => !!document.getElementById("__lvRetryFloatStyle");
+    // The stylesheet goes.
+    document.getElementById("__lvRetryFloatStyle").remove();
+    const goneFirst = !sheet();
+    b().click();
+    await wait(400);
+    const afterOff = { on: b().getAttribute("data-ar-on"), slash: slashOffset(), sheet: sheet() };
+    b().click();
+    await wait(400);
+    const afterOn = { on: b().getAttribute("data-ar-on"), slash: slashOffset(), sheet: sheet() };
+    // A button left behind after shutdown.
+    const old = b();
+    teardown();
+    document.body.appendChild(old);
+    sent.length = 0;
+    old.click();
+    await wait(60);
+    const leftOver = { stillThere: old.isConnected, sent: sent.map((m) => m.type) };
+    return { goneFirst, afterOff, afterOn, leftOver };
+  });
+  await page.close();
+  check("the stylesheet was gone before the tap", out.goneFirst, out);
+  check("a tap puts the stylesheet back", out.afterOff.sheet && out.afterOn.sheet, out);
+  check("switched off, the slash is drawn", out.afterOff.on === "0" && /^0(px)?$/.test(out.afterOff.slash), out.afterOff);
+  check("switched back on, the slash is wiped away", out.afterOn.on === "1" && /^26(px)?$/.test(out.afterOn.slash), out.afterOn);
+  check("a button left after shutdown takes itself away when tapped", out.leftOver.stillThere === false, out.leftOver);
+  check("and switches nothing", out.leftOver.sent.length === 0, out.leftOver);
+  check("no console errors", errors.length === 0, errors);
+}
+
 console.log("\na host with no context menu API");
 {
   const page = await browser.newPage({ viewport: { width: 412, height: 800 } });

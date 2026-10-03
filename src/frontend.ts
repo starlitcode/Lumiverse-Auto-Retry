@@ -5637,6 +5637,14 @@ export function setup(ctx: Ctx, opts?: any) {
 
   function paintFloat() {
     if (!floatEl) return;
+    // The rules that draw on and off and move the button live in a stylesheet
+    // in the page. An update made while the page stays open can leave the
+    // button without it, and the button then went on switching while showing
+    // neither the change nor any movement. It is put back here when it has
+    // gone, and the slash is also set on the element below, so the mark is
+    // right with or without it.
+    if (floatStyleEl && !floatStyleEl.isConnected) floatStyleEl = null;
+    ensureFloatStyle();
     const wasOn = floatShownOn;
     // What the button shows is whether a reply would actually be retried right
     // now, which is both switches. Showing only the master one would leave it
@@ -5690,6 +5698,13 @@ export function setup(ctx: Ctx, opts?: any) {
       if (box) box.innerHTML = markSvgLive(glyph);
     }
     floatEl.setAttribute("data-ar-on", on ? "1" : "0");
+    // The same values the stylesheet gives the slash, on the element itself.
+    // The stylesheet's transition still moves it from one to the other.
+    const slash: any = floatEl.querySelector(".lv-ar-slash");
+    if (slash && slash.style) {
+      slash.style.strokeDasharray = "26";
+      slash.style.strokeDashoffset = on ? "26" : "0";
+    }
     // The first paint sets the state without moving: a button appearing already
     // mid-animation reads as a glitch rather than as an answer to something.
     if (wasOn === null) floatEl.setAttribute("data-ar-still", "1");
@@ -5912,6 +5927,14 @@ export function setup(ctx: Ctx, opts?: any) {
     el.addEventListener("pointerup", rememberFloat);
     el.addEventListener("pointercancel", rememberFloat);
     el.addEventListener("click", () => {
+      // A button left on the page after this copy of the extension was shut
+      // down, which an update made while the page stays open can do. It has
+      // nothing behind it any more, so it takes itself away instead of
+      // switching settings the running copy does not know about.
+      if (tornDown) {
+        try { el.remove(); } catch (_) {}
+        return;
+      }
       // The hold already acted. Toggling here as well would undo it in the same
       // gesture.
       if (openedByHold) {
