@@ -121,6 +121,10 @@ A code block, in this shape and nothing else:
 
 No credits in the Discord post. They stay in the changelog.
 
+Keep the post short. Each line says what changed in one plain sentence, two at
+most. Leave out background, how it worked before, lists of colours or options,
+and anything else the changelog already explains. Detail stays in the changelog.
+
 Write the Discord post each time a version is pushed to `stable`, and give it
 to the owner in the reply. A push that changes nothing users see, such as a
 change to CLAUDE.md, has no post.
