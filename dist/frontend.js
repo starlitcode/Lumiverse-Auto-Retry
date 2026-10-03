@@ -5547,10 +5547,10 @@ export function setup(ctx, opts) {
             return;
         // The rules that draw on and off and move the button live in a stylesheet
         // in the page. An update made while the page stays open can leave the
-        // button without it, and the button then went on switching while showing
-        // neither the change nor any movement. It is put back here when it has
-        // gone, and the slash is also set on the element below, so the mark is
-        // right with or without it.
+        // button without it. The button then still switches, but shows neither the
+        // change nor any movement. It is put back here when it has gone, and the
+        // slash is also set on the element below, so the mark is right with or
+        // without it.
         if (floatStyleEl && !floatStyleEl.isConnected)
             floatStyleEl = null;
         ensureFloatStyle();
@@ -5755,6 +5755,10 @@ export function setup(ctx, opts) {
             catch (_) { }
         };
         el.addEventListener("pointerdown", (e) => {
+            // A button left after shutdown starts no hold, so it opens no menu. A
+            // tap on it takes it away, below.
+            if (tornDown)
+                return;
             openedByHold = false;
             pressFrom = { x: e && e.clientX, y: e && e.clientY };
             // The ring starts filling now and reaches the whole way round exactly as
@@ -5847,7 +5851,7 @@ export function setup(ctx, opts) {
         el.addEventListener("click", () => {
             // A button left on the page after this copy of the extension was shut
             // down, which an update made while the page stays open can do. It has
-            // nothing behind it any more, so it takes itself away instead of
+            // nothing behind it, so it takes itself away instead of
             // switching settings the running copy does not know about.
             if (tornDown) {
                 try {
@@ -5901,6 +5905,8 @@ export function setup(ctx, opts) {
     // a highlight that came back on returning to the tab. None of that is ours to
     // get wrong now.
     async function showFloatMenu() {
+        if (tornDown)
+            return;
         const menu = ctx?.ui?.showContextMenu;
         if (typeof menu !== "function") {
             // An older Lumiverse without the API. Say where the settings are rather

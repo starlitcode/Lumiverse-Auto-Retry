@@ -592,8 +592,6 @@ function placeNotes(messages: any[], notes: any[], placement: string): { list: a
   } catch (_) { /* no account settings yet */ }
 })();
 
-// Settings bridge with the UI: save the whole settings object to per-user
-// account storage and send it back on request.
 // One of Lumiverse's own notifications. Lumiverse takes them only from an
 // extension's server side, so the panel sends its words here to be shown. The
 // kind sets the colour. It is sent to the account that asked: on a shared
@@ -613,6 +611,8 @@ function notify(kind: any, text: any, userId?: string) {
   }
 }
 
+// Settings bridge with the UI: save the whole settings object to per-user
+// account storage and send it back on request.
 spindle.onFrontendMessage(async (payload: any, userId?: string) => {
   try {
     if (!payload) return;

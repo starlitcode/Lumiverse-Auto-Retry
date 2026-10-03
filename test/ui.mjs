@@ -8552,13 +8552,14 @@ console.log("\nthe floating button after an update made while the page stays ope
     host.style.cssText = "position:fixed;left:60px;top:60px";
     const handlers = {};
     const sent = [];
+    let menus = 0;
     const teardown = window.__setup(
       { events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
         sendToBackend: (m) => sent.push(m),
         onBackendMessage: () => () => {},
         ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
               registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }),
-              showContextMenu: () => Promise.resolve({ selectedKey: null }),
+              showContextMenu: () => { menus++; return Promise.resolve({ selectedKey: null }); },
               createFloatWidget: () => ({ root: host, destroy: () => {}, setPosition: () => {} }) } },
       { enabled: true, showFloatingToggle: true, floatingToggleSize: 44 },
     );
@@ -8584,16 +8585,27 @@ console.log("\nthe floating button after an update made while the page stays ope
     teardown();
     document.body.appendChild(old);
     sent.length = 0;
+    // A press held on it starts no ring and opens no menu, by hold or by the
+    // menu event a phone raises on a long press.
+    menus = 0;
+    old.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, clientX: 10, clientY: 10 }));
+    await wait(100);
+    const ring = old.hasAttribute("data-ar-holding");
+    await wait(600);
+    old.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
+    await wait(60);
+    const held = { ring, menus };
     old.click();
     await wait(60);
     const leftOver = { stillThere: old.isConnected, sent: sent.map((m) => m.type) };
-    return { goneFirst, afterOff, afterOn, leftOver };
+    return { goneFirst, afterOff, afterOn, held, leftOver };
   });
   await page.close();
   check("the stylesheet was gone before the tap", out.goneFirst, out);
   check("a tap puts the stylesheet back", out.afterOff.sheet && out.afterOn.sheet, out);
   check("switched off, the slash is drawn", out.afterOff.on === "0" && /^0(px)?$/.test(out.afterOff.slash), out.afterOff);
   check("switched back on, the slash is wiped away", out.afterOn.on === "1" && /^26(px)?$/.test(out.afterOn.slash), out.afterOn);
+  check("a press held on a left-over button starts no ring and opens no menu", !out.held.ring && out.held.menus === 0, out.held);
   check("a button left after shutdown takes itself away when tapped", out.leftOver.stillThere === false, out.leftOver);
   check("and switches nothing", out.leftOver.sent.length === 0, out.leftOver);
   check("no console errors", errors.length === 0, errors);

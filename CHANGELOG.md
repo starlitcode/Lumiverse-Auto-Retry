@@ -16,10 +16,10 @@ _2026-10-03_
 
 - **Messages are Lumiverse's own notifications.** Messages such as "Auto Retry gave up after 3 tries." or "Auto Retry is on." now show as Lumiverse's own notifications: green for success, blue for information, yellow for a problem and red for an error. Each one goes only to the account that caused it. The pop-up with a **Cancel** button stays for the three things you can cancel: the wait before a retry, several tries at once, and picking your regenerate button. See [Settings](docs/settings.md).
 
-
 ### Fixed
 
-- **The floating button could freeze after an update.** After Auto Retry updated while Lumiverse was open, the button could keep showing the slash and stop moving, while a tap still turned Auto Retry on and off. The button now puts its look back. A button left over from before the update takes itself away when tapped.
+- **The floating button could freeze after an update.** After Auto Retry updated while Lumiverse was open, the button could keep showing the slash and stop moving, while a tap still turned Auto Retry on and off. The button now puts its look back. A button left over from before the update takes itself away when tapped. Holding it does nothing.
+
 ---
 
 ## 5.12.0
