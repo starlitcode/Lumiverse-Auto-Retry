@@ -286,7 +286,7 @@ These are the defaults for a new install. They are in the `CONFIG` block at the 
 | confirmButtonsCustom | false | Lets you add your own dialog button words. Off: only the built-in list is used, and the box is hidden. |
 | confirmButtonLabels | (blank) | Extra dialog button labels it may press when a dialog appears after a retry, one per line. Tried before the built-in list, which is used as well. Shown and read only while `confirmButtonsCustom` is on. |
 | stopSelector | (see file) | Your stop button, used to stop a reply that has frozen. |
-| toast | true | Show the retry pop-up with its Cancel button. It counts down the wait and says what the retry is for and which try it is. |
+| toast | true | Show the retry pop-up with its Cancel button. It counts down the wait and says what the retry is for and which try it is. With it off, most other notifications are left out too. Notifications about something you did, and a pause after failed runs, always show. |
 | liveLog | false | Show the on-screen panel. It has four tabs: Log (what it is doing), Prompt (what went to the model), Stats (what it retried for) and Replaced (the last reply a retry replaced). |
 | panelHome | float | Where that panel goes. `float` is a small box over the chat you can move and resize, and where you leave it is remembered. `drawer` puts it in Lumiverse's own side panel, which never covers the reply you are reading. A Lumiverse with no side panel for extensions gets the box, and the Log says so. Shown only while `liveLog` is on. |
 | costIn | 0 | Your provider's input price per million tokens, in its own currency. The panel's Prompt tab uses it to say what retrying costs. 0 leaves the line off. |

@@ -26,7 +26,7 @@
 // with while this side comes back on the new build. A debug report naming only
 // the panel's version would be speaking for a file it cannot see, so the panel
 // asks for this one and prints both.
-const VERSION = '5.12.0';
+const VERSION = '5.13.0';
 const SETTINGS_FILE = 'settings.json';
 // Presets, kept in account storage next to the settings so they
 // follow the user between devices. The browser copy is a fast local cache, not
@@ -592,10 +592,38 @@ function placeNotes(messages, notes, placement) {
 })();
 // Settings bridge with the UI: save the whole settings object to per-user
 // account storage and send it back on request.
+// One of Lumiverse's own notifications. Lumiverse takes them only from an
+// extension's server side, so the panel sends its words here to be shown. The
+// kind sets the colour. It is sent to the account that asked: on a shared
+// server, a notification with no account named goes to everybody. Lumiverse
+// shows the extension's name as the title, so none is added. It also shows at
+// most five in ten seconds from one extension and drops the rest.
+const NOTIFY_KINDS = ['success', 'info', 'warning', 'error'];
+function notify(kind, text, userId) {
+    const k = NOTIFY_KINDS.indexOf(String(kind)) >= 0 ? String(kind) : 'info';
+    const words = String(text == null ? '' : text).trim().slice(0, 500);
+    if (!words)
+        return;
+    try {
+        if (!spindle.toast || typeof spindle.toast[k] !== 'function')
+            return;
+        spindle.toast[k](words, userId ? { userId: userId } : undefined);
+    }
+    catch (e) {
+        try {
+            spindle.log.warn('auto-retry: could not show a notification: ' + sayError(e));
+        }
+        catch (__) { }
+    }
+}
 spindle.onFrontendMessage(async (payload, userId) => {
     try {
         if (!payload)
             return;
+        if (payload.type === 'notify') {
+            notify(payload.kind, payload.text, userId);
+            return;
+        }
         if (payload.type === 'save_settings' && payload.settings && typeof payload.settings === 'object') {
             setAtOnce(userId, payload.settings.tryAtOnce === true);
             // This write is the account copy, the one that carries settings between

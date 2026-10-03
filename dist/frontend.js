@@ -141,7 +141,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.12.0";
+const VERSION = "5.13.0";
 // Whether two saved settings hold the same values, whatever order their keys
 // were written in. A key left undefined counts as not there, the way it is
 // when saved. Used to tell an update or a put-back that would change nothing.
@@ -7988,7 +7988,7 @@ export function setup(ctx, opts) {
                 " instead; set both selectors in the buttons section");
         if (!picked) {
             log("no retry control found, set the button selectors in settings");
-            showToast("Auto Retry could not find your regenerate button. Set it in Auto Retry settings.");
+            showToast("Auto Retry could not find your regenerate button. Set it in Auto Retry settings.", { kind: "error" });
             return null;
         }
         hideToast();
@@ -8854,14 +8854,14 @@ export function setup(ctx, opts) {
                 // quiet for minutes at a time is a state change, not a retry. A
                 // user who sees nothing has no way to tell this from the thing breaking.
                 showToast("Auto Retry paused for " + sayTime(pauseMs) +
-                    ": the last " + runsNeeded + (runsNeeded === 1 ? " run" : " runs") + " failed.", { force: true });
+                    ": the last " + runsNeeded + (runsNeeded === 1 ? " run" : " runs") + " failed.", { force: true, kind: "warning" });
                 // Pausing is the state that most looks like the extension having
                 // stopped working, so the line saying otherwise should not be a
                 // quarter of a second behind the message announcing it.
                 paintNow();
             }
             else {
-                showToast("Auto Retry gave up after " + cfg.maxRetries + " tries.");
+                showToast("Auto Retry gave up after " + cfg.maxRetries + " tries.", { kind: "warning" });
             }
             return;
         }
@@ -9141,7 +9141,7 @@ export function setup(ctx, opts) {
                 hideToast();
                 s.attempts = 0;
                 log("a reply is one of your hard failures, so not retrying");
-                showToast("Auto Retry did not retry: a reply matches one of your hard failures, so trying again would not help.");
+                showToast("Auto Retry did not retry: a reply matches one of your hard failures, so trying again would not help.", { kind: "warning" });
                 return;
             }
             if (problem) {
@@ -9198,7 +9198,7 @@ export function setup(ctx, opts) {
                 stats.good += 1;
                 s.attempts = 0;
                 log("added a reply that passed as a new reroll", content.length + " chars");
-                showToast("Auto Retry added a reply that passed, as a new reroll.");
+                showToast("Auto Retry added a reply that passed, as a new reroll.", { kind: "success" });
                 // Lumiverse raises no end event for a reroll an extension writes, so
                 // anything that acts on a finished reply, such as Auto Refine, is told
                 // in the page.
@@ -9788,7 +9788,7 @@ export function setup(ctx, opts) {
             // failure, so don't let the hard-error skip catch it before the refusal check.
             if (cfg.ignoreHardErrors && isHardError(p.error, cfg) && !(cfg.retryOnRefusal && looksLikeRefusalError(errorText(p.error), cfg))) {
                 log("hard error ignored", errorText(p.error));
-                showToast("Auto Retry did not retry: that error will not fix itself, so trying again would not help.");
+                showToast("Auto Retry did not retry: that error will not fix itself, so trying again would not help.", { kind: "warning" });
                 s.attempts = 0;
                 return;
             }
@@ -9841,7 +9841,7 @@ export function setup(ctx, opts) {
         const problem = replyProblem(content, thought, cfg);
         if (problem === HARD_FAILURE) {
             log("the reply is one of your hard failures, so not retrying");
-            showToast("Auto Retry did not retry: the reply matches one of your hard failures, so trying again would not help.");
+            showToast("Auto Retry did not retry: the reply matches one of your hard failures, so trying again would not help.", { kind: "warning" });
             s.attempts = 0;
             return;
         }
@@ -10469,12 +10469,31 @@ export function setup(ctx, opts) {
         };
         addTicker(toastTick);
     }
+    function notify(msg, kind) {
+        const words = String(msg == null ? "" : msg).trim();
+        if (!words)
+            return;
+        try {
+            if (ctx && typeof ctx.sendToBackend === "function")
+                ctx.sendToBackend({ type: "notify", kind: kind, text: words });
+        }
+        catch (_) { }
+    }
+    // force is for messages the user has to see to understand what the app is
+    // doing right now, like the button picker waiting for a press. Everything
+    // else still respects the toast setting.
+    //
+    // A message with Cancel on it, or one rewritten as it counts down, is drawn
+    // here in a bar of its own, since a notification can have neither. Every
+    // other message is a notification, and it leaves the bar as it is: the
+    // retry or the pick the bar is about is still going.
     function showToast(msg, opts) {
-        // force is for messages the user has to see to understand what the app is
-        // doing right now, like the button picker waiting for a click. Everything
-        // else still respects the toast setting.
         if (!cfg.toast && !(opts && opts.force))
             return;
+        if (!(opts && (opts.cancel || opts.sticky))) {
+            notify(msg, (opts && opts.kind) || "info");
+            return;
+        }
         const t = ensureToast();
         if (!t)
             return;
@@ -11964,7 +11983,7 @@ export function setup(ctx, opts) {
                         }, null, 2));
                         showToast(ok
                             ? "Saved. The file holds your rules and your presets."
-                            : "The browser would not save the file. Some private windows block downloads.", { force: true });
+                            : "The browser would not save the file. Some private windows block downloads.", { force: true, kind: ok ? "success" : "error" });
                     });
                     row.appendChild(get);
                     body.appendChild(row);
@@ -12383,7 +12402,7 @@ export function setup(ctx, opts) {
             const ok = downloadText("auto-retry-word-swaps.json", JSON.stringify(body2, null, 2));
             showToast(ok
                 ? "Saved. The file holds your rules and your presets."
-                : "The browser would not save the file. Some private windows block downloads.", { force: true });
+                : "The browser would not save the file. Some private windows block downloads.", { force: true, kind: ok ? "success" : "error" });
         });
         row.appendChild(get);
         const gone = btn("I have it, hide this", false);
@@ -12622,7 +12641,7 @@ export function setup(ctx, opts) {
                     // Not a failure to save, which is what the other wording means. A
                     // temporary chat is not kept, so neither is anything about it.
                     ? said + " It lasts while this temporary chat is open."
-                    : said + " This browser will not remember it after a reload.", { force: true });
+                    : said + " This browser will not remember it after a reload.", { force: true, kind: remembered || temporary ? "info" : "warning" });
         });
         paint();
         // Held so the row can be repainted from outside. It is built once when the
@@ -13802,7 +13821,7 @@ export function setup(ctx, opts) {
                     (done.presets === 1 ? " preset deleted" : " presets deleted"));
             onApplied(done);
             log("reset: " + ids.join(", ") + (presetCb.checked ? " + presets" : ""));
-            showToast("Reset: " + bits.join(", ") + ".", { force: true });
+            showToast("Reset: " + bits.join(", ") + ".", { force: true, kind: "success" });
         });
         overlay.addEventListener("click", (e) => {
             if (e.target === overlay)
@@ -14117,8 +14136,10 @@ export function setup(ctx, opts) {
             if (sel)
                 cfg[key] = sel;
             openSettings();
+            // A notification, so Lumiverse decides where it shows. The bar that asked
+            // for the press has gone with the picker.
             if (message)
-                showToast(message, { force: true, top: true });
+                showToast(message, { force: true, kind: sel ? "success" : message === "Picking cancelled." ? "info" : "warning" });
         };
         // The press that picked is still down, so a click is coming for whatever is
         // under it. Eaten by a listener of its own, since the picker stands down the
@@ -14561,7 +14582,7 @@ export function setup(ctx, opts) {
                     if (msg.type === "account_save_failed") {
                         const what = msg.what === "presets" ? "presets" : "settings";
                         log("the account copy of the " + what + " could not be saved");
-                        showToast("Your " + what + " are saved in this browser, but could not be saved to your account, so they will not follow you to another device.", { force: true });
+                        showToast("Your " + what + " are saved in this browser, but could not be saved to your account, so they will not follow you to another device.", { force: true, kind: "error" });
                         return;
                     }
                 }

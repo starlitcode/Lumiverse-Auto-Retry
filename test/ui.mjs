@@ -785,7 +785,8 @@ console.log("\nhints");
         await frame();
         await new Promise((r) => setTimeout(r, 200));
         const afterOne = notes();
-        const said = (document.getElementById("__lvRetryToast") || {}).textContent || "";
+        // Said in a Lumiverse notification, which the panel asks the backend for.
+        const said = (window.__sent || []).filter((m) => m && m.type === "notify").map((m) => m.text).join(" | ");
         const again = modal.querySelector('[data-ar-note-drop="1"]');
         // Every box around the button, kept from before the press, so the one
         // that closes can be found by what it does rather than by its markup.
@@ -3886,8 +3887,11 @@ console.log("\npop-up goes away");
   const out = await page.evaluate(async () => {
     const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     const handlers = {};
+    // What the panel asks the backend to show as Lumiverse's own notifications.
+    const notes = [];
     const teardown = window.__setup(
       { events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
+        sendToBackend: (m) => { if (m && m.type === "notify") notes.push(m); },
         ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
               registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) } },
       { toast: true, retryDelayMs: 400, backoffFactor: 1, maxDelayMs: 400, jitter: false,
@@ -3922,12 +3926,12 @@ console.log("\npop-up goes away");
     // Read with nothing awaited. The button takes the box away itself before it
     // runs whatever it was given to do, so the countdown cannot survive the
     // click even for a frame, whatever that action does or fails to do.
-    const instantly = { countdownGone: !/Retrying in/.test(says()) };
+    const instantly = { countdownGone: !up() };
     await wait(120);
-    // Cancel replaces the countdown with a short confirmation, which is not
-    // sticky and clears itself. Both halves matter: the countdown has to be
-    // gone at once, and what replaces it must not be another thing that stays.
-    const afterCancel = { up: up(), text: says(), cancelGone: !cancel() };
+    // The countdown goes, and a short notification says it stopped. Both
+    // halves matter: the countdown has to be gone at once, and what says so
+    // must not be another thing that stays on the page.
+    const afterCancel = { up: up(), said: notes.map((n) => n.text).join(" | ") };
     await wait(3600);
     const laterStillUp = up();
 
@@ -3953,10 +3957,9 @@ console.log("\npop-up goes away");
   check("its Cancel button is there", out.hadCancel === true, out);
   check("Cancel takes the box away before it does anything else",
     out.instantly.countdownGone === true, out);
-  check("pressing Cancel takes the countdown away",
-    !/Retrying in/.test(out.afterCancel.text) && out.afterCancel.cancelGone === true, out);
-  check("and says so briefly instead", /stopped/i.test(out.afterCancel.text), out);
-  check("and that confirmation clears itself", out.laterStillUp === false, out);
+  check("pressing Cancel takes the countdown away", out.afterCancel.up === false, out);
+  check("and says so in a Lumiverse notification instead", /stopped/i.test(out.afterCancel.said), out);
+  check("and nothing of ours stays on the page", out.laterStillUp === false, out);
   check("stopping twice does not leave one behind", out.afterTwoStops.up === false, out);
   check("no console errors", errors.length === 0, errors);
 }
@@ -8261,13 +8264,17 @@ console.log("\na finished reply is not re-rolled, a stalled one still is");
 // stranded the last line well short of the right edge. The lines are evened out
 // and the box is pinned to the widest of them, so what is checked here is that
 // it takes the room it needs and stops.
-console.log("\nthe toast is the size of what is written in it");
+console.log("\none-off messages are Lumiverse notifications, and the box is the size of its words");
 {
+  // A message that only says something went to Lumiverse, as one of its own
+  // notifications. The box on the page is kept for a message with Cancel on
+  // it, such as the countdown before a retry, and it is fitted to its words:
+  // not padded out to the cap, nothing spilling out, centred and on screen.
   const page = await browser.newPage({ viewport: { width: 412, height: 800 } });
   const errors = [];
   page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
   page.on("console", (m) => { if (m.type() === "error") errors.push("console: " + m.text()); });
-  await stage(page, "<div id=modal></div>");
+  await stage(page, '<div id=modal></div><button data-testid="regenerate">Regenerate</button>');
   await page.addStyleTag({ content: THEME });
   await page.addScriptTag({ content: SOURCE, type: "module" });
   await page.waitForFunction(() => !!window.__setup);
@@ -8275,8 +8282,10 @@ console.log("\nthe toast is the size of what is written in it");
     const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     const handlers = {};
     const acts = {};
-    window.__setup(
+    const notes = [];
+    const teardown = window.__setup(
       { events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
+        sendToBackend: (m) => { if (m && m.type === "notify") notes.push(m); },
         ui: {
           showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
           registerInputBarAction: (o) => {
@@ -8285,101 +8294,61 @@ console.log("\nthe toast is the size of what is written in it");
             return a;
           },
         } },
-      { toast: true, showExtrasToggle: true },
+      { toast: true, showExtrasToggle: true, retryDelayMs: 12000, backoffFactor: 1, maxDelayMs: 12000,
+        jitter: false, maxRetries: 3, stuckTimeoutMs: 0, idleTimeoutMs: 0, pauseWhenFailing: false },
     );
-    const read = () => {
-      const t = document.getElementById("__lvRetryToast");
-      const r = t.getBoundingClientRect();
-      const span = t.firstElementChild;
-      const node = span.firstChild;
-      const tops = [];
-      let at = 0;
-      for (const word of node.textContent.split(" ")) {
-        if (word) {
-          const rr = document.createRange();
-          rr.setStart(node, at);
-          rr.setEnd(node, at + word.length);
-          tops.push(Math.round(rr.getBoundingClientRect().top));
-        }
-        at += word.length + 1;
-      }
-      const bottom = Math.max(...tops);
-      // The rendered lines themselves, which is what the box is supposed to be
-      // the size of. Counting word tops says how many there are; this says how
-      // long each one came out.
-      const whole = document.createRange();
-      whole.selectNodeContents(node);
-      const rects = whole.getClientRects();
-      const lineWidths = [];
-      for (let i = 0; i < rects.length; i++)
-        if (rects[i].width > 0) lineWidths.push(Math.round(rects[i].width));
-      return {
-        text: node.textContent,
-        width: Math.round(r.width),
-        lines: new Set(tops).size,
-        lineWidths,
-        shortest: lineWidths.length ? Math.min(...lineWidths) : 0,
-        widest: lineWidths.length ? Math.max(...lineWidths) : 0,
-        overflows: t.scrollWidth > Math.ceil(t.clientWidth) + 1,
-        lastWords: tops.filter((t) => t === bottom).length,
-        // Centred on the viewport, and not hanging off either edge.
-        centred: Math.abs(r.left + r.width / 2 - 206) < 2,
-        onScreen: r.left >= 0 && r.right <= 412,
-      };
-    };
+    const box = () => document.getElementById("__lvRetryToast");
+    const up = () => { const t = box(); return !!t && t.style.opacity === "1"; };
 
     handlers.CHARACTER_MESSAGE_RENDERED({ chatId: "A", messageId: "m1" });
     await wait(20);
     acts["auto-retry-settings"].cb();
     await wait(40);
-    // A long one: switching this chat off. Wrapping is fair here, and it must
-    // still use the full width it is allowed rather than half of it.
     document.querySelector("[data-ar-chat-switch]").querySelector("button").click();
-    // Past the box's entrance, which grows it into place. Measured during it,
-    // the box reads a few percent narrower than it rests.
-    await wait(320);
-    const long = read();
-    // And a short one, which must not be padded out to the cap. The checkbox
-    // in the panel raises no toast, so this uses the Extras on/off entry,
-    // which is the control that announces the switch.
+    await wait(60);
+    const afterSwitch = { up: up(), said: notes.map((n) => n.kind + ": " + n.text) };
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     await wait(20);
     acts["auto-retry-toggle"].cb();
-    // Past the small pulse a new message in a box already up is given.
+    await wait(60);
+    const afterToggle = { up: up(), said: notes.map((n) => n.kind + ": " + n.text) };
+    acts["auto-retry-toggle"].cb();
+    await wait(20);
+
+    // The countdown, in the box.
+    handlers.GENERATION_STARTED({ chatId: "c", generationId: "g1" });
+    handlers.GENERATION_ENDED({ chatId: "c", content: "" });
+    for (let i = 0; i < 40 && !up(); i++) await wait(50);
     await wait(320);
-    const short = read();
-    return { long, short };
+    const t = box();
+    const r = t ? t.getBoundingClientRect() : { width: 0, left: -1, right: 9999 };
+    const countdown = {
+      up: up(),
+      text: t ? (t.textContent || "").trim() : "",
+      width: Math.round(r.width),
+      overflows: !!t && t.scrollWidth > Math.ceil(t.clientWidth) + 1,
+      centred: Math.abs(r.left + r.width / 2 - 206) < 2,
+      onScreen: r.left >= 0 && r.right <= 412,
+    };
+    teardown();
+    return { afterSwitch, afterToggle, countdown };
   });
   await page.close();
-  // 206 is exactly half of this viewport, which is where a centred layout
-  // would cap every message whatever max-width said.
   const CAP = Math.round(412 * 0.92);
-  check("a long message is wider than half the screen", out.long.width > 206, out.long);
-  check("and no wider than the cap it was given", out.long.width <= CAP, out.long);
-  check("a short message is not padded out to the cap", out.short.width < 206, out.short);
-  check("a long message wraps, so there is something to even out", out.long.lines > 1, out.long);
-  // The three that describe the fix. Reaching for the cap is what made it look
-  // like the screen rather than like a message; a stranded last line is what
-  // that looked like up close; and the box hugging its widest line is what
-  // replaces both.
-  check("a long message is not padded out to the cap either", out.long.width < CAP - 8, out.long);
-  check("and its lines come out even", out.long.shortest >= out.long.widest * 0.6, out.long);
-  check("and the box is the width of its widest line", out.long.width - out.long.widest <= 32, out.long);
-  for (const [what, m] of [["long", out.long], ["short", out.short]])
-    check(what + ": nothing spills out of the box", !m.overflows, m);
-  for (const [what, m] of [["long", out.long], ["short", out.short]]) {
-    check(what + ": centred on the screen", m.centred, m);
-    check(what + ": and fully on it", m.onScreen, m);
-  }
+  check("switching this chat off says so in a Lumiverse notification",
+    out.afterSwitch.said.some((t) => /off in this chat/.test(t)), out.afterSwitch);
+  check("and does not open the box on the page", out.afterSwitch.up === false, out.afterSwitch);
+  check("turning Auto Retry off says so in a Lumiverse notification too",
+    out.afterToggle.said.some((t) => /^info: Auto Retry is o(n|ff)\./.test(t)), out.afterToggle);
+  check("and does not open the box either", out.afterToggle.up === false, out.afterToggle);
+  check("the countdown is in the box, with Cancel", out.countdown.up && /Retrying in/.test(out.countdown.text) && /Cancel/.test(out.countdown.text), out.countdown);
+  check("it is not padded out to the cap", out.countdown.width < CAP - 8, out.countdown);
+  check("nothing spills out of it", !out.countdown.overflows, out.countdown);
+  check("it is centred on the screen", out.countdown.centred, out.countdown);
+  check("and fully on it", out.countdown.onScreen, out.countdown);
   check("no console errors", errors.length === 0, errors);
 }
 
-// ---- Save does not claim a save that did not happen ----
-// The browser copy is what survives a reload, and writing it can fail outright:
-// a browser with site data blocked, or with no room left, throws. That throw
-// was swallowed, so the panel said "Saved" over settings that were gone the
-// next time the page loaded. The presets have always said when this happens;
-// the settings did not.
 console.log("\nSave tells the truth about the browser copy");
 {
   for (const storageWorks of [true, false]) {
@@ -8576,8 +8545,10 @@ console.log("\na host with no context menu API");
     const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     const host = document.getElementById("host");
     host.style.cssText = "position:fixed;left:60px;top:60px";
+    const notes = [];
     window.__setup(
       { events: { on: () => () => {} },
+        sendToBackend: (m) => { if (m && m.type === "notify") notes.push(m.text); },
         ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
               registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }),
               // No showContextMenu, which is the whole point.
@@ -8590,10 +8561,9 @@ console.log("\na host with no context menu API");
     await wait(700);
     b.dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
     await wait(60);
-    const t = document.getElementById("__lvRetryToast");
     return {
       stillThere: !!host.querySelector("button"),
-      said: t ? (t.textContent || "").trim() : "",
+      said: notes.join(" | "),
     };
   });
   await page.close();
@@ -11926,10 +11896,11 @@ console.log("\nteardown");
   await page.waitForFunction(() => !!window.__setup);
   const out = await page.evaluate(async () => {
     const live = new Map();
+    const handlers = {};
     let duplicate = false;
     const teardown = window.__setup(
       {
-        events: { on: () => () => {} },
+        events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
         ui: {
           showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
           registerInputBarAction: (o) => {
@@ -11948,7 +11919,8 @@ console.log("\nteardown");
       // The floating button stays down here. With it up its own menu takes the
       // movable entries over and only the settings one is left in Extras, which
       // is the wrong shape for a check about tearing all of them down.
-      { showExtrasToggle: true, showFloatingToggle: false, showReplaceButton: true, showSwapAllButton: true },
+      { showExtrasToggle: true, showFloatingToggle: false, showReplaceButton: true, showSwapAllButton: true,
+        retryDelayMs: 12000, backoffFactor: 1, maxDelayMs: 12000, jitter: false, stuckTimeoutMs: 0, idleTimeoutMs: 0 },
     );
     const registered = [...live.keys()];
     // Open a hint first, or "the popover is gone afterwards" passes because one
@@ -11957,7 +11929,10 @@ console.log("\nteardown");
     live.get("auto-retry-settings").cb();
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
     document.querySelector("button[data-ar-hint]").dispatchEvent(new MouseEvent("mouseenter"));
-    live.get("auto-retry-toggle").cb();
+    // The box on the page holds the countdown before a retry, so a failed
+    // reply puts it up.
+    handlers.GENERATION_STARTED({ chatId: "c", generationId: "g1" });
+    handlers.GENERATION_ENDED({ chatId: "c", content: "" });
     await new Promise((r) => setTimeout(r, 30));
     const hintWasOpen = !!document.querySelector('[role="tooltip"]');
     const toastWasUp = !!document.getElementById("__lvRetryToast");
