@@ -16,6 +16,10 @@ _2026-10-02_
 
 - **It was garbled**, under **When to count a reply as bad**, on by default. It retries a reply that turned into a jumble: English words run together with scraps of other languages and alphabets, and capitals in the middle of words. A reply that starts fine and falls apart near the end is caught too. Replies mostly in another alphabet, code, product names and a character who speaks another language now and then are left alone. See [Garbled replies](docs/detection.md#garbled-replies).
 
+### Changed
+
+- **A Broken replies heading.** Under **When to count a reply as bad**, the two switches for one character over and over and **It was garbled** now sit together under a heading of their own. **It came back blank** is just below them.
+
 ---
 
 ## 5.11.2
