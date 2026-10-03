@@ -2600,6 +2600,59 @@ console.log("\na reply that is streaming is not stuck");
   check("no console errors", errors.length === 0, errors);
 }
 
+console.log("\na council at work is not a stuck reply");
+{
+  // A council runs between the start of a reply and its first word, and
+  // nothing streams while it works. Each step it reports starts the wait for
+  // the first word again. A failed council tool makes Lumiverse wait for the
+  // reader's choice, and that wait is not counted at all.
+  const errors = [];
+  const runOne = async (steps) => {
+    const page = await browser.newPage();
+    page.on("pageerror", (e) => errors.push(e.message));
+    await stage(page, '<div id=modal></div><button data-testid="regenerate">R</button>');
+    await page.addScriptTag({ content: SOURCE, type: "module" });
+    await page.waitForFunction(() => !!window.__setup);
+    const res = await page.evaluate(async (steps) => {
+      const handlers = {};
+      let clicks = 0;
+      document.querySelector("[data-testid=regenerate]").addEventListener("click", () => clicks++);
+      window.__setup(
+        {
+          events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
+          sendToBackend: () => {},
+          onBackendMessage: () => () => {},
+          ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+                registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) },
+        },
+        { retryDelayMs: 10, backoffFactor: 1, maxDelayMs: 10, jitter: false, maxRetries: 2,
+          toast: false, stuckTimeoutMs: 150, idleTimeoutMs: 0, pauseWhenFailing: false },
+      );
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      handlers.GENERATION_STARTED({ chatId: "c1", generationId: "g" });
+      for (const step of steps) {
+        await wait(90);
+        if (step && handlers[step]) handlers[step]({ chatId: "c1", generationId: "g", content: "She " });
+      }
+      // Past the point the start watchdog would have fired after the last step.
+      await wait(450);
+      return { clicks };
+    }, steps);
+    await page.close();
+    return res;
+  };
+
+  const quiet = await runOne([null, null, null, null]);
+  check("the page under test does retry a reply that stays silent", quiet.clicks > 0, quiet);
+  // The first words arrive after the council is done, as they do in a real
+  // reply. Without them, a silence after the council is a stuck reply.
+  const working = await runOne(["COUNCIL_STARTED", "COUNCIL_MEMBER_DONE", "COUNCIL_MEMBER_DONE", "COUNCIL_COMPLETED", "STREAM_TOKEN_RECEIVED"]);
+  check("a council reporting each step is not taken for a stuck reply", working.clicks === 0, working);
+  const asking = await runOne(["COUNCIL_STARTED", "COUNCIL_TOOLS_FAILED"]);
+  check("a council waiting on your choice after a failed tool is not taken for a stuck reply", asking.clicks === 0, asking);
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- switching off a chat that will not exist tomorrow ----
 // A temporary chat has no character card and is discarded on the way out, and
 // the next one carries a different id. Remembering an exclusion against it

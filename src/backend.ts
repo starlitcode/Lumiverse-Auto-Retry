@@ -34,7 +34,7 @@ declare function clearTimeout(handle: any): void;
 // with while this side comes back on the new build. A debug report naming only
 // the panel's version would be speaking for a file it cannot see, so the panel
 // asks for this one and prints both.
-const VERSION = '5.13.0';
+const VERSION = '5.13.1';
 
 const SETTINGS_FILE = 'settings.json';
 // Presets, kept in account storage next to the settings so they

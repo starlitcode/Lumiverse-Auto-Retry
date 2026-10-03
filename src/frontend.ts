@@ -152,7 +152,7 @@ const STREAM_BUF_MAX = 200000;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.13.0";
+const VERSION = "5.13.1";
 
 // Whether two saved settings hold the same values, whatever order their keys
 // were written in. A key left undefined counts as not there, the way it is
@@ -9650,6 +9650,32 @@ export function setup(ctx: Ctx, opts?: any) {
       armWatchdog(s, "idleTimer", cfg.idleTimeoutMs, () => onFrozen(chatId));
   }
 
+  // A council runs between the start of a reply and its first word. Other
+  // models are asked in turn, and nothing streams while they work, so each step
+  // the council reports is the reply still going: the wait for its first word
+  // starts again from there. A council tool that failed makes Lumiverse wait,
+  // for up to ten minutes, for you to choose whether to retry it. That wait is
+  // yours, so the watchdog is put away until the council reports again or the
+  // first words arrive.
+  function onCouncil(p: any, failed: boolean) {
+    if (!p) return;
+    const chatId = chatForGeneration(p);
+    const s = st(chatId);
+    if (!s.live || s.impersonating || s.sawContent || s.sawReasoning) return;
+    if (failed) {
+      if (s.startTimer) {
+        clearTimeout(s.startTimer);
+        s.startTimer = null;
+      }
+      log("a council tool failed and Lumiverse is asking what to do, so the reply is not counted as stuck while it waits");
+      return;
+    }
+    if (cfg.enabled && cfg.stuckTimeoutMs > 0)
+      armWatchdog(s, "startTimer", cfg.stuckTimeoutMs, () =>
+        abortAndRetry(chatId, "stuck"),
+      );
+  }
+
   function onEnd(p: any) {
     if (!p) return;
     // The generation id identifies the work, the chat id is only context, and
@@ -14324,6 +14350,10 @@ export function setup(ctx: Ctx, opts?: any) {
       ),
       ctx.events.on("GENERATION_ENDED", safe("GENERATION_ENDED", onEnd)),
       ctx.events.on("GENERATION_STOPPED", safe("GENERATION_STOPPED", onStop)),
+      ctx.events.on("COUNCIL_STARTED", safe("COUNCIL_STARTED", (p: any) => onCouncil(p, false))),
+      ctx.events.on("COUNCIL_MEMBER_DONE", safe("COUNCIL_MEMBER_DONE", (p: any) => onCouncil(p, false))),
+      ctx.events.on("COUNCIL_COMPLETED", safe("COUNCIL_COMPLETED", (p: any) => onCouncil(p, false))),
+      ctx.events.on("COUNCIL_TOOLS_FAILED", safe("COUNCIL_TOOLS_FAILED", (p: any) => onCouncil(p, true))),
       ctx.events.on("CHAT_CHANGED", safe("CHAT_CHANGED", onChatSwitched)),
       ctx.events.on("CHAT_SWITCHED", safe("CHAT_SWITCHED", onChatSwitched)),
       // Free events, and the ones that fire when a chat is simply opened rather

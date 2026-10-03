@@ -301,6 +301,8 @@ These are the defaults for a new install. They are in the `CONFIG` block at the 
 
 `idleTimeoutMs` needs streaming on. It watches for text that stopped arriving, and with streaming off no text arrives until the end. A reply that hangs is then caught by `stuckTimeoutMs` instead. Every other check reads the finished reply, so it works with streaming on or off.
 
+With the council on, the council works before the reply's first words. Each step it reports starts the `stuckTimeoutMs` wait again. When a council tool fails, Lumiverse asks you whether to retry it, and that wait is not counted.
+
 ### After an update
 
 Defaults only apply to a new install. Settings already saved to your account keep their values. To get the newer defaults, open **Reset…** and tick the part you want.

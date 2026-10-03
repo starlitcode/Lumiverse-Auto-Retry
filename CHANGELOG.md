@@ -8,6 +8,16 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.13.1
+
+_2026-10-03_
+
+### Fixed
+
+- **A council could be taken for a stuck reply.** With the council on, no words arrive while the council works. If that took longer than the wait set in `stuckTimeoutMs`, Auto Retry stopped the reply and retried it. This also happened while Lumiverse was asking you what to do about a council tool that failed. Each step the council reports now starts the wait again, and the wait is not counted while Lumiverse is asking you. See [Settings](docs/settings.md#the-two-waits-for-a-frozen-reply).
+
+---
+
 ## 5.13.0
 
 _2026-10-03_
