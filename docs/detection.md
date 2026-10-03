@@ -403,7 +403,7 @@ Use it to build your phrase lists. Paste a real refusal to see if it is caught. 
 
 ## What the built-in list looks for
 
-This is the full phrase list that **Reword the built-in phrases** acts on. A reply counts as a refusal if it contains any of these, unless it is inside quotation marks. Capitals and curly apostrophes do not matter. The long form of each is matched too, so "I'm unable to help with that" also matches "I am unable to help with that".
+This is the full phrase list that **Reword the built-in phrases** acts on. A reply counts as a refusal if it contains any of these, unless it is inside quotation marks. `content_filter` is the code some providers write as the reply when their filter stops it. It is matched only with the underscore, and it also matches `content_filtered`. Capitals and curly apostrophes do not matter. The long form of each is matched too, so "I'm unable to help with that" also matches "I am unable to help with that".
 
 ```
 i can't help with that                i'm unable to complete that request
@@ -438,7 +438,7 @@ i have to prioritize safety           i'm not going to engage with this prompt
 i cannot create that content          that's something i can't help with
 i cannot generate that content        i'm not able to provide information or help with that
 i can't create that content           i can't provide information that could facilitate harm
-i'm unable to provide that
+i'm unable to provide that            content_filter
 ```
 
 It also matches some patterns. They match by shape, not exact words, so **Reword the built-in phrases** does not change them. The examples show the idea and are not every wording each one catches.
@@ -459,7 +459,7 @@ It also matches some patterns. They match by shape, not exact words, so **Reword
 
 **An apology on its own is never matched.** "I'm sorry", "Unfortunately" and "I apologize" start many normal replies, and characters apologise all the time. They only count as part of a longer refusal, like "I'm sorry, but I can't create that content."
 
-**Errors:** when a reply comes back as an error, it matches content-block wording like "PROHIBITED_CONTENT", "Blocked by safety settings." or "finish_reason: safety". Network errors like "connection refused" are ignored.
+**Errors:** when a reply comes back as an error, it matches content-block wording like "PROHIBITED_CONTENT", "Blocked by safety settings.", "finish_reason: safety", "content_filter" or "content_filtered". It also matches the words Lumiverse uses when a provider stops a reply: "The provider declined the response", "The provider blocked the prompt" and "it may reproduce protected material". Network errors like "connection refused" are ignored.
 
 ### The subject list
 

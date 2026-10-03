@@ -15,6 +15,7 @@ _2026-10-03_
 ### Fixed
 
 - **A council could be taken for a stuck reply.** With the council on, no words arrive while the council works. If that took longer than the wait set in `stuckTimeoutMs`, Auto Retry stopped the reply and retried it. This also happened while Lumiverse was asking you what to do about a council tool that failed. Each step the council reports now starts the wait again, and the wait is not counted while Lumiverse is asking you. See [Settings](docs/settings.md#the-two-waits-for-a-frozen-reply).
+- **A content filter was not always caught as a refusal.** An error that said "content_filtered" was not matched. Neither were the words Lumiverse uses when a provider stops a reply: "The provider declined the response", "The provider blocked the prompt" and "it may reproduce protected material". A reply whose only text was the filter code, such as "content_filter", was not matched either. All of these now count as a refusal. See [What the built-in list looks for](docs/detection.md#what-the-built-in-list-looks-for).
 
 ---
 

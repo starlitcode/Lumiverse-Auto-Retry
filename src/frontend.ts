@@ -2138,6 +2138,11 @@ const REFUSAL_PHRASES = [
   "that's something i can't help with",
   "i'm not able to provide information or help with that",
   "i can't provide information that could facilitate harm",
+  // A provider's own code for a reply its filter stopped, written as the reply
+  // instead of sent as an error. Matched with the underscore only, so a story
+  // that mentions a content filter in words is left alone. It also covers
+  // "content_filtered".
+  "content_filter",
 ];
 
 // Tier 4: the model closing the scene down rather than declining outright. It
@@ -2853,12 +2858,16 @@ function refusalVerdict(text: string, cfg?: any): RefusalVerdict {
 
 // Some providers deliver a refusal as an error string (e.g. a prohibited-content
 // result) rather than as reply text. This matches that, tuned for short error
-// messages, and stay narrow to content-moderation wording so it never
-// fires on a network error like "connection refused" or a timeout. Only used as
+// messages, and stays narrow to content-moderation wording so it never
+// fires on a network error like "connection refused" or a timeout. Lumiverse
+// words a stopped reply itself: "The provider declined the response", "The
+// provider blocked the prompt", "stopped the response because of a content
+// filter (content_filter)" and "because it may reproduce protected material".
+// Providers also send "content_filtered". Only used as
 // a fallback when the user has turned normal error-retries off but still wants
 // refusals caught. Respects the user's phrase lists and the built-ins toggle.
 const REFUSAL_ERROR =
-  /\b(?:prohibited[_ ]?content|content[_ ]?polic(?:y|ies)|safety[_ ]?(?:polic(?:y|ies)|filter|settings?)|response was blocked|blocked (?:by|for) (?:safety|content|moderation)|content[_ ]?filter|moderation|flagged as|violat\w* (?:content|safety|polic)|finish[_ ]?reason["'\s:=]*(?:safety|prohibited|blocklist|recitation)|blocklist)\b/i;
+  /\b(?:prohibited[_ ]?content|content[_ ]?polic(?:y|ies)|safety[_ ]?(?:polic(?:y|ies)|filter|settings?)|response was blocked|blocked (?:by|for) (?:safety|content|moderation)|declined the response|blocked the prompt|reproduce protected material|content[_ ]?filter(?:ed|ing|s)?|moderation|flagged as|violat\w* (?:content|safety|polic)|finish[_ ]?reason["'\s:=]*(?:safety|prohibited|blocklist|recitation)|blocklist)\b/i;
 
 // How long a provider said to wait, in milliseconds, or 0 when it did not say.
 // Free and shared tiers usually do: the number is in the Retry-After header and

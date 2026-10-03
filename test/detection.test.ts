@@ -546,6 +546,31 @@ describe("refusal detection on error text", () => {
     expect(looksLikeRefusalError("Response was blocked by safety settings.", cfg)).toBe(true);
   });
 
+  // A provider's filter code, in every form it arrives in, and the words
+  // Lumiverse puts around a reply a provider stopped.
+  test("a content filter counts, however it is written", () => {
+    for (const e of [
+      "content_filter",
+      "content_filtered",
+      "finish_reason: content_filter",
+      "Blocked by content filters.",
+      "OpenRouter generation failed: The provider stopped the response because of a content filter (content_filter).",
+      "OpenRouter generation failed: The provider declined the response (cyber). No explanation was provided.",
+      "Google generation failed: The provider blocked the prompt (SAFETY).",
+      "Google generation failed: The provider stopped the response because it may reproduce protected material (recitation).",
+    ])
+      expect({ e, hit: looksLikeRefusalError(e, cfg) }).toEqual({ e, hit: true });
+  });
+
+  test("a stopped reply that is not about content does not", () => {
+    for (const e of [
+      "OpenRouter generation failed: The provider did not complete the response (incomplete).",
+      "OpenRouter generation failed: The response reached its output token limit before finishing.",
+      "content length mismatch",
+    ])
+      expect({ e, hit: looksLikeRefusalError(e, cfg) }).toEqual({ e, hit: false });
+  });
+
   test("an ordinary network error does not", () => {
     expect(looksLikeRefusalError("connection refused", cfg)).toBe(false);
     expect(looksLikeRefusalError("ETIMEDOUT", cfg)).toBe(false);

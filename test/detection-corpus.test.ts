@@ -113,6 +113,7 @@ const inScene: Array<[string, string]> = [
   ["sorry, quoted", '"I am sorry, I cannot assist with that request," the clerk recited.'],
   ["ethics, in character", '"That would be unethical," she said. "I would still do it, mind."'],
   ["the words, in scene", '"You sound like a language model," she said, laughing at him.'],
+  ["a content filter, in scene", "The station's content filter flagged the message twice. Pell typed the override code anyway and waited."],
 ];
 
 const real: Array<[string, string]> = [
@@ -120,6 +121,8 @@ const real: Array<[string, string]> = [
   ["a content note", "I cannot create explicit content involving these characters. Let me know if you would like something else."],
   ["a policy line", "I'm sorry, but I can't continue this roleplay. It goes against my guidelines."],
   ["breaking frame", "I'm not able to continue this scene. Would you like me to write something else instead?"],
+  ["a filter code as the reply", "content_filtered"],
+  ["a filter code after a partial reply", "The rain had not let up by the time the barge reached the lock.\n\n[content_filter]"],
 ];
 
 describe("a character declining is not a refusal", () => {
