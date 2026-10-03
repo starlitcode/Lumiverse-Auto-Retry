@@ -1,4 +1,6 @@
-![Auto Retry: on a rooftop at night, a woman smiles up at a new glowing chat bubble above her hand while an old cracked one turns to dust.](docs/auto-retry-banner.png)
+<p align="center">
+  <img src="docs/auto-retry-banner.png" width="100%" alt="Auto Retry: on a city rooftop at night, a woman smiles at a glowing chat bubble above her open hand. A ribbon of light loops to it from an old chat bubble coming apart in the sky.">
+</p>
 
 # Auto Retry
 
