@@ -20,6 +20,8 @@ behaves, goes into both.
 - A release is dated the day it first goes to `stable`, in US Eastern time
   (America/New_York), not UTC. A release late in the evening Eastern time is
   still that day.
+- The owner is in US Eastern time. Every date and time uses it, not UTC.
+  Make every commit with `TZ=America/New_York`, so its time is Eastern.
 - Versions follow semver. A patch only fixes things. Adding anything is a minor
   version. Bump `spindle.json`, `package.json` and the `VERSION` constants together.
 - A version is released once the owner says it is announced, not when it goes to
@@ -154,6 +156,11 @@ The owner has a learning disability. Contradictions are confusing.
 - The extensions are about giving people control. Nothing sent to a model is
   hidden: every built-in prompt, check and instruction can be read in the panel
   and changed there, with a way back to the built-in version.
+
+- Never reveal anything personal the owner shares: email addresses,
+  locations, IP addresses, chat conversations, persona names or character
+  names. Not in code, tests, docs, the changelog, commit messages, pull
+  requests or replies, and never say that any of these belong to the owner.
 
 - Never mention anyone else's extension, in code, docs or anywhere else,
   unless the owner asks for it, as in the README credits. Never say that
