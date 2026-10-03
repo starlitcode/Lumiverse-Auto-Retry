@@ -141,7 +141,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.11.2";
+const VERSION = "5.12.0";
 // Whether two saved settings hold the same values, whatever order their keys
 // were written in. A key left undefined counts as not there, the way it is
 // when saved. Used to tell an update or a put-back that would change nothing.
@@ -247,6 +247,7 @@ const CONFIG = {
     retryOnEmpty: true, // also catches a generation cut off mid-reasoning (reasoning seen, content empty)
     retryOnSpam: true, // the reply is one character over and over, such as "!!!!!!!!" (see spamVerdict)
     retryOnSpamThinking: true, // the thinking is one character over and over, even when the reply after it looks fine
+    retryOnGarbled: true, // words run together across languages and scripts, as a model writes when it breaks down (see garbledVerdict)
     retryOnTruncated: true, // final content present but cut off mid-sentence (structural heuristic, see looksTruncated)
     // Also treat "the reply stops on a letter" as cut off. The test for an
     // ending reads any script's punctuation, and an emoji, so a scene closing on
@@ -405,6 +406,10 @@ const RUNS = {
     errors: {
         title: "Errors",
         note: "A reply that failed outright, rather than one that arrived and was no good. Most errors are worth another try. The ones that will read the same next time are not, and the two rows under the switch are where that is decided.",
+    },
+    broken: {
+        title: "Broken replies",
+        note: "A reply from a model that broke down: one character over and over, in the reply or in its thinking, or a jumble of words from several languages run together. A reply like this is never worth keeping, so all three are on by default.",
     },
     frozen: {
         title: "Replies that freeze",
@@ -646,22 +651,31 @@ const SCHEMA = [
                 hint: "Wording for an error that will not fix itself, one per line. Also checked against a reply, for providers that write their error as the reply.",
             },
             {
-                key: "retryOnEmpty",
-                label: "It came back blank",
-                type: "bool",
-                hint: "Retry when nothing comes back, including a reply that thinks but never writes anything.",
-            },
-            {
                 key: "retryOnSpam",
+                run: "broken",
                 label: "It was one character over and over",
                 type: "bool",
                 hint: "Retry when the reply is only something like !!!!!!!!. Some free or busy providers send this.",
             },
             {
                 key: "retryOnSpamThinking",
+                run: "broken",
                 label: "Its thinking was one character over and over",
                 type: "bool",
                 hint: "Retry when the thinking is only something like !!!!!!!!, even when the reply after it looks fine.",
+            },
+            {
+                key: "retryOnGarbled",
+                run: "broken",
+                label: "It was garbled",
+                type: "bool",
+                hint: "Retry when the reply turns into a jumble of words from several languages run together, as a model writes when it breaks down.",
+            },
+            {
+                key: "retryOnEmpty",
+                label: "It came back blank",
+                type: "bool",
+                hint: "Retry when nothing comes back, including a reply that thinks but never writes anything.",
             },
             {
                 key: "retryOnTruncated",
@@ -1453,6 +1467,116 @@ function carrySpamSwitch(saved) {
     if (saved.retryOnSpam === false && !("retryOnSpamThinking" in saved))
         return Object.assign({}, saved, { retryOnSpamThinking: false });
     return saved;
+}
+// A reply that has turned into a jumble: words from several languages and
+// scripts run together, capitals in the middle of words, scraps of other
+// alphabets dropped between English words. A model writes this when it breaks
+// down, often after a good start, so the reply is read in windows of words
+// and one bad window is enough.
+//
+// Three signs are counted, each once per word:
+//   mixed   one word of four or more letters holding letters from two
+//           scripts, such as Latin and Han
+//   caps    a small letter followed by two or more capitals, or ending on one,
+//           inside a word, such as "fieldTRV" or "harborQ"
+//   island  one or two words in another script, of two or more letters, with
+//           English on both sides
+// The lengths keep out symbols written as letters, such as Δx or a lone α in
+// a scene about physics.
+// A window is garbled when it holds GARBLE_MIN_SIGNS signs of at least two
+// kinds. One kind alone is left alone, since each can turn up in a good reply:
+// a run of product names, a character who says a word in Russian now and then.
+//
+// Only a reply that is mostly in the Latin alphabet is judged. A reply in
+// Chinese or Japanese runs English words into its own text without spaces as a
+// matter of course, and none of these signs would mean anything there. Code,
+// inline code and web addresses are left out before counting.
+const GARBLE_WINDOW = 80;
+const GARBLE_MIN_SIGNS = 5;
+const GARBLE_MIN_WORDS = 30;
+const GARBLE_MIN_LATIN = 0.7;
+const GARBLE_SCRIPTS = [
+    ["latin", /\p{Script=Latin}/u],
+    ["cyrillic", /\p{Script=Cyrillic}/u],
+    ["greek", /\p{Script=Greek}/u],
+    ["cjk", /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u],
+    ["hangul", /\p{Script=Hangul}/u],
+    ["devanagari", /\p{Script=Devanagari}/u],
+    ["arabic", /\p{Script=Arabic}/u],
+    ["hebrew", /\p{Script=Hebrew}/u],
+    ["thai", /\p{Script=Thai}/u],
+];
+// The names of Apple's systems are the one common word shape that matches the
+// caps sign.
+const GARBLE_CAPS_FINE = /^(?:i|ipad|mac|tv|watch|vision)OS$/i;
+function scriptOf(ch) {
+    for (const [name, re] of GARBLE_SCRIPTS)
+        if (re.test(ch))
+            return name;
+    return "";
+}
+function garbledVerdict(visible) {
+    const text = String(visible == null ? "" : visible)
+        .replace(/```[\s\S]*?```/g, " ")
+        .replace(/`[^`\n]*`/g, " ")
+        .replace(/\bhttps?:\/\/\S+/gi, " ");
+    const words = [];
+    const letters = new Map();
+    for (const raw of text.split(/\s+/)) {
+        const core = raw.replace(/^[^\p{L}]+|[^\p{L}]+$/gu, "");
+        if (!core)
+            continue;
+        const scripts = new Set();
+        for (const ch of Array.from(core)) {
+            const s = scriptOf(ch);
+            if (!s)
+                continue;
+            scripts.add(s);
+            letters.set(s, (letters.get(s) || 0) + 1);
+        }
+        if (scripts.size)
+            words.push({ scripts, core, size: Array.from(core).length });
+    }
+    if (words.length < GARBLE_MIN_WORDS)
+        return false;
+    let all = 0;
+    letters.forEach((n) => (all += n));
+    if (!all || (letters.get("latin") || 0) / all < GARBLE_MIN_LATIN)
+        return false;
+    // The sign each word carries, if any.
+    const signs = words.map((w) => {
+        if (w.scripts.size > 1)
+            return w.size >= 4 ? "mixed" : "";
+        if (w.scripts.has("latin") && !GARBLE_CAPS_FINE.test(w.core) && /\p{Ll}(?:\p{Lu}{2,}|\p{Lu}$)/u.test(w.core))
+            return "caps";
+        return "";
+    });
+    const latin = (i) => i >= 0 && i < words.length && words[i].scripts.size === 1 && words[i].scripts.has("latin");
+    const foreign = (i) => i >= 0 && i < words.length && words[i].scripts.size === 1 && !words[i].scripts.has("latin");
+    for (let i = 0; i < words.length; i++) {
+        if (!foreign(i) || foreign(i - 1))
+            continue;
+        const end = foreign(i + 1) ? i + 1 : i;
+        if (foreign(end + 1))
+            continue;
+        if (latin(i - 1) && latin(end + 1) && !signs[i] && words[i].size >= 2)
+            signs[i] = "island";
+    }
+    for (let start = 0; start < words.length; start += GARBLE_WINDOW / 4) {
+        const kinds = new Set();
+        let count = 0;
+        for (let i = start; i < Math.min(words.length, start + GARBLE_WINDOW); i++) {
+            if (!signs[i])
+                continue;
+            count++;
+            kinds.add(signs[i]);
+        }
+        if (count >= GARBLE_MIN_SIGNS && kinds.size >= 2)
+            return true;
+        if (start + GARBLE_WINDOW >= words.length)
+            break;
+    }
+    return false;
 }
 // An out-of-character refusal: the model dropping the scene to say it's an AI,
 // or that it can't help / continue. Targets accidental refusals, where re-running
@@ -2682,6 +2806,8 @@ function replyProblem(content, thought, cfg) {
         if (where)
             return where === "thinking" ? "thinking was one character over and over" : "one character over and over";
     }
+    if (cfg.retryOnGarbled && garbledVerdict(stripMarkup(stripThinkingAlways(content, cfg))))
+        return "garbled";
     if (cfg.retryOnTruncated && looksTruncated(content, cfg.retryOnNoPunct, cfg))
         return "cut off";
     if (cfg.retryOnRefusal) {
@@ -6473,6 +6599,7 @@ export function setup(ctx, opts) {
                 "retryOnEmpty",
                 "retryOnSpam",
                 "retryOnSpamThinking",
+                "retryOnGarbled",
                 "retryOnTruncated",
                 "retryOnNoPunct",
                 "retryOnShort",
@@ -8853,6 +8980,7 @@ export function setup(ctx, opts) {
         "thinking only, no reply",
         "thinking was one character over and over",
         "one character over and over",
+        "garbled",
         "cut off",
         REFUSAL_REASON,
         BREAKOFF_REASON,
@@ -14574,6 +14702,7 @@ export function setup(ctx, opts) {
 // input, so they can be checked without a browser.
 export const __testing = {
     replyProblem,
+    garbledVerdict,
     HARD_FAILURE,
     splitLeadingThinking,
     sameSettings,

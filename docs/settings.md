@@ -25,7 +25,7 @@ Four start closed. Press **▸** to open one. Nothing in them is needed to use t
 The longer sections have headings inside them, each with a line saying what its rows are for:
 
 - **How it retries**: **When it gives up**, then **How long it waits between tries**.
-- **When to count a reply as bad**: starts at **Errors** and ends at **Replies that freeze**.
+- **When to count a reply as bad**: **Errors**, then **Broken replies**, then the other checks, then **Replies that freeze**.
 - **Refusal tuning**: **What counts as one**, **Wording you supply**, **How far it looks**, then the note rows.
 
 Every section header is a button, so a closed section also opens with Enter or Space on a keyboard.
@@ -261,6 +261,7 @@ These are the defaults for a new install. They are in the `CONFIG` block at the 
 | retryOnEmpty | true | Retry empty replies, and replies cut off while the model is still thinking. |
 | retryOnSpam | true | Retry when the reply is one character over and over, such as `!!!!!!!!`. |
 | retryOnSpamThinking | true | Retry when the thinking is one character over and over, even when the reply after it looks fine. |
+| retryOnGarbled | true | Retry a reply that turned into a jumble of words from several languages and alphabets run together. See [Garbled replies](detection.md#garbled-replies). |
 | retryOnTruncated | true | Retry a reply that ends mid-sentence. |
 | retryOnNoPunct | true | Retry a reply that stops on a word with nothing after it. Punctuation in any script counts as an ending, and so does an emoji. |
 | retryOnShort | false | Retry short replies. Off by default, because short replies are often fine. |

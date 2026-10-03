@@ -1354,6 +1354,8 @@ console.log("\nwhat is on screen straight away");
         panelSwitch: shown("Show the on-screen panel"),
         rerollSwitch: shown("Retry by adding a new reroll"),
         frozenRun: shown("Replies that freeze"),
+        brokenRun: shown("Broken replies"),
+        garbledRow: shown("It was garbled"),
         frozenRow: shown("Give up on a reply that froze (ms)"),
         openHeadings: open.map((d) => (d.textContent || "").trim()).sort(),
         shutHeadings: heads.map((h) => (h.textContent || "").trim()).sort(),
@@ -1363,6 +1365,7 @@ console.log("\nwhat is on screen straight away");
   check("the on-screen panel switch needs no digging", out.panelSwitch, out);
   check("and neither does the reroll choice", out.rerollSwitch, out);
   check("the frozen-reply rows are under their own heading", out.frozenRun && out.frozenRow, out);
+  check("the broken-reply switches, garbled among them, are under their own heading", out.brokenRun && out.garbledRow, out);
   check(
     "three headings are open and four are shut",
     out.openHeadings.length === 3 && out.shutHeadings.length === 4,
@@ -7017,6 +7020,7 @@ console.log("\nthe sub-headings on a small phone");
   const HEADINGS = [
     "When it gives up",
     "How long it waits between tries",
+    "Broken replies",
     "Replies that freeze",
     "What counts as one",
     "Wording you supply",

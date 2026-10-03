@@ -8,6 +8,16 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.12.0
+
+_2026-10-03_
+
+### Added
+
+- **It was garbled**, under **When to count a reply as bad**, on by default. It retries a reply that turned into a jumble: English words run together with scraps of other languages and alphabets, and capitals in the middle of words. A reply that starts fine and falls apart near the end is caught too. Replies mostly in another alphabet, code, product names and a character who speaks another language now and then are left alone. See [Garbled replies](docs/detection.md#garbled-replies).
+
+---
+
 ## 5.11.2
 
 _2026-10-02_

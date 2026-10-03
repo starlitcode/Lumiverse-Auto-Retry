@@ -5,6 +5,7 @@ Most reasons for a retry are simple, like an error or a blank reply. Each of tho
 This page covers the checks that read the text of a finished reply:
 
 - [One character over and over](#one-character-over-and-over): the model sent `!!!!!!!!` or similar.
+- [Garbled replies](#garbled-replies): the reply turned into a jumble of words from several languages.
 - [Cut-off detection](#cut-off-detection): the reply stopped part way.
 - [Accidental-refusal detection](#accidental-refusal-detection): the model stepped out of the story and declined.
 
@@ -41,7 +42,38 @@ The reply switch checks the reply itself, without its thinking and its HTML tags
 
 These are a small part of the reply around them.
 
-Both switches are under **When to count a reply as bad**.
+Both switches are under **When to count a reply as bad**, in **Broken replies**.
+
+## Garbled replies
+
+Sometimes a model breaks down partway and writes a jumble: English words run together with scraps of other languages and alphabets, and capital letters in the middle of words. It can start that way, or start fine and fall apart near the end.
+
+**It was garbled** (`retryOnGarbled`) retries a reply like that. It is on by default, under **When to count a reply as bad**, in **Broken replies**.
+
+It counts three signs:
+
+- **Two alphabets in one word**, such as English letters and Chinese characters in the same word.
+- **Capitals in the middle of a word**: a small letter followed by two or more capitals, or a word ending on a capital, such as `harborQ` or `quietTRVS`.
+- **A scrap of another alphabet between English words**: one or two words in Russian, Greek, Hindi, Chinese or another alphabet, with English on both sides.
+
+A reply counts as garbled when any stretch of 80 words holds:
+
+- at least 5 of these signs, and
+- at least 2 kinds of sign.
+
+One kind on its own is left alone, because each can turn up in a good reply.
+
+**What it leaves alone:**
+
+- a reply mostly written in another alphabet, such as Chinese or Russian. These signs mean nothing there.
+- a reply shorter than 30 words
+- a character who says a line in Japanese or Russian now and then
+- names like iPhone, YouTube, McDonald's and macOS
+- code, inline code and web addresses, which are left out before counting
+- a robot or a glitching character whose speech is written in mixed capitals
+- science letters such as Δx or a lone α
+
+The thinking is not checked, only the reply.
 
 ## Cut-off detection
 
