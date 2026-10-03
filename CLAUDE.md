@@ -17,9 +17,11 @@ behaves, goes into both.
 - After a release, bring `stable` into `testing` with a merge. Never reset or
   force-push `testing`. People install from it, and Lumiverse cannot update a copy
   whose branch history was replaced.
-- A release is dated the day it first goes to `stable`, in US Eastern time
-  (America/New_York), not UTC. A release late in the evening Eastern time is
-  still that day.
+- A release is dated the day the owner releases it to the public, which is
+  the day the owner says it is announced. It is not dated by the day it goes
+  to `stable`. Until the owner says it is announced, its date is the day it
+  went to `stable`, and it moves to the announced day once the owner says so.
+  Use US Eastern time (America/New_York), not UTC.
 - The owner is in US Eastern time. Every date and time uses it, not UTC.
   Make every commit with `TZ=America/New_York`, so its time is Eastern.
 - Versions follow semver. A patch only fixes things. Adding anything is a minor
