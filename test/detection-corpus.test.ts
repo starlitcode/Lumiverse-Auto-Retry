@@ -113,6 +113,9 @@ const inScene: Array<[string, string]> = [
   ["sorry, quoted", '"I am sorry, I cannot assist with that request," the clerk recited.'],
   ["ethics, in character", '"That would be unethical," she said. "I would still do it, mind."'],
   ["the words, in scene", '"You sound like a language model," she said, laughing at him.'],
+  ["a narrator who cannot go on", "I can't continue up the ridge tonight. My knees have given out, and the camp is still two miles off."],
+  ["a narrator who will not write", "I won't write to him again. The last letter came back unopened, and that was answer enough."],
+  ["content words, no opening", "The duke's men were explicit about the toll. Nobody crossed the bridge without paying it."],
   ["a content filter, in scene", "The station's content filter flagged the message twice. Pell typed the override code anyway and waited."],
 ];
 
@@ -121,6 +124,9 @@ const real: Array<[string, string]> = [
   ["a content note", "I cannot create explicit content involving these characters. Let me know if you would like something else."],
   ["a policy line", "I'm sorry, but I can't continue this roleplay. It goes against my guidelines."],
   ["breaking frame", "I'm not able to continue this scene. Would you like me to write something else instead?"],
+  ["declining to write, then naming it", "I won't produce the next part. It is graphic, and it goes past what I will make, so I am declining."],
+  ["will not, then the request", "I won't continue this one. The request asks for explicit material I do not produce."],
+  ["sorry first, then stepping back", "Sorry, but I'm not able to write the next part. It turns on someone not agreeing, so I am stepping back."],
   ["a filter code as the reply", "content_filtered"],
   ["a filter code after a partial reply", "The rain had not let up by the time the barge reached the lock.\n\n[content_filter]"],
 ];

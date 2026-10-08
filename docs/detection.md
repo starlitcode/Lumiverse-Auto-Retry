@@ -449,6 +449,7 @@ It also matches some patterns. They match by shape, not exact words, so **Reword
 - **Assistant-only verbs** (assist, comply, fulfill). "I can't assist with that." / "I'm unable to comply." / "I cannot fulfill this."
 - **A refusal that names what it refuses.** "I won't write content depicting X", "I can't create scenes involving X", "I don't write stories about X". See [The subject list](#the-subject-list).
 - **The refusal stated as a limit**, with no "I can't". "What I won't do is write that scene." / "Here's what I can do: I can write it with the violence off the page instead." It needs a word about the writing, so "What I won't do is leave you here" is left alone.
+- **Declining to write, then naming it.** The reply opens by declining to write, continue or create, and names the content or the request within the next few sentences. "I won't produce the next part. It is graphic, and I am declining." Both halves are needed, so a first-person line such as "I can't continue up the ridge tonight" is left alone.
 - **Saying it is not comfortable.** "I don't feel comfortable continuing this." / "I don't feel comfortable writing that."
 - **An apology with a refusal.** "I'm sorry, but I can't create that." / "That's not something I can help with." / "I'm not going to generate that content."
 - **A redirect that turns away.** It needs the turn away, so a normal offer to help does not count. "I'd be happy to help with something else instead." / "Instead, I can help you with a lighter scene." / "Please try asking something else."

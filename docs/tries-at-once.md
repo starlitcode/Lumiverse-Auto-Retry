@@ -16,6 +16,13 @@ With **Several tries at once** on, the second try and every try after it work di
 4. The other replies still being written are stopped.
 5. If none of them pass, that counts as one failed try. The next try is set up as usual.
 
+A reply that never comes back is not waited for forever:
+
+- If no reply comes back for 5 minutes, the replies still out are stopped, and the next try goes out.
+- The 5 minutes start again each time a reply comes back.
+- If your `stuckTimeoutMs` wait is longer than 5 minutes, that wait is used instead.
+- The log says how many replies did not come back.
+
 The first try is always a normal retry, because it can stream into the chat and it uses everything Lumiverse adds to a prompt.
 
 ## How many at once

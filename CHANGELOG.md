@@ -8,6 +8,28 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.14.0
+
+_2026-10-08_
+
+### Added
+
+- **Reduce motion.** A new switch in Basics, off by default. On, nothing in Auto Retry moves or fades. A device set to reduce motion gets the same. See [Reduce motion](docs/settings.md#reduce-motion).
+
+### Changed
+
+- **Nothing zooms or bounces.** The pop-up rises and fades in without growing, and it no longer goes past its place and back. It no longer pulses when its message changes. The floating button gets lighter when pressed instead of shrinking. The mark in a tick box fades in instead of growing.
+
+### Fixed
+
+- **Several tries at once could wait for good.** When a reply never came back from the provider, the bar kept counting and nothing else happened. Now, if no reply comes back for 5 minutes, or for the `stuckTimeoutMs` wait if that is longer, the calls still out are stopped and the next try goes out.
+- **The several tries at once bar was cramped on a phone.** When its words grew onto a second line, they stayed squeezed at one side with a gap before **Cancel**. The bar now fits the two lines, with the words beside **Cancel**.
+- **A finished reply that opened with a block in tags could be retried as cut off.** This happened when the block's closing tag was on the same line as its last entry, such as `Mood: calm</status>`, when the reply came straight after the closing tag on the same line, or when the closing tag had a space in it. The block is now read as closed in all of these.
+- **Your own refusal phrases could not match a tag.** A reply is read with its tags taken out, so a phrase such as `<blocked/>` never matched. Your own phrases, and the phrases in **Never treat these as a refusal**, are now also read against the reply with its tags in. Symbols in a phrase are matched as typed.
+- **A refusal written another way was not caught.** A reply that opens by declining to write, such as "I won't produce the next part", and then names the content or the request, was not caught. It is now caught as a refusal. Auto Refine catches it too.
+
+---
+
 ## 5.13.1
 
 _2026-10-03_

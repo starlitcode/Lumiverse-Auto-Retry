@@ -141,7 +141,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.13.1";
+const VERSION = "5.14.0";
 // Whether two saved settings hold the same values, whatever order their keys
 // were written in. A key left undefined counts as not there, the way it is
 // when saved. Used to tell an update or a put-back that would change nothing.
@@ -309,6 +309,9 @@ const CONFIG = {
     confirmButtonLabels: "",
     stopSelector: '[aria-label="Stop generation"], [data-action="stop"], [data-testid="stop"], ' +
         'button[aria-label*="stop" i], button[title*="stop" i], [class*="_sendBtnStop_"]',
+    // Nothing of Auto Retry's moves or fades. A device set to reduce motion
+    // gets the same without this.
+    reduceMotion: false,
     toast: true,
     // The on-screen panel: what the extension did, what went to the model, and
     // what it has been doing overall, as four tabs of one thing. Handy on
@@ -449,6 +452,12 @@ const SCHEMA = [
                 label: "On/off button in the Extras menu",
                 type: "bool",
                 hint: "Off by default. Adds an on/off button to the Extras menu by the chat box. It is hidden while the floating button is on.",
+            },
+            {
+                key: "reduceMotion",
+                label: "Reduce motion",
+                type: "bool",
+                hint: "Off by default. On, nothing in Auto Retry moves or fades. Your device's own reduce motion setting does the same.",
             },
             {
                 key: "toast",
@@ -961,24 +970,37 @@ const HTML_KNOWN = ("html|head|body|div|span|p|a|b|i|u|s|em|strong|small|mark|su
 // shape of the text says the reply finished, and stripping markup deletes the
 // one piece of evidence before anything looks at it.
 //
-// Two things keep this narrow. The tag has to be alone on its line, which is
-// how these blocks are always written and is not how somebody types <sigh> in
-// the middle of a sentence. And the name has to be one HTML does not have,
-// because every HTML element already has a rule here: containers are counted,
-// inline tags are counted only when styled, and a bare <b> left open is
-// ignored on purpose.
+// Two things keep this narrow. The opening tag has to be alone on its line,
+// which is how these blocks are always written and is not how somebody types
+// <sigh> in the middle of a sentence. And the name has to be one HTML does not
+// have, because every HTML element already has a rule here: containers are
+// counted, inline tags are counted only when styled, and a bare <b> left open
+// is ignored on purpose.
+//
+// A closing tag counts wherever it is. Models often close a block on the
+// same line as its last entry, as in "Mood: calm</status>", or put the reply
+// straight after it on the same line, and the block is still closed.
 function customBlockLeftOpen(shown) {
     if (shown.indexOf("<") < 0)
         return false;
     const counts = {};
-    const re = /^[ \t]*<(\/?)([a-zA-Z][\w:-]*)(?:\s[^>]*)?>[ \t]*$/gm;
+    const opener = /^[ \t]*<([a-zA-Z][\w:-]*)(?:\s[^>]*)?>[ \t]*$/gm;
     let m;
     let seen = 0;
-    while ((m = re.exec(shown)) && seen++ < 5000) {
-        const name = m[2].toLowerCase();
+    while ((m = opener.exec(shown)) && seen++ < 5000) {
+        const name = m[1].toLowerCase();
         if (HTML_KNOWN.indexOf(name) >= 0)
             continue;
-        counts[name] = (counts[name] || 0) + (m[1] === "/" ? -1 : 1);
+        counts[name] = (counts[name] || 0) + 1;
+    }
+    if (!Object.keys(counts).length)
+        return false;
+    const closer = /<\/\s*([a-zA-Z][\w:-]*)\s*>/g;
+    seen = 0;
+    while ((m = closer.exec(shown)) && seen++ < 5000) {
+        const name = m[1].toLowerCase();
+        if (name in counts)
+            counts[name] -= 1;
     }
     for (const name of Object.keys(counts))
         if (counts[name] > 0)
@@ -1739,6 +1761,12 @@ const REFUSAL_STRONG = [
     // a concrete thing in the scene. Without this, a servant or aide saying "I
     // can't assist you with the horses today" reads as the model refusing.
     /\bI(?: (?:can(?:no|')?t|cannot|will not|won'?t|am (?:not able|unable) to)|'m (?:not able|unable) to) (?:be able to )?(?:assist|comply|fulfil|fulfill)\b(?:[^.?!\n]{0,30}?\b(?:that|this|it|your request|this request|the request|your prompt)\b|(?:\s+you)?\s*[.!?,"'\u201d\u2019]|(?:\s+you)?\s*$)/i,
+    // A reply that opens by declining to write, and names the content or the
+    // request in the next few sentences: "I won't produce the next part. It is
+    // explicit...". Both halves are needed. The opening alone is a line a
+    // first-person narrator can write, and the content words alone are a scene.
+    // Auto Refine has the same pattern.
+    /^\s*(?:(?:I'm |I am )?sorry[,.!]?\s*(?:but\s+)?)?I(?: (?:can(?:no|')?t|can not|will not|won'?t|am (?:not able|unable|not going|not willing) to|must decline to|have to decline to)|'m (?:not able|unable|not going|not willing) to)\s+(?:write|continue|create|produce|generate|depict|portray|go on with|carry on with|take part in|help with|assist with)\b(?=[\s\S]{0,400}?\b(?:explicit|graphic|sexual(?:ly)?|non-?consensual|consent|polic(?:y|ies)|guidelines?|declin(?:e|ing)|not comfortable|(?:this|the|your) (?:request|prompt)|step(?:ping)? back)\b)/i,
     // Out-of-character comfort hedge, only in the assistant-action sense.
     /\bI don'?t feel comfortable (?:continuing|writing|creating|generating|producing|proceeding|providing|helping|assisting)\b/i,
     // Common modern refusal openers and bodies: "I'm sorry, but I can't create/generate...",
@@ -2529,6 +2557,10 @@ function refusalVerdict(text, cfg) {
         };
     const norm = normalizeForMatch(raw);
     const lower = norm.toLowerCase();
+    // Your own phrases are also read against the reply with its tags left in,
+    // so a phrase that holds a tag, such as <blocked>, can match.
+    const tagged = normalizeForMatch(stripThinking(String(text == null ? "" : text), cfg)).toLowerCase();
+    const ownMatch = (p) => lower.includes(p) || tagged.includes(p);
     // Anything inside quotation marks is a character speaking. A model refusing
     // never puts its refusal in quotes, and a character declining almost always
     // is in them, so this is the single cheapest way to tell the two apart.
@@ -2558,7 +2590,7 @@ function refusalVerdict(text, cfg) {
     // before anything else, including the crisis tier, so a phrase parked here
     // is honoured whatever the reply's length or which tier would have matched.
     for (const p of splitPhrases(cfg && cfg.refusalIgnorePhrases))
-        if (lower.includes(p))
+        if (ownMatch(p))
             return {
                 refusal: false,
                 reason: 'your "never treat these as a refusal" list matched: ' + p,
@@ -2627,7 +2659,7 @@ function refusalVerdict(text, cfg) {
     // The user's own additions count as refusals. Not subject to the quotation
     // rule: someone who typed a phrase in meant it, wherever it appears.
     for (const p of splitPhrases(cfg && cfg.refusalExtraPhrases))
-        if (lower.includes(p))
+        if (ownMatch(p))
             return { refusal: true, reason: "one of your own phrases matched: " + p };
     // Built-in English lists, unless the user has switched them off to run pure-custom.
     if (!cfg || cfg.refusalUseBuiltins !== false) {
@@ -5311,6 +5343,7 @@ export function setup(ctx, opts) {
             const root = drawerTab && drawerTab.root;
             if (!root)
                 throw new Error("drawer tab gave no root");
+            root.setAttribute("data-ar-panel", "1");
             root.style.cssText =
                 "display:flex;flex-direction:column;height:100%;min-height:0;" +
                     "font-family:var(--lumiverse-font-family,system-ui);font-size:13px;color:var(--lumiverse-text,#e9e4f0)";
@@ -6066,6 +6099,9 @@ export function setup(ctx, opts) {
         }
     }
     function syncFloat() {
+        // Every path that changes the settings comes through here, so Reduce
+        // motion is read here too.
+        markMotion();
         if (!cfg.showFloatingToggle) {
             hideFloat();
             return;
@@ -6265,13 +6301,7 @@ export function setup(ctx, opts) {
             done();
         };
         try {
-            let still = false;
-            try {
-                still =
-                    typeof matchMedia === "function" &&
-                        matchMedia("(prefers-reduced-motion: reduce)").matches;
-            }
-            catch (_) { }
+            const still = noMotion();
             const tall = node && node.getBoundingClientRect ? node.getBoundingClientRect().height : 0;
             if (still || !(tall > 0) || !node.style) {
                 finish();
@@ -6686,7 +6716,7 @@ export function setup(ctx, opts) {
         {
             id: "notifications",
             label: "Panel, pop-up and prices",
-            keys: ["toast", "liveLog", "panelHome", "costIn", "costOut"],
+            keys: ["reduceMotion", "toast", "liveLog", "panelHome", "costIn", "costOut"],
         },
         // Special entry: carried outside cfg. buildExport and the import handler
         // treat it as the whole preset store, every kind of preset in it, rather
@@ -7910,6 +7940,50 @@ export function setup(ctx, opts) {
     // Three guards were already written for this, all of them keyed on an id
     // nothing ever set, so all three were doing nothing.
     const OWN_UI = "[data-ar-ui]";
+    // Whether anything may move: off with Reduce motion on, or with the device
+    // set to reduce motion.
+    function noMotion() {
+        if (cfg.reduceMotion)
+            return true;
+        try {
+            return typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+        }
+        catch (_) {
+            return false;
+        }
+    }
+    // Reduce motion, put on the page's root, with the rules that read it. Every
+    // part of ours carries data-ar-ui, the float button carries data-ar-float,
+    // and the drawer panel carries data-ar-panel, so one rule reaches all of it.
+    // Code that waits for a transition to end also has a timer, so nothing
+    // waits on one that never runs. A device set to reduce motion gets the same
+    // rules through the media query.
+    let motionStyleEl = null;
+    function markMotion() {
+        if (typeof document === "undefined")
+            return;
+        try {
+            if (!motionStyleEl) {
+                const parts = ["[data-ar-ui]", "[data-ar-panel]", "[data-ar-float]"];
+                const rules = (root) => parts
+                    .map((p) => [p, p + " *", p + "::before", p + "::after", p + " *::before", p + " *::after"].map((s) => root + s).join(","))
+                    .join(",") + "{animation:none!important;transition:none!important}";
+                const el = document.createElement("style");
+                el.id = "__lvRetryMotionStyle";
+                el.textContent =
+                    rules("html[data-ar-still] ") +
+                        "html[data-ar-still] [data-ar-float] .lv-ar-hold{display:none}" +
+                        "@media (prefers-reduced-motion: reduce){" + rules("") + "}";
+                (document.head || document.documentElement).appendChild(el);
+                motionStyleEl = el;
+            }
+            if (cfg.reduceMotion)
+                document.documentElement.setAttribute("data-ar-still", "1");
+            else
+                document.documentElement.removeAttribute("data-ar-still");
+        }
+        catch (_) { }
+    }
     const markOwnUI = (el) => {
         try {
             el && el.setAttribute && el.setAttribute("data-ar-ui", "1");
@@ -8369,9 +8443,11 @@ export function setup(ctx, opts) {
                     // The two say on the same way.
                     '[data-ar-float][data-ar-on="1"]{' +
                     "box-shadow:0 0 0 3px var(--lumiverse-primary-020,rgba(147,112,219,.18))}" +
-                    // A press dips the whole button, so a tap feels like a press whether or
-                    // not it changes anything.
-                    "[data-ar-float]:active{transform:scale(.94)}" +
+                    // A press lightens the whole button, so a tap feels like a press
+                    // whether or not it changes anything. It does not change size: a
+                    // button that shrinks and grows back costs a repaint of everything
+                    // under it.
+                    "[data-ar-float]:active{filter:brightness(1.15)}" +
                     // The slash draws itself on and wipes itself off along its own length.
                     // 24 is a comfortable over-estimate of the line's length in viewBox
                     // units, so the whole stroke is covered at either end.
@@ -8385,7 +8461,6 @@ export function setup(ctx, opts) {
                     "transition:none}" +
                     "@media (prefers-reduced-motion:reduce){" +
                     "[data-ar-float],[data-ar-float] .lv-ar-slash{transition:none}" +
-                    "[data-ar-float]:active{transform:none}" +
                     // The ring is movement and nothing else: it says how far through a hold
                     // you are and carries no state worth showing still. Somebody who asked
                     // for less movement gets the menu on the same hold with nothing drawn.
@@ -8441,10 +8516,11 @@ export function setup(ctx, opts) {
                     // The tick boxes, drawn here rather than left to the browser. A browser
                     // checkbox tinted with accent-color cannot be animated at all: it is
                     // painted by the platform and it snaps, which made every tick on this
-                    // panel the one control that arrived instead of moving. The mark scales
-                    // up into the box and the box fills behind it, in step and in the same
-                    // time as Auto Refine's switches, since somebody running both should not
-                    // have to notice which one they are looking at.
+                    // panel the one control that arrived instead of moving. The mark fades
+                    // in and the box fills behind it, in step and in the same time as Auto
+                    // Refine's switches, since somebody running both should not have to
+                    // notice which one they are looking at. The mark keeps its size: a
+                    // mark that grows is a zoom.
                     // The margin is the browser's own default for a checkbox, kept rather than
                     // zeroed. It is what gives every row holding one its height, and a check
                     // holds those rows to 26px so a finger has something to land on: taking
@@ -8456,17 +8532,15 @@ export function setup(ctx, opts) {
                     "border:1px solid var(--lumiverse-border,rgba(128,128,128,.25));" +
                     "transition:background-color var(--lumiverse-transition-fast,150ms ease)," +
                     "border-color var(--lumiverse-transition-fast,150ms ease)}" +
-                    // Two sides of a square, turned, which is a tick. Drawn from the middle
-                    // so it grows out of the box rather than sliding in from an edge.
+                    // Two sides of a square, turned, which is a tick.
                     "[data-ar-check]::after{content:\"\";position:absolute;left:6px;top:2px;" +
                     "width:5px;height:10px;border:solid var(--lumiverse-primary,rgba(147,112,219,.9));" +
                     "border-width:0 2px 2px 0;transform-origin:center;" +
-                    "transform:rotate(45deg) scale(.3);opacity:0;" +
-                    "transition:transform var(--lumiverse-transition-fast,150ms ease)," +
-                    "opacity var(--lumiverse-transition-fast,150ms ease)}" +
+                    "transform:rotate(45deg);opacity:0;" +
+                    "transition:opacity var(--lumiverse-transition-fast,150ms ease)}" +
                     "[data-ar-check]:checked{background:var(--lumiverse-primary-020,rgba(147,112,219,.2));" +
                     "border-color:var(--lumiverse-primary-050,rgba(147,112,219,.5))}" +
-                    "[data-ar-check]:checked::after{transform:rotate(45deg) scale(1);opacity:1}" +
+                    "[data-ar-check]:checked::after{opacity:1}" +
                     "[data-ar-check]:disabled{opacity:.45;cursor:not-allowed}" +
                     "[data-ar-check]:focus-visible{outline:none;box-shadow:" + FOCUS_RING + "}" +
                     "@media (prefers-reduced-motion: reduce){" +
@@ -9032,6 +9106,38 @@ export function setup(ctx, opts) {
     // How long to wait for the backend to say it has sent the tries. Building a
     // prompt for a long chat can take a few seconds on a busy server.
     const AT_ONCE_ACK_MS = 20000;
+    // How long to wait for the next reply once the tries are out. These replies
+    // come back whole, not word by word, so the wait covers a full reply from a
+    // slow thinking model. A longer Stuck reply limit raises it. Without it, a
+    // call the provider never answers keeps the run and its bar up for good.
+    const AT_ONCE_WAIT_MS = 5 * 60 * 1000;
+    function atOnceWaitMs() {
+        return Math.max(AT_ONCE_WAIT_MS, Number(cfg.stuckTimeoutMs) || 0);
+    }
+    function armAtOnceWait(chatId, run) {
+        clearTimeout(run.timer);
+        run.timer = setTimeout(() => {
+            run.timer = null;
+            if (run.over || run.adding)
+                return;
+            const s = st(chatId);
+            if (s.atOnce !== run)
+                return;
+            const missing = run.count - run.back;
+            endAtOnce(s, true);
+            hideToast();
+            log(missing + " of the " + run.count + " replies did not come back in " + sayTime(atOnceWaitMs()) +
+                ", so they were stopped");
+            if (run.lastText)
+                s.lastText = run.lastText.slice(-STREAM_BUF_MAX);
+            if (run.judged)
+                scheduleRetry(chatId, run.reason);
+            else if (run.lastError)
+                scheduleRetry(chatId, "error", run.lastError);
+            else
+                scheduleRetry(chatId, "stuck");
+        }, atOnceWaitMs());
+    }
     function atOnceMost() {
         return Math.max(2, Math.min(AT_ONCE_MAX, Math.round(Number(cfg.tryAtOnceMax)) || CONFIG.tryAtOnceMax));
     }
@@ -9150,8 +9256,7 @@ export function setup(ctx, opts) {
         if (msg.stage === "failed")
             return fallBack(String(msg.why || "no reason was given"));
         if (msg.stage === "sent") {
-            clearTimeout(run.timer);
-            run.timer = null;
+            armAtOnceWait(chatId, run);
             run.messageId = String(msg.messageId || "");
             run.swipeCount = Number(msg.swipeCount) || 0;
             stats.extraReplies += Math.max(0, run.count - 1);
@@ -9167,6 +9272,7 @@ export function setup(ctx, opts) {
             if (msg.stopped || run.adding)
                 return;
             run.back += 1;
+            armAtOnceWait(chatId, run);
             paintNow();
             if (msg.error) {
                 run.lastError = String(msg.error);
@@ -10159,12 +10265,7 @@ export function setup(ctx, opts) {
         // makes the browser treat this as a fade rather than as a value that was
         // always one. The read is the placement above, which has already asked for
         // the box's rect.
-        let still = false;
-        try {
-            still = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
-        }
-        catch (_) { }
-        if (still)
+        if (noMotion())
             el.style.transition = "none";
         el.style.opacity = "1";
         // Tapping the description dismisses it. On a phone that is the easiest
@@ -10334,26 +10435,20 @@ export function setup(ctx, opts) {
     }
     // ---- toast with an optional Cancel button ----
     // The box rises into place as it fades in and sinks a little as it fades
-    // out. Coming in it slows as it lands and goes slightly past its place before
-    // settling; going out it speeds up, since nobody watches something leave.
-    // Only the fade is used when the reader asks for less motion.
-    const TOAST_EASE = "opacity 200ms ease-out,transform 260ms cubic-bezier(.2,.9,.3,1.15)";
+    // out. It keeps its size and does not go past its place, since a zoom or a
+    // bounce costs more to draw on a phone. Coming in it slows as it lands;
+    // going out it speeds up, since nobody watches something leave. With less
+    // motion asked for, nothing moves or fades: see noMotion.
+    const TOAST_EASE = "opacity 200ms ease-out,transform 200ms ease-out";
     const TOAST_EASE_OUT = "opacity 160ms ease-in,transform 160ms ease-in";
-    const TOAST_AWAY = "translateY(10px) scale(.96)";
-    const toastStill = () => {
-        try {
-            return typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
-        }
-        catch (_) {
-            return false;
-        }
-    };
+    const TOAST_AWAY = "translateY(10px)";
+    const toastStill = () => noMotion();
     // Where the box waits while hidden: below its place when it sits at the
     // bottom of the screen, above it when it sits at the top.
     const toastAwayFor = (t) => {
         if (toastStill())
             return "none";
-        return t && t.style.bottom === "auto" ? "translateY(-10px) scale(.96)" : TOAST_AWAY;
+        return t && t.style.bottom === "auto" ? "translateY(-10px)" : TOAST_AWAY;
     };
     function toastIn(t) {
         const was = t.style.opacity === "1";
@@ -10366,15 +10461,6 @@ export function setup(ctx, opts) {
         }
         t.style.transform = "none";
         t.style.opacity = "1";
-        // A new message in a box that is already up gets a small pulse, so the
-        // change is seen. A countdown rewriting its own words does not come
-        // through here.
-        if (was && !toastStill()) {
-            try {
-                t.animate([{ transform: "scale(1.035)" }, { transform: "none" }], { duration: 220, easing: "ease-out" });
-            }
-            catch (_) { }
-        }
     }
     function toastOut(t) {
         t.style.transition = TOAST_EASE_OUT;
@@ -10440,7 +10526,9 @@ export function setup(ctx, opts) {
         if (!span || typeof document === "undefined")
             return;
         try {
-            const had = keepWidth ? parseFloat(span.style.width) || 0 : 0;
+            let had = keepWidth ? parseFloat(span.style.width) || 0 : 0;
+            if (!keepWidth)
+                t.__lines = 0;
             // Cleared first, so what is measured is the message at the full width it
             // is allowed rather than whatever the message before it was pinned to.
             span.style.width = "";
@@ -10457,6 +10545,14 @@ export function setup(ctx, opts) {
                 if (w > widest)
                     widest = w;
             }
+            // A rewrite that wraps onto more lines than before is a new shape. The
+            // old width was one line long, so keeping it leaves the shorter lines
+            // at one side of the box and a gap before Cancel. The box narrows once,
+            // to the new lines, and holds that width from then on.
+            const wrapped = !!t.__lines && lines > t.__lines;
+            t.__lines = lines;
+            if (wrapped)
+                had = 0;
             if (widest <= 0 || (lines < 2 && !t.__holds)) {
                 // One line already fits the box exactly, so there is nothing to pin. A
                 // message being rewritten keeps the width it had, since narrowing to
@@ -14731,6 +14827,17 @@ export function setup(ctx, opts) {
             catch (_) { }
             floatStyleEl = null;
         }
+        if (motionStyleEl) {
+            try {
+                motionStyleEl.remove();
+            }
+            catch (_) { }
+            motionStyleEl = null;
+        }
+        try {
+            document.documentElement.removeAttribute("data-ar-still");
+        }
+        catch (_) { }
         offs.forEach((o) => {
             try {
                 o && o();

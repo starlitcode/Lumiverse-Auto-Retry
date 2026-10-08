@@ -2333,6 +2333,10 @@ console.log("\nseveral tries at once");
     const sent = [];
     let backs = [];
     let clicks = 0;
+    // The wait for a try that never comes back is five minutes. Here it is
+    // made short, and nothing else in this page waits that long.
+    const realSetTimeout = window.setTimeout;
+    window.setTimeout = (fn, ms, ...rest) => realSetTimeout(fn, ms === 5 * 60 * 1000 ? 80 : ms, ...rest);
     document.querySelector("[data-testid=regenerate]").addEventListener("click", () => clicks++);
     window.__setup(
       {
@@ -2425,6 +2429,18 @@ console.log("\nseveral tries at once");
     await wait(20);
     const takenStopped = !!takenAsk && sent.some((m) => m.type === "stop_at_once" && m.requestId === takenAsk.requestId);
 
+    // A try that never comes back: the run ends, the call is stopped, and the
+    // next try goes out instead of the bar waiting for good.
+    await twoFailures("hang", { content: REFUSAL });
+    const hangAsk = asks("hang")[0] || null;
+    if (hangAsk) {
+      answer({ type: "at_once", requestId: hangAsk.requestId, stage: "sent", count: 2, from: "kept", messageId: "m2", swipeCount: 2 });
+      answer({ type: "at_once", requestId: hangAsk.requestId, stage: "reply", index: 0, content: REFUSAL });
+    }
+    await wait(250);
+    const hangStopped = !!hangAsk && sent.some((m) => m.type === "stop_at_once" && m.requestId === hangAsk.requestId);
+    const hangNext = asks("hang").length;
+
     // An error is never sent several at once.
     const c5 = clicks;
     await twoFailures("error", { error: "upstream connection reset" });
@@ -2438,6 +2454,7 @@ console.log("\nseveral tries at once");
       firstCount: first && first.count, secondCount: second && second.count,
       told,
       fbBefore, fbAfter, takenStopped, errorAsks, errorClicks, allErrAsks, allErrClicks,
+      hangStopped, hangNext,
     };
   });
   await page.close();
@@ -2457,6 +2474,136 @@ console.log("\nseveral tries at once");
   check("every reply an error makes the next try press the button", out.allErrAsks === 1 && out.allErrClicks === 2, out);
   check("a reply the reader starts stops the tries", out.takenStopped === true, out);
   check("an error is never sent several at once", out.errorAsks === 0 && out.errorClicks === 2, out);
+  check("a try that never comes back is stopped after the wait", out.hangStopped === true, out);
+  check("and the next try goes out", out.hangNext === 2, out);
+  check("no console errors", errors.length === 0, errors);
+}
+
+// ---- reduce motion ----
+// With Reduce motion on, or the device set to reduce motion, nothing of ours
+// moves or fades: the pop-up, the floating button and the panel. Off, the
+// pop-up still fades in.
+console.log("\nreduce motion");
+{
+  const run = async ({ reduceMotion, device }) => {
+    const page = await browser.newPage();
+    const errors = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    await stage(page, '<div id=modal></div><button data-testid="regenerate">Regenerate</button>');
+    await page.addStyleTag({ content: THEME });
+    if (device) await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.addScriptTag({ content: SOURCE, type: "module" });
+    await page.waitForFunction(() => !!window.__setup);
+    const out = await page.evaluate(async (reduceMotion) => {
+      const handlers = {};
+      window.__setup(
+        { events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
+          sendToBackend: () => {},
+          ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+                registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }),
+                createFloatWidget: () => {
+                  const host = document.createElement("div");
+                  document.body.appendChild(host);
+                  return { root: host, destroy: () => host.remove(), setPosition: () => {} };
+                } } },
+        { toast: true, retryDelayMs: 4000, backoffFactor: 1, maxDelayMs: 4000, jitter: false, maxRetries: 3,
+          stuckTimeoutMs: 0, idleTimeoutMs: 0, pauseWhenFailing: false,
+          showFloatingToggle: true, liveLog: true, reduceMotion },
+      );
+      handlers.GENERATION_STARTED({ chatId: "c", generationId: "g1" });
+      handlers.GENERATION_ENDED({ chatId: "c", content: "" });
+      await new Promise((r) => setTimeout(r, 300));
+      const moving = [];
+      const look = (n, pseudo) => {
+        const cs = getComputedStyle(n, pseudo || null);
+        return cs.transitionDuration.split(",").some((d) => parseFloat(d) > 0) ||
+          (cs.animationName !== "none" && cs.animationName !== "");
+      };
+      const all = Array.from(document.querySelectorAll("[data-ar-ui], [data-ar-ui] *, [data-ar-float], [data-ar-float] *"));
+      for (const n of all) {
+        const name = (n.id || n.getAttribute("data-ar-float") != null && "float" || n.tagName).toString();
+        if (look(n)) moving.push(name);
+        if (look(n, "::after")) moving.push(name + "::after");
+      }
+      return {
+        count: all.length,
+        toast: !!document.getElementById("__lvRetryToast"),
+        float: !!document.querySelector("[data-ar-float]"),
+        moving,
+        marked: document.documentElement.hasAttribute("data-ar-still"),
+      };
+    }, reduceMotion);
+    await page.close();
+    return { out, errors };
+  };
+  const off = await run({ reduceMotion: false, device: false });
+  check("off, the pop-up still fades", off.out.toast && off.out.moving.length > 0, off.out);
+  const on = await run({ reduceMotion: true, device: false });
+  check("with Reduce motion on, the page is marked", on.out.marked, on.out);
+  check("and nothing of ours moves or fades", on.out.toast && on.out.float && on.out.count > 5 && on.out.moving.length === 0, on.out);
+  const dev = await run({ reduceMotion: false, device: true });
+  check("with the device set to reduce motion, nothing of ours moves either", dev.out.toast && dev.out.moving.length === 0, dev.out);
+  check("no console errors", [...off.errors, ...on.errors, ...dev.errors].length === 0, [...off.errors, ...on.errors, ...dev.errors]);
+}
+
+// ---- the tries at once bar on a phone ----
+// The bar's words are rewritten every second. When they grow from one line to
+// two, the box has to narrow to the two lines. Kept at the one-line width, the
+// lines sit at one side of the box with a gap before Cancel.
+console.log("\nthe tries at once bar on a phone");
+{
+  const page = await browser.newPage({ viewport: { width: 412, height: 900 }, hasTouch: true, isMobile: true });
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await stage(page, '<div id=modal></div><button data-testid="regenerate">Regenerate</button>');
+  await page.addStyleTag({ content: THEME });
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  const out = await page.evaluate(async () => {
+    const handlers = {};
+    const sent = [];
+    let backs = [];
+    window.__setup(
+      { events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
+        sendToBackend: (m) => sent.push(m),
+        onBackendMessage: (fn) => { backs.push(fn); return () => { backs = backs.filter((f) => f !== fn); }; },
+        ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+              registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) } },
+      { retryDelayMs: 10, backoffFactor: 1, maxDelayMs: 10, jitter: false, maxRetries: 5,
+        toast: true, stuckTimeoutMs: 0, idleTimeoutMs: 0, pauseWhenFailing: false, tryAtOnce: true, tryAtOnceMax: 3 },
+    );
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const answer = (m) => { for (const f of backs.slice()) { try { f(m); } catch (_) {} } };
+    const REFUSAL = "I'm sorry, but I can't write that part of the story.";
+    for (const g of ["g0", "g1"]) {
+      handlers.GENERATION_STARTED({ chatId: "c", generationId: g });
+      handlers.GENERATION_ENDED({ chatId: "c", generationId: g, content: REFUSAL });
+      await wait(100);
+    }
+    const ask = sent.find((m) => m.type === "try_at_once");
+    if (!ask) return null;
+    answer({ type: "at_once", requestId: ask.requestId, stage: "sent", count: 2, from: "kept", messageId: "m2", swipeCount: 2 });
+    answer({ type: "at_once", requestId: ask.requestId, stage: "reply", index: 0, content: REFUSAL });
+    await wait(1500);
+    const t = document.getElementById("__lvRetryToast");
+    const words = t.querySelector("span");
+    const range = document.createRange();
+    range.selectNodeContents(words);
+    const lines = [...range.getClientRects()].map((r) => r.width).filter((w) => w > 0);
+    const box = t.getBoundingClientRect();
+    return {
+      text: words.textContent,
+      lines: lines.length,
+      widest: Math.max(...lines),
+      words: words.getBoundingClientRect().width,
+      inside: box.left >= 0 && box.right <= window.innerWidth,
+    };
+  });
+  await page.close();
+  check("the bar is up with the words on two lines", !!out && out.lines === 2 && /at once/.test(out.text), out);
+  check("the words fill their part of the box, with no gap before Cancel",
+    !!out && out.words - out.widest <= 4, out);
+  check("the bar stays inside the screen", !!out && out.inside, out);
   check("no console errors", errors.length === 0, errors);
 }
 

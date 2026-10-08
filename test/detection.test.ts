@@ -585,6 +585,26 @@ describe("refusal detection on error text", () => {
     expect(looksLikeRefusalError("upstream said POLICY_ENGINE_HALT", mine)).toBe(true);
   });
 
+  // Symbols are kept as typed. Nothing in a phrase is read as a pattern.
+  test("a phrase with symbols in it matches as typed", () => {
+    const mine = withCfg({ refusalExtraPhrases: "[gate: closed]\n(x_x) halt*\n$moderation.block" });
+    expect(looksLikeRefusalError("server said [GATE: CLOSED]", mine)).toBe(true);
+    expect(looksLikeRefusalError("code (x_x) halt* 77", mine)).toBe(true);
+    expect(looksLikeRefusalError("$moderation.block", mine)).toBe(true);
+    expect(looksLikeRefusalError("gate closed", mine)).toBe(false);
+    expect(refusalVerdict("The lantern went out. [gate: closed]", mine).refusal).toBe(true);
+  });
+
+  // A reply is read with its tags taken out, for the built-in checks. Your own
+  // phrases are read against the tags as well, so one that holds a tag works.
+  test("a phrase that holds a tag matches a reply with that tag", () => {
+    const mine = withCfg({ refusalExtraPhrases: "<blocked/>" });
+    expect(refusalVerdict("<blocked/> The scene could not go on.", mine).refusal).toBe(true);
+    expect(refusalVerdict("<b>The scene went on.</b>", mine).refusal).toBe(false);
+    const parked = withCfg({ refusalIgnorePhrases: "<ooc-ok>" });
+    expect(refusalVerdict("<ooc-ok> I can't help with that.", parked).refusal).toBe(false);
+  });
+
   test("and it still counts with the built-in list switched off", () => {
     const mine = withCfg({ refusalUseBuiltins: false, refusalExtraPhrases: "policy_engine_halt" });
     expect(looksLikeRefusalError("PROHIBITED_CONTENT", mine)).toBe(false);

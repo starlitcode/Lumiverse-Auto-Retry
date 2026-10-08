@@ -91,6 +91,14 @@ A button in the chat input's Extras menu, next to the settings button. It takes 
 - Tapping it always switches Auto Retry on or off everywhere.
 - It is hidden while the floating button is on, because the two do the same job. Turn the floating button off and this one comes back.
 
+## Reduce motion
+
+**Reduce motion** is in Basics. It is off by default.
+
+- On, nothing in Auto Retry moves or fades. The pop-up, the panel, the floating button and the tick boxes all change at once.
+- A device set to reduce motion gets the same, with the switch off.
+- No part of Auto Retry grows or shrinks to show a change, so nothing zooms with the switch off either.
+
 ## Turning it off in one chat
 
 Use this for a scene where the model is meant to refuse, or a chat you are using to test something.
@@ -286,6 +294,7 @@ These are the defaults for a new install. They are in the `CONFIG` block at the 
 | confirmButtonsCustom | false | Lets you add your own dialog button words. Off: only the built-in list is used, and the box is hidden. |
 | confirmButtonLabels | (blank) | Extra dialog button labels it may press when a dialog appears after a retry, one per line. Tried before the built-in list, which is used as well. Shown and read only while `confirmButtonsCustom` is on. |
 | stopSelector | (see file) | Your stop button, used to stop a reply that has frozen. |
+| reduceMotion | false | Turn off every animation in Auto Retry: nothing moves or fades. A device set to reduce motion gets the same without this. |
 | toast | true | Show the retry pop-up with its Cancel button. It counts down the wait and says what the retry is for and which try it is. With it off, most other notifications are left out too. Notifications about something you did, and a pause after failed runs, always show. |
 | liveLog | false | Show the on-screen panel. It has four tabs: Log (what it is doing), Prompt (what went to the model), Stats (what it retried for) and Replaced (the last reply a retry replaced). |
 | panelHome | float | Where that panel goes. `float` is a small box over the chat you can move and resize, and where you leave it is remembered. `drawer` puts it in Lumiverse's own side panel, which never covers the reply you are reading. A Lumiverse with no side panel for extensions gets the box, and the Log says so. Shown only while `liveLog` is on. |

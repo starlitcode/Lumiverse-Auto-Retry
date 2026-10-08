@@ -85,6 +85,11 @@ const FINISHED: Array<[string, string]> = [
   ["a bracket inside a quoted attribute", '<span title="a > b">She smiled.</span> It was warm.'],
   ["structured thinking then a reply", "<think>\nBeats:\n1. he panics\n2. she softens\n</think>She reached for his hand."],
   ["a table inside the thinking", "<think>\n| beat | who |\n| --- | --- |\n| 1 | him |\n</think>He exhaled."],
+  // A block of the model's own, closed on the line of its last entry or with
+  // the reply right after the closing tag. The block is closed.
+  ["a block closed on its last line", "<tally>\nLamps lit: 4\nOil left: half</tally>\n\nShe trimmed the last wick."],
+  ["a block closed with the reply after it", "<tally>\nLamps lit: 4\n</tally> She trimmed the last wick."],
+  ["a block closed with a space in the tag", "<tally>\nLamps lit: 4\n</ tally>\n\nShe trimmed the last wick."],
 ];
 
 describe("a finished reply is never called cut off", () => {
@@ -111,6 +116,7 @@ const CUT: Array<[string, string]> = [
   ["json opened", 'Status: {"hp": 12, "sky":'],
   ["think block opened", "<think>She is lying and I should"],
   ["custom block opened", "<story_plan>\nBeat one: she leaves"],
+  ["a block opened, closed on no line, ending on a full stop", "<tally>\nLamps lit: 4\nOil left: half."],
   ["html container opened", '<div class="card"><b>HP</b>: 12'],
   ["stops on a letter with no punctuation", "She walked to the window and looked out at the empty street below and then she"],
   ["list then cut mid-item", "Supplies:\n- rope\n- water\n- a map she could not"],
