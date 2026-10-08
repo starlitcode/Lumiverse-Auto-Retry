@@ -2598,6 +2598,25 @@ console.log("\na pattern behind the panel");
     });
   });
   check("the floating panel keeps its theme colour under the pattern", r.out.layers >= 2, r.out);
+  // On a light theme with a pattern on, the panel's buttons keep dark text.
+  // The readability sweep cannot read a pattern layer and falls back to the
+  // panel's base colour, which has to be the theme's own light colour then.
+  // The theme is the one Lumiverse's own theme engine writes for a purple
+  // accent, kept in lumiverse-themes.json. A hand-written light theme tends to
+  // set every colour light, which the engine does not do, and hides this.
+  const ENGINE = JSON.parse(readFileSync(join(root, "test", "lumiverse-themes.json"), "utf8"));
+  for (const panelHome of ["float", "drawer"]) {
+    const lit = await inPanel(browser, { css: ENGINE.light + "body{background:var(--lumiverse-bg-deep)}", settings: { liveLog: true, panelHome, panelPattern: "diamonds" } }, async (page) => {
+      await page.waitForTimeout(300);
+      return page.evaluate(() => {
+        const box = document.getElementById("__lvRetryLog") || document.querySelector("[data-ar-panel]");
+        const buttons = box ? [...box.querySelectorAll("button")] : [];
+        const dark = (c) => { const m = /rgba?\(([^)]*)\)/.exec(c); if (!m) return false; const p = m[1].split(",").map(Number); return p[0] + p[1] + p[2] < 384; };
+        return { count: buttons.length, light: buttons.filter((b) => !dark(getComputedStyle(b).color)).map((b) => b.textContent.trim()) };
+      });
+    });
+    check("light theme, pattern, " + panelHome + ": the panel's buttons keep dark text", lit.out.count > 3 && lit.out.light.length === 0, lit.out);
+  }
   check("the log's box takes the theme's colour, not a fixed grey", r.out.body === "rgb(40, 0, 60)", r.out);
 }
 

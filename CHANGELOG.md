@@ -15,6 +15,7 @@ _2026-10-08_
 ### Fixed
 
 - **The boxes over a pattern could be dark on a light theme.** In 5.15.0 the settings sections and the log over a pattern were drawn on the theme's deepest background colour. A custom light theme that does not set that colour left them dark. They are now drawn in the theme's raised colour, the one Lumiverse uses for its own panels, which is light on a light theme and dark on a dark one.
+- **Copy and Clear could turn white on a light theme.** In 5.15.0, with a pattern on, the floating panel's buttons took white text on a light theme, which made them hard to read. The panel's colour under the pattern now comes from the theme, so the buttons keep dark text.
 
 ---
 

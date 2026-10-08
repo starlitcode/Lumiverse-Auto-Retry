@@ -7998,6 +7998,10 @@ export function setup(ctx: Ctx, opts?: any) {
         // The floating panel's own colour is a layer of the theme's raised
         // colour, so the pattern goes over that layer rather than in its
         // place. The drawer has no colour of its own to keep.
+        // Its base colour becomes the raised colour too. The readability sweep
+        // reads a plain colour layer but not a pattern, so with a pattern on it
+        // falls back to the base, which is otherwise Lumiverse's fixed dark
+        // grey, and paints the buttons' text white on a light theme.
         const lift =
           "linear-gradient(var(--lumiverse-bg-elevated,rgba(35,30,48,.9)),var(--lumiverse-bg-elevated,rgba(35,30,48,.9)))";
         const drawn: Record<string, string> = {
@@ -8013,7 +8017,8 @@ export function setup(ctx: Ctx, opts?: any) {
           const on = 'html[data-ar-pattern="' + kind + '"] ';
           patterns +=
             on + "[data-ar-panel]{background-image:" + drawn[kind] + "!important;background-size:" + sizes[kind] + "!important}" +
-            on + "#__lvRetryLog{background-image:" + drawn[kind] + "," + lift + "!important;background-size:" + sizes[kind] + ",auto!important}" +
+            on + "#__lvRetryLog{background-color:var(--lumiverse-bg-elevated,rgba(35,30,48,.9))!important;" +
+            "background-image:" + drawn[kind] + "," + lift + "!important;background-size:" + sizes[kind] + ",auto!important}" +
             on + "[data-ar-settings]{background-image:" + drawn[kind] + "!important;background-size:" + sizes[kind] + "!important}";
         }
         // Solid, and in the theme's own colour: the theme's raised colour,
