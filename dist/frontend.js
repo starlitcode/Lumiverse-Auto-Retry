@@ -406,7 +406,7 @@ const RUNS = {
     },
     panelLook: {
         title: "The on-screen panel",
-        note: "Whether it is shown, where it goes, and the pattern behind it.",
+        note: "Whether it is shown, and where it goes.",
     },
     panelCost: {
         title: "What a retry costs",
@@ -466,6 +466,19 @@ const SCHEMA = [
                 hint: "Off by default. On, nothing in Auto Retry moves or fades. Your device's own reduce motion setting does the same.",
             },
             {
+                key: "panelPattern",
+                label: "Pattern behind the settings and the panel",
+                type: "pick",
+                live: true,
+                options: [
+                    { value: "", label: "None" },
+                    { value: "diamonds", label: "Diamonds" },
+                    { value: "stripes", label: "Stripes" },
+                    { value: "dots", label: "Dots" },
+                ],
+                hint: "None by default. A faint pattern in your theme's colour, behind these settings and the on-screen panel. Text sits on solid boxes over it.",
+            },
+            {
                 key: "toast",
                 label: "Show a pop-up on each retry",
                 type: "bool",
@@ -490,21 +503,6 @@ const SCHEMA = [
                     { value: "drawer", label: "In the sidebar drawer" },
                 ],
                 hint: "Floating is a box over the chat you can move and resize. In the sidebar puts it in Lumiverse's own side panel, so it never covers the reply.",
-            },
-            {
-                key: "panelPattern",
-                needs: ["liveLog"],
-                run: "panelLook",
-                label: "Pattern behind that panel",
-                type: "pick",
-                live: true,
-                options: [
-                    { value: "", label: "None" },
-                    { value: "diamonds", label: "Diamonds" },
-                    { value: "stripes", label: "Stripes" },
-                    { value: "dots", label: "Dots" },
-                ],
-                hint: "None by default. A faint pattern in your theme's colour. The log sits on a solid box over it.",
             },
             // A retry is a whole generation paid for twice, so the Prompt tab can say
             // what one costs. Nothing here knows what a model charges and no two
@@ -8016,7 +8014,8 @@ export function setup(ctx, opts) {
                     const on = 'html[data-ar-pattern="' + kind + '"] ';
                     patterns +=
                         on + "[data-ar-panel]{background-image:" + drawn[kind] + "!important;background-size:" + sizes[kind] + "!important}" +
-                            on + "#__lvRetryLog{background-image:" + drawn[kind] + "," + lift + "!important;background-size:" + sizes[kind] + ",auto!important}";
+                            on + "#__lvRetryLog{background-image:" + drawn[kind] + "," + lift + "!important;background-size:" + sizes[kind] + ",auto!important}" +
+                            on + "[data-ar-settings]{background-image:" + drawn[kind] + "!important;background-size:" + sizes[kind] + "!important}";
                 }
                 // Solid, and in the theme's own colour: the theme's deepest background
                 // with its raised colour laid over it. Lumiverse's own "solid card"
@@ -8032,6 +8031,11 @@ export function setup(ctx, opts) {
                         patterns +
                         "html[data-ar-pattern] #__lvRetryLogBody,html[data-ar-pattern] #__lvRetryStatus{" + solid +
                         "margin:6px 8px;border-radius:var(--lumiverse-radius,8px);" +
+                        "border:1px solid var(--lumiverse-border,rgba(255,255,255,.12))}" +
+                        // Each section of the settings on a solid box of its own, so no
+                        // setting is read across the lines.
+                        "html[data-ar-pattern] [data-ar-sec]{" + solid + "padding:12px;" +
+                        "border-radius:var(--lumiverse-radius-md,10px);" +
                         "border:1px solid var(--lumiverse-border,rgba(255,255,255,.12))}";
                 (document.head || document.documentElement).appendChild(el);
                 motionStyleEl = el;
@@ -11075,6 +11079,8 @@ export function setup(ctx, opts) {
     }
     function buildSettingsBody(root, onSaved) {
         ensurePanelStyle();
+        // What the pattern behind the settings is drawn on.
+        root.setAttribute("data-ar-settings", "1");
         // The buttons a popover can be anchored to are about to be thrown away.
         hideHint();
         root.innerHTML = "";
@@ -11965,6 +11971,7 @@ export function setup(ctx, opts) {
         for (const group of SCHEMA) {
             const sec = document.createElement("div");
             sec.style.cssText = SECTION_CSS;
+            sec.setAttribute("data-ar-sec", "1");
             const handle = {
                 sec: sec,
                 title: group.title,
@@ -12092,6 +12099,7 @@ export function setup(ctx, opts) {
         {
             const sec = document.createElement("div");
             sec.style.cssText = SECTION_CSS;
+            sec.setAttribute("data-ar-sec", "1");
             const { header: h, caret } = sectionHeader("Debug info", true);
             sec.appendChild(h);
             const handle = {
@@ -12161,6 +12169,7 @@ export function setup(ctx, opts) {
         {
             const sec = document.createElement("div");
             sec.style.cssText = SECTION_CSS;
+            sec.setAttribute("data-ar-sec", "1");
             const { header: h, caret } = sectionHeader("Import / export", true);
             sec.appendChild(h);
             const handle = {

@@ -2558,18 +2558,24 @@ console.log("\na pattern behind the panel");
         return page.evaluate(() => {
           const d = document.querySelector("[data-ar-panel]");
           const body = document.getElementById("__lvRetryLogBody");
+          const settings = document.querySelector("[data-ar-settings]");
+          const sec = document.querySelector("[data-ar-sec]");
           return {
             drawn: !!d && /gradient/.test(getComputedStyle(d).backgroundImage),
             bodySolid: !!body && /^rgb\(/.test(getComputedStyle(body).backgroundColor),
+            settingsDrawn: !!settings && /gradient/.test(getComputedStyle(settings).backgroundImage),
+            sectionSolid: !!sec && /^rgb\(/.test(getComputedStyle(sec).backgroundColor),
             sideways: document.documentElement.scrollWidth > window.innerWidth + 1,
           };
         });
       });
       const name = panelPattern || "none";
-      if (!panelPattern) check(label + ": with None, nothing is drawn", !r.out.drawn, r.out);
+      if (!panelPattern) check(label + ": with None, nothing is drawn", !r.out.drawn && !r.out.settingsDrawn && !r.out.sectionSolid, r.out);
       else {
         check(label + ", " + name + ": the pattern is drawn", r.out.drawn, r.out);
         check(label + ", " + name + ": the log sits on a solid box", r.out.bodySolid, r.out);
+        check(label + ", " + name + ": the settings have the pattern too", r.out.settingsDrawn, r.out);
+        check(label + ", " + name + ": and each section of the settings sits on a solid box", r.out.sectionSolid, r.out);
       }
       check(label + ", " + name + ": nothing runs off the side", !r.out.sideways, r.out);
     }
