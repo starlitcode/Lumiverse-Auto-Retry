@@ -7996,22 +7996,39 @@ export function setup(ctx: Ctx, opts?: any) {
         // own background is set on the element itself. The log and the line
         // under the tabs sit on a solid box, so no text is read across it.
         const ink = "var(--lumiverse-primary-010,rgba(147,112,219,.12))";
-        const panel = (kind: string) =>
-          'html[data-ar-pattern="' + kind + '"] [data-ar-panel],html[data-ar-pattern="' + kind + '"] #__lvRetryLog';
+        // The floating panel's own colour is a layer of the theme's raised
+        // colour, so the pattern goes over that layer rather than in its
+        // place. The drawer has no colour of its own to keep.
+        const lift =
+          "linear-gradient(var(--lumiverse-bg-elevated,rgba(35,30,48,.9)),var(--lumiverse-bg-elevated,rgba(35,30,48,.9)))";
+        const drawn: Record<string, string> = {
+          diamonds:
+            "repeating-linear-gradient(45deg," + ink + " 0 1px,transparent 1px 16px)," +
+            "repeating-linear-gradient(-45deg," + ink + " 0 1px,transparent 1px 16px)",
+          stripes: "repeating-linear-gradient(135deg," + ink + " 0 1px,transparent 1px 9px)",
+          dots: "radial-gradient(" + ink + " 1.2px,transparent 1.6px)",
+        };
+        const sizes: Record<string, string> = { diamonds: "auto,auto", stripes: "auto", dots: "14px 14px" };
+        let patterns = "";
+        for (const kind of Object.keys(drawn)) {
+          const on = 'html[data-ar-pattern="' + kind + '"] ';
+          patterns +=
+            on + "[data-ar-panel]{background-image:" + drawn[kind] + "!important;background-size:" + sizes[kind] + "!important}" +
+            on + "#__lvRetryLog{background-image:" + drawn[kind] + "," + lift + "!important;background-size:" + sizes[kind] + ",auto!important}";
+        }
+        // Solid, and in the theme's own colour: the theme's deepest background
+        // with its raised colour laid over it. Lumiverse's own "solid card"
+        // colour is a fixed grey that no theme changes.
         const solid =
-          "background-color:var(--lumiverse-card-bg-solid,rgb(24,20,34))!important;" +
-          "background-image:none!important;";
+          "background-color:var(--lumiverse-bg-deep,rgb(18,14,26))!important;" +
+          "background-image:" + lift + "!important;";
         const el = document.createElement("style");
         el.id = "__lvRetryMotionStyle";
         el.textContent =
           rules("html[data-ar-still] ") +
           "html[data-ar-still] [data-ar-float] .lv-ar-hold{display:none}" +
           "@media (prefers-reduced-motion: reduce){" + rules("") + "}" +
-          panel("diamonds") + "{background-image:" +
-          "repeating-linear-gradient(45deg," + ink + " 0 1px,transparent 1px 16px)," +
-          "repeating-linear-gradient(-45deg," + ink + " 0 1px,transparent 1px 16px)!important}" +
-          panel("stripes") + "{background-image:repeating-linear-gradient(135deg," + ink + " 0 1px,transparent 1px 9px)!important}" +
-          panel("dots") + "{background-image:radial-gradient(" + ink + " 1.2px,transparent 1.6px)!important;background-size:14px 14px!important}" +
+          patterns +
           "html[data-ar-pattern] #__lvRetryLogBody,html[data-ar-pattern] #__lvRetryStatus{" + solid +
           "margin:6px 8px;border-radius:var(--lumiverse-radius,8px);" +
           "border:1px solid var(--lumiverse-border,rgba(255,255,255,.12))}";

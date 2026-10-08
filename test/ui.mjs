@@ -2574,6 +2574,25 @@ console.log("\na pattern behind the panel");
       check(label + ", " + name + ": nothing runs off the side", !r.out.sideways, r.out);
     }
   }
+  // The solid colour comes from the theme, and the floating panel keeps its
+  // own colour under the pattern. Lumiverse's own "solid card" colour is a
+  // fixed grey, and a purple theme turned grey-black under it.
+  const r = await inPanel(browser, {
+    css: ":root{--lumiverse-bg-deep:rgb(40,0,60);--lumiverse-card-bg-solid:rgb(24,20,34)}",
+    settings: { liveLog: true, panelHome: "float", panelPattern: "dots" },
+  }, async (page) => {
+    await page.waitForTimeout(200);
+    return page.evaluate(() => {
+      const panel = document.getElementById("__lvRetryLog");
+      const body = document.getElementById("__lvRetryLogBody");
+      return {
+        layers: panel ? (getComputedStyle(panel).backgroundImage.match(/gradient\(/g) || []).length : 0,
+        body: body ? getComputedStyle(body).backgroundColor : "",
+      };
+    });
+  });
+  check("the floating panel keeps its theme colour under the pattern", r.out.layers >= 2, r.out);
+  check("the log's box takes the theme's colour, not a fixed grey", r.out.body === "rgb(40, 0, 60)", r.out);
 }
 
 // ---- the tries at once bar on a phone ----
