@@ -8,6 +8,16 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.15.1
+
+_2026-10-08_
+
+### Fixed
+
+- **The boxes over a pattern could be dark on a light theme.** In 5.15.0 the settings sections and the log over a pattern were drawn on the theme's deepest background colour. A custom light theme that does not set that colour left them dark. They are now drawn in the theme's raised colour, the one Lumiverse uses for its own panels, which is light on a light theme and dark on a dark one.
+
+---
+
 ## 5.15.0
 
 _2026-10-08_
