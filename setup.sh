@@ -95,6 +95,67 @@ if [ -f test/ui.mjs ]; then
   fi
 fi
 
+# Every date and time on this project is US Eastern, and a commit takes its
+# time from TZ. The machine runs on UTC, so the shells this environment opens
+# are told to use Eastern. Setting TZ in the environment's own settings does
+# the same for every process, and is the surer of the two.
+if [ -z "${TZ:-}" ]; then
+  for rc in "${HOME:-/root}/.bashrc" "${HOME:-/root}/.profile"; do
+    if [ -f "$rc" ] || [ "$rc" = "${HOME:-/root}/.bashrc" ]; then
+      grep -q 'export TZ=America/New_York' "$rc" 2>/dev/null || \
+        printf '\n# Commits and dates on this project are US Eastern.\nexport TZ=America/New_York\n' >> "$rc"
+    fi
+  done
+  note "Time zone: shells will use America/New_York. Set TZ=America/New_York in the environment's variables to cover every process."
+fi
+
+# Lumiverse's own source, for checking how the host really behaves and for
+# scripts/engine-themes.ts. Shallow, outside the repo, and skipped quietly when
+# GitHub cannot be reached.
+lumi="${LUMIVERSE_SRC:-${HOME:-/root}/lumiverse-src}"
+if [ ! -d "$lumi/.git" ]; then
+  if git clone -q --depth 1 https://github.com/prolix-oc/Lumiverse "$lumi" 2>/dev/null; then
+    note "Lumiverse source: cloned to $lumi"
+  else
+    warn "could not clone the Lumiverse source to $lumi; checks against the host's code will need it cloned by hand"
+  fi
+else
+  git -C "$lumi" pull -q --ff-only 2>/dev/null && note "Lumiverse source: updated in $lumi" || note "Lumiverse source: $lumi (not updated)"
+fi
+
+# Work happens on testing. A session can start on a branch of its own, and
+# the rules in CLAUDE.md say not to work there.
+if command -v git >/dev/null 2>&1 && git rev-parse --git-dir >/dev/null 2>&1; then
+  branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)"
+  if [ "$branch" != "testing" ]; then
+    warn "on branch '$branch'. Work happens on testing: git checkout testing"
+  fi
+fi
+
+# dist is committed and is what Lumiverse loads, so it has to be what src
+# builds to. Built into a scratch folder and compared, so nothing in the repo
+# changes here.
+if [ -f tsconfig.frontend.json ] && [ -d dist ] && [ -d node_modules/typescript ]; then
+  scratch="$(mktemp -d)"
+  if bunx tsc -p tsconfig.frontend.json --noEmit false --rootDir src --outDir "$scratch" >/dev/null 2>&1 &&
+     bunx tsc -p tsconfig.backend.json --noEmit false --rootDir src --outDir "$scratch" >/dev/null 2>&1; then
+    stale=""
+    for f in "$scratch"/*.js; do
+      cmp -s "$f" "dist/$(basename "$f")" || stale="$stale $(basename "$f")"
+    done
+    if [ -n "$stale" ]; then
+      warn "dist does not match src ($stale ). Run 'bun run build' and commit both."
+    else
+      note "dist: matches src."
+    fi
+  else
+    warn "src did not build; 'bun run check' will say why."
+  fi
+  rm -rf "$scratch"
+fi
+
+note "Browser checks: 'bun run test:ui' runs them all, 'bun run test:ui:only \"name\"' runs the sections whose title holds that name."
+
 # 'bun run check' is left for you to run once you are in. Gating the session on
 # a green test suite means a failing test costs you the environment you would
 # have fixed it from.

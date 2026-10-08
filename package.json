@@ -25,6 +25,7 @@
     "typecheck": "bun run typecheck:frontend && bun run typecheck:backend",
     "test": "bun test",
     "test:ui": "bun test/ui.mjs",
+    "test:ui:only": "bun scripts/ui-only.mjs",
     "check": "bun run typecheck && bun test",
     "build:frontend": "tsc -p tsconfig.frontend.json --noEmit false --rootDir src --outDir dist",
     "build:backend": "tsc -p tsconfig.backend.json --noEmit false --rootDir src --outDir dist",

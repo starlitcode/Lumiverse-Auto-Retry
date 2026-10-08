@@ -50,6 +50,12 @@ Two skills are available. Load them before starting work.
 - `bun run check` is types and the unit tests. The backend tests run
   `dist/backend.js` in a sandbox, so build before testing.
 - `bun run test:ui` drives the built `dist/frontend.js` in headless Chromium.
+- `bun run test:ui:only "name"` runs only the browser check sections whose title
+  holds that name. The full suite takes several minutes. Run the full suite
+  before anything goes to `stable`.
+- `test/lumiverse-themes.json` holds the colours Lumiverse's own theme engine
+  writes, dark and light. `bun scripts/engine-themes.ts` writes it again from a
+  Lumiverse clone, which `setup.sh` puts in `~/lumiverse-src`.
 - A new check has to be seen failing: break the rule it guards in `dist`, watch
   that check fail, then put `dist` back.
 - `test/host-calls.test.ts` needs a `try {` within 60 lines above every

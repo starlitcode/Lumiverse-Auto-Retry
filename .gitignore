@@ -27,3 +27,6 @@ Thumbs.db
 
 # note: dist/ is intentionally NOT ignored.
 # Lumiverse loads dist/frontend.js, so it is committed prebuilt.
+
+# What bun run test:ui:only writes while it runs
+test/_only.mjs
