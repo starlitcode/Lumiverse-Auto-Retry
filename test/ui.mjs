@@ -2562,9 +2562,9 @@ console.log("\na pattern behind the panel");
           const sec = document.querySelector("[data-ar-sec]");
           return {
             drawn: !!d && /gradient/.test(getComputedStyle(d).backgroundImage),
-            bodySolid: !!body && /^rgb\(/.test(getComputedStyle(body).backgroundColor),
+            bodySolid: !!body && ((c) => { const m = /rgba?\(([^)]*)\)/.exec(c); if (!m) return false; const p = m[1].split(","); return p.length < 4 || parseFloat(p[3]) >= 0.85; })(getComputedStyle(body).backgroundColor),
             settingsDrawn: !!settings && /gradient/.test(getComputedStyle(settings).backgroundImage),
-            sectionSolid: !!sec && /^rgb\(/.test(getComputedStyle(sec).backgroundColor),
+            sectionSolid: !!sec && ((c) => { const m = /rgba?\(([^)]*)\)/.exec(c); if (!m) return false; const p = m[1].split(","); return p.length < 4 || parseFloat(p[3]) >= 0.85; })(getComputedStyle(sec).backgroundColor),
             sideways: document.documentElement.scrollWidth > window.innerWidth + 1,
           };
         });
@@ -2584,7 +2584,7 @@ console.log("\na pattern behind the panel");
   // own colour under the pattern. Lumiverse's own "solid card" colour is a
   // fixed grey, and a purple theme turned grey-black under it.
   const r = await inPanel(browser, {
-    css: ":root{--lumiverse-bg-deep:rgb(40,0,60);--lumiverse-card-bg-solid:rgb(24,20,34)}",
+    css: ":root{--lumiverse-bg-elevated:rgb(40,0,60);--lumiverse-card-bg-solid:rgb(24,20,34)}",
     settings: { liveLog: true, panelHome: "float", panelPattern: "dots" },
   }, async (page) => {
     await page.waitForTimeout(200);

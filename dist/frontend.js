@@ -8017,10 +8017,13 @@ export function setup(ctx, opts) {
                             on + "#__lvRetryLog{background-image:" + drawn[kind] + "," + lift + "!important;background-size:" + sizes[kind] + ",auto!important}" +
                             on + "[data-ar-settings]{background-image:" + drawn[kind] + "!important;background-size:" + sizes[kind] + "!important}";
                 }
-                // Solid, and in the theme's own colour: the theme's deepest background
-                // with its raised colour laid over it. Lumiverse's own "solid card"
-                // colour is a fixed grey that no theme changes.
-                const solid = "background-color:var(--lumiverse-bg-deep,rgb(18,14,26))!important;" +
+                // Solid, and in the theme's own colour: the theme's raised colour,
+                // laid twice. It is light on a light theme and dark on a dark one,
+                // and near solid once laid twice even when a theme makes it
+                // see-through. Lumiverse's "solid card" colour is a fixed grey that
+                // no theme changes, and a custom theme does not always set the
+                // deepest background, so neither is used.
+                const solid = "background-color:var(--lumiverse-bg-elevated,rgba(35,30,48,.9))!important;" +
                     "background-image:" + lift + "!important;";
                 const el = document.createElement("style");
                 el.id = "__lvRetryMotionStyle";
