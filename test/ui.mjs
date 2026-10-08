@@ -11972,7 +11972,8 @@ console.log("\nfind and replace, retired");
         appearance: getComputedStyle(outBoxes[0]).appearance,
         tickHidden: getComputedStyle(inBoxes[0], "::after").opacity,
         tickShown: getComputedStyle(outBoxes[0], "::after").opacity,
-        moves: /transform/.test(getComputedStyle(outBoxes[0], "::after").transitionProperty),
+        fades: /opacity/.test(getComputedStyle(outBoxes[0], "::after").transitionProperty),
+        grows: /transform/.test(getComputedStyle(outBoxes[0], "::after").transitionProperty),
       };
     }),
   );
@@ -11982,7 +11983,8 @@ console.log("\nfind and replace, retired");
   check("the boxes are drawn by us, so they can be animated", out.drawn && out.appearance === "none", out);
   check("a ticked one shows its mark and an unticked one does not",
     out.tickShown === "1" && out.tickHidden === "0", out);
-  check("and the mark moves rather than appearing", out.moves, out);
+  check("and the mark fades in rather than appearing", out.fades, out);
+  check("without growing, which would be a zoom", !out.grows, out);
   check("no console errors", errors.length === 0, errors);
 }
 
