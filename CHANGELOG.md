@@ -8,6 +8,21 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.15.0
+
+_2026-10-08_
+
+### Added
+
+- **A pattern behind the on-screen panel.** A new setting, **Pattern behind that panel**, with Diamonds, Stripes and Dots. It is drawn faintly in your theme's colour, and the log sits on a solid box over it. It is None by default. See [Settings](docs/settings.md#every-option-and-its-default).
+
+### Changed
+
+- **The tick mark springs into the box.** In 5.14.0 the mark in a tick box only faded in. It now grows into the box again, goes a little past its size and settles back. Reduce motion still turns it off.
+- **The on-screen panel's settings have their own heading.** **Show the on-screen panel**, **Where that panel goes** and the new pattern setting are grouped under **The on-screen panel** in Basics.
+
+---
+
 ## 5.14.0
 
 _2026-10-08_

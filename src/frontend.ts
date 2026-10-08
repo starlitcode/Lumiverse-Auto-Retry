@@ -152,7 +152,7 @@ const STREAM_BUF_MAX = 200000;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.14.0";
+const VERSION = "5.15.0";
 
 // Whether two saved settings hold the same values, whatever order their keys
 // were written in. A key left undefined counts as not there, the way it is
@@ -338,6 +338,8 @@ const CONFIG = {
   // gets the same without this.
   reduceMotion: false,
   toast: true,
+  // A faint pattern behind the on-screen panel. Empty is plain.
+  panelPattern: "",
   // The on-screen panel: what the extension did, what went to the model, and
   // what it has been doing overall, as four tabs of one thing. Handy on
   // mobile, where there is no console to open. Off by default.
@@ -507,6 +509,10 @@ const RUNS: Record<string, { title: string; note: string }> = {
     title: "How far it looks",
     note: "What the check is allowed to read. A long reply is real writing rather than a refusal, and the model's own reasoning is not the reply, so neither is treated as one by default.",
   },
+  panelLook: {
+    title: "The on-screen panel",
+    note: "Whether it is shown, where it goes, and the pattern behind it.",
+  },
   panelCost: {
     title: "What a retry costs",
     note: "Your provider's own prices, copied off its price list, in whatever currency it bills you in. Nothing here knows what a model charges and no two providers agree, so this is the only way the panel can turn a token count into money. A retry pays for the prompt again and for a whole new reply, so both are counted. Both at 0, no cost is worked out and the Prompt tab says nothing about it.",
@@ -572,6 +578,7 @@ const SCHEMA: Group[] = [
       },
       {
         key: "liveLog",
+        run: "panelLook",
         label: "Show the on-screen panel",
         type: "bool",
         hint: "A panel with four tabs: Log, Prompt, Stats and Replaced. It shows what Auto Retry is doing, which helps on a phone with no console.",
@@ -579,6 +586,7 @@ const SCHEMA: Group[] = [
       {
         key: "panelHome",
         needs: ["liveLog"],
+        run: "panelLook",
         label: "Where that panel goes",
         type: "pick",
         live: true,
@@ -587,6 +595,21 @@ const SCHEMA: Group[] = [
           { value: "drawer", label: "In the sidebar drawer" },
         ],
         hint: "Floating is a box over the chat you can move and resize. In the sidebar puts it in Lumiverse's own side panel, so it never covers the reply.",
+      },
+      {
+        key: "panelPattern",
+        needs: ["liveLog"],
+        run: "panelLook",
+        label: "Pattern behind that panel",
+        type: "pick",
+        live: true,
+        options: [
+          { value: "", label: "None" },
+          { value: "diamonds", label: "Diamonds" },
+          { value: "stripes", label: "Stripes" },
+          { value: "dots", label: "Dots" },
+        ],
+        hint: "None by default. A faint pattern in your theme's colour. The log sits on a solid box over it.",
       },
       // A retry is a whole generation paid for twice, so the Prompt tab can say
       // what one costs. Nothing here knows what a model charges and no two
@@ -6236,6 +6259,8 @@ export function setup(ctx: Ctx, opts?: any) {
       // whether you want it there. Moving as you pick does, and closing the
       // panel without saving moves it back with everything else.
       if (key === "panelHome") syncLiveLog();
+      // The pattern is shown as it is picked, the same way.
+      if (key === "panelPattern") markMotion();
     } catch (_) {}
   }
 
@@ -6760,7 +6785,7 @@ export function setup(ctx: Ctx, opts?: any) {
     {
       id: "notifications",
       label: "Panel, pop-up and prices",
-      keys: ["reduceMotion", "toast", "liveLog", "panelHome", "costIn", "costOut"],
+      keys: ["reduceMotion", "toast", "liveLog", "panelHome", "panelPattern", "costIn", "costOut"],
     },
     // Special entry: carried outside cfg. buildExport and the import handler
     // treat it as the whole preset store, every kind of preset in it, rather
@@ -7965,17 +7990,40 @@ export function setup(ctx: Ctx, opts?: any) {
           parts
             .map((p) => [p, p + " *", p + "::before", p + "::after", p + " *::before", p + " *::after"].map((s) => root + s).join(","))
             .join(",") + "{animation:none!important;transition:none!important}";
+        // The pattern behind the panel, on the same sheet since it is read
+        // off the page's root the same way. Thin lines or dots in the theme's
+        // colour, drawn with gradients. Marked important, since the panel's
+        // own background is set on the element itself. The log and the line
+        // under the tabs sit on a solid box, so no text is read across it.
+        const ink = "var(--lumiverse-primary-010,rgba(147,112,219,.12))";
+        const panel = (kind: string) =>
+          'html[data-ar-pattern="' + kind + '"] [data-ar-panel],html[data-ar-pattern="' + kind + '"] #__lvRetryLog';
+        const solid =
+          "background-color:var(--lumiverse-card-bg-solid,rgb(24,20,34))!important;" +
+          "background-image:none!important;";
         const el = document.createElement("style");
         el.id = "__lvRetryMotionStyle";
         el.textContent =
           rules("html[data-ar-still] ") +
           "html[data-ar-still] [data-ar-float] .lv-ar-hold{display:none}" +
-          "@media (prefers-reduced-motion: reduce){" + rules("") + "}";
+          "@media (prefers-reduced-motion: reduce){" + rules("") + "}" +
+          panel("diamonds") + "{background-image:" +
+          "repeating-linear-gradient(45deg," + ink + " 0 1px,transparent 1px 16px)," +
+          "repeating-linear-gradient(-45deg," + ink + " 0 1px,transparent 1px 16px)!important}" +
+          panel("stripes") + "{background-image:repeating-linear-gradient(135deg," + ink + " 0 1px,transparent 1px 9px)!important}" +
+          panel("dots") + "{background-image:radial-gradient(" + ink + " 1.2px,transparent 1.6px)!important;background-size:14px 14px!important}" +
+          "html[data-ar-pattern] #__lvRetryLogBody,html[data-ar-pattern] #__lvRetryStatus{" + solid +
+          "margin:6px 8px;border-radius:var(--lumiverse-radius,8px);" +
+          "border:1px solid var(--lumiverse-border,rgba(255,255,255,.12))}";
         (document.head || document.documentElement).appendChild(el);
         motionStyleEl = el;
       }
       if (cfg.reduceMotion) document.documentElement.setAttribute("data-ar-still", "1");
       else document.documentElement.removeAttribute("data-ar-still");
+      const pattern = String(cfg.panelPattern || "");
+      if (pattern === "diamonds" || pattern === "stripes" || pattern === "dots")
+        document.documentElement.setAttribute("data-ar-pattern", pattern);
+      else document.documentElement.removeAttribute("data-ar-pattern");
     } catch (_) {}
   }
   const markOwnUI = (el: any) => {
@@ -8486,11 +8534,9 @@ export function setup(ctx: Ctx, opts?: any) {
         // The tick boxes, drawn here rather than left to the browser. A browser
         // checkbox tinted with accent-color cannot be animated at all: it is
         // painted by the platform and it snaps, which made every tick on this
-        // panel the one control that arrived instead of moving. The mark fades
-        // in and the box fills behind it, in step and in the same time as Auto
-        // Refine's switches, since somebody running both should not have to
-        // notice which one they are looking at. The mark keeps its size: a
-        // mark that grows is a zoom.
+        // panel the one control that arrived instead of moving. The mark grows
+        // into the box with a small spring and the box fills behind it, in
+        // step with Auto Refine's switches, whose knob springs the same way.
         // The margin is the browser's own default for a checkbox, kept rather than
         // zeroed. It is what gives every row holding one its height, and a check
         // holds those rows to 26px so a finger has something to land on: taking
@@ -8506,11 +8552,14 @@ export function setup(ctx: Ctx, opts?: any) {
         "[data-ar-check]::after{content:\"\";position:absolute;left:6px;top:2px;" +
         "width:5px;height:10px;border:solid var(--lumiverse-primary,rgba(147,112,219,.9));" +
         "border-width:0 2px 2px 0;transform-origin:center;" +
-        "transform:rotate(45deg);opacity:0;" +
-        "transition:opacity var(--lumiverse-transition-fast,150ms ease)}" +
+        "transform:rotate(45deg) scale(.3);opacity:0;" +
+        // Grows a little past its size and settles back, so the tick lands
+        // with a small spring. Fades out without one when it is cleared.
+        "transition:transform 300ms cubic-bezier(.34,1.56,.64,1)," +
+        "opacity var(--lumiverse-transition-fast,150ms ease)}" +
         "[data-ar-check]:checked{background:var(--lumiverse-primary-020,rgba(147,112,219,.2));" +
         "border-color:var(--lumiverse-primary-050,rgba(147,112,219,.5))}" +
-        "[data-ar-check]:checked::after{opacity:1}" +
+        "[data-ar-check]:checked::after{transform:rotate(45deg) scale(1);opacity:1}" +
         "[data-ar-check]:disabled{opacity:.45;cursor:not-allowed}" +
         "[data-ar-check]:focus-visible{outline:none;box-shadow:" + FOCUS_RING + "}" +
         "@media (prefers-reduced-motion: reduce){" +
@@ -14673,6 +14722,7 @@ export function setup(ctx: Ctx, opts?: any) {
     }
     try {
       document.documentElement.removeAttribute("data-ar-still");
+      document.documentElement.removeAttribute("data-ar-pattern");
     } catch (_) {}
     offs.forEach((o: any) => {
       try {

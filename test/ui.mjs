@@ -2546,6 +2546,36 @@ console.log("\nreduce motion");
   check("no console errors", [...off.errors, ...on.errors, ...dev.errors].length === 0, [...off.errors, ...on.errors, ...dev.errors]);
 }
 
+// ---- a pattern behind the panel ----
+// None by default. Chosen, it is drawn behind the on-screen panel, and the log
+// and the line under the tabs sit on solid boxes over it.
+console.log("\na pattern behind the panel");
+{
+  for (const [label, viewport, touch] of [["phone", { width: 390, height: 800 }, true], ["laptop", { width: 1280, height: 800 }, false]]) {
+    for (const panelPattern of ["", "diamonds", "stripes", "dots"]) {
+      const r = await inPanel(browser, { viewport, touch, settings: { liveLog: true, panelHome: "drawer", panelPattern } }, async (page) => {
+        await page.waitForTimeout(200);
+        return page.evaluate(() => {
+          const d = document.querySelector("[data-ar-panel]");
+          const body = document.getElementById("__lvRetryLogBody");
+          return {
+            drawn: !!d && /gradient/.test(getComputedStyle(d).backgroundImage),
+            bodySolid: !!body && /^rgb\(/.test(getComputedStyle(body).backgroundColor),
+            sideways: document.documentElement.scrollWidth > window.innerWidth + 1,
+          };
+        });
+      });
+      const name = panelPattern || "none";
+      if (!panelPattern) check(label + ": with None, nothing is drawn", !r.out.drawn, r.out);
+      else {
+        check(label + ", " + name + ": the pattern is drawn", r.out.drawn, r.out);
+        check(label + ", " + name + ": the log sits on a solid box", r.out.bodySolid, r.out);
+      }
+      check(label + ", " + name + ": nothing runs off the side", !r.out.sideways, r.out);
+    }
+  }
+}
+
 // ---- the tries at once bar on a phone ----
 // The bar's words are rewritten every second. When they grow from one line to
 // two, the box has to narrow to the two lines. Kept at the one-line width, the
@@ -11974,6 +12004,7 @@ console.log("\nfind and replace, retired");
         tickShown: getComputedStyle(outBoxes[0], "::after").opacity,
         fades: /opacity/.test(getComputedStyle(outBoxes[0], "::after").transitionProperty),
         grows: /transform/.test(getComputedStyle(outBoxes[0], "::after").transitionProperty),
+        springs: /cubic-bezier\([^,]+,\s*1\.\d+/.test(getComputedStyle(outBoxes[0], "::after").transitionTimingFunction),
       };
     }),
   );
@@ -11984,7 +12015,7 @@ console.log("\nfind and replace, retired");
   check("a ticked one shows its mark and an unticked one does not",
     out.tickShown === "1" && out.tickHidden === "0", out);
   check("and the mark fades in rather than appearing", out.fades, out);
-  check("without growing, which would be a zoom", !out.grows, out);
+  check("and grows into the box with a spring", out.grows && out.springs, out);
   check("no console errors", errors.length === 0, errors);
 }
 
