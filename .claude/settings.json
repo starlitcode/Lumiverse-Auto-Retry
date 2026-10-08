@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if [ \"$CLAUDE_CODE_REMOTE\" = \"true\" ]; then cd \"$CLAUDE_PROJECT_DIR\" && bash setup.sh; fi; exit 0",
+            "timeout": 300
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -47,6 +47,11 @@ Two skills are available. Load them before starting work.
 - `src/` is the source. `dist/` is committed, readable, and is what Lumiverse
   loads. `bun run build` makes `dist` from `src`, and both go in the same commit.
   Never edit `dist` by hand.
+- `setup.sh` gets a cloud session ready: packages, Eastern time, a Lumiverse
+  source copy, and checks on the branch and on `dist`. A cloud session with only
+  this repo runs it by itself when it starts. A session with both extensions
+  does not, so run `bash setup.sh` in each repo first. It only runs in the
+  cloud, never on your own computer.
 - `bun run check` is types and the unit tests. The backend tests run
   `dist/backend.js` in a sandbox, so build before testing.
 - `bun run test:ui` drives the built `dist/frontend.js` in headless Chromium.
