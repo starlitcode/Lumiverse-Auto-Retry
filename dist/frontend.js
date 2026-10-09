@@ -1335,7 +1335,7 @@ function looksTruncated(text, retryOnNoPunct, cfg) {
         return true;
     // The same question for the formats that close on a token of their own: an
     // opener with nothing closing it is thinking the reply never came out of.
-    for (const pair of THINK_PAIRS)
+    for (const pair of thinkPairs())
         if (new RegExp(pair.open, "i").test(raw) && !new RegExp(pair.close, "i").test(raw))
             return true;
     // The checks below count fences, backticks, asterisks and quotes. A closed
@@ -2423,6 +2423,25 @@ const THINK_PAIRS = [
     // Kimi, which writes its tags with triangles in place of angle brackets.
     { needs: "\u25c1think\u25b7", open: "\u25c1think\u25b7", close: "\u25c1\\/think\u25b7" },
 ];
+// The thinking start and end saved on the reader's connections, sent by the
+// backend as written and matched as written.
+let boundThinkPairs = [];
+const escapeRe = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+function setBoundThinkPairs(list) {
+    const out = [];
+    if (Array.isArray(list))
+        for (const p of list.slice(0, 10)) {
+            const open = String((p && p.open) || "");
+            const close = String((p && p.close) || "");
+            if (open.trim().length < 3 || close.trim().length < 3)
+                continue;
+            out.push({ needs: open.toLowerCase(), open: escapeRe(open), close: escapeRe(close) });
+        }
+    boundThinkPairs = out;
+}
+function thinkPairs() {
+    return THINK_PAIRS.concat(boundThinkPairs);
+}
 // Turn, role and reply markers a local backend can pass through. They are not
 // reasoning, but until they are gone they count towards the length checks and
 // sit in the middle of the phrases the refusal checks match on.
@@ -2487,7 +2506,7 @@ function stripThinking(text, cfg) {
     // taken closed first, then as an opener running to the end, which is thinking
     // that was cut off before the reply started.
     const low = t.toLowerCase();
-    for (const pair of THINK_PAIRS) {
+    for (const pair of thinkPairs()) {
         if (low.indexOf(pair.needs) < 0)
             continue;
         t = t.replace(new RegExp(pair.open + "[\\s\\S]*?" + pair.close, "gi"), " ");
@@ -4233,6 +4252,16 @@ export function setup(ctx, opts) {
         try {
             if (canSend())
                 ctx.sendToBackend({ type: "list_replaced", requestId: "ar-replaced-" + Date.now(), save: replacedSaving() });
+        }
+        catch (_) { }
+    }
+    // Asked on start, when the backend comes back up, and as each reply starts,
+    // so a marker changed in Lumiverse is picked up. The backend answers from
+    // what it read in the last minute.
+    function askThinkMarks() {
+        try {
+            if (canSend())
+                ctx.sendToBackend({ type: "get_think_marks" });
         }
         catch (_) { }
     }
@@ -9889,6 +9918,7 @@ export function setup(ctx, opts) {
         scheduleRetry(chatId, reason);
     }
     function onStart(p) {
+        askThinkMarks();
         if (!p)
             return;
         const chatId = chatOf(p);
@@ -15108,6 +15138,7 @@ export function setup(ctx, opts) {
     loadFromAccount();
     loadPresetsFromAccount();
     askReplaced();
+    askThinkMarks();
     // A tab brought back after a while asks the account again, so what it shows
     // and what it would save is the newest copy.
     try {
@@ -15150,6 +15181,7 @@ export function setup(ctx, opts) {
                         if (presetsWaiting)
                             loadPresetsFromAccount();
                         askReplaced();
+                        askThinkMarks();
                         askForPermissions();
                         askForBackendVersion();
                         if (promptsAsked) {
@@ -15254,6 +15286,10 @@ export function setup(ctx, opts) {
                     // The account copy could not be written. The browser copy may well have
                     // worked, so this does not say the settings are lost: it says the part
                     // that carries them to another device did not happen.
+                    if (msg.type === "think_marks") {
+                        setBoundThinkPairs(msg.pairs);
+                        return;
+                    }
                     if (msg.type === "replaced_list") {
                         takeReplaced(msg.items);
                         return;
@@ -15426,6 +15462,7 @@ export function setup(ctx, opts) {
 // whether a colour pairing is readable. All of them are pure functions of their
 // input, so they can be checked without a browser.
 export const __testing = {
+    setBoundThinkPairs,
     replyProblem,
     garbledVerdict,
     HARD_FAILURE,

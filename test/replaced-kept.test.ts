@@ -12,7 +12,7 @@ const BACKEND = readFileSync(join(root, "dist", "backend.js"), "utf8");
 
 // A fresh backend over a store that can be handed to the next one, as after an
 // update or a restart.
-function boot(stored: Record<string, any> = {}) {
+function boot(stored: Record<string, any> = {}, connections: any[] = []) {
   let frontendHandler: any = null;
   const sent: Array<{ msg: any; userId: any }> = [];
   const spindle = {
@@ -40,12 +40,14 @@ function boot(stored: Record<string, any> = {}) {
     on: () => {},
     chat: { getMessages: async () => [], updateMessage: async () => {} },
     registerInterceptor: () => {},
+    connections: { list: async () => connections },
     log: { info() {}, warn() {}, error() {} },
   };
   new Function("spindle", BACKEND)(spindle);
   return {
     stored,
     ask: (payload: any, userId = "u1") => frontendHandler(payload, userId),
+    sent,
     list: async (userId = "u1", save = false) => {
       await frontendHandler({ type: "list_replaced", requestId: "r", save }, userId);
       const got = sent.filter((s) => s.msg.type === "replaced_list" && s.userId === userId).pop();
@@ -131,5 +133,26 @@ describe("the reply a retry replaced", () => {
     const h = boot(stored);
     await h.ask({ type: "save_replaced", save: false });
     expect(h.stored["u1:replaced.json"]).toEqual([]);
+  });
+});
+
+describe("the thinking markers saved on a connection", () => {
+  const bound = (prefix: string, suffix: string) => ({
+    id: "c1",
+    reasoning_bindings: { settings: { prefix, suffix, autoParse: true } },
+  });
+
+  test("are sent to the panel as written, with line breaks trimmed", async () => {
+    const h = boot({}, [bound("@@plan@@\n", "\n@@done@@"), { id: "c2", reasoning_bindings: null }]);
+    await h.ask({ type: "get_think_marks" });
+    const got = h.sent.filter((s) => s.msg.type === "think_marks").pop();
+    expect(got.msg.pairs).toEqual([{ open: "@@plan@@", close: "@@done@@" }]);
+    expect(got.userId).toBe("u1");
+  });
+
+  test("and one too short to be safe is left out", async () => {
+    const h = boot({}, [bound("(", ")")]);
+    await h.ask({ type: "get_think_marks" });
+    expect(h.sent.filter((s) => s.msg.type === "think_marks").pop().msg.pairs).toEqual([]);
   });
 });

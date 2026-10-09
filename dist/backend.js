@@ -204,6 +204,36 @@ async function readReplaced(userId) {
     while (list.length > REPLACED_PER_USER)
         list.shift();
 }
+// ---- thinking markers saved on a connection ----
+// The thinking start and end a reader saved on a connection, under Lumiverse's
+// Reasoning settings. The panel does the stripping, so they are sent there as
+// written. Read at most once a minute per account. The global Reasoning
+// settings cannot be read by an extension, so a marker set only there is not
+// found here.
+const MARKS_FRESH_MS = 60000;
+const marksBy = new Map();
+function marksFrom(list) {
+    const out = [];
+    if (!Array.isArray(list))
+        return out;
+    for (const c of list) {
+        const set = c && c.reasoning_bindings && c.reasoning_bindings.settings;
+        if (!set)
+            continue;
+        // Lumiverse trims line breaks off both ends of each marker. One under 3
+        // characters could be ordinary punctuation in a reply, so it is skipped.
+        const open = String(set.prefix == null ? '' : set.prefix).replace(/^\n+|\n+$/g, '');
+        const close = String(set.suffix == null ? '' : set.suffix).replace(/^\n+|\n+$/g, '');
+        if (open.trim().length < 3 || close.trim().length < 3 || open.length > 80 || close.length > 80)
+            continue;
+        if (out.some((p) => p.open === open && p.close === close))
+            continue;
+        out.push({ open: open, close: close });
+        if (out.length >= 10)
+            break;
+    }
+    return out;
+}
 // Replying without a userId broadcasts to every connected user on an
 // operator-scoped install, so every reply to a frontend message carries the id
 // of whoever sent it. A user-scoped install ignores the argument.
@@ -949,6 +979,21 @@ spindle.onFrontendMessage(async (payload, userId) => {
                     replyTo(userId, { type: 'account_save_failed', what: 'presets' });
                 }
             });
+            return;
+        }
+        if (payload.type === 'get_think_marks') {
+            const k = userKey(userId);
+            const had = marksBy.get(k);
+            let pairs = had ? had.pairs : [];
+            if (!had || Date.now() - had.at >= MARKS_FRESH_MS) {
+                try {
+                    if (spindle.connections && typeof spindle.connections.list === 'function')
+                        pairs = marksFrom(await spindle.connections.list(userId));
+                }
+                catch (_) { /* no generation permission: the built-in formats still apply */ }
+                marksBy.set(k, { at: Date.now(), pairs: pairs });
+            }
+            replyTo(userId, { type: 'think_marks', pairs: pairs });
             return;
         }
         if (payload.type === 'keep_replaced') {

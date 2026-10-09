@@ -273,6 +273,12 @@ Nine formats are recognised. The first three use tag names like `think`, `thinki
 
 **Gemma 4** has an empty channel pair on every reply when the model is not thinking. Empty pairs are removed too.
 
+**Your own thinking markers** are recognised too. In Lumiverse's **Reasoning** settings, a **Prefix** and **Suffix** saved on a connection are read from that connection.
+
+- Each must be at least 3 characters, so ordinary punctuation is never taken for thinking.
+- They are read again at most once a minute.
+- A Prefix and Suffix set only in the global Reasoning settings, with nothing saved on a connection, cannot be read by an extension. For those, add the tag name to **Extra thinking tag names**.
+
 **Turn markers** are also removed: Gemma's `<\|turn>model` and `<turn\|>`, ChatML's `<\|im_start\|>` and `<\|im_end\|>`, Llama's header block, and Cohere's turn tokens. These are removed whether or not **Ignore the thinking / reasoning** is on, because they are not thinking.
 
 **Thinking sent separately.** Some providers send thinking apart from the reply. It never reaches the reply text, so there is nothing to remove.

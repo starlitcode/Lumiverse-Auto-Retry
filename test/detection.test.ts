@@ -511,6 +511,23 @@ describe("refusal detection ignores the model's thinking", () => {
       });
     }
 
+    // The thinking start and end saved on a connection, sent by the backend.
+    test("a connection's own thinking markers are a format too", () => {
+      const { setBoundThinkPairs } = __testing as any;
+      const text = "@@plan@@" + WORKING + "@@done@@" + REPLY;
+      setBoundThinkPairs([{ open: "@@plan@@", close: "@@done@@" }]);
+      try {
+        expect(stripThinking(text, {}).trim()).toBe(REPLY);
+        expect(looksLikeRefusal(text, cfg)).toBe(false);
+        expect(looksTruncated("@@plan@@still working on it", false, {})).toBe(true);
+        // One too short to be safe is not used.
+        setBoundThinkPairs([{ open: "(", close: ")" }]);
+        expect(stripThinking("(" + WORKING + ")" + REPLY, {})).toContain(WORKING);
+      } finally {
+        setBoundThinkPairs([]);
+      }
+    });
+
     // A tool call ends a commentary channel on its own token. Without it in the
     // list the reply reads as cut off every time the model calls a tool.
     test("a commentary channel closed by a tool call is not cut off", () => {
