@@ -2076,6 +2076,8 @@ console.log("\nwhole-list note settings");
       // rather than be left standing over nothing.
       box("refusalNote").click();
       await frame();
+      // It folds away with its rows, so it is looked for once the fold is over.
+      await new Promise((r) => setTimeout(r, 400));
       const shownWhileOff = !!w && w.offsetParent !== null;
       return { keys, shownWhileOn, shownWhileOff };
     }),
