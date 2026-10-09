@@ -416,7 +416,7 @@ _2026-09-14_
 
 ### Fixed
 
-- **Picking a note set loads it now, so a save can no longer land on the wrong one.** Picking one only lit the buttons up and left your notes exactly as they were. The panel then showed one set while the picker named another, and pressing **Update selected** wrote what was in the boxes over the set you had just picked. The set you overwrote was gone, with nothing to get it back from.
+- **Picking a note set loads it now, so a save can no longer go to the wrong one.** Picking one only lit the buttons up and left your notes exactly as they were. The panel then showed one set while the picker named another, and pressing **Update selected** wrote what was in the boxes over the set you had just picked. The set you overwrote was gone, with nothing to get it back from.
 
   Choosing one in the list loads it straight away. What you are looking at always matches what the picker says, which is what makes **Update selected** safe to press.
 
@@ -577,7 +577,7 @@ _2026-09-05_
 ### Fixed
 
 - **The panel follows a theme change.** Where a theme makes its own text unreadable the panel repaints it, and that repaint is only right for the theme it measured. Moving a phone from dark to light left the panel wearing the wrong ink. The theme is watched three ways, since none of them catches the others, and a change measures again.
-- **A press does not repaint the panel twice.** New rows were drawn in the theme's own colours and repaired a frame later, which shows as a flicker. The repair now lands on the first frame they appear on.
+- **A press does not repaint the panel twice.** New rows were drawn in the theme's own colours and repaired a frame later, which shows as a flicker. The repair is now made on the first frame they appear on.
 - **A setting's own words flip its switch, rather than opening its description.** A label with no `for` names the first thing inside it that can be labelled, and a button is one, so the "?" beside each setting had taken the label off the setting. The control is named outright now.
 - **The press that closes a description does only that**, instead of also flipping whatever tick was under your finger.
 - **A setting's description stays on the screen of a small phone.** Its width cap is room on the screen while the width itself is in the element's own units, and Lumiverse's UI Scale is a zoom, so the two came apart. The width is measured against however much the host is scaling.
@@ -854,7 +854,7 @@ _2026-08-20_
 
 ### Changed
 
-- **The support check knows more of the wordings models actually use.** It caught the shape that is mostly a list of services; the shape that spends most of its length being kind and carries one line of referral was going past it. Reported wordings are now covered: "I'm glad you told me", "that takes courage to say out loud", "I'm listening", "I'm not going anywhere", "I won't judge you", "you matter", "this pain doesn't have to be carried alone", and the heading that introduces a second list of services under the first.
+- **The support check knows more of the wordings models actually use.** It caught the shape that is mostly a list of services; the shape that spends most of its length being kind and carries one line of referral was not caught. Reported wordings are now covered: "I'm glad you told me", "that takes courage to say out loud", "I'm listening", "I'm not going anywhere", "I won't judge you", "you matter", "this pain doesn't have to be carried alone", and the heading that introduces a second list of services under the first.
 - Every one of those went in the softer of the two lists, which can agree with a signal but can never be one. A character in a scene says all of them, and two of them were already in the checks as scenes that must not be caught. The rule is unchanged: two agreeing signals, and the deciding one has to come from the register no scene uses. Take the referral line off any of the new replies and the same words are one character comforting another, which the checks now hold them to in both directions.
 
 ## 4.16.0
@@ -939,7 +939,7 @@ _2026-08-18_
 
 ### Added
 
-- **The panel says when a permission it needs was never granted.** This is the one fault that raises nothing anywhere: a gated event simply never arrives and a registration that needs approval silently does nothing, so an extension with the wrong grants sits there looking installed while doing none of what it was asked to. Missing `generation` means nothing is ever retried, and until now nothing said so. The panel now names each one that is missing and what it costs, and shows nothing at all when everything is granted. The debug report lists every one either way, so a report about an extension that did nothing carries the reason.
+- **The panel says when a permission it needs was never granted.** This is the one fault that raises nothing anywhere: a gated event simply never arrives and a registration that needs approval does nothing and says nothing, so an extension with the wrong grants looks installed but does none of what it was asked to. Missing `generation` means nothing is ever retried, and until now nothing said so. The panel now names each one that is missing and what it costs, and shows nothing at all when everything is granted. The debug report lists every one either way, so a report about an extension that did nothing carries the reason.
 - **The Prompt tab says whether the interceptor permission is actually missing.** It used to guess from a prompt that never arrived, and a guess about a permission is the one claim in the panel you cannot check from the panel. It now asks, so a denial is stated plainly and a permission that is granted is never blamed.
 
 ### Removed
@@ -961,7 +961,7 @@ _2026-08-17_
 ### Fixed
 
 - **The Prompt tab could show a prompt from a different chat.** A captured prompt is sent to a person rather than to a window, so with two chats open in two tabs, both of them received every prompt either one produced, and the tab showing one chat drew the other's without a word about it. The tab now checks, and says so instead of drawing it. The prompt itself is held rather than thrown away, so walking back into the chat it belongs to brings it back, and a prompt that arrives before anything has said which chat it was for is still shown once that is known.
-- **The Prompt tab could stay empty however long you waited, and the refusal note could never send.** Both run off an interceptor, and registering one is fire-and-forget: without the permission the host does not throw, it silently does nothing and notifies separately. This registered once as the backend loaded, which was a bet that the grant was already in the local cache at that instant. A grant can also be given or taken away while the extension runs with nothing restarting. Losing that bet left both features dead for the life of the backend with nothing anywhere saying so, which looks exactly like a quiet install. The permission is checked first now, the registration is tried again the moment the permission is granted, and a refusal is written to the log rather than passing in silence.
+- **The Prompt tab could stay empty however long you waited, and the refusal note could never send.** Both run off an interceptor, and registering one gives no answer back: without the permission the host does not throw. It does nothing, and says so only in a separate notice. This registered once as the backend loaded, which only worked if the grant was already in the local cache at that moment. A grant can also be given or taken away while the extension runs with nothing restarting. When it was not, both features stopped working until the backend restarted, with nothing saying so. That looks the same as an install with nothing to do. The permission is checked first now, the registration is tried again the moment the permission is granted, and a refusal is written to the log rather than going unreported.
 - **The Prompt tab said the interceptor permission was missing when it was not.** A prompt is assembled as a reply begins, which is the only moment there is to capture it, so a tab opened partway through a reply cannot catch that one however long the reply runs. The tab took that silence for a missing permission and said so. Sending a reply with the panel shut, or while reading the Log, and then going to look at the prompt was enough to be told the extension lacked a permission it had, which is the one thing named there that you cannot check from the panel. It now only says that about a reply the tab was open and asking for from the start, and asks for another reply otherwise. **Clear** takes the message back along with the prompt, rather than emptying the tab and going on saying it about a reply you had just discarded.
 - **The Prompt tab stayed empty until you left the chat and came back.** Asking the backend to capture prompts is a live request rather than a saved setting, and it was sent only when the answer changed. The two sides have separate lifetimes, so a backend that was not listening yet, or that restarted afterwards, knew nothing while the panel was certain it had already asked, and nothing ever re-sent it. Leaving the chat and returning happened to toggle the view off and on, which sent it again, which is why that appeared to be the fix. The backend now says when it has started, and any panel waiting on a prompt asks again when it hears it.
 
@@ -998,7 +998,7 @@ _2026-08-15_
 ### Added
 
 - **What a model refuses a horror roleplay over.** A slasher scene is an ordinary thing to write on a roleplay app, and two of eighteen refusal wordings were caught before this: graphic violence, gore, mutilation, dismemberment, body horror, animal cruelty, violence against children, a violent death, depictions of harm, a murder scene, stalking, and declining to play a real person. "Violence" on its own is not in the list, because "I can't describe the violence" is a line somebody says in a scene, so the qualified forms are listed instead.
-- **A subject in the form a refusal about a backstory uses.** The list held the bare nouns, so a reply declining to write "a character is raped" or "her being sexually assaulted" or "him being tortured" walked past every pattern, which is the wording that comes up when somebody is asking a character about their past. The endings are spelled out rather than left to a wildcard, so a rapeseed field is still a field, and the forms that drop a letter are written separately. Somebody telling a character what happened to them is left alone, in seven checks that use the same words.
+- **A subject in the form a refusal about a backstory uses.** The list held the bare nouns, so a reply declining to write "a character is raped" or "her being sexually assaulted" or "him being tortured" was not caught by any pattern, which is the wording that comes up when somebody is asking a character about their past. The endings are spelled out rather than left to a wildcard, so a rapeseed field is still a field, and the forms that drop a letter are written separately. Somebody telling a character what happened to them is left alone, in seven checks that use the same words.
 - **None of it costs you a scene that only sounds like one.** A knife in the porch light, someone stalking through the corn, blood on the stairs, a kissing scene, someone asking first, rope on a table, a stepbrother resenting his stepsister, the minor character in act two, somebody choking on smoke, the grooming of the horses. Every one of those carries a word from the lists above and none of them is a refusal, because a subject only ever counts as the object of a refusal verb. That rule is what lets the lists be as wide as they are.
 - **The refusal aimed at a kind of writing.** "I cannot generate sexually explicit content or graphic descriptions of that." One word hid it: the pattern read whatever word followed the verb, and its list held "sexual" while the reply said "sexually", so the adverb was enough to walk past the whole thing. There is room for the adjectives that stack up in front now, and the noun still has to be one a model uses about its own output.
 - **Every kind of writing a model refuses a roleplay over.** The subjects it names were checked as a sweep rather than one at a time, which turned up a category that matched nothing at all: kink. BDSM, bondage, degradation, breath play, ageplay, power exchange, the word kink itself. Also explicit writing under every name it goes by, smut and erotica among them; consent framings including dubious, unclear and non-consensual; the family framings a model reads as incest whether or not they are; a character it decides is underage; and content it calls illegal. Thirty-one wordings across five categories, and every one of them is a check.
@@ -1108,7 +1108,7 @@ _2026-08-13_
 
 ### Fixed
 
-- **Lumiverse's own menu opened underneath the floating button's.** Holding or right-clicking the button showed its menu with the app's default one behind it, which then cleared on its own a moment later. The press was being told not to draw the browser's menu, which is a different thing from being stopped, so it carried on up to Lumiverse and opened that one too. It is now stopped at the button, before anything else can act on it. Dragging is untouched, since only the menu press is swallowed and every other kind still reaches the app.
+- **Lumiverse's own menu opened underneath the floating button's.** Holding or right-clicking the button showed its menu with the app's default one behind it, which then cleared on its own a moment later. The press was being told not to draw the browser's menu, which is a different thing from being stopped, so it carried on up to Lumiverse and opened that one too. It is now stopped at the button, before anything else can act on it. Dragging is untouched, since only the menu press is stopped and every other kind still reaches the app.
 
 ### Removed
 
@@ -1225,7 +1225,7 @@ What has not started counting: a `<` someone typed in a scene, `if x<y`, a bare 
 
 ### Changed
 
-- **The retry pop-up counts down instead of freezing.** It used to say "Retrying 2/5 (cut off) in 47.3s" once and go on saying it for the next forty-seven seconds, so the one number anyone actually watches was the one number that never moved. 4.4.0 raised the longest wait to a minute, which turned that from a small oddity into something that looks like the extension having stopped. It now reads **Cut off. Retrying in 47s (try 2 of 5)** and the number goes down. Only the text is repainted, so the Cancel button next to it cannot be swallowed by a press landing mid-redraw.
+- **The retry pop-up counts down instead of freezing.** It used to say "Retrying 2/5 (cut off) in 47.3s" once and go on saying it for the next forty-seven seconds, so the one number anyone actually watches was the one number that never moved. 4.4.0 raised the longest wait to a minute, which turned that from a small oddity into something that looks like the extension having stopped. It now reads **Cut off. Retrying in 47s (try 2 of 5)** and the number goes down. Only the text is repainted, so the Cancel button next to it cannot miss a press made while the text is redrawn.
 - **One way of writing a length, everywhere.** Whole seconds, because a figure twitching four times a second is noise, then `5m 03s` and `1h 05m 03s` as the wait grows. The countdown, the panel, the Stats tab and the message announcing a pause all say a length the same way now. Hours are there because the pause after repeated failures can be set to three of them, and `180 minutes` leaves you doing the division. Smaller units keep their leading zero so the line does not change width as it counts.
 - **The on-screen panel says what is happening this second.** A line under the tabs, with a dot that lights while something is going on. It counts down a pending retry, says when a reply is arriving and roughly how much has landed, says when the model is thinking, says when it has paused itself after repeated failures, and says when there is nothing to do. It sits above all three tabs because none of them answered that question: the Log says what already happened, the Stats say what has happened overall. A retry in a chat you have moved away from is still reported, marked as being in another chat. It and the pop-up read from the same place, so they cannot disagree.
 - **The Stats tab counts up as you watch it.** **Watching for** was rounded to the nearest minute and drawn once, so it read "1 minute" for the first ninety seconds of every session and then sat there until something else redrew the view. It reads `2h 23m 05s` now and it moves. The note saying it has paused itself counts down there too, and clears itself when the pause ends rather than counting past zero. Only those two lines are rewritten as they change, so the bars and the scroll position stay where they are.
@@ -1249,7 +1249,7 @@ _2026-08-06_
 ### Added
 
 - **It now catches the model breaking off rather than declining.** "I'm going to stop here", "I won't continue this discussion", "let's redirect the conversation". On by default, and narrow: it only counts when that is how the reply ends, never inside quotation marks, and never behind a dialogue tag, so a character who stops walking and carries on with the scene is left alone. Switch it off with **Also catch the model breaking off**.
-- **The built-in refusal list has grown by about twenty wordings.** These are the ones models actually use that were being walked past: "I can't generate that", "I don't create content like that", "I'm not going to comply with that request", "I can't help with illegal activities", "I can't provide advice on that", "I can't process that request" and others. Apologetic openings on their own ("I'm sorry", "Unfortunately", "I apologize") are still not counted: they open as many ordinary replies as refusals, and a character apologising is one of the most common things in roleplay.
+- **The built-in refusal list has grown by about twenty wordings.** These are the ones models actually use that were not being caught: "I can't generate that", "I don't create content like that", "I'm not going to comply with that request", "I can't help with illegal activities", "I can't provide advice on that", "I can't process that request" and others. Apologetic openings on their own ("I'm sorry", "Unfortunately", "I apologize") are still not counted: they open as many ordinary replies as refusals, and a character apologising is one of the most common things in roleplay.
 - **A switch for whether a refusal in quotation marks counts.** On by default, which leaves dialogue alone. Your own phrases are counted either way.
 - **The on-screen log says when a refusal note went out.** It names the retry that carried it and how many notes went with it. Copy debug info counts them too, so a bug report can say whether notes were going out at all. Before this, a note that worked and no note at all looked exactly the same from outside.
 - **A Stats view in the on-screen panel.** A third tab beside Log and Prompt: replies that came back fine, retries fired, messages it gave up on, how often a reply needed a retry at all, and a breakdown of what it retried for with a bar for each. It also says when it has paused itself after repeated failures, which is the state that otherwise looks like it having stopped working. The counters behind it already existed for the debug report, which is a wall of text you have to ask for and then read. **Clear** on that tab starts the counting again.
@@ -1364,7 +1364,7 @@ _2026-08-02_
 - **Unchecked boxes were white blocks.** A checkbox is drawn by the browser, which picks its colours from the page rather than from your theme, so an unchecked one came out as a bright white square on a dark panel. The off state was the loudest thing on screen and the on state receded. The panel now measures what it is sitting on and tells the browser which way round it is, so a light theme still gets light controls.
 - **The full-size editor, the live log and the retry pop-up were see-through.** Open the editor over the settings and you could read the rows behind it, Save included. All three were painted with a colour that is 90% opaque, meant to tint a surface rather than be one. Every panel that floats over something else is solid now.
 - **Five settings showed a number with no unit.** "Wait before the first retry" read 1200 with nothing saying whether that meant milliseconds, seconds or minutes, while "How long to pause (minutes)" right above it named its unit. All five say (ms) now.
-- **The retry pop-up covered the floating button's menu.** It sat above everything, so it could land on top of a menu you had just opened and turn a tap on "Hide this button" into a tap on Cancel. Things you open on purpose now sit above things that appear on their own.
+- **The retry pop-up covered the floating button's menu.** It sat above everything, so it could cover a menu you had just opened and turn a tap on "Hide this button" into a tap on Cancel. Things you open on purpose now sit above things that appear on their own.
 - **The menu's focus ring was a hard white rectangle**, taken from the browser rather than your theme. It uses your accent colour now.
 - **Preset buttons that had nothing to act on.** With no presets saved, Load, Update selected, Delete and Rename selected were all lit, Load styled as the main action, and each one answered a press with a message telling you to pick a preset first. They wait until there is a preset to act on.
 
@@ -1447,7 +1447,7 @@ _2026-07-24_
 
 ### Fixed
 
-- **Catches more refusals.** Some slipped through, especially ones phrased around roleplay itself, like "I cannot participate in romantic or sexual roleplay scenarios, even in a fictional context." Those are caught now. In-character lines are still safe, so a character saying "I cannot participate in this duel" will not trigger a retry.
+- **Catches more refusals.** Some were not caught, especially ones phrased around roleplay itself, like "I cannot participate in romantic or sexual roleplay scenarios, even in a fictional context." Those are caught now. In-character lines are still safe, so a character saying "I cannot participate in this duel" will not trigger a retry.
 
 ## 3.1.1
 
@@ -1506,7 +1506,7 @@ _2026-07-23_
 
 ### Changed
 
-- **Empty and cut-off checks no longer depend on the refusal option.** Turning off Ignore the thinking / reasoning was also switching off those two checks, so thinking-only and mid-thought replies slipped through. That option covers refusal matching only now.
+- **Empty and cut-off checks no longer depend on the refusal option.** Turning off Ignore the thinking / reasoning was also switching off those two checks, so thinking-only and mid-thought replies were not retried. That option covers refusal matching only now.
 - **Selectors can contain commas.** `:is(a, b)` and `[aria-label="Next, swipe"]` each count as one entry.
 - **Debug info says why retries stopped.** It now opens with whether auto-retry is active, off, or paused.
 
@@ -1690,7 +1690,7 @@ _2026-07-14_
 
 ### Fixed
 
-- **Word deletions clean up trailing spaces.** Leaving the right side empty to delete a word now swallows one trailing space, so removing a word mid-sentence leaves single spacing instead of a double space.
+- **Word deletions clean up trailing spaces.** Leaving the right side empty to delete a word now removes one trailing space, so removing a word mid-sentence leaves single spacing instead of a double space.
 
 ## 1.5.0
 
@@ -1702,7 +1702,7 @@ _2026-07-13_
 
 ### Changed
 
-- **The "longest reply to treat as a refusal" cap defaults to 2000.** (was 1200). Some models write long, padded refusals (apology, "as an AI", a paragraph of reasoning, then offered alternatives) that ran past the old limit and slipped through. 2000 catches those while leaving genuinely long replies alone.
+- **The "longest reply to treat as a refusal" cap defaults to 2000.** (was 1200). Some models write long, padded refusals (apology, "as an AI", a paragraph of reasoning, then offered alternatives) that were longer than the old limit and were not caught. 2000 catches those while leaving genuinely long replies alone.
 
 ## 1.4.1
 

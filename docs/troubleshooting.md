@@ -71,7 +71,7 @@ How it knows which chat you are in:
 Sometimes Lumiverse reports a reply without saying which chat it is in. Retrying still works, but three things that need the chat do not:
 
 - **Turn off here** is greyed out, with a note that it is waiting to find out which chat this is. Sending a message, or switching chats and back, usually fixes it. Use the main **Auto Retry** switch meanwhile.
-- **The retry note is not added.** A note belongs to one chat, and without a chat it could land on a reply somewhere else. The retry still happens, and the log says why the note was left out.
+- **The retry note is not added.** A note belongs to one chat, and without a chat it could be added to a reply in another chat. The retry still happens, and the log says why the note was left out.
 - **Anything that names the chat you are in** says **No chat is open**.
 
 On the **Stats** tab, these retries are counted on a row called **Chats without an id**.
