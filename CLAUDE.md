@@ -3,7 +3,10 @@
 Auto Retry is a Lumiverse extension built on Spindle. Its sister extension is
 [Auto Refine](https://github.com/starlitcode/Lumiverse-Auto-Refine), and the two are
 kept in step: a fix to something they share, such as how a switch or a field row
-behaves, goes into both.
+behaves, goes into both. Treat them as twins: the same thing has the same name,
+the same wording and the same behaviour in both, such as **Extra thinking tag
+names**, the thinking formats, the put-back and replaced-reply storage, and the
+motion of bulk buttons.
 
 ## Branches and releases
 
@@ -71,6 +74,16 @@ Two skills are available. Load them before starting work.
 - Refusal and cut-off detection has corpus tests in `test/detection-corpus.test.ts`
   and `test/truncation-corpus.test.ts`. A new pattern gets a line in the corpus
   that it catches and one close to it that it must not.
+
+## Thinking formats
+
+- Both extensions recognise the same thinking formats. A new one goes into both,
+  with a test for it closed and a test for it opened with no closer, and a row
+  in both docs tables (`docs/detection.md` in Auto Retry, `docs/prompt.md` in
+  Auto Refine).
+- A Prefix and Suffix saved on a connection in Lumiverse's Reasoning settings
+  are read with `spindle.connections.list`, from `reasoning_bindings.settings`.
+  The global Reasoning settings cannot be read by an extension.
 
 ## Writing
 
