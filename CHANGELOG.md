@@ -12,6 +12,12 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 _2026-10-09_
 
+### Changed
+
+- **Sections open and close smoothly when you tap their heading.** They opened and shut in one step. Their space now opens and closes over a moment, and the settings below move with them. Pressing again while one moves turns it round. Search still opens them at once.
+- **Notices that come and go open and close smoothly.** This covers the permission notice, the line saying you changed a set since loading it, and the line saying the notes are read-only. In **Reset settings**, the step that asks if you are sure now fades in.
+- With Reduce motion on, all of these open and close at once.
+
 ### Fixed
 
 - **Fixed again: a section that hangs off a switch opens and closes smoothly.** 5.16.0 said that what hangs off a switch opens and closes smoothly. A whole section, such as **Refusal tuning** under **It looks like an accidental refusal**, still opened in one step at the end and dropped shut at the start. The settings scroll in a box that let the section shrink to nothing while it moved. It now opens and closes smoothly, with a pattern on or off, at any UI Scale.

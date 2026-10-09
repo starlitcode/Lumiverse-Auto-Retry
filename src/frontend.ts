@@ -6576,6 +6576,36 @@ export function setup(ctx: Ctx, opts?: any) {
     } catch (_) {}
   }
 
+  // A line or notice that comes and goes with what it describes. It opens
+  // and closes the way a row does, rather than appearing between two frames.
+  // The first time it is set is how the panel is built, so it is drawn as it
+  // is.
+  function showLine(node: any, show: boolean) {
+    if (!node) return;
+    const was = node._arLineWant === undefined ? !node.hidden : node._arLineWant;
+    const first = !node._arLineSeen;
+    node._arLineSeen = true;
+    node._arLineWant = show;
+    if (first || noMotion()) {
+      node._arFold = null;
+      clearFold(node);
+      node.hidden = !show;
+      return;
+    }
+    if (show) {
+      if (!was || node.hidden) {
+        const wasHidden = node.hidden;
+        node.hidden = false;
+        unfold(node, wasHidden);
+      }
+      return;
+    }
+    if (was && !node.hidden)
+      foldAway(node, () => {
+        if (node._arLineWant === false) node.hidden = true;
+      });
+  }
+
   async function askFirst(
     key: string,
     spec: { title: string; message: string; confirmLabel: string },
@@ -11439,7 +11469,7 @@ export function setup(ctx: Ctx, opts?: any) {
         const name = select.value;
         const p = name ? list().find((x) => x.name === name) || builtInNote(name) : null;
         if (!p || !p.values) {
-          drift.hidden = true;
+          showLine(drift, false);
           return;
         }
         const now: Record<string, any> = cfg as any;
@@ -11450,7 +11480,7 @@ export function setup(ctx: Ctx, opts?: any) {
             break;
           }
         }
-        drift.hidden = !moved;
+        showLine(drift, moved);
         if (moved)
           drift.textContent = isBuiltIn(name)
             ? "You have changed these since loading " +
@@ -12120,20 +12150,39 @@ export function setup(ctx: Ctx, opts?: any) {
       caret: HTMLElement,
       title: string,
     ): (open: boolean) => void {
-      // Shown or hidden in one step, with no animation. A section is most of a
-      // screen, and one that travels open or shut moves everything under it
-      // for the length of the travel.
-      const apply = (v: boolean) => {
-        body.style.display = v ? "flex" : "none";
+      // Opened or shut by its heading, it moves the same way as Auto Refine's
+      // folds: its space opens and closes over a moment, so what is under it
+      // moves with it, and a press while it moves turns it round. Opened by
+      // the search or when the panel is built, it is shown at once.
+      const box: any = body;
+      const apply = (v: boolean, moving?: boolean) => {
+        const wasHidden = body.style.display === "none";
+        box._arWant = v;
         caret.textContent = v ? CARET_OPEN : CARET_SHUT;
         h.setAttribute("aria-expanded", v ? "true" : "false");
+        if (!moving || noMotion()) {
+          box._arFold = null;
+          clearFold(body);
+          body.style.display = v ? "flex" : "none";
+          return;
+        }
+        if (v) {
+          body.style.display = "flex";
+          unfold(body, wasHidden);
+        } else if (!wasHidden) {
+          foldAway(body, () => {
+            if (box._arWant === false) body.style.display = "none";
+          });
+        }
       };
       h.setAttribute("role", "button");
       h.setAttribute("tabindex", "0");
       h.setAttribute("data-ar-sechead", "1");
+      // Read off the heading rather than off the body, which is still shown
+      // while it closes.
       const toggle = () => {
-        const open = body.style.display !== "none";
-        apply(!open);
+        const open = h.getAttribute("aria-expanded") === "true";
+        apply(!open, true);
         if (!open) openGroups.add(title);
         else openGroups.delete(title);
       };
@@ -12968,10 +13017,10 @@ export function setup(ctx: Ctx, opts?: any) {
         (p) => permIs(p.name) === false && !permIsHidden(p.name) && (!p.onlyFor || !!cfg[p.onlyFor]),
       );
       if (!missing.length) {
-        box.style.display = "none";
+        showLine(box, false);
         return;
       }
-      box.style.display = "block";
+      showLine(box, true);
       box.style.cssText +=
         ";margin:0 0 10px;padding:8px 10px;font-size:12px;line-height:1.45;" +
         "border-radius:var(--lumiverse-radius-sm,5px);" +
@@ -13513,7 +13562,7 @@ export function setup(ctx: Ctx, opts?: any) {
         "font-size:12px;line-height:1.45;color:var(--lumiverse-text-muted,rgba(255,255,255,.7))";
       const setLocked = () => {
         const held = !!notesOnBuiltIn;
-        heldLine.hidden = !held;
+        showLine(heldLine, held);
         if (held)
           heldLine.textContent =
             "You are looking at " +
@@ -14196,6 +14245,16 @@ export function setup(ctx: Ctx, opts?: any) {
       go.disabled = frozen;
       row.style.display = frozen ? "none" : "flex";
       confirmWrap.style.display = frozen ? "flex" : "none";
+      // The step that is shown fades in and slides 4px down into place, so
+      // the swap reads as one step following the other.
+      const shown = frozen ? confirmWrap : row;
+      if (!noMotion() && typeof (shown as any).animate === "function")
+        try {
+          (shown as any).animate(
+            [{ opacity: 0, transform: "translateY(-4px)" }, { opacity: 1, transform: "none" }],
+            { duration: 200, easing: "ease-out" },
+          );
+        } catch (_) {}
     };
 
     // What is about to happen, in the order it happens, with the reversible

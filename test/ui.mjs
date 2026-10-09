@@ -12231,38 +12231,72 @@ for (const [label, viewport, touch] of [["phone", { width: 390, height: 860 }, t
   }
 }
 
-// A section opens and shuts in one step, with no animation.
-{
-  const { out, errors } = await inPanel(browser, {}, async (page) =>
-    page.evaluate(async () => {
-      const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-      await frame();
-      const head = document.querySelector('[role="button"][aria-expanded="false"]');
-      if (!head) return { missing: true };
-      const body = head.parentElement.querySelector("div[style*='display: none']") ||
-        head.nextElementSibling;
-      const look = () => {
-        const st = getComputedStyle(body);
-        return {
-          shown: st.display !== "none",
-          anim: st.animationName,
-          height: body.style.height,
-          moving: /[1-9]/.test(st.transitionDuration),
+// A section opened or shut by its heading moves the same way as Auto
+// Refine's folds: its space opens and closes over several frames, and a
+// press while it moves turns it round. Measured by the height of the
+// section, which a scroll does not change, with and without a pattern and
+// at each zoom. With Reduce motion on, it opens and shuts at once.
+for (const [label, viewport, touch] of [["phone", { width: 390, height: 860 }, true], ["laptop", { width: 1280, height: 860 }, false]]) {
+  for (const [pattern, zoom, still] of [["", 1, false], ["hearts", 0.9, false], ["", 1.25, false], ["", 1, true]]) {
+    const { out, errors } = await inPanel(browser, { viewport, touch, css: zoom === 1 ? "" : "html{zoom:" + zoom + "}", settings: { panelPattern: pattern, reduceMotion: still } }, async (page) =>
+      page.evaluate(async () => {
+        const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        await frame();
+        const head = [...document.querySelectorAll('#modal [data-ar-sechead][aria-expanded="false"]')].find((x) => x.closest("[data-ar-sec]") && x.closest("[data-ar-sec]").style.display !== "none");
+        if (!head) return null;
+        const sec = head.closest("[data-ar-sec]");
+        const h = () => sec.getBoundingClientRect().height;
+        const run = async (turn) => {
+          const start = h();
+          const tops = [];
+          const times = [];
+          head.click();
+          const t0 = performance.now();
+          let turned = false;
+          while (performance.now() - t0 < 620) {
+            await new Promise((r) => requestAnimationFrame(r));
+            if (turn && !turned && performance.now() - t0 > 90) {
+              turned = true;
+              head.click();
+            }
+            tops.push(h() - start);
+            times.push(performance.now());
+          }
+          const steps = tops.map((t, i) => (Math.abs(t - (i ? tops[i - 1] : 0)) * 16.7) / Math.max(16.7, times[i] - (i ? times[i - 1] : t0)));
+          return { travel: Math.round(tops[tops.length - 1]), tops: tops.map(Math.round), steps, expanded: head.getAttribute("aria-expanded") };
         };
-      };
-      head.click();
-      const opened = look();
-      head.click();
-      const shut = look();
-      return { missing: false, opened, shut };
-    }),
-  );
-  check("a section is there to open", !out.missing, out);
-  check("it opens at once, with no animation",
-    out.opened.shown && out.opened.anim === "none" && !out.opened.height && !out.opened.moving, out.opened);
-  check("and shuts at once, with no animation",
-    !out.shut.shown && !out.shut.height && !out.shut.moving, out.shut);
-  check("no console errors", errors.length === 0, errors);
+        const opened = await run(false);
+        const shut = await run(false);
+        const turned = await run(true);
+        return { opened, shut, turned };
+      }),
+    );
+    const say = label + (pattern ? ", " + pattern : "") + (zoom === 1 ? "" : ", zoom " + zoom) + (still ? ", Reduce motion on" : "") + ": ";
+    const skips = (w) => {
+      let worst = 0;
+      for (let i = 2; i < w.steps.length; i++) worst = Math.max(worst, w.steps[i] - Math.max(w.steps[i - 1], w.steps[i - 2]));
+      return worst;
+    };
+    check(say + "a section is there to open", !!out, out);
+    if (!out) continue;
+    check(say + "its heading opens it", out.opened.travel > 40 && out.opened.expanded === "true", out.opened.tops);
+    check(say + "and shuts it again", Math.abs(out.shut.travel + out.opened.travel) <= 2 && out.shut.expanded === "false", out.shut.tops);
+    if (still) {
+      check(say + "it opens in one step", Math.abs(Math.max(...out.opened.steps) - out.opened.travel) <= 2, out.opened.tops);
+      check(say + "and shuts in one step", Math.abs(Math.max(...out.shut.steps) - Math.abs(out.shut.travel)) <= 2, out.shut.tops);
+    } else {
+      check(say + "opening, it moves in small steps and lands with no skip",
+        Math.max(...out.opened.steps) < out.opened.travel / 3 && skips(out.opened) <= 6, out.opened.tops);
+      check(say + "closing, it moves in small steps and lands with no skip",
+        Math.max(...out.shut.steps) < Math.abs(out.shut.travel) / 3 && skips(out.shut) <= 6, out.shut.tops);
+      // Judged from the turn on. A close starts at its fastest, so the first
+      // step back is bigger than the last step up, and that is not a skip.
+      const peak = out.turned.tops.indexOf(Math.max(...out.turned.tops));
+      check(say + "pressed again while opening, it turns round with no jump and ends shut",
+        skips({ steps: out.turned.steps.slice(peak + 1) }) <= 6 && Math.max(...out.turned.steps) < out.opened.travel / 3 && Math.abs(out.turned.travel) <= 2, out.turned.tops);
+    }
+    check(say + "no console errors", errors.length === 0, errors);
+  }
 }
 
 // What a file gives and what it takes are two questions with one answer each.
