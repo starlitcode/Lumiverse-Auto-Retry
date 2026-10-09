@@ -28,7 +28,7 @@ declare const spindle: any;
 // with while this side comes back on the new build. A debug report naming only
 // the panel's version would be speaking for a file it cannot see, so the panel
 // asks for this one and prints both.
-const VERSION = '5.16.2';
+const VERSION = '5.17.0';
 
 const SETTINGS_FILE = 'settings.json';
 // Presets, kept in account storage next to the settings so they
@@ -97,6 +97,85 @@ function inTurn(queue: Map<string, Promise<void>>, userId: string | undefined, j
     if (queue.get(k) === held) queue.delete(k);
   });
   return next;
+}
+
+// ---- the replies a retry replaced ----
+// The panel keeps the last reply a retry replaced in each chat. A copy is held
+// here as well, per account, so the panel can ask for it again after a reload.
+// Memory only, unless the account has Keep it through an update on: then it is
+// also written to that account's storage, so an update or a restart keeps it.
+const REPLACED_FILE = 'replaced.json';
+const REPLACED_PER_USER = 8;
+const REPLACED_TEXT_MAX = 200000;
+type Replaced = { chatId: string; text: string; reason: string; at: number };
+const replacedKept = new Map<string, Replaced[]>();
+const replacedRead = new Set<string>();
+const replacedSavedWas = new Map<string, boolean>();
+const replacedWrites = new Map<string, Promise<void>>();
+const userKey = (userId: any): string => String(userId == null ? '' : userId);
+function replacedFor(userId: any): Replaced[] {
+  const k = userKey(userId);
+  let list = replacedKept.get(k);
+  if (!list) {
+    list = [];
+    replacedKept.set(k, list);
+  }
+  return list;
+}
+function cleanReplaced(r: any): Replaced | null {
+  if (!r || typeof r !== 'object') return null;
+  const text = String(r.text == null ? '' : r.text).slice(-REPLACED_TEXT_MAX);
+  if (!text.trim()) return null;
+  const at = Number(r.at);
+  return {
+    chatId: String(r.chatId == null ? '' : r.chatId),
+    text: text,
+    reason: String(r.reason == null ? '' : r.reason).slice(0, 300),
+    at: isFinite(at) && at > 0 ? at : Date.now(),
+  };
+}
+// Writes this account's list, or an empty one when saving is off, so turning
+// the switch off removes the saved copy. With it off, only the first message
+// after it was turned off writes anything.
+//
+// The saved copy is read in first, so a write made before the panel has asked
+// for the list cannot overwrite replies saved before a restart. When this
+// module has not seen the switch yet, off still writes the empty list once, as
+// the saved copy may be from before the switch was turned off.
+async function saveReplaced(userId: any, on: boolean): Promise<void> {
+  const k = userKey(userId);
+  const was = replacedSavedWas.get(k);
+  replacedSavedWas.set(k, on);
+  if (!on && was === false) return;
+  if (on) await readReplaced(userId);
+  else replacedRead.add(k);
+  const value = on ? replacedFor(userId).slice() : [];
+  return inTurn(replacedWrites, userId, async () => {
+    try {
+      await writeUserJson(REPLACED_FILE, value, userId);
+    } catch (e) {
+      try { spindle.log.warn('auto-retry: could not save the replaced replies to the account'); } catch (__) {}
+      replyTo(userId, { type: 'account_save_failed', what: 'replaced' });
+    }
+  });
+}
+// The saved copy is read once per account, on the first ask after this module
+// starts, and only when the account keeps one. What is already in memory is
+// newer and wins.
+async function readReplaced(userId: any): Promise<void> {
+  const k = userKey(userId);
+  if (replacedRead.has(k)) return;
+  replacedRead.add(k);
+  let got: any = null;
+  try { got = await readUserJson(REPLACED_FILE, userId); } catch (_) { got = null; }
+  if (!Array.isArray(got)) return;
+  const list = replacedFor(userId);
+  for (const raw of got.slice(0, REPLACED_PER_USER)) {
+    const r = cleanReplaced(raw);
+    if (r && !list.some((x) => x.chatId === r.chatId)) list.push(r);
+  }
+  list.sort((a, b) => a.at - b.at);
+  while (list.length > REPLACED_PER_USER) list.shift();
 }
 
 // Replying without a userId broadcasts to every connected user on an
@@ -820,6 +899,34 @@ spindle.onFrontendMessage(async (payload: any, userId?: string) => {
           replyTo(userId, { type: 'account_save_failed', what: 'presets' });
         }
       });
+      return;
+    }
+    if (payload.type === 'keep_replaced') {
+      const r = cleanReplaced(payload.item);
+      if (!r) return;
+      const list = replacedFor(userId).filter((x) => x.chatId !== r.chatId);
+      list.push(r);
+      while (list.length > REPLACED_PER_USER) list.shift();
+      replacedKept.set(userKey(userId), list);
+      await saveReplaced(userId, payload.save === true);
+      return;
+    }
+    if (payload.type === 'forget_replaced') {
+      const chatId = payload.chatId == null ? null : String(payload.chatId);
+      replacedKept.set(
+        userKey(userId),
+        payload.all === true || chatId === null ? [] : replacedFor(userId).filter((x) => x.chatId !== chatId),
+      );
+      await saveReplaced(userId, payload.save === true);
+      return;
+    }
+    if (payload.type === 'save_replaced') {
+      await saveReplaced(userId, payload.save === true);
+      return;
+    }
+    if (payload.type === 'list_replaced') {
+      if (payload.save === true) await readReplaced(userId);
+      replyTo(userId, { type: 'replaced_list', requestId: payload.requestId, items: replacedFor(userId).slice() });
       return;
     }
     if (payload.type === 'load_presets') {

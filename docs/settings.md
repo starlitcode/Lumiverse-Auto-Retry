@@ -237,6 +237,8 @@ The reply the last retry in this chat threw away, with the reason and how long a
 A retry that adds a reroll already leaves the old reply to swipe back to. But rerolls can be deleted, by you or by another extension. This tab keeps its own copy.
 
 - It keeps one reply per chat, for the last eight chats.
+- A reload keeps it. Your server holds a copy in memory for your account.
+- An update or a restart of Lumiverse clears it, unless **Keep it through an update** is on, under **How it retries**.
 - **Clear** drops the one you are looking at.
 - Turn it off with **Keep the reply a retry replaced**, under **How it retries**.
 
@@ -262,7 +264,8 @@ These are the defaults for a new install. They are in the `CONFIG` block at the 
 | jitter | true | Changes each wait by a small random amount, so retries do not all reach the server at the same moment. |
 | rateLimitDelayMs | 15000 | The shortest wait when the server says it is busy. A shorter wait often hits the same limit again. When the server says how long to wait, that time is used instead, even if it is longer than `maxDelayMs`, up to an hour. |
 | retryByNewReroll | true | On: a retry clicks the next / swipe button, adding a new reroll and keeping the existing ones, so a reply it was wrong to retry can be swiped back to. Off: a retry redoes the reply in place with the regenerate button, which on some setups clears the other rerolls. Applies to every retry reason. The other button is the fallback. |
-| keepReplaced | true | Keep the last reply a retry replaced in this chat, to read or copy on the Replaced tab of the on-screen panel. It is kept in this browser tab only. It is never saved or sent anywhere, and it is gone when the tab closes. |
+| keepReplaced | true | Keep the last reply a retry replaced in this chat, to read or copy on the Replaced tab of the on-screen panel. It is kept in this tab and in your server's memory, so a reload keeps it. An update or a restart clears it. |
+| keepReplacedSaved | false | Keep it through an update. Also saves the replaced replies on your server, for your account, so an update or a restart does not clear them. Turning it off empties the saved copy. |
 | stuckTimeoutMs | 240000 | A reply started, but no text came within this time. It is retried. 0 turns this off. |
 | idleTimeoutMs | 90000 | Text was coming in, then stopped for this long. It is retried. 0 turns this off. |
 | retryOnError | true | Retry provider errors. |

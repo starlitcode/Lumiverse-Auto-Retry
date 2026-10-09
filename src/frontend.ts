@@ -152,7 +152,7 @@ const STREAM_BUF_MAX = 200000;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.16.2";
+const VERSION = "5.17.0";
 
 // Whether two saved settings hold the same values, whatever order their keys
 // were written in. A key left undefined counts as not there, the way it is
@@ -235,8 +235,12 @@ const CONFIG = {
   // Kept because the reroll is not a safe place to leave it. Anything that
   // tidies a chat can remove a reroll, and one tap on a housekeeping
   // extension's button takes the reply Auto Retry was holding on to with it.
-  // This copy is the extension's own, in memory, and nothing else can reach it.
+  // This copy is the extension's own, and nothing else can reach it. The
+  // backend holds one too, so a reload can ask for it back.
   keepReplaced: true,
+  // Also written to the account's storage on the server, so an update or a
+  // restart keeps it. Off by default, as it writes a reply to disk.
+  keepReplacedSaved: false,
 
   // watchdogs. Both are set long. A watchdog that fires early on a slow but
   // healthy model is worse than one that fires late: it throws away a reply
@@ -752,7 +756,14 @@ const SCHEMA: Group[] = [
         key: "keepReplaced",
         label: "Keep the reply a retry replaced",
         type: "bool",
-        hint: "Keeps the last reply a retry replaced in this chat, to read on the panel's Replaced tab. It is only kept in this browser tab, and is gone when you close it.",
+        hint: "Keeps the last reply a retry replaced in this chat, to read on the panel's Replaced tab. A reload keeps it. An update or a restart clears it.",
+      },
+      {
+        key: "keepReplacedSaved",
+        needs: ["keepReplaced"],
+        label: "Keep it through an update",
+        type: "bool",
+        hint: "Off by default. Saves it on your server, so an update or a restart does not clear it.",
       },
       {
         key: "retryByNewReroll",
@@ -3770,6 +3781,7 @@ export function setup(ctx: Ctx, opts?: any) {
             accountSwaps = s.replaceRules;
           Object.assign(cfg, coerceSaved(s));
           saveSaved();
+          askReplaced();
           syncLiveLog();
           syncFloat();
           // Settings arriving from the account can switch any of the Extras
@@ -4300,10 +4312,48 @@ export function setup(ctx: Ctx, opts?: any) {
     const body = String(text || "").trim().slice(-STREAM_BUF_MAX);
     if (!body) return;
     const key = chatSlot(chatId);
-    replaced.set(key, { text: body, reason: reason, at: Date.now() });
+    const at = Date.now();
+    replaced.delete(key);
+    replaced.set(key, { text: body, reason: reason, at: at });
     while (replaced.size > REPLACED_MAX)
       replaced.delete(replaced.keys().next().value as string);
+    try {
+      if (canSend())
+        (ctx as any).sendToBackend({ type: "keep_replaced", item: { chatId: key, text: body, reason: reason, at: at }, save: replacedSaving() });
+    } catch (_) {}
   }
+  // The backend keeps a copy per account, so a reload can ask for it back.
+  // Every message to it says whether the account saves it to storage as well.
+  const replacedSaving = (): boolean => !!(cfg.keepReplaced && cfg.keepReplacedSaved);
+  const canSend = (): boolean => !!ctx && typeof (ctx as any).sendToBackend === "function";
+  // Asked on start, when the account's settings arrive, and when the backend
+  // comes back up. What this tab already holds is newer and is kept.
+  function askReplaced() {
+    if (!cfg.keepReplaced) return;
+    try {
+      if (canSend())
+        (ctx as any).sendToBackend({ type: "list_replaced", requestId: "ar-replaced-" + Date.now(), save: replacedSaving() });
+    } catch (_) {}
+  }
+  function takeReplaced(items: any) {
+    if (!cfg.keepReplaced || !Array.isArray(items)) return;
+    let added = false;
+    for (const it of items) {
+      if (!it || typeof it.text !== "string" || !it.text.trim()) continue;
+      const key = chatSlot(it.chatId);
+      if (replaced.has(key)) continue;
+      replaced.set(key, { text: it.text, reason: String(it.reason || ""), at: Number(it.at) || Date.now() });
+      added = true;
+    }
+    if (!added) return;
+    const order = Array.from(replaced.entries()).sort((a, b) => a[1].at - b[1].at);
+    replaced.clear();
+    for (const [k, v] of order.slice(-REPLACED_MAX)) replaced.set(k, v);
+    if (liveTab === "replaced") renderLiveLog();
+  }
+  // What the switch to save it was when the backend was last told, so a
+  // settings save only sends a message when it changes.
+  let replacedSaveSent: boolean | null = null;
   const chatNames = new Map<string, string>();
   // Chats the name has already been asked for, whether or not an answer came
   // back. A host that will not name a chat answers with nothing, and without
@@ -4673,7 +4723,7 @@ export function setup(ctx: Ctx, opts?: any) {
     body.style.whiteSpace = "pre-wrap";
     if (!cfg.keepReplaced) {
       body.textContent =
-        "Keeping replaced replies is switched off, under How it retries. With it on, the reply a retry throws away is kept here until the tab is closed.";
+        "Keeping replaced replies is switched off, under How it retries. With it on, the reply a retry throws away is kept here. A reload keeps it.";
       return;
     }
     const r = replacedHere();
@@ -5139,7 +5189,13 @@ export function setup(ctx: Ctx, opts?: any) {
         // permission was missing, about a reply you had just discarded.
         promptNeverArrived = false;
       }
-      else if (liveTab === "replaced") replaced.delete(chatSlot(lastChatId));
+      else if (liveTab === "replaced") {
+        replaced.delete(chatSlot(lastChatId));
+        try {
+          if (canSend())
+            (ctx as any).sendToBackend({ type: "forget_replaced", chatId: chatSlot(lastChatId), save: replacedSaving() });
+        } catch (_) {}
+      }
       else if (liveTab === "stats") {
         // Counting starts again from now, so the clock resets with the counts
         // or the rate below them would be measured against the wrong window.
@@ -6898,6 +6954,7 @@ export function setup(ctx: Ctx, opts?: any) {
         "rateLimitDelayMs",
         "retryByNewReroll",
         "keepReplaced",
+        "keepReplacedSaved",
         "stuckTimeoutMs",
         "idleTimeoutMs",
         "retryOnError",
@@ -11284,7 +11341,20 @@ export function setup(ctx: Ctx, opts?: any) {
       const storedHere = saveSaved();
       // Switching it off has to drop what is already held, or "turn it off and
       // nothing is kept" is only true of replies that had not happened yet.
-      if (!cfg.keepReplaced) replaced.clear();
+      if (!cfg.keepReplaced && (replaced.size || replacedSaveSent !== false)) {
+        replaced.clear();
+        try {
+          if (canSend()) (ctx as any).sendToBackend({ type: "forget_replaced", all: true, save: false });
+        } catch (_) {}
+        replacedSaveSent = false;
+      }
+      const saving = !!(cfg.keepReplaced && cfg.keepReplacedSaved);
+      if (saving !== replacedSaveSent) {
+        replacedSaveSent = saving;
+        try {
+          if (canSend()) (ctx as any).sendToBackend({ type: "save_replaced", save: saving });
+        } catch (_) {}
+      }
       saveToAccount();
       syncLiveLog();
       syncFloat();
@@ -14882,6 +14952,7 @@ export function setup(ctx: Ctx, opts?: any) {
   chaseActiveChat();
   loadFromAccount();
   loadPresetsFromAccount();
+  askReplaced();
   // A tab brought back after a while asks the account again, so what it shows
   // and what it would save is the newest copy.
   try {
@@ -14916,6 +14987,7 @@ export function setup(ctx: Ctx, opts?: any) {
           // the account's.
           if (settingsWaiting) loadFromAccount();
           if (presetsWaiting) loadPresetsFromAccount();
+          askReplaced();
           askForPermissions();
           askForBackendVersion();
           if (promptsAsked) {
@@ -15007,6 +15079,18 @@ export function setup(ctx: Ctx, opts?: any) {
         // The account copy could not be written. The browser copy may well have
         // worked, so this does not say the settings are lost: it says the part
         // that carries them to another device did not happen.
+        if (msg.type === "replaced_list") {
+          takeReplaced(msg.items);
+          return;
+        }
+        if (msg.type === "account_save_failed" && msg.what === "replaced") {
+          log("the replaced reply could not be saved on the server");
+          showToast(
+            "The reply a retry replaced could not be saved on your server, so an update or a restart will clear it.",
+            { force: true, kind: "error" },
+          );
+          return;
+        }
         if (msg.type === "account_save_failed") {
           const what = msg.what === "presets" ? "presets" : "settings";
           log("the account copy of the " + what + " could not be saved");

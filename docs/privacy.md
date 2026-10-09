@@ -114,10 +114,16 @@ Neither of these is in an export, because a screen position or a chat id means n
 
 - the last twenty lines of what it did
 - counters for the session: good replies, retries, their reasons, retries per chat, and notes sent and skipped. Per-chat counts use the chat id, never anything a reply said.
-- **replies a retry replaced**, if **Keep the reply a retry replaced** is on. You can read them back on the **Replaced** tab. At most eight chats' worth is kept, newest first. Turn it off under **How it retries** and nothing is kept.
 - **the last prompt**, only while you have the panel's **Prompt** tab open. It is the text of your chat, so it is only kept after you open that tab. One prompt at a time. Close the panel and nothing is kept.
 
 None of these is written to disk, synced, or sent anywhere.
+
+**Replies a retry replaced**, if **Keep the reply a retry replaced** is on:
+
+- You can read them back on the **Replaced** tab. At most eight chats' worth is kept, newest first.
+- They are held in this tab and in your server's memory, for your account only. A reload keeps them. An update or a restart of Lumiverse clears them.
+- With **Keep it through an update** on, they are also saved on your server, in Lumiverse's storage for your account. It is off by default. Turning it off empties the saved copy.
+- Turn off **Keep the reply a retry replaced**, under **How it retries**, and nothing is kept.
 
 **In memory on the server, only with Several tries at once on:** the last prompt in each chat, for up to 12 chats and 30 minutes each. Turning the setting off drops every copy, and so does a restart. It is not written to disk. See [Several tries at once](#several-tries-at-once).
 

@@ -8,6 +8,20 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.17.0
+
+_2026-10-09_
+
+### Added
+
+- **Keep it through an update.** A new switch under **Keep the reply a retry replaced**, in **How it retries**. It is off by default. On, the replies on the **Replaced** tab are saved on your server for your account, so an update or a restart of Lumiverse does not clear them. Turning it off empties the saved copy.
+
+### Changed
+
+- **The reply a retry replaced comes back after a reload.** It was kept only in the browser tab, so a reload or leaving the app cleared it. Your server now holds a copy for your account, and the panel asks for it when it starts. Only your own account can see it.
+
+---
+
 ## 5.16.2
 
 _2026-10-09_

@@ -11520,6 +11520,92 @@ console.log("\npainted surfaces");
 // button selectors back is the case that comes up, and doing it should not cost
 // the word swaps and refusal phrases. What is worth holding down is the promise
 // it makes on screen: what you do not tick is not touched.
+// The backend holds a copy of the replaced reply for the account, so a page
+// that was reloaded asks for it and shows it again.
+console.log("\nthe replaced reply comes back after a reload");
+for (const size of [
+  { name: "phone", viewport: { width: 412, height: 860 }, touch: true },
+  { name: "laptop", viewport: { width: 1280, height: 860 }, touch: false },
+]) {
+  const TEXT = "The kettle boiled over while the two of them argued about the map.";
+  const { out, errors } = await inPanel(browser, { viewport: size.viewport, touch: size.touch, settings: { liveLog: true } }, async (page) => {
+    return page.evaluate(async (TEXT) => {
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const asked = window.__sent.filter((m) => m.type === "list_replaced");
+      if (window.__handlers.CHAT_SWITCHED) window.__handlers.CHAT_SWITCHED({ chatId: "c1" });
+      if (window.__handlers.CHAT_CHANGED) window.__handlers.CHAT_CHANGED({ chatId: "c1" });
+      await frame();
+      window.__fromBackend({ type: "replaced_list", items: [{ chatId: "c1", text: TEXT, reason: "too short", at: Date.now() - 5000 }] });
+      await frame();
+      const panel = document.getElementById("__lvRetryLog");
+      const tab = panel && [...panel.querySelectorAll('[role="tab"]')].find((b) => b.textContent.trim() === "Replaced");
+      if (tab) tab.click();
+      await wait(60);
+      const body = document.getElementById("__lvRetryLogBody");
+      for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      await wait(300);
+      const rows = [...document.querySelectorAll("[data-ar-row]")].map((r) => r.getAttribute("data-ar-row"));
+      const row = document.querySelector('[data-ar-row="keepReplacedSaved"]');
+      const box = row && row.querySelector('input[type="checkbox"]');
+      const r = row ? row.getBoundingClientRect() : null;
+      const wasOff = !!box && !box.checked;
+      if (box) box.click();
+      const save = [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === "Save");
+      if (save) save.click();
+      await wait(80);
+      const told = window.__sent.filter((m) => m.type === "save_replaced").pop();
+      return {
+        asked: asked.length,
+        askedSave: asked.length ? asked[0].save : null,
+        shown: body ? body.innerText : "",
+        under: rows.indexOf("keepReplacedSaved") === rows.indexOf("keepReplaced") + 1,
+        wasOff,
+        told: told ? told.save : null,
+        fits: !!r && r.left >= 0 && r.right <= window.innerWidth,
+        sideways: document.documentElement.scrollWidth > window.innerWidth,
+      };
+    }, TEXT);
+  });
+  check(size.name + ": the page asks for it on start", out.asked >= 1 && out.askedSave === false, out);
+  check(size.name + ": and shows what comes back on the Replaced tab", out.shown.indexOf(TEXT) >= 0, out.shown.slice(0, 160));
+  check(size.name + ": Keep it through an update is under Keep the reply a retry replaced, and off", out.under && out.wasOff, out);
+  check(size.name + ": turning it on and saving tells the backend", out.told === true, out);
+  check(size.name + ": nothing runs off the side", out.fits && !out.sideways, out);
+  check(size.name + ": no console errors", errors.length === 0, errors);
+}
+
+// Tick every setting ticks each box where it stands, so each tick draws in as
+// it does under a finger.
+console.log("\ntick every setting moves each box");
+{
+  const { out, errors } = await inPanel(browser, {}, async (page) => {
+    return page.evaluate(async () => {
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      await wait(300);
+      const el = document.querySelector('[data-ar-row="maxRetries"]').querySelector("input");
+      el.value = "9";
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+      await frame();
+      [...document.querySelectorAll("button")].find((x) => /^Reset/.test(x.textContent.trim())).click();
+      await wait(400);
+      const box = document.querySelector('[data-ar-reset="retry"] input');
+      const tick = () => parseFloat(getComputedStyle(box, "::after").opacity);
+      const from = tick();
+      [...document.querySelectorAll("button")].find((x) => x.textContent.trim() === "Tick every setting").click();
+      await wait(40);
+      const mid = tick();
+      await wait(600);
+      return { from, mid, end: tick(), kept: box.isConnected, on: box.checked };
+    });
+  });
+  check("each box is ticked where it stands", out.kept && out.on, out);
+  check("and its tick draws in over a moment", out.from === 0 && out.mid > 0 && out.mid < 1 && out.end === 1, out);
+  check("no console errors", errors.length === 0, errors);
+}
+
 console.log("\nreset picker");
 {
   const openPicker = async (page) =>
