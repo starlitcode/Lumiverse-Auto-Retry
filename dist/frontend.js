@@ -6304,6 +6304,17 @@ export function setup(ctx, opts) {
     // A box let down to nothing and then handed over. done runs once, whether the
     // travel finished, was cut short by a second one, or never started because the
     // reader asked for no movement.
+    // A box's height in its own CSS pixels. getBoundingClientRect gives screen
+    // pixels, and Lumiverse applies its UI Scale as a zoom, so the two differ.
+    // A height read in screen pixels and written back as CSS pixels opened a
+    // row too tall or too short, and it jumped to its real height at the end.
+    // The scale is read off the width, which the browser also reports both
+    // ways.
+    function cssHeight(node) {
+        const r = node.getBoundingClientRect();
+        const scale = node.offsetWidth > 0 && r.width > 0 ? r.width / node.offsetWidth : 1;
+        return r.height / (scale > 0.01 ? scale : 1);
+    }
     // Everything a fold or an open sets, taken back off.
     function clearFold(node) {
         try {
@@ -6337,7 +6348,7 @@ export function setup(ctx, opts) {
         };
         try {
             const still = noMotion();
-            const tall = node && node.getBoundingClientRect ? node.getBoundingClientRect().height : 0;
+            const tall = node && node.getBoundingClientRect ? cssHeight(node) : 0;
             if (still || !(tall > 0) || !node.style) {
                 finish();
                 return;
@@ -6426,7 +6437,7 @@ export function setup(ctx, opts) {
         try {
             if (!node || !node.style || typeof node.getBoundingClientRect !== "function")
                 return;
-            const fromH = fromHidden ? 0 : node.getBoundingClientRect().height;
+            const fromH = fromHidden ? 0 : cssHeight(node);
             const fromO = fromHidden ? 0 : parseFloat(getComputedStyle(node).opacity) || 0;
             // A fold still running is dropped, and its hand-over with it.
             node._arFold = null;
@@ -6434,7 +6445,7 @@ export function setup(ctx, opts) {
             if (noMotion())
                 return;
             const cs = getComputedStyle(node);
-            const tall = node.getBoundingClientRect().height;
+            const tall = cssHeight(node);
             if (!(tall > 0))
                 return;
             const pads = ["paddingTop", "paddingBottom", "borderTopWidth", "borderBottomWidth"];

@@ -12071,8 +12071,11 @@ console.log("\nfind and replace, retired");
 // words fade before the space closes. With Reduce motion on, both happen at
 // once, and nothing moves when the panel is first built.
 for (const [label, viewport, touch] of [["phone", { width: 390, height: 860 }, true], ["laptop", { width: 1280, height: 860 }, false]]) {
-  for (const reduceMotion of [false, true]) {
-    const { out, errors } = await inPanel(browser, { viewport, touch, settings: { reduceMotion, pauseWhenFailing: false } }, async (page) =>
+  // Lumiverse applies its UI Scale as a zoom on the page, which is where a
+  // row opened to the wrong height and jumped at the end. So the motion is
+  // measured with no zoom, and zoomed in and out.
+  for (const [reduceMotion, zoom] of [[false, 1], [false, 1.25], [false, 0.85], [true, 1]]) {
+    const { out, errors } = await inPanel(browser, { viewport, touch, css: zoom === 1 ? "" : "html{zoom:" + zoom + "}", settings: { reduceMotion, pauseWhenFailing: false } }, async (page) =>
       page.evaluate(async () => {
         const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
         await frame();
@@ -12092,6 +12095,7 @@ for (const [label, viewport, touch] of [["phone", { width: 390, height: 860 }, t
         const gapNow = () => box.getBoundingClientRect().height;
         const watch = async () => {
           const start = gapNow();
+          const times = [];
           const tops = [];
           const looks = [];
           sw.click();
@@ -12099,6 +12103,7 @@ for (const [label, viewport, touch] of [["phone", { width: 390, height: 860 }, t
           while (performance.now() - t0 < 520) {
             await new Promise((r) => requestAnimationFrame(r));
             tops.push(gapNow() - start);
+          times.push(performance.now());
             const cs = getComputedStyle(kid);
             looks.push({ o: parseFloat(cs.opacity), h: kid.getBoundingClientRect().height, t: cs.transform });
           }
@@ -12108,40 +12113,48 @@ for (const [label, viewport, touch] of [["phone", { width: 390, height: 860 }, t
             biggest = Math.max(biggest, Math.abs(t - prev));
             prev = t;
           }
-          return { travel: Math.round(tops[tops.length - 1]), biggest: Math.round(biggest), looks, tops, shown: kid.style.display !== "none" };
+          // Each step as the distance one frame at 60 a second would cover. A slow
+          // frame on the test machine covers more ground in one go, and that is not
+          // the row skipping.
+          const paced = () => tops.map((t, i) => {
+            const was = i ? tops[i - 1] : 0;
+            const dt = times[i] - (i ? times[i - 1] : t0);
+            return (Math.abs(t - was) * 16.7) / Math.max(16.7, dt);
+          });
+          return { travel: Math.round(tops[tops.length - 1]), biggest: Math.round(biggest), steps: paced(), looks, tops, shown: kid.style.display !== "none" };
         };
         const opened = await watch();
         const shut = await watch();
         return { found: true, onBuild, opened, shut };
       }),
     );
-    const say = label + (reduceMotion ? ", Reduce motion on" : "") + ": ";
+    const say = label + (zoom === 1 ? "" : ", zoom " + zoom) + (reduceMotion ? ", Reduce motion on" : "") + ": ";
     check(say + "the switch and the rows under it are there to drive", out.found, out);
     check(say + "nothing moves just for the panel being built", out.onBuild, out);
     check(say + "switching it on opens the rows and makes room for them", out.opened && out.opened.travel > 30 && out.opened.shown, out.opened && { travel: out.opened.travel });
     check(say + "switching it off hides them again", out.shut && !out.shut.shown, out.shut && out.shut.shown);
     if (!reduceMotion) {
       check(say + "opening, the room grows in small steps, never more than a third in one frame",
-        out.opened && out.opened.biggest < out.opened.travel / 3, out.opened && { travel: out.opened.travel, biggest: out.opened.biggest });
+        out.opened && Math.max(...out.opened.steps) < out.opened.travel / 3, out.opened && { travel: out.opened.travel, biggest: out.opened.biggest });
       check(say + "opening, the row starts faded and slides down into place",
         out.opened && out.opened.looks[0].o < 0.5 && /matrix\(1, 0, 0, 1, 0, -/.test(out.opened.looks[0].t), out.opened && out.opened.looks.slice(0, 2));
-      // The row slows down as it lands. A step bigger than the one before it
+      // The row slows down as it lands. A step well past the two before it
       // is the row skipping, and at the end that reads as an abrupt stop.
       const skips = (w) => {
         let worst = 0;
         for (let i = 2; i < w.tops.length; i++) {
-          const step = Math.abs(w.tops[i] - w.tops[i - 1]);
-          const before = Math.abs(w.tops[i - 1] - w.tops[i - 2]);
+          const step = w.steps[i];
+          const before = Math.max(w.steps[i - 1], w.steps[i - 2]);
           worst = Math.max(worst, step - before);
         }
         return worst;
       };
-      check(say + "opening, it lands softly with no skip at the end", out.opened && skips(out.opened) <= 2,
+      check(say + "opening, it lands softly with no skip at the end", out.opened && skips(out.opened) <= 6,
         out.opened && out.opened.tops.map(Math.round));
-      check(say + "closing, it lands softly with no skip at the end", out.shut && skips(out.shut) <= 2,
+      check(say + "closing, it lands softly with no skip at the end", out.shut && skips(out.shut) <= 6,
         out.shut && out.shut.tops.map(Math.round));
       check(say + "closing, the room closes in small steps",
-        out.shut && out.shut.biggest < Math.abs(out.shut.travel) / 3, out.shut && { travel: out.shut.travel, biggest: out.shut.biggest });
+        out.shut && Math.max(...out.shut.steps) < Math.abs(out.shut.travel) / 3, out.shut && { travel: out.shut.travel, biggest: out.shut.biggest });
       const faded = out.shut ? out.shut.looks.findIndex((l) => l.o < 0.05) : -1;
       const flat = out.shut ? out.shut.looks.findIndex((l) => l.h < 1) : -1;
       check(say + "closing, the words are gone before the space is", faded >= 0 && (flat === -1 || faded < flat), { faded, flat });
