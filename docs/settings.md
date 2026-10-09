@@ -96,6 +96,7 @@ A button in the chat input's Extras menu, next to the settings button. It takes 
 **Reduce motion** is in Basics. It is off by default.
 
 - On, nothing in Auto Retry moves or fades. The pop-up, the panel, the floating button and the tick boxes all change at once.
+- With it off, the floating panel, the boxes that open over the settings and a setting's description fade in and slide a little, and fade out when they close. Nothing grows.
 - A device set to reduce motion gets the same, with the switch off.
 - With the switch off, the floating button shrinks a little when pressed, and the mark in a tick box springs in. With it on, the button keeps its size and the mark appears at once.
 

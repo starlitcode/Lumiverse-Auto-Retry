@@ -21,12 +21,6 @@
  */
 
 declare const spindle: any;
-// The backend runtime has timers, but this module typechecks against ES2020
-// with no DOM lib, and nothing in ES2020 declares them. Without these the
-// settle gate below fails the backend typecheck, which takes `bun run check`
-// and the CI job with it. Declarations emit nothing, so dist is unaffected.
-declare function setTimeout(fn: () => void, ms: number): any;
-declare function clearTimeout(handle: any): void;
 
 // The build this half is running. An update pulls the repo, rebuilds if it has
 // to, and restarts the backend runtime. It does not reach into a browser tab

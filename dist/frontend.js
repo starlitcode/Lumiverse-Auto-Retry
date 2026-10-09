@@ -5107,6 +5107,8 @@ export function setup(ctx, opts) {
         // Named, like the other surfaces the extension owns, so anything walking
         // the page can tell this panel from the chat behind it.
         el.id = "__lvRetryLog";
+        markOwnUI(el);
+        el.setAttribute("data-ar-card", "1");
         el.style.cssText =
             "position:fixed;right:8px;bottom:8px;z-index:" + Z_LIVE_LOG + ";width:min(340px,92vw);height:min(300px,50vh);min-width:200px;min-height:120px;max-width:96vw;max-height:85vh;display:flex;flex-direction:column;background-color:var(--lumiverse-card-bg-solid,rgb(24,20,34));background-image:linear-gradient(var(--lumiverse-bg-elevated,rgba(35,30,48,.9)),var(--lumiverse-bg-elevated,rgba(35,30,48,.9)));border:1px solid var(--lumiverse-border,rgba(255,255,255,.14));border-radius:var(--lumiverse-radius-md,10px);box-shadow:var(--lumiverse-shadow-md,0 8px 24px rgba(0,0,0,.4));font-family:var(--lumiverse-font-family,system-ui);font-size:13px;color:var(--lumiverse-text,#e9e4f0);overflow:hidden";
         const parts = buildPanelParts(true);
@@ -5321,12 +5323,8 @@ export function setup(ctx, opts) {
             catch (_) { }
         }
         stopStatsTick();
-        if (liveLogEl.parentNode) {
-            try {
-                liveLogEl.parentNode.removeChild(liveLogEl);
-            }
-            catch (_) { }
-        }
+        if (liveLogEl.parentNode)
+            leaveAway(liveLogEl);
         liveLogEl = null;
         liveLogBody = null;
         paintTabs = null;
@@ -8162,6 +8160,38 @@ export function setup(ctx, opts) {
         }
         catch (_) { }
     };
+    // A pop-up of ours leaving the page. It fades out, and is taken off once the
+    // fade ends, or by a timer if the end is never reported. Its id goes at
+    // once, so the next one opened is the only one found by it. With Reduce
+    // motion on, or after teardown, it goes at once.
+    const leaving = new Set();
+    function leaveAway(node) {
+        if (!node)
+            return;
+        const gone = () => {
+            leaving.delete(node);
+            try {
+                node.remove();
+            }
+            catch (_) { }
+        };
+        if (tornDown || noMotion() || !node.isConnected)
+            return gone();
+        try {
+            node.removeAttribute("id");
+            node.setAttribute("aria-hidden", "true");
+            node.setAttribute("data-ar-leaving", "1");
+        }
+        catch (_) {
+            return gone();
+        }
+        leaving.add(node);
+        node.addEventListener("animationend", (e) => {
+            if (e && e.target === node)
+                gone();
+        });
+        setTimeout(gone, 320);
+    }
     const clickable = (el) => {
         if (!el)
             return false;
@@ -8687,6 +8717,21 @@ export function setup(ctx, opts) {
                     "@keyframes lvRetryArrive{from{opacity:0;transform:translateY(-4px)}" +
                     "to{opacity:1;transform:none}}" +
                     "@media (prefers-reduced-motion: reduce){[data-ar-arrive]{animation:none}}" +
+                    // A pop-up of ours: the floating log, a dialog and the dim behind it.
+                    // A card fades in and slides up 10px, and a dim fades in, the same as
+                    // Auto Refine's. Neither grows. On the way out they fade, and the card
+                    // slides down 6px. Only opacity and position move. The card's opening
+                    // holds nothing once it ends, so dragging the floating log, which
+                    // moves it with a transform, is not held back by it. Reduce motion
+                    // turns all of it off through the rules on [data-ar-ui].
+                    "[data-ar-card]{animation:lvRetryCardIn 220ms cubic-bezier(.2,.8,.28,1) backwards}" +
+                    "[data-ar-shade]{animation:lvRetryFadeIn 200ms ease-out backwards}" +
+                    "[data-ar-leaving]{pointer-events:none;animation:lvRetryFadeOut 160ms ease-in both!important}" +
+                    "[data-ar-card][data-ar-leaving]{animation:lvRetryCardOut 160ms ease-in both!important}" +
+                    "@keyframes lvRetryCardIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}" +
+                    "@keyframes lvRetryFadeIn{from{opacity:0}to{opacity:1}}" +
+                    "@keyframes lvRetryFadeOut{from{opacity:1}to{opacity:0}}" +
+                    "@keyframes lvRetryCardOut{from{opacity:1}to{opacity:0;transform:translateY(6px)}}" +
                     // The tick boxes, drawn here rather than left to the browser. A browser
                     // checkbox tinted with accent-color cannot be animated at all: it is
                     // painted by the platform and it snaps, which made every tick on this
@@ -10295,6 +10340,7 @@ export function setup(ctx, opts) {
         try {
             going.removeAttribute("role");
             going.style.opacity = "0";
+            going.style.transform = going.getAttribute("data-ar-hint-up") ? "translateY(4px)" : "translateY(-4px)";
         }
         catch (_) { }
         const one = { box: going, timer: null };
@@ -10329,11 +10375,10 @@ export function setup(ctx, opts) {
                 "border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));" +
                 "box-shadow:var(--lumiverse-shadow-md,0 8px 24px rgba(0,0,0,.4));" +
                 "color:var(--lumiverse-text,#eee);font:12px/1.45 var(--lumiverse-font-family,system-ui);" +
-                // Fades in where it opens and out where it stood, rather than appearing
-                // and vanishing between two frames. It arrives on top of the rows below
-                // the one it belongs to, and something landing over what you were reading
-                // with no travel at all reads as the page having flinched.
-                "opacity:0;transition:opacity 140ms ease-out;" +
+                // Fades in where it opens and out where it stood, and slides 4px from
+                // the row it belongs to, the same as Auto Refine's. The direction is set
+                // once it is known whether it opens under the row or over it.
+                "opacity:0;transform:translateY(-4px);transition:opacity 140ms ease-out,transform 140ms ease-out;" +
                 // Off screen until it has been measured, so it is never seen in the wrong
                 // place for a frame.
                 "left:0;top:-9999px";
@@ -10442,7 +10487,13 @@ export function setup(ctx, opts) {
         // the box's rect.
         if (noMotion())
             el.style.transition = "none";
+        if (above) {
+            el.setAttribute("data-ar-hint-up", "1");
+            el.style.transform = "translateY(4px)";
+            void el.offsetWidth;
+        }
         el.style.opacity = "1";
+        el.style.transform = "none";
         // Tapping the description dismisses it. On a phone that is the easiest
         // place to tap, and it did nothing.
         el.addEventListener("click", () => hideHint());
@@ -13871,10 +13922,12 @@ export function setup(ctx, opts) {
         const overlay = document.createElement("div");
         overlay.id = "__lvRetryReset";
         markOwnUI(overlay);
+        overlay.setAttribute("data-ar-shade", "1");
         overlay.style.cssText =
             "position:fixed;inset:0;z-index:" + Z_OVERLAY + ";display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;background:var(--lumiverse-modal-backdrop,rgba(0,0,0,.6));font-family:var(--lumiverse-font-family,system-ui)";
         const box = document.createElement("div");
         box.setAttribute("role", "dialog");
+        box.setAttribute("data-ar-card", "1");
         box.setAttribute("aria-modal", "true");
         box.setAttribute("aria-label", "Reset settings");
         // Focused on open so Escape and the tab order start inside the box rather
@@ -14001,10 +14054,7 @@ export function setup(ctx, opts) {
             close();
         };
         function close() {
-            try {
-                overlay.remove();
-            }
-            catch (_) { }
+            leaveAway(overlay);
             try {
                 document.removeEventListener("keydown", onKey, true);
             }
@@ -14207,9 +14257,12 @@ export function setup(ctx, opts) {
             catch (_) { }
         }
         const overlay = document.createElement("div");
+        markOwnUI(overlay);
+        overlay.setAttribute("data-ar-shade", "1");
         overlay.style.cssText =
             "position:fixed;inset:0;z-index:" + Z_OVERLAY + ";display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;background:var(--lumiverse-modal-backdrop,rgba(0,0,0,.6));font-family:var(--lumiverse-font-family,system-ui)";
         const box = document.createElement("div");
+        box.setAttribute("data-ar-card", "1");
         box.style.cssText =
             "display:flex;flex-direction:column;gap:10px;width:min(720px,96vw);height:min(80vh,640px);box-sizing:border-box;padding:14px;background-color:var(--lumiverse-card-bg-solid,rgb(24,20,34));background-image:linear-gradient(var(--lumiverse-bg-elevated,rgba(35,30,48,.9)),var(--lumiverse-bg-elevated,rgba(35,30,48,.9)));border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));border-radius:var(--lumiverse-radius-lg,12px);box-shadow:var(--lumiverse-shadow-xl,0 20px 60px rgba(0,0,0,.5));color:var(--lumiverse-text,#eee)";
         const title = document.createElement("div");
@@ -14231,10 +14284,7 @@ export function setup(ctx, opts) {
                 close();
         };
         function close() {
-            try {
-                overlay.remove();
-            }
-            catch (_) { }
+            leaveAway(overlay);
             try {
                 document.removeEventListener("keydown", onKey);
             }
@@ -14287,10 +14337,12 @@ export function setup(ctx, opts) {
         const overlay = document.createElement("div");
         overlay.id = "__lvRetryCrisisNotice";
         markOwnUI(overlay);
+        overlay.setAttribute("data-ar-shade", "1");
         overlay.style.cssText =
             "position:fixed;inset:0;z-index:" + Z_OVERLAY + ";display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;background:var(--lumiverse-modal-backdrop,rgba(0,0,0,.6));font-family:var(--lumiverse-font-family,system-ui)";
         const box = document.createElement("div");
         box.setAttribute("role", "dialog");
+        box.setAttribute("data-ar-card", "1");
         box.setAttribute("aria-modal", "true");
         box.setAttribute("aria-label", "Before you turn this on");
         box.tabIndex = -1;
@@ -14348,10 +14400,7 @@ export function setup(ctx, opts) {
                 answer(false);
         };
         function close() {
-            try {
-                overlay.remove();
-            }
-            catch (_) { }
+            leaveAway(overlay);
             try {
                 document.removeEventListener("keydown", onKey);
             }
@@ -14955,6 +15004,14 @@ export function setup(ctx, opts) {
     log("ready v" + VERSION, cfg);
     return () => {
         tornDown = true;
+        // A pop-up still fading out goes now, not when its timer runs.
+        for (const node of Array.from(leaving)) {
+            leaving.delete(node);
+            try {
+                node.remove();
+            }
+            catch (_) { }
+        }
         clearConfirmWatch();
         // The full-size editor is parented to the page, not to the modal, so
         // dismissing the modal below does not take it with it. Left open it would
@@ -15086,7 +15143,6 @@ export const __testing = {
     garbledVerdict,
     HARD_FAILURE,
     splitLeadingThinking,
-    sameSettings,
     parseColor,
     blendColor,
     relLuminance,

@@ -656,6 +656,35 @@ console.log("\nthe prompt view");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- a description fades and slides in ----
+// The same small slide as Auto Refine's: 4px from the row it belongs to,
+// with the fade. With less motion asked for, it appears at once.
+console.log("\na description fades and slides in");
+{
+  for (const [label, viewport, touch] of [["phone", { width: 390, height: 860 }, true], ["laptop", { width: 1280, height: 860 }, false]]) {
+    for (const how of ["off", "panel"]) {
+      // A finger opens a description with a tap, a mouse by hovering.
+      const { out, errors } = await inPanel(browser, { viewport, touch, settings: { reduceMotion: how === "panel" } }, async (page) => {
+        const info = page.locator("#modal button[data-ar-hint]").first();
+        await info.scrollIntoViewIfNeeded();
+        if (touch) await info.tap();
+        else await info.hover();
+        return page.evaluate(async () => {
+          const el = document.querySelector('[role="tooltip"]');
+          if (!el) return null;
+          const moving = el.getAnimations().map((a) => a.transitionProperty).sort();
+          await new Promise((r) => setTimeout(r, 300));
+          return { moving, rest: getComputedStyle(el).transform, opacity: getComputedStyle(el).opacity };
+        });
+      });
+      if (how === "off") check(label + ": the description fades and slides", !!out && out.moving.join() === "opacity,transform", out);
+      else check(label + ": with Reduce motion on, it appears at once", !!out && out.moving.length === 0, out);
+      check(label + ": and comes to rest in its own place, fully shown", !!out && out.rest === "none" && out.opacity === "1", out);
+      check(label + ": no console errors", errors.length === 0, errors);
+    }
+  }
+}
+
 // ---- a hint must not move the list ----
 console.log("\nhints");
 {
@@ -4411,20 +4440,63 @@ console.log("\npop-ups come up and go down");
   check("and it still fades out", q.leaving.opacity === "0" && q.leaving.transform === "none", q.leaving);
   check("no console errors", moving.errors.length + still.errors.length === 0, moving.errors.concat(still.errors));
 
-  // A dialog, the reset picker, as it comes up.
-  for (const reducedMotion of ["no-preference", "reduce"]) {
-    const { out, errors } = await inPanel(browser, {}, async (page) => {
-      await page.emulateMedia({ reducedMotion });
-      return page.evaluate(() => {
-        [...document.querySelectorAll("button")].find((b) => /^Reset/.test((b.textContent || "").trim())).click();
-        const dialog = document.getElementById("__lvRetryReset");
-        return dialog ? dialog.getAnimations({ subtree: true }).length : -1;
+  // A dialog, the reset picker, coming up and going. The dim fades in and the
+  // box fades in and slides up 10px, the same as Auto Refine's pop-ups, and
+  // neither grows. Closed, it fades out before it leaves the page. With
+  // less motion asked for, from the device or the panel, it comes and goes
+  // at once.
+  for (const [label, viewport, touch] of [["phone", { width: 390, height: 860 }, true], ["laptop", { width: 1280, height: 860 }, false]]) {
+    for (const how of ["off", "device", "panel"]) {
+      const { out, errors } = await inPanel(browser, { viewport, touch, settings: { reduceMotion: how === "panel" } }, async (page) => {
+        if (how === "device") await page.emulateMedia({ reducedMotion: "reduce" });
+        return page.evaluate(async () => {
+          [...document.querySelectorAll("button")].find((b) => /^Reset/.test((b.textContent || "").trim())).click();
+          const dialog = document.getElementById("__lvRetryReset");
+          if (!dialog) return null;
+          const box = dialog.querySelector('[role="dialog"]');
+          const names = dialog.getAnimations({ subtree: true }).map((a) => a.animationName).sort();
+          const grows = /scale/.test(getComputedStyle(box).transform + " " + [...document.styleSheets].map((x) => { try { return [...x.cssRules].map((r) => r.cssText).join(" "); } catch (_) { return ""; } }).join(" ").match(/@keyframes lvRetryCard[^}]*}[^}]*}/g));
+          await new Promise((r) => setTimeout(r, 400));
+          const cancel = [...dialog.querySelectorAll("button")].find((b) => /^Cancel|^Close/.test(b.textContent.trim()));
+          if (!cancel) return { names, noCancel: true };
+          cancel.click();
+          const justAfter = { there: dialog.isConnected, leaving: dialog.getAttribute("data-ar-leaving"), id: document.getElementById("__lvRetryReset") === null };
+          await new Promise((r) => setTimeout(r, 450));
+          return { names, grows, justAfter, gone: !dialog.isConnected };
+        });
       });
-    });
-    // Pop-ups appear at once, whatever the motion setting. Only the retry
-    // message above moves.
-    check((reducedMotion === "reduce" ? "with less motion asked for, " : "") + "a dialog appears at once, with no animation", out === 0, out);
-    check("the dialog: no console errors", errors.length === 0, errors);
+      const still = how !== "off";
+      const say = label + (still ? ", reduce motion from the " + how : "") + ": ";
+      if (!still) {
+        check(say + "the dim fades in and the box fades and slides in", !!out && out.names.join() === "lvRetryCardIn,lvRetryFadeIn", out);
+        check(say + "nothing grows", !!out && !out.grows, out);
+        check(say + "closed, it fades out before it goes", !!out && out.justAfter && out.justAfter.there && out.justAfter.leaving === "1", out);
+      } else {
+        check(say + "the dialog comes up with no animation", !!out && out.names.length === 0, out);
+        check(say + "closed, it goes at once", !!out && out.justAfter && !out.justAfter.there, out);
+      }
+      check(say + "once closed, it is gone from the page", !!out && out.gone && out.justAfter.id, out);
+      check(say + "no console errors", errors.length === 0, errors);
+    }
+  }
+
+  // The floating log fades and slides in the same way, and fades out when it
+  // is switched off.
+  for (const how of ["off", "panel"]) {
+    const { out, errors } = await inPanel(browser, { settings: { liveLog: true, panelHome: "float", reduceMotion: how === "panel" } }, (page) =>
+      page.evaluate(async () => {
+        const log = document.getElementById("__lvRetryLog");
+        if (!log) return null;
+        const names = log.getAnimations().map((a) => a.animationName);
+        await new Promise((r) => setTimeout(r, 400));
+        const rest = getComputedStyle(log).transform;
+        return { names, rest };
+      }),
+    );
+    if (how === "off") check("the floating log fades and slides in", !!out && out.names.join() === "lvRetryCardIn", out);
+    else check("with Reduce motion on, the floating log comes up with no animation", !!out && out.names.length === 0, out);
+    check("and then holds no transform of its own, so it can still be dragged", !!out && out.rest === "none", out);
+    check("the floating log: no console errors", errors.length === 0, errors);
   }
 }
 

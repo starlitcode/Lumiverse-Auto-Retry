@@ -21,6 +21,8 @@ _2026-10-09_
 - **The floating button shrinks a little when pressed.** In 5.14.0 it stopped shrinking and only got lighter. It now shrinks a little and gets lighter, and grows back when you let go. With Reduce motion on, it only gets lighter.
 - **The line that says Auto Retry is off opens and closes smoothly.** It appeared and went at once when you switched Auto Retry or the chat off or on. It now opens down into place and fades in, and folds shut when it goes. With Reduce motion on, it appears and goes at once.
 - **A scroll bar's thumb is at least 28 pixels tall.** In a box holding a very long text, the thumb shrank to a short dash. It now keeps a size you can see and grab.
+- **Boxes that open over the page fade and slide in.** The floating panel, **Reset settings**, the bigger editor that **Expand** opens, and the **Before you turn this on** box appeared and went at once. Each now fades in and slides up a little, and fades out when it closes. Nothing grows. With Reduce motion on, they appear and go at once.
+- **A setting's description slides as it fades.** It faded in and out where it stood. It now also slides 4 pixels from the setting it belongs to. With Reduce motion on, it appears and goes at once.
 - **The built-in note Write them as written says character card.** It said "Their sheet is who they are", and a model may not know that a sheet is the character card. It now says "Their character card is who they are". If you use this note, the panel tells you it changed.
 
 ---
