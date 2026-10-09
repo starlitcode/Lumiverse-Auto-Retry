@@ -10801,6 +10801,9 @@ console.log("\ndependent rows");
 
       box("refusalNote").click();
       await frame();
+      // Rows switched off fold away, so they are looked for once the fold
+      // is over.
+      await new Promise((r) => setTimeout(r, 400));
       const goneAgain = all((k) => shown(k) === false);
 
       // The same wiring on a different switch, to prove it is not special-cased.
@@ -10852,6 +10855,7 @@ console.log("\ndependent rows");
       const sectionOnAtFirst = rendered(tuningHead()) && rendered(tuningRow());
       refusalBox().click();
       await frame();
+      await new Promise((r) => setTimeout(r, 400));
       const sectionGone = !rendered(tuningHead()) && !rendered(tuningRow());
       // The switch that hides it has to stay put, or there is no way back.
       const refusalSwitchStays = rendered(document.querySelector('[data-ar-row="retryOnRefusal"]'));
@@ -12104,7 +12108,7 @@ for (const [label, viewport, touch] of [["phone", { width: 390, height: 860 }, t
             biggest = Math.max(biggest, Math.abs(t - prev));
             prev = t;
           }
-          return { travel: Math.round(tops[tops.length - 1]), biggest: Math.round(biggest), looks, shown: kid.style.display !== "none" };
+          return { travel: Math.round(tops[tops.length - 1]), biggest: Math.round(biggest), looks, tops, shown: kid.style.display !== "none" };
         };
         const opened = await watch();
         const shut = await watch();
@@ -12121,6 +12125,21 @@ for (const [label, viewport, touch] of [["phone", { width: 390, height: 860 }, t
         out.opened && out.opened.biggest < out.opened.travel / 3, out.opened && { travel: out.opened.travel, biggest: out.opened.biggest });
       check(say + "opening, the row starts faded and slides down into place",
         out.opened && out.opened.looks[0].o < 0.5 && /matrix\(1, 0, 0, 1, 0, -/.test(out.opened.looks[0].t), out.opened && out.opened.looks.slice(0, 2));
+      // The row slows down as it lands. A step bigger than the one before it
+      // is the row skipping, and at the end that reads as an abrupt stop.
+      const skips = (w) => {
+        let worst = 0;
+        for (let i = 2; i < w.tops.length; i++) {
+          const step = Math.abs(w.tops[i] - w.tops[i - 1]);
+          const before = Math.abs(w.tops[i - 1] - w.tops[i - 2]);
+          worst = Math.max(worst, step - before);
+        }
+        return worst;
+      };
+      check(say + "opening, it lands softly with no skip at the end", out.opened && skips(out.opened) <= 2,
+        out.opened && out.opened.tops.map(Math.round));
+      check(say + "closing, it lands softly with no skip at the end", out.shut && skips(out.shut) <= 2,
+        out.shut && out.shut.tops.map(Math.round));
       check(say + "closing, the room closes in small steps",
         out.shut && out.shut.biggest < Math.abs(out.shut.travel) / 3, out.shut && { travel: out.shut.travel, biggest: out.shut.biggest });
       const faded = out.shut ? out.shut.looks.findIndex((l) => l.o < 0.05) : -1;

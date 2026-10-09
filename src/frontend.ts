@@ -6494,6 +6494,10 @@ export function setup(ctx: Ctx, opts?: any) {
       // Height is written as the box-sizing reads it. A content-box row
       // counts its padding and edge outside its height.
       const goal = cs.boxSizing === "border-box" ? tall : Math.max(0, tall - edges);
+      // Read now. cs is live, and once the margin below is set it reads back
+      // that value instead, which held the gap shut until the end and then
+      // opened it in one step.
+      const margin = cs.marginBottom;
       let gap = 0;
       try {
         const owner = node.parentElement;
@@ -6520,7 +6524,7 @@ export function setup(ctx: Ctx, opts?: any) {
         ",border-top-width " + ease + ",border-bottom-width " + ease + ",transform " + ease +
         ",opacity 200ms ease-out 60ms";
       node.style.height = goal + "px";
-      node.style.marginBottom = cs.marginBottom;
+      node.style.marginBottom = margin;
       for (const k of pads) node.style[k] = want[k];
       node.style.opacity = "1";
       node.style.transform = "none";
