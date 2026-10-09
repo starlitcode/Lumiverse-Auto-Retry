@@ -255,7 +255,7 @@ All four are treated alike, including the retry limit and the note, if you send 
 
 Only the final reply is checked for a refusal, never the model's thinking. Thinking blocks are removed first.
 
-Seven formats are recognised. The first three use tag names like `think`, `thinking`, `reasoning`, `thought`, `reflection`, `scratchpad` and `analysis`. The other four have their own fixed tokens.
+Nine formats are recognised. The first three use tag names like `think`, `thinking`, `reasoning`, `thought`, `reflection`, `scratchpad` and `analysis`. The other six have their own fixed tokens.
 
 | Form | Example |
 | --- | --- |
@@ -266,6 +266,8 @@ Seven formats are recognised. The first three use tag names like `think`, `think
 | Gemma 4 channels | `<\|channel>thought` … `<channel\|>` |
 | Cohere | `<\|START_THINKING\|>` … `<\|END_THINKING\|>` |
 | Seed-OSS | `<seed:think>` … `</seed:think>` |
+| Begin and end of thought | `<\|begin_of_thought\|>` … `<\|end_of_thought\|>` |
+| Kimi | `◁think▷` … `◁/think▷` |
 
 **Harmony** is the format gpt-oss uses. It has no closing tag. The thinking runs until the next control token: `<\|end\|>`, `<\|return\|>`, `<\|start\|>` or `<\|call\|>`. The channels counted as thinking are `analysis`, `thinking`, `thought`, `reasoning` and `commentary`. The `final` channel is the reply, and is kept.
 

@@ -475,6 +475,8 @@ describe("refusal detection ignores the model's thinking", () => {
       ["Cohere", "<|START_THINKING|>" + WORKING + "<|END_THINKING|><|START_RESPONSE|>" + REPLY + "<|END_RESPONSE|>"],
       ["Seed-OSS", "<seed:think>" + WORKING + "</seed:think>" + REPLY],
       ["Seed-OSS budget reflection", "<seed:cot_budget_reflect>" + WORKING + "</seed:cot_budget_reflect>" + REPLY],
+      ["begin and end of thought", "<|begin_of_thought|>" + WORKING + "<|end_of_thought|>\n" + REPLY],
+      ["Kimi", "\u25c1think\u25b7" + WORKING + "\u25c1/think\u25b7" + REPLY],
     ];
 
     for (const [name, text] of CLOSED) {
@@ -495,6 +497,8 @@ describe("refusal detection ignores the model's thinking", () => {
       ["Gemma 4", "<|channel>thought\nstill working on it"],
       ["Cohere", "<|START_THINKING|>still working on it"],
       ["Seed-OSS", "<seed:think>still working on it"],
+      ["begin and end of thought", "<|begin_of_thought|>still working on it"],
+      ["Kimi", "\u25c1think\u25b7still working on it"],
     ];
 
     for (const [name, text] of OPEN) {

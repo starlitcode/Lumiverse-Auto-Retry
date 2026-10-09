@@ -2418,6 +2418,10 @@ const THINK_PAIRS = [
         open: "<seed:cot_budget_reflect>",
         close: "<\\/seed:cot_budget_reflect>",
     },
+    // The named pair some builds use instead of a tag name.
+    { needs: "<|begin_of_thought|>", open: "<\\|begin_of_thought\\|>", close: "<\\|end_of_thought\\|>" },
+    // Kimi, which writes its tags with triangles in place of angle brackets.
+    { needs: "\u25c1think\u25b7", open: "\u25c1think\u25b7", close: "\u25c1\\/think\u25b7" },
 ];
 // Turn, role and reply markers a local backend can pass through. They are not
 // reasoning, but until they are gone they count towards the length checks and

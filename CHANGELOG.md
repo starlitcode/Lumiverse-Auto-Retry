@@ -15,6 +15,7 @@ _2026-10-09_
 ### Added
 
 - **Keep it through an update.** A new switch under **Keep the reply a retry replaced**, in **How it retries**. It is off by default. On, the replies on the **Replaced** tab are saved on your server for your account, so an update or a restart of Lumiverse does not clear them. Turning it off empties the saved copy.
+- **Two more thinking formats are recognised.** Kimi's `◁think▷` … `◁/think▷`, and `<|begin_of_thought|>` … `<|end_of_thought|>`. A refusal inside them no longer counts as a refusal, and thinking that opens and never closes reads as cut off.
 
 ### Changed
 
