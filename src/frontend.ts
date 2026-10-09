@@ -152,7 +152,7 @@ const STREAM_BUF_MAX = 200000;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.15.1";
+const VERSION = "5.16.0";
 
 // Whether two saved settings hold the same values, whatever order their keys
 // were written in. A key left undefined counts as not there, the way it is
@@ -8492,11 +8492,13 @@ export function setup(ctx: Ctx, opts?: any) {
         // The two say on the same way.
         '[data-ar-float][data-ar-on="1"]{' +
         "box-shadow:0 0 0 3px var(--lumiverse-primary-020,rgba(147,112,219,.18))}" +
-        // A press lightens the whole button, so a tap feels like a press
-        // whether or not it changes anything. It does not change size: a
-        // button that shrinks and grows back costs a repaint of everything
-        // under it.
+        // A press lightens the whole button and shrinks it a little, and it
+        // grows back on release, so a tap feels like a press whether or not it
+        // changes anything. With Reduce motion on it only lightens, since a
+        // size change with no movement is a jump.
         "[data-ar-float]:active{filter:brightness(1.15)}" +
+        "@media (prefers-reduced-motion:no-preference){" +
+        "html:not([data-ar-still]) [data-ar-float]:active{transform:scale(.94)}}" +
         // The slash draws itself on and wipes itself off along its own length.
         // 24 is a comfortable over-estimate of the line's length in viewBox
         // units, so the whole stroke is covered at either end.

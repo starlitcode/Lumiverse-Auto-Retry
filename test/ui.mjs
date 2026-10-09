@@ -2533,6 +2533,24 @@ console.log("\nreduce motion");
         marked: document.documentElement.hasAttribute("data-ar-still"),
       };
     }, reduceMotion);
+    // The floating button, pressed and held, then let go off the button so
+    // the press does not switch it.
+    const r = await page.locator("[data-ar-float]").first().boundingBox();
+    const scale = () => page.evaluate(() => {
+      const m = /matrix\(([^,]+)/.exec(getComputedStyle(document.querySelector("[data-ar-float]")).transform);
+      return m ? Math.round(parseFloat(m[1]) * 100) / 100 : 1;
+    });
+    out.rest = await scale();
+    if (r) {
+      await page.mouse.move(r.x + r.width / 2, r.y + r.height / 2);
+      await page.mouse.down();
+      await page.waitForTimeout(400);
+      out.pressed = await scale();
+      await page.mouse.move(r.x - 60, r.y - 60);
+      await page.mouse.up();
+      await page.waitForTimeout(400);
+      out.after = await scale();
+    }
     await page.close();
     return { out, errors };
   };
@@ -2543,6 +2561,11 @@ console.log("\nreduce motion");
   check("and nothing of ours moves or fades", on.out.toast && on.out.float && on.out.count > 5 && on.out.moving.length === 0, on.out);
   const dev = await run({ reduceMotion: false, device: true });
   check("with the device set to reduce motion, nothing of ours moves either", dev.out.toast && dev.out.moving.length === 0, dev.out);
+  // Pressed, the floating button shrinks a little and grows back on release.
+  // With Reduce motion on, it keeps its size.
+  check("off, the floating button shrinks a little when pressed, and grows back", off.out.pressed > 0.9 && off.out.pressed < 0.97 && off.out.rest === 1 && off.out.after === 1, off.out);
+  check("with Reduce motion on, the floating button keeps its size when pressed", on.out.pressed === 1, on.out);
+  check("with the device set to reduce motion, it keeps its size too", dev.out.pressed === 1, dev.out);
   check("no console errors", [...off.errors, ...on.errors, ...dev.errors].length === 0, [...off.errors, ...on.errors, ...dev.errors]);
 }
 

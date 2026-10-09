@@ -8,6 +8,16 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.16.0
+
+_2026-10-09_
+
+### Changed
+
+- **The floating button shrinks a little when pressed.** In 5.14.0 it stopped shrinking and only got lighter. It now shrinks a little and gets lighter, and grows back when you let go. With Reduce motion on, it only gets lighter.
+
+---
+
 ## 5.15.1
 
 _2026-10-08_
