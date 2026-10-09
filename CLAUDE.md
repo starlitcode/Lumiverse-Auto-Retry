@@ -154,6 +154,11 @@ Every change to the panel or the page has to work on a phone and on a laptop.
   button. Hover is only ever an extra. Phones have no hover, so everything a
   hover shows or does must also work with a click or a tap.
 - Use a click or a tap for anything that does something or opens something.
+- Lumiverse's **UI Scale** zooms the whole page. A size read with
+  `getBoundingClientRect` is in zoomed screen pixels, and a size written to a
+  style is in CSS pixels. Convert before writing one back, as `cssHeight`
+  does, or a row opens to the wrong height and jumps at the end. Browser
+  checks for size and motion run at zoom 1, 1.25 and 0.85.
 
 ## Motion
 
