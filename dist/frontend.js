@@ -141,7 +141,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.16.1";
+const VERSION = "5.16.2";
 // Whether two saved settings hold the same values, whatever order their keys
 // were written in. A key left undefined counts as not there, the way it is
 // when saved. Used to tell an update or a put-back that would change nothing.
@@ -5059,7 +5059,9 @@ export function setup(ctx, opts) {
         dot.style.cssText = "flex:none;width:7px;height:7px;border-radius:50%";
         ensureStatusStyle();
         const words = document.createElement("span");
-        words.style.cssText = "flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap";
+        // Every digit the same width, so a countdown does not move the words
+        // after it each second.
+        words.style.cssText = "flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-variant-numeric:tabular-nums";
         statusEl.appendChild(dot);
         statusEl.appendChild(words);
         // Repainted by the shared clock rather than by whatever happened to change,
@@ -7881,11 +7883,14 @@ export function setup(ctx, opts) {
         // pop-up opened saying nothing about the wait, picking the countdown up a
         // quarter of a second later. Both are cleared together in clearTimers, so
         // this says exactly what the timer said and says it sooner.
+        // The countdown comes first. The line is one line with an ellipsis, so on
+        // a phone a long reason put first pushed the number out of sight, and the
+        // one figure that moves is what says the wait is working.
         if (s.retryAt)
             return {
-                text: (s.retryReason ? s.retryReason + ". " : "") +
-                    "Retrying in " + sayTime(s.retryAt - Date.now()) +
-                    " (try " + s.attempts + " of " + cfg.maxRetries + ")",
+                text: "Retrying in " + sayTime(s.retryAt - Date.now()) +
+                    " (try " + s.attempts + " of " + cfg.maxRetries + ")" +
+                    (s.retryReason ? ". " + s.retryReason : ""),
                 busy: true,
             };
         // Same reasoning as the two below, and this one already holds the moment it

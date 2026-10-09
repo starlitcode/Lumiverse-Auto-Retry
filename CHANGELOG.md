@@ -8,6 +8,16 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.16.2
+
+_2026-10-09_
+
+### Fixed
+
+- **The countdown on the status line stays in sight.** The line said why it was retrying first, then **Retrying in** and the time left. On a phone a long reason pushed the countdown past the end of the line, where it was cut off. The countdown now comes first, and the reason after it. Its digits are all the same width, so the line does not shift each second.
+
+---
+
 ## 5.16.1
 
 _2026-10-09_

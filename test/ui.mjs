@@ -1949,7 +1949,8 @@ console.log("\nthe drawer panel on phone and desktop");
       // Give the status line the longest thing it ever says, and the log
       // enough in it to need scrolling.
       handlers.GENERATION_STARTED({ chatId: "c", generationId: "g" });
-      handlers.GENERATION_ENDED({ chatId: "c", content: "" });
+      // A refusal gives the longest reason, which comes after the countdown.
+      handlers.GENERATION_ENDED({ chatId: "c", content: "I'm sorry, but I can't continue with this story. As an AI, I have to step out of the scene here." });
       for (let i = 0; i < 40; i++) {
         await new Promise((r) => setTimeout(r, 50));
         if (/Retrying in/.test(document.getElementById("__lvRetryStatus").textContent || "")) break;
@@ -1962,6 +1963,17 @@ console.log("\nthe drawer panel on phone and desktop");
       const hostR = host.getBoundingClientRect();
       const res = {
         text: (status.querySelector("span:last-child").textContent || "").trim(),
+        // The countdown is inside what is drawn, not past the ellipsis.
+        countdownSeen: (() => {
+          const span = status.querySelector("span:last-child");
+          const t = span.firstChild;
+          const m = t && /Retrying in \S+/.exec(t.textContent || "");
+          if (!m) return false;
+          const r = document.createRange();
+          r.setStart(t, m.index);
+          r.setEnd(t, m.index + m[0].length);
+          return r.getBoundingClientRect().right <= span.getBoundingClientRect().right + 1;
+        })(),
         dotW: Math.round(status.querySelector("span").getBoundingClientRect().width),
         // Nothing may stick out of the drawer sideways, and the drawer itself
         // must not have been pushed wider than the host made it.
@@ -2011,6 +2023,7 @@ console.log("\nthe drawer panel on phone and desktop");
     check(name + ": a long log line wraps instead of running off the edge", out.logWraps, out);
     check(name + ": Copy and Clear stay together", out.pairTogether, out);
     check(name + ": the status line still says what it is waiting for", /Retrying in/.test(out.text), out);
+    check(name + ": and the countdown is in sight, not cut off at the end", out.countdownSeen, out.text);
     check(name + ": the dot keeps its size", out.dotW >= 6, out);
     check(name + ": the log scrolls inside the panel", out.bodyScrolls, out);
     if (bounded) check(name + ": and does not run past the drawer", out.bodyBottomInside, out);
