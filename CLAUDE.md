@@ -155,6 +155,23 @@ Every change to the panel or the page has to work on a phone and on a laptop.
   hover shows or does must also work with a click or a tap.
 - Use a click or a tap for anything that does something or opens something.
 
+## Motion
+
+The owner is sensitive to flashing and to busy movement.
+
+- Large things, such as pop-ups, cards, editors and notices you have to see,
+  fade in and out and may slide a little. They never grow or zoom.
+- Zoom is for small things only, such as the floating button when pressed,
+  a switch knob or a tick mark.
+- A glow or a light-up is slow and runs once, so it reads as a glow and
+  never as a blink. Nothing flashes more than once.
+- Something that comes and goes with a switch opens and closes smoothly.
+  Nothing pops in or out between two frames.
+- Reduce motion, from the panel or the device, turns all of it off. A part
+  that would change size keeps its size, since a size change with no movement
+  is a jump.
+- Move only opacity and position where possible, which is cheap to draw.
+
 ## Talking to the owner
 
 The owner has a learning disability. Contradictions are confusing.
