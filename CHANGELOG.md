@@ -8,6 +8,16 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.16.1
+
+_2026-10-09_
+
+### Fixed
+
+- **Fixed again: a section that hangs off a switch opens and closes smoothly.** 5.16.0 said that what hangs off a switch opens and closes smoothly. A whole section, such as **Refusal tuning** under **It looks like an accidental refusal**, still opened in one step at the end and dropped shut at the start. The settings scroll in a box that let the section shrink to nothing while it moved. It now opens and closes smoothly, with a pattern on or off, at any UI Scale.
+
+---
+
 ## 5.16.0
 
 _2026-10-09_

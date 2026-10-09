@@ -141,7 +141,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.16.0";
+const VERSION = "5.16.1";
 // Whether two saved settings hold the same values, whatever order their keys
 // were written in. A key left undefined counts as not there, the way it is
 // when saved. Used to tell an update or a put-back that would change nothing.
@@ -6328,6 +6328,7 @@ export function setup(ctx, opts) {
             node.style.borderTopWidth = "";
             node.style.borderBottomWidth = "";
             node.style.transform = "";
+            node.style.flexShrink = "";
         }
         catch (_) { }
     }
@@ -6368,7 +6369,15 @@ export function setup(ctx, opts) {
             // An open still running stops where it is, and this closes from there.
             const was = getComputedStyle(node).opacity;
             node.style.transition = "none";
-            node.style.height = tall + "px";
+            node.style.flexShrink = "0";
+            // Written as the box-sizing reads it. A content-box box counts its
+            // padding and edge outside its height, so they come off first, or it
+            // grew by them before it started to close.
+            const how = getComputedStyle(node);
+            const edges = how.boxSizing === "border-box"
+                ? 0
+                : ["paddingTop", "paddingBottom", "borderTopWidth", "borderBottomWidth"].reduce((sum, k) => sum + (parseFloat(how[k]) || 0), 0);
+            node.style.height = Math.max(0, tall - edges) + "px";
             node.style.overflow = "hidden";
             node.style.opacity = was;
             // Read the layout between the two, or the browser sees one value being set
@@ -6472,6 +6481,11 @@ export function setup(ctx, opts) {
             catch (_) { }
             node.style.transition = "none";
             node.style.overflow = "hidden";
+            // Held at the height it is given. In a box that scrolls, a flex item
+            // with its overflow hidden may be shrunk to nothing, and it was: the
+            // height moved where it could not be seen, and the box opened in one
+            // step at the end.
+            node.style.flexShrink = "0";
             node.style.height = fromH + "px";
             node.style.opacity = String(fromO);
             if (fromHidden) {

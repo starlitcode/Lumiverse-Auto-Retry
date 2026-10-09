@@ -11970,6 +11970,71 @@ console.log("\nreset urgency");
 // ---- what is left of find and replace ----
 // The feature is gone. The one thing left is a card handing somebody's rules
 // back to them, and it has to be absent for everyone who never used it.
+console.log("\na section that hangs off a switch opens and closes smoothly");
+{
+  // Refusal tuning is a whole section that hangs off It looks like an
+  // accidental refusal. The settings scroll in a box, which may shrink a flex
+  // item with its overflow hidden to nothing, so the section is measured by
+  // where the next section sits on every frame. With a pattern on, each
+  // section has its own padding and edge, which open and close with it.
+  // Measured at each zoom, since Lumiverse's UI Scale is a zoom.
+  for (const [label, viewport, touch] of [["phone", { width: 390, height: 860 }, true], ["laptop", { width: 1280, height: 860 }, false]]) {
+    for (const [pattern, zoom] of [["", 1], ["hearts", 1], ["hearts", 0.9], ["", 1.25], ["hearts", 0.85]]) {
+      const { out, errors } = await inPanel(browser, { viewport, touch, css: zoom === 1 ? "" : "html{zoom:" + zoom + "}", settings: { panelPattern: pattern, retryOnRefusal: false } }, async (page) =>
+        page.evaluate(async () => {
+          const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+          await frame();
+          const sw = document.querySelector('#modal [data-ar-row="retryOnRefusal"] input[data-ar-check]');
+          const secs = [...document.querySelectorAll("#modal [data-ar-sec]")];
+          const dep = secs.find((x) => x.style.display === "none");
+          const next = dep && secs[secs.indexOf(dep) + 1];
+          if (!sw || !dep || !next) return null;
+          // Measured from the switch's own row, so a scroll is not counted.
+          const at = () => next.getBoundingClientRect().top - sw.getBoundingClientRect().top;
+          const watch = async () => {
+            const start = at();
+            const tops = [];
+            const times = [];
+            sw.click();
+            const t0 = performance.now();
+            while (performance.now() - t0 < 520) {
+              await new Promise((r) => requestAnimationFrame(r));
+              tops.push(at() - start);
+              times.push(performance.now());
+            }
+            // Each step as the distance one frame at 60 a second would cover,
+            // so a slow frame on the test machine is not read as a skip.
+            const steps = tops.map((t, i) => (Math.abs(t - (i ? tops[i - 1] : 0)) * 16.7) / Math.max(16.7, times[i] - (i ? times[i - 1] : t0)));
+            return { travel: Math.round(tops[tops.length - 1]), tops: tops.map(Math.round), steps, shown: dep.style.display !== "none" };
+          };
+          const opened = await watch();
+          const shut = await watch();
+          return { opened, shut };
+        }),
+      );
+      const say = label + (pattern ? ", " + pattern : "") + (zoom === 1 ? "" : ", zoom " + zoom) + ": ";
+      // The section slows down as it lands. A step well past the two before
+      // it is the section skipping.
+      const skips = (w) => {
+        let worst = 0;
+        for (let i = 2; i < w.steps.length; i++) worst = Math.max(worst, w.steps[i] - Math.max(w.steps[i - 1], w.steps[i - 2]));
+        return worst;
+      };
+      check(say + "the section and the one after it are there to drive", !!out, out);
+      if (!out) continue;
+      check(say + "switching it on opens the section", out.opened.shown && out.opened.travel > 20, out.opened.travel);
+      check(say + "opening, it moves in small steps, never more than a third in one frame",
+        Math.max(...out.opened.steps) < out.opened.travel / 3, out.opened.tops);
+      check(say + "opening, it lands with no skip at the end", skips(out.opened) <= 6, out.opened.tops);
+      check(say + "switching it off closes it", !out.shut.shown && Math.abs(out.shut.travel + out.opened.travel) <= 2, out.shut.travel);
+      check(say + "closing, it never grows first", out.shut.tops.every((t) => t <= 1), out.shut.tops);
+      check(say + "closing, it moves in small steps", Math.max(...out.shut.steps) < Math.abs(out.shut.travel) / 3, out.shut.tops);
+      check(say + "closing, it lands with no skip at the end", skips(out.shut) <= 6, out.shut.tops);
+      check(say + "no console errors", errors.length === 0, errors);
+    }
+  }
+}
+
 console.log("\nfind and replace, retired");
 {
   const { out, errors } = await inPanel(browser, {}, async (page) =>
