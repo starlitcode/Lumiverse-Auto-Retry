@@ -20,7 +20,7 @@ _2026-10-09_
 
 - **The floating button shrinks a little when pressed.** In 5.14.0 it stopped shrinking and only got lighter. It now shrinks a little and gets lighter, and grows back when you let go. With Reduce motion on, it only gets lighter.
 - **The line that says Auto Retry is off opens and closes smoothly.** It appeared and went at once when you switched Auto Retry or the chat off or on. It now opens down into place and fades in, and folds shut when it goes. With Reduce motion on, it appears and goes at once.
-- **Rows under a switch fold shut.** They already faded in when the switch went on. They now fold shut when it goes off, so the rows under them move up instead of jumping.
+- **A scroll bar's thumb is at least 28 pixels tall.** In a box holding a very long text, the thumb shrank to a short dash. It now keeps a size you can see and grab.
 - **The built-in note Write them as written says character card.** It said "Their sheet is who they are", and a model may not know that a sheet is the character card. It now says "Their character card is who they are". If you use this note, the panel tells you it changed.
 
 ---

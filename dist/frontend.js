@@ -8132,6 +8132,12 @@ export function setup(ctx, opts) {
                         "border:1px solid var(--lumiverse-border,rgba(255,255,255,.12))}" +
                         // Each section of the settings on a solid box of its own, so no
                         // setting is read across the lines.
+                        // Lumiverse styles every scroll bar on the page, with no least size
+                        // for the thumb, so a box holding a very long text gets a thumb a
+                        // few pixels tall. Inside our boxes it is never shorter than this,
+                        // and keeps the theme's colour and shape.
+                        "[data-ar-ui] ::-webkit-scrollbar-thumb,[data-ar-panel] ::-webkit-scrollbar-thumb," +
+                        "[data-ar-settings] ::-webkit-scrollbar-thumb,#__lvRetryLog ::-webkit-scrollbar-thumb{min-height:28px;min-width:28px}" +
                         "html[data-ar-pattern] [data-ar-sec]{" + solid + "padding:12px;" +
                         "border-radius:var(--lumiverse-radius-md,10px);" +
                         "border:1px solid var(--lumiverse-border,rgba(255,255,255,.12))}";
@@ -11905,30 +11911,17 @@ export function setup(ctx, opts) {
         // frames. The same movement a section makes when it opens, since they are
         // the same thing happening: something that was not on the panel now is.
         //
-        // Taking the mark off on the way out is what keeps this cheap: the reflow
-        // that restarts an animation is only needed when one is already marked,
-        // which after a hide it is not. Turning a switch that reveals a dozen rows
-        // costs no forced layouts at all.
+        // Only on the way in. The same rows are shown and hidden by the search
+        // box, where they have to come and go at once. Taking the mark off on the
+        // way out is also what keeps this cheap: the reflow that restarts an
+        // animation is only needed when one is already marked, which after a hide
+        // it is not. Turning a switch that reveals a dozen rows costs no forced
+        // layouts at all.
         //
         // Nothing shimmers on open, either. A freshly built panel has display unset
         // rather than "none", so the first pass over it animates nothing.
         const showsNow = (node, on) => {
             const was = node.style.display;
-            node._arWant = on;
-            // On the way out, a row that was showing folds shut and fades, the same
-            // as in Auto Refine, so the rows under it move up with it rather than
-            // jumping. A row already on its way out is left to finish.
-            if (!on && was !== "none" && !node._arFolding && node.isConnected && !noMotion() && node.getClientRects().length) {
-                node.removeAttribute("data-ar-arrive");
-                node._arFolding = true;
-                foldAway(node, () => {
-                    node._arFolding = false;
-                    node.style.display = node._arWant ? "flex" : "none";
-                });
-                return;
-            }
-            if (node._arFolding && !on)
-                return;
             node.style.display = on ? "flex" : "none";
             if (!on || was !== "none") {
                 node.removeAttribute("data-ar-arrive");
