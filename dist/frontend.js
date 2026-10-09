@@ -475,6 +475,8 @@ const SCHEMA = [
                     { value: "diamonds", label: "Diamonds" },
                     { value: "stripes", label: "Stripes" },
                     { value: "dots", label: "Dots" },
+                    { value: "hearts", label: "Hearts" },
+                    { value: "stars", label: "Stars" },
                 ],
                 hint: "None by default. A faint pattern in your theme's colour, behind these settings and the on-screen panel. Text sits on solid boxes over it.",
             },
@@ -7440,14 +7442,76 @@ export function setup(ctx, opts) {
             return;
         const globalOff = cfg.enabled === false;
         const hereOff = chatIsOff(lastChatId);
-        masterNoteEl.style.display = globalOff || hereOff ? "block" : "none";
-        masterNoteEl.textContent = globalOff
+        showNote(masterNoteEl, globalOff || hereOff, globalOff
             ? hereOff
                 ? "Auto Retry is off everywhere, and this chat is switched off as well. These settings are saved and apply when you turn it back on."
                 : "Auto Retry is off. These settings are saved and apply when you turn it back on."
-            : "Auto Retry is on, but it is switched off in this chat.";
+            : "Auto Retry is on, but it is switched off in this chat.");
         try {
             ensureReadableTree(masterNoteEl, 2.6);
+        }
+        catch (_) { }
+    }
+    // A note that comes and goes with a switch. It opens down into place and
+    // fades in, and on the way out it folds shut and fades, so the panel under
+    // it moves with it rather than jumping. A note already showing whose words
+    // change fades its new words in. With Reduce motion on, it appears and goes
+    // at once.
+    function showNote(note, on, text) {
+        if (!note || !note.style)
+            return;
+        // The first paint is how the panel opens, so it is drawn as it is.
+        const first = !note._arSeen;
+        note._arSeen = true;
+        const shown = note.style.display !== "none" && note._arWant !== false;
+        note._arWant = on;
+        if (!on) {
+            if (!shown || first) {
+                note.style.display = "none";
+                return;
+            }
+            foldAway(note, () => {
+                if (note._arWant === false)
+                    note.style.display = "none";
+            });
+            return;
+        }
+        const changed = note.textContent !== text;
+        note.textContent = text;
+        note.style.display = "block";
+        if (first || noMotion())
+            return;
+        try {
+            if (!shown) {
+                const tall = note.getBoundingClientRect().height;
+                if (!(tall > 0))
+                    return;
+                note.style.overflow = "hidden";
+                note.style.height = "0px";
+                note.style.opacity = "0";
+                void note.offsetWidth;
+                note.style.transition = "height 220ms ease-out,opacity 220ms ease-out";
+                note.style.height = tall + "px";
+                note.style.opacity = "1";
+                const done = () => {
+                    if (note._arWant !== true)
+                        return;
+                    note.style.height = "";
+                    note.style.overflow = "";
+                    note.style.opacity = "";
+                    note.style.transition = "";
+                };
+                note.addEventListener("transitionend", function end(e) {
+                    if (e && e.target !== note)
+                        return;
+                    note.removeEventListener("transitionend", end);
+                    done();
+                });
+                setTimeout(done, 320);
+            }
+            else if (changed && typeof note.animate === "function") {
+                note.animate([{ opacity: 0.35 }, { opacity: 1 }], { duration: 220, easing: "ease-out" });
+            }
         }
         catch (_) { }
     }
@@ -7983,6 +8047,17 @@ export function setup(ctx, opts) {
     // waits on one that never runs. A device set to reduce motion gets the same
     // rules through the media query.
     let motionStyleEl = null;
+    // The two patterns drawn as shapes. Each tile holds two, set apart from
+    // each other so the rows sit between one another.
+    const SHAPE_PATTERNS = ["hearts", "stars"];
+    function shapeTile(kind) {
+        const path = kind === "hearts"
+            ? "M12 21 C12 21 3 15.3 3 9.4 C3 6.4 5.3 4 8.2 4 C9.9 4 11.3 4.9 12 6.2 C12.7 4.9 14.1 4 15.8 4 C18.7 4 21 6.4 21 9.4 C21 15.3 12 21 12 21 Z"
+            : "M12 2.8 L14.8 8.9 L21.4 9.6 L16.4 14.1 L17.8 20.7 L12 17.3 L6.2 20.7 L7.6 14.1 L2.6 9.6 L9.2 8.9 Z";
+        const one = (x, y) => "<g transform='translate(" + x + " " + y + ") scale(.45)'><path d='" + path + "'/></g>";
+        const svg = "<svg xmlns='http://www.w3.org/2000/svg' width='36' height='36'>" + one(3, 3) + one(21, 21) + "</svg>";
+        return 'url("data:image/svg+xml,' + encodeURIComponent(svg) + '")';
+    }
     function markMotion() {
         if (typeof document === "undefined")
             return;
@@ -8028,6 +8103,21 @@ export function setup(ctx, opts) {
                 // see-through. Lumiverse's "solid card" colour is a fixed grey that
                 // no theme changes, and a custom theme does not always set the
                 // deepest background, so neither is used.
+                // Hearts and stars are shapes, which a gradient cannot draw. Each is a
+                // small picture used as a mask over a layer filled with the theme's
+                // colour, so the shapes take the colour and follow a theme change. The
+                // layer sits behind everything in the box it is on. Auto Refine draws
+                // the same two.
+                for (const kind of SHAPE_PATTERNS) {
+                    const on = 'html[data-ar-pattern="' + kind + '"] ';
+                    const tile = shapeTile(kind);
+                    patterns +=
+                        on + "[data-ar-panel]," + on + "[data-ar-settings]{position:relative;isolation:isolate}" +
+                            on + "#__lvRetryLog{isolation:isolate;background-color:var(--lumiverse-bg-elevated,rgba(35,30,48,.9))!important}" +
+                            on + "[data-ar-panel]::before," + on + "#__lvRetryLog::before," + on + "[data-ar-settings]::before{" +
+                            'content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;border-radius:inherit;' +
+                            "background-color:" + ink + ";-webkit-mask:" + tile + " 0 0/36px 36px repeat;mask:" + tile + " 0 0/36px 36px repeat}";
+                }
                 const solid = "background-color:var(--lumiverse-bg-elevated,rgba(35,30,48,.9))!important;" +
                     "background-image:" + lift + "!important;";
                 const el = document.createElement("style");
@@ -8053,7 +8143,7 @@ export function setup(ctx, opts) {
             else
                 document.documentElement.removeAttribute("data-ar-still");
             const pattern = String(cfg.panelPattern || "");
-            if (pattern === "diamonds" || pattern === "stripes" || pattern === "dots")
+            if (["diamonds", "stripes", "dots"].concat(SHAPE_PATTERNS).indexOf(pattern) >= 0)
                 document.documentElement.setAttribute("data-ar-pattern", pattern);
             else
                 document.documentElement.removeAttribute("data-ar-pattern");
@@ -11815,16 +11905,30 @@ export function setup(ctx, opts) {
         // frames. The same movement a section makes when it opens, since they are
         // the same thing happening: something that was not on the panel now is.
         //
-        // Only on the way in. Something going away has nothing worth watching, and
-        // taking the mark off on the way out is also what keeps this cheap: the
-        // reflow that restarts an animation is only needed when one is already
-        // marked, which after a hide it is not. Turning a switch that reveals a
-        // dozen rows costs no forced layouts at all.
+        // Taking the mark off on the way out is what keeps this cheap: the reflow
+        // that restarts an animation is only needed when one is already marked,
+        // which after a hide it is not. Turning a switch that reveals a dozen rows
+        // costs no forced layouts at all.
         //
         // Nothing shimmers on open, either. A freshly built panel has display unset
         // rather than "none", so the first pass over it animates nothing.
         const showsNow = (node, on) => {
             const was = node.style.display;
+            node._arWant = on;
+            // On the way out, a row that was showing folds shut and fades, the same
+            // as in Auto Refine, so the rows under it move up with it rather than
+            // jumping. A row already on its way out is left to finish.
+            if (!on && was !== "none" && !node._arFolding && node.isConnected && !noMotion() && node.getClientRects().length) {
+                node.removeAttribute("data-ar-arrive");
+                node._arFolding = true;
+                foldAway(node, () => {
+                    node._arFolding = false;
+                    node.style.display = node._arWant ? "flex" : "none";
+                });
+                return;
+            }
+            if (node._arFolding && !on)
+                return;
             node.style.display = on ? "flex" : "none";
             if (!on || was !== "none") {
                 node.removeAttribute("data-ar-arrive");

@@ -2575,7 +2575,7 @@ console.log("\nreduce motion");
 console.log("\na pattern behind the panel");
 {
   for (const [label, viewport, touch] of [["phone", { width: 390, height: 800 }, true], ["laptop", { width: 1280, height: 800 }, false]]) {
-    for (const panelPattern of ["", "diamonds", "stripes", "dots"]) {
+    for (const panelPattern of ["", "diamonds", "stripes", "dots", "hearts", "stars"]) {
       const r = await inPanel(browser, { viewport, touch, settings: { liveLog: true, panelHome: "drawer", panelPattern } }, async (page) => {
         await page.waitForTimeout(200);
         return page.evaluate(() => {
@@ -2583,10 +2583,20 @@ console.log("\na pattern behind the panel");
           const body = document.getElementById("__lvRetryLogBody");
           const settings = document.querySelector("[data-ar-settings]");
           const sec = document.querySelector("[data-ar-sec]");
+          // Lines and dots are drawn as gradients. Hearts and stars are a layer
+          // behind the box, masked to the shape, which has to cover the whole
+          // box and sit behind its text.
+          const shaped = (n) => {
+            if (!n) return false;
+            const cs = getComputedStyle(n, "::before");
+            const mask = cs.maskImage || cs.webkitMaskImage || "";
+            return /url\(/.test(mask) && cs.zIndex === "-1" && Math.abs(parseFloat(cs.height) - n.getBoundingClientRect().height) < 2;
+          };
+          const drawnOn = (n) => !!n && (/gradient/.test(getComputedStyle(n).backgroundImage) || shaped(n));
           return {
-            drawn: !!d && /gradient/.test(getComputedStyle(d).backgroundImage),
+            drawn: drawnOn(d),
             bodySolid: !!body && ((c) => { const m = /rgba?\(([^)]*)\)/.exec(c); if (!m) return false; const p = m[1].split(","); return p.length < 4 || parseFloat(p[3]) >= 0.85; })(getComputedStyle(body).backgroundColor),
-            settingsDrawn: !!settings && /gradient/.test(getComputedStyle(settings).backgroundImage),
+            settingsDrawn: drawnOn(settings),
             sectionSolid: !!sec && ((c) => { const m = /rgba?\(([^)]*)\)/.exec(c); if (!m) return false; const p = m[1].split(","); return p.length < 4 || parseFloat(p[3]) >= 0.85; })(getComputedStyle(sec).backgroundColor),
             sideways: document.documentElement.scrollWidth > window.innerWidth + 1,
           };
