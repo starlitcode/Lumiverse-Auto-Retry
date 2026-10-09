@@ -6187,7 +6187,8 @@ console.log("\nper-chat switch");
     const noteButtons = note ? note.querySelectorAll("button").length : -1;
     const backBtn = chatRow() ? chatRow().querySelector("button") : null;
     if (backBtn) backBtn.click();
-    await wait(20);
+    // The line folds shut before it is hidden.
+    await wait(400);
     const afterBack = {
       pressed: btn().getAttribute("aria-pressed"),
       stored: JSON.parse(localStorage.getItem("lv-auto-retry:chats-off:v1") || "[]"),
@@ -11088,16 +11089,42 @@ console.log("\nmaster switch off");
       await frame();
       const after = rowsUp();
       const saysSo = showing();
+      // It opens down into place: a moment in, it is still shorter than it
+      // will be, and see-through.
+      const opening = { height: note().getBoundingClientRect().height, opacity: Number(getComputedStyle(note()).opacity) };
+      await new Promise((r) => setTimeout(r, 400));
+      const open = { height: note().getBoundingClientRect().height, opacity: Number(getComputedStyle(note()).opacity) };
       box.click();
       await frame();
-      return { quietWhileOn, saysSo, before, after, quietAgain: !showing() };
+      // And folds shut, still on the page for a moment as it goes.
+      const closing = showing() && note().getBoundingClientRect().height < open.height;
+      await new Promise((r) => setTimeout(r, 400));
+      return { quietWhileOn, saysSo, before, after, opening, open, closing, quietAgain: !showing() };
     }),
   );
   check("nothing is said while it is on", out.quietWhileOn === true, out);
   check("switching it off says so", out.saysSo === true, out);
   check("and takes away nothing at all", out.before > 20 && out.after === out.before, out);
-  check("switching it back on takes the line away", out.quietAgain === true, out);
+  check("the line opens down into place and fades in", out.opening.height < out.open.height && out.opening.opacity < 1 && out.open.opacity === 1, out);
+  check("switching it back on folds the line shut", out.closing === true, out);
+  check("and then takes it away", out.quietAgain === true, out);
   check("no console errors", errors.length === 0, errors);
+  // With Reduce motion on, the line comes and goes at once.
+  const still = await inPanel(browser, { settings: { reduceMotion: true } }, async (page) =>
+    page.evaluate(async () => {
+      const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const note = () => document.querySelector("[data-ar-master]");
+      const box = document.querySelector('[data-ar-row="enabled"]').querySelector("input[type=checkbox]");
+      box.click();
+      await frame();
+      const shown = { display: note().style.display, height: note().style.height, opacity: getComputedStyle(note()).opacity };
+      box.click();
+      await frame();
+      return { shown, goneAtOnce: note().style.display === "none" };
+    }),
+  );
+  check("with Reduce motion on, the line appears at once", still.out.shown.display !== "none" && still.out.shown.height === "" && still.out.shown.opacity === "1", still.out);
+  check("and goes at once", still.out.goneAtOnce === true, still.out);
 }
 
 // ---- hiding a row is only hiding it ----
