@@ -6304,24 +6304,35 @@ export function setup(ctx, opts) {
     // A box let down to nothing and then handed over. done runs once, whether the
     // travel finished, was cut short by a second one, or never started because the
     // reader asked for no movement.
+    // Everything a fold or an open sets, taken back off.
+    function clearFold(node) {
+        try {
+            node.style.height = "";
+            node.style.opacity = "";
+            node.style.overflow = "";
+            node.style.transition = "";
+            node.style.marginBottom = "";
+            node.style.paddingTop = "";
+            node.style.paddingBottom = "";
+            node.style.borderTopWidth = "";
+            node.style.borderBottomWidth = "";
+            node.style.transform = "";
+        }
+        catch (_) { }
+    }
     function foldAway(node, done) {
         let ran = false;
+        const token = {};
+        node._arFold = token;
         const finish = () => {
             if (ran)
                 return;
             ran = true;
-            try {
-                node.style.height = "";
-                node.style.opacity = "";
-                node.style.overflow = "";
-                node.style.transition = "";
-                node.style.marginBottom = "";
-                node.style.paddingTop = "";
-                node.style.paddingBottom = "";
-                node.style.borderTopWidth = "";
-                node.style.borderBottomWidth = "";
-            }
-            catch (_) { }
+            // An open or another fold started since then owns the styles now.
+            if (node._arFold !== token)
+                return;
+            node._arFold = null;
+            clearFold(node);
             done();
         };
         try {
@@ -6343,8 +6354,12 @@ export function setup(ctx, opts) {
                     gap = parseFloat(how.rowGap || how.gap || "0") || 0;
             }
             catch (_) { }
+            // An open still running stops where it is, and this closes from there.
+            const was = getComputedStyle(node).opacity;
+            node.style.transition = "none";
             node.style.height = tall + "px";
             node.style.overflow = "hidden";
+            node.style.opacity = was;
             // Read the layout between the two, or the browser sees one value being set
             // and nothing to travel between.
             void node.offsetWidth;
@@ -6357,13 +6372,18 @@ export function setup(ctx, opts) {
             // the row sticking and then jumping shut. Longer than the panel's other
             // movements because this one carries the page with it, and the same
             // distance over more frames is a smaller step in each.
+            //
+            // The words fade and slide 4px up faster than the space closes, so they
+            // are gone before the row is squeezed, and nothing is seen cut in half.
             const ease = "220ms ease-out";
             node.style.transition =
-                "height " + ease + ",opacity " + ease + ",margin-bottom " + ease +
+                "height " + ease + ",margin-bottom " + ease +
                     ",padding-top " + ease + ",padding-bottom " + ease +
-                    ",border-top-width " + ease + ",border-bottom-width " + ease;
+                    ",border-top-width " + ease + ",border-bottom-width " + ease +
+                    ",opacity 140ms ease-out,transform 160ms ease-out";
             node.style.height = "0px";
             node.style.opacity = "0";
+            node.style.transform = "translateY(-4px)";
             // The gap under it closes too, or the last few pixels go all at once.
             node.style.marginBottom = gap > 0 ? -gap + "px" : "0px";
             // And its own padding and edge. A height of nothing still leaves those
@@ -6373,8 +6393,10 @@ export function setup(ctx, opts) {
             node.style.paddingBottom = "0px";
             node.style.borderTopWidth = "0px";
             node.style.borderBottomWidth = "0px";
+            // The height is the last to finish. The fade ends first and is not the
+            // end of the fold.
             const end = (e) => {
-                if (e && e.target !== node)
+                if (e && (e.target !== node || e.propertyName !== "height"))
                     return;
                 try {
                     node.removeEventListener("transitionend", end);
@@ -6390,6 +6412,95 @@ export function setup(ctx, opts) {
         catch (_) {
             finish();
         }
+    }
+    // The other direction, the same as Auto Refine's. Something arriving takes
+    // its full height in one frame and pushes everything below it down by that
+    // much. This opens its space smoothly instead, so what is below moves down
+    // with it. The row fades in a moment after its space starts to open, and
+    // slides 4px down into place.
+    //
+    // fromHidden is a box that was not on the panel, which opens from nothing.
+    // Otherwise the box is part way through closing, and turns round from the
+    // height it has reached.
+    function unfold(node, fromHidden) {
+        try {
+            if (!node || !node.style || typeof node.getBoundingClientRect !== "function")
+                return;
+            const fromH = fromHidden ? 0 : node.getBoundingClientRect().height;
+            const fromO = fromHidden ? 0 : parseFloat(getComputedStyle(node).opacity) || 0;
+            // A fold still running is dropped, and its hand-over with it.
+            node._arFold = null;
+            clearFold(node);
+            if (noMotion())
+                return;
+            const cs = getComputedStyle(node);
+            const tall = node.getBoundingClientRect().height;
+            if (!(tall > 0))
+                return;
+            const pads = ["paddingTop", "paddingBottom", "borderTopWidth", "borderBottomWidth"];
+            const want = {};
+            let edges = 0;
+            for (const k of pads) {
+                want[k] = cs[k];
+                edges += parseFloat(want[k]) || 0;
+            }
+            // Height is written as the box-sizing reads it. A content-box row
+            // counts its padding and edge outside its height.
+            const goal = cs.boxSizing === "border-box" ? tall : Math.max(0, tall - edges);
+            let gap = 0;
+            try {
+                const owner = node.parentElement;
+                const how = owner ? getComputedStyle(owner) : null;
+                if (how)
+                    gap = parseFloat(how.rowGap || how.gap || "0") || 0;
+            }
+            catch (_) { }
+            node.style.transition = "none";
+            node.style.overflow = "hidden";
+            node.style.height = fromH + "px";
+            node.style.opacity = String(fromO);
+            if (fromHidden) {
+                // The gap its parent puts under it, and its own padding and edge,
+                // open with it, or they arrive in one step at the start.
+                node.style.marginBottom = gap > 0 ? -gap + "px" : "0px";
+                for (const k of pads)
+                    node.style[k] = "0px";
+                node.style.transform = "translateY(-4px)";
+            }
+            void node.offsetWidth;
+            // The curve the pop-ups use: it moves on the first frame and lands
+            // softly.
+            const ease = "240ms cubic-bezier(.2,.8,.28,1)";
+            node.style.transition =
+                "height " + ease + ",margin-bottom " + ease + ",padding-top " + ease + ",padding-bottom " + ease +
+                    ",border-top-width " + ease + ",border-bottom-width " + ease + ",transform " + ease +
+                    ",opacity 200ms ease-out 60ms";
+            node.style.height = goal + "px";
+            node.style.marginBottom = cs.marginBottom;
+            for (const k of pads)
+                node.style[k] = want[k];
+            node.style.opacity = "1";
+            node.style.transform = "none";
+            const token = {};
+            node._arFold = token;
+            const done = (e) => {
+                if (e && (e.target !== node || e.propertyName !== "height"))
+                    return;
+                try {
+                    node.removeEventListener("transitionend", done);
+                }
+                catch (_) { }
+                if (node._arFold !== token)
+                    return;
+                node._arFold = null;
+                // Its own height back, so a row that grows later is not held at the
+                // height it had on arrival.
+                clearFold(node);
+            };
+            node.addEventListener("transitionend", done);
+            setTimeout(() => done(), 500);
+        }
+        catch (_) { }
     }
     async function askFirst(key, spec, armSays, go) {
         let asked = false;
@@ -7475,37 +7586,14 @@ export function setup(ctx, opts) {
             return;
         }
         const changed = note.textContent !== text;
+        const wasHidden = note.style.display === "none";
         note.textContent = text;
         note.style.display = "block";
         if (first || noMotion())
             return;
         try {
             if (!shown) {
-                const tall = note.getBoundingClientRect().height;
-                if (!(tall > 0))
-                    return;
-                note.style.overflow = "hidden";
-                note.style.height = "0px";
-                note.style.opacity = "0";
-                void note.offsetWidth;
-                note.style.transition = "height 220ms ease-out,opacity 220ms ease-out";
-                note.style.height = tall + "px";
-                note.style.opacity = "1";
-                const done = () => {
-                    if (note._arWant !== true)
-                        return;
-                    note.style.height = "";
-                    note.style.overflow = "";
-                    note.style.opacity = "";
-                    note.style.transition = "";
-                };
-                note.addEventListener("transitionend", function end(e) {
-                    if (e && e.target !== note)
-                        return;
-                    note.removeEventListener("transitionend", end);
-                    done();
-                });
-                setTimeout(done, 320);
+                unfold(note, wasHidden);
             }
             else if (changed && typeof note.animate === "function") {
                 note.animate([{ opacity: 0.35 }, { opacity: 1 }], { duration: 220, easing: "ease-out" });
@@ -8161,9 +8249,9 @@ export function setup(ctx, opts) {
         catch (_) { }
     };
     // A pop-up of ours leaving the page. It fades out, and is taken off once the
-    // fade ends, or by a timer if the end is never reported. Its id goes at
-    // once, so the next one opened is the only one found by it. With Reduce
-    // motion on, or after teardown, it goes at once.
+    // fade ends, or by a timer if the end is never reported. Its ids, and those
+    // of everything in it, go at once, so the next one opened is the only one
+    // found by them. With Reduce motion on, or after teardown, it goes at once.
     const leaving = new Set();
     function leaveAway(node) {
         if (!node)
@@ -8179,7 +8267,10 @@ export function setup(ctx, opts) {
             return gone();
         try {
             node.removeAttribute("id");
+            for (const inner of Array.from(node.querySelectorAll("[id]")))
+                inner.removeAttribute("id");
             node.setAttribute("aria-hidden", "true");
+            node.setAttribute("inert", "");
             node.setAttribute("data-ar-leaving", "1");
         }
         catch (_) {
@@ -8709,14 +8800,6 @@ export function setup(ctx, opts) {
                     // The browser's own ring goes either way. Ours replaces it, and a
                     // button the extension focused itself is not meant to be marked at all.
                     "[data-ar-btn]:focus-visible{outline:none}" +
-                    // A section opening. Going from display:none to shown between two
-                    // frames is the panel jumping rather than a section opening, so it
-                    // moves: down four pixels and in, the same shape and time as Auto
-                    // Refine's folds.
-                    "[data-ar-arrive]{animation:lvRetryArrive 180ms ease-out both}" +
-                    "@keyframes lvRetryArrive{from{opacity:0;transform:translateY(-4px)}" +
-                    "to{opacity:1;transform:none}}" +
-                    "@media (prefers-reduced-motion: reduce){[data-ar-arrive]{animation:none}}" +
                     // A pop-up of ours: the floating log, a dialog and the dim behind it.
                     // A card fades in and slides up 10px, and a dim fades in, the same as
                     // Auto Refine's. Neither grows. On the way out they fade, and the card
@@ -11931,10 +12014,13 @@ export function setup(ctx, opts) {
             const f = fieldByKey[k];
             return f ? f.label : k;
         };
+        // Whether a row is shown, or on its way to being shown. A row folding
+        // away is still on screen for a moment and does not count.
+        const rowShown = (node) => node.style.display !== "none" && node._arGoing !== false;
         const paintDepNotes = (searching) => {
             for (const d of depNotes) {
                 const unmet = d.groups.filter((g) => !g.some((k) => !!cfg[k]));
-                const show = searching && unmet.length > 0 && d.row.style.display !== "none";
+                const show = searching && unmet.length > 0 && rowShown(d.row);
                 d.note.style.display = show ? "block" : "none";
                 // Rebuilt each time: which switch is the one still missing changes as
                 // the others are turned on.
@@ -11958,34 +12044,45 @@ export function setup(ctx, opts) {
         let searchBox = null;
         // Same reason as searchBox: applyDeps is defined long before this element
         // is built, and a const would still be in its dead zone if it ever ran early.
-        // A row that hangs off a switch, arriving rather than appearing between two
-        // frames. The same movement a section makes when it opens, since they are
-        // the same thing happening: something that was not on the panel now is.
+        // A row that hangs off a switch, opening and closing rather than
+        // appearing and going between two frames. Its space opens and closes
+        // smoothly, so the rows below it move with it, the same as Auto Refine's.
         //
-        // Only on the way in. The same rows are shown and hidden by the search
-        // box, where they have to come and go at once. Taking the mark off on the
-        // way out is also what keeps this cheap: the reflow that restarts an
-        // animation is only needed when one is already marked, which after a hide
-        // it is not. Turning a switch that reveals a dozen rows costs no forced
-        // layouts at all.
-        //
-        // Nothing shimmers on open, either. A freshly built panel has display unset
-        // rather than "none", so the first pass over it animates nothing.
+        // The first pass over a freshly built panel is drawn as it is, so nothing
+        // moves when the panel opens. The search box shows and hides the same
+        // rows at once, and forgets where they were going, so the next switch
+        // starts from what is on screen.
         const showsNow = (node, on) => {
-            const was = node.style.display;
-            node.style.display = on ? "flex" : "none";
-            if (!on || was !== "none") {
-                node.removeAttribute("data-ar-arrive");
+            const first = !node._arSeen;
+            node._arSeen = true;
+            const goingTo = node._arGoing === undefined ? node.style.display !== "none" : node._arGoing;
+            if (!first && goingTo === on)
+                return;
+            node._arGoing = on;
+            if (first || noMotion()) {
+                node._arFold = null;
+                clearFold(node);
+                node.style.display = on ? "flex" : "none";
                 return;
             }
-            try {
-                if (node.hasAttribute("data-ar-arrive")) {
-                    node.removeAttribute("data-ar-arrive");
-                    void node.offsetWidth;
-                }
-                node.setAttribute("data-ar-arrive", "1");
+            if (on) {
+                const wasHidden = node.style.display === "none";
+                node.style.display = "flex";
+                unfold(node, wasHidden);
+                return;
             }
-            catch (_) { }
+            foldAway(node, () => {
+                if (node._arGoing === false)
+                    node.style.display = "none";
+            });
+        };
+        // Shown or hidden by the search, at once.
+        const searchShows = (node, on) => {
+            node._arFold = null;
+            node._arGoing = undefined;
+            node._arSeen = false;
+            clearFold(node);
+            node.style.display = on ? "flex" : "none";
         };
         applyDeps = () => {
             // Ahead of the search guard: whether the master switch is off has nothing
@@ -12019,7 +12116,7 @@ export function setup(ctx, opts) {
                 const rows = w.querySelectorAll("[data-ar-row]");
                 let any = rows.length === 0;
                 for (let i = 0; i < rows.length; i++)
-                    if (rows[i].style.display !== "none")
+                    if (rowShown(rows[i]))
                         any = true;
                 showsNow(w, any);
             }
@@ -12097,7 +12194,6 @@ export function setup(ctx, opts) {
             // for the length of the travel.
             const apply = (v) => {
                 body.style.display = v ? "flex" : "none";
-                body.removeAttribute("data-ar-arrive");
                 caret.textContent = v ? CARET_OPEN : CARET_SHUT;
                 h.setAttribute("aria-expanded", v ? "true" : "false");
             };
@@ -12552,11 +12648,11 @@ export function setup(ctx, opts) {
             // fall back to inline and lose its layout.
             if (!q) {
                 for (const r of searchRows)
-                    r.row.style.display = "flex";
+                    searchShows(r.row, true);
                 for (const w of subRuns)
-                    w.style.display = "flex";
+                    searchShows(w, true);
                 for (const s of panelSections) {
-                    s.sec.style.display = "flex";
+                    searchShows(s.sec, true);
                     if (s.setOpen)
                         s.setOpen(openGroups.has(s.title));
                 }
@@ -12577,13 +12673,13 @@ export function setup(ctx, opts) {
                     if (r.section !== s)
                         continue;
                     const hit = titleHit || r.text.indexOf(q) >= 0;
-                    r.row.style.display = hit ? "flex" : "none";
+                    searchShows(r.row, hit);
                     if (hit) {
                         any = true;
                         hits++;
                     }
                 }
-                s.sec.style.display = any ? "flex" : "none";
+                searchShows(s.sec, any);
                 if (any && s.setOpen)
                     s.setOpen(true);
             }
@@ -12593,9 +12689,9 @@ export function setup(ctx, opts) {
                 const rows = w.querySelectorAll("[data-ar-row]");
                 let any = false;
                 for (let i = 0; i < rows.length; i++)
-                    if (rows[i].style.display !== "none")
+                    if (rowShown(rows[i]))
                         any = true;
-                w.style.display = any ? "flex" : "none";
+                searchShows(w, any);
             }
             // Anything the search turned up that its switch has not enabled says so,
             // rather than looking like a setting that does nothing when changed.

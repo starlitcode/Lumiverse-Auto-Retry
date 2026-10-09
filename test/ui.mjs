@@ -11655,7 +11655,9 @@ console.log("\nreset confirmation");
       const inBox = (t) => [...document.querySelectorAll("#__lvRetryReset button")]
         .find((b) => b.textContent.trim() === t) || null;
       const press = async (t) => { const b = inBox(t) || [...document.querySelectorAll("#__lvRetryReset button")].find((x) => x.textContent.trim().startsWith(t)); if (b) b.click(); await frame(); };
-      const tick = (id) => document.querySelector('[data-ar-reset="' + id + '"] input');
+      // Inside the box that is open. One closed a moment ago can still be
+      // fading out.
+      const tick = (id) => document.querySelector('#__lvRetryReset [data-ar-reset="' + id + '"] input');
       const val = () => document.querySelector('[data-ar-row="maxRetries"] input').value;
       const confirmEl = () => document.querySelector("[data-ar-reset-confirm]");
 
@@ -12057,58 +12059,77 @@ console.log("\nfind and replace, retired");
   check("no console errors", errors.length === 0, errors);
 }
 
-// A row that hangs off a switch moves in the same way a section does, since
-// they are the same thing happening: something that was not on the panel now is.
-{
-  const { out, errors } = await inPanel(browser, {}, async (page) =>
-    page.evaluate(async () => {
-      const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-      await frame();
-      for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
-      // A moment for rows that fade in as they appear. Waited out here rather
-      // than in every check below.
-      await new Promise((r) => setTimeout(r, 260));
-      await frame();
-      // A switch with rows named after it in the schema, rather than whichever
-      // one happens to be first: Pause when it keeps failing carries the two
-      // rows saying how many runs and how long a pause.
-      const kid = () => document.querySelector('#modal [data-ar-row="breakerRuns"]');
-      const parent = document.querySelector('#modal [data-ar-row="pauseWhenFailing"]');
-      const sw = parent && parent.querySelector("input[data-ar-check]");
-      if (!sw || !kid()) return { found: false, sw: !!sw, kid: !!kid() };
-      // Rows only. The sections were opened by hand just above, and an opened
-      // section is marked to move for the same reason a row is, so counting
-      // both would be counting this check's own clicks.
-      const marks = () => document.querySelectorAll("#modal [data-ar-row][data-ar-arrive]").length;
-      const onBuild = marks();
-      // Whichever way it starts, drive it off and then on.
-      if (kid().style.display !== "none") sw.click();
-      await frame();
-      const hidden = kid().style.display === "none";
-      const wentAway = marks();
-      sw.click();
-      const back = kid();
-      const shown = back.style.display !== "none";
-      const marked = back.getAttribute("data-ar-arrive");
-      const cs = getComputedStyle(back);
-      const anim = { name: cs.animationName, time: cs.animationDuration };
-      await new Promise((r) => setTimeout(r, 300));
-      const after = getComputedStyle(back);
-      const settled = { opacity: after.opacity, shown: after.display };
-      return { found: true, onBuild, hidden, wentAway, shown, marked, anim, settled };
-    }),
-  );
-  check("the switch and the row under it are both there to drive", out.found, out);
-  check("nothing is animated just for the panel being built", out.onBuild === 0, out);
-  check("switching it off takes the row away", out.hidden, out);
-  check("and marks nothing, since going away is not worth watching", out.wentAway === 0, out);
-  check("switching it back on brings the row and marks it to move",
-    out.shown && out.marked === "1", out);
-  check("fading down into place over 0.18s",
-    out.anim && out.anim.name === "lvRetryArrive" && out.anim.time === "0.18s", out.anim);
-  check("and it settles fully in place",
-    out.settled && out.settled.opacity === "1" && out.settled.shown === "flex", out.settled);
-  check("no console errors", errors.length === 0, errors);
+// A row that hangs off a switch opens and closes smoothly. Its space opens
+// over several frames, so the row under it moves down in small steps rather
+// than in one jump, and it fades in and slides down 4px. Switched off, the
+// words fade before the space closes. With Reduce motion on, both happen at
+// once, and nothing moves when the panel is first built.
+for (const [label, viewport, touch] of [["phone", { width: 390, height: 860 }, true], ["laptop", { width: 1280, height: 860 }, false]]) {
+  for (const reduceMotion of [false, true]) {
+    const { out, errors } = await inPanel(browser, { viewport, touch, settings: { reduceMotion, pauseWhenFailing: false } }, async (page) =>
+      page.evaluate(async () => {
+        const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        await frame();
+        for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+        await frame();
+        // Pause when it keeps failing carries the rows saying how many runs
+        // and how long a pause.
+        const q = (k) => document.querySelector('#modal [data-ar-row="' + k + '"]');
+        const parent = q("pauseWhenFailing");
+        const sw = parent && parent.querySelector("input[data-ar-check]");
+        const kid = q("breakerRuns");
+        if (!sw || !kid) return { found: false };
+        const onBuild = kid.style.display === "none" && !kid.style.height;
+        // The height of the box holding the rows. Everything under the box
+        // moves by as much as it grows, and a scroll does not change it.
+        const box = kid.parentElement;
+        const gapNow = () => box.getBoundingClientRect().height;
+        const watch = async () => {
+          const start = gapNow();
+          const tops = [];
+          const looks = [];
+          sw.click();
+          const t0 = performance.now();
+          while (performance.now() - t0 < 520) {
+            await new Promise((r) => requestAnimationFrame(r));
+            tops.push(gapNow() - start);
+            const cs = getComputedStyle(kid);
+            looks.push({ o: parseFloat(cs.opacity), h: kid.getBoundingClientRect().height, t: cs.transform });
+          }
+          let biggest = 0;
+          let prev = 0;
+          for (const t of tops) {
+            biggest = Math.max(biggest, Math.abs(t - prev));
+            prev = t;
+          }
+          return { travel: Math.round(tops[tops.length - 1]), biggest: Math.round(biggest), looks, shown: kid.style.display !== "none" };
+        };
+        const opened = await watch();
+        const shut = await watch();
+        return { found: true, onBuild, opened, shut };
+      }),
+    );
+    const say = label + (reduceMotion ? ", Reduce motion on" : "") + ": ";
+    check(say + "the switch and the rows under it are there to drive", out.found, out);
+    check(say + "nothing moves just for the panel being built", out.onBuild, out);
+    check(say + "switching it on opens the rows and makes room for them", out.opened && out.opened.travel > 30 && out.opened.shown, out.opened && { travel: out.opened.travel });
+    check(say + "switching it off hides them again", out.shut && !out.shut.shown, out.shut && out.shut.shown);
+    if (!reduceMotion) {
+      check(say + "opening, the room grows in small steps, never more than a third in one frame",
+        out.opened && out.opened.biggest < out.opened.travel / 3, out.opened && { travel: out.opened.travel, biggest: out.opened.biggest });
+      check(say + "opening, the row starts faded and slides down into place",
+        out.opened && out.opened.looks[0].o < 0.5 && /matrix\(1, 0, 0, 1, 0, -/.test(out.opened.looks[0].t), out.opened && out.opened.looks.slice(0, 2));
+      check(say + "closing, the room closes in small steps",
+        out.shut && out.shut.biggest < Math.abs(out.shut.travel) / 3, out.shut && { travel: out.shut.travel, biggest: out.shut.biggest });
+      const faded = out.shut ? out.shut.looks.findIndex((l) => l.o < 0.05) : -1;
+      const flat = out.shut ? out.shut.looks.findIndex((l) => l.h < 1) : -1;
+      check(say + "closing, the words are gone before the space is", faded >= 0 && (flat === -1 || faded < flat), { faded, flat });
+    } else {
+      check(say + "the rows open in one step", out.opened && Math.abs(out.opened.biggest - out.opened.travel) <= 2, out.opened && { travel: out.opened.travel, biggest: out.opened.biggest });
+      check(say + "and close in one step", out.shut && Math.abs(out.shut.biggest - Math.abs(out.shut.travel)) <= 2, out.shut && { travel: out.shut.travel, biggest: out.shut.biggest });
+    }
+    check(say + "no console errors", errors.length === 0, errors);
+  }
 }
 
 // A section opens and shuts in one step, with no animation.
@@ -12125,7 +12146,6 @@ console.log("\nfind and replace, retired");
         const st = getComputedStyle(body);
         return {
           shown: st.display !== "none",
-          mark: body.getAttribute("data-ar-arrive"),
           anim: st.animationName,
           height: body.style.height,
           moving: /[1-9]/.test(st.transitionDuration),
@@ -12140,7 +12160,7 @@ console.log("\nfind and replace, retired");
   );
   check("a section is there to open", !out.missing, out);
   check("it opens at once, with no animation",
-    out.opened.shown && out.opened.mark === null && out.opened.anim === "none" && !out.opened.height && !out.opened.moving, out.opened);
+    out.opened.shown && out.opened.anim === "none" && !out.opened.height && !out.opened.moving, out.opened);
   check("and shuts at once, with no animation",
     !out.shut.shown && !out.shut.height && !out.shut.moving, out.shut);
   check("no console errors", errors.length === 0, errors);

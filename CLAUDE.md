@@ -157,20 +157,27 @@ Every change to the panel or the page has to work on a phone and on a laptop.
 
 ## Motion
 
-The owner is sensitive to flashing and to busy movement.
+The owner is sensitive to flashing and to busy movement. The rules below are
+the defaults. An effect the owner asks for overrides them.
 
-- Large things, such as pop-ups, cards, editors and notices you have to see,
-  fade in and out and may slide a little. They never grow or zoom.
-- Zoom is for small things only, such as the floating button when pressed,
-  a switch knob or a tick mark.
+- The owner prefers fades and slides. Anything that appears or goes, such as
+  a pop-up, a card, an editor, a notice or a description, fades in and out
+  and slides a little. It never grows or zooms.
+- Toggles, such as a switch or a tick box, may zoom, bounce or use whatever
+  effect the owner asks for.
+- Widgets, such as the floating button, are more complex, and these rules do
+  not bind them. The owner decides how they move. Without a request, choose
+  what suits the widget.
 - A glow or a light-up is slow and runs once, so it reads as a glow and
   never as a blink. Nothing flashes more than once.
-- Something that comes and goes with a switch opens and closes smoothly.
-  Nothing pops in or out between two frames.
+- Something that comes and goes with a switch opens and closes smoothly. Its
+  space opens and closes over several frames, so the rows under it move with
+  it, and it fades and slides 4 pixels. Nothing pops in or out between two
+  frames.
 - Reduce motion, from the panel or the device, turns all of it off. A part
   that would change size keeps its size, since a size change with no movement
   is a jump.
-- Move only opacity and position where possible, which is cheap to draw.
+- Move opacity and position where possible, which is cheap to draw.
 
 ## Talking to the owner
 
