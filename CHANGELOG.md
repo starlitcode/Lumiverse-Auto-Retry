@@ -15,6 +15,7 @@ _2026-10-09_
 ### Changed
 
 - **The floating button shrinks a little when pressed.** In 5.14.0 it stopped shrinking and only got lighter. It now shrinks a little and gets lighter, and grows back when you let go. With Reduce motion on, it only gets lighter.
+- **The built-in note Write them as written says character card.** It said "Their sheet is who they are", and a model may not know that a sheet is the character card. It now says "Their character card is who they are". If you use this note, the panel tells you it changed.
 
 ---
 

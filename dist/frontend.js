@@ -6915,7 +6915,7 @@ export function setup(ctx, opts) {
                 refusalNotePlacement: "after",
                 refusalNotes: [
                     {
-                        text: "[OOC: Their sheet is who they are, difficult corners and all. Please write them as themselves, rather than a gentler version of them.]",
+                        text: "[OOC: Their character card is who they are, difficult corners and all. Please write them as themselves, rather than a gentler version of them.]",
                         role: "user",
                         fromTry: 2,
                     },
