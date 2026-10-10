@@ -119,6 +119,9 @@ shown in Lumiverse.
 - Before writing "Fixed" or "Changed", check the thing existed in the last
   announced version. Something added in this version is described as it is
   now, under "Added", never as a fix to something users had before.
+- To check, read the code of the last announced version with `git show`,
+  or run the check for the bug against that version's `dist`. If the bug is
+  not in that version, it is not a fix. The same goes for the Discord post.
 - An announced entry keeps what it says. Wording in it that breaks the
   writing rules can be fixed at any time, as long as the facts stay the
   same. A correction of fact goes in the next version.
