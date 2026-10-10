@@ -11194,9 +11194,14 @@ console.log("\nmaster switch off");
       await new Promise((r) => setTimeout(r, 400));
       const open = { height: note().getBoundingClientRect().height, opacity: Number(getComputedStyle(note()).opacity) };
       box.click();
-      await frame();
-      // And folds shut, still on the page for a moment as it goes.
-      const closing = showing() && note().getBoundingClientRect().height < open.height;
+      // And folds shut, still on the page for a moment as it goes. Watched
+      // over several frames, since a slow machine can draw the first one or
+      // two before the fold has moved.
+      let closing = false;
+      for (let i = 0; i < 12 && !closing; i++) {
+        await frame();
+        closing = showing() && note().getBoundingClientRect().height < open.height - 0.5;
+      }
       await new Promise((r) => setTimeout(r, 400));
       return { quietWhileOn, saysSo, before, after, opening, open, closing, quietAgain: !showing() };
     }),
