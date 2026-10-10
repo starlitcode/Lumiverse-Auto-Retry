@@ -21,6 +21,7 @@ _2026-10-09_
 ### Changed
 
 - **The reply a retry replaced comes back after a reload.** It was kept only in the browser tab, so a reload or leaving the app cleared it. Your server now holds a copy for your account, and the panel asks for it when it starts. Only your own account can see it.
+- **The pattern behind the settings stays still.** It works like a phone wallpaper: the settings scroll over it, and it does not move.
 
 ---
 

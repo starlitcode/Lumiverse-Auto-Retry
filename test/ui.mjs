@@ -2637,10 +2637,18 @@ console.log("\na pattern behind the panel");
             return /url\(/.test(mask) && cs.zIndex === "-1" && Math.abs(parseFloat(cs.height) - n.getBoundingClientRect().height) < 2;
           };
           const drawnOn = (n) => !!n && (/gradient/.test(getComputedStyle(n).backgroundImage) || shaped(n));
+          // The settings scroll, so their pattern is on a layer held at the
+          // top of the box that scrolls them, behind everything else.
+          const pinned = (n) => {
+            if (!n) return false;
+            const cs = getComputedStyle(n, "::before");
+            return cs.position === "sticky" && cs.zIndex === "-1" &&
+              (/gradient/.test(cs.backgroundImage) || /url\(/.test(cs.maskImage || cs.webkitMaskImage || ""));
+          };
           return {
             drawn: drawnOn(d),
             bodySolid: !!body && ((c) => { const m = /rgba?\(([^)]*)\)/.exec(c); if (!m) return false; const p = m[1].split(","); return p.length < 4 || parseFloat(p[3]) >= 0.85; })(getComputedStyle(body).backgroundColor),
-            settingsDrawn: drawnOn(settings),
+            settingsDrawn: pinned(settings),
             sectionSolid: !!sec && ((c) => { const m = /rgba?\(([^)]*)\)/.exec(c); if (!m) return false; const p = m[1].split(","); return p.length < 4 || parseFloat(p[3]) >= 0.85; })(getComputedStyle(sec).backgroundColor),
             sideways: document.documentElement.scrollWidth > window.innerWidth + 1,
           };
@@ -11604,6 +11612,53 @@ console.log("\ntick every setting moves each box");
   check("each box is ticked where it stands", out.kept && out.on, out);
   check("and its tick draws in over a moment", out.from === 0 && out.mid > 0 && out.mid < 1 && out.end === 1, out);
   check("no console errors", errors.length === 0, errors);
+}
+
+// The settings scroll inside the host's window, and their pattern is a
+// wallpaper: it stays where it is while they scroll. With every row hidden, the
+// box looks the same at any scroll position.
+console.log("\nthe settings pattern stays still while they scroll");
+for (const zoom of [1, 1.25, 0.85]) {
+  for (const kind of zoom === 1 ? ["diamonds", "dots", "hearts"] : ["diamonds"]) {
+    const css =
+      // The box that scrolls is around the settings, as the host's window is.
+      "html{zoom:" + zoom + ";overflow:hidden}body{margin:0;height:520px;overflow-y:auto;scrollbar-width:none}" +
+      "body::-webkit-scrollbar{display:none}[data-ar-settings]>*{visibility:hidden}";
+    const { out, errors } = await inPanel(browser, { css, settings: { panelPattern: kind } }, async (page) => {
+      await page.waitForTimeout(200);
+      await page.evaluate(() => {
+        for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      });
+      await page.waitForTimeout(500);
+      // Two boxes scroll: the list inside the settings, and the host's window
+      // around them. The pattern stays still for both.
+      const box = page.locator("body");
+      const tall = await page.evaluate(() => {
+        const inner = Array.from(document.querySelectorAll("#modal *")).find(
+          (n) => /auto|scroll/.test(getComputedStyle(n).overflowY) && n.scrollHeight > n.clientHeight + 100,
+        );
+        if (inner) inner.setAttribute("data-test-inner", "1");
+        return inner ? inner.scrollHeight - inner.clientHeight : 0;
+      });
+      const a = await box.screenshot();
+      await page.evaluate(() => {
+        document.querySelector("[data-test-inner]").scrollTop = 37;
+        document.body.scrollTop = 7;
+      });
+      await page.waitForTimeout(60);
+      const b = await box.screenshot();
+      await page.evaluate(() => {
+        document.querySelector("[data-test-inner]").scrollTop = 1e6;
+        document.body.scrollTop = 1e6;
+      });
+      await page.waitForTimeout(60);
+      const c = await box.screenshot();
+      return { tall, still: a.equals(b) && a.equals(c) };
+    });
+    check("zoom " + zoom + ", " + kind + ": the settings can scroll", out.tall > 100, out);
+    check("zoom " + zoom + ", " + kind + ": the pattern does not move as they scroll", out.still, out);
+    check("zoom " + zoom + ", " + kind + ": no console errors", errors.length === 0, errors);
+  }
 }
 
 console.log("\nreset picker");

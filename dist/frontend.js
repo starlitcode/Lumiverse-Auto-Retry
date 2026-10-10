@@ -8345,8 +8345,19 @@ export function setup(ctx, opts) {
                         on + "[data-ar-panel]{background-image:" + drawn[kind] + "!important;background-size:" + sizes[kind] + "!important}" +
                             on + "#__lvRetryLog{background-color:var(--lumiverse-bg-elevated,rgba(35,30,48,.9))!important;" +
                             "background-image:" + drawn[kind] + "," + lift + "!important;background-size:" + sizes[kind] + ",auto!important}" +
-                            on + "[data-ar-settings]{background-image:" + drawn[kind] + "!important;background-size:" + sizes[kind] + "!important}";
+                            on + "[data-ar-settings]::before{background-image:" + drawn[kind] + ";background-size:" + sizes[kind] + "}";
                 }
+                // The settings scroll inside the host's window, so their pattern is a
+                // wallpaper: drawn on a layer that sticks to the top of the box that
+                // scrolls, as tall as that box shows (--ar-view, measured by
+                // pinWallpaper), and pulled out of the flow by its own margin. The
+                // settings scroll over it. The panel and the floating log do not
+                // scroll themselves, as only the log inside them does, so their
+                // pattern already stays still.
+                patterns +=
+                    "html[data-ar-pattern] [data-ar-settings]{position:relative;isolation:isolate}" +
+                        'html[data-ar-pattern] [data-ar-settings]::before{content:"";display:block;position:sticky;top:0;' +
+                        "height:var(--ar-view,60vh);margin-bottom:calc(-1 * var(--ar-view,60vh));z-index:-1;pointer-events:none}";
                 // Solid, and in the theme's own colour: the theme's raised colour,
                 // laid twice. It is light on a light theme and dark on a dark one,
                 // and near solid once laid twice even when a theme makes it
@@ -8362,10 +8373,11 @@ export function setup(ctx, opts) {
                     const on = 'html[data-ar-pattern="' + kind + '"] ';
                     const tile = shapeTile(kind);
                     patterns +=
-                        on + "[data-ar-panel]," + on + "[data-ar-settings]{position:relative;isolation:isolate}" +
+                        on + "[data-ar-panel]{position:relative;isolation:isolate}" +
                             on + "#__lvRetryLog{isolation:isolate;background-color:var(--lumiverse-bg-elevated,rgba(35,30,48,.9))!important}" +
+                            on + "[data-ar-panel]::before," + on + "#__lvRetryLog::before{" +
+                            'content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;border-radius:inherit}' +
                             on + "[data-ar-panel]::before," + on + "#__lvRetryLog::before," + on + "[data-ar-settings]::before{" +
-                            'content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;border-radius:inherit;' +
                             "background-color:" + ink + ";-webkit-mask:" + tile + " 0 0/36px 36px repeat;mask:" + tile + " 0 0/36px 36px repeat}";
                 }
                 const solid = "background-color:var(--lumiverse-bg-elevated,rgba(35,30,48,.9))!important;" +
@@ -11482,10 +11494,63 @@ export function setup(ctx, opts) {
         }
         return { wrap, checks };
     }
+    // How tall the settings' wallpaper layer is: the height the box that
+    // scrolls them shows. Measured again whenever that box or the settings
+    // change size.
+    let wallBox = null;
+    let wallRoot = null;
+    let wallSeen = null;
+    function scrollBoxOf(el) {
+        for (let p = el.parentElement; p; p = p.parentElement) {
+            const oy = getComputedStyle(p).overflowY;
+            if (oy === "auto" || oy === "scroll")
+                return p;
+        }
+        return null;
+    }
+    function sizeWallpaper() {
+        const root = wallRoot;
+        if (!root)
+            return;
+        const box = root.isConnected ? scrollBoxOf(root) : null;
+        if (box !== wallBox) {
+            if (wallSeen && wallBox)
+                wallSeen.unobserve(wallBox);
+            wallBox = box;
+            if (wallSeen && box)
+                wallSeen.observe(box);
+        }
+        if (box && box.clientHeight > 0)
+            root.style.setProperty("--ar-view", box.clientHeight + "px");
+    }
+    function pinWallpaper(root) {
+        if (root !== wallRoot) {
+            if (wallSeen)
+                wallSeen.disconnect();
+            wallRoot = root;
+            wallBox = null;
+            try {
+                wallSeen = new ResizeObserver(() => sizeWallpaper());
+                wallSeen.observe(root);
+            }
+            catch (_) {
+                wallSeen = null;
+            }
+        }
+        sizeWallpaper();
+    }
+    disposers.push(() => {
+        if (wallSeen)
+            wallSeen.disconnect();
+        wallSeen = null;
+        wallRoot = null;
+        wallBox = null;
+    });
     function buildSettingsBody(root, onSaved) {
         ensurePanelStyle();
         // What the pattern behind the settings is drawn on.
         root.setAttribute("data-ar-settings", "1");
+        pinWallpaper(root);
         // The buttons a popover can be anchored to are about to be thrown away.
         hideHint();
         root.innerHTML = "";
