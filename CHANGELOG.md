@@ -8,6 +8,16 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.17.1
+
+_2026-10-10_
+
+### Changed
+
+- **Importing presets says what each one did.** A preset in the file with the same name as one of yours replaces yours, and the message now says how many were replaced by the same name and how many are new. A preset exactly like one you already have is left alone, and the message says so. Importing the same file twice says nothing changed.
+
+---
+
 ## 5.17.0
 
 _2026-10-09_

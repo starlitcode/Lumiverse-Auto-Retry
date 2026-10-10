@@ -152,7 +152,7 @@ const STREAM_BUF_MAX = 200000;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.17.0";
+const VERSION = "5.17.1";
 
 // Whether two saved settings hold the same values, whatever order their keys
 // were written in. A key left undefined counts as not there, the way it is
@@ -7462,27 +7462,35 @@ export function setup(ctx: Ctx, opts?: any) {
       (ctx as any).sendToBackend({ type: "load_presets", requestId: reqId });
     } catch (_) {}
   }
-  // Merge presets from an imported blob into storage. Same-named presets are
-  // replaced by the imported one, new names are added. Returns how many came
-  // in, or -1 if saving failed. Zero (including a file with none) is harmless.
-  function importPresets(data: any): number {
+  // Merge presets from an imported blob into storage. One name, one preset:
+  // a same-named preset is replaced by the imported one, and a new name is
+  // added. One identical to the preset already held is counted apart, since
+  // nothing changed for it. Returns the three counts, or null if saving
+  // failed. A file with none is harmless. Auto Refine counts the same way.
+  function importPresets(data: any): { added: number; replaced: number; same: number } | null {
+    const counts = { added: 0, replaced: 0, same: 0 };
     const incoming = data && data.presets ? data.presets : null;
-    if (!incoming || typeof incoming !== "object") return 0;
+    if (!incoming || typeof incoming !== "object") return counts;
     const stored = loadPresets();
-    let n = 0;
     for (const kind of Object.keys(stored)) {
       const arr = Array.isArray(incoming[kind]) ? incoming[kind] : [];
       for (const p of arr) {
         if (!p || typeof p.name !== "string" || !p.values || typeof p.values !== "object")
           continue;
         const i = stored[kind].findIndex((x) => x.name === p.name);
-        if (i >= 0) stored[kind][i] = { name: p.name, values: p.values };
-        else stored[kind].push({ name: p.name, values: p.values });
-        n++;
+        if (i < 0) {
+          stored[kind].push({ name: p.name, values: p.values });
+          counts.added++;
+        } else if (settledJson(stored[kind][i].values) === settledJson(p.values)) {
+          counts.same++;
+        } else {
+          stored[kind][i] = { name: p.name, values: p.values };
+          counts.replaced++;
+        }
       }
     }
-    if (n && !savePresets(stored)) return -1;
-    return n;
+    if ((counts.added || counts.replaced) && !savePresets(stored)) return null;
+    return counts;
   }
 
   // Snapshot the current values of a kind's keys.
@@ -12735,7 +12743,7 @@ export function setup(ctx: Ctx, opts?: any) {
           // Applied in the order they were picked, so where two files carry the
           // same setting the last one is what stands.
           const parts: string[] = [];
-          let presetCount = 0;
+          const presetCount = { added: 0, replaced: 0, same: 0 };
           let ran = 0;
           for (let i = 0; i < texts.length; i++) {
             const text = texts[i];
@@ -12756,16 +12764,24 @@ export function setup(ctx: Ctx, opts?: any) {
                 data = JSON.parse(text);
               } catch (_) {}
               const got = importPresets(data);
-              if (got === -1) {
+              if (got === null) {
                 status.textContent = "Could not save the imported presets on this browser.";
                 return;
               }
-              presetCount += got;
+              presetCount.added += got.added;
+              presetCount.replaced += got.replaced;
+              presetCount.same += got.same;
             }
             ran++;
           }
-          if (presetCount > 0) for (const r of presetBarRefreshers) r();
-          if (!parts.length && !presetCount) {
+          const presetsChanged = presetCount.added + presetCount.replaced;
+          if (presetsChanged > 0) for (const r of presetBarRefreshers) r();
+          if (!parts.length && !presetsChanged && presetCount.same) {
+            status.textContent = "Every preset in " + (picked.length === 1 ? "that file" : "those files") +
+              " was already here, so nothing changed.";
+            return;
+          }
+          if (!parts.length && !presetsChanged) {
             status.textContent =
               "Nothing matched the ticked parts in " +
               (picked.length === 1 ? "that file." : "those " + ran + " files.");
@@ -12778,15 +12794,23 @@ export function setup(ctx: Ctx, opts?: any) {
           let msg = "";
           if (parts.length)
             msg = "Imported: " + parts.join(", ") + ". Press Save to keep it.";
-          if (presetCount > 0)
+          // Added and replaced are said apart, so a preset of yours that a file
+          // replaced is never hidden inside one total.
+          const presetWords: string[] = [];
+          if (presetCount.added)
+            presetWords.push(presetCount.added + " new preset" + (presetCount.added === 1 ? "" : "s"));
+          if (presetCount.replaced)
+            presetWords.push(
+              presetCount.replaced + (presetCount.replaced === 1 ? " preset replaced" : " presets replaced") +
+                " by the same name",
+            );
+          if (presetWords.length)
+            msg += (msg ? " " : "") + "Presets: " + presetWords.join(", ") + ", saved already.";
+          if (presetCount.same)
             msg +=
-              (msg ? " " : "") +
-              "Also brought in " +
-              presetCount +
-              " preset" +
-              (presetCount === 1 ? "" : "s") +
-              ", saved already.";
-          status.textContent = msg;
+              " " + presetCount.same + (presetCount.same === 1 ? " preset was" : " presets were") +
+              " already here and left alone.";
+          status.textContent = msg.trim();
         });
       });
       const importBtn = btn("Import from files", false);

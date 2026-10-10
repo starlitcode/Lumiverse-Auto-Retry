@@ -12603,12 +12603,34 @@ console.log("\ntaking more than one file at a time");
         return (all.notes || []).map((p) => p.name);
       } catch (_) { return null; }
     });
-    return { aim, said, held };
+    // Again: one with the same name and other values, and one exactly as held.
+    const changed = {
+      autoRetry: "5.0.0",
+      settings: {},
+      presets: { notes: [{ name: "First of mine", values: { notesEnabled: false } }, { name: "Second of mine", values: { notesEnabled: true } }] },
+    };
+    await page.setInputFiles('input[type="file"][accept*="json"]', [file("again.json", changed)]);
+    await new Promise((r) => setTimeout(r, 400));
+    const saidAgain = await page.evaluate(() => document.querySelector('[data-ar-transfer="said"]').textContent);
+    const firstNow = await page.evaluate(() => {
+      const all = JSON.parse(localStorage.getItem("lv-auto-retry:presets:v1") || "{}");
+      return (all.notes || []).filter((p) => p.name === "First of mine").map((p) => p.values.notesEnabled);
+    });
+    // And the same file once more, which changes nothing.
+    await page.setInputFiles('input[type="file"][accept*="json"]', [file("again2.json", changed)]);
+    await new Promise((r) => setTimeout(r, 400));
+    const saidSame = await page.evaluate(() => document.querySelector('[data-ar-transfer="said"]').textContent);
+    return { aim, said, held, saidAgain, firstNow, saidSame };
   });
   check("the picker takes more than one", out.aim.there && out.aim.multiple, out.aim);
   check("two files in one press count as two",
-    /2 presets/.test(out.said || ""), out.said);
+    /2 new presets/.test(out.said || ""), out.said);
   check("and both are held", (out.held || []).length === 2, JSON.stringify(out.held));
+  check("a preset with the same name replaces yours, and says so",
+    /1 preset replaced by the same name/.test(out.saidAgain || "") && JSON.stringify(out.firstNow) === "[false]",
+    out.saidAgain + " " + JSON.stringify(out.firstNow));
+  check("one exactly like yours is said apart", /1 preset was already here and left alone/.test(out.saidAgain || ""), out.saidAgain);
+  check("the same file twice changes nothing, and says so", /already here, so nothing changed/.test(out.saidSame || ""), out.saidSame);
   check("no console errors", errors.length === 0, errors);
 }
 

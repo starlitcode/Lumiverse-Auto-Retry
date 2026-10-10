@@ -1,6 +1,6 @@
 {
   "name": "lumiverse-auto-retry",
-  "version": "5.17.0",
+  "version": "5.17.1",
   "description": "Watches each reply as it comes in and retries it when something goes wrong: an error, an empty reply, a stream that stalls, a reply cut off mid-sentence, or a refusal. Every check, phrase and retry note can be read and changed in its settings.",
   "author": "starlitcode",
   "license": "GPL-3.0-only",
