@@ -122,6 +122,9 @@ shown in Lumiverse.
 - To check, read the code of the last announced version with `git show`,
   or run the check for the bug against that version's `dist`. If the bug is
   not in that version, it is not a fix. The same goes for the Discord post.
+- Versions announced at the same time count as one release. A bug made in
+  one of them and fixed in a later one of them never reached anyone, so it
+  is not a fix. Check against the version announced before them.
 - An announced entry keeps what it says. Wording in it that breaks the
   writing rules can be fixed at any time, as long as the facts stay the
   same. A correction of fact goes in the next version.
