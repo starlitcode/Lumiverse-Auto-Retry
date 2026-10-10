@@ -8,6 +8,16 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.17.2
+
+_2026-10-10_
+
+### Fixed
+
+- **A model that goes quiet while thinking is no longer stopped partway.** Many models think in bursts, with long quiet spells between them. Before any reply text, a quiet spell longer than **Give up on a reply that froze** stopped the reply and retried it, which cut the thinking off. While the model is still thinking, it now waits as long as **Give up waiting for it to start**, 4 minutes by default.
+
+---
+
 ## 5.17.1
 
 _2026-10-10_

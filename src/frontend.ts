@@ -152,7 +152,7 @@ const STREAM_BUF_MAX = 200000;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.17.1";
+const VERSION = "5.17.2";
 
 // Whether two saved settings hold the same values, whatever order their keys
 // were written in. A key left undefined counts as not there, the way it is
@@ -878,7 +878,7 @@ const SCHEMA: Group[] = [
         int: true,
         min: 0,
         max: 600000,
-        hint: "If words stop coming for this long partway through a reply, it retries. The default is " + defaultMs("idleTimeoutMs") + ". 0 turns it off.",
+        hint: "If words stop coming for this long partway through a reply, it retries. The default is " + defaultMs("idleTimeoutMs") + ". While the model is still thinking, it waits as long as for the first words.",
       },
     ],
   },
@@ -9814,6 +9814,8 @@ export function setup(ctx: Ctx, opts?: any) {
     // sawContent is true for an empty content token as well, and a generation
     // that died after nothing but those is the case this watchdog exists for.
     const gotText = String(s.buf || "").trim().length > 0;
+    if (!gotText && s.sawReasoning)
+      log("the model went quiet while thinking, for longer than the wait for the first words");
     if (gotText && !cfg.retryOnTruncated) {
       clearTimers(s);
       log("a reply stopped partway and was left alone: cut-off replies are switched off");
@@ -10218,7 +10220,18 @@ export function setup(ctx: Ctx, opts?: any) {
       s.startTimer = null;
     }
     if (cfg.enabled && cfg.idleTimeoutMs > 0)
-      armWatchdog(s, "idleTimer", cfg.idleTimeoutMs, () => onFrozen(chatId));
+      armWatchdog(s, "idleTimer", quietAllowed(s), () => onFrozen(chatId));
+  }
+
+  // How long a reply may go quiet before it counts as stalled. While the model
+  // is still thinking and no reply text has come yet, it gets the wait for the
+  // first words. Many models think in bursts with long quiet spells between
+  // them, and stopping one there cut its thinking off partway.
+  function quietAllowed(s: any): number {
+    const idle = Number(cfg.idleTimeoutMs) || 0;
+    if (String(s.buf || "").trim()) return idle;
+    if (!s.sawReasoning) return idle;
+    return Math.max(idle, Number(cfg.stuckTimeoutMs) || 0);
   }
 
   // A council runs between the start of a reply and its first word. Other

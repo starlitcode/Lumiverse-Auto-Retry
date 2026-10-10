@@ -7220,7 +7220,7 @@ console.log("\nan impersonation is not a reply");
 console.log("\na reply that stopped partway with text in it");
 {
   const errors = [];
-  const run = async (opts, streamText) => {
+  const run = async (opts, streamText, kind) => {
     const page = await browser.newPage();
     page.on("pageerror", (e) => errors.push(e.message));
     await stage(page,
@@ -7228,7 +7228,7 @@ console.log("\na reply that stopped partway with text in it");
       '<button data-testid="swipe-right">S</button><button data-testid="stop">X</button>');
     await page.addScriptTag({ content: SOURCE, type: "module" });
     await page.waitForFunction(() => !!window.__setup);
-    const res = await page.evaluate(async ([opts, streamText]) => {
+    const res = await page.evaluate(async ([opts, streamText, kind]) => {
       const h = {};
       const clicks = [];
       for (const id of ["regenerate", "swipe-right", "stop"])
@@ -7246,10 +7246,10 @@ console.log("\na reply that stopped partway with text in it");
       );
       h.GENERATION_STARTED({ chatId: "c1", generationId: "g1" });
       // Text arrives, then the stream goes quiet without ever ending.
-      h.STREAM_TOKEN_RECEIVED({ chatId: "c1", generationId: "g1", content: streamText });
+      h.STREAM_TOKEN_RECEIVED(Object.assign({ chatId: "c1", generationId: "g1", content: streamText }, kind ? { type: kind } : {}));
       await new Promise((r) => setTimeout(r, 400));
       return { clicks };
-    }, [opts, streamText]);
+    }, [opts, streamText, kind || ""]);
     await page.close();
     return res;
   };
@@ -7273,6 +7273,15 @@ console.log("\na reply that stopped partway with text in it");
   check("a retry adds a reroll rather than redoing the reply in place",
     withTextOn.clicks.indexOf("swipe-right") >= 0 &&
       withTextOn.clicks.indexOf("regenerate") < 0, withTextOn);
+
+  // A model can think in bursts with long quiet spells between them. Before
+  // any reply text, a quiet spell is given the wait for the first words, so the
+  // thinking is not stopped partway.
+  const THOUGHT = "the gate is open, so the guard must have left before dawn";
+  const thinking = await run({ stuckTimeoutMs: 1500 }, THOUGHT, "reasoning");
+  const thinkingNoWait = await run({ stuckTimeoutMs: 0 }, THOUGHT, "reasoning");
+  check("a quiet spell while the model is thinking is not called a stall", thinking.clicks.length === 0, thinking);
+  check("with the wait for the first words off, the stall wait still applies", thinkingNoWait.clicks.indexOf("stop") >= 0, thinkingNoWait);
 
   check("no console errors", errors.length === 0, errors);
 }
