@@ -5,7 +5,7 @@
   "author": "starlitcode",
   "github": "https://github.com/starlitcode/Lumiverse-Auto-Retry",
   "homepage": "https://github.com/starlitcode/Lumiverse-Auto-Retry",
-  "description": "Automatically retry failed, empty, stalled, or cut-off replies, with optional refusal detection.",
+  "description": "Watches each reply as it comes in and retries it when something goes wrong: an error, an empty reply, a stream that stalls, a reply cut off mid-sentence, or a refusal. Every check, phrase and retry note can be read and changed in its settings.",
   "permissions": [
     "generation",
     "chats",
