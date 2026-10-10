@@ -11364,7 +11364,16 @@ export function setup(ctx: Ctx, opts?: any) {
       wallBox = box;
       if (wallSeen && box) wallSeen.observe(box);
     }
-    if (box && box.clientHeight > 0) root.style.setProperty("--ar-view", box.clientHeight + "px");
+    if (!box || box.clientHeight <= 0) return;
+    // The space inside the box's padding, which is what the settings and
+    // the layer have to fit in. Fitting the settings to it keeps the box
+    // from scrolling a few pixels with a second scroll bar of its own.
+    const cs = getComputedStyle(box);
+    const inner = box.clientHeight - (parseFloat(cs.paddingTop) || 0) - (parseFloat(cs.paddingBottom) || 0);
+    if (inner > 0) {
+      root.style.setProperty("--ar-view", inner + "px");
+      root.style.setProperty("--ar-fit", inner + "px");
+    }
   }
   function pinWallpaper(root: HTMLElement) {
     if (root !== wallRoot) {
@@ -12073,9 +12082,11 @@ export function setup(ctx: Ctx, opts?: any) {
     // The pixel cap tracks the modal's own 720: 720 less its title bar and
     // padding leaves roughly 640, so the panel fills the modal without pushing
     // past it. The vh term is what keeps a short screen from overflowing.
+    // --ar-fit is the space the host's box really has, measured by
+    // sizeWallpaper, and wins whenever the two guesses come out taller.
     const panel = document.createElement("div");
     panel.style.cssText =
-      "display:flex;flex-direction:column;max-height:min(74vh,640px);overflow:hidden;box-sizing:border-box;font:13px/1.45 var(--lumiverse-font-family,system-ui);color:var(--lumiverse-text,#eee)";
+      "display:flex;flex-direction:column;max-height:min(74vh,640px,var(--ar-fit,100vh));overflow:hidden;box-sizing:border-box;font:13px/1.45 var(--lumiverse-font-family,system-ui);color:var(--lumiverse-text,#eee)";
     // No shading down the panel. This element is only the modal's content area,
     // and the header, the frame and the footer around it belong to the host, so
     // anything painted here stops at a hard line where that chrome takes over:

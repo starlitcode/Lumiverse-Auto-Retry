@@ -11666,6 +11666,39 @@ for (const zoom of [1, 1.25, 0.85]) {
   }
 }
 
+// The host's window guesses its own height, and the settings fit the space it
+// really gives them. Guessing a little taller let the window scroll a few
+// pixels, with a long second scroll bar of its own beside the settings' one.
+console.log("\nthe settings fit the host's window");
+for (const [label, viewport, touch, boxH] of [
+  ["phone", { width: 390, height: 844 }, true, 600],
+  ["laptop", { width: 1280, height: 900 }, false, 640],
+]) {
+  for (const zoom of [1, 1.25, 0.85]) {
+    const css =
+      "html{zoom:" + zoom + ";overflow:hidden}body{margin:0;height:" + boxH + "px;padding:16px;box-sizing:border-box;overflow-y:auto}";
+    const { out, errors } = await inPanel(browser, { css, viewport, touch, settings: { panelPattern: "dots" } }, async (page) => {
+      await page.waitForTimeout(200);
+      await page.evaluate(() => {
+        for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+      });
+      await page.waitForTimeout(500);
+      return page.evaluate(() => {
+        const inner = Array.from(document.querySelectorAll("#modal *")).find(
+          (n) => /auto|scroll/.test(getComputedStyle(n).overflowY) && n.scrollHeight > n.clientHeight + 100,
+        );
+        return {
+          extra: document.body.scrollHeight - document.body.clientHeight,
+          listScrolls: !!inner,
+        };
+      });
+    });
+    check(label + ", zoom " + zoom + ": the host's window has nothing of its own to scroll", out.extra <= 1, out);
+    check(label + ", zoom " + zoom + ": the settings list still scrolls", out.listScrolls, out);
+    check(label + ", zoom " + zoom + ": no console errors", errors.length === 0, errors);
+  }
+}
+
 console.log("\nreset picker");
 {
   const openPicker = async (page) =>

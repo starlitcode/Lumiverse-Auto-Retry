@@ -23,6 +23,10 @@ _2026-10-09_
 - **The reply a retry replaced comes back after a reload.** It was kept only in the browser tab, so a reload or leaving the app cleared it. Your server now holds a copy for your account, and the panel asks for it when it starts. Only your own account can see it.
 - **The pattern behind the settings stays still.** It works like a phone wallpaper: the settings scroll over it, and it does not move.
 
+### Fixed
+
+- **No second scroll bar in the settings window.** On some screens the settings were a little taller than the window Lumiverse gives them. The window then scrolled a few pixels, with a long scroll bar of its own beside the settings' one. The settings now measure the space the window has and fit inside it.
+
 ---
 
 ## 5.16.2
