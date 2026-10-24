@@ -12444,7 +12444,7 @@ export function setup(ctx, opts) {
     }
     // How tall the settings' wallpaper layer is: the height the box that
     // scrolls them shows. Measured again whenever that box or the settings
-    // change size.
+    // change size, and whenever the window or the part of it on screen does.
     let wallBox = null;
     let wallRoot = null;
     let wallSeen = null;
@@ -12511,12 +12511,49 @@ export function setup(ctx, opts) {
         }
         sizeWallpaper();
     }
+    // The host's box can follow the part of the window on screen, which a
+    // phone's keyboard shrinks while the page keeps its size. When the keyboard
+    // closes, the box may grow again, but the settings are still held to the
+    // short size and nothing changes size, so no ResizeObserver fires and the
+    // settings stayed short. Measured again on the next frame, after the host
+    // has resized its box, and once more when the resizing has settled.
+    let wallTimer = null;
+    const remeasureWallpaper = () => {
+        try {
+            if (typeof requestAnimationFrame === "function")
+                requestAnimationFrame(() => sizeWallpaper());
+        }
+        catch (_) { }
+        clearTimeout(wallTimer);
+        wallTimer = setTimeout(() => {
+            wallTimer = null;
+            sizeWallpaper();
+        }, 300);
+    };
+    try {
+        if (typeof window !== "undefined") {
+            window.addEventListener("resize", remeasureWallpaper);
+            if (window.visualViewport)
+                window.visualViewport.addEventListener("resize", remeasureWallpaper);
+        }
+    }
+    catch (_) { }
     disposers.push(() => {
         if (wallSeen)
             wallSeen.disconnect();
         wallSeen = null;
         wallRoot = null;
         wallBox = null;
+        clearTimeout(wallTimer);
+        wallTimer = null;
+        try {
+            if (typeof window !== "undefined") {
+                window.removeEventListener("resize", remeasureWallpaper);
+                if (window.visualViewport)
+                    window.visualViewport.removeEventListener("resize", remeasureWallpaper);
+            }
+        }
+        catch (_) { }
     });
     function buildSettingsBody(root, onSaved) {
         ensurePanelStyle();
@@ -12803,9 +12840,14 @@ export function setup(ctx, opts) {
                 const was = lastPick;
                 lastPick = select.value;
                 const name = select.value;
-                syncPresetButtons();
+                // The set goes in before anything compares the notes with it, so the
+                // line saying they differ does not start to show for the moment the
+                // picker names the set and the notes are still the old ones. doLoad
+                // brings the buttons into line itself.
                 if (name)
                     doLoad(name, was);
+                else
+                    syncPresetButtons();
             });
             // The sets that come with the extension, for this bar's kind. Only notes
             // has any today; a bar for another kind gets an empty list and behaves
@@ -12877,6 +12919,7 @@ export function setup(ctx, opts) {
                 const p = list().find((x) => x.name === name) || builtInNote(name);
                 if (!p) {
                     status.textContent = "That preset is gone.";
+                    syncPresetButtons();
                     return;
                 }
                 const before = {

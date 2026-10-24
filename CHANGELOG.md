@@ -15,6 +15,11 @@ _2026-10-24_
 ### Fixed again
 
 - **Several tries at once did not run after an error that came before any text.** 5.17.3 said a refusal sent as an error, such as `prohibited_content`, goes out several at once. When the error came before the first word, Lumiverse saved no reply, so your message was the last one in the chat. Several tries at once had no reply to add a reroll to, so each try pressed the retry button instead. Now the tries go out at once, and the reply that passes is added after your message as a new reply. In a group chat each try still presses the button, since a reply added by an extension cannot say which character wrote it. Seeing whether a chat is a group chat needs the `chats` permission. Auto Refine is told about the new reply, the same as a reroll. See [When no reply was saved](docs/tries-at-once.md#when-no-reply-was-saved). Reported in [pull request #79](https://github.com/starlitcode/Lumiverse-Auto-Retry/pull/79), which also suggested the fix.
+- **The settings window shrank with a phone keyboard and stayed short.** 5.17.4 said the settings window goes back to its full height when a phone keyboard closes. On some phones the keyboard shrinks only the part of the screen you can see, and the settings window shrank with it. When the keyboard closed, nothing told the settings to measure again, so they stayed short. They now measure again whenever the screen or the part you can see changes size.
+
+### Fixed
+
+- **A line flashed when picking a note set.** Picking a set under **Refusal tuning** briefly started to show "You have changed these since loading", then hid it. The set's notes now go in before anything compares them, so the line does not show.
 
 ---
 

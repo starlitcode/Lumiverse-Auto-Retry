@@ -12584,6 +12584,90 @@ for (const [label, viewport, touch] of [
   }
 }
 
+console.log("\nthe settings grow back when only the part on screen was short");
+// A phone's keyboard can shrink only the part of the window on screen, with
+// the page keeping its size. A host box that follows that part shrinks with
+// it and may grow again when the keyboard closes. Nothing in the settings
+// changes size then, so they have to measure again on the resize the browser
+// sends, from the window or from the part on screen.
+for (const [label, viewport, touch] of [
+  ["phone", { width: 390, height: 844 }, true],
+  ["laptop", { width: 1280, height: 900 }, false],
+]) {
+  for (const zoom of [1, 1.25, 0.85]) {
+    for (const from of ["visualViewport", "window"]) {
+      const width = Math.min(460, viewport.width - 24);
+      const body =
+        '<div style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center">' +
+        '<div id=hostbox style="width:' + width + 'px;max-height:min(720px,calc(var(--vp,' + viewport.height + 'px) - 24px));display:flex;flex-direction:column;overflow:hidden">' +
+        '<div style="padding:12px 16px"><h3 style="margin:0;font-size:15px">Auto Retry settings</h3></div>' +
+        '<div style="padding:16px;overflow-y:auto;flex:1"><div id=modal></div></div></div></div>';
+      const css = "html{zoom:" + zoom + "}body{margin:0}";
+      const { out, errors } = await inPanel(browser, { css, viewport, touch, body }, async (page) => {
+        const tall = () => page.evaluate(() => Math.round(document.getElementById("hostbox").getBoundingClientRect().height));
+        const onScreen = (h) =>
+          page.evaluate(([h, from]) => {
+            document.documentElement.style.setProperty("--vp", h + "px");
+            const target = from === "window" ? window : window.visualViewport;
+            if (target) target.dispatchEvent(new Event("resize"));
+          }, [h, from]);
+        await page.waitForTimeout(300);
+        const before = await tall();
+        await onScreen(Math.round(viewport.height / 2));
+        await page.waitForTimeout(400);
+        const squeezed = await tall();
+        await onScreen(viewport.height);
+        await page.waitForTimeout(500);
+        const after = await tall();
+        return { before, squeezed, after };
+      });
+      const tag = label + ", zoom " + zoom + ", told by the " + (from === "window" ? "window" : "part on screen") + ": ";
+      check(tag + "a short part on screen makes it shorter", out.squeezed < out.before, out);
+      check(tag + "it grows back when the keyboard closes", Math.abs(out.after - out.before) <= 2, out);
+      check(tag + "no console errors", errors.length === 0, errors);
+    }
+  }
+}
+
+console.log("\npicking a set never shows the line saying the notes changed");
+// The line says the notes no longer match the set the picker names. Picking
+// a set puts its notes in, so they match from the start, and the line must
+// not show, not even for a few frames while the set goes in.
+for (const [label, viewport, touch] of [["phone", { width: 390, height: 844 }, true], ["laptop", { width: 1280, height: 900 }, false]]) {
+  const { out, errors } = await inPanel(browser, { viewport, touch, settings: { retryOnRefusal: true, refusalNote: true } }, (page) =>
+    page.evaluate(async () => {
+      for (let k = 0; k < 2; k++) {
+        for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+        await new Promise((r) => setTimeout(r, 260));
+      }
+      const bar = document.querySelector('[data-ar-presets="notes"]');
+      const sel = bar && bar.querySelector("select");
+      if (!sel) return { noPicker: true };
+      const line = () => {
+        const n = document.querySelector("#modal [data-lvr-presetdrift]");
+        return !!n && !n.hidden && n.getBoundingClientRect().height > 0;
+      };
+      let seen = 0;
+      let frames = 0;
+      const picks = [...sel.querySelectorAll("optgroup")[0].querySelectorAll("option")].map((o) => o.value).slice(0, 2);
+      for (const name of picks) {
+        sel.value = name;
+        sel.dispatchEvent(new Event("change", { bubbles: true }));
+        const until = performance.now() + 400;
+        while (performance.now() < until) {
+          if (line()) seen++;
+          frames++;
+          await new Promise((r) => requestAnimationFrame(r));
+        }
+      }
+      return { picks, seen, frames };
+    }),
+  );
+  check(label + ": two sets were picked", !!out.picks && out.picks.length === 2, out);
+  check(label + ": the line never showed, in any frame", out.seen === 0 && out.frames > 10, out);
+  check(label + ": no console errors", errors.length === 0, errors);
+}
+
 console.log("\nsave with nothing changed");
 // Save compares every setting with what was saved last. With nothing changed
 // it says the settings are already saved and writes nothing. A real change is
