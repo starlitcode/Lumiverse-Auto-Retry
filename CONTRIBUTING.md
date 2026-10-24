@@ -6,7 +6,7 @@ Thank you for wanting to help with Auto Retry.
 
 Bug reports, ideas and questions are welcome.
 
-- Post them under my Auto Retry post on the Lumiverse Discord server, or
+- Post them in my [Auto Retry post](https://discord.com/channels/1484149939167821915/1514031700185714688) on the Lumiverse Discord server, or
 - [open an issue](https://github.com/starlitcode/Lumiverse-Auto-Retry/issues).
 
 For anything sensitive, such as a security problem, follow [SECURITY.md](SECURITY.md) instead.
