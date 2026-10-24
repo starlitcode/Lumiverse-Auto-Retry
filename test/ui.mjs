@@ -14166,10 +14166,10 @@ console.log("\nwhen the notes stop matching the set named in the picker");
   // changing a note afterwards left the picker naming a set the panel no longer
   // held.
   //
-  // The fields are not locked while a set that comes with the extension is
-  // picked. Loading one and changing it is how somebody is meant to start,
-  // which is what Save as new is for. What was missing was the panel saying the
-  // two had parted company.
+  // A set that comes with the extension cannot be typed in, but the notes
+  // can still change while its name is in the picker, such as by an import.
+  // The check changes one by script to stand for that. The panel has to say
+  // the notes no longer match the set it names.
   const openNotes = (page) =>
     page.evaluate(async () => {
       for (const b of [...document.querySelectorAll("#modal [aria-expanded]")]) {
@@ -14365,9 +14365,9 @@ console.log("\na provider error written into the reply");
 }
 
 console.log("\na set that comes with it stays picked after Save");
-// Save closes the panel. Opening it again has to come back on the set that
-// was picked, with its notes still locked, rather than naming nothing and
-// leaving the set's own notes open to editing as if they were yours.
+// Opening the panel again after Save has to come back on the set that was
+// saved, with its notes still locked, rather than naming nothing and leaving
+// the set's own notes open to editing as if they were yours.
 {
   const { out, errors } = await inPanel(browser, { settings: { retryOnRefusal: true, refusalNote: true } }, async (page) =>
     page.evaluate(async () => {
