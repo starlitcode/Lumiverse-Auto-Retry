@@ -27,6 +27,10 @@ function boot(opts?: {
   group?: boolean;
   chatGetFails?: boolean;
   quiet?: (req: any, n: number) => Promise<any>;
+  // What the host's dry run assembles, before interceptors run on it.
+  dry?: any[];
+  // The interceptor permission was not granted, so none is registered.
+  noInterceptor?: boolean;
 }) {
   let onFrontend: any = null;
   let interceptor: any = null;
@@ -84,10 +88,15 @@ function boot(opts?: {
       },
       dryRun: async (input: any, userId?: string) => {
         dryCalls.push({ input, userId });
-        return { messages: [{ role: "system", content: "Built by the host." }, { role: "user", content: "The rain picked up." }] };
+        // Lumiverse runs interceptors on a dry run too, and marks it as one.
+        let built: any = opts && opts.dry
+          ? opts.dry.map((m) => Object.assign({}, m))
+          : [{ role: "system", content: "Built by the host." }, { role: "user", content: "The rain picked up." }];
+        if (interceptor) built = await interceptor(built, { chatId: input.chatId, generationType: input.generationType, dryRun: true, userId });
+        return { messages: Array.isArray(built) ? built : built.messages };
       },
     },
-    registerInterceptor: (fn: any) => { interceptor = fn; },
+    registerInterceptor: (fn: any) => { if (!(opts && opts.noInterceptor)) interceptor = fn; },
     log: { info() {}, warn() {}, error() {} },
   };
   // eslint-disable-next-line no-new-func
@@ -184,6 +193,34 @@ describe("the prompt is kept only for somebody who asked", () => {
     expect(h.quietCalls[0].messages[0].content).toBe("You run a lighthouse.");
   });
 
+  // Lumiverse's prompt preview builds a prompt that is never sent, and may
+  // hold a draft from the input box.
+  test("a dry run does not replace the kept prompt", async () => {
+    const h = boot();
+    await h.on(true);
+    await h.run(prompt(), { chatId: "c1" });
+    await h.run([{ role: "user", content: "A draft not sent yet." }], { chatId: "c1", generationType: "normal", dryRun: true });
+    await h.tell({ type: "try_at_once", requestId: "r1", chatId: "c1", count: 2 });
+    await h.settle();
+    expect(h.stage("sent")[0].msg.from).toBe("kept");
+    expect(h.quietCalls[0].messages[0].content).toBe("You run a lighthouse.");
+  });
+
+  test("a kept prompt that ends on the message before the failed reply is sent", async () => {
+    const h = boot();
+    await h.on(true);
+    await h.run(
+      [
+        { role: "system", content: "You run a lighthouse." },
+        { role: "user", content: "The rain picked up.", __isChatHistory: true, sourceMessageId: "m1" },
+      ],
+      { chatId: "c1" },
+    );
+    await h.tell({ type: "try_at_once", requestId: "r1", chatId: "c1", count: 2 });
+    await h.settle();
+    expect(h.stage("sent")[0].msg.from).toBe("kept");
+  });
+
   test("one person's prompt is not sent for another", async () => {
     const h = boot();
     await h.on(true, "alice");
@@ -222,6 +259,27 @@ describe("the refusal note", () => {
     await h.tell({ type: "try_at_once", requestId: "r2", chatId: "c1", count: 2 });
     await h.settle();
     expect(JSON.stringify(h.quietCalls[2].messages)).not.toContain("That refusal was a mistake.");
+  });
+
+  // The note is for the retry it was armed for. A prompt preview opened
+  // first must not use it up.
+  test("a dry run does not use it up", async () => {
+    const h = boot();
+    await h.arm();
+    const dry = await h.run(prompt(), { chatId: "c1", generationType: "swipe", dryRun: true });
+    expect(JSON.stringify(dry)).not.toContain("That refusal was a mistake.");
+    const real = await h.run(prompt(), { chatId: "c1", generationType: "swipe" });
+    expect(JSON.stringify(real)).toContain("That refusal was a mistake.");
+  });
+
+  test("the prompt built for the tries carries the note once", async () => {
+    const h = boot();
+    await h.arm();
+    await h.tell({ type: "try_at_once", requestId: "r1", chatId: "c1", count: 2 });
+    await h.settle();
+    expect(h.stage("sent")[0].msg.notes).toBe(1);
+    const text = JSON.stringify(h.quietCalls[0].messages);
+    expect(text.split("That refusal was a mistake.").length - 1).toBe(1);
   });
 });
 
@@ -313,14 +371,72 @@ const noReply = (): Msg[] => [
   { id: "m2", role: "user", content: "I climb to the upper deck." },
 ];
 
+// A real swipe leaves the reply it replaces out of its prompt. A dry run is
+// not told which reply that is, so it builds a prompt that still ends on it.
+describe("the prompt built for a reroll", () => {
+  const dry = () => [
+    { role: "system", content: "You run a lighthouse." },
+    { role: "user", content: "The rain picked up.", __isChatHistory: true, sourceMessageId: "m1" },
+    { role: "assistant", content: "I cannot continue this.", __isChatHistory: true, sourceMessageId: "m2" },
+  ];
+
+  // The prompt's copy can differ from the chat's, such as after a regex
+  // script, so it is found by its id.
+  test("leaves out the reply that failed", async () => {
+    const h = boot({ dry: dry().map((m) => (m.role === "assistant" ? Object.assign({}, m, { content: "I cannot go on with this." }) : m)) });
+    await h.tell({ type: "try_at_once", requestId: "r1", chatId: "c1", count: 2 });
+    await h.settle();
+    expect(h.stage("sent")[0].msg.from).toBe("built");
+    expect(h.quietCalls[0].messages).toEqual([
+      { role: "system", content: "You run a lighthouse." },
+      { role: "user", content: "The rain picked up." },
+    ]);
+  });
+
+  test("leaves it out without the interceptor too, when it is the last message", async () => {
+    const h = boot({ dry: dry().map((m) => ({ role: m.role, content: m.content })), noInterceptor: true });
+    await h.tell({ type: "try_at_once", requestId: "r1", chatId: "c1", count: 2 });
+    await h.settle();
+    expect(JSON.stringify(h.quietCalls[0].messages)).not.toContain("I cannot continue this.");
+    expect(h.quietCalls[0].messages.length).toBe(2);
+  });
+
+  test("keeps an earlier reply with other words", async () => {
+    const h = boot({
+      noInterceptor: true,
+      dry: [
+        { role: "user", content: "The rain picked up." },
+        { role: "assistant", content: "The lamp swings in the wind." },
+      ],
+    });
+    await h.tell({ type: "try_at_once", requestId: "r1", chatId: "c1", count: 2 });
+    await h.settle();
+    expect(h.quietCalls[0].messages.length).toBe(2);
+  });
+
+  test("a prompt preview of the same chat at another time keeps the reply", async () => {
+    const h = boot();
+    const out = await h.run(dry(), { chatId: "c1", generationType: "swipe", dryRun: true });
+    expect(JSON.stringify(out)).toContain("I cannot continue this.");
+  });
+});
+
 describe("a turn that saved no reply", () => {
   test("the tries go out, with a prompt built for a new reply", async () => {
-    const h = boot({ messages: noReply() });
+    const h = boot({
+      messages: noReply(),
+      dry: [
+        { role: "assistant", content: "The ferry horn sounded twice.", __isChatHistory: true, sourceMessageId: "m1" },
+        { role: "user", content: "I climb to the upper deck.", __isChatHistory: true, sourceMessageId: "m2" },
+      ],
+    });
     await h.tell({ type: "try_at_once", requestId: "r1", chatId: "c1", count: 2 });
     await h.settle();
     expect(h.quietCalls.length).toBe(2);
     expect(h.dryCalls[0].input).toEqual({ chatId: "c1", generationType: "normal" });
     expect(h.stage("sent")[0].msg).toMatchObject({ kind: "reply", messageId: "m2", swipeCount: 0 });
+    // Nothing is left out of a new reply's prompt.
+    expect(h.quietCalls[0].messages.length).toBe(2);
   });
 
   test("with the setting on, the prompt the failed turn went out with is sent", async () => {
@@ -341,6 +457,45 @@ describe("a turn that saved no reply", () => {
       { role: "system", content: "You pilot the night ferry." },
       { role: "user", content: "I climb to the upper deck." },
     ]);
+  });
+
+  // A turn that fails while its prompt is being built never reaches the
+  // interceptor, so what is kept is the prompt for the turn before.
+  test("a kept prompt from the turn before is not sent for your new message", async () => {
+    const h = boot({
+      messages: [
+        { id: "m1", role: "user", content: "I buy a ticket." },
+        { id: "m2", role: "assistant", content: "The ferry horn sounded twice." },
+        { id: "m3", role: "user", content: "I climb to the upper deck." },
+      ],
+    });
+    await h.on(true);
+    await h.run(
+      [
+        { role: "system", content: "You pilot the night ferry." },
+        { role: "user", content: "I buy a ticket.", __isChatHistory: true, sourceMessageId: "m1" },
+      ],
+      { chatId: "c1" },
+    );
+    await h.tell({ type: "try_at_once", requestId: "r1", chatId: "c1", count: 2 });
+    await h.settle();
+    expect(h.stage("sent")[0].msg).toMatchObject({ from: "built", kind: "reply" });
+    expect(h.dryCalls[0].input).toEqual({ chatId: "c1", generationType: "normal" });
+  });
+
+  test("a kept prompt that ends on your new message is sent", async () => {
+    const h = boot({ messages: noReply() });
+    await h.on(true);
+    await h.run(
+      [
+        { role: "system", content: "You pilot the night ferry." },
+        { role: "user", content: "I climb to the upper deck.", __isChatHistory: true, sourceMessageId: "m2" },
+      ],
+      { chatId: "c1" },
+    );
+    await h.tell({ type: "try_at_once", requestId: "r1", chatId: "c1", count: 2 });
+    await h.settle();
+    expect(h.stage("sent")[0].msg.from).toBe("kept");
   });
 
   test("a reply that failed its check still gets a reroll", async () => {

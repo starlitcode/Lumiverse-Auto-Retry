@@ -165,7 +165,7 @@ const STREAM_BUF_MAX = 200000;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.20.6";
+const VERSION = "5.21.0";
 
 // Whether two saved settings hold the same values, whatever order their keys
 // were written in. A key left undefined counts as not there, the way it is
@@ -368,6 +368,12 @@ const CONFIG = {
   // open, so there is nothing for a second switch to buy: a switch left on
   // would go on paying for itself in every chat long after somebody looked once.
   liveLog: false,
+  logReplies: true,
+  logRetries: true,
+  logAtOnce: true,
+  logNotes: true,
+  logSetup: true,
+  logProblems: true,
   // Where that panel lives. "float" is the original: a small box over the chat
   // that the user drags where they want it. "drawer" puts it in Lumiverse's own
   // sidebar, which places it, themes it, lists it in the Ctrl+K palette, and
@@ -427,6 +433,17 @@ const MOVED_MARK = MOVED_DEFAULTS.map((m) => m.key + ":" + String(m.was)).join("
 // both the form and what gets persisted. Every option above (except the two
 // internal timing constants) is listed here, so everything is user-editable.
 type FieldType = "bool" | "num" | "text" | "pick" | "notes";
+
+// The kinds of line in the on-screen log, each with the setting that shows it.
+type LogKind = "replies" | "retry" | "atonce" | "notes" | "setup" | "problem";
+const LOG_KINDS: Record<LogKind, keyof typeof CONFIG> = {
+  replies: "logReplies",
+  retry: "logRetries",
+  atonce: "logAtOnce",
+  notes: "logNotes",
+  setup: "logSetup",
+  problem: "logProblems",
+};
 interface Field {
   key: keyof typeof CONFIG;
   label: string;
@@ -500,6 +517,10 @@ interface Group {
 // like more of the same. They are not. They are for whichever notes are due,
 // together, and the heading is where that gets said.
 const RUNS: Record<string, { title: string; note: string }> = {
+  logShow: {
+    title: "Show in the log",
+    note: "Which kinds of line the Log tab shows. A hidden line is still kept, and Debug info still includes it.",
+  },
   wholeList: {
     title: "For the whole list",
     note: "These two are set once and apply to every note. What each note sets for itself, its role and the try it starts on, is on its own row in the list above.",
@@ -625,6 +646,56 @@ const SCHEMA: Group[] = [
           { value: "drawer", label: "In the sidebar drawer" },
         ],
         hint: "Floating is a box over the chat you can move and resize. In the sidebar puts it in Lumiverse's own side panel, so it never covers the reply.",
+      },
+
+      // One switch for each kind of line in LOG_KINDS.
+      {
+        key: "logReplies",
+        needs: ["liveLog"],
+        run: "logShow",
+        label: "How each reply ended",
+        type: "bool",
+        hint: "On by default. A line when a reply starts and ends, and how it was judged.",
+      },
+      {
+        key: "logRetries",
+        needs: ["liveLog"],
+        run: "logShow",
+        label: "Retries",
+        type: "bool",
+        hint: "On by default. Each retry, the button it pressed, and when it gave up or paused.",
+      },
+      {
+        key: "logAtOnce",
+        needs: ["liveLog"],
+        run: "logShow",
+        label: "Several tries at once",
+        type: "bool",
+        hint: "On by default. The tries sent at once, each reply that came back, and the one added.",
+      },
+      {
+        key: "logNotes",
+        needs: ["liveLog"],
+        run: "logShow",
+        label: "Refusal notes",
+        type: "bool",
+        hint: "On by default. Which notes went with a retry, and why a note did not.",
+      },
+      {
+        key: "logSetup",
+        needs: ["liveLog"],
+        run: "logShow",
+        label: "Settings and presets",
+        type: "bool",
+        hint: "On by default. Settings and presets loaded, saved, or moved to and from your account.",
+      },
+      {
+        key: "logProblems",
+        needs: ["liveLog"],
+        run: "logShow",
+        label: "Problems and warnings",
+        type: "bool",
+        hint: "On by default. Something that could not be done, such as a window that would not open.",
       },
 
       // A retry is a whole generation paid for twice, so the Prompt tab can say
@@ -4378,10 +4449,10 @@ export function setup(ctx: Ctx, opts?: any) {
           // same sync on its way past, which is not a thing to rely on.
           syncInputBarActions();
           if (modalHandle && modalRoot) { if (modalSnapshot) modalSnapshot(); buildSettingsBody(modalRoot, modalSnapshot); }
-          log("settings loaded from account");
+          log("setup", "settings loaded from account");
         } else {
           try {
-            if (typeof localStorage !== "undefined" && localStorage.getItem(STORE_KEY)) { saveToAccount(); log("settings migrated to account"); }
+            if (typeof localStorage !== "undefined" && localStorage.getItem(STORE_KEY)) { saveToAccount(); log("setup", "settings migrated to account"); }
           } catch (_) {}
         }
       });
@@ -4723,10 +4794,24 @@ export function setup(ctx: Ctx, opts?: any) {
   // not console logging is on, so the Copy debug info report carries a timeline
   // and the user never has to open dev tools to report a behavioral bug.
   const EVENTLOG_MAX = 20;
-  const eventLog: string[] = [];
+  const eventLog: Array<{ line: string; kind: LogKind }> = [];
   let liveLogEl: HTMLElement | null = null;
   let liveLogBody: HTMLElement | null = null;
-  function recordEvent(args: any[]) {
+  // What the Log tab shows: the lines of every kind left switched on. The
+  // debug report reads eventLog itself, so it keeps every line.
+  function shownLog(): string[] {
+    return eventLog.filter((e) => cfg[LOG_KINDS[e.kind]] !== false).map((e) => e.line);
+  }
+  function logViewText(): string {
+    const shown = shownLog();
+    const hidden = eventLog.length - shown.length;
+    const said = hidden
+      ? "(" + hidden + (hidden === 1 ? " line is" : " lines are") + " of a kind you hid. Show in the log, in the settings, chooses what shows.)"
+      : "";
+    if (!shown.length) return said || "(nothing yet)";
+    return said ? said + "\n" + shown.join("\n") : shown.join("\n");
+  }
+  function recordEvent(kind: LogKind, args: any[]) {
     try {
       const parts = args.map((a) => {
         if (typeof a === "string") return a;
@@ -4738,13 +4823,13 @@ export function setup(ctx: Ctx, opts?: any) {
       });
       let line = new Date().toISOString().slice(11, 23) + " " + parts.join(" ");
       if (line.length > 220) line = line.slice(0, 217) + "...";
-      eventLog.push(line);
+      eventLog.push({ line: line, kind: kind });
       if (eventLog.length > EVENTLOG_MAX) eventLog.shift();
       if (liveLogBody) renderLiveLog();
     } catch (_) {}
   }
-  const log = (...a: any[]) => {
-    recordEvent(a);
+  const log = (kind: LogKind, ...a: any[]) => {
+    recordEvent(kind, a);
   };
 
   // Optional on-screen log. A small fixed panel that shows recent activity live,
@@ -5075,9 +5160,7 @@ export function setup(ctx: Ctx, opts?: any) {
     if (liveTab === "stats") return renderStatsView();
     if (liveTab === "replaced") return renderReplacedView();
     liveLogBody.style.whiteSpace = "pre-wrap";
-    liveLogBody.textContent = eventLog.length
-      ? eventLog.join("\n")
-      : "(nothing yet)";
+    liveLogBody.textContent = logViewText();
     liveLogBody.scrollTop = liveLogBody.scrollHeight;
   }
 
@@ -5768,9 +5851,7 @@ export function setup(ctx: Ctx, opts?: any) {
             ? statsAsText()
             : liveTab === "replaced"
               ? replacedAsText()
-              : eventLog.length
-                ? eventLog.join("\n")
-                : "(nothing yet)",
+              : logViewText(),
       );
       copyBtn.textContent = ok ? "Copied" : "Could not";
       setTimeout(() => {
@@ -6120,7 +6201,7 @@ export function setup(ctx: Ctx, opts?: any) {
   function showDrawerPanel(): boolean {
     if (drawerTab) return true;
     if (!ctx || !ctx.ui || typeof (ctx as any).ui.registerDrawerTab !== "function") {
-      log("this version of Lumiverse has no sidebar panel for extensions, so the panel stays over the chat");
+      log("problem", "this version of Lumiverse has no sidebar panel for extensions, so the panel stays over the chat");
       return false;
     }
     try {
@@ -6161,7 +6242,7 @@ export function setup(ctx: Ctx, opts?: any) {
       ensureReadableTree(root);
       return true;
     } catch (e) {
-      log("could not open the sidebar panel, so the panel stays over the chat", e);
+      log("problem", "could not open the sidebar panel, so the panel stays over the chat", e);
       hideDrawerPanel();
       return false;
     }
@@ -6212,7 +6293,7 @@ export function setup(ctx: Ctx, opts?: any) {
     try {
       drawerTab && drawerTab.activate();
     } catch (e) {
-      log("could not open the drawer tab", e);
+      log("problem", "could not open the drawer tab", e);
     }
   }
 
@@ -6503,7 +6584,7 @@ export function setup(ctx: Ctx, opts?: any) {
       // Float widgets need the ui_panels permission. Without it the extension
       // still works; there is just no floating button.
       floatWidget = null;
-      log("could not create the floating button. Check that the ui_panels permission is granted.");
+      log("problem", "could not create the floating button. Check that the ui_panels permission is granted.");
       return;
     }
     floatWidgetSize = d;
@@ -6702,7 +6783,7 @@ export function setup(ctx: Ctx, opts?: any) {
     if (typeof menu !== "function") {
       // An older Lumiverse without the API. Say where the settings are rather
       // than opening nothing and looking broken.
-      log("this version of Lumiverse cannot open the floating button's menu");
+      log("problem", "this version of Lumiverse cannot open the floating button's menu");
       showToast("Auto Retry settings are in the chat bar's Extras popover.", { force: true });
       return;
     }
@@ -6761,7 +6842,7 @@ export function setup(ctx: Ctx, opts?: any) {
       selectedKey = (res && res.selectedKey) || null;
     } catch (e) {
       if (floatMenuToken === token) floatMenuToken = null;
-      log("float menu failed", e);
+      log("problem", "float menu failed", e);
       return;
     }
 
@@ -7609,7 +7690,10 @@ export function setup(ctx: Ctx, opts?: any) {
     {
       id: "notifications",
       label: "Panel, pop-up and prices",
-      keys: ["reduceMotion", "toast", "liveLog", "panelHome", "panelPattern", "costIn", "costOut"],
+      keys: [
+        "reduceMotion", "toast", "liveLog", "panelHome", "panelPattern", "costIn", "costOut",
+        "logReplies", "logRetries", "logAtOnce", "logNotes", "logSetup", "logProblems",
+      ],
     },
     // Special entry: carried outside cfg. buildExport and the import handler
     // treat it as the whole preset store, every kind of preset in it, rather
@@ -8009,13 +8093,13 @@ export function setup(ctx: Ctx, opts?: any) {
               localStorage.setItem(PRESETS_KEY, JSON.stringify(merged));
           } catch (_) {}
           for (const r of presetBarRefreshers) r();
-          log("brought " + took + (took === 1 ? " preset" : " presets") + " down from the account");
+          log("setup", "brought " + took + (took === 1 ? " preset" : " presets") + " down from the account");
         }
         // Anything the account did not have goes up, so the two agree either
         // way round rather than only when the account was already ahead.
         if (kept) {
           savePresetsToAccount(merged);
-          log("sent " + kept + (kept === 1 ? " preset" : " presets") + " up to the account");
+          log("setup", "sent " + kept + (kept === 1 ? " preset" : " presets") + " up to the account");
         }
       });
       presetsWaiting = () => {
@@ -8331,7 +8415,7 @@ export function setup(ctx: Ctx, opts?: any) {
         }
         stateLoaded = true;
         if (sendUp) saveStateToAccount();
-        log(st ? "chats switched off and notices read from the account" : "chats switched off and notices sent up to the account");
+        log("setup", st ? "chats switched off and notices read from the account" : "chats switched off and notices sent up to the account");
       });
       stateWaiting = () => {
         try { off && off(); } catch (_) {}
@@ -8779,7 +8863,7 @@ export function setup(ctx: Ctx, opts?: any) {
     if (Date.now() - due <= WATCHDOG_SLACK_MS) return false;
     if (Date.now() - saidPageSlept > 1000) {
       saidPageSlept = Date.now();
-      log(
+      log("replies",
         "this tab was asleep for part of the wait, so the reply starts its " +
         "wait over rather than being counted as stuck",
       );
@@ -9163,7 +9247,7 @@ export function setup(ctx: Ctx, opts?: any) {
       el.click();
       return true;
     } catch (e) {
-      log("click failed", e);
+      log("retry", "click failed", e);
       return false;
     } finally {
       selfClicking -= 1;
@@ -9200,13 +9284,13 @@ export function setup(ctx: Ctx, opts?: any) {
     // with it. That is worth knowing from the log rather than working out from
     // a reroll that went missing.
     if (picked && picked.via !== (cfg.retryByNewReroll ? "swipe" : "regenerate"))
-      log(
+      log("retry",
         "no " + (cfg.retryByNewReroll ? "next / swipe" : "regenerate") +
         " button on screen, so this retry used " + picked.via +
         " instead; set both selectors in the buttons section",
       );
     if (!picked) {
-      log("no retry control found, set the button selectors in settings");
+      log("retry", "no retry control found, set the button selectors in settings");
       showToast(
         "Auto Retry could not find your regenerate button. Set it in Auto Retry settings.",
         { kind: "error" },
@@ -9264,7 +9348,7 @@ export function setup(ctx: Ctx, opts?: any) {
       // The retry this note was armed for is off, so the note goes with it.
       disarmRefusalNote(chatId);
       if (announce) showToast("Auto Retry stopped.");
-      log("stopped retrying in this chat", chatId);
+      log("retry", "stopped retrying in this chat", chatId);
     }
     // Called off is a change too, and the one people are watching for after
     // pressing Cancel.
@@ -9786,12 +9870,12 @@ export function setup(ctx: Ctx, opts?: any) {
     const btn = findNewConfirm(before);
     if (!btn) return false;
     if (confirmClicks >= CONFIRM_MAX_CLICKS) {
-      log("dialog did not respond to being confirmed; leaving it alone");
+      log("retry", "dialog did not respond to being confirmed; leaving it alone");
       clearConfirmWatch();
       return true;
     }
     confirmClicks += 1;
-    log("a dialog opened after the retry click; confirming it");
+    log("retry", "a dialog opened after the retry click; confirming it");
     // Kept in the hidden list until the watch ends: if this press dismisses it
     // the element goes away and restoring it is a no-op, and if it does not the
     // dialog reappears rather than staying hidden.
@@ -9872,7 +9956,7 @@ export function setup(ctx: Ctx, opts?: any) {
       // start event is just slow. Clicking again here would stack a second
       // generation, so this waits a few more rounds before deciding.
       if (left > 0 && find(cfg.stopSelector)) {
-        log("retry click has not reported a start yet; waiting", chatId);
+        log("retry", "retry click has not reported a start yet; waiting", chatId);
         armStartWatchdog(chatId, via, allowFallback, left - 1);
         return;
       }
@@ -9887,14 +9971,14 @@ export function setup(ctx: Ctx, opts?: any) {
           const beforeOther = confirmSnapshot();
           watchForConfirm(beforeOther);
           if (clickHostControl(other)) {
-            log("no generation after the " + via + " click, trying " + otherVia, chatId);
+            log("retry", "no generation after the " + via + " click, trying " + otherVia, chatId);
             armStartWatchdog(chatId, otherVia, false);
             return;
           }
           s.expectingStart = 0;
         }
       }
-      log("retry click produced no generation; resetting stale state", chatId);
+      log("retry", "retry click produced no generation; resetting stale state", chatId);
       disarmRefusalNote(chatId);
       s.selfTriggered = false;
       tellPage(RETRY_OFF_EVENT, chatId);
@@ -9925,7 +10009,7 @@ export function setup(ctx: Ctx, opts?: any) {
       armedNoteChat = null;
       if (!ctx || typeof (ctx as any).sendToBackend !== "function") return;
       (ctx as any).sendToBackend({ type: "arm_refusal_note", chatId: chatId, notes: [] });
-      log("retry never started; note taken back", chatId);
+      log("notes", "retry never started; note taken back", chatId);
     } catch (_) {}
   }
 
@@ -9950,7 +10034,7 @@ export function setup(ctx: Ctx, opts?: any) {
         // an unscoped note would attach itself to whichever generation ran
         // next, in any chat. The retry itself still goes ahead without it.
         if (chatId === NO_CHAT) {
-          log("no note this time: the host did not say which chat this is, and a note has to belong to one");
+          log("notes", "no note this time: the host did not say which chat this is, and a note has to belong to one");
           return resolve(false);
         }
         // An empty note is skipped rather than sent blank, so a half-filled list
@@ -9975,12 +10059,12 @@ export function setup(ctx: Ctx, opts?: any) {
         const due = all.filter((n: any) => attempt >= n.fromTry);
         if (!due.length) {
           const soonest = Math.min.apply(null, all.map((n: any) => n.fromTry));
-          log("no note is due yet; the earliest starts on try " + soonest + ", this is try " + attempt);
+          log("notes", "no note is due yet; the earliest starts on try " + soonest + ", this is try " + attempt);
           return resolve(false);
         }
         const notes = due.map((n: any) => ({ text: n.text, role: n.role }));
         if (due.length < all.length)
-          log("sending " + due.length + " of " + all.length + " notes; the rest start on a later try");
+          log("notes", "sending " + due.length + " of " + all.length + " notes; the rest start on a later try");
         if (!ctx || typeof (ctx as any).sendToBackend !== "function") return resolve(false);
         const reqId = "ar-arm-" + Date.now() + "-" + Math.random().toString(36).slice(2);
         let settled = false;
@@ -9996,13 +10080,13 @@ export function setup(ctx: Ctx, opts?: any) {
         try {
           off = (ctx as any).onBackendMessage((msg: any) => {
             if (msg && msg.type === "note_armed" && msg.requestId === reqId) {
-              log(msg.armed ? "note is in place for the next retry" : "backend accepted no note");
+              log("notes", msg.armed ? "note is in place for the next retry" : "backend accepted no note");
               finish(!!msg.armed);
             }
           });
         } catch (_) {}
         timer = setTimeout(() => {
-          log("note was not acknowledged in time; retrying without waiting further");
+          log("notes", "note was not acknowledged in time; retrying without waiting further");
           finish(false);
         }, NOTE_ACK_MS);
         (ctx as any).sendToBackend({
@@ -10025,19 +10109,19 @@ export function setup(ctx: Ctx, opts?: any) {
     // Tries at once still out are this chat's retry already.
     if (!cfg.enabled || s.pending || s.atOnce) return;
     if (chatIsOff(chatId)) {
-      log("this chat is switched off, not retrying", chatId);
+      log("retry", "this chat is switched off, not retrying", chatId);
       return;
     }
     if (cfg.pauseWhenFailing && Date.now() < pausedUntil) {
-      log("paused after repeated failures, not retrying", chatId);
+      log("retry", "paused after repeated failures, not retrying", chatId);
       return;
     }
     if (Date.now() < s.suppressUntil) {
-      log("ignored, you had just stopped or canceled it", chatId);
+      log("retry", "ignored, you had just stopped or canceled it", chatId);
       return;
     }
     if (s.attempts >= cfg.maxRetries) {
-      log("gave up", chatId, reason);
+      log("retry", "gave up", chatId, reason);
       s.attempts = 0;
       // A second guard on a value that is already clamped. The lowest the box
       // allows is 1, and a saved 0 from before that is clamped on load, so this
@@ -10052,7 +10136,7 @@ export function setup(ctx: Ctx, opts?: any) {
         const pauseMs = breakerPauseMs();
         pausedUntil = Date.now() + pauseMs;
         failedRuns = 0;
-        log("paused for " + sayTime(pauseMs) + " after " + runsNeeded + " failed runs");
+        log("retry", "paused for " + sayTime(pauseMs) + " after " + runsNeeded + " failed runs");
         // Said the same way as the countdown that follows it on the panel, and
         // for the same reason the countdown grew hours: this pause can be set
         // to three hours, and "180 minutes" leaves you doing the division.
@@ -10090,7 +10174,7 @@ export function setup(ctx: Ctx, opts?: any) {
     const delay = computeDelay(s.attempts, rl, err);
     clearTimers(s);
     s.pending = true;
-    log(
+    log("retry",
       "retry " +
         s.attempts +
         "/" +
@@ -10230,7 +10314,7 @@ export function setup(ctx: Ctx, opts?: any) {
       const missing = run.count - run.back;
       endAtOnce(s, true);
       hideToast();
-      log(
+      log("atonce",
         missing + " of the " + run.count + " replies did not come back in " + sayTime(atOnceWaitMs()) +
           ", so they were stopped",
       );
@@ -10276,7 +10360,7 @@ export function setup(ctx: Ctx, opts?: any) {
   async function runAtOnce(chatId: string, reason: string) {
     const s = st(chatId);
     if (!ctx || typeof (ctx as any).sendToBackend !== "function" || typeof (ctx as any).onBackendMessage !== "function") {
-      log("several tries at once needs the backend, which is not there, so pressing the retry button instead");
+      log("atonce", "several tries at once needs the backend, which is not there, so pressing the retry button instead");
       return clickRetry(chatId, reason);
     }
     const attempt = s.attempts;
@@ -10316,7 +10400,7 @@ export function setup(ctx: Ctx, opts?: any) {
       if (run.over) return;
       endAtOnce(s, true);
       hideToast();
-      log("several tries at once did not run: " + why + ". Pressing the retry button instead.");
+      log("atonce", "several tries at once did not run: " + why + ". Pressing the retry button instead.");
       clickRetry(chatId, reason);
     };
     try {
@@ -10361,7 +10445,7 @@ export function setup(ctx: Ctx, opts?: any) {
       stats.extraReplies += Math.max(0, run.count - 1);
       // The backend has used the note up, so there is nothing left to take back.
       if (armedNoteChat === String(chatId)) armedNoteChat = null;
-      log(
+      log("atonce",
         "sent " + run.count + " at once, with the prompt " +
           (msg.from === "kept"
             ? "the last reply went out with"
@@ -10381,11 +10465,11 @@ export function setup(ctx: Ctx, opts?: any) {
         if (cfg.retryOnRefusal && looksLikeRefusalError(String(msg.error), cfg)) {
           run.judged += 1;
           run.reason = BLOCKED_REASON;
-          log("reply " + run.back + " of " + run.count + ": " + BLOCKED_REASON + " (" + String(msg.error) + ")");
+          log("atonce", "reply " + run.back + " of " + run.count + ": " + BLOCKED_REASON + " (" + String(msg.error) + ")");
           return;
         }
         run.lastError = String(msg.error);
-        log("reply " + run.back + " of " + run.count + " failed: " + run.lastError);
+        log("atonce", "reply " + run.back + " of " + run.count + " failed: " + run.lastError);
         return;
       }
       run.judged += 1;
@@ -10397,14 +10481,14 @@ export function setup(ctx: Ctx, opts?: any) {
         endAtOnce(s, true);
         hideToast();
         s.attempts = 0;
-        log("a reply is one of your hard failures, so not retrying");
+        log("atonce", "a reply is one of your hard failures, so not retrying");
         showToast("Auto Retry did not retry: a reply matches one of your hard failures, so trying again would not help.", { kind: "warning" });
         return;
       }
       if (problem) {
         run.reason = problem;
         run.lastText = content;
-        log("reply " + run.back + " of " + run.count + ": " + problem);
+        log("atonce", "reply " + run.back + " of " + run.count + ": " + problem);
         return;
       }
       run.adding = true;
@@ -10416,7 +10500,7 @@ export function setup(ctx: Ctx, opts?: any) {
       if (run.adding) return;
       endAtOnce(s, false);
       hideToast();
-      log("none of the " + run.count + " replies passed");
+      log("atonce", "none of the " + run.count + " replies passed");
       if (run.lastText) s.lastText = run.lastText.slice(-STREAM_BUF_MAX);
       if (!run.judged && run.lastError) scheduleRetry(chatId, "error", run.lastError);
       else scheduleRetry(chatId, run.reason);
@@ -10440,7 +10524,7 @@ export function setup(ctx: Ctx, opts?: any) {
         hideToast();
       }
       if (ok && !current) {
-        log(
+        log("atonce",
           "a reply that passed was added " + (newReply ? "" : "as a new reroll ") +
             "after you stopped the retry",
         );
@@ -10451,7 +10535,7 @@ export function setup(ctx: Ctx, opts?: any) {
         pausedUntil = 0;
         stats.good += 1;
         s.attempts = 0;
-        log(newReply ? "added a reply that passed" : "added a reply that passed as a new reroll", content.length + " chars");
+        log("atonce", newReply ? "added a reply that passed" : "added a reply that passed as a new reroll", content.length + " chars");
         const said = newReply ? "Auto Retry added a reply that passed." : "Auto Retry added a reply that passed, as a new reroll.";
         showToast(said, { kind: "success" });
         // Lumiverse raises no end event for a reply an extension writes, so
@@ -10470,7 +10554,7 @@ export function setup(ctx: Ctx, opts?: any) {
         } catch (_) {}
         return;
       }
-      log("a reply passed, but it could not be added: " + why);
+      log("atonce", "a reply passed, but it could not be added: " + why);
       if (!current) return;
       s.lastText = content.slice(-STREAM_BUF_MAX);
       scheduleRetry(chatId, run.reason);
@@ -10522,10 +10606,10 @@ export function setup(ctx: Ctx, opts?: any) {
     // that died after nothing but those is the case this watchdog exists for.
     const gotText = String(s.buf || "").trim().length > 0;
     if (!gotText && s.sawReasoning)
-      log("the model went quiet while thinking, for longer than the wait for the first words");
+      log("replies", "the model went quiet while thinking, for longer than the wait for the first words");
     if (gotText && !cfg.retryOnTruncated) {
       clearTimers(s);
-      log("a reply stopped partway and was left alone: cut-off replies are switched off");
+      log("replies", "a reply stopped partway and was left alone: cut-off replies are switched off");
       return;
     }
     abortAndRetry(chatId, "stalled");
@@ -10542,7 +10626,7 @@ export function setup(ctx: Ctx, opts?: any) {
       clearTimers(s);
       s.live = false;
       s.screenAtStart = "";
-      log(
+      log("replies",
         "the reply is on the page but this tab never heard it arrive, so it " +
         "was left alone rather than counted as " + reason,
       );
@@ -10605,13 +10689,13 @@ export function setup(ctx: Ctx, opts?: any) {
       s.ignored.add(p.generationId);
       rememberGeneration(p.generationId, chatId);
       clearTimers(s);
-      log("an impersonation started, which writes your turn into the input box, so it is left alone");
+      log("replies", "an impersonation started, which writes your turn into the input box, so it is left alone");
       return;
     }
     const ours =
       s.selfTriggered ||
       (s.retryClickAt > 0 && Date.now() - s.retryClickAt < OURS_WINDOW_MS);
-    log(
+    log("replies",
       "gen start",
       p.generationId,
       ours ? "(auto-retry)" : "(user)",
@@ -10621,7 +10705,7 @@ export function setup(ctx: Ctx, opts?: any) {
       if (s.atOnce) {
         endAtOnce(s, true);
         hideToast();
-        log("a new reply started, so the tries at once were stopped");
+        log("atonce", "a new reply started, so the tries at once were stopped");
       }
       s.attempts = 0;
       s.suppressUntil = 0;
@@ -10958,7 +11042,7 @@ export function setup(ctx: Ctx, opts?: any) {
         clearTimeout(s.startTimer);
         s.startTimer = null;
       }
-      log("a council tool failed and Lumiverse is asking what to do, so the reply is not counted as stuck while it waits");
+      log("replies", "a council tool failed and Lumiverse is asking what to do, so the reply is not counted as stuck while it waits");
       return;
     }
     if (cfg.enabled && cfg.stuckTimeoutMs > 0)
@@ -10988,7 +11072,7 @@ export function setup(ctx: Ctx, opts?: any) {
     const genId = genKey(p.generationId);
     if (genId) {
       if (s.judged.has(genId)) {
-        log("that reply had already been dealt with, so this ending was ignored");
+        log("replies", "that reply had already been dealt with, so this ending was ignored");
         return;
       }
       s.judged.add(genId);
@@ -11045,7 +11129,7 @@ export function setup(ctx: Ctx, opts?: any) {
     if (s.ignored.has(p.generationId)) return; // aborted gen's trailing event, retry already scheduled
     clearTimers(s);
     if (Date.now() < s.suppressUntil) {
-      log("the reply ended just after you stopped it, so ignoring it");
+      log("replies", "the reply ended just after you stopped it, so ignoring it");
       s.attempts = 0;
       return;
     } // user just stopped; do not retry
@@ -11053,7 +11137,7 @@ export function setup(ctx: Ctx, opts?: any) {
       // A content-moderation block we can retry as a refusal is not a permanent
       // failure, so don't let the hard-error skip catch it before the refusal check.
       if (cfg.ignoreHardErrors && isHardError(p.error, cfg) && !(cfg.retryOnRefusal && looksLikeRefusalError(errorText(p.error), cfg))) {
-        log("hard error ignored", errorText(p.error));
+        log("replies", "hard error ignored", errorText(p.error));
         showToast("Auto Retry did not retry: that error will not fix itself, so trying again would not help.", { kind: "warning" });
         s.attempts = 0;
         return;
@@ -11107,13 +11191,13 @@ export function setup(ctx: Ctx, opts?: any) {
       return;
     }
     if (content.length === 0) {
-      log("the reply ended with no text to read, so leaving it alone");
+      log("replies", "the reply ended with no text to read, so leaving it alone");
       s.attempts = 0;
       return;
     }
     const problem = replyProblem(content, thought, cfg);
     if (problem === HARD_FAILURE) {
-      log("the reply is one of your hard failures, so not retrying");
+      log("replies", "the reply is one of your hard failures, so not retrying");
       showToast("Auto Retry did not retry: the reply matches one of your hard failures, so trying again would not help.", { kind: "warning" });
       s.attempts = 0;
       return;
@@ -11126,7 +11210,7 @@ export function setup(ctx: Ctx, opts?: any) {
     failedRuns = 0;
     pausedUntil = 0;
     stats.good += 1;
-    log("gen ok", content.length + " chars");
+    log("replies", "gen ok", content.length + " chars");
     s.attempts = 0; // clean success
   }
 
@@ -11143,7 +11227,7 @@ export function setup(ctx: Ctx, opts?: any) {
       return;
     }
     if (s.ignored.has(p.generationId)) return; // our own abort, not a user stop
-    log("user stop", p.generationId);
+    log("replies", "user stop", p.generationId);
     standDown(chatId, true); // a real user stop, so nothing is retried after it
   }
 
@@ -12053,7 +12137,7 @@ export function setup(ctx: Ctx, opts?: any) {
       lines.push("");
       lines.push("recent activity (oldest first):");
       if (eventLog.length === 0) lines.push("  (nothing recorded yet)");
-      else for (const e of eventLog) lines.push("  " + e);
+      else for (const e of eventLog) lines.push("  " + e.line);
     }
     return lines.join("\n");
   }
@@ -12663,7 +12747,7 @@ export function setup(ctx: Ctx, opts?: any) {
         undoTo = took ? before : null;
         syncPresetButtons();
         status.textContent = "Loaded preset: " + name + ". Press Save to keep it.";
-        log("loaded the " + kindLabel + " preset " + JSON.stringify(name));
+        log("setup", "loaded the " + kindLabel + " preset " + JSON.stringify(name));
       };
 
       loadBtn.addEventListener("click", () => {
@@ -12699,7 +12783,7 @@ export function setup(ctx: Ctx, opts?: any) {
         undoTo = null;
         syncPresetButtons();
         status.textContent = "Put back what was here before.";
-        log("put back what the " + kindLabel + " preset replaced");
+        log("setup", "put back what the " + kindLabel + " preset replaced");
       });
 
       saveNew.addEventListener("click", () => {
@@ -12728,7 +12812,7 @@ export function setup(ctx: Ctx, opts?: any) {
         undoTo = null;
         refreshSelect(name);
         status.textContent = "Saved current settings as: " + name + ".";
-        log("saved a " + kindLabel + " preset called " + JSON.stringify(name));
+        log("setup", "saved a " + kindLabel + " preset called " + JSON.stringify(name));
       });
 
       rename.addEventListener("click", () => {
@@ -12774,7 +12858,7 @@ export function setup(ctx: Ctx, opts?: any) {
         if (readPick(kind) === cur) writePick(kind, newName);
         refreshSelect(newName);
         status.textContent = "Renamed " + cur + " to " + newName + ".";
-        log("renamed a " + kindLabel + " preset to " + JSON.stringify(newName));
+        log("setup", "renamed a " + kindLabel + " preset to " + JSON.stringify(newName));
       });
 
       update.addEventListener("click", () => {
@@ -12804,7 +12888,7 @@ export function setup(ctx: Ctx, opts?: any) {
         syncPresetButtons();
         status.textContent =
           "Updated " + name + " to your current settings.";
-        log("updated the " + kindLabel + " preset " + JSON.stringify(name));
+        log("setup", "updated the " + kindLabel + " preset " + JSON.stringify(name));
       });
 
       del.addEventListener("click", async () => {
@@ -12832,7 +12916,7 @@ export function setup(ctx: Ctx, opts?: any) {
             if (readPick(kind) === name) writePick(kind, "");
             refreshSelect();
             status.textContent = "Deleted preset: " + name + ".";
-            log("deleted the " + kindLabel + " preset " + JSON.stringify(name));
+            log("setup", "deleted the " + kindLabel + " preset " + JSON.stringify(name));
           },
         );
       });
@@ -13433,7 +13517,7 @@ export function setup(ctx: Ctx, opts?: any) {
       body.style.cssText = "display:none;flex-direction:column;gap:10px";
       body.appendChild(
         sectionDesc(
-          "A snapshot for your own debugging or a bug report. Tick the parts to include, build a preview, edit out anything you would rather not share, then copy. Nothing leaves your device until you paste it somewhere.",
+          "Optional. Adding this to a bug report helps show exactly what went wrong. Nothing leaves your device until you paste it.",
           false,
         ),
       );
@@ -13483,7 +13567,7 @@ export function setup(ctx: Ctx, opts?: any) {
         if (!dArea.value.trim()) dArea.value = buildDebugInfo(opts());
         const ok = await copyText(dArea.value);
         dStatus.textContent = ok
-          ? "Copied. Paste it into your bug report."
+          ? "Copied. You can paste it into a bug report."
           : "Could not copy here. Select the text and copy it by hand.";
       });
 
@@ -13905,11 +13989,11 @@ export function setup(ctx: Ctx, opts?: any) {
         // Left on screen rather than cleared after a moment: this one is not a
         // confirmation somebody can miss without cost.
         say("Could not save in this browser. Check that it is not blocking site data.");
-        log("settings could not be saved in this browser");
+        log("problem", "settings could not be saved in this browser");
         return;
       }
       say("Saved. Takes effect on the next reply.");
-      log("settings saved", cfg);
+      log("setup", "settings saved", cfg);
       setTimeout(() => {
         if (status.textContent === "Saved. Takes effect on the next reply.") say("");
       }, 2600);
@@ -15327,7 +15411,7 @@ export function setup(ctx: Ctx, opts?: any) {
             (done.presets === 1 ? " preset deleted" : " presets deleted"),
         );
       onApplied(done);
-      log("reset: " + ids.join(", ") + (presetCb.checked ? " + presets" : ""));
+      log("setup", "reset: " + ids.join(", ") + (presetCb.checked ? " + presets" : ""));
       showToast("Reset: " + bits.join(", ") + ".", { force: true, kind: "success" });
     });
     overlay.addEventListener("click", (e) => {
@@ -15741,7 +15825,7 @@ export function setup(ctx: Ctx, opts?: any) {
 
   function openSettings() {
     if (!ctx?.ui?.showModal) {
-      log("this version of Lumiverse cannot open the settings window");
+      log("problem", "this version of Lumiverse cannot open the settings window");
       return;
     }
     try {
@@ -15826,7 +15910,7 @@ export function setup(ctx: Ctx, opts?: any) {
         modalBaseline = null;
       });
     } catch (e) {
-      log("could not open the settings window", e);
+      log("problem", "could not open the settings window", e);
     }
   }
 
@@ -15845,10 +15929,10 @@ export function setup(ctx: Ctx, opts?: any) {
         } catch (_) {}
       });
     } else {
-      log("this version of Lumiverse cannot add buttons to the Extras menu");
+      log("problem", "this version of Lumiverse cannot add buttons to the Extras menu");
     }
   } catch (e) {
-    log("could not add the settings button to the Extras menu", e);
+    log("problem", "could not add the settings button to the Extras menu", e);
   }
 
   // backup stop-press catcher (see onDocClick)
@@ -15867,7 +15951,7 @@ export function setup(ctx: Ctx, opts?: any) {
     try {
       fn(p);
     } catch (e) {
-      log("handler error in " + label, e);
+      log("problem", "handler error in " + label, e);
     }
   };
 
@@ -15895,7 +15979,7 @@ export function setup(ctx: Ctx, opts?: any) {
       ctx.events.on("MESSAGE_SENT", safe("MESSAGE_SENT", (p: any) => noteChat(p && p.chatId))),
     ];
   } catch (e) {
-    log("could not listen for replies. Check that the generation permission is granted.", e);
+    log("problem", "could not listen for replies. Check that the generation permission is granted.", e);
   }
   syncLiveLog();
   syncFloat();
@@ -15946,7 +16030,7 @@ export function setup(ctx: Ctx, opts?: any) {
           askForPermissions();
           askForBackendVersion();
           if (promptsAsked) {
-            log("backend restarted, asking it for prompts again");
+            log("problem", "backend restarted, asking it for prompts again");
             askForPrompts(true);
           }
           return;
@@ -15957,7 +16041,7 @@ export function setup(ctx: Ctx, opts?: any) {
           // on every backend restart, and a line saying the halves agree is one
           // the reader has no use for.
           if (said && said !== backendVersion && said !== VERSION)
-            log("the backend is running " + said + ", this panel is " + VERSION);
+            log("problem", "the backend is running " + said + ", this panel is " + VERSION);
           backendVersion = said;
           return;
         }
@@ -15981,7 +16065,7 @@ export function setup(ctx: Ctx, opts?: any) {
             watchers: Number(msg.watchers) || 0,
             named: !!msg.named,
           };
-          log("a prompt was read and could not be matched to this tab");
+          log("problem", "a prompt was read and could not be matched to this tab");
           if (liveTab === "prompt") renderLiveLog();
           return;
         }
@@ -16019,7 +16103,7 @@ export function setup(ctx: Ctx, opts?: any) {
         if (msg.type === "note_skipped") {
           stats.notesSkipped += 1;
           stats.lastNoteSkip = String(msg.reason || "unknown");
-          log("refusal note not sent: " + stats.lastNoteSkip);
+          log("notes", "refusal note not sent: " + stats.lastNoteSkip);
           return;
         }
         // Logged as well as the skip. "Did my note go out?" had no answer here
@@ -16028,7 +16112,7 @@ export function setup(ctx: Ctx, opts?: any) {
         if (msg.type === "note_sent") {
           stats.notesSent += 1;
           const n = Number(msg.count) || 0;
-          log("refusal note sent with the retry (" + n + (n === 1 ? " note" : " notes") + ")");
+          log("notes", "refusal note sent with the retry (" + n + (n === 1 ? " note" : " notes") + ")");
           return;
         }
         // The account copy could not be written. The browser copy may well have
@@ -16043,7 +16127,7 @@ export function setup(ctx: Ctx, opts?: any) {
           return;
         }
         if (msg.type === "account_save_failed" && msg.what === "replaced") {
-          log("the replaced reply could not be saved on the server");
+          log("problem", "the replaced reply could not be saved on the server");
           showToast(
             "The reply a retry replaced could not be saved on your server, so an update or a restart will clear it.",
             { force: true, kind: "error" },
@@ -16051,7 +16135,7 @@ export function setup(ctx: Ctx, opts?: any) {
           return;
         }
         if (msg.type === "account_save_failed" && msg.what === "state") {
-          log("the account copy of the chats switched off could not be saved");
+          log("problem", "the account copy of the chats switched off could not be saved");
           showToast(
             "The chats you switched off are saved in this browser, but could not be saved to your account, so they will not follow you to another device.",
             { force: true, kind: "error" },
@@ -16060,7 +16144,7 @@ export function setup(ctx: Ctx, opts?: any) {
         }
         if (msg.type === "account_save_failed") {
           const what = msg.what === "presets" ? "presets" : "settings";
-          log("the account copy of the " + what + " could not be saved");
+          log("problem", "the account copy of the " + what + " could not be saved");
           showToast(
             "Your " + what + " are saved in this browser, but could not be saved to your account, so they will not follow you to another device.",
             { force: true, kind: "error" },
@@ -16081,7 +16165,7 @@ export function setup(ctx: Ctx, opts?: any) {
   askForPermissions();
   askForBackendVersion();
   watchTheme();
-  log("ready v" + VERSION, cfg);
+  log("setup", "ready v" + VERSION, cfg);
 
   return () => {
     tornDown = true;
@@ -16202,6 +16286,7 @@ export function setup(ctx: Ctx, opts?: any) {
 // whether a color pairing is readable. All of them are pure functions of their
 // input, so they can be checked without a browser.
 export const __testing = {
+  LOG_KINDS,
   setBoundThinkPairs,
   replyProblem,
   garbledVerdict,

@@ -753,6 +753,45 @@ console.log("\nthe prompt view");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- hiding kinds of line in the Log ----
+// Each kind of line has its own switch. A hidden line is still kept, so the
+// Log says how many are hidden and Debug info still carries them.
+console.log("\nhiding kinds of line in the Log");
+{
+  const run = (settings) =>
+    inPanel(browser, { settings }, (page) =>
+      page.evaluate(async () => {
+        const wait = () => new Promise((r) => setTimeout(r, 120));
+        window.__handlers.GENERATION_STARTED({ chatId: "c1", generationId: "g1", messageId: "m1" });
+        await wait();
+        const tab = [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === "Log");
+        if (tab) tab.click();
+        await wait();
+        const said = document.body.innerText;
+        const modal = document.getElementById("modal");
+        const build = [...modal.querySelectorAll("button")].find((b) => b.textContent.trim() === "Build preview");
+        let report = "";
+        if (build) {
+          build.click();
+          await wait();
+          const area = modal.querySelector("[data-ar-debug]");
+          report = area ? area.value : "";
+        }
+        const sw = [...modal.querySelectorAll("*")].some((n) => n.childElementCount === 0 && n.textContent.trim() === "Show in the log");
+        return { tab: !!tab, shown: /gen start/.test(said), hiddenSaid: /of a kind you hid/.test(said), inReport: /gen start/.test(report), sw };
+      }),
+    );
+  const on = await run({ liveLog: true });
+  const off = await run({ liveLog: true, logReplies: false });
+  check("the Log tab was found", on.out.tab && off.out.tab, JSON.stringify({ on: on.out, off: off.out }));
+  check("the settings have a Show in the log heading", on.out.sw, JSON.stringify(on.out));
+  check("a line about a reply shows by default", on.out.shown && !on.out.hiddenSaid, JSON.stringify(on.out));
+  check("with How each reply ended off, it is hidden", !off.out.shown, JSON.stringify(off.out));
+  check("and the Log says a line is hidden", off.out.hiddenSaid, JSON.stringify(off.out));
+  check("Debug info still includes it", off.out.inReport, JSON.stringify(off.out));
+  check("no console errors", on.errors.length === 0 && off.errors.length === 0, on.errors.concat(off.errors));
+}
+
 // ---- a description fades and slides in ----
 // The same small slide as Auto Refine's: 4px from the row it belongs to,
 // with the fade. With less motion asked for, it appears at once.
@@ -14630,7 +14669,9 @@ console.log("\nthe settings on a phone and under a mouse");
 // at least 32 pixels, with the tick boxes answering a tap just around them.
 // Under a mouse: each kind of control answers the pointer.
 {
-  const S = { retryOnRefusal: true, refusalNote: true, tryAtOnce: true, retryOnShort: true };
+  // The on-screen panel is on so the rows that need it, such as Show in the
+  // log, are measured too.
+  const S = { retryOnRefusal: true, refusalNote: true, tryAtOnce: true, retryOnShort: true, liveLog: true };
   const openAll = (page) => page.evaluate(async () => { for (let k = 0; k < 3; k++) { for (const h of document.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click(); await new Promise((r) => setTimeout(r, 300)); } });
   const phone = await inPanel(browser, { viewport: { width: 375, height: 812 }, touch: true, settings: S }, async (page) => {
     await openAll(page);

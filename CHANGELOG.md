@@ -8,6 +8,26 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.21.0
+
+_2026-10-24_
+
+### Added
+
+- **A switch for each kind of line in the Log.** **Show in the log**, under **Show the on-screen panel**, has six switches: **How each reply ended**, **Retries**, **Several tries at once**, **Refusal notes**, **Settings and presets**, and **Problems and warnings**. All are on by default. A hidden line is still kept. The Log says how many lines are hidden, and **Debug info** still includes them. See [Log](docs/settings.md#log).
+
+### Fixed
+
+- **A prompt preview used up the refusal note.** Lumiverse runs extensions on a prompt preview, such as its prompt itemizer, and marks it as a preview. Auto Retry did not check for that mark. A preview opened before a retry took the note, so the retry went without it. A preview also replaced the prompt on the **Prompt** tab, and the prompt kept for Several tries at once, which could hold a message you had not sent yet. Auto Retry now leaves a preview alone.
+- **Several tries at once could send the failed reply back to the model.** When there was no kept prompt to use, Lumiverse built the prompt for the reroll. A prompt built that way still ended on the reply that failed, so the tries were written as if they came after it. The failed reply is now left out, the same as for a normal reroll.
+- **Several tries at once could answer the message before yours.** With Several tries at once on, Auto Retry keeps the prompt the last reply went out with. A turn can fail while Lumiverse is still building its prompt. The prompt kept was then the one for the turn before, and the reply that passed answered your previous message. A kept prompt is now only used for the message it answers. Otherwise Lumiverse builds the prompt again. See [What is sent](docs/tries-at-once.md#what-is-sent).
+
+### Changed
+
+- **Debug info says it is optional.** The note under **Debug info** now says that adding the report to a bug report is optional, and that it helps show exactly what went wrong. After **Copy**, the line under it says you can paste it into a bug report.
+
+---
+
 ## 5.20.6
 
 _2026-10-24_

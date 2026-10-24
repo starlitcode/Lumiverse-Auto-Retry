@@ -30,7 +30,7 @@ declare const spindle: any;
 // with while this side comes back on the new build. A debug report naming only
 // the panel's version would be speaking for a file it cannot see, so the panel
 // asks for this one and prints both.
-const VERSION = '5.20.6';
+const VERSION = '5.21.0';
 
 const SETTINGS_FILE = 'settings.json';
 // Presets, kept in account storage next to the settings so they
@@ -407,10 +407,18 @@ function snapshotPrompt(messages: any[], context: any, userId?: string, noteAt?:
 // panel arms one for this try. It is kept only for people who have the setting
 // on, in memory, one per chat, for a limited time, and it is dropped the moment
 // the setting goes off. Where there is none, Lumiverse is asked to build the
-// prompt with generate.dryRun. That one skips the council and anything another
-// extension adds with an interceptor, which is why the kept one comes first.
+// prompt with generate.dryRun. That one skips the council, which is why the
+// kept one comes first.
+//
+// A kept prompt is only used for the message it answers. Lumiverse calls
+// interceptors after it has staged the empty reply, so a turn that fails
+// while the prompt is still being built never reaches the interceptor, and
+// what is kept is the prompt for the turn before. Sent again, it would answer
+// the wrong message.
 const atOnceUsers = new Set<string>();
-interface KeptPrompt { messages: any[]; at: number; }
+// answers is the id of the last chat message in the prompt, or '' on a
+// Lumiverse that does not say which message a prompt line came from.
+interface KeptPrompt { messages: any[]; at: number; answers: string; }
 const keptPrompts = new Map<string, KeptPrompt>();
 // Enough for someone moving between a handful of chats. The oldest goes first.
 const KEPT_MAX = 12;
@@ -429,6 +437,13 @@ const stoppedEarly = new Map<string, string>();
 const STOPPED_EARLY_MAX = 50;
 
 const keptKey = (who: string, chatId: string) => who + '\n' + chatId;
+
+// A real swipe leaves the reply it replaces out of its prompt. A dry run
+// cannot be told which reply that is, so the prompt it builds still ends on
+// the failed reply. The interceptor sees which chat message each prompt line
+// came from, so while tries at once builds a reroll's prompt it takes that
+// reply out, by id. done records that it did.
+const dryLeaveOut = new Map<string, { id: string; done: boolean }>();
 
 // Same matching as the prompt viewer: the interceptor's context does not name
 // the user on every build, and on a server with one such user that is who it is.
@@ -478,9 +493,12 @@ function keepPrompt(messages: any[], context: any, userId?: string): void {
       keptPrompts.delete(keptKey(who, chatId));
       return;
     }
+    let answers = '';
+    for (const m of messages)
+      if (m && m.__isChatHistory && m.sourceMessageId != null) answers = String(m.sourceMessageId);
     const key = keptKey(who, chatId);
     keptPrompts.delete(key);
-    keptPrompts.set(key, { messages: plainMessages(messages), at: Date.now() });
+    keptPrompts.set(key, { messages: plainMessages(messages), at: Date.now(), answers: answers });
     while (keptPrompts.size > KEPT_MAX) keptPrompts.delete(keptPrompts.keys().next().value as string);
   } catch (_) { /* keeping a copy must never cost anyone their generation */ }
 }
@@ -500,10 +518,11 @@ function sayError(e: any): string {
 // A message of the user's with no reply after it is a turn that failed before
 // any text came back, such as an error before the first word, so Lumiverse
 // saved no reply. The reply that passes is added after it as a new reply.
-// Anything else means the chat has moved on.
+// Anything else means the chat has moved on. answers is the message the new
+// reply answers: the one before the failed reply, or your message itself.
 type AtOnceTarget =
-  | { kind: 'reroll'; id: string; swipes: string[] }
-  | { kind: 'reply'; id: string };
+  | { kind: 'reroll'; id: string; swipes: string[]; answers: string; text: string }
+  | { kind: 'reply'; id: string; answers: string };
 async function whereToAdd(chatId: string): Promise<AtOnceTarget | { why: string }> {
   if (!spindle.chat || typeof spindle.chat.getMessages !== 'function')
     return { why: 'this version of Lumiverse does not let an extension add to a chat' };
@@ -516,12 +535,15 @@ async function whereToAdd(chatId: string): Promise<AtOnceTarget | { why: string 
   const last = Array.isArray(list) && list.length ? list[list.length - 1] : null;
   const role = last && last.id ? String(last.role || '') : '';
   if (!role) return { why: 'there is nothing in the chat yet' };
-  if (role === 'user') return { kind: 'reply', id: String(last.id) };
+  if (role === 'user') return { kind: 'reply', id: String(last.id), answers: String(last.id) };
   if (role !== 'assistant') return { why: 'the last message in the chat is not a reply or a message of yours' };
   const swipes = Array.isArray(last.swipes) && last.swipes.length
     ? last.swipes.map((x: any) => String(x == null ? '' : x))
     : [String(last.content == null ? '' : last.content)];
-  return { kind: 'reroll', id: String(last.id), swipes };
+  const before = list.length > 1 ? list[list.length - 2] : null;
+  const answers = before && before.id ? String(before.id) : '';
+  const text = String(last.content == null ? '' : last.content);
+  return { kind: 'reroll', id: String(last.id), swipes, answers, text };
 }
 
 // A reply an extension adds carries no character, so in a group chat it
@@ -558,7 +580,8 @@ async function tryAtOnce(payload: any, userId?: string): Promise<void> {
 
   const who = watcherKey(userId);
   const kept = keptPrompts.get(keptKey(atOnceUserFor(userId) || who, chatId));
-  let messages: any[] | null = kept && Date.now() - kept.at < KEPT_MAX_AGE_MS ? kept.messages : null;
+  const keptFits = !!kept && Date.now() - kept.at < KEPT_MAX_AGE_MS && (!kept.answers || kept.answers === target.answers);
+  let messages: any[] | null = kept && keptFits ? kept.messages : null;
   let from = 'kept';
   if (!messages) {
     from = 'built';
@@ -568,8 +591,21 @@ async function tryAtOnce(payload: any, userId?: string): Promise<void> {
       // A reroll is built the way a swipe is. A new reply is built the way a
       // normal turn is, from the chat as it stands, ending on your message.
       const generationType = target.kind === 'reroll' ? 'swipe' : 'normal';
-      const dry = await spindle.generate.dryRun({ chatId: chatId, generationType: generationType }, userId);
+      const leave = target.kind === 'reroll' ? { id: target.id, done: false } : null;
+      if (leave) dryLeaveOut.set(chatId, leave);
+      let dry: any;
+      try {
+        dry = await spindle.generate.dryRun({ chatId: chatId, generationType: generationType }, userId);
+      } finally {
+        if (leave && dryLeaveOut.get(chatId) === leave) dryLeaveOut.delete(chatId);
+      }
       messages = dry && Array.isArray(dry.messages) ? plainMessages(dry.messages) : null;
+      // Without the interceptor permission the reply was not taken out above.
+      // It is then the last message, word for word, and comes off here.
+      if (target.kind === 'reroll' && leave && !leave.done && messages && messages.length) {
+        const end = messages[messages.length - 1];
+        if (end.role === 'assistant' && String(end.content).trim() === target.text.trim()) messages = messages.slice(0, -1);
+      }
     } catch (e) {
       return say({ stage: 'failed', why: 'Lumiverse could not build the prompt (' + sayError(e) + ')' });
     }
@@ -1076,10 +1112,20 @@ spindle.onFrontendMessage(async (payload: any, userId?: string) => {
 const promptInterceptor = async (messages: any[], context: any) => {
   try {
     // A quiet generation is a background call, such as another extension's
-    // rewrite or one of this extension's own tries at once. It is not a reply
-    // in the chat, so it does not take the refusal note, replace the kept
-    // prompt, or take the Prompt tab's place.
+    // rewrite or one of this extension's own tries at once. A dry run builds a
+    // prompt that is never sent, such as Lumiverse's prompt preview or the
+    // prompt built for tries at once. Neither is a reply in the chat, so
+    // neither takes the refusal note, replaces the kept prompt, or takes the
+    // Prompt tab's place. The one change made to a dry run is taking out the
+    // reply a reroll replaces, for tries at once (see dryLeaveOut).
     if (String((context && context.generationType) || '').toLowerCase() === 'quiet') return messages;
+    if (context && context.dryRun === true) {
+      const leave = context.chatId ? dryLeaveOut.get(String(context.chatId)) : undefined;
+      if (!leave || !Array.isArray(messages)) return messages;
+      const kept = messages.filter((m: any) => !(m && m.__isChatHistory && String(m.sourceMessageId) === leave.id));
+      leave.done = kept.length < messages.length;
+      return kept;
+    }
     const who = context && context.userId;
     const chatId = context && context.chatId ? String(context.chatId) : '';
     // Before the note goes in, so a later try only carries a note when one is
@@ -1157,7 +1203,7 @@ const promptInterceptor = async (messages: any[], context: any) => {
 // onlyFor names the setting a permission is for, when only one setting uses it.
 const PERMISSIONS: Array<{ name: string; costs: string; onlyFor?: string }> = [
   { name: 'generation', costs: 'Everything. Retries run off the generation events, and without this none of them arrive, so nothing is ever retried.' },
-  { name: 'interceptor', costs: 'The refusal note, and the Prompt tab.' },
+  { name: 'interceptor', costs: 'The refusal note, and the Prompt tab. With Several tries at once on, a reply that failed is found in a prompt Lumiverse builds by its words only.' },
   { name: 'chats', costs: 'The chat name in the log, and knowing which chat you are in without a reply first. With Several tries at once on, a try after an error that came before any text presses the retry button instead.' },
   { name: 'characters', costs: 'The character name in the log.' },
   { name: 'ui_panels', costs: 'The floating button. The on-screen panel falls back to its own window.' },

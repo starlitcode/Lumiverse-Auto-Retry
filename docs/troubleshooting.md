@@ -12,7 +12,7 @@ Check the top of the settings panel first. A permission that was never granted c
 
 ## Debug info
 
-**Debug info**, in the settings panel, builds a short plain-text report:
+**Debug info**, in the settings panel, builds a short plain-text report. Adding it to a bug report is optional, but it helps show exactly what went wrong.
 
 1. Tick the parts you want.
 2. Press **Build preview**.

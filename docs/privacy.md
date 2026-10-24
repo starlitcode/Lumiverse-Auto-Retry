@@ -20,7 +20,7 @@ It asks Lumiverse for six permissions. All six are privileged: on a shared serve
 | `ui_panels` | The floating on/off button, and the on-screen panel when it floats over the chat. It gives screen space, not access to your data. | Everything works, with no floating button. A panel in the sidebar drawer needs no permission. |
 | `chats` | Asking which chat you are looking at. With **Several tries at once** on, also reading whether a chat is a group chat. | Everything works. **Turn off here** waits to be told which chat you are in. With **Several tries at once** on, a try after an error that came before any text presses the retry button instead. |
 | `characters` | Turning a chat's card id into a name, so the panel can say who a chat is with. It reads one card, for the chat you are in. | Everything works. The panel says "This chat" instead of a name. |
-| `interceptor` | Adding the retry note to a prompt, and showing the whole prompt on the panel's **Prompt** tab. | Everything works. No retry note is sent, and the Prompt tab stays empty and says so. |
+| `interceptor` | Adding the retry note to a prompt, and showing the whole prompt on the panel's **Prompt** tab. With Several tries at once on, it also finds the failed reply in a prompt Lumiverse builds, so it can be left out. | Everything works. No retry note is sent, and the Prompt tab stays empty and says so. Several tries at once finds the failed reply by its words only. |
 | `chat_mutation` | **Several tries at once** only: reading the messages in the chat to find the failed reply, and adding the reply that passed to it as a new reroll. When the failed turn saved no reply, the reply that passed is added after your message as a new reply. | Everything works. With **Several tries at once** on, each try presses the retry button instead. |
 
 **About `chats`:** Lumiverse puts reading, creating and deleting chats into one permission, with no narrower one to ask for. Auto Retry only uses two calls from it: which chat is open, and, with **Several tries at once** on, reading one chat to see whether it is a group chat. It never creates, deletes or changes a chat.
@@ -56,10 +56,11 @@ The note is the only thing in the extension that changes what the model is asked
 - It carries only the text you typed. Your prompt is not read, copied or stored, and nothing is written to your chat.
 - Because it is not a message in your chat, it may not appear in Lumiverse's Prompt Breakdown. The on-screen panel writes a line naming the note on the retry that carried it.
 
-It is added just before the extension presses your retry button, and six things keep it to that one reply:
+It is added just before the extension presses your retry button, and seven things keep it to that one reply:
 
 - It belongs to one chat, and is never added to a reply in another chat.
 - A background call that another extension makes, which Lumiverse marks as "quiet", never takes it.
+- A prompt preview, such as Lumiverse's prompt itemizer, never takes it either.
 - It is cleared after one retry, whether or not that retry used it.
 - It expires after 45 seconds.
 - If the retry press started nothing, it is taken back straight away. If there is no retry button to press, no note is set up at all.

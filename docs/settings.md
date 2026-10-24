@@ -183,6 +183,17 @@ A retry in a chat you have since left is still shown, marked as being in another
 
 What the extension is doing as it happens: replies starting, retries and why, replies that came back fine, and notes being sent. It keeps the last twenty lines.
 
+**Show in the log**, under **Show the on-screen panel**, has a switch for each kind of line. All are on by default. Turn one off to hide that kind:
+
+- **How each reply ended**: a reply starting and ending, and how it was judged.
+- **Retries**: each retry, the button it pressed, and when it gave up or paused.
+- **Several tries at once**: the tries sent, each reply that came back, and the one added.
+- **Refusal notes**: which notes went with a retry, and why a note did not.
+- **Settings and presets**: settings and presets loaded, saved, or moved to and from your account.
+- **Problems and warnings**: something that could not be done, such as a window that would not open.
+
+A hidden line is still kept. The top of the Log says how many are hidden, and **Debug info** still includes them.
+
 ### Stats
 
 What it has done since the page loaded:
@@ -208,7 +219,7 @@ The whole prompt that went to the model, after your settings, world info, person
 
 **Two tabs open:** if you have two chats open in two browser tabs, both receive every prompt. The tab only shows the prompt for the chat you are in, and says so when one belongs to another chat.
 
-**Background calls are not shown.** A call that Lumiverse marks as "quiet", such as a rewrite by another extension, does not replace the prompt on this tab.
+**Background calls and previews are not shown.** A call that Lumiverse marks as "quiet", such as a rewrite by another extension, does not replace the prompt on this tab. A prompt preview, such as Lumiverse's prompt itemizer, does not replace it either.
 
 The prompt stays on your device. It is not sent anywhere or written to disk, and it goes when you close the tab.
 
@@ -317,6 +328,12 @@ These are the defaults for a new install. They are in the `CONFIG` block at the 
 | toast | true | Show the retry pop-up with its Cancel button. It counts down the wait and says what the retry is for and which try it is. With it off, most other notifications are left out too. Notifications about something you did, and a pause after failed runs, always show. |
 | liveLog | false | Show the on-screen panel. It has four tabs: Log (what it is doing), Prompt (what went to the model), Stats (what it retried for) and Replaced (the last reply a retry replaced). |
 | panelHome | float | Where that panel goes. `float` is a small box over the chat you can move and resize, and where you leave it is remembered. `drawer` puts it in Lumiverse's own side panel, which never covers the reply you are reading. A Lumiverse with no side panel for extensions gets the box, and the Log says so. Shown only while `liveLog` is on. |
+| logReplies | true | Show the lines about how each reply started, ended and was judged in the Log tab. Shown only while `liveLog` is on. |
+| logRetries | true | Show the lines about each retry, the button it pressed, and when it gave up or paused. Shown only while `liveLog` is on. |
+| logAtOnce | true | Show the lines about Several tries at once: the tries sent, each reply that came back, and the one added. Shown only while `liveLog` is on. |
+| logNotes | true | Show the lines about refusal notes: which went with a retry, and why a note did not. Shown only while `liveLog` is on. |
+| logSetup | true | Show the lines about settings and presets loaded, saved, or moved to and from your account. Shown only while `liveLog` is on. |
+| logProblems | true | Show the lines about something that could not be done, such as a window that would not open. Shown only while `liveLog` is on. |
 | panelPattern | (none) | A faint pattern behind these settings and the on-screen panel: Diamonds, Stripes, Dots, Hearts or Stars. Each section of the settings, the log and the line under the tabs sit on a solid box over it. |
 | costIn | 0 | Your provider's input price per million tokens, in its own currency. The panel's Prompt tab uses it to say what retrying costs. 0 leaves the line off. |
 | costOut | 0 | The output price from the same list, for the reply a retry produces. Both at 0 leaves the line off. |

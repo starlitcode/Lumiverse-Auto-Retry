@@ -4,7 +4,13 @@ Thank you for wanting to help with Auto Retry.
 
 ## Bug reports, not pull requests
 
-Pull requests are not merged here. Every change to the code goes through me.
+Pull requests are not merged here. Every change to the code goes through me, for three reasons:
+
+- The code stays clean and consistent.
+- No code gets in that has not been checked for security.
+- I do not have time to check every pull request closely.
+
+What this means for you:
 
 - Please do not spend your time, your limits or your AI usage writing a fix.
 - A clear bug report is all I need. It helps me more than a pull request.
@@ -47,3 +53,8 @@ Nothing leaves your device until you paste it. [Reporting a bug](docs/troublesho
 - `stable` is what most people install. It only moves when a version is released, so it can be behind `testing`.
 
 If you installed from `testing`, say so in your report.
+
+If you open a pull request anyway:
+
+- Start from `testing`, and open the pull request against `testing`, not `stable`.
+- Test your change on `testing`. `stable` can be behind `testing`, so a change that works on `stable` may not work on `testing`.

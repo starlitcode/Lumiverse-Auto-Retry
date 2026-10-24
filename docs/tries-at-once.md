@@ -81,7 +81,10 @@ These cases always use a normal retry, even with the setting on. The try is made
 The prompt is the one your failed reply was sent with.
 
 - Auto Retry keeps a copy of the last prompt in each chat while the setting is on. It is kept in memory on the server, for up to 12 chats, for 30 minutes. Turning the setting off drops every copy.
-- If there is no copy, Lumiverse builds the prompt for a new reroll, or for a new reply when no reply was saved. That prompt has your card, preset, lore and history, but it leaves out anything another extension adds to the prompt as it is sent, and Lumiverse's council feature.
+- A copy is only used for the message it answers. A turn can fail while Lumiverse is still building its prompt. The copy is then from the turn before, so it is not used.
+- A prompt preview, such as Lumiverse's prompt itemizer, never replaces the copy.
+- If there is no copy to use, Lumiverse builds the prompt for a new reroll, or for a new reply when no reply was saved. That prompt has your card, preset, lore and history. It leaves out Lumiverse's council feature, and anything another extension leaves out of a prompt preview.
+- A prompt for a reroll leaves out the reply that failed, the same as a normal reroll.
 - The log says which of the two was used.
 - If **Send a note with a refusal retry** is on, the note goes with these replies the same way it goes with a normal retry.
 
