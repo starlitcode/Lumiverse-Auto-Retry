@@ -34,7 +34,7 @@ function boot(opts?: {
   const quietCalls: any[] = [];
   const dryCalls: any[] = [];
   const updates: any[] = [];
-  const appends: any[] = [];
+  const appended: any[] = [];
   let messages: Msg[] = opts && opts.messages
     ? opts.messages
     : [
@@ -62,11 +62,12 @@ function boot(opts?: {
       updateMessage: async (chatId: string, id: string, patch: any) => {
         updates.push({ chatId, id, patch });
       },
-      appendMessage: async (chatId: string, message: any) => {
-        const id = "m" + (messages.length + 1);
-        appends.push({ chatId, message });
-        messages = messages.concat([{ id, role: message.role, content: message.content }]);
-        return { id };
+      // Lumiverse names the new message and hands its id back.
+      appendMessage: async (chatId: string, msg: any) => {
+        const newId = "m" + String(messages.length + 1);
+        appended.push({ chatId, message: msg });
+        messages = messages.concat([{ id: newId, role: msg.role, content: msg.content }]);
+        return { id: newId };
       },
     },
     chats: {
@@ -97,7 +98,7 @@ function boot(opts?: {
     quietCalls,
     dryCalls,
     updates,
-    appends,
+    appended,
     setMessages: (m: Msg[]) => { messages = m; },
     setAccount: (v: any) => { account = v; },
     tell: (payload: any, userId?: string) => onFrontend(payload, userId),
@@ -319,7 +320,7 @@ describe("a turn that saved no reply", () => {
     await h.settle();
     expect(h.quietCalls.length).toBe(2);
     expect(h.dryCalls[0].input).toEqual({ chatId: "c1", generationType: "normal" });
-    expect(h.stage("sent")[0].msg).toMatchObject({ mode: "new_reply", messageId: "m2", swipeCount: 0 });
+    expect(h.stage("sent")[0].msg).toMatchObject({ kind: "reply", messageId: "m2", swipeCount: 0 });
   });
 
   test("with the setting on, the prompt the failed turn went out with is sent", async () => {
@@ -335,7 +336,7 @@ describe("a turn that saved no reply", () => {
     await h.tell({ type: "try_at_once", requestId: "r1", chatId: "c1", count: 2 });
     await h.settle();
     expect(h.dryCalls.length).toBe(0);
-    expect(h.stage("sent")[0].msg).toMatchObject({ from: "kept", mode: "new_reply" });
+    expect(h.stage("sent")[0].msg).toMatchObject({ from: "kept", kind: "reply" });
     expect(h.quietCalls[0].messages).toEqual([
       { role: "system", content: "You pilot the night ferry." },
       { role: "user", content: "I climb to the upper deck." },
@@ -347,7 +348,7 @@ describe("a turn that saved no reply", () => {
     await h.tell({ type: "try_at_once", requestId: "r1", chatId: "c1", count: 2 });
     await h.settle();
     expect(h.dryCalls[0].input).toEqual({ chatId: "c1", generationType: "swipe" });
-    expect(h.stage("sent")[0].msg).toMatchObject({ mode: "reroll", messageId: "m2", swipeCount: 1 });
+    expect(h.stage("sent")[0].msg).toMatchObject({ kind: "reroll", messageId: "m2", swipeCount: 1 });
   });
 
   test("not in a group chat, which a reply from an extension cannot name the writer of", async () => {
@@ -375,15 +376,15 @@ describe("a turn that saved no reply", () => {
 });
 
 describe("nothing is sent when there is nothing to add to", () => {
-  test("the chat is empty", async () => {
-    const h = boot({ messages: [] });
+  test("an empty chat", async () => {
+    const h = boot({ messages: new Array<Msg>() });
     await h.tell({ type: "try_at_once", requestId: "r1", chatId: "c1", count: 2 });
     await h.settle();
     expect(h.quietCalls.length).toBe(0);
-    expect(h.stage("failed")[0].msg.why).toBe("the chat has no messages");
+    expect(h.stage("failed")[0].msg.why).toBe("there is nothing in the chat yet");
   });
 
-  test("the last message is a system message", async () => {
+  test("a system message at the end", async () => {
     const h = boot({ messages: [{ id: "m1", role: "system", content: "The ferry docks at dawn." }] });
     await h.tell({ type: "try_at_once", requestId: "r1", chatId: "c1", count: 2 });
     await h.settle();
@@ -413,16 +414,16 @@ describe("adding the reply that passed", () => {
     expect(h.updates).toEqual([
       { chatId: "c1", id: "m2", patch: { swipes: ["I cannot continue this.", "She lit the lamp and waited."], swipe_id: 1 } },
     ]);
-    expect(h.appends.length).toBe(0);
+    expect(h.appended.length).toBe(0);
   });
 
   test("after a turn that saved no reply, it becomes a new reply, and its id is handed back", async () => {
     const h = boot({ messages: noReply() });
     await h.tell({
-      type: "add_reroll", requestId: "a1", chatId: "c1", mode: "new_reply", messageId: "m2",
+      type: "add_reroll", requestId: "a1", chatId: "c1", kind: "reply", messageId: "m2",
       text: "Gulls wheel over the wake.", reasoning: "Keep the crossing calm.",
     });
-    expect(h.appends).toEqual([{ chatId: "c1", message: { role: "assistant", content: "Gulls wheel over the wake." } }]);
+    expect(h.appended).toEqual([{ chatId: "c1", message: { role: "assistant", content: "Gulls wheel over the wake." } }]);
     expect(added(h)[0]).toMatchObject({ requestId: "a1", ok: true, messageId: "m3", swipe: 0 });
     expect(h.updates).toEqual([
       { chatId: "c1", id: "m3", patch: { reasoning: { text: "Keep the crossing calm.", duration: null } } },
@@ -433,11 +434,11 @@ describe("adding the reply that passed", () => {
     const h = boot({ messages: noReply() });
     h.setMessages(noReply().concat([{ id: "m3", role: "assistant", content: "The rail is cold." }]));
     await h.tell({
-      type: "add_reroll", requestId: "a1", chatId: "c1", mode: "new_reply", messageId: "m2",
+      type: "add_reroll", requestId: "a1", chatId: "c1", kind: "reply", messageId: "m2",
       text: "Gulls wheel over the wake.",
     });
     expect(added(h)[0].ok).toBe(false);
-    expect(h.appends.length).toBe(0);
+    expect(h.appended.length).toBe(0);
     expect(h.updates.length).toBe(0);
   });
 
@@ -445,11 +446,11 @@ describe("adding the reply that passed", () => {
     const h = boot({ messages: noReply() });
     h.setMessages(noReply().concat([{ id: "m3", role: "user", content: "Actually, I stay below." }]));
     await h.tell({
-      type: "add_reroll", requestId: "a1", chatId: "c1", mode: "new_reply", messageId: "m2",
+      type: "add_reroll", requestId: "a1", chatId: "c1", kind: "reply", messageId: "m2",
       text: "Gulls wheel over the wake.",
     });
     expect(added(h)[0].ok).toBe(false);
-    expect(h.appends.length).toBe(0);
+    expect(h.appended.length).toBe(0);
   });
 
   test("its thinking goes with it", async () => {

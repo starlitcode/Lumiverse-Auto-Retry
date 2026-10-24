@@ -10302,7 +10302,7 @@ export function setup(ctx: Ctx, opts?: any) {
       // presses the button and waits as long as an error asks for.
       judged: 0,
       lastError: null,
-      mode: "reroll",
+      kind: "reroll",
       messageId: "",
       swipeCount: 0,
       adding: false,
@@ -10355,7 +10355,7 @@ export function setup(ctx: Ctx, opts?: any) {
       armAtOnceWait(chatId, run);
       // A reroll on the reply that failed, or a new reply after your message
       // when the failed turn saved no reply at all.
-      run.mode = msg.mode === "new_reply" ? "new_reply" : "reroll";
+      run.kind = msg.kind === "reply" ? "reply" : "reroll";
       run.messageId = String(msg.messageId || "");
       run.swipeCount = Number(msg.swipeCount) || 0;
       stats.extraReplies += Math.max(0, run.count - 1);
@@ -10365,7 +10365,7 @@ export function setup(ctx: Ctx, opts?: any) {
         "sent " + run.count + " at once, with the prompt " +
           (msg.from === "kept"
             ? "the last reply went out with"
-            : "Lumiverse built for a new " + (run.mode === "new_reply" ? "reply" : "reroll")) +
+            : "Lumiverse built for a new " + run.kind) +
           (msg.notes ? ", and the refusal note" : ""),
       );
       return;
@@ -10427,7 +10427,7 @@ export function setup(ctx: Ctx, opts?: any) {
     const reqId = "ar-reroll-" + Date.now() + "-" + Math.random().toString(36).slice(2);
     let off: any = null;
     let timer: any = null;
-    const asReroll = run.mode !== "new_reply";
+    const newReply = run.kind === "reply";
     const finish = (ok: boolean, why: string, landed?: any) => {
       try { off && off(); } catch (_) {}
       off = null;
@@ -10441,7 +10441,7 @@ export function setup(ctx: Ctx, opts?: any) {
       }
       if (ok && !current) {
         log(
-          "a reply that passed was added " + (asReroll ? "as a new reroll " : "") +
+          "a reply that passed was added " + (newReply ? "" : "as a new reroll ") +
             "after you stopped the retry",
         );
         return;
@@ -10451,17 +10451,15 @@ export function setup(ctx: Ctx, opts?: any) {
         pausedUntil = 0;
         stats.good += 1;
         s.attempts = 0;
-        log(asReroll ? "added a reply that passed as a new reroll" : "added a reply that passed", content.length + " chars");
-        showToast(
-          asReroll ? "Auto Retry added a reply that passed, as a new reroll." : "Auto Retry added a reply that passed.",
-          { kind: "success" },
-        );
+        log(newReply ? "added a reply that passed" : "added a reply that passed as a new reroll", content.length + " chars");
+        const said = newReply ? "Auto Retry added a reply that passed." : "Auto Retry added a reply that passed, as a new reroll.";
+        showToast(said, { kind: "success" });
         // Lumiverse raises no end event for a reply an extension writes, so
         // anything that acts on a finished reply, such as Auto Refine, is told
         // in the page. A new reply has an id of its own, which the backend
         // hands back. The same event goes either way, and it also tells Auto
         // Refine the retry is over.
-        const messageId = landed && landed.messageId ? String(landed.messageId) : asReroll ? run.messageId : "";
+        const messageId = landed && landed.messageId ? String(landed.messageId) : newReply ? "" : run.messageId;
         const swipe = landed && landed.messageId ? Number(landed.swipe) || 0 : run.swipeCount;
         try {
           if (messageId && typeof window !== "undefined" && typeof CustomEvent === "function")
@@ -10490,7 +10488,7 @@ export function setup(ctx: Ctx, opts?: any) {
         type: "add_reroll",
         requestId: reqId,
         chatId: chatId,
-        mode: run.mode,
+        kind: run.kind,
         messageId: run.messageId,
         swipeCount: run.swipeCount,
         text: content,

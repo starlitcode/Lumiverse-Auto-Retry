@@ -502,11 +502,11 @@ function sayError(e: any): string {
 // saved no reply. The reply that passes is added after it as a new reply.
 // Anything else means the chat has moved on.
 type AtOnceTarget =
-  | { mode: 'reroll'; id: string; swipes: string[] }
-  | { mode: 'new_reply'; id: string };
-async function lastTarget(chatId: string): Promise<AtOnceTarget | { why: string }> {
+  | { kind: 'reroll'; id: string; swipes: string[] }
+  | { kind: 'reply'; id: string };
+async function whereToAdd(chatId: string): Promise<AtOnceTarget | { why: string }> {
   if (!spindle.chat || typeof spindle.chat.getMessages !== 'function')
-    return { why: 'this Lumiverse cannot add a reply for an extension' };
+    return { why: 'this version of Lumiverse does not let an extension add to a chat' };
   let list: any[];
   try {
     list = await spindle.chat.getMessages(chatId);
@@ -514,15 +514,14 @@ async function lastTarget(chatId: string): Promise<AtOnceTarget | { why: string 
     return { why: 'Auto Retry could not read the chat. Check that the chat_mutation permission is granted (' + sayError(e) + ')' };
   }
   const last = Array.isArray(list) && list.length ? list[list.length - 1] : null;
-  if (!last || !last.id) return { why: 'the chat has no messages' };
-  if (last.role === 'assistant') {
-    const swipes = Array.isArray(last.swipes) && last.swipes.length
-      ? last.swipes.map((x: any) => String(x == null ? '' : x))
-      : [String(last.content == null ? '' : last.content)];
-    return { mode: 'reroll', id: String(last.id), swipes: swipes };
-  }
-  if (last.role === 'user') return { mode: 'new_reply', id: String(last.id) };
-  return { why: 'the last message in the chat is not a reply or a message of yours' };
+  const role = last && last.id ? String(last.role || '') : '';
+  if (!role) return { why: 'there is nothing in the chat yet' };
+  if (role === 'user') return { kind: 'reply', id: String(last.id) };
+  if (role !== 'assistant') return { why: 'the last message in the chat is not a reply or a message of yours' };
+  const swipes = Array.isArray(last.swipes) && last.swipes.length
+    ? last.swipes.map((x: any) => String(x == null ? '' : x))
+    : [String(last.content == null ? '' : last.content)];
+  return { kind: 'reroll', id: String(last.id), swipes };
 }
 
 // A reply an extension adds carries no character, so in a group chat it
@@ -550,9 +549,9 @@ async function tryAtOnce(payload: any, userId?: string): Promise<void> {
   const say = (m: any) => replyTo(userId, Object.assign({ type: 'at_once', requestId: requestId }, m));
   if (!requestId) return;
   if (!chatId) return say({ stage: 'failed', why: 'the host did not say which chat this is' });
-  const target = await lastTarget(chatId);
+  const target = await whereToAdd(chatId);
   if ('why' in target) return say({ stage: 'failed', why: target.why });
-  if (target.mode === 'new_reply') {
+  if (target.kind === 'reply') {
     const why = await groupChatWhy(chatId, userId);
     if (why) return say({ stage: 'failed', why: why });
   }
@@ -568,7 +567,7 @@ async function tryAtOnce(payload: any, userId?: string): Promise<void> {
     try {
       // A reroll is built the way a swipe is. A new reply is built the way a
       // normal turn is, from the chat as it stands, ending on your message.
-      const generationType = target.mode === 'reroll' ? 'swipe' : 'normal';
+      const generationType = target.kind === 'reroll' ? 'swipe' : 'normal';
       const dry = await spindle.generate.dryRun({ chatId: chatId, generationType: generationType }, userId);
       messages = dry && Array.isArray(dry.messages) ? plainMessages(dry.messages) : null;
     } catch (e) {
@@ -598,15 +597,8 @@ async function tryAtOnce(payload: any, userId?: string): Promise<void> {
   const Ctl = (globalThis as any).AbortController;
   const controller = typeof Ctl === 'function' ? new Ctl() : null;
   atOnceRuns.set(requestId, { controller: controller, who: who });
-  say({
-    stage: 'sent',
-    count: count,
-    from: from,
-    notes: notes,
-    mode: target.mode,
-    messageId: target.id,
-    swipeCount: target.mode === 'reroll' ? target.swipes.length : 0,
-  });
+  const swipeCount = target.kind === 'reroll' ? target.swipes.length : 0;
+  say({ stage: 'sent', count: count, from: from, notes: notes, kind: target.kind, messageId: target.id, swipeCount: swipeCount });
   let left = count;
   for (let i = 0; i < count; i++) {
     const req: any = { messages: messages };
@@ -660,14 +652,14 @@ async function addReroll(payload: any): Promise<{ ok: boolean; why?: string; mes
   const chatId = payload.chatId ? String(payload.chatId) : '';
   const text = String(payload.text == null ? '' : payload.text);
   if (!chatId || !text.trim()) return { ok: false, why: 'there was nothing to add' };
-  const target = await lastTarget(chatId);
+  const target = await whereToAdd(chatId);
   if ('why' in target) return { ok: false, why: target.why };
-  const mode = payload.mode === 'new_reply' ? 'new_reply' : 'reroll';
-  if (target.mode !== mode || target.id !== String(payload.messageId || ''))
+  const asked = payload.kind === 'reply' ? 'reply' : 'reroll';
+  if (target.kind !== asked || target.id !== String(payload.messageId || ''))
     return { ok: false, why: 'the chat changed while the tries were out' };
   let messageId = target.id;
   let swipe = 0;
-  if (target.mode === 'reroll') {
+  if (target.kind === 'reroll') {
     if (target.swipes.length !== Number(payload.swipeCount))
       return { ok: false, why: 'the reply changed while the tries were out' };
     try {
@@ -681,21 +673,20 @@ async function addReroll(payload: any): Promise<{ ok: boolean; why?: string; mes
     swipe = target.swipes.length;
   } else {
     if (typeof spindle.chat.appendMessage !== 'function')
-      return { ok: false, why: 'this Lumiverse cannot add a reply for an extension' };
-    let created: any;
+      return { ok: false, why: 'this version of Lumiverse does not let an extension add to a chat' };
     try {
-      created = await spindle.chat.appendMessage(chatId, { role: 'assistant', content: text });
+      const made = await spindle.chat.appendMessage(chatId, { role: 'assistant', content: text });
+      messageId = made && made.id ? String(made.id) : '';
     } catch (e) {
-      return { ok: false, why: 'Lumiverse would not add the reply (' + sayError(e) + ')' };
+      return { ok: false, why: 'Lumiverse refused to add the new reply (' + sayError(e) + ')' };
     }
-    messageId = created && created.id ? String(created.id) : '';
   }
   const reasoning = String(payload.reasoning == null ? '' : payload.reasoning);
   if (reasoning.trim() && messageId) {
     try {
       await spindle.chat.updateMessage(chatId, messageId, { reasoning: { text: reasoning, duration: null } });
     } catch (_) {
-      try { spindle.log.warn('auto-retry: the reply was added, but its thinking could not be saved with it'); } catch (__) {}
+      try { spindle.log.warn('auto-retry: added the reply that passed, but Lumiverse would not save its thinking'); } catch (__) {}
     }
   }
   return { ok: true, messageId: messageId, swipe: swipe };

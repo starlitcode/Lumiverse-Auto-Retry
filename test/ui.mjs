@@ -2601,7 +2601,7 @@ console.log("\nseveral tries at once");
     await twoFailures("fresh", { error: "upstream connection reset" });
     const freshAsk = asks("fresh")[0] || null;
     if (freshAsk) {
-      answer({ type: "at_once", requestId: freshAsk.requestId, stage: "sent", count: 2, from: "built", mode: "new_reply", messageId: "u4", swipeCount: 0 });
+      answer({ type: "at_once", requestId: freshAsk.requestId, stage: "sent", count: 2, from: "built", kind: "reply", messageId: "u4", swipeCount: 0 });
       answer({ type: "at_once", requestId: freshAsk.requestId, stage: "reply", index: 0, content: GOOD });
     }
     await wait(20);
@@ -2611,7 +2611,7 @@ console.log("\nseveral tries at once");
     const freshTold = told.filter((d) => d.chatId === "fresh");
 
     return {
-      fresh: freshAdd && { mode: freshAdd.mode, messageId: freshAdd.messageId }, freshTold,
+      fresh: freshAdd && { kind: freshAdd.kind, messageId: freshAdd.messageId }, freshTold,
       passCount: passAsk && passAsk.count, clicksBeforeAtOnce, clicksAfterPass,
       reroll: reroll && { text: reroll.text, reasoning: reroll.reasoning, messageId: reroll.messageId, swipeCount: reroll.swipeCount },
       stopped,
@@ -2638,7 +2638,7 @@ console.log("\nseveral tries at once");
   check("every reply an error makes the next try go out several at once again", out.allErrAsks === 2 && out.allErrClicks === 1, out);
   check("a reply the reader starts stops the tries", out.takenStopped === true, out);
   check("an error from the provider goes out several at once on its second try", out.errorAsks === 1 && out.errorClicks === 1, out);
-  check("after a turn that saved no reply, the one that passed is added as a new reply", !!out.fresh && out.fresh.mode === "new_reply" && out.fresh.messageId === "u4", out.fresh);
+  check("after a turn that saved no reply, the one that passed is added as a new reply", !!out.fresh && out.fresh.kind === "reply" && out.fresh.messageId === "u4", out.fresh);
   check("and the page is told the new reply's own id", out.freshTold.length === 1 && out.freshTold[0].messageId === "a5" && out.freshTold[0].swipe === 0, out.freshTold);
   check("a try that never comes back is stopped after the wait", out.hangStopped === true, out);
   check("and the next try goes out", out.hangNext === 2, out);
