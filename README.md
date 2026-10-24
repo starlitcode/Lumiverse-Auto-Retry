@@ -75,6 +75,10 @@ It works with no setup. Everything else is optional.
 - It makes no network calls of its own. [Privacy](docs/privacy.md) covers the six permissions it asks for and what still works without each one.
 - The files Lumiverse loads are `dist/frontend.js` and `dist/backend.js`. They are plain, readable JavaScript. Nothing is minified. [Privacy](docs/privacy.md#checking-any-of-this-yourself) goes through the rest of the repo file by file.
 
+## Help and feedback
+
+Questions, bug reports and ideas are welcome in my [Auto Retry post](https://discord.com/channels/1484149939167821915/1514031700185714688) on the Lumiverse Discord server, or as a [GitHub issue](https://github.com/starlitcode/Lumiverse-Auto-Retry/issues). See [Contributing](CONTRIBUTING.md) for how changes are made.
+
 ## Made for adults
 
 Auto Retry is for adults, 18 and older. It is not for sexual content involving minors, and I do not support anyone using it for that. I do not help anyone who tells me they are under 18, with anything. [About age](docs/detection.md#about-age) says exactly how the extension handles it.
