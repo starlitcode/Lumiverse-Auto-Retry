@@ -13,7 +13,7 @@ For anything sensitive, such as a security problem, follow [SECURITY.md](SECURIT
 
 ## Pull requests
 
-I write all the code myself, so I do not merge pull requests.
+Every change to the code goes through me, so I do not merge pull requests.
 
 - A pull request is still welcome as a way to show a fix or an idea.
 - If I use it, the changelog credits your pull request with a link to it.
