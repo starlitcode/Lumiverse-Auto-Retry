@@ -165,7 +165,7 @@ const STREAM_BUF_MAX = 200000;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.20.5";
+const VERSION = "5.20.6";
 
 // Whether two saved settings hold the same values, whatever order their keys
 // were written in. A key left undefined counts as not there, the way it is
@@ -10180,7 +10180,8 @@ export function setup(ctx: Ctx, opts?: any) {
   // From the second try on, with the setting on, the backend sends the prompt
   // the failed reply went out with as many times as the try number, up to the
   // most at once, and each reply is checked here as it comes back. The first
-  // one that passes is added to the failed reply as a new reroll and the rest
+  // one that passes is added to the failed reply as a new reroll, or after
+  // your message as a new reply when the failed turn saved none, and the rest
   // are stopped. When none pass, that counts as one failed try and the next is
   // scheduled as usual.
   //
@@ -10301,6 +10302,7 @@ export function setup(ctx: Ctx, opts?: any) {
       // presses the button and waits as long as an error asks for.
       judged: 0,
       lastError: null,
+      mode: "reroll",
       messageId: "",
       swipeCount: 0,
       adding: false,
@@ -10351,6 +10353,9 @@ export function setup(ctx: Ctx, opts?: any) {
     if (msg.stage === "failed") return fallBack(String(msg.why || "no reason was given"));
     if (msg.stage === "sent") {
       armAtOnceWait(chatId, run);
+      // A reroll on the reply that failed, or a new reply after your message
+      // when the failed turn saved no reply at all.
+      run.mode = msg.mode === "new_reply" ? "new_reply" : "reroll";
       run.messageId = String(msg.messageId || "");
       run.swipeCount = Number(msg.swipeCount) || 0;
       stats.extraReplies += Math.max(0, run.count - 1);
@@ -10358,7 +10363,9 @@ export function setup(ctx: Ctx, opts?: any) {
       if (armedNoteChat === String(chatId)) armedNoteChat = null;
       log(
         "sent " + run.count + " at once, with the prompt " +
-          (msg.from === "kept" ? "the last reply went out with" : "Lumiverse built for a new reroll") +
+          (msg.from === "kept"
+            ? "the last reply went out with"
+            : "Lumiverse built for a new " + (run.mode === "new_reply" ? "reply" : "reroll")) +
           (msg.notes ? ", and the refusal note" : ""),
       );
       return;
@@ -10420,7 +10427,8 @@ export function setup(ctx: Ctx, opts?: any) {
     const reqId = "ar-reroll-" + Date.now() + "-" + Math.random().toString(36).slice(2);
     let off: any = null;
     let timer: any = null;
-    const finish = (ok: boolean, why: string) => {
+    const asReroll = run.mode !== "new_reply";
+    const finish = (ok: boolean, why: string, landed?: any) => {
       try { off && off(); } catch (_) {}
       off = null;
       clearTimeout(timer);
@@ -10432,7 +10440,10 @@ export function setup(ctx: Ctx, opts?: any) {
         hideToast();
       }
       if (ok && !current) {
-        log("a reply that passed was added as a new reroll after you stopped the retry");
+        log(
+          "a reply that passed was added " + (asReroll ? "as a new reroll " : "") +
+            "after you stopped the retry",
+        );
         return;
       }
       if (ok) {
@@ -10440,16 +10451,24 @@ export function setup(ctx: Ctx, opts?: any) {
         pausedUntil = 0;
         stats.good += 1;
         s.attempts = 0;
-        log("added a reply that passed as a new reroll", content.length + " chars");
-        showToast("Auto Retry added a reply that passed, as a new reroll.", { kind: "success" });
-        // Lumiverse raises no end event for a reroll an extension writes, so
+        log(asReroll ? "added a reply that passed as a new reroll" : "added a reply that passed", content.length + " chars");
+        showToast(
+          asReroll ? "Auto Retry added a reply that passed, as a new reroll." : "Auto Retry added a reply that passed.",
+          { kind: "success" },
+        );
+        // Lumiverse raises no end event for a reply an extension writes, so
         // anything that acts on a finished reply, such as Auto Refine, is told
-        // in the page.
+        // in the page. A new reply has an id of its own, which the backend
+        // hands back. The same event goes either way, and it also tells Auto
+        // Refine the retry is over.
+        const messageId = landed && landed.messageId ? String(landed.messageId) : asReroll ? run.messageId : "";
+        const swipe = landed && landed.messageId ? Number(landed.swipe) || 0 : run.swipeCount;
         try {
-          if (typeof window !== "undefined" && typeof CustomEvent === "function")
+          if (messageId && typeof window !== "undefined" && typeof CustomEvent === "function")
             window.dispatchEvent(new CustomEvent(REROLL_EVENT, {
-              detail: { chatId: String(chatId), messageId: run.messageId, swipe: run.swipeCount },
+              detail: { chatId: String(chatId), messageId: messageId, swipe: swipe },
             }));
+          else tellPage(RETRY_OFF_EVENT, chatId);
         } catch (_) {}
         return;
       }
@@ -10462,7 +10481,7 @@ export function setup(ctx: Ctx, opts?: any) {
     try { (ctx as any).sendToBackend({ type: "stop_at_once", requestId: run.requestId }); } catch (_) {}
     try {
       off = (ctx as any).onBackendMessage((msg: any) => {
-        if (msg && msg.type === "reroll_added" && msg.requestId === reqId) finish(!!msg.ok, String(msg.why || "no reason was given"));
+        if (msg && msg.type === "reroll_added" && msg.requestId === reqId) finish(!!msg.ok, String(msg.why || "no reason was given"), msg);
       });
     } catch (_) {}
     timer = setTimeout(() => finish(false, "the backend did not answer"), AT_ONCE_ACK_MS);
@@ -10471,6 +10490,7 @@ export function setup(ctx: Ctx, opts?: any) {
         type: "add_reroll",
         requestId: reqId,
         chatId: chatId,
+        mode: run.mode,
         messageId: run.messageId,
         swipeCount: run.swipeCount,
         text: content,

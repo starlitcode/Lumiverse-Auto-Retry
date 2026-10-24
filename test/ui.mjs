@@ -2550,7 +2550,7 @@ console.log("\nseveral tries at once");
     await twoFailures("fallback", { content: REFUSAL });
     const fbAsk = asks("fallback")[0] || null;
     const fbBefore = clicks - c3;
-    if (fbAsk) answer({ type: "at_once", requestId: fbAsk.requestId, stage: "failed", why: "the last message in the chat is not a reply" });
+    if (fbAsk) answer({ type: "at_once", requestId: fbAsk.requestId, stage: "failed", why: "this is a group chat, and a reply added by an extension cannot say which character wrote it" });
     await wait(40);
     const fbAfter = clicks - c3;
 
@@ -2595,7 +2595,23 @@ console.log("\nseveral tries at once");
     const errorAsks = asks("error").length;
     const errorClicks = clicks - c5;
 
+    // A turn that failed before any text came back saved no reply, so the
+    // backend runs the tries for a new reply after your message. The page is
+    // told the new reply's own id, which the backend hands back.
+    await twoFailures("fresh", { error: "upstream connection reset" });
+    const freshAsk = asks("fresh")[0] || null;
+    if (freshAsk) {
+      answer({ type: "at_once", requestId: freshAsk.requestId, stage: "sent", count: 2, from: "built", mode: "new_reply", messageId: "u4", swipeCount: 0 });
+      answer({ type: "at_once", requestId: freshAsk.requestId, stage: "reply", index: 0, content: GOOD });
+    }
+    await wait(20);
+    const freshAdd = sent.find((m) => m.type === "add_reroll" && m.chatId === "fresh") || null;
+    if (freshAdd) answer({ type: "reroll_added", requestId: freshAdd.requestId, ok: true, messageId: "a5", swipe: 0 });
+    await wait(40);
+    const freshTold = told.filter((d) => d.chatId === "fresh");
+
     return {
+      fresh: freshAdd && { mode: freshAdd.mode, messageId: freshAdd.messageId }, freshTold,
       passCount: passAsk && passAsk.count, clicksBeforeAtOnce, clicksAfterPass,
       reroll: reroll && { text: reroll.text, reasoning: reroll.reasoning, messageId: reroll.messageId, swipeCount: reroll.swipeCount },
       stopped,
@@ -2615,13 +2631,15 @@ console.log("\nseveral tries at once");
   check("the rest are stopped once one passes", out.stopped === true, out);
   // Lumiverse raises no end event for it, so the page is told, for anything
   // that acts on a finished reply.
-  check("the page is told a reroll was added", out.told.length === 1 && out.told[0].chatId === "pass" && out.told[0].messageId === "m2" && out.told[0].swipe === 2, out.told);
+  check("the page is told a reroll was added", out.told.filter((d) => d.chatId === "pass").length === 1 && out.told[0].chatId === "pass" && out.told[0].messageId === "m2" && out.told[0].swipe === 2, out.told);
   check("nothing is pressed after a reply passed", out.clicksAfterPass === 1, out);
   check("none passing asks again with one more", out.firstCount === 2 && out.secondCount === 3, out);
   check("a backend that cannot run them falls back to the button", out.fbBefore === 1 && out.fbAfter === 2, out);
   check("every reply an error makes the next try go out several at once again", out.allErrAsks === 2 && out.allErrClicks === 1, out);
   check("a reply the reader starts stops the tries", out.takenStopped === true, out);
   check("an error from the provider goes out several at once on its second try", out.errorAsks === 1 && out.errorClicks === 1, out);
+  check("after a turn that saved no reply, the one that passed is added as a new reply", !!out.fresh && out.fresh.mode === "new_reply" && out.fresh.messageId === "u4", out.fresh);
+  check("and the page is told the new reply's own id", out.freshTold.length === 1 && out.freshTold[0].messageId === "a5" && out.freshTold[0].swipe === 0, out.freshTold);
   check("a try that never comes back is stopped after the wait", out.hangStopped === true, out);
   check("and the next try goes out", out.hangNext === 2, out);
   check("no console errors", errors.length === 0, errors);

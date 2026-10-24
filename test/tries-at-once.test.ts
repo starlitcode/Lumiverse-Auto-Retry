@@ -1,10 +1,12 @@
 // Several tries at once, driven through the file Lumiverse actually loads.
 //
 // The backend half sends the prompt several times and adds the reply the panel
-// picks as a new reroll. The promises worth holding down: a prompt is only
-// kept for somebody who switched the setting on, and only theirs; the refusal
-// note goes in only when one is armed for the try; a reroll never lands on a
-// message that changed while the tries were out; and Stop stops every call.
+// picks as a new reroll, or as a new reply when the failed turn saved none.
+// The promises worth holding down: a prompt is only kept for somebody who
+// switched the setting on, and only theirs; the refusal note goes in only when
+// one is armed for the try; a reply never lands on a message that changed
+// while the tries were out; a group chat gets no reply it cannot name the
+// writer of; and Stop stops every call.
 //
 // Run with: bun test
 
@@ -22,6 +24,8 @@ type Msg = { id: string; role: string; content: string; swipes?: string[] };
 function boot(opts?: {
   messages?: Msg[];
   readFails?: boolean;
+  group?: boolean;
+  chatGetFails?: boolean;
   quiet?: (req: any, n: number) => Promise<any>;
 }) {
   let onFrontend: any = null;
@@ -30,6 +34,7 @@ function boot(opts?: {
   const quietCalls: any[] = [];
   const dryCalls: any[] = [];
   const updates: any[] = [];
+  const appends: any[] = [];
   let messages: Msg[] = opts && opts.messages
     ? opts.messages
     : [
@@ -57,6 +62,18 @@ function boot(opts?: {
       updateMessage: async (chatId: string, id: string, patch: any) => {
         updates.push({ chatId, id, patch });
       },
+      appendMessage: async (chatId: string, message: any) => {
+        const id = "m" + (messages.length + 1);
+        appends.push({ chatId, message });
+        messages = messages.concat([{ id, role: message.role, content: message.content }]);
+        return { id };
+      },
+    },
+    chats: {
+      get: async (chatId: string) => {
+        if (opts && opts.chatGetFails) throw new Error("permission denied");
+        return { id: chatId, metadata: opts && opts.group ? { group: true } : {} };
+      },
     },
     generate: {
       quiet: (req: any) => {
@@ -80,6 +97,7 @@ function boot(opts?: {
     quietCalls,
     dryCalls,
     updates,
+    appends,
     setMessages: (m: Msg[]) => { messages = m; },
     setAccount: (v: any) => { account = v; },
     tell: (payload: any, userId?: string) => onFrontend(payload, userId),
@@ -287,13 +305,70 @@ describe("the calls", () => {
   });
 });
 
-describe("nothing is sent when there is no reply to add to", () => {
-  test("the last message is the user's", async () => {
-    const h = boot({ messages: [{ id: "m1", role: "user", content: "Hello?" }] });
+// A turn that failed before any text came back, such as an error before the
+// first word, leaves your message last with no reply saved after it.
+const noReply = (): Msg[] => [
+  { id: "m1", role: "assistant", content: "The ferry horn sounded twice." },
+  { id: "m2", role: "user", content: "I climb to the upper deck." },
+];
+
+describe("a turn that saved no reply", () => {
+  test("the tries go out, with a prompt built for a new reply", async () => {
+    const h = boot({ messages: noReply() });
+    await h.tell({ type: "try_at_once", requestId: "r1", chatId: "c1", count: 2 });
+    await h.settle();
+    expect(h.quietCalls.length).toBe(2);
+    expect(h.dryCalls[0].input).toEqual({ chatId: "c1", generationType: "normal" });
+    expect(h.stage("sent")[0].msg).toMatchObject({ mode: "new_reply", messageId: "m2", swipeCount: 0 });
+  });
+
+  test("a reply that failed its check still gets a reroll", async () => {
+    const h = boot();
+    await h.tell({ type: "try_at_once", requestId: "r1", chatId: "c1", count: 2 });
+    await h.settle();
+    expect(h.dryCalls[0].input).toEqual({ chatId: "c1", generationType: "swipe" });
+    expect(h.stage("sent")[0].msg).toMatchObject({ mode: "reroll", messageId: "m2", swipeCount: 1 });
+  });
+
+  test("not in a group chat, which a reply from an extension cannot name the writer of", async () => {
+    const h = boot({ messages: noReply(), group: true });
     await h.tell({ type: "try_at_once", requestId: "r1", chatId: "c1", count: 2 });
     await h.settle();
     expect(h.quietCalls.length).toBe(0);
-    expect(h.stage("failed")[0].msg.why).toBe("the last message in the chat is not a reply");
+    expect(h.stage("failed")[0].msg.why).toContain("group chat");
+  });
+
+  test("not when the chat cannot be read to see whether it is a group chat", async () => {
+    const h = boot({ messages: noReply(), chatGetFails: true });
+    await h.tell({ type: "try_at_once", requestId: "r1", chatId: "c1", count: 2 });
+    await h.settle();
+    expect(h.quietCalls.length).toBe(0);
+    expect(h.stage("failed")[0].msg.why).toContain("group chat");
+  });
+
+  test("a group chat does not stop a reroll on a reply that is there", async () => {
+    const h = boot({ group: true });
+    await h.tell({ type: "try_at_once", requestId: "r1", chatId: "c1", count: 2 });
+    await h.settle();
+    expect(h.quietCalls.length).toBe(2);
+  });
+});
+
+describe("nothing is sent when there is nothing to add to", () => {
+  test("the chat is empty", async () => {
+    const h = boot({ messages: [] });
+    await h.tell({ type: "try_at_once", requestId: "r1", chatId: "c1", count: 2 });
+    await h.settle();
+    expect(h.quietCalls.length).toBe(0);
+    expect(h.stage("failed")[0].msg.why).toBe("the chat has no messages");
+  });
+
+  test("the last message is a system message", async () => {
+    const h = boot({ messages: [{ id: "m1", role: "system", content: "The ferry docks at dawn." }] });
+    await h.tell({ type: "try_at_once", requestId: "r1", chatId: "c1", count: 2 });
+    await h.settle();
+    expect(h.quietCalls.length).toBe(0);
+    expect(h.stage("failed")[0].msg.why).toBe("the last message in the chat is not a reply or a message of yours");
   });
 
   test("the chat cannot be read, and the permission is named", async () => {
@@ -314,10 +389,47 @@ describe("adding the reply that passed", () => {
       type: "add_reroll", requestId: "a1", chatId: "c1", messageId: "m2", swipeCount: 1,
       text: "She lit the lamp and waited.",
     });
-    expect(added(h)[0]).toMatchObject({ requestId: "a1", ok: true });
+    expect(added(h)[0]).toMatchObject({ requestId: "a1", ok: true, messageId: "m2", swipe: 1 });
     expect(h.updates).toEqual([
       { chatId: "c1", id: "m2", patch: { swipes: ["I cannot continue this.", "She lit the lamp and waited."], swipe_id: 1 } },
     ]);
+    expect(h.appends.length).toBe(0);
+  });
+
+  test("after a turn that saved no reply, it becomes a new reply, and its id is handed back", async () => {
+    const h = boot({ messages: noReply() });
+    await h.tell({
+      type: "add_reroll", requestId: "a1", chatId: "c1", mode: "new_reply", messageId: "m2",
+      text: "Gulls wheel over the wake.", reasoning: "Keep the crossing calm.",
+    });
+    expect(h.appends).toEqual([{ chatId: "c1", message: { role: "assistant", content: "Gulls wheel over the wake." } }]);
+    expect(added(h)[0]).toMatchObject({ requestId: "a1", ok: true, messageId: "m3", swipe: 0 });
+    expect(h.updates).toEqual([
+      { chatId: "c1", id: "m3", patch: { reasoning: { text: "Keep the crossing calm.", duration: null } } },
+    ]);
+  });
+
+  test("not as a new reply when one was saved while the tries were out", async () => {
+    const h = boot({ messages: noReply() });
+    h.setMessages(noReply().concat([{ id: "m3", role: "assistant", content: "The rail is cold." }]));
+    await h.tell({
+      type: "add_reroll", requestId: "a1", chatId: "c1", mode: "new_reply", messageId: "m2",
+      text: "Gulls wheel over the wake.",
+    });
+    expect(added(h)[0].ok).toBe(false);
+    expect(h.appends.length).toBe(0);
+    expect(h.updates.length).toBe(0);
+  });
+
+  test("not as a new reply when you sent another message while the tries were out", async () => {
+    const h = boot({ messages: noReply() });
+    h.setMessages(noReply().concat([{ id: "m3", role: "user", content: "Actually, I stay below." }]));
+    await h.tell({
+      type: "add_reroll", requestId: "a1", chatId: "c1", mode: "new_reply", messageId: "m2",
+      text: "Gulls wheel over the wake.",
+    });
+    expect(added(h)[0].ok).toBe(false);
+    expect(h.appends.length).toBe(0);
   });
 
   test("its thinking goes with it", async () => {

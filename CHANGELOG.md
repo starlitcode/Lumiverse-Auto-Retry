@@ -8,6 +8,16 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.20.6
+
+_2026-10-24_
+
+### Fixed again
+
+- **Several tries at once did not run after an error that came before any text.** 5.17.3 said a refusal sent as an error, such as `prohibited_content`, goes out several at once. When the error came before the first word, Lumiverse saved no reply, so your message was the last one in the chat. Several tries at once had no reply to add a reroll to, so each try pressed the retry button instead. Now the tries go out at once, and the reply that passes is added after your message as a new reply. In a group chat each try still presses the button, since a reply added by an extension cannot say which character wrote it. Auto Refine is told about the new reply, the same as a reroll. See [When no reply was saved](docs/tries-at-once.md#when-no-reply-was-saved). Reported by a Discord user.
+
+---
+
 ## 5.20.5
 
 _2026-10-23_

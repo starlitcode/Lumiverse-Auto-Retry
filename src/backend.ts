@@ -28,7 +28,7 @@ declare const spindle: any;
 // with while this side comes back on the new build. A debug report naming only
 // the panel's version would be speaking for a file it cannot see, so the panel
 // asks for this one and prints both.
-const VERSION = '5.20.5';
+const VERSION = '5.20.6';
 
 const SETTINGS_FILE = 'settings.json';
 // Presets, kept in account storage next to the settings so they
@@ -492,11 +492,19 @@ function sayError(e: any): string {
   return m ? String(m) : 'no reason was given';
 }
 
-// The reply a try is for: the last message in the chat, which has to be the
-// reply that failed its check. Anything else means the chat has moved on.
-async function lastReply(chatId: string): Promise<{ id: string; swipes: string[] } | { why: string }> {
+// What a try is for, read off the last message in the chat.
+//
+// A reply that failed its check gets the reply that passes as a new reroll.
+// A message of the user's with no reply after it is a turn that failed before
+// any text came back, such as an error before the first word, so Lumiverse
+// saved no reply. The reply that passes is added after it as a new reply.
+// Anything else means the chat has moved on.
+type AtOnceTarget =
+  | { mode: 'reroll'; id: string; swipes: string[] }
+  | { mode: 'new_reply'; id: string };
+async function lastTarget(chatId: string): Promise<AtOnceTarget | { why: string }> {
   if (!spindle.chat || typeof spindle.chat.getMessages !== 'function')
-    return { why: 'this Lumiverse cannot add a reroll for an extension' };
+    return { why: 'this Lumiverse cannot add a reply for an extension' };
   let list: any[];
   try {
     list = await spindle.chat.getMessages(chatId);
@@ -504,11 +512,33 @@ async function lastReply(chatId: string): Promise<{ id: string; swipes: string[]
     return { why: 'Auto Retry could not read the chat. Check that the chat_mutation permission is granted (' + sayError(e) + ')' };
   }
   const last = Array.isArray(list) && list.length ? list[list.length - 1] : null;
-  if (!last || last.role !== 'assistant' || !last.id) return { why: 'the last message in the chat is not a reply' };
-  const swipes = Array.isArray(last.swipes) && last.swipes.length
-    ? last.swipes.map((x: any) => String(x == null ? '' : x))
-    : [String(last.content == null ? '' : last.content)];
-  return { id: String(last.id), swipes: swipes };
+  if (!last || !last.id) return { why: 'the chat has no messages' };
+  if (last.role === 'assistant') {
+    const swipes = Array.isArray(last.swipes) && last.swipes.length
+      ? last.swipes.map((x: any) => String(x == null ? '' : x))
+      : [String(last.content == null ? '' : last.content)];
+    return { mode: 'reroll', id: String(last.id), swipes: swipes };
+  }
+  if (last.role === 'user') return { mode: 'new_reply', id: String(last.id) };
+  return { why: 'the last message in the chat is not a reply or a message of yours' };
+}
+
+// A reply an extension adds carries no character, so in a group chat it
+// cannot say which character wrote it. Lumiverse marks a group chat with
+// metadata.group. A chat that cannot be read is treated the same way, since
+// the answer is not known.
+async function groupChatWhy(chatId: string, userId?: string): Promise<string> {
+  if (!spindle.chats || typeof spindle.chats.get !== 'function')
+    return 'this Lumiverse cannot say whether this is a group chat';
+  let chat: any;
+  try {
+    chat = await spindle.chats.get(chatId, userId);
+  } catch (e) {
+    return 'Auto Retry could not read the chat to see whether it is a group chat (' + sayError(e) + ')';
+  }
+  if (chat && chat.metadata && chat.metadata.group === true)
+    return 'this is a group chat, and a reply added by an extension cannot say which character wrote it';
+  return '';
 }
 
 async function tryAtOnce(payload: any, userId?: string): Promise<void> {
@@ -518,8 +548,12 @@ async function tryAtOnce(payload: any, userId?: string): Promise<void> {
   const say = (m: any) => replyTo(userId, Object.assign({ type: 'at_once', requestId: requestId }, m));
   if (!requestId) return;
   if (!chatId) return say({ stage: 'failed', why: 'the host did not say which chat this is' });
-  const target = await lastReply(chatId);
+  const target = await lastTarget(chatId);
   if ('why' in target) return say({ stage: 'failed', why: target.why });
+  if (target.mode === 'new_reply') {
+    const why = await groupChatWhy(chatId, userId);
+    if (why) return say({ stage: 'failed', why: why });
+  }
 
   const who = watcherKey(userId);
   const kept = keptPrompts.get(keptKey(atOnceUserFor(userId) || who, chatId));
@@ -530,7 +564,10 @@ async function tryAtOnce(payload: any, userId?: string): Promise<void> {
     if (!spindle.generate || typeof spindle.generate.dryRun !== 'function')
       return say({ stage: 'failed', why: 'this Lumiverse cannot build a prompt for an extension' });
     try {
-      const dry = await spindle.generate.dryRun({ chatId: chatId, generationType: 'swipe' }, userId);
+      // A reroll is built the way a swipe is. A new reply is built the way a
+      // normal turn is, from the chat as it stands, ending on your message.
+      const generationType = target.mode === 'reroll' ? 'swipe' : 'normal';
+      const dry = await spindle.generate.dryRun({ chatId: chatId, generationType: generationType }, userId);
       messages = dry && Array.isArray(dry.messages) ? plainMessages(dry.messages) : null;
     } catch (e) {
       return say({ stage: 'failed', why: 'Lumiverse could not build the prompt (' + sayError(e) + ')' });
@@ -559,7 +596,15 @@ async function tryAtOnce(payload: any, userId?: string): Promise<void> {
   const Ctl = (globalThis as any).AbortController;
   const controller = typeof Ctl === 'function' ? new Ctl() : null;
   atOnceRuns.set(requestId, { controller: controller, who: who });
-  say({ stage: 'sent', count: count, from: from, notes: notes, messageId: target.id, swipeCount: target.swipes.length });
+  say({
+    stage: 'sent',
+    count: count,
+    from: from,
+    notes: notes,
+    mode: target.mode,
+    messageId: target.id,
+    swipeCount: target.mode === 'reroll' ? target.swipes.length : 0,
+  });
   let left = count;
   for (let i = 0; i < count; i++) {
     const req: any = { messages: messages };
@@ -604,34 +649,54 @@ function stopAtOnce(requestId: string, userId?: string): void {
   try { if (run.controller) run.controller.abort(); } catch (_) {}
 }
 
-// The reply that passed goes on the failed reply as a new reroll and is shown.
-// The chat is read again first: if a message was sent or the reply deleted
-// while the tries were out, the reply is not put on the wrong message.
-async function addReroll(payload: any): Promise<{ ok: boolean; why?: string }> {
+// The reply that passed goes on the failed reply as a new reroll, or after
+// your message as a new reply when the turn saved none, and is shown. The
+// chat is read again first: if a message was sent or the reply deleted while
+// the tries were out, the reply is not put on the wrong message. The message
+// it landed on is handed back, so Auto Refine can be told which one it is.
+async function addReroll(payload: any): Promise<{ ok: boolean; why?: string; messageId?: string; swipe?: number }> {
   const chatId = payload.chatId ? String(payload.chatId) : '';
   const text = String(payload.text == null ? '' : payload.text);
   if (!chatId || !text.trim()) return { ok: false, why: 'there was nothing to add' };
-  const target = await lastReply(chatId);
+  const target = await lastTarget(chatId);
   if ('why' in target) return { ok: false, why: target.why };
-  if (target.id !== String(payload.messageId || '') || target.swipes.length !== Number(payload.swipeCount))
-    return { ok: false, why: 'the reply changed while the tries were out' };
-  try {
-    await spindle.chat.updateMessage(chatId, target.id, {
-      swipes: target.swipes.concat([text]),
-      swipe_id: target.swipes.length,
-    });
-  } catch (e) {
-    return { ok: false, why: 'Lumiverse would not add the reroll (' + sayError(e) + ')' };
+  const mode = payload.mode === 'new_reply' ? 'new_reply' : 'reroll';
+  if (target.mode !== mode || target.id !== String(payload.messageId || ''))
+    return { ok: false, why: 'the chat changed while the tries were out' };
+  let messageId = target.id;
+  let swipe = 0;
+  if (target.mode === 'reroll') {
+    if (target.swipes.length !== Number(payload.swipeCount))
+      return { ok: false, why: 'the reply changed while the tries were out' };
+    try {
+      await spindle.chat.updateMessage(chatId, target.id, {
+        swipes: target.swipes.concat([text]),
+        swipe_id: target.swipes.length,
+      });
+    } catch (e) {
+      return { ok: false, why: 'Lumiverse would not add the reroll (' + sayError(e) + ')' };
+    }
+    swipe = target.swipes.length;
+  } else {
+    if (typeof spindle.chat.appendMessage !== 'function')
+      return { ok: false, why: 'this Lumiverse cannot add a reply for an extension' };
+    let created: any;
+    try {
+      created = await spindle.chat.appendMessage(chatId, { role: 'assistant', content: text });
+    } catch (e) {
+      return { ok: false, why: 'Lumiverse would not add the reply (' + sayError(e) + ')' };
+    }
+    messageId = created && created.id ? String(created.id) : '';
   }
   const reasoning = String(payload.reasoning == null ? '' : payload.reasoning);
-  if (reasoning.trim()) {
+  if (reasoning.trim() && messageId) {
     try {
-      await spindle.chat.updateMessage(chatId, target.id, { reasoning: { text: reasoning, duration: null } });
+      await spindle.chat.updateMessage(chatId, messageId, { reasoning: { text: reasoning, duration: null } });
     } catch (_) {
-      try { spindle.log.warn('auto-retry: the reroll was added, but its thinking could not be saved with it'); } catch (__) {}
+      try { spindle.log.warn('auto-retry: the reply was added, but its thinking could not be saved with it'); } catch (__) {}
     }
   }
-  return { ok: true };
+  return { ok: true, messageId: messageId, swipe: swipe };
 }
 
 // Where the note sits relative to the conversation. __isChatHistory marks the
@@ -910,13 +975,20 @@ spindle.onFrontendMessage(async (payload: any, userId?: string) => {
       return;
     }
     if (payload.type === 'add_reroll') {
-      let done: { ok: boolean; why?: string };
+      let done: { ok: boolean; why?: string; messageId?: string; swipe?: number };
       try {
         done = await addReroll(payload);
       } catch (e) {
         done = { ok: false, why: sayError(e) };
       }
-      replyTo(userId, { type: 'reroll_added', requestId: payload.requestId, ok: done.ok, why: done.why || '' });
+      replyTo(userId, {
+        type: 'reroll_added',
+        requestId: payload.requestId,
+        ok: done.ok,
+        why: done.why || '',
+        messageId: done.messageId || '',
+        swipe: Number(done.swipe) || 0,
+      });
       return;
     }
     if (payload.type === 'save_presets' && payload.presets && typeof payload.presets === 'object') {

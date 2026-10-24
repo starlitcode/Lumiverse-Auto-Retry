@@ -18,16 +18,16 @@ It asks Lumiverse for six permissions. All six are privileged: on a shared serve
 | --- | --- | --- |
 | `generation` | Seeing replies start, stream and end. | It cannot see replies at all. This is the one it needs. |
 | `ui_panels` | The floating on/off button, and the on-screen panel when it floats over the chat. It gives screen space, not access to your data. | Everything works, with no floating button. A panel in the sidebar drawer needs no permission. |
-| `chats` | Asking which chat you are looking at. | Everything works. **Turn off here** waits to be told which chat you are in. |
+| `chats` | Asking which chat you are looking at. With **Several tries at once** on, also reading whether a chat is a group chat. | Everything works. **Turn off here** waits to be told which chat you are in. |
 | `characters` | Turning a chat's card id into a name, so the panel can say who a chat is with. It reads one card, for the chat you are in. | Everything works. The panel says "This chat" instead of a name. |
 | `interceptor` | Adding the retry note to a prompt, and showing the whole prompt on the panel's **Prompt** tab. | Everything works. No retry note is sent, and the Prompt tab stays empty and says so. |
-| `chat_mutation` | **Several tries at once** only: reading the messages in the chat to find the failed reply, and adding the reply that passed to it as a new reroll. | Everything works. With **Several tries at once** on, each try presses the retry button instead. |
+| `chat_mutation` | **Several tries at once** only: reading the messages in the chat to find the failed reply, and adding the reply that passed to it as a new reroll. When the failed turn saved no reply, the reply that passed is added after your message as a new reply. | Everything works. With **Several tries at once** on, each try presses the retry button instead. |
 
-**About `chats`:** Lumiverse puts reading, creating and deleting chats into one permission, with no narrower one to ask for. Auto Retry only uses one call from it: which chat is open. It never creates, deletes or changes a chat.
+**About `chats`:** Lumiverse puts reading, creating and deleting chats into one permission, with no narrower one to ask for. Auto Retry only uses two calls from it: which chat is open, and, with **Several tries at once** on, reading one chat to see whether it is a group chat. It never creates, deletes or changes a chat.
 
 **About `characters`:** it never creates, edits or deletes a card.
 
-**About `chat_mutation`:** Lumiverse puts reading, adding, changing and deleting messages into one permission. Auto Retry reads the messages in a chat and adds a reroll to the last reply. It never deletes a message, never changes the text of a reroll that is already there, and never sends a message as you.
+**About `chat_mutation`:** Lumiverse puts reading, adding, changing and deleting messages into one permission. Auto Retry reads the messages in a chat and adds a reroll to the last reply. When a turn saved no reply, it adds the reply that passed after your message instead. It never deletes a message, never changes the text of a reroll that is already there, and never sends a message as you.
 
 ### The Lumiverse features it uses
 
@@ -43,10 +43,11 @@ Behind those permissions it uses these Lumiverse features and nothing else:
 
 With **Several tries at once** on, it also uses these:
 
-- building the prompt for a new reroll
+- building the prompt for a new reroll, or for a new reply
+- reading whether a chat is a group chat
 - sending a prompt to your model connection
 - reading the messages in a chat
-- adding a reroll to a reply
+- adding a reroll to a reply, or adding a new reply
 
 ### The note sent with a refusal retry
 
@@ -70,7 +71,7 @@ Off by default. With it on:
 
 - **It keeps the last prompt in each chat**, so a try can send the same prompt again. The copy is in memory on the server, for up to 12 chats, for 30 minutes. It is not written to disk. Turning the setting off drops every copy.
 - **The prompt goes to your own model connection**, the same one your replies use, several times at once. Lumiverse sends it. Auto Retry does not open a connection of its own.
-- **The replies come back to Auto Retry in your browser**, so they can be checked. The one that passes is added to your chat as a new reroll. The others are not kept.
+- **The replies come back to Auto Retry in your browser**, so they can be checked. The one that passes is added to your chat as a new reroll, or as a new reply when the failed turn saved none. The others are not kept.
 
 [Several tries at once](tries-at-once.md) explains the rest, including the cost.
 
