@@ -73,6 +73,7 @@ Some errors stop a turn before any text comes back, such as `prohibited_content`
 These cases always use a normal retry, even with the setting on. The try is made by pressing the retry button, and the log says why.
 
 - **A group chat with no reply saved.** A reply added by an extension cannot say which character wrote it. A reroll on a reply that is there still goes out at once.
+- **No reply saved, and no `chats` permission.** Auto Retry reads the chat to see whether it is a group chat, and that needs the `chats` permission.
 - **Nothing to add to.** The chat is empty, or its last message is neither a reply nor yours.
 
 ## What is sent
@@ -100,7 +101,7 @@ Lumiverse does not announce a reroll or a reply an extension adds as a finished 
 
 ## The permission it needs
 
-Adding a reroll or a reply needs the `chat_mutation` permission. Lumiverse asks for it after updating to a version with this setting.
+Adding a reroll or a reply needs the `chat_mutation` permission. Adding a reply after a turn that saved none also needs `chats`, to see whether the chat is a group chat. Lumiverse asks for it after updating to a version with this setting.
 
 - Without it, **Several tries at once** cannot run. Each try falls back to pressing the retry button, and the log says why.
 - Everything else in Auto Retry works without it.

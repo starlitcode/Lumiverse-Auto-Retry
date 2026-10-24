@@ -322,6 +322,26 @@ describe("a turn that saved no reply", () => {
     expect(h.stage("sent")[0].msg).toMatchObject({ mode: "new_reply", messageId: "m2", swipeCount: 0 });
   });
 
+  test("with the setting on, the prompt the failed turn went out with is sent", async () => {
+    const h = boot({ messages: noReply() });
+    await h.on(true);
+    await h.run(
+      [
+        { role: "system", content: "You pilot the night ferry." },
+        { role: "user", content: "I climb to the upper deck.", __isChatHistory: true },
+      ],
+      { chatId: "c1" },
+    );
+    await h.tell({ type: "try_at_once", requestId: "r1", chatId: "c1", count: 2 });
+    await h.settle();
+    expect(h.dryCalls.length).toBe(0);
+    expect(h.stage("sent")[0].msg).toMatchObject({ from: "kept", mode: "new_reply" });
+    expect(h.quietCalls[0].messages).toEqual([
+      { role: "system", content: "You pilot the night ferry." },
+      { role: "user", content: "I climb to the upper deck." },
+    ]);
+  });
+
   test("a reply that failed its check still gets a reroll", async () => {
     const h = boot();
     await h.tell({ type: "try_at_once", requestId: "r1", chatId: "c1", count: 2 });

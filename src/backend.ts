@@ -13,11 +13,13 @@
  * click starts, then thrown away. One generation only.
  *
  * And it sends the prompt several times at once when "Several tries at once"
- * is on, then adds the reply the panel picks to the chat as a new reroll.
+ * is on, then adds the reply the panel picks to the chat as a new reroll, or
+ * as a new reply when the failed turn saved none.
  *
  * Needs the `generation` permission to hear when a reply finishes and to send
- * the tries, `interceptor` for the refusal note, and `chat_mutation` to add a
- * reroll.
+ * the tries, `interceptor` for the refusal note, `chat_mutation` to add a
+ * reroll or a reply, and `chats` to see whether a chat is a group chat before
+ * adding a reply.
  */
 
 declare const spindle: any;
@@ -1165,10 +1167,10 @@ const promptInterceptor = async (messages: any[], context: any) => {
 const PERMISSIONS: Array<{ name: string; costs: string; onlyFor?: string }> = [
   { name: 'generation', costs: 'Everything. Retries run off the generation events, and without this none of them arrive, so nothing is ever retried.' },
   { name: 'interceptor', costs: 'The refusal note, and the Prompt tab.' },
-  { name: 'chats', costs: 'The chat name in the log, and knowing which chat you are in without a reply first.' },
+  { name: 'chats', costs: 'The chat name in the log, and knowing which chat you are in without a reply first. With Several tries at once on, a try after an error that came before any text presses the retry button instead.' },
   { name: 'characters', costs: 'The character name in the log.' },
   { name: 'ui_panels', costs: 'The floating button. The on-screen panel falls back to its own window.' },
-  { name: 'chat_mutation', costs: 'Several tries at once, which adds the reply that passes as a new reroll. Everything else works without it.', onlyFor: 'tryAtOnce' },
+  { name: 'chat_mutation', costs: 'Several tries at once, which adds the reply that passes as a new reroll or a new reply. Everything else works without it.', onlyFor: 'tryAtOnce' },
 ];
 // null where the host is too old to say, which is not the same as denied and is
 // not worth showing as one.

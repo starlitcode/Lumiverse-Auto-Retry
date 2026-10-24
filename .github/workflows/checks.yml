@@ -2,7 +2,7 @@
 # a diff: that dist/ is really a build of src/.
 #
 # dist/ is committed and is the file Lumiverse loads, so a change that lands in
-# src/ and not in dist/ passes review looking correct and ships doing nothing.
+# src/ and not in dist/ passes review looking correct and reaches users doing nothing.
 # The last step of the first job rebuilds and fails if anything moved, which is
 # the check a person cannot reliably do by eye.
 
