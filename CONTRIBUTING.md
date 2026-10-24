@@ -4,9 +4,13 @@ Thank you for wanting to help with Auto Retry.
 
 ## Bug reports, not pull requests
 
-Please send a bug report or an idea instead of a pull request. I do not accept pull requests. Every change to the code goes through me.
+Pull requests are not merged here. Every change to the code goes through me.
 
-A clear bug report helps me more than a pull request. Questions and ideas are welcome too.
+- Please do not spend your time, your limits or your AI usage writing a fix.
+- A clear bug report is all I need. It helps me more than a pull request.
+- If you already opened a pull request, it can still help me see the problem. It will not be merged.
+
+Questions and ideas are welcome too.
 
 ## Where to send it
 
