@@ -190,6 +190,13 @@ shown in Lumiverse.
     in their own words.
   Before a push to `stable`, read the owner's messages since the last release
   for anything that came from a user, and check each entry it led to.
+- When a user opens a pull request, from Discord or anywhere else, the credit
+  links that pull request instead of naming a Discord user. This gives them
+  credit on GitHub. Use "Reported in", "Suggested in" or "Asked about in",
+  such as "Reported in [pull request #12](https://github.com/starlitcode/Lumiverse-Auto-Retry/pull/12)."
+  Add "which also suggested the fix" when it did. This holds whether or not
+  the pull request is merged, and for every entry it leads to, in both
+  extensions.
 
 ## Discord posts
 
