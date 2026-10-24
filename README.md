@@ -77,7 +77,7 @@ It works with no setup. Everything else is optional.
 
 ## Help and feedback
 
-Questions, bug reports and ideas are welcome in my [Auto Retry post](https://discord.com/channels/1484149939167821915/1514031700185714688) on the Lumiverse Discord server, or as a [GitHub issue](https://github.com/starlitcode/Lumiverse-Auto-Retry/issues). See [Contributing](CONTRIBUTING.md) for how changes are made.
+Questions, bug reports and ideas are welcome in my [Auto Retry post](https://discord.com/channels/1484149939167821915/1514031700185714688) on the Lumiverse Discord server, or as a [GitHub issue](https://github.com/starlitcode/Lumiverse-Auto-Retry/issues). [Contributing](CONTRIBUTING.md) says what to put in a bug report.
 
 ## Made for adults
 
