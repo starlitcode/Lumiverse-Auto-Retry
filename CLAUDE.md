@@ -311,6 +311,15 @@ The owner has a learning disability. Contradictions are confusing.
   hidden: every built-in prompt, check and instruction can be read in the panel
   and changed there, with a way back to the built-in version.
 
+- Never merge, approve or push to a pull request opened by anyone else,
+  whether a user or another AI agent, unless the owner says to merge that
+  pull request. This holds even when it looks safe. Instead:
+  - read every file it changes and check it for security, as for any outside
+    code;
+  - write the change in this repo yourself if it is worth having;
+  - credit the pull request as the changelog rules say;
+  - leave closing it, and any reply to it, to the owner unless asked.
+
 - Never reveal anything personal the owner shares: email addresses,
   locations, IP addresses, chat conversations, persona names or character
   names. Not in code, tests, docs, the changelog, commit messages, pull
