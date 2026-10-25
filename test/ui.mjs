@@ -753,6 +753,36 @@ console.log("\nthe prompt view");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- the debug report ----
+// Easy to read for the person and for whoever fixes the bug: the reader's own
+// time with the zone, the settings that were changed with their defaults, and
+// the kind of each recent line.
+console.log("\nthe debug report");
+{
+  const r = await inPanel(browser, { settings: { liveLog: true, maxRetries: 6 } }, (page) =>
+    page.evaluate(async () => {
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms || 150));
+      window.__handlers.GENERATION_STARTED({ chatId: "c1", generationId: "g1", messageId: "m1" });
+      await wait();
+      const modal = document.getElementById("modal");
+      const build = [...modal.querySelectorAll("button")].find((b) => b.textContent.trim() === "Build preview");
+      if (!build) return "";
+      build.click();
+      await wait();
+      const area = modal.querySelector("[data-ar-debug]");
+      return area ? area.value : "";
+    }),
+  );
+  const text = r.out;
+  check("the report was built", text.length > 200, text.slice(0, 200));
+  check("its time is the reader's own, with the zone", /time: \d{4}-\d\d-\d\d \d\d:\d\d:\d\d \(UTC[+-]\d+(:\d\d)?\)/.test(text), text.slice(0, 200));
+  check("a changed setting is listed by its label and name, with its default", /Most tries per message \(maxRetries\): 6, default 4/.test(text), text);
+  check("a setting at its default is not listed", !/\(retryOnRefusal\)/.test(text), text);
+  check("a recent line says its kind", /\[replies\] a reply started \(g1\), from you/.test(text), text);
+  check("no recent line carries a copy of the settings", !/ready v[0-9.]+ \{/.test(text), text);
+  check("no console errors", r.errors.length === 0, r.errors);
+}
+
 // ---- hiding kinds of line in the Log ----
 // Each kind of line has its own switch. A hidden line is still kept, so the
 // Log says how many are hidden and Debug info still carries them.
@@ -778,7 +808,7 @@ console.log("\nhiding kinds of line in the Log");
           report = area ? area.value : "";
         }
         const sw = [...modal.querySelectorAll("*")].some((n) => n.childElementCount === 0 && n.textContent.trim() === "Show in the log");
-        return { tab: !!tab, shown: /gen start/.test(said), hiddenSaid: /of a kind you hid/.test(said), inReport: /gen start/.test(report), sw };
+        return { tab: !!tab, shown: /a reply started/.test(said), hiddenSaid: /of a kind you hid/.test(said), inReport: /\[replies\] a reply started/.test(report), sw };
       }),
     );
   const on = await run({ liveLog: true });
@@ -2649,7 +2679,35 @@ console.log("\nseveral tries at once");
     await wait(40);
     const freshTold = told.filter((d) => d.chatId === "fresh");
 
+    // Another tab has tries out for this chat already: nothing is pressed
+    // here, and no other try is asked for.
+    const c6 = clicks;
+    await twoFailures("busy", { content: REFUSAL });
+    const busyAsk = asks("busy")[0] || null;
+    const busyBefore = clicks - c6;
+    if (busyAsk) answer({ type: "at_once", requestId: busyAsk.requestId, stage: "failed", busy: true, why: "tries at once are already out for this chat, from another tab" });
+    await wait(80);
+    const busyAfter = clicks - c6;
+    const busyAsks = asks("busy").length;
+
+    // The reply passed, but the chat changed while it was out, such as by
+    // another tab adding its own: nothing is retried.
+    const c7 = clicks;
+    await twoFailures("moved", { content: REFUSAL });
+    const movedAsk = asks("moved")[0] || null;
+    if (movedAsk) {
+      answer({ type: "at_once", requestId: movedAsk.requestId, stage: "sent", count: 2, from: "kept", messageId: "m2", swipeCount: 2 });
+      answer({ type: "at_once", requestId: movedAsk.requestId, stage: "reply", index: 0, content: GOOD });
+    }
+    await wait(20);
+    const movedAdd = sent.find((m) => m.type === "add_reroll" && m.chatId === "moved") || null;
+    if (movedAdd) answer({ type: "reroll_added", requestId: movedAdd.requestId, ok: false, changed: true, why: "the reply changed while the tries were out" });
+    await wait(80);
+    const movedClicks = clicks - c7;
+    const movedAsks = asks("moved").length;
+
     return {
+      busyBefore, busyAfter, busyAsks, movedAdd: !!movedAdd, movedClicks, movedAsks,
       fresh: freshAdd && { kind: freshAdd.kind, messageId: freshAdd.messageId }, freshTold,
       passCount: passAsk && passAsk.count, clicksBeforeAtOnce, clicksAfterPass,
       reroll: reroll && { text: reroll.text, reasoning: reroll.reasoning, messageId: reroll.messageId, swipeCount: reroll.swipeCount },
@@ -2679,6 +2737,8 @@ console.log("\nseveral tries at once");
   check("an error from the provider goes out several at once on its second try", out.errorAsks === 1 && out.errorClicks === 1, out);
   check("after a turn that saved no reply, the one that passed is added as a new reply", !!out.fresh && out.fresh.kind === "reply" && out.fresh.messageId === "u4", out.fresh);
   check("and the page is told the new reply's own id", out.freshTold.length === 1 && out.freshTold[0].messageId === "a5" && out.freshTold[0].swipe === 0, out.freshTold);
+  check("another tab's tries for the chat: nothing is pressed here", out.busyBefore === 1 && out.busyAfter === 1 && out.busyAsks === 1, out);
+  check("a chat that changed while the tries were out is not retried", out.movedAdd && out.movedClicks === 1 && out.movedAsks === 1, out);
   check("a try that never comes back is stopped after the wait", out.hangStopped === true, out);
   check("and the next try goes out", out.hangNext === 2, out);
   check("no console errors", errors.length === 0, errors);

@@ -155,7 +155,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.21.0";
+const VERSION = "5.21.1";
 // Whether two saved settings hold the same values, whatever order their keys
 // were written in. A key left undefined counts as not there, the way it is
 // when saved. Used to tell an update or a put-back that would change nothing.
@@ -401,6 +401,14 @@ const MOVED_DEFAULTS = [
 // rather than a hash: the list is short, and a stamp somebody can read in their
 // own storage is better than one only this file can explain.
 const MOVED_MARK = MOVED_DEFAULTS.map((m) => m.key + ":" + String(m.was)).join("|");
+// The time on the reader's own clock, with the zone, so a time in a report
+// matches what the person saw and can be turned into anyone else's time.
+function localStamp(d) {
+    const p = (n) => String(n).padStart(2, "0");
+    const off = -d.getTimezoneOffset();
+    const zone = "UTC" + (off >= 0 ? "+" : "-") + Math.floor(Math.abs(off) / 60) + (Math.abs(off) % 60 ? ":" + p(Math.abs(off) % 60) : "");
+    return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()) + " " + p(d.getHours()) + ":" + p(d.getMinutes()) + ":" + p(d.getSeconds()) + " (" + zone + ")";
+}
 const LOG_KINDS = {
     replies: "logReplies",
     retry: "logRetries",
@@ -4741,6 +4749,8 @@ export function setup(ctx, opts) {
     // not console logging is on, so the Copy debug info report carries a timeline
     // and the user never has to open dev tools to report a behavioral bug.
     const EVENTLOG_MAX = 20;
+    // time is on the reader's own clock, to the millisecond, so lines that land
+    // close together still read in order.
     const eventLog = [];
     let liveLogEl = null;
     let liveLogBody = null;
@@ -4771,10 +4781,13 @@ export function setup(ctx, opts) {
                     return String(a);
                 }
             });
-            let line = new Date().toISOString().slice(11, 23) + " " + parts.join(" ");
-            if (line.length > 220)
-                line = line.slice(0, 217) + "...";
-            eventLog.push({ line: line, kind: kind });
+            const d = new Date();
+            const p2 = (n) => String(n).padStart(2, "0");
+            const time = p2(d.getHours()) + ":" + p2(d.getMinutes()) + ":" + p2(d.getSeconds()) + "." + String(d.getMilliseconds()).padStart(3, "0");
+            let text = parts.join(" ");
+            if (text.length > 207)
+                text = text.slice(0, 204) + "...";
+            eventLog.push({ line: time + " " + text, time: time, text: text, kind: kind });
             if (eventLog.length > EVENTLOG_MAX)
                 eventLog.shift();
             if (liveLogBody)
@@ -6832,7 +6845,7 @@ export function setup(ctx, opts) {
         catch (e) {
             if (floatMenuToken === token)
                 floatMenuToken = null;
-            log("problem", "float menu failed", e);
+            log("problem", "the floating button's menu could not be opened", e);
             return;
         }
         // Left behind: the button was hidden, or the extension torn down, while
@@ -9366,7 +9379,7 @@ export function setup(ctx, opts) {
             return true;
         }
         catch (e) {
-            log("retry", "click failed", e);
+            log("retry", "pressing the retry button failed", e);
             return false;
         }
         finally {
@@ -10315,11 +10328,11 @@ export function setup(ctx, opts) {
         s.pending = true;
         log("retry", "retry " +
             s.attempts +
-            "/" +
+            " of " +
             cfg.maxRetries +
             " in " +
-            delay +
-            "ms (" +
+            (delay / 1000).toFixed(1) +
+            "s (" +
             reason +
             (rl ? ", rate-limited" : "") +
             ")");
@@ -10585,6 +10598,16 @@ export function setup(ctx, opts) {
     }
     function onAtOnce(chatId, run, msg, fallBack) {
         const s = st(chatId);
+        // Another tab already has tries out for this chat, and it adds the reply
+        // that passes. Pressing the button here as well would be a second retry
+        // for the same reply.
+        if (msg.stage === "failed" && msg.busy) {
+            endAtOnce(s, false);
+            hideToast();
+            s.attempts = 0;
+            log("atonce", "tries at once are already out for this chat in another tab, so this tab leaves the retry to it");
+            return;
+        }
         if (msg.stage === "failed")
             return fallBack(String(msg.why || "no reason was given"));
         if (msg.stage === "sent") {
@@ -10668,7 +10691,7 @@ export function setup(ctx, opts) {
         let off = null;
         let timer = null;
         const newReply = run.kind === "reply";
-        const finish = (ok, why, landed) => {
+        const finish = (ok, why, landed, changed) => {
             try {
                 off && off();
             }
@@ -10716,6 +10739,12 @@ export function setup(ctx, opts) {
             log("atonce", "a reply passed, but it could not be added: " + why);
             if (!current)
                 return;
+            // The reply the tries were for is not the last one any more, so there
+            // is nothing left to retry. Another tab may have added its own.
+            if (changed) {
+                s.attempts = 0;
+                return;
+            }
             s.lastText = content.slice(-STREAM_BUF_MAX);
             scheduleRetry(chatId, run.reason);
         };
@@ -10727,7 +10756,7 @@ export function setup(ctx, opts) {
         try {
             off = ctx.onBackendMessage((msg) => {
                 if (msg && msg.type === "reroll_added" && msg.requestId === reqId)
-                    finish(!!msg.ok, String(msg.why || "no reason was given"), msg);
+                    finish(!!msg.ok, String(msg.why || "no reason was given"), msg, !!msg.changed);
             });
         }
         catch (_) { }
@@ -10857,7 +10886,7 @@ export function setup(ctx, opts) {
         }
         const ours = s.selfTriggered ||
             (s.retryClickAt > 0 && Date.now() - s.retryClickAt < OURS_WINDOW_MS);
-        log("replies", "gen start", p.generationId, ours ? "(auto-retry)" : "(user)");
+        log("replies", "a reply started (" + String(p.generationId) + "), " + (ours ? "from a retry" : "from you"));
         if (!ours) {
             // A reply the reader started replaces the one the tries were for.
             if (s.atOnce) {
@@ -11330,7 +11359,7 @@ export function setup(ctx, opts) {
             // A content-moderation block we can retry as a refusal is not a permanent
             // failure, so don't let the hard-error skip catch it before the refusal check.
             if (cfg.ignoreHardErrors && isHardError(p.error, cfg) && !(cfg.retryOnRefusal && looksLikeRefusalError(errorText(p.error), cfg))) {
-                log("replies", "hard error ignored", errorText(p.error));
+                log("replies", "the error is one of your hard failures, so not retrying:", errorText(p.error));
                 showToast("Auto Retry did not retry: that error will not fix itself, so trying again would not help.", { kind: "warning" });
                 s.attempts = 0;
                 return;
@@ -11400,7 +11429,7 @@ export function setup(ctx, opts) {
         failedRuns = 0;
         pausedUntil = 0;
         stats.good += 1;
-        log("replies", "gen ok", content.length + " chars");
+        log("replies", "a reply came back fine,", content.length + " chars");
         s.attempts = 0; // clean success
     }
     function onStop(p) {
@@ -11418,7 +11447,7 @@ export function setup(ctx, opts) {
         }
         if (s.ignored.has(p.generationId))
             return; // our own abort, not a user stop
-        log("replies", "user stop", p.generationId);
+        log("replies", "you stopped the reply (" + String(p.generationId) + ")");
         standDown(chatId, true); // a real user stop, so nothing is retried after it
     }
     // Backup for the user's Stop press: if the host's GENERATION_STOPPED event is
@@ -12295,7 +12324,7 @@ export function setup(ctx, opts) {
                 : backendVersion === VERSION
                     ? "the same version"
                     : "v" + backendVersion + ", which is not the version above"));
-        lines.push("time: " + new Date().toISOString());
+        lines.push("time: " + localStamp(new Date()));
         // Always included, whatever categories are ticked. This is the first thing
         // to check when retries have stopped happening, so it must never be the
         // part someone left out of the report.
@@ -12310,10 +12339,17 @@ export function setup(ctx, opts) {
                     : "active") +
             " (failed runs in a row: " + failedRuns + " of " + breakerRuns() + ")");
         if (inc(o.settings)) {
+            // Each one by its label and its name in the code, with the default
+            // beside it. The version line above says what every other setting is.
+            const changed = keys.filter((k) => JSON.stringify(cfg[k]) !== JSON.stringify(CONFIG[k]));
             lines.push("");
-            lines.push("settings:");
-            for (const k of keys)
-                lines.push("  " + k + ": " + JSON.stringify(cfg[k]));
+            lines.push("settings changed from the default (" + changed.length + " of " + keys.length + "):");
+            if (!changed.length)
+                lines.push("  (none)");
+            for (const k of changed)
+                lines.push("  " + fieldByKey[k].label + " (" + k + "): " + JSON.stringify(cfg[k]) + ", default " + JSON.stringify(CONFIG[k]));
+            lines.push("every other setting is at its default for v" + VERSION +
+                (inc(o.buttons) ? ", apart from the button selectors listed below" : ", apart from the button selectors, which are left out"));
         }
         if (inc(o.buttons)) {
             lines.push("");
@@ -12396,12 +12432,13 @@ export function setup(ctx, opts) {
                     lines.push("    " + r + ": " + stats.reasons[r]);
             }
             lines.push("");
+            // Each line with its kind, the same names as LOG_KINDS.
             lines.push("recent activity (oldest first):");
             if (eventLog.length === 0)
                 lines.push("  (nothing recorded yet)");
             else
                 for (const e of eventLog)
-                    lines.push("  " + e.line);
+                    lines.push("  " + e.time + " [" + e.kind + "] " + e.text);
         }
         return lines.join("\n");
     }
@@ -14212,7 +14249,7 @@ export function setup(ctx, opts) {
                 return;
             }
             say("Saved. Takes effect on the next reply.");
-            log("setup", "settings saved", cfg);
+            log("setup", "settings saved");
             setTimeout(() => {
                 if (status.textContent === "Saved. Takes effect on the next reply.")
                     say("");
@@ -15645,7 +15682,7 @@ export function setup(ctx, opts) {
                 bits.push(done.presets +
                     (done.presets === 1 ? " preset deleted" : " presets deleted"));
             onApplied(done);
-            log("setup", "reset: " + ids.join(", ") + (presetCb.checked ? " + presets" : ""));
+            log("setup", "reset " + ids.join(", ") + (presetCb.checked ? ", and the presets" : ""));
             showToast("Reset: " + bits.join(", ") + ".", { force: true, kind: "success" });
         });
         overlay.addEventListener("click", (e) => {
@@ -16256,7 +16293,7 @@ export function setup(ctx, opts) {
             fn(p);
         }
         catch (e) {
-            log("problem", "handler error in " + label, e);
+            log("problem", "something went wrong while handling " + label, e);
         }
     };
     let offs = [];
@@ -16484,7 +16521,7 @@ export function setup(ctx, opts) {
     askForPermissions();
     askForBackendVersion();
     watchTheme();
-    log("setup", "ready v" + VERSION, cfg);
+    log("setup", "ready v" + VERSION);
     return () => {
         tornDown = true;
         // A pop-up still fading out goes now, not when its timer runs.

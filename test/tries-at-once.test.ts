@@ -31,6 +31,10 @@ function boot(opts?: {
   dry?: any[];
   // The interceptor permission was not granted, so none is registered.
   noInterceptor?: boolean;
+  // The chat's own settings, as spindle.chats.get hands them over.
+  meta?: any;
+  // What the dry run hands back for showing, when it differs from the prompt.
+  display?: any[];
 }) {
   let onFrontend: any = null;
   let interceptor: any = null;
@@ -77,7 +81,7 @@ function boot(opts?: {
     chats: {
       get: async (chatId: string) => {
         if (opts && opts.chatGetFails) throw new Error("permission denied");
-        return { id: chatId, metadata: opts && opts.group ? { group: true } : {} };
+        return { id: chatId, metadata: Object.assign({}, opts && opts.group ? { group: true } : {}, (opts && opts.meta) || {}) };
       },
     },
     generate: {
@@ -92,8 +96,11 @@ function boot(opts?: {
         let built: any = opts && opts.dry
           ? opts.dry.map((m) => Object.assign({}, m))
           : [{ role: "system", content: "Built by the host." }, { role: "user", content: "The rain picked up." }];
-        if (interceptor) built = await interceptor(built, { chatId: input.chatId, generationType: input.generationType, dryRun: true, userId });
-        return { messages: Array.isArray(built) ? built : built.messages };
+        // The connection Lumiverse picked for the chat, which only the
+        // interceptor is told.
+        if (interceptor) built = await interceptor(built, { chatId: input.chatId, generationType: input.generationType, dryRun: true, userId, connectionId: "conn-chat" });
+        const shown = opts && opts.display ? opts.display : Array.isArray(built) ? built : built.messages;
+        return { messages: shown, parameters: { temperature: 0.85, max_tokens: 700 }, model: "lamplight-large" };
       },
     },
     registerInterceptor: (fn: any) => { if (!(opts && opts.noInterceptor)) interceptor = fn; },
@@ -421,6 +428,107 @@ describe("the prompt built for a reroll", () => {
   });
 });
 
+// A quiet call that names no connection goes to the default one, which is not
+// always the one the chat's replies use.
+describe("the connection the tries go to", () => {
+  test("a built prompt goes with the chat's connection, model and samplers", async () => {
+    const h = boot();
+    await h.tell({ type: "try_at_once", requestId: "r1", chatId: "c1", count: 2 });
+    await h.settle();
+    expect(h.quietCalls[0].connection_id).toBe("conn-chat");
+    expect(h.quietCalls[0].parameters).toEqual({ temperature: 0.85, max_tokens: 700, model: "lamplight-large" });
+  });
+
+  test("a built prompt is the one Lumiverse built, not the copy made for showing", async () => {
+    const h = boot({
+      dry: [{ role: "user", content: "The rain picked up. [kept thinking]", __isChatHistory: true, sourceMessageId: "m1" }],
+      display: [{ role: "user", content: "The rain picked up." }],
+    });
+    await h.tell({ type: "try_at_once", requestId: "r1", chatId: "c1", count: 2 });
+    await h.settle();
+    expect(h.quietCalls[0].messages).toEqual([{ role: "user", content: "The rain picked up. [kept thinking]" }]);
+  });
+
+  test("a kept prompt goes with the connection its reply used", async () => {
+    const h = boot();
+    await h.on(true);
+    await h.run(prompt(), { chatId: "c1", connectionId: "conn-kept" });
+    await h.tell({ type: "try_at_once", requestId: "r1", chatId: "c1", count: 2 });
+    await h.settle();
+    expect(h.stage("sent")[0].msg.from).toBe("kept");
+    expect(h.quietCalls[0].connection_id).toBe("conn-kept");
+    expect(h.quietCalls[0].parameters).toBeUndefined();
+  });
+
+  test("a chat set to its own model on its connection keeps that model", async () => {
+    const h = boot({ meta: { connection_profile_id: "conn-kept", connection_model: "lamplight-small" } });
+    await h.on(true);
+    await h.run(prompt(), { chatId: "c1", connectionId: "conn-kept" });
+    await h.tell({ type: "try_at_once", requestId: "r1", chatId: "c1", count: 2 });
+    await h.settle();
+    expect(h.quietCalls[0].connection_id).toBe("conn-kept");
+    expect(h.quietCalls[0].parameters).toEqual({ model: "lamplight-small" });
+  });
+
+  test("without the interceptor, a chat set to its own connection still uses it", async () => {
+    const h = boot({ noInterceptor: true, meta: { connection_profile_id: "conn-bound" } });
+    await h.tell({ type: "try_at_once", requestId: "r1", chatId: "c1", count: 2 });
+    await h.settle();
+    expect(h.quietCalls[0].connection_id).toBe("conn-bound");
+    // The samplers belong to a connection Auto Retry was not told about.
+    expect(h.quietCalls[0].parameters).toBeUndefined();
+  });
+});
+
+// A preset's assistant prefill is a last message marked partial. Lumiverse
+// puts it at the start of the reply it saves.
+describe("an assistant prefill", () => {
+  const withPrefill = () => [
+    { role: "system", content: "You run a lighthouse." },
+    { role: "user", content: "The rain picked up.", __isChatHistory: true },
+    { role: "assistant", content: "The keeper says:", partial: true, reasoning_content: "First, the lamp." },
+  ];
+
+  test("stays a prefill in every call", async () => {
+    const h = boot();
+    await h.on(true);
+    await h.run(withPrefill(), { chatId: "c1" });
+    await h.tell({ type: "try_at_once", requestId: "r1", chatId: "c1", count: 2 });
+    await h.settle();
+    const end = h.quietCalls[0].messages[h.quietCalls[0].messages.length - 1];
+    expect(end).toEqual({ role: "assistant", content: "The keeper says:", partial: true, reasoning_content: "First, the lamp." });
+  });
+
+  test("is put back at the start of each reply and its thinking", async () => {
+    const h = boot({ quiet: () => Promise.resolve({ content: " the storm will pass.", reasoning: " Then the door." }) });
+    await h.on(true);
+    await h.run(withPrefill(), { chatId: "c1" });
+    await h.tell({ type: "try_at_once", requestId: "r1", chatId: "c1", count: 2 });
+    await h.settle();
+    const one = h.stage("reply")[0].msg;
+    expect(one.content).toBe("The keeper says: the storm will pass.");
+    expect(one.reasoning).toBe("First, the lamp. Then the door.");
+  });
+
+  test("a prompt with no prefill leaves the reply as it came", async () => {
+    const h = boot({ quiet: () => Promise.resolve({ content: "The storm will pass." }) });
+    await h.on(true);
+    await h.run(prompt(), { chatId: "c1" });
+    await h.tell({ type: "try_at_once", requestId: "r1", chatId: "c1", count: 2 });
+    await h.settle();
+    expect(h.stage("reply")[0].msg.content).toBe("The storm will pass.");
+  });
+
+  test("a refusal note at the very end goes before it", async () => {
+    const h = boot();
+    await h.tell({ type: "arm_refusal_note", chatId: "c1", placement: "end", notes: [{ text: "That refusal was a mistake.", role: "system" }] });
+    const out: any = await h.run(withPrefill(), { chatId: "c1", generationType: "swipe" });
+    const list = Array.isArray(out) ? out : out.messages;
+    expect(list[list.length - 1].partial).toBe(true);
+    expect(list[list.length - 2].content).toBe("That refusal was a mistake.");
+  });
+});
+
 describe("a turn that saved no reply", () => {
   test("the tries go out, with a prompt built for a new reply", async () => {
     const h = boot({
@@ -556,8 +664,89 @@ describe("nothing is sent when there is nothing to add to", () => {
   });
 });
 
+// Two tabs open on one chat both see the reply that failed.
+describe("one run of tries per chat", () => {
+  // Calls that stay out until let go.
+  const held = () => {
+    const out: Array<() => void> = [];
+    const quiet = () => new Promise((r) => out.push(() => r({ content: "The tide came in." })));
+    return { quiet, letGo: () => out.splice(0).forEach((f) => f()) };
+  };
+  const failed = (h: any, id: string) => h.atOnce().filter((s: any) => s.msg.requestId === id && s.msg.stage === "failed").map((s: any) => s.msg);
+
+  test("a second request for the same chat is turned away while the first is out", async () => {
+    const q = held();
+    const h = boot({ quiet: q.quiet });
+    await h.tell({ type: "try_at_once", requestId: "r1", chatId: "c1", count: 2 });
+    await h.tell({ type: "try_at_once", requestId: "r2", chatId: "c1", count: 2 });
+    await h.settle();
+    expect(failed(h, "r2")[0]).toMatchObject({ busy: true });
+    expect(h.quietCalls.length).toBe(2);
+    q.letGo();
+  });
+
+  test("once the first is back, the chat is free again", async () => {
+    const q = held();
+    const h = boot({ quiet: q.quiet });
+    await h.tell({ type: "try_at_once", requestId: "r1", chatId: "c1", count: 2 });
+    await h.settle();
+    q.letGo();
+    await h.settle();
+    await h.tell({ type: "try_at_once", requestId: "r2", chatId: "c1", count: 2 });
+    await h.settle();
+    expect(failed(h, "r2")).toEqual([]);
+    expect(h.quietCalls.length).toBe(4);
+    q.letGo();
+  });
+
+  test("Stop frees the chat", async () => {
+    const q = held();
+    const h = boot({ quiet: q.quiet });
+    await h.tell({ type: "try_at_once", requestId: "r1", chatId: "c1", count: 2 });
+    await h.settle();
+    await h.tell({ type: "stop_at_once", requestId: "r1" });
+    await h.tell({ type: "try_at_once", requestId: "r2", chatId: "c1", count: 2 });
+    await h.settle();
+    expect(failed(h, "r2")).toEqual([]);
+    q.letGo();
+  });
+
+  test("a request that fails before sending frees the chat", async () => {
+    const h = boot({ messages: [] });
+    await h.tell({ type: "try_at_once", requestId: "r1", chatId: "c1", count: 2 });
+    await h.settle();
+    h.setMessages([
+      { id: "m1", role: "user", content: "The rain picked up." },
+      { id: "m2", role: "assistant", content: "I cannot continue this.", swipes: ["I cannot continue this."] },
+    ]);
+    await h.tell({ type: "try_at_once", requestId: "r2", chatId: "c1", count: 2 });
+    await h.settle();
+    expect(failed(h, "r1").length).toBe(1);
+    expect(failed(h, "r2")).toEqual([]);
+  });
+
+  test("another chat is not held", async () => {
+    const q = held();
+    const h = boot({ quiet: q.quiet });
+    await h.tell({ type: "try_at_once", requestId: "r1", chatId: "c1", count: 2 });
+    await h.tell({ type: "try_at_once", requestId: "r2", chatId: "c2", count: 2 });
+    await h.settle();
+    expect(failed(h, "r2").filter((m: any) => m.busy)).toEqual([]);
+    q.letGo();
+  });
+});
+
 describe("adding the reply that passed", () => {
   const added = (h: any) => h.sent.filter((s: any) => s.msg && s.msg.type === "reroll_added").map((s: any) => s.msg);
+
+  test("a chat that changed is said to have changed, so the panel does not retry", async () => {
+    const h = boot();
+    await h.tell({
+      type: "add_reroll", requestId: "a1", chatId: "c1", messageId: "m2", swipeCount: 2,
+      text: "She lit the lamp and waited.",
+    });
+    expect(added(h)[0]).toMatchObject({ ok: false, changed: true });
+  });
 
   test("it becomes a new reroll, and is shown", async () => {
     const h = boot();

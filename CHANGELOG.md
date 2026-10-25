@@ -8,6 +8,25 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.21.1
+
+_2026-10-24_
+
+### Fixed
+
+- **Several tries at once could use a different model from the chat.** The tries named no connection, and Lumiverse then uses your default connection. A normal reply uses the connection the chat is set to, or the one you picked. The tries now go to the same connection as a normal reply. With a prompt Lumiverse built, they also use the same model and samplers. See [Which model they go to](docs/tries-at-once.md#which-model-they-go-to).
+- **Several tries at once sent a copy of the prompt made for showing.** When Lumiverse built the prompt, the tries were sent the copy Lumiverse makes to show on screen. That copy can leave out thinking that earlier replies keep. The tries now send the prompt itself. This needs the `interceptor` permission.
+- **Several tries at once lost an assistant prefill.** A prefill from your preset was sent as a finished message, and the reply that passed was added without it at the start. The prefill now stays the start of each try, and of the reply that is added.
+- **A refusal note at the very end of the prompt went after an assistant prefill.** The prefill then was not the last message, so the model did not continue from it. The note now goes just before the prefill. This was true of every retry, not only Several tries at once.
+- **Two tabs on one chat both sent tries.** Each tab sent its own set of tries for the same reply, and paid for them. When the second tab's reply could not be added, because the first had added one, it started another retry. Now only one set of tries is out for a chat at a time, and a reply that cannot be added because the chat changed is not retried. See [Two tabs on one chat](docs/tries-at-once.md#two-tabs-on-one-chat).
+
+### Changed
+
+- **Debug info is easier to read.** The time at the top is your own time, with your time zone. Under settings, only the ones you changed are listed, each with its name in the panel, its name in the code, and its default. Each line under recent activity says which kind of line it is. See [Debug info](docs/troubleshooting.md#debug-info).
+- **Plainer lines in the Log.** Some lines were written like code notes, such as "gen start" and "gen ok". They now say what happened, such as "a reply started" and "a reply came back fine". The first line no longer carries a cut-off copy of every setting.
+
+---
+
 ## 5.21.0
 
 _2026-10-24_

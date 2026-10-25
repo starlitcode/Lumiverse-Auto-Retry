@@ -59,7 +59,7 @@ describe("the debug report and the Stats tab agree", () => {
       { id: "environment", prints: 'lines.push("permissions:")', word: /permission/i },
       { id: "buttons", prints: "regenerateSelector = ", word: /selector/i },
       { id: "activity", prints: "recent activity (oldest first)", word: /activity/i },
-      { id: "settings", prints: 'lines.push("settings:")', word: /setting/i },
+      { id: "settings", prints: 'lines.push("settings changed from the default ("', word: /setting/i },
     ];
     for (const r of rules) {
       // The section really does print it, so the rule cannot pass by being

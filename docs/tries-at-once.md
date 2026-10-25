@@ -87,6 +87,20 @@ The prompt is the one your failed reply was sent with.
 - A prompt for a reroll leaves out the reply that failed, the same as a normal reroll.
 - The log says which of the two was used.
 - If **Send a note with a refusal retry** is on, the note goes with these replies the same way it goes with a normal retry.
+- An assistant prefill from your preset stays at the start of the reply, the same as in a normal reply.
+
+### Which model they go to
+
+The tries go to the same connection as a normal reply in the chat.
+
+- With a kept copy, they go to the connection that reply used.
+- With a prompt Lumiverse built, they also use the model and samplers Lumiverse would send with it.
+- A chat set to its own connection, and its own model on it, keeps both.
+- Without the `interceptor` permission, Auto Retry only knows the connection a chat is set to. A chat with none set uses your default connection.
+
+### Two tabs on one chat
+
+Only one set of tries is out for a chat at a time. With the same chat open in two tabs, the first tab to ask sends the tries and adds the reply that passes. The other tab leaves it, and its log says so.
 
 ## What you see
 

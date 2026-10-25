@@ -23,9 +23,10 @@ Nothing leaves your device until you paste it somewhere.
 
 - **The first two lines** are always included. They name the version of the panel and the version of the backend. These only differ if you updated without reloading the tab.
 - **The parts** are **Your settings**, **Buttons and selectors**, **Permissions, browser and screen**, and **Session totals and recent activity**. Each covers everything in that part.
-- **Your settings** comes straight from the full list of options, so no setting is ever left out.
+- **Your settings** lists every setting you changed, by its name in the panel and in the code, with its default beside it. Every other setting is at its default for your version.
 - **Session totals** count replies that came back fine, retries, messages it gave up on, and retries by reason, since the page loaded. So "it retries too much" becomes "ninety retries, all for a cut-off reply".
-- **The activity timeline** is the last twenty things it did.
+- **The activity timeline** is the last twenty things it did, in your own time, and says which kind of line each one is.
+- **The time** at the top is your own time, with your time zone.
 
 ## It retried a reply you wanted to keep
 
