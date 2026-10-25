@@ -759,7 +759,7 @@ console.log("\nthe prompt view");
 // the kind of each recent line.
 console.log("\nthe debug report");
 {
-  const r = await inPanel(browser, { settings: { liveLog: true, maxRetries: 6 } }, (page) =>
+  const r = await inPanel(browser, { settings: { liveLog: true, maxRetries: 6, tryAtOnce: true } }, (page) =>
     page.evaluate(async () => {
       const wait = (ms) => new Promise((r) => setTimeout(r, ms || 150));
       window.__handlers.GENERATION_STARTED({ chatId: "c1", generationId: "g1", messageId: "m1" });
@@ -780,6 +780,8 @@ console.log("\nthe debug report");
   check("a setting at its default is not listed", !/\(retryOnRefusal\)/.test(text), text);
   check("a recent line says its kind", /\[replies\] a reply started \(g1\), from you/.test(text), text);
   check("no recent line carries a copy of the settings", !/ready v[0-9.]+ \{/.test(text), text);
+  check("it says which Lumiverse, or that Lumiverse did not say", /\nlumiverse: (v\S+|not reported by this Lumiverse)\n/.test(text), text.slice(0, 300));
+  check("with Several tries at once on, it has a part for the last run", /several tries at once, last run:\n  \(none yet\)/.test(text), text);
   check("no console errors", r.errors.length === 0, r.errors);
 }
 

@@ -165,7 +165,7 @@ const STREAM_BUF_MAX = 200000;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.21.1";
+const VERSION = "5.22.0";
 
 // Whether two saved settings hold the same values, whatever order their keys
 // were written in. A key left undefined counts as not there, the way it is
@@ -4802,7 +4802,8 @@ export function setup(ctx: Ctx, opts?: any) {
   // A short in-memory ring buffer of what the extension did, captured whether or
   // not console logging is on, so the Copy debug info report carries a timeline
   // and the user never has to open dev tools to report a behavioral bug.
-  const EVENTLOG_MAX = 20;
+  // Enough for a run of tries at once, which writes a line for each reply.
+  const EVENTLOG_MAX = 40;
   // time is on the reader's own clock, to the millisecond, so lines that land
   // close together still read in order.
   const eventLog: Array<{ line: string; time: string; text: string; kind: LogKind }> = [];
@@ -8668,7 +8669,7 @@ export function setup(ctx: Ctx, opts?: any) {
   let failedRuns = 0;
   let pausedUntil = 0;
   // A running tally of what the extension has actually done since it loaded.
-  // The event log keeps only the last twenty lines, so on a long session the
+  // The event log keeps only the last forty lines, so on a long session the
   // shape of a problem ("it retried ninety times, all of them for 'cut off'")
   // has scrolled away by the time anyone thinks to look. These counters do not
   // scroll away, so a bug report can say what actually happened instead of only
@@ -9330,6 +9331,7 @@ export function setup(ctx: Ctx, opts?: any) {
     const hadPending = s.pending || !!s.timer || s.attempts > 0 || !!s.atOnce;
     // Tries still out are stopped, so nothing is added after the reader has
     // taken over.
+    endedAs(s.atOnce, "stopped by you");
     endAtOnce(s, true);
     // Otherwise a dialog raised by the retry that was just called off could
     // still be confirmed, starting a reply the user had stopped.
@@ -10326,6 +10328,7 @@ export function setup(ctx: Ctx, opts?: any) {
       const s = st(chatId);
       if (s.atOnce !== run) return;
       const missing = run.count - run.back;
+      endedAs(run, missing + " did not come back in time, so they were stopped");
       endAtOnce(s, true);
       hideToast();
       log("atonce",
@@ -10371,6 +10374,13 @@ export function setup(ctx: Ctx, opts?: any) {
     }
     paintNow();
   }
+  // The last run of tries, in any chat, for the debug report. It is the run
+  // object itself, so it carries what each stage set on it, and outcome says
+  // how it ended.
+  let lastAtOnceRun: any = null;
+  function endedAs(run: any, outcome: string) {
+    if (run && !run.outcome) run.outcome = outcome;
+  }
   async function runAtOnce(chatId: string, reason: string) {
     const s = st(chatId);
     if (!ctx || typeof (ctx as any).sendToBackend !== "function" || typeof (ctx as any).onBackendMessage !== "function") {
@@ -10401,6 +10411,12 @@ export function setup(ctx: Ctx, opts?: any) {
       judged: 0,
       lastError: null,
       kind: "reroll",
+      chatId: String(chatId),
+      from: "",
+      notes: 0,
+      connection: "",
+      lastProblem: "",
+      outcome: "",
       messageId: "",
       swipeCount: 0,
       adding: false,
@@ -10410,8 +10426,10 @@ export function setup(ctx: Ctx, opts?: any) {
     };
     endAtOnce(s, true);
     s.atOnce = run;
+    lastAtOnceRun = run;
     const fallBack = (why: string) => {
       if (run.over) return;
+      endedAs(run, "the retry button was pressed instead, because " + why);
       endAtOnce(s, true);
       hideToast();
       log("atonce", "several tries at once did not run: " + why + ". Pressing the retry button instead.");
@@ -10452,6 +10470,7 @@ export function setup(ctx: Ctx, opts?: any) {
     // that passes. Pressing the button here as well would be a second retry
     // for the same reply.
     if (msg.stage === "failed" && msg.busy) {
+      endedAs(run, "left to another tab, which had tries out for this chat");
       endAtOnce(s, false);
       hideToast();
       s.attempts = 0;
@@ -10466,6 +10485,9 @@ export function setup(ctx: Ctx, opts?: any) {
       run.kind = msg.kind === "reply" ? "reply" : "reroll";
       run.messageId = String(msg.messageId || "");
       run.swipeCount = Number(msg.swipeCount) || 0;
+      run.from = msg.from === "kept" ? "kept" : "built";
+      run.notes = Number(msg.notes) || 0;
+      run.connection = String(msg.connection || "");
       stats.extraReplies += Math.max(0, run.count - 1);
       // The backend has used the note up, so there is nothing left to take back.
       if (armedNoteChat === String(chatId)) armedNoteChat = null;
@@ -10489,10 +10511,12 @@ export function setup(ctx: Ctx, opts?: any) {
         if (cfg.retryOnRefusal && looksLikeRefusalError(String(msg.error), cfg)) {
           run.judged += 1;
           run.reason = BLOCKED_REASON;
+          run.lastProblem = BLOCKED_REASON;
           log("atonce", "reply " + run.back + " of " + run.count + ": " + BLOCKED_REASON + " (" + String(msg.error) + ")");
           return;
         }
         run.lastError = String(msg.error);
+        run.lastProblem = "error: " + run.lastError;
         log("atonce", "reply " + run.back + " of " + run.count + " failed: " + run.lastError);
         return;
       }
@@ -10502,6 +10526,7 @@ export function setup(ctx: Ctx, opts?: any) {
       noteReplySize(content, chatId);
       const problem = content ? replyProblem(content, thought, cfg) : "empty";
       if (problem === HARD_FAILURE) {
+        endedAs(run, "a reply was one of your hard failures, so it stopped");
         endAtOnce(s, true);
         hideToast();
         s.attempts = 0;
@@ -10511,6 +10536,7 @@ export function setup(ctx: Ctx, opts?: any) {
       }
       if (problem) {
         run.reason = problem;
+        run.lastProblem = problem;
         run.lastText = content;
         log("atonce", "reply " + run.back + " of " + run.count + ": " + problem);
         return;
@@ -10522,6 +10548,7 @@ export function setup(ctx: Ctx, opts?: any) {
     }
     if (msg.stage === "done") {
       if (run.adding) return;
+      endedAs(run, "none passed, so the next try was set up");
       endAtOnce(s, false);
       hideToast();
       log("atonce", "none of the " + run.count + " replies passed");
@@ -10548,6 +10575,7 @@ export function setup(ctx: Ctx, opts?: any) {
         hideToast();
       }
       if (ok && !current) {
+        endedAs(run, "a reply that passed was added after you stopped the retry");
         log("atonce",
           "a reply that passed was added " + (newReply ? "" : "as a new reroll ") +
             "after you stopped the retry",
@@ -10555,6 +10583,7 @@ export function setup(ctx: Ctx, opts?: any) {
         return;
       }
       if (ok) {
+        endedAs(run, newReply ? "a reply that passed was added as a new reply" : "a reply that passed was added as a new reroll");
         failedRuns = 0;
         pausedUntil = 0;
         stats.good += 1;
@@ -10579,6 +10608,7 @@ export function setup(ctx: Ctx, opts?: any) {
         return;
       }
       log("atonce", "a reply passed, but it could not be added: " + why);
+      endedAs(run, "a reply passed, but it could not be added: " + why);
       if (!current) return;
       // The reply the tries were for is not the last one any more, so there
       // is nothing left to retry. Another tab may have added its own.
@@ -10731,6 +10761,7 @@ export function setup(ctx: Ctx, opts?: any) {
     if (!ours) {
       // A reply the reader started replaces the one the tries were for.
       if (s.atOnce) {
+        endedAs(s.atOnce, "stopped, because a new reply started");
         endAtOnce(s, true);
         hideToast();
         log("atonce", "a new reply started, so the tries at once were stopped");
@@ -12056,6 +12087,11 @@ export function setup(ctx: Ctx, opts?: any) {
             : "v" + backendVersion + ", which is not the version above"),
     );
     lines.push("time: " + localStamp(new Date()));
+    // Lumiverse's own version, which a newer Lumiverse hands to extensions.
+    // Much of what goes wrong depends on how that version behaves.
+    let host = "";
+    try { host = String(((ctx as any).host && (ctx as any).host.lumiverseVersion) || ""); } catch (_) {}
+    lines.push("lumiverse: " + (host ? "v" + host.replace(/^v/, "") : "not reported by this Lumiverse"));
     // Always included, whatever categories are ticked. This is the first thing
     // to check when retries have stopped happening, so it must never be the
     // part someone left out of the report.
@@ -12169,6 +12205,30 @@ export function setup(ctx: Ctx, opts?: any) {
       if (reasons.length) {
         lines.push("  retries by reason:");
         for (const r of reasons) lines.push("    " + r + ": " + stats.reasons[r]);
+      }
+      // The last run of tries at once, how it was sent and how it ended.
+      const run = lastAtOnceRun;
+      if (cfg.tryAtOnce || run) {
+        lines.push("");
+        lines.push("several tries at once, last run:");
+        if (!run) lines.push("  (none yet)");
+        else {
+          const at = new Date(run.at);
+          const p2 = (n: number) => String(n).padStart(2, "0");
+          lines.push(
+            "  at " + p2(at.getHours()) + ":" + p2(at.getMinutes()) + ":" + p2(at.getSeconds()) +
+              ", try " + run.attempt + ", " + run.count + " sent, " + run.back + " back" +
+              (String(run.chatId) === String(lastChatId) ? ", in this chat" : ", in another chat"),
+          );
+          if (run.from)
+            lines.push(
+              "  prompt: " + (run.from === "kept" ? "the one the last reply went out with" : "built by Lumiverse for a new " + run.kind) +
+                (run.notes ? ", with the refusal note" : ""),
+            );
+          if (run.connection) lines.push("  connection: " + run.connection);
+          if (run.lastProblem) lines.push("  last reply that failed: " + run.lastProblem);
+          lines.push("  how it ended: " + (run.outcome || (run.over ? "ended" : "still running")));
+        }
       }
       lines.push("");
       // Each line with its kind, the same names as LOG_KINDS.

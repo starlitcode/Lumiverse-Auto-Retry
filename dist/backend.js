@@ -28,7 +28,7 @@
 // with while this side comes back on the new build. A debug report naming only
 // the panel's version would be speaking for a file it cannot see, so the panel
 // asks for this one and prints both.
-const VERSION = '5.21.1';
+const VERSION = '5.22.0';
 const SETTINGS_FILE = 'settings.json';
 // Presets, kept in account storage next to the settings so they
 // follow the user between devices. The browser copy is a fast local cache, not
@@ -726,7 +726,13 @@ async function tryAtOnce(payload, userId) {
     atOnceRuns.set(requestId, { controller: controller, who: who, release: release });
     const prefill = prefillOf(messages);
     const swipeCount = target.kind === 'reroll' ? target.swipes.length : 0;
-    say({ stage: 'sent', count: count, from: from, notes: notes, kind: target.kind, messageId: target.id, swipeCount: swipeCount });
+    const said = !connectionId
+        ? 'your default one, since Auto Retry could not tell which one the chat uses'
+        : connectionId === bound
+            ? "the one the chat is set to"
+            : 'the one the chat\'s replies use';
+    const connection = said + (parameters && Object.keys(parameters).some((k) => k !== 'model') ? ', with its samplers' : '');
+    say({ stage: 'sent', count: count, from: from, notes: notes, kind: target.kind, messageId: target.id, swipeCount: swipeCount, connection: connection });
     let left = count;
     for (let i = 0; i < count; i++) {
         const req = { messages: messages };

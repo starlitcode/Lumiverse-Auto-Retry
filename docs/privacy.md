@@ -115,7 +115,7 @@ The chat ids, the marks and the panel's place are not in an export. A chat id me
 
 **In memory only, gone when you close the tab:**
 
-- the last twenty lines of what it did
+- the last forty lines of what it did
 - counters for the session: good replies, retries, their reasons, retries per chat, and notes sent and skipped. Per-chat counts use the chat id, never anything a reply said.
 - **the last prompt**, only while you have the panel's **Prompt** tab open. It is the text of your chat, so it is only kept after you open that tab. One prompt at a time. Close the panel and nothing is kept.
 

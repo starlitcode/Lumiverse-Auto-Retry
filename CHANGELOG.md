@@ -8,6 +8,21 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.22.0
+
+_2026-10-25_
+
+### Added
+
+- **Debug info says which Lumiverse you use.** A newer Lumiverse tells extensions its version, and the report now includes it. Much of what goes wrong depends on how that version behaves.
+- **Debug info shows the last run of Several tries at once.** With the setting on, it says how many tries were sent and came back, which prompt and connection they used, the last reply that failed, and how the run ended.
+
+### Changed
+
+- **Debug info and the Log keep the last forty lines.** They kept twenty. One run of tries at once writes a line for each reply, so twenty could lose the start of a problem.
+
+---
+
 ## 5.21.1
 
 _2026-10-25_

@@ -181,7 +181,7 @@ A retry in a chat you have since left is still shown, marked as being in another
 
 ### Log
 
-What the extension is doing as it happens: replies starting, retries and why, replies that came back fine, and notes being sent. It keeps the last twenty lines.
+What the extension is doing as it happens: replies starting, retries and why, replies that came back fine, and notes being sent. It keeps the last forty lines.
 
 **Show in the log**, under **Show the on-screen panel**, has a switch for each kind of line. All are on by default. Turn one off to hide that kind:
 
