@@ -112,6 +112,7 @@ As a second guard, only one set of tries is out for a chat at a time. If two tab
 - These replies do not stream into the chat. The reply that passes appears all at once when it is added, as a new reroll or a new reply.
 - **Stop** or **Cancel** stops every reply still being written. Nothing is added after that.
 - Sending a new message yourself stops them too.
+- Reloading the page while they are out does not stop them, since they run on your server. Nothing is added, because the page that checks them is gone. You still pay for them.
 - When the reply failed with an error, Lumiverse shows its own red **Generation failed** box. It stays under the reply that was added until the next reply, or until you open another chat. It is about the reply that failed, not the one added. An extension cannot close it.
 
 ## With Auto Refine

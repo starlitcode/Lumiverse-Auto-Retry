@@ -68,6 +68,8 @@ const START_GRACE_MS = 15000;
 // that takes its time announcing a start does not get the reply counted as
 // one the reader asked for, which would hand back the tries.
 const OURS_WINDOW_MS = 90000;
+// The space between the pop-up and the top of Lumiverse's input area.
+const TOAST_ABOVE_INPUT = 10;
 // How much longer than its own wait a tab waits before it retries a reply that
 // another tab handles. Long enough for a tab in the background, whose timers
 // a browser can hold back by a few seconds, to press first.
@@ -159,7 +161,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.23.0";
+const VERSION = "5.23.1";
 // Whether two saved settings hold the same values, whatever order their keys
 // were written in. A key left undefined counts as not there, the way it is
 // when saved. Used to tell an update or a put-back that would change nothing.
@@ -9444,10 +9446,15 @@ export function setup(ctx, opts) {
         // by regenerating instead, which is the one that can take the old reply
         // with it. That is worth knowing from the log rather than working out from
         // a reroll that went missing.
+        // When no reply was saved, such as after an error before any text, there
+        // is nothing to swipe, and regenerate is the right press. The line says
+        // so, so nobody changes a selector that is working.
         if (picked && picked.via !== (cfg.retryByNewReroll ? "swipe" : "regenerate"))
             log("retry", "no " + (cfg.retryByNewReroll ? "next / swipe" : "regenerate") +
-                " button on screen, so this retry used " + picked.via +
-                " instead; set both selectors in the buttons section");
+                " button on screen, so this retry used " + picked.via + " instead. " +
+                (cfg.retryByNewReroll
+                    ? "That is expected when no reply was saved. If a reply is on screen, check both selectors in the buttons section"
+                    : "Check both selectors in the buttons section"));
         if (!picked) {
             log("retry", "no retry control found, set the button selectors in settings");
             showToast("Auto Retry could not find your regenerate button. Set it in Auto Retry settings.", { kind: "error" });
@@ -12228,6 +12235,73 @@ export function setup(ctx, opts) {
         }
         toastMove(t, [from || { opacity: "1", transform: "none" }, { opacity: "0", transform: away }], TOAST_OUT_MS, "ease-in", false);
     }
+    // The top edge of Lumiverse's own input area, in screen pixels, or null when
+    // there is none along the bottom of the screen. The input area is the box
+    // you type in and the row of buttons above it, which sit in one short
+    // container. The pop-up is placed above it, so a tap on the box lands on the
+    // box. Never a box inside another extension's part of the page, which can
+    // draw an input of its own, or one of this extension's own.
+    function inputAreaTop() {
+        const usable = (el) => {
+            try {
+                if (el.closest && (el.closest(OTHER_UI) || el.closest(OWN_UI)))
+                    return false;
+                const r = el.getBoundingClientRect();
+                return r.width > 0 && r.height > 0;
+            }
+            catch (_) {
+                return false;
+            }
+        };
+        let box = null;
+        try {
+            box = Array.from(document.querySelectorAll('textarea[name="chat-message"]')).find(usable) || null;
+            if (!box) {
+                // The lowest one on screen, for a Lumiverse that names its box differently.
+                let lowest = -1;
+                for (const el of Array.from(document.querySelectorAll("textarea"))) {
+                    if (!usable(el))
+                        continue;
+                    const b = el.getBoundingClientRect().bottom;
+                    if (b > lowest) {
+                        lowest = b;
+                        box = el;
+                    }
+                }
+            }
+        }
+        catch (_) { }
+        if (!box)
+            return null;
+        const vh = window.innerHeight || 0;
+        let top = box.getBoundingClientRect().top;
+        let node = box.parentElement;
+        for (let i = 0; i < 6 && node && node !== document.body; i++, node = node.parentElement) {
+            const r = node.getBoundingClientRect();
+            if (!(r.height > 0) || r.height > vh * 0.4)
+                break;
+            top = Math.min(top, r.top);
+        }
+        return top > vh * 0.5 ? top : null;
+    }
+    // Where the pop-up sits along the bottom: just above the input area, or 20
+    // pixels up when there is none. The gap is read in screen pixels and written
+    // in the pop-up's own CSS pixels, which differ by Lumiverse's UI Scale.
+    function toastBottom(t) {
+        const base = "max(20px,env(safe-area-inset-bottom,0px))";
+        const top = inputAreaTop();
+        if (top == null)
+            return base;
+        let scale = 1;
+        try {
+            const r = t.getBoundingClientRect();
+            if (t.offsetWidth > 0 && r.width > 0)
+                scale = r.width / t.offsetWidth;
+        }
+        catch (_) { }
+        const gap = Math.ceil(((window.innerHeight || 0) - top) / (scale > 0.01 ? scale : 1)) + TOAST_ABOVE_INPUT;
+        return gap > 20 ? "max(" + gap + "px,env(safe-area-inset-bottom,0px))" : base;
+    }
     function ensureToast() {
         if (typeof document === "undefined")
             return null;
@@ -12349,6 +12423,14 @@ export function setup(ctx, opts) {
         const t = typeof document !== "undefined" && document.getElementById("__lvRetryToast");
         if (!t || !t.__words || t.style.opacity !== "1")
             return;
+        // Kept above the input area as it grows, such as while a long message is
+        // typed under it. Only along the bottom: the picker's message sits at the
+        // top.
+        if (t.style.top === "auto") {
+            const at = toastBottom(t);
+            if (t.style.bottom !== at)
+                t.style.bottom = at;
+        }
         const span = t.__words;
         span.textContent = msg;
         // Words that still fit the box as it is leave it alone. Refitting them
@@ -12523,7 +12605,7 @@ export function setup(ctx, opts) {
             }
             else {
                 t.style.top = "auto";
-                t.style.bottom = "max(20px,env(safe-area-inset-bottom,0px))";
+                t.style.bottom = toastBottom(t);
             }
             // Sticky and cancellable messages are the ones rewritten in place. Set
             // before the fit, which reads it.

@@ -8,6 +8,17 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.23.1
+
+_2026-10-25_
+
+### Fixed
+
+- **The retry pop-up covered the input box.** It sat at the bottom of the screen, on top of the middle of Lumiverse's input box, so a tap there pressed the pop-up instead of the box. It now sits just above the input box and its row of buttons, on a phone and on a computer, at any UI Scale.
+- **A line in the Log asked you to change selectors that were working.** With **Retry by adding a new reroll** on, a retry after a reply that was never saved, such as after an error before any text, pressed Regenerate. That is the right button, since there is no reply to add a reroll to, but the Log said to set both selectors. It now says this is expected when no reply was saved.
+
+---
+
 ## 5.23.0
 
 _2026-10-25_

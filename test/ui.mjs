@@ -2535,6 +2535,78 @@ console.log("\nretrying");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- the pop-up stays clear of the input area ----
+// The pop-up for a retry sits just above Lumiverse's input area: the box you
+// type in and the row of buttons over it. Pinned to the bottom of the screen,
+// it sat on the middle of the box, and a tap there landed on the pop-up. A box
+// inside another extension's part of the page is not Lumiverse's, and is not
+// used to place it.
+console.log("\nthe pop-up stays clear of the input area");
+{
+  const AREA =
+    '<div id="area" style="position:fixed;left:12px;right:12px;bottom:12px;background:#222">' +
+    '<div style="height:30px">buttons</div>' +
+    '<textarea name="chat-message" style="display:block;width:90%;height:40px;margin:6px"></textarea></div>';
+  const OTHER =
+    '<div data-spindle-ext="someone-else" style="position:fixed;left:12px;right:12px;bottom:12px;height:120px;background:#333">' +
+    '<textarea style="display:block;width:90%;height:60px;margin:30px 6px"></textarea></div>';
+  const run = async (viewport, touch, zoom, body) => {
+    const page = await browser.newPage({ viewport, hasTouch: touch, isMobile: touch });
+    const errors = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    await stage(page, '<div id=modal></div><button data-testid="regenerate">Regenerate</button>' + body);
+    await page.addStyleTag({ content: THEME + "html{zoom:" + zoom + "}" });
+    await page.addScriptTag({ content: SOURCE, type: "module" });
+    await page.waitForFunction(() => !!window.__setup);
+    const out = await page.evaluate(async () => {
+      const h = {};
+      window.__setup(
+        {
+          events: { on: (n, fn) => { h[n] = fn; return () => {}; } },
+          ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+                registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) },
+        },
+        { retryDelayMs: 5000, backoffFactor: 1, maxDelayMs: 5000, jitter: false, maxRetries: 2,
+          toast: true, stuckTimeoutMs: 0, idleTimeoutMs: 0, pauseWhenFailing: false },
+      );
+      h.GENERATION_STARTED({ chatId: "c1", generationId: "g1" });
+      h.GENERATION_ENDED({ chatId: "c1", generationId: "g1", content: "" });
+      await new Promise((r) => setTimeout(r, 700));
+      const t = document.getElementById("__lvRetryToast");
+      const tr = t.getBoundingClientRect();
+      const area = document.getElementById("area");
+      let areaTop = null, onBox = null;
+      if (area) {
+        areaTop = area.getBoundingClientRect().top;
+        const box = area.querySelector("textarea").getBoundingClientRect();
+        onBox = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2) === area.querySelector("textarea");
+      }
+      return { shown: t.style.opacity === "1" && tr.height > 0, bottom: tr.bottom, areaTop, onBox, fromEdge: innerHeight - tr.bottom };
+    });
+    await page.close();
+    return { out, errors };
+  };
+  for (const [label, viewport, touch] of [
+    ["phone", { width: 390, height: 844 }, true],
+    ["laptop", { width: 1280, height: 900 }, false],
+  ]) {
+    for (const zoom of [1, 1.25, 0.85]) {
+      const say = label + ", zoom " + zoom + ": ";
+      const r = await run(viewport, touch, zoom, AREA);
+      check(say + "the pop-up is up", r.out.shown, r.out);
+      check(say + "it sits above the input area, with a gap", r.out.bottom <= r.out.areaTop - 4, r.out);
+      check(say + "a tap on the middle of the box lands on the box", r.out.onBox === true, r.out);
+      check(say + "no console errors", r.errors.length === 0, r.errors);
+    }
+  }
+  // Another extension's box is not Lumiverse's input area, so the pop-up keeps
+  // its own place at the bottom. 20 CSS pixels, which UI Scale makes larger or
+  // smaller on screen.
+  const other = await run({ width: 1280, height: 900 }, false, 1, OTHER);
+  check("another extension's box does not move the pop-up", other.out.shown && Math.abs(other.out.fromEdge - 20) <= 2, other.out);
+  check("no console errors with another extension's box", other.errors.length === 0, other.errors);
+}
+
 // ---- two tabs on one chat ----
 // Every open tab receives a reply's events. Lumiverse names one tab on the
 // reply, in frontendSessionId, and that tab retries it. The other tabs stand
