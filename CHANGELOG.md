@@ -17,10 +17,13 @@ _2026-10-25_
 - **Debug info says which Lumiverse you use.** A newer Lumiverse tells extensions its version, and the report now includes it. Much of what goes wrong depends on how that version behaves.
 - **Debug info shows the last run of Several tries at once.** With the setting on, it says how many tries were sent and came back, which prompt and connection they used, the last reply that failed, and how the run ended.
 
+### Fixed again
+
+- **An Impersonate started without its button could be retried.** 5.7.1 said Impersonate is no longer retried. That only held when you pressed Lumiverse's **Impersonate** button in the same tab. One started another way, such as with a shortcut or in another tab, was checked like a reply. A short or refused one was then retried, which pressed **Regenerate** in the chat. Auto Retry now reads the kind of generation that Lumiverse names when it starts.
+
 ### Fixed
 
 - **Two switches had the same name.** Under **Show in the log**, the switch for lines about Several tries at once was also called **Several tries at once**, the same as the setting itself. It is now called **Tries sent at once**.
-- **An Impersonate started without its button could be retried.** Auto Retry only knew a generation was an Impersonate when you pressed Lumiverse's **Impersonate** button in that same tab. One started another way, such as with a shortcut or in another tab, was checked like a reply. A short or refused one was then retried, which pressed **Regenerate** in the chat. Auto Retry now reads the kind of generation that Lumiverse names when it starts.
 - **Two tabs on one chat both retried a reply.** With the same chat open in two tabs, or on a phone and a computer, both pressed **Regenerate**. Each press stopped the other tab's reply, so you paid for extra replies and got extra rerolls. Auto Retry 5.21.1 stopped two tabs from both sending tries at once, but plain retries were still pressed by both. Now one tab retries: the tab Lumiverse names on the reply, which is the tab opened or reloaded last. The other tab stands by. It retries only if no retry has started 20 seconds after the usual wait, such as when the named tab is on a phone with its screen off. **Cancel** in one tab stops the other tab too. See [The same chat open in two tabs](docs/troubleshooting.md#the-same-chat-open-in-two-tabs).
 
 ### Changed
