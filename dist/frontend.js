@@ -12576,7 +12576,7 @@ export function setup(ctx, opts) {
             secure = !!window.isSecureContext;
         }
         catch (_) { }
-        return "secure page: " + (https ? "yes (https)" : secure ? "yes (on this computer)" : "no (plain http, not on this computer)");
+        return "secure page: " + (https ? "yes (https)" : secure ? "yes (Lumiverse is on this device)" : "no (plain http, reached over the network)");
     }
     // A setting's value as the report writes it. An empty one says "empty",
     // which reads more plainly than a pair of quote marks or brackets.

@@ -14,7 +14,7 @@ _2026-10-25_
 
 ### Added
 
-- **Debug info says whether the page is secure.** Some browser features only work on a secure page: one on `https`, or one opened on the same computer as Lumiverse. The report says yes or no. It never shows the address or the port.
+- **Debug info says whether the page is secure.** Some browser features only work on a secure page: one on `https`, or one opened on the same device that Lumiverse runs on. The report says yes or no. It never shows the address or the port.
 
 ### Changed
 

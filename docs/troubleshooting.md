@@ -28,7 +28,7 @@ Nothing leaves your device until you paste it somewhere.
 - **The activity timeline** is the last forty things it did, in your own time, and says which kind of line each one is.
 - **Several tries at once, last run** shows up when the setting is on. It says how many tries were sent, which prompt and connection they used, and how the run ended.
 - **Lumiverse's version** is near the top, when your Lumiverse says what it is.
-- **Secure page** says whether the page is on `https` or opened on the same computer as Lumiverse. Some browser features only work on a secure page. It never shows the address or the port.
+- **Secure page** says whether the page is on `https` or opened on the same device that Lumiverse runs on, such as a phone running Lumiverse itself. Some browser features only work on a secure page. It never shows the address or the port.
 - **The time** at the top is your own time, with your time zone.
 
 ## It retried a reply you wanted to keep

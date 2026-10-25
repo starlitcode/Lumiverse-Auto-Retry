@@ -784,7 +784,7 @@ console.log("\nthe debug report");
   check("no recent line carries a copy of the settings", !/ready v[0-9.]+ \{/.test(text), text);
   check("it says which Lumiverse, or that Lumiverse did not say", /\nlumiverse: (v\S+|not reported by this Lumiverse)\n/.test(text), text.slice(0, 300));
   check("with Several tries at once on, it has a part for the last run", /several tries at once, last run:\n  \(none yet\)/.test(text), text);
-  check("it says whether the page is secure, with no address", /\nsecure page: no \(plain http, not on this computer\)\n/.test(text) && !/lumiverse\.test/.test(text), text.slice(0, 400));
+  check("it says whether the page is secure, with no address", /\nsecure page: no \(plain http, reached over the network\)\n/.test(text) && !/lumiverse\.test/.test(text), text.slice(0, 400));
   check("no console errors", r.errors.length === 0, r.errors);
 }
 
