@@ -29,11 +29,12 @@ For anything sensitive, such as a security problem, follow [SECURITY.md](SECURIT
 
 I fix a bug from what the report says. If a report is short or vague, I cannot tell what went wrong or how to fix it. Please include:
 
-1. What you did, step by step.
+1. How to make the problem happen again, step by step. Start from something everyone has, such as opening a chat, and list each thing you did in order. If it only happens sometimes, say how often.
 2. What you expected to happen.
 3. What happened instead. Copy any message word for word.
 4. Whether you are on a phone or a computer, and which browser.
-5. A screenshot or a screen recording, if it shows the problem.
+
+A screenshot or a screen recording is optional. It helps a lot, because I can see the problem for myself.
 
 ## The debug report
 

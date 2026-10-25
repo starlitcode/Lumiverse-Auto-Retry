@@ -6993,7 +6993,10 @@ export function setup(ctx, opts) {
         }
         catch (_) { }
         if (cfg.enabled === false) {
-            chats.forEach((_s, id) => standDown(id, false));
+            chats.forEach((_s, id) => {
+                standDown(id, false);
+                tellOtherTabs(id);
+            });
         }
         showToast(cfg.enabled === false ? "Auto Retry is off." : "Auto Retry is on.", {
             force: true,
@@ -8405,9 +8408,11 @@ export function setup(ctx, opts) {
         catch (_) { }
         tellBackendChatsOff();
         saveStateToAccount();
-        // Anything already in flight for that chat goes with it.
-        if (off)
+        // Anything already in flight for that chat goes with it, in every tab.
+        if (off) {
             standDown(id, false);
+            tellOtherTabs(id);
+        }
         // Every one of these describes the chat that just changed, so they are all
         // repainted here rather than by whoever called. Repainting from a click
         // handler instead would leave any other way in stale: the line at the top
@@ -9461,9 +9466,16 @@ export function setup(ctx, opts) {
     // budget, and briefly suppress new automatic retries so a stopped
     // generation's trailing events can't immediately restart the loop. This is
     // what makes Stop and Cancel actually stop things.
-    function standDown(chatId, announce) {
+    // tell is true for Cancel on the pop-up, which only this tab sees. The other
+    // tabs are then told, so a tab standing by does not retry a reply you called
+    // off. A Stop needs no telling: Lumiverse tells every tab itself.
+    function standDown(chatId, announce, tell) {
         const s = st(chatId);
         const hadPending = s.pending || !!s.timer || s.attempts > 0 || !!s.atOnce;
+        if (tell)
+            tellOtherTabs(chatId);
+        s.takenOver = false;
+        s.awaitOther = false;
         // Tries still out are stopped, so nothing is added after the reader has
         // taken over.
         endedAs(s.atOnce, "stopped by you");
@@ -10374,7 +10386,7 @@ export function setup(ctx, opts) {
         tellPage(RETRYING_EVENT, chatId);
         const opening = chatStatus(s);
         showToast(opening ? opening.text : "Retrying", {
-            cancel: () => standDown(chatId, true),
+            cancel: () => standDown(chatId, true, true),
             sticky: true,
         });
         startToastCountdown(s);
@@ -10445,6 +10457,28 @@ export function setup(ctx, opts) {
             leaveToOtherTab(chatId, "another tab added a reply that passed in this chat, so this tab calls off its own retry");
         s.awaitOther = false;
         s.attempts = 0;
+    }
+    // Tells the other tabs of the account that retrying in this chat was
+    // stopped here. The backend passes it to every tab, this one included,
+    // which has nothing left to stop by then.
+    function tellOtherTabs(chatId) {
+        if (chatId === NO_CHAT)
+            return;
+        try {
+            if (ctx && typeof ctx.sendToBackend === "function")
+                ctx.sendToBackend({ type: "stood_down", chatId: chatId });
+        }
+        catch (_) { }
+    }
+    // Retrying in this chat was stopped in another tab: with Cancel, or by
+    // switching Auto Retry off. Whatever this tab had waiting or out for the
+    // chat stops too.
+    function othersStoodDown(chatId) {
+        const s = st(chatId);
+        if (!(s.standby || s.pending || s.timer || s.atOnce || s.takenOver || s.awaitOther))
+            return;
+        log("retry", "you stopped retrying this chat in another tab, so this tab stops too");
+        standDown(chatId, false);
     }
     function leaveToOtherTab(chatId, why) {
         const s = st(chatId);
@@ -10694,7 +10728,7 @@ export function setup(ctx, opts) {
             return fallBack("the panel could not listen for the replies");
         }
         run.timer = setTimeout(() => fallBack("the backend did not answer"), AT_ONCE_ACK_MS);
-        showToast(atOnceText(run), { cancel: () => standDown(chatId, true), sticky: true });
+        showToast(atOnceText(run), { cancel: () => standDown(chatId, true, true), sticky: true });
         // Ticked like the countdown before a retry, and taken down once the run is
         // over, whatever ended it.
         if (cfg.toast) {
@@ -16714,6 +16748,10 @@ export function setup(ctx, opts) {
                     // reply that passed.
                     if (msg.type === "at_once" && msg.stage === "sent" && msg.chatId) {
                         othersAtOnce(String(msg.chatId), String(msg.requestId || ""));
+                        return;
+                    }
+                    if (msg.type === "stood_down" && msg.chatId) {
+                        othersStoodDown(String(msg.chatId));
                         return;
                     }
                     if (msg.type === "reroll_added" && msg.ok && msg.chatId) {

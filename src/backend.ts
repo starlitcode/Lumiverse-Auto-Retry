@@ -1099,6 +1099,13 @@ spindle.onFrontendMessage(async (payload: any, userId?: string, tab?: string) =>
       });
       return;
     }
+    // Retrying in a chat was stopped in one tab. Every tab of the account is
+    // told, so a tab standing by for that chat does not retry it.
+    if (payload.type === 'stood_down') {
+      const forChat = payload.chatId ? String(payload.chatId) : '';
+      if (forChat) replyTo(userId, { type: 'stood_down', chatId: forChat });
+      return;
+    }
     if (payload.type === 'stop_at_once') {
       stopAtOnce(String(payload.requestId || ''), userId);
       return;

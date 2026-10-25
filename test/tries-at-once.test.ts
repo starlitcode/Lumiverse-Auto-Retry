@@ -761,6 +761,15 @@ describe("adding the reply that passed", () => {
     expect(h.appended.length).toBe(0);
   });
 
+  // Cancel pressed in one tab reaches every tab of the account, so a tab
+  // standing by for that chat does not retry it.
+  test("a stop in one tab is passed to every tab of the account", async () => {
+    const h = boot();
+    await h.tell({ type: "stood_down", chatId: "c1" }, "u1");
+    const out = h.sent.filter((m: any) => m.msg && m.msg.type === "stood_down");
+    expect(out).toEqual([{ msg: { type: "stood_down", chatId: "c1" }, userId: "u1" }]);
+  });
+
   // Every tab of the account hears these, and the chat id is how a tab
   // standing by in that chat knows another tab is retrying, since tries at
   // once start no reply in the chat.

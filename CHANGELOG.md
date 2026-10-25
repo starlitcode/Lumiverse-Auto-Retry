@@ -20,7 +20,7 @@ _2026-10-25_
 ### Fixed
 
 - **Two switches had the same name.** Under **Show in the log**, the switch for lines about Several tries at once was also called **Several tries at once**, the same as the setting itself. It is now called **Tries sent at once**.
-- **Two tabs on one chat both retried a reply.** With the same chat open in two tabs, or on a phone and a computer, both pressed **Regenerate**. Each press stopped the other tab's reply, so you paid for extra replies and got extra rerolls. Auto Retry 5.21.1 stopped two tabs from both sending tries at once, but plain retries were still pressed by both. Now one tab retries: the tab Lumiverse names on the reply, which is the tab opened or reloaded last. The other tab stands by. It retries only if no retry has started 20 seconds after the usual wait, such as when the named tab is on a phone with its screen off. See [The same chat open in two tabs](docs/troubleshooting.md#the-same-chat-open-in-two-tabs).
+- **Two tabs on one chat both retried a reply.** With the same chat open in two tabs, or on a phone and a computer, both pressed **Regenerate**. Each press stopped the other tab's reply, so you paid for extra replies and got extra rerolls. Auto Retry 5.21.1 stopped two tabs from both sending tries at once, but plain retries were still pressed by both. Now one tab retries: the tab Lumiverse names on the reply, which is the tab opened or reloaded last. The other tab stands by. It retries only if no retry has started 20 seconds after the usual wait, such as when the named tab is on a phone with its screen off. **Cancel** in one tab stops the other tab too. See [The same chat open in two tabs](docs/troubleshooting.md#the-same-chat-open-in-two-tabs).
 
 ### Changed
 

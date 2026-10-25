@@ -68,6 +68,7 @@ This covers two browser tabs, and also a phone and a computer.
 - That tab retries the reply. The countdown and the pop-up show in that tab, even when you sent the message from the other one.
 - The other tab stands by. Its Log says "another tab retries this reply".
 - If no retry has started 20 seconds after the usual wait, the other tab retries instead. This covers a named tab that the browser has paused, such as on a phone with its screen off.
+- **Cancel** on the pop-up, or switching Auto Retry off, stops retrying in every tab. **Stop** on a reply does too.
 - When a paused tab runs again, it calls off any retry it had waiting, once it sees that the other tab has retried.
 - On a Lumiverse that names no tab, every tab retries, as before.
 

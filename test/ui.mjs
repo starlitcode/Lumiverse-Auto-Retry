@@ -2595,7 +2595,8 @@ console.log("\ntwo tabs on one chat");
   const awake = await tab();
   const asleep = await tab();
   const tries = await tab();
-  const [awakeOut, asleepOut, triesOut] = await Promise.all([
+  const stopped = await tab();
+  const [awakeOut, asleepOut, triesOut, stoppedOut] = await Promise.all([
     // The other tab is awake: each retry it makes starts a reply, which calls
     // the stand-by off. Its tries count here too, so once it has used them
     // all, this tab does not start more of its own.
@@ -2646,17 +2647,78 @@ console.log("\ntwo tabs on one chat");
       await wait(21000);
       return window.__clicks;
     }),
+    // You pressed Cancel on the other tab's pop-up. The backend passes that
+    // on to every tab, and a stand-by here is called off.
+    stopped.page.evaluate(async () => {
+      const h = window.__h;
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      const b = { chatId: "canceled", frontendSessionId: "tab-b" };
+      h.GENERATION_STARTED(Object.assign({ generationId: "c0" }, b));
+      h.GENERATION_ENDED(Object.assign({ generationId: "c0", content: "" }, b));
+      await wait(100);
+      window.__fromBackend({ type: "stood_down", chatId: "canceled" });
+      await wait(21000);
+      return window.__clicks;
+    }),
   ]);
   check("a stand-by is called off by the other tab's retry, and counts its tries", awakeOut === 0, awakeOut);
   check("a stand-by does not act before its wait is over", asleepOut.early === 0, asleepOut);
   check("a tab retries when the other tab did not", asleepOut.tookOver === 1, asleepOut);
   check("after taking over, it retries its own retry at once", asleepOut.next === 1, asleepOut);
   check("another tab's tries at once, or the reply they added, call a stand-by off", triesOut === 0, triesOut);
-  check("no console errors with two tabs", awake.errors.length + asleep.errors.length + tries.errors.length === 0,
-    [awake.errors, asleep.errors, tries.errors]);
+  check("Cancel pressed in another tab calls a stand-by off", stoppedOut === 0, stoppedOut);
+  check("no console errors with two tabs", awake.errors.length + asleep.errors.length + tries.errors.length + stopped.errors.length === 0,
+    [awake.errors, asleep.errors, tries.errors, stopped.errors]);
   await awake.page.close();
   await asleep.page.close();
   await tries.page.close();
+  await stopped.page.close();
+
+  // Cancel on this tab's pop-up is passed to the other tabs through the
+  // backend. A Stop is not: Lumiverse tells every tab about a Stop itself,
+  // and a tab passing one on would call off the retry of a tab that stopped
+  // a stalled reply on purpose.
+  const telling = await browser.newPage();
+  const tellingErrors = [];
+  telling.on("pageerror", (e) => tellingErrors.push(e.message));
+  await stage(telling, '<div id=modal></div><button data-testid="regenerate">Regenerate</button>');
+  await telling.addStyleTag({ content: THEME });
+  await telling.addScriptTag({ content: SOURCE, type: "module" });
+  await telling.waitForFunction(() => !!window.__setup);
+  const told = await telling.evaluate(async () => {
+    const h = {};
+    const sent = [];
+    window.__setup(
+      {
+        frontendSessionId: "tab-a",
+        events: { on: (n, fn) => { h[n] = fn; return () => {}; } },
+        sendToBackend: (msg) => sent.push(msg),
+        onBackendMessage: () => () => {},
+        ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+              registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) },
+      },
+      { retryDelayMs: 5000, backoffFactor: 1, maxDelayMs: 5000, jitter: false, maxRetries: 2,
+        toast: true, stuckTimeoutMs: 0, idleTimeoutMs: 0, pauseWhenFailing: false },
+    );
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const stoodDown = () => sent.filter((m) => m && m.type === "stood_down").map((m) => m.chatId);
+    h.GENERATION_STARTED({ chatId: "x1", generationId: "x1", frontendSessionId: "tab-b" });
+    h.GENERATION_STOPPED({ chatId: "x1", generationId: "x1", frontendSessionId: "tab-b" });
+    await wait(100);
+    const afterStop = stoodDown().slice();
+    h.GENERATION_STARTED({ chatId: "x2", generationId: "x2", frontendSessionId: "tab-a" });
+    h.GENERATION_ENDED({ chatId: "x2", generationId: "x2", content: "", frontendSessionId: "tab-a" });
+    await wait(100);
+    const cancel = [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === "Cancel");
+    if (cancel) cancel.click();
+    await wait(100);
+    return { afterStop, foundCancel: !!cancel, afterCancel: stoodDown() };
+  });
+  check("a Stop is not passed on to the other tabs", told.afterStop.length === 0, told);
+  check("Cancel on the pop-up is passed on to the other tabs",
+    told.foundCancel && told.afterCancel.length === 1 && told.afterCancel[0] === "x2", told);
+  check("no console errors when telling the other tabs", tellingErrors.length === 0, tellingErrors);
+  await telling.close();
 
   // A tab that was asleep wakes and works through the replies it missed, and
   // can have a retry waiting for one that another tab has retried already.
