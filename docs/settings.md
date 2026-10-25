@@ -187,7 +187,7 @@ What the extension is doing as it happens: replies starting, retries and why, re
 
 - **How each reply ended**: a reply starting and ending, and how it was judged.
 - **Retries**: each retry, the button it pressed, and when it gave up or paused.
-- **Several tries at once**: the tries sent, each reply that came back, and the one added.
+- **Tries sent at once**: the tries sent by Several tries at once, each reply that came back, and the one added.
 - **Refusal notes**: which notes went with a retry, and why a note did not.
 - **Settings and presets**: settings and presets loaded, saved, or moved to and from your account.
 - **Problems and warnings**: something that could not be done, such as a window that would not open.

@@ -761,6 +761,21 @@ describe("adding the reply that passed", () => {
     expect(h.appended.length).toBe(0);
   });
 
+  // Every tab of the account hears these, and the chat id is how a tab
+  // standing by in that chat knows another tab is retrying, since tries at
+  // once start no reply in the chat.
+  test("the tries going out and the reply being added both name the chat", async () => {
+    const h = boot();
+    await h.tell({ type: "try_at_once", requestId: "r1", chatId: "c1", count: 2 });
+    await h.settle();
+    expect(h.stage("sent")[0].msg.chatId).toBe("c1");
+    await h.tell({
+      type: "add_reroll", requestId: "a1", chatId: "c1", messageId: "m2", swipeCount: 1,
+      text: "She lit the lamp and waited.",
+    });
+    expect(added(h)[0].chatId).toBe("c1");
+  });
+
   test("after a turn that saved no reply, it becomes a new reply, and its id is handed back", async () => {
     const h = boot({ messages: noReply() });
     await h.tell({

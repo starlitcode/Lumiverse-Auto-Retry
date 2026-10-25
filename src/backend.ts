@@ -212,8 +212,13 @@ function marksFrom(list: any): Array<{ open: string; close: string }> {
 // Replying without a userId broadcasts to every connected user on an
 // operator-scoped install, so every reply to a frontend message carries the id
 // of whoever sent it. A user-scoped install ignores the argument.
-function replyTo(userId: string | undefined, msg: any): void {
-  try { spindle.sendToFrontend(msg, userId); } catch (_) {}
+// With a tab named, only that tab gets the message. A Lumiverse that does not
+// know the third argument ignores it and sends to every tab.
+function replyTo(userId: string | undefined, msg: any, tab?: string): void {
+  try {
+    if (tab) spindle.sendToFrontend(msg, userId, { frontendSessionId: tab });
+    else spindle.sendToFrontend(msg, userId);
+  } catch (_) {}
 }
 
 // The note that goes out with a refusal retry. Armed by the frontend the moment
@@ -230,7 +235,8 @@ function replyTo(userId: string | undefined, msg: any): void {
 // Most builds report "normal" for everything, including a regenerate, so
 // requiring "regenerate" or "swipe" would mean no note ever goes out. Users who
 // know their build reports it properly can ask for that check with strictType.
-interface RefusalNote { chatId: string; notes: Array<{ text: string; role: string }>; placement: string; at: number; strictType: boolean; }
+// tab is the browser tab that armed the note, which is the tab retrying.
+interface RefusalNote { chatId: string; notes: Array<{ text: string; role: string }>; placement: string; at: number; strictType: boolean; tab: string; }
 // One per chat. One backend can serve several accounts, and a single slot let
 // a note armed in one account's chat replace one armed a moment earlier in
 // another's, so that retry went out without the note it was promised.
@@ -714,7 +720,9 @@ async function tryAtOnce(payload: any, userId?: string): Promise<void> {
       ? "the one the chat is set to"
       : 'the one the chat\'s replies use';
   const connection = said + (parameters && Object.keys(parameters).some((k) => k !== 'model') ? ', with its samplers' : '');
-  say({ stage: 'sent', count: count, from: from, notes: notes, kind: target.kind, messageId: target.id, swipeCount: swipeCount, connection: connection });
+  // Every tab of the account hears this, and the chat id lets a tab standing
+  // by in that chat see that another tab is retrying.
+  say({ stage: 'sent', chatId: chatId, count: count, from: from, notes: notes, kind: target.kind, messageId: target.id, swipeCount: swipeCount, connection: connection });
   let left = count;
   for (let i = 0; i < count; i++) {
     const req: any = { messages: messages };
@@ -898,7 +906,9 @@ function notify(kind: any, text: any, userId?: string) {
 
 // Settings bridge with the UI: save the whole settings object to per-user
 // account storage and send it back on request.
-spindle.onFrontendMessage(async (payload: any, userId?: string) => {
+// tab is the id of the browser tab that sent the message. A Lumiverse that
+// does not pass one leaves it undefined.
+spindle.onFrontendMessage(async (payload: any, userId?: string, tab?: string) => {
   try {
     if (!payload) return;
     if (payload.type === 'notify') {
@@ -1070,6 +1080,7 @@ spindle.onFrontendMessage(async (payload: any, userId?: string) => {
           placement: String(payload.placement || 'after'),
           at: Date.now(),
           strictType: !!payload.strictType,
+          tab: typeof tab === 'string' ? tab : '',
         });
       else if (forChat) refusalNotes.delete(forChat);
       // Acknowledged so the frontend can hold the retry click until the note is
@@ -1099,9 +1110,11 @@ spindle.onFrontendMessage(async (payload: any, userId?: string) => {
       } catch (e) {
         done = { ok: false, why: sayError(e) };
       }
+      // Every tab of the account hears this too, with the chat it was for.
       replyTo(userId, {
         type: 'reroll_added',
         requestId: payload.requestId,
+        chatId: payload.chatId ? String(payload.chatId) : '',
         ok: done.ok,
         why: done.why || '',
         changed: !!done.changed,
@@ -1248,13 +1261,13 @@ const promptInterceptor = async (messages: any[], context: any) => {
       // something else, and only one of those is fixable by the user. The
       // note stays armed: with the strict check on, the point is to wait for
       // a generation the host does call a retry.
-      try { replyTo(who, { type: 'note_skipped', reason: 'the strict check is on and the host called this generation "' + type + '"' }); } catch (__) {}
+      try { replyTo(who, { type: 'note_skipped', reason: 'the strict check is on and the host called this generation "' + type + '"' }, refusalNote.tab); } catch (__) {}
       return messages;
     }
     const armed = refusalNote;
     refusalNotes.delete(armed.chatId); // one generation, collected or not
     if (Date.now() - armed.at > NOTE_MAX_AGE_MS) {
-      try { replyTo(who, { type: 'note_skipped', reason: 'it was armed too long ago to still belong to this generation' }); } catch (__) {}
+      try { replyTo(who, { type: 'note_skipped', reason: 'it was armed too long ago to still belong to this generation' }, armed.tab); } catch (__) {}
       snapshotPrompt(messages, context, who);
       return messages;
     }
@@ -1268,8 +1281,10 @@ const promptInterceptor = async (messages: any[], context: any) => {
       name: built.length > 1 ? 'Auto Retry refusal note ' + (i + 1) : 'Auto Retry refusal note',
     }));
     // Said out loud, so "did my note go?" has an answer in the live log
-    // instead of being something the user has to infer from the reply.
-    try { replyTo(who, { type: 'note_sent', count: built.length, generationType: type }); } catch (__) {}
+    // instead of being something the user has to infer from the reply. Sent
+    // to the tab that armed the note, which is the tab retrying, and not to
+    // every open tab.
+    try { replyTo(who, { type: 'note_sent', count: built.length, generationType: type }, armed.tab); } catch (__) {}
     // After the note is in, so the panel shows what actually went rather than
     // what would have gone without it.
     snapshotPrompt(placed.list, context, who, { from: placed.from, count: built.length });

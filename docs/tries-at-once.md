@@ -100,7 +100,11 @@ The tries go to the same connection as a normal reply in the chat.
 
 ### Two tabs on one chat
 
-Only one set of tries is out for a chat at a time. With the same chat open in two tabs, the first tab to ask sends the tries and adds the reply that passes. The other tab leaves it, and its log says so.
+Only one tab retries a reply, so only one tab sends tries for it. See [The same chat open in two tabs](troubleshooting.md#the-same-chat-open-in-two-tabs) for which tab that is.
+
+A tab standing by is told when the other tab sends tries at once, and when it adds a reply that passed. So it does not take over while the tries are out, or after they worked.
+
+As a second guard, only one set of tries is out for a chat at a time. If two tabs ask, the first one sends the tries. The other tab leaves it, and its log says so.
 
 ## What you see
 
@@ -108,6 +112,7 @@ Only one set of tries is out for a chat at a time. With the same chat open in tw
 - These replies do not stream into the chat. The reply that passes appears all at once when it is added, as a new reroll or a new reply.
 - **Stop** or **Cancel** stops every reply still being written. Nothing is added after that.
 - Sending a new message yourself stops them too.
+- When the reply failed with an error, Lumiverse shows its own red **Generation failed** box. It stays under the reply that was added until the next reply, or until you open another chat. It is about the reply that failed, not the one added. An extension cannot close it.
 
 ## With Auto Refine
 

@@ -60,6 +60,17 @@ A tab in the background can miss Lumiverse's events completely. So the extension
 
 A generation that really produced nothing is still retried.
 
+## The same chat open in two tabs
+
+This covers two browser tabs, and also a phone and a computer.
+
+- Lumiverse names one tab on each reply. It is the tab opened or reloaded last.
+- That tab retries the reply. The countdown and the pop-up show in that tab, even when you sent the message from the other one.
+- The other tab stands by. Its Log says "another tab retries this reply".
+- If no retry has started 20 seconds after the usual wait, the other tab retries instead. This covers a named tab that the browser has paused, such as on a phone with its screen off.
+- When a paused tab runs again, it calls off any retry it had waiting, once it sees that the other tab has retried.
+- On a Lumiverse that names no tab, every tab retries, as before.
+
 ## "No chat is open"
 
 The Extras menu and the floating button can be reached from the chat list, with no chat open. There they say **No chat is open** instead of acting on the chat you were last in.

@@ -18,22 +18,24 @@ const BACKEND = readFileSync(
 );
 
 interface Harness {
-  arm: (over?: any) => Promise<void>;
+  arm: (over?: any, tab?: string) => Promise<void>;
   run: (messages: any[], context?: any) => Promise<any>;
   priority: number;
+  sent: Array<{ msg: any; opts: any }>;
 }
 
 function boot(): Harness {
   let frontendHandler: any = null;
   let interceptor: any = null;
   let priority = -1;
+  const sent: Array<{ msg: any; opts: any }> = [];
   const spindle = {
     storage: {
       read: async () => { throw new Error("empty"); },
       write: async () => {},
     },
     onFrontendMessage: (fn: any) => { frontendHandler = fn; },
-    sendToFrontend: () => {},
+    sendToFrontend: (msg: any, _user?: any, opts?: any) => { sent.push({ msg, opts }); },
     on: () => {},
     chat: { getMessages: async () => [], updateMessage: async () => {} },
     registerInterceptor: (fn: any, p: number) => { interceptor = fn; priority = p; },
@@ -42,16 +44,21 @@ function boot(): Harness {
   // eslint-disable-next-line no-new-func
   new Function("spindle", BACKEND)(spindle);
   return {
-    arm: (over?: any) =>
+    // tab is the browser tab the message came from, which Lumiverse passes
+    // as the third argument.
+    arm: (over?: any, tab?: string) =>
       frontendHandler(
         Object.assign(
           { type: "arm_refusal_note", chatId: "c1", notes: [{ text: "This was refused by mistake.", role: "system" }], placement: "after" },
           over || {},
         ),
+        undefined,
+        tab,
       ),
     run: (messages: any[], context?: any) =>
       interceptor(messages, Object.assign({ chatId: "c1", generationType: "regenerate" }, context || {})),
     get priority() { return priority; },
+    sent,
   } as Harness;
 }
 
@@ -506,5 +513,42 @@ describe("both halves agree on the limit", () => {
     // constant in the other, so changing the constant left the message lying.
     expect(frontend).not.toMatch(/"\d+ is the most one retry can carry"/);
     expect(frontend).toMatch(/MAX_NOTES \+ " is the most one retry can carry"/);
+  });
+});
+
+// The tab that arms the note is the tab retrying. The lines about the note go
+// to that tab alone, or the other tabs would log a note for a retry they never
+// made. It is not always the tab Lumiverse names on the reply: a tab that took
+// over from a sleeping one retries under the sleeping tab's name.
+describe("the note lines go to the tab that retries", () => {
+  const lines = (h: Harness) => h.sent.filter((s) => s.msg && /^note_(sent|skipped)$/.test(s.msg.type));
+
+  test("a sent note is addressed to the tab that armed it", async () => {
+    const h = boot();
+    await h.arm({}, "tab-b");
+    await h.run(prompt(), { frontendSessionId: "tab-a" });
+    const got = lines(h);
+    expect(got.length).toBe(1);
+    expect(got[0].msg.type).toBe("note_sent");
+    expect(got[0].opts).toEqual({ frontendSessionId: "tab-b" });
+  });
+
+  test("so is a note that was not sent", async () => {
+    const h = boot();
+    await h.arm({ strictType: true }, "tab-b");
+    await h.run(prompt(), { generationType: "normal", frontendSessionId: "tab-a" });
+    const got = lines(h);
+    expect(got.length).toBe(1);
+    expect(got[0].msg.type).toBe("note_skipped");
+    expect(got[0].opts).toEqual({ frontendSessionId: "tab-b" });
+  });
+
+  test("a Lumiverse that names no tab sends to every tab, as before", async () => {
+    const h = boot();
+    await h.arm();
+    await h.run(prompt());
+    const got = lines(h);
+    expect(got.length).toBe(1);
+    expect(got[0].opts).toBeUndefined();
   });
 });

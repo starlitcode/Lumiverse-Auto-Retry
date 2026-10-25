@@ -242,9 +242,14 @@ function marksFrom(list) {
 // Replying without a userId broadcasts to every connected user on an
 // operator-scoped install, so every reply to a frontend message carries the id
 // of whoever sent it. A user-scoped install ignores the argument.
-function replyTo(userId, msg) {
+// With a tab named, only that tab gets the message. A Lumiverse that does not
+// know the third argument ignores it and sends to every tab.
+function replyTo(userId, msg, tab) {
     try {
-        spindle.sendToFrontend(msg, userId);
+        if (tab)
+            spindle.sendToFrontend(msg, userId, { frontendSessionId: tab });
+        else
+            spindle.sendToFrontend(msg, userId);
     }
     catch (_) { }
 }
@@ -732,7 +737,9 @@ async function tryAtOnce(payload, userId) {
             ? "the one the chat is set to"
             : 'the one the chat\'s replies use';
     const connection = said + (parameters && Object.keys(parameters).some((k) => k !== 'model') ? ', with its samplers' : '');
-    say({ stage: 'sent', count: count, from: from, notes: notes, kind: target.kind, messageId: target.id, swipeCount: swipeCount, connection: connection });
+    // Every tab of the account hears this, and the chat id lets a tab standing
+    // by in that chat see that another tab is retrying.
+    say({ stage: 'sent', chatId: chatId, count: count, from: from, notes: notes, kind: target.kind, messageId: target.id, swipeCount: swipeCount, connection: connection });
     let left = count;
     for (let i = 0; i < count; i++) {
         const req = { messages: messages };
@@ -923,7 +930,9 @@ function notify(kind, text, userId) {
 }
 // Settings bridge with the UI: save the whole settings object to per-user
 // account storage and send it back on request.
-spindle.onFrontendMessage(async (payload, userId) => {
+// tab is the id of the browser tab that sent the message. A Lumiverse that
+// does not pass one leaves it undefined.
+spindle.onFrontendMessage(async (payload, userId, tab) => {
     try {
         if (!payload)
             return;
@@ -1114,6 +1123,7 @@ spindle.onFrontendMessage(async (payload, userId) => {
                     placement: String(payload.placement || 'after'),
                     at: Date.now(),
                     strictType: !!payload.strictType,
+                    tab: typeof tab === 'string' ? tab : '',
                 });
             else if (forChat)
                 refusalNotes.delete(forChat);
@@ -1145,9 +1155,11 @@ spindle.onFrontendMessage(async (payload, userId) => {
             catch (e) {
                 done = { ok: false, why: sayError(e) };
             }
+            // Every tab of the account hears this too, with the chat it was for.
             replyTo(userId, {
                 type: 'reroll_added',
                 requestId: payload.requestId,
+                chatId: payload.chatId ? String(payload.chatId) : '',
                 ok: done.ok,
                 why: done.why || '',
                 changed: !!done.changed,
@@ -1317,7 +1329,7 @@ const promptInterceptor = async (messages, context) => {
             // note stays armed: with the strict check on, the point is to wait for
             // a generation the host does call a retry.
             try {
-                replyTo(who, { type: 'note_skipped', reason: 'the strict check is on and the host called this generation "' + type + '"' });
+                replyTo(who, { type: 'note_skipped', reason: 'the strict check is on and the host called this generation "' + type + '"' }, refusalNote.tab);
             }
             catch (__) { }
             return messages;
@@ -1326,7 +1338,7 @@ const promptInterceptor = async (messages, context) => {
         refusalNotes.delete(armed.chatId); // one generation, collected or not
         if (Date.now() - armed.at > NOTE_MAX_AGE_MS) {
             try {
-                replyTo(who, { type: 'note_skipped', reason: 'it was armed too long ago to still belong to this generation' });
+                replyTo(who, { type: 'note_skipped', reason: 'it was armed too long ago to still belong to this generation' }, armed.tab);
             }
             catch (__) { }
             snapshotPrompt(messages, context, who);
@@ -1343,9 +1355,11 @@ const promptInterceptor = async (messages, context) => {
             name: built.length > 1 ? 'Auto Retry refusal note ' + (i + 1) : 'Auto Retry refusal note',
         }));
         // Said out loud, so "did my note go?" has an answer in the live log
-        // instead of being something the user has to infer from the reply.
+        // instead of being something the user has to infer from the reply. Sent
+        // to the tab that armed the note, which is the tab retrying, and not to
+        // every open tab.
         try {
-            replyTo(who, { type: 'note_sent', count: built.length, generationType: type });
+            replyTo(who, { type: 'note_sent', count: built.length, generationType: type }, armed.tab);
         }
         catch (__) { }
         // After the note is in, so the panel shows what actually went rather than

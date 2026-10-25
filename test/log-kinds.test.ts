@@ -41,3 +41,17 @@ describe("every Log line can be hidden", () => {
     }
   });
 });
+
+// Two switches with one name read as one setting, and a change made to the
+// wrong one looks like a setting that does not save.
+describe("every setting has its own name", () => {
+  test("no two settings share a label", () => {
+    const seen = new Map<string, string[]>();
+    for (const g of SCHEMA)
+      for (const f of g.fields) {
+        const label = String(f.label).toLowerCase();
+        seen.set(label, (seen.get(label) || []).concat(f.key));
+      }
+    expect([...seen.entries()].filter(([, keys]) => keys.length > 1)).toEqual([]);
+  });
+});

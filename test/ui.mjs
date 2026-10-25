@@ -2532,6 +2532,193 @@ console.log("\nretrying");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- two tabs on one chat ----
+// Every open tab receives a reply's events. Lumiverse names one tab on the
+// reply, in frontendSessionId, and that tab retries it. The other tabs stand
+// by: if no reply starts within the retry wait plus 20 seconds, the named tab
+// is taken to be asleep and a standing tab retries instead.
+console.log("\ntwo tabs on one chat");
+{
+  // A page with Auto Retry loaded as the tab "tab-a", and its own settings.
+  const tab = async (settings) => {
+    const page = await browser.newPage();
+    const errors = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    await stage(page, '<div id=modal></div><button data-testid="regenerate">Regenerate</button>');
+    await page.addStyleTag({ content: THEME });
+    await page.addScriptTag({ content: SOURCE, type: "module" });
+    await page.waitForFunction(() => !!window.__setup);
+    await page.evaluate((settings) => {
+      window.__clicks = 0;
+      window.__h = {};
+      window.__backs = [];
+      window.__fromBackend = (msg) => window.__backs.forEach((fn) => fn(msg));
+      document.querySelector("[data-testid=regenerate]").addEventListener("click", () => window.__clicks++);
+      window.__setup(
+        {
+          frontendSessionId: "tab-a",
+          events: { on: (n, fn) => { window.__h[n] = fn; return () => {}; } },
+          onBackendMessage: (fn) => { window.__backs.push(fn); return () => {}; },
+          ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+                registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) },
+        },
+        Object.assign({ retryDelayMs: 30, backoffFactor: 1, maxDelayMs: 30, jitter: false, maxRetries: 2,
+          toast: false, stuckTimeoutMs: 0, idleTimeoutMs: 0, pauseWhenFailing: false }, settings),
+      );
+    }, settings || {});
+    return { page, errors };
+  };
+
+  const quick = await tab();
+  const out = await quick.page.evaluate(async () => {
+    const h = window.__h;
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    let chatN = 0;
+    const run = async (mark) => {
+      const chatId = "tabs" + ++chatN;
+      const before = window.__clicks;
+      const p = mark ? { frontendSessionId: mark } : {};
+      h.GENERATION_STARTED(Object.assign({ chatId, generationId: "g" + chatN }, p));
+      h.GENERATION_ENDED(Object.assign({ chatId, generationId: "g" + chatN, content: "" }, p));
+      await wait(150);
+      return window.__clicks - before;
+    };
+    return { otherTabs: await run("tab-b"), thisTab: await run("tab-a"), noMark: await run("") };
+  });
+  check("a reply another tab handles is not retried here at once", out.otherTabs === 0, out.otherTabs);
+  check("a reply this tab handles is retried", out.thisTab === 1, out.thisTab);
+  check("a reply that names no tab is retried, as before", out.noMark === 1, out.noMark);
+  check("no console errors", quick.errors.length === 0, quick.errors);
+  await quick.page.close();
+
+  // Two pages side by side, since a stand-by waits 20 seconds.
+  const awake = await tab();
+  const asleep = await tab();
+  const tries = await tab();
+  const [awakeOut, asleepOut, triesOut] = await Promise.all([
+    // The other tab is awake: each retry it makes starts a reply, which calls
+    // the stand-by off. Its tries count here too, so once it has used them
+    // all, this tab does not start more of its own.
+    awake.page.evaluate(async () => {
+      const h = window.__h;
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      const b = { chatId: "awake", frontendSessionId: "tab-b" };
+      for (let i = 0; i < 3; i++) {
+        h.GENERATION_STARTED(Object.assign({ generationId: "w" + i }, b));
+        h.GENERATION_ENDED(Object.assign({ generationId: "w" + i, content: "" }, b));
+        await wait(100);
+      }
+      await wait(21000);
+      return window.__clicks;
+    }),
+    // The other tab is asleep: nothing starts, so this tab retries once the
+    // wait is over. That retry still carries the other tab's mark, and this
+    // tab goes on retrying it as its own.
+    asleep.page.evaluate(async () => {
+      const h = window.__h;
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      const b = { chatId: "asleep", frontendSessionId: "tab-b" };
+      h.GENERATION_STARTED(Object.assign({ generationId: "z0" }, b));
+      h.GENERATION_ENDED(Object.assign({ generationId: "z0", content: "" }, b));
+      await wait(15000);
+      const early = window.__clicks;
+      await wait(6000);
+      const tookOver = window.__clicks;
+      h.GENERATION_STARTED(Object.assign({ generationId: "z1" }, b));
+      h.GENERATION_ENDED(Object.assign({ generationId: "z1", content: "" }, b));
+      await wait(300);
+      return { early, tookOver, next: window.__clicks - tookOver };
+    }),
+    // The other tab retries with several tries at once, which start no reply
+    // in the chat. The backend tells every tab when they go out, and when a
+    // reply that passed is added. Either one calls the stand-by off.
+    tries.page.evaluate(async () => {
+      const h = window.__h;
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      for (const chatId of ["sent", "added"]) {
+        const b = { chatId, frontendSessionId: "tab-b" };
+        h.GENERATION_STARTED(Object.assign({ generationId: chatId }, b));
+        h.GENERATION_ENDED(Object.assign({ generationId: chatId, content: "" }, b));
+      }
+      await wait(100);
+      window.__fromBackend({ type: "at_once", stage: "sent", chatId: "sent", requestId: "elsewhere-1", count: 2 });
+      window.__fromBackend({ type: "reroll_added", chatId: "added", requestId: "elsewhere-2", ok: true });
+      await wait(21000);
+      return window.__clicks;
+    }),
+  ]);
+  check("a stand-by is called off by the other tab's retry, and counts its tries", awakeOut === 0, awakeOut);
+  check("a stand-by does not act before its wait is over", asleepOut.early === 0, asleepOut);
+  check("a tab retries when the other tab did not", asleepOut.tookOver === 1, asleepOut);
+  check("after taking over, it retries its own retry at once", asleepOut.next === 1, asleepOut);
+  check("another tab's tries at once, or the reply they added, call a stand-by off", triesOut === 0, triesOut);
+  check("no console errors with two tabs", awake.errors.length + asleep.errors.length + tries.errors.length === 0,
+    [awake.errors, asleep.errors, tries.errors]);
+  await awake.page.close();
+  await asleep.page.close();
+  await tries.page.close();
+
+  // A tab that was asleep wakes and works through the replies it missed, and
+  // can have a retry waiting for one that another tab has retried already.
+  // Hearing that another tab sent tries at once, or added a reply that
+  // passed, calls that retry off.
+  const woke = await tab({ retryDelayMs: 400, maxDelayMs: 400 });
+  const wokeOut = await woke.page.evaluate(async () => {
+    const h = window.__h;
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const failAt = (chatId) => {
+      h.GENERATION_STARTED({ chatId, generationId: chatId, frontendSessionId: "tab-a" });
+      h.GENERATION_ENDED({ chatId, generationId: chatId, content: "", frontendSessionId: "tab-a" });
+    };
+    failAt("w1");
+    window.__fromBackend({ type: "at_once", stage: "sent", chatId: "w1", requestId: "elsewhere-3", count: 2 });
+    await wait(700);
+    const afterSent = window.__clicks;
+    failAt("w2");
+    window.__fromBackend({ type: "reroll_added", chatId: "w2", requestId: "elsewhere-4", ok: true });
+    await wait(700);
+    const afterAdded = window.__clicks - afterSent;
+    failAt("w3");
+    await wait(700);
+    return { afterSent, afterAdded, alone: window.__clicks - afterSent - afterAdded };
+  });
+  check("a waiting retry is called off when another tab sends tries at once", wokeOut.afterSent === 0, wokeOut);
+  check("a waiting retry is called off when another tab adds a reply", wokeOut.afterAdded === 0, wokeOut);
+  check("a waiting retry goes ahead when no other tab acts", wokeOut.alone === 1, wokeOut);
+  check("no console errors after waking", woke.errors.length === 0, woke.errors);
+  await woke.page.close();
+
+  // A reply that stalls. The tab it belongs to stops and retries it. Another
+  // tab must not time it as well, or both tabs stop it and press Regenerate.
+  const stall = await tab({ retryDelayMs: 20, maxDelayMs: 20, stuckTimeoutMs: 60, idleTimeoutMs: 60 });
+  const stalled = await stall.page.evaluate(async () => {
+    const h = window.__h;
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    h.GENERATION_STARTED({ chatId: "s1", generationId: "s1", frontendSessionId: "tab-b" });
+    await wait(400);
+    const noWords = window.__clicks;
+    h.GENERATION_STARTED({ chatId: "s2", generationId: "s2", frontendSessionId: "tab-b" });
+    h.STREAM_TOKEN_RECEIVED({ chatId: "s2", generationId: "s2", token: "The bell rang " });
+    await wait(400);
+    const wentQuiet = window.__clicks - noWords;
+    const quietBefore = window.__clicks;
+    h.GENERATION_STARTED({ chatId: "s4", generationId: "s4", frontendSessionId: "tab-b" });
+    h.COUNCIL_STARTED({ chatId: "s4", generationId: "s4" });
+    await wait(400);
+    const council = window.__clicks - quietBefore;
+    const before = window.__clicks;
+    h.GENERATION_STARTED({ chatId: "s3", generationId: "s3", frontendSessionId: "tab-a" });
+    await wait(400);
+    return { noWords, wentQuiet, council, own: window.__clicks - before };
+  });
+  check("a stalled reply another tab handles is left to that tab", stalled.noWords === 0, stalled);
+  check("a reply another tab handles that goes quiet is left to that tab", stalled.wentQuiet === 0, stalled);
+  check("a council step on another tab's reply does not time it here", stalled.council === 0, stalled);
+  check("a stalled reply this tab handles is retried", stalled.own === 1, stalled);
+  check("no console errors with a stalled reply", stall.errors.length === 0, stall.errors);
+  await stall.page.close();
+}
+
 // ---- several tries at once ----
 // The panel's half: from the second try it asks the backend for several
 // replies instead of pressing the button, judges each as it comes back, adds

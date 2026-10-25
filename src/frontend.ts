@@ -75,6 +75,10 @@ const START_GRACE_MS = 15000;
 // that takes its time announcing a start does not get the reply counted as
 // one the reader asked for, which would hand back the tries.
 const OURS_WINDOW_MS = 90000;
+// How much longer than its own wait a tab waits before it retries a reply that
+// another tab handles. Long enough for a tab in the background, whose timers
+// a browser can hold back by a few seconds, to press first.
+const STANDBY_GRACE_MS = 20000;
 // The retry reason that carries the optional note. Named once so the arming
 // check below cannot drift away from the callers that raise it.
 // How long a retry keeps looking for a button to press before it says there
@@ -678,7 +682,7 @@ const SCHEMA: Group[] = [
         key: "logAtOnce",
         needs: ["liveLog"],
         run: "logShow",
-        label: "Several tries at once",
+        label: "Tries sent at once",
         type: "bool",
         hint: "On by default. The tries sent at once, each reply that came back, and the one added.",
       },
@@ -8578,6 +8582,7 @@ export function setup(ctx: Ctx, opts?: any) {
   // with nothing to report to, and lose the budget for a retry already sent.
   const chatIsBusy = (s: any): boolean =>
     !!(s && (s.pending || s.timer || s.startTimer || s.idleTimer || s.startWatchdog ||
+      s.standby || s.takenOver || s.awaitOther ||
       s.expectingStart || s.attempts > 0 || Date.now() < s.suppressUntil));
   // Recency is a field rather than the Map's own insertion order. Re-inserting
   // a chat to mark it as used would move it to the end of the Map, and two
@@ -8648,6 +8653,20 @@ export function setup(ctx: Ctx, opts?: any) {
       expectingStart: 0,
       // Several tries at once that are still out, or null.
       atOnce: null,
+      // The reply in the air is one another tab handles. This tab reads it,
+      // so it can judge the ending, but times none of it.
+      othersReply: false,
+      // Set while the ending of another tab's reply is judged, so a retry it
+      // calls for becomes a stand-by instead (see standBy).
+      standingBy: false,
+      // The stand-by timer: this tab retries if the other tab has not.
+      standby: null,
+      // This tab took the retries over from a tab that did not act. Its own
+      // retries still carry the other tab's mark, so this says they are ours.
+      takenOver: false,
+      // Another tab sent tries at once for the reply this tab stood by for.
+      // The next reply that tab starts is the same retry going on.
+      awaitOther: false,
     };
     chats.set(key, s);
     evictIdleChats();
@@ -8972,6 +8991,10 @@ export function setup(ctx: Ctx, opts?: any) {
     if (s.timer) {
       clearTimeout(s.timer);
       s.timer = null;
+    }
+    if (s.standby) {
+      clearTimeout(s.standby);
+      s.standby = null;
     }
     // Cleared with the timer it belongs to, or the status line would go on
     // counting down to a retry that was called off.
@@ -10120,7 +10143,8 @@ export function setup(ctx: Ctx, opts?: any) {
     });
   }
 
-  function scheduleRetry(chatId: string, reason: string, err?: any) {
+  // waited is true when a stand-by has already waited out the delay.
+  function scheduleRetry(chatId: string, reason: string, err?: any, waited?: boolean) {
     const s = st(chatId);
     // Tries at once still out are this chat's retry already.
     if (!cfg.enabled || s.pending || s.atOnce) return;
@@ -10134,6 +10158,11 @@ export function setup(ctx: Ctx, opts?: any) {
     }
     if (Date.now() < s.suppressUntil) {
       log("retry", "ignored, you had just stopped or canceled it", chatId);
+      return;
+    }
+    if (s.standingBy) {
+      s.standingBy = false;
+      standBy(chatId, reason, err);
       return;
     }
     if (s.attempts >= cfg.maxRetries) {
@@ -10187,7 +10216,7 @@ export function setup(ctx: Ctx, opts?: any) {
     // name for the ones after. The label is worked out when the tally is drawn.
     stats.byChat[String(chatId)] = (stats.byChat[String(chatId)] || 0) + 1;
     const rl = isRateLimit(err);
-    const delay = computeDelay(s.attempts, rl, err);
+    const delay = waited ? 0 : computeDelay(s.attempts, rl, err);
     clearTimers(s);
     s.pending = true;
     log("retry",
@@ -10221,6 +10250,73 @@ export function setup(ctx: Ctx, opts?: any) {
       if (atOnceFits(chatId, reason, s.attempts)) runAtOnce(chatId, reason);
       else clickRetry(chatId, reason);
     }, delay);
+  }
+
+  // A reply another tab handles needs a retry. That tab retries it after its
+  // usual wait, and its retry starting calls this off. If nothing has started
+  // by the end of the same wait plus STANDBY_GRACE_MS, the other tab is taken
+  // to be asleep, and this tab retries instead. Nothing is shown but the log
+  // line, since the other tab shows its own countdown.
+  function standBy(chatId: string, reason: string, err?: any) {
+    const s = st(chatId);
+    if (s.attempts >= cfg.maxRetries) {
+      log("retry", "the tab that handles this reply has used every try, so this tab leaves it", chatId);
+      s.attempts = 0;
+      return;
+    }
+    const wait = computeDelay(s.attempts + 1, isRateLimit(err), err) + STANDBY_GRACE_MS;
+    clearTimers(s);
+    log("retry", "another tab retries this reply. If no reply starts in " + sayTime(wait) + ", this tab retries it");
+    s.standby = setTimeout(() => {
+      s.standby = null;
+      s.takenOver = true;
+      log("retry", "the other tab did not retry, so this tab does");
+      scheduleRetry(chatId, reason, err, true);
+    }, wait);
+  }
+
+  // Another tab of the account sent tries at once for a chat. A stand-by in
+  // that chat is called off, and the tries count as one retry, the same as a
+  // reply the other tab starts.
+  //
+  // A retry this tab has waiting there is called off too. This happens when
+  // a tab wakes and works through the replies it missed while asleep: the
+  // other tab has retried them already.
+  function othersAtOnce(chatId: string, requestId: string) {
+    const s = st(chatId);
+    if (s.atOnce && s.atOnce.requestId === requestId) return;
+    if (s.standby) {
+      clearTimers(s);
+      s.attempts += 1;
+      s.awaitOther = true;
+      log("retry", "another tab sent several tries at once for this reply, so this tab leaves it to that tab");
+      paintNow();
+      return;
+    }
+    if (s.pending || s.timer)
+      leaveToOtherTab(chatId, "another tab sent several tries at once for this chat, so this tab calls off its own retry");
+  }
+
+  // Another tab added a reply that passed. Nothing this tab had waiting for
+  // that chat is needed any more.
+  function othersAdded(chatId: string, requestId: string) {
+    if (ownAdds.has(requestId)) return;
+    const s = st(chatId);
+    if (s.standby) clearTimers(s);
+    else if (s.pending || s.timer)
+      leaveToOtherTab(chatId, "another tab added a reply that passed in this chat, so this tab calls off its own retry");
+    s.awaitOther = false;
+    s.attempts = 0;
+  }
+
+  function leaveToOtherTab(chatId: string, why: string) {
+    const s = st(chatId);
+    clearTimers(s);
+    s.attempts = 0;
+    hideToast();
+    tellPage(RETRY_OFF_EVENT, chatId);
+    log("retry", why);
+    paintNow();
   }
 
   // The usual retry: press the host's own button and watch for the reply it
@@ -10378,6 +10474,9 @@ export function setup(ctx: Ctx, opts?: any) {
   // object itself, so it carries what each stage set on it, and outcome says
   // how it ended.
   let lastAtOnceRun: any = null;
+  // The ids of the replies this tab asked the backend to add. Every tab of
+  // the account hears that a reply was added, and these are this tab's own.
+  const ownAdds = new Set<string>();
   function endedAs(run: any, outcome: string) {
     if (run && !run.outcome) run.outcome = outcome;
   }
@@ -10560,6 +10659,8 @@ export function setup(ctx: Ctx, opts?: any) {
   function addAtOnceReply(chatId: string, run: any, content: string, thought: string) {
     const s = st(chatId);
     const reqId = "ar-reroll-" + Date.now() + "-" + Math.random().toString(36).slice(2);
+    ownAdds.add(reqId);
+    while (ownAdds.size > IGNORE_MAX) ownAdds.delete(ownAdds.values().next().value as string);
     let off: any = null;
     let timer: any = null;
     const newReply = run.kind === "reply";
@@ -10706,6 +10807,18 @@ export function setup(ctx: Ctx, opts?: any) {
     scheduleRetry(chatId, reason);
   }
 
+  // Lumiverse marks each reply with one tab, the one opened or reloaded last,
+  // and every open tab is told the same mark. The tab the mark names retries
+  // the reply, so two tabs on one chat, or a phone and a computer, do not both
+  // press Regenerate. The other tabs stand by, because the named tab can be
+  // asleep, such as a phone in a pocket. With no mark, or on a Lumiverse that
+  // gives none, every tab retries as before.
+  function otherTab(p: any): boolean {
+    const mark = p && typeof p.frontendSessionId === "string" ? p.frontendSessionId : "";
+    let mine = "";
+    try { mine = String((ctx as any).frontendSessionId || ""); } catch (_) {}
+    return !!(mark && mine && mark !== mine);
+  }
   function onStart(p: any) {
     askThinkMarks();
     if (!p) return;
@@ -10755,6 +10868,44 @@ export function setup(ctx: Ctx, opts?: any) {
     const ours =
       s.selfTriggered ||
       (s.retryClickAt > 0 && Date.now() - s.retryClickAt < OURS_WINDOW_MS);
+    s.standingBy = false;
+    // A reply another tab handles. Anything this tab had waiting for this chat
+    // stands down, the same as for a reply you start yourself. A start this
+    // tab caused is its own, whatever the mark says, because after a takeover
+    // its retries still carry the other tab's mark.
+    if (!ours && otherTab(p)) {
+      // A stand-by was waiting, or the other tab's tries at once were out, so
+      // this is most likely the other tab's retry and counts toward the same
+      // tries.
+      const continuing = !!s.standby || s.awaitOther;
+      s.awaitOther = false;
+      if (s.atOnce) {
+        endedAs(s.atOnce, "stopped, because a reply started that another tab handles");
+        endAtOnce(s, true);
+        hideToast();
+      }
+      clearTimers(s);
+      s.pending = false;
+      s.attempts = continuing ? s.attempts + 1 : 0;
+      s.suppressUntil = 0;
+      s.selfTriggered = false;
+      s.retryClickAt = 0;
+      s.takenOver = false;
+      s.othersReply = true;
+      s.genId = p.generationId;
+      rememberGeneration(p.generationId, chatId);
+      if (!s.live) s.liveSince = Date.now();
+      s.live = true;
+      s.sawReasoning = false;
+      s.sawContent = false;
+      s.buf = "";
+      s.thinkBuf = "";
+      log("replies", "a reply started that another tab handles, so this tab leaves it to that tab");
+      paintNow();
+      return;
+    }
+    s.othersReply = false;
+    s.awaitOther = false;
     log("replies",
       "a reply started (" + String(p.generationId) + "), " + (ours ? "from a retry" : "from you"),
     );
@@ -11064,6 +11215,9 @@ export function setup(ctx: Ctx, opts?: any) {
           s.buf = s.buf.slice(-STREAM_BUF_MAX);
       }
     }
+    // Another tab times its own reply. Timed here too, a stall would be
+    // stopped and retried by both tabs.
+    if (s.othersReply) return;
     // streaming is alive: drop the start watchdog, arm the idle watchdog
     if (s.startTimer) {
       clearTimeout(s.startTimer);
@@ -11095,7 +11249,7 @@ export function setup(ctx: Ctx, opts?: any) {
     if (!p) return;
     const chatId = chatForGeneration(p);
     const s = st(chatId);
-    if (!s.live || s.impersonating || s.sawContent || s.sawReasoning) return;
+    if (!s.live || s.impersonating || s.othersReply || s.sawContent || s.sawReasoning) return;
     if (failed) {
       if (s.startTimer) {
         clearTimeout(s.startTimer);
@@ -11110,7 +11264,23 @@ export function setup(ctx: Ctx, opts?: any) {
       );
   }
 
+  // A reply another tab handles, including one this tab opened too late to
+  // see start, is judged like any other, and a retry it calls for becomes a
+  // stand-by. The flag is cleared after the judging, so no later retry reads
+  // it.
   function onEnd(p: any) {
+    if (!p) return;
+    const s = st(chatForGeneration(p));
+    s.standingBy = otherTab(p) && !s.takenOver;
+    s.othersReply = false;
+    try {
+      judgeEnd(p);
+    } finally {
+      s.standingBy = false;
+    }
+  }
+
+  function judgeEnd(p: any) {
     if (!p) return;
     // The generation id identifies the work, the chat id is only context, and
     // where the two disagree the chat the generation started in is right. An
@@ -16206,6 +16376,18 @@ export function setup(ctx: Ctx, opts?: any) {
         // Logged as well as the skip. "Did my note go out?" had no answer here
         // that was not a guess from the reply, so only the failures were ever
         // visible and a working note looked identical to no note at all.
+        // Another tab's tries at once, and the reply they added. Tries at once
+        // start no reply in the chat, so without these a tab standing by would
+        // take over from a tab that was retrying, or that had already added a
+        // reply that passed.
+        if (msg.type === "at_once" && msg.stage === "sent" && msg.chatId) {
+          othersAtOnce(String(msg.chatId), String(msg.requestId || ""));
+          return;
+        }
+        if (msg.type === "reroll_added" && msg.ok && msg.chatId) {
+          othersAdded(String(msg.chatId), String(msg.requestId || ""));
+          return;
+        }
         if (msg.type === "note_sent") {
           stats.notesSent += 1;
           const n = Number(msg.count) || 0;
