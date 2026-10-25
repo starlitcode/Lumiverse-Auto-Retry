@@ -49,7 +49,7 @@ To stop it happening again, look at the reason. Each has its own switch under **
 
 The **Stats** tab counts the reasons over the whole session, so you can see which check keeps firing.
 
-**Impersonate is never retried.** It writes your own turn into the input box. Lumiverse does not say what kind of generation is starting, so Auto Retry notices the press on Lumiverse's **Impersonate** button. An impersonation started another way, such as a shortcut that skips that button, is judged like a reply.
+**Impersonate is never retried.** It writes your own turn into the input box. Lumiverse says what kind of generation is starting, and Auto Retry reads that. So an impersonation started with a shortcut, or in another tab, is left alone too. On a Lumiverse that does not say, Auto Retry notices the press on Lumiverse's **Impersonate** button instead, and an impersonation started another way is judged like a reply.
 
 ## It called a reply stuck after you came back to the tab
 
@@ -69,7 +69,7 @@ This covers two browser tabs, and also a phone and a computer.
 - The other tab stands by. Its Log says "another tab retries this reply".
 - If no retry has started 20 seconds after the usual wait, the other tab retries instead. This covers a named tab that the browser has paused, such as on a phone with its screen off.
 - **Cancel** on the pop-up, or switching Auto Retry off, stops retrying in every tab. **Stop** on a reply does too.
-- When a paused tab runs again, it calls off any retry it had waiting, once it sees that the other tab has retried.
+- When a paused tab runs again, it calls off any retry it had waiting, once it sees that the other tab has retried the reply or given up on it.
 - On a Lumiverse that names no tab, every tab retries, as before.
 
 ## "No chat is open"

@@ -1147,8 +1147,11 @@ spindle.onFrontendMessage(async (payload, userId, tab) => {
         // told, so a tab standing by for that chat does not retry it.
         if (payload.type === 'stood_down') {
             const forChat = payload.chatId ? String(payload.chatId) : '';
+            // why is "gave_up" when that tab used every try, and empty when you
+            // stopped it. Nothing else is passed on.
+            const why = payload.why === 'gave_up' ? 'gave_up' : '';
             if (forChat)
-                replyTo(userId, { type: 'stood_down', chatId: forChat });
+                replyTo(userId, { type: 'stood_down', chatId: forChat, why: why });
             return;
         }
         if (payload.type === 'stop_at_once') {

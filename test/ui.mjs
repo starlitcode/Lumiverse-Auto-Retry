@@ -2720,6 +2720,59 @@ console.log("\ntwo tabs on one chat");
   check("no console errors when telling the other tabs", tellingErrors.length === 0, tellingErrors);
   await telling.close();
 
+  // A tab that used every try says so, so a tab that was paused does not
+  // start its own tries on the same reply when it runs again.
+  const giving = await browser.newPage();
+  const givingErrors = [];
+  giving.on("pageerror", (e) => givingErrors.push(e.message));
+  await stage(giving, '<div id=modal></div><button data-testid="regenerate">Regenerate</button>');
+  await giving.addStyleTag({ content: THEME });
+  await giving.addScriptTag({ content: SOURCE, type: "module" });
+  await giving.waitForFunction(() => !!window.__setup);
+  const gave = await giving.evaluate(async () => {
+    const h = {};
+    const sent = [];
+    const backs = [];
+    let clicks = 0;
+    document.querySelector("[data-testid=regenerate]").addEventListener("click", () => clicks++);
+    window.__setup(
+      {
+        frontendSessionId: "tab-a",
+        events: { on: (n, fn) => { h[n] = fn; return () => {}; } },
+        // The backend sends a tab's own message back to it, as Lumiverse does.
+        sendToBackend: (msg) => {
+          sent.push(msg);
+          if (msg && msg.type === "stood_down") setTimeout(() => backs.forEach((fn) => fn(msg)), 0);
+        },
+        onBackendMessage: (fn) => { backs.push(fn); return () => {}; },
+        ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+              registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) },
+      },
+      { retryDelayMs: 10, backoffFactor: 1, maxDelayMs: 10, jitter: false, maxRetries: 1,
+        toast: false, stuckTimeoutMs: 0, idleTimeoutMs: 0, pauseWhenFailing: false, liveLog: true },
+    );
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const told = () => sent.filter((m) => m && m.type === "stood_down");
+    h.GENERATION_STARTED({ chatId: "g1", generationId: "g1", frontendSessionId: "tab-a" });
+    h.GENERATION_ENDED({ chatId: "g1", generationId: "g1", content: "", frontendSessionId: "tab-a" });
+    await wait(400);
+    const beforeLast = told().length;
+    h.GENERATION_STARTED({ chatId: "g1", generationId: "g2", frontendSessionId: "tab-a" });
+    h.GENERATION_ENDED({ chatId: "g1", generationId: "g2", content: "", frontendSessionId: "tab-a" });
+    await wait(300);
+    // The tab's own message has come back to it by now. It is not another
+    // tab stopping, so the Log does not say so.
+    const body = document.getElementById("__lvRetryLogBody");
+    const logText = body ? body.textContent : null;
+    return { clicks, beforeLast, after: told(), logText };
+  });
+  check("a tab that used every try tells the other tabs, and not before",
+    gave.clicks === 1 && gave.beforeLast === 0 && gave.after.length === 1 && gave.after[0].why === "gave_up" && gave.after[0].chatId === "g1", gave);
+  check("a tab's own message coming back is not read as another tab",
+    typeof gave.logText === "string" && /gave up/.test(gave.logText) && !/another tab/.test(gave.logText), gave.logText);
+  check("no console errors when giving up", givingErrors.length === 0, givingErrors);
+  await giving.close();
+
   // A tab that was asleep wakes and works through the replies it missed, and
   // can have a retry waiting for one that another tab has retried already.
   // Hearing that another tab sent tries at once, or added a reply that
@@ -2742,11 +2795,17 @@ console.log("\ntwo tabs on one chat");
     const afterAdded = window.__clicks - afterSent;
     failAt("w3");
     await wait(700);
-    return { afterSent, afterAdded, alone: window.__clicks - afterSent - afterAdded };
+    const alone = window.__clicks - afterSent - afterAdded;
+    const beforeGaveUp = window.__clicks;
+    failAt("w4");
+    window.__fromBackend({ type: "stood_down", chatId: "w4", why: "gave_up" });
+    await wait(700);
+    return { afterSent, afterAdded, alone, afterGaveUp: window.__clicks - beforeGaveUp };
   });
   check("a waiting retry is called off when another tab sends tries at once", wokeOut.afterSent === 0, wokeOut);
   check("a waiting retry is called off when another tab adds a reply", wokeOut.afterAdded === 0, wokeOut);
   check("a waiting retry goes ahead when no other tab acts", wokeOut.alone === 1, wokeOut);
+  check("a waiting retry is called off when another tab used every try", wokeOut.afterGaveUp === 0, wokeOut);
   check("no console errors after waking", woke.errors.length === 0, woke.errors);
   await woke.page.close();
 
@@ -7955,11 +8014,12 @@ console.log("\nfinding the button to press");
 // ---- an impersonation is not a reply ----
 // Impersonate writes your own turn into the input box. Judged as a reply, a turn
 // that stopped where you would stop read as cut off and was retried over the
-// top of what it had just written. The press on the host's button is what
-// marks the generation that follows as one to leave alone.
+// top of what it had just written. Lumiverse names the kind of generation on
+// its start event, and that marks it. On a Lumiverse that names none, the
+// press on its Impersonate button does.
 console.log("\nan impersonation is not a reply");
 {
-  const run = async (pressFirst) => {
+  const run = async (pressFirst, kind) => {
     const page = await browser.newPage();
     const errors = [];
     page.on("pageerror", (e) => errors.push(e.message));
@@ -7972,7 +8032,7 @@ console.log("\nan impersonation is not a reply");
     );
     await page.addScriptTag({ content: SOURCE, type: "module" });
     await page.waitForFunction(() => !!window.__setup);
-    const out = await page.evaluate(async (pressFirst) => {
+    const out = await page.evaluate(async ([pressFirst, kind]) => {
       const h = {};
       let clicks = 0;
       document.querySelector('[data-testid="regenerate"]').addEventListener("click", () => clicks++);
@@ -7984,13 +8044,13 @@ console.log("\nan impersonation is not a reply");
           retryOnTruncated: true, retryByNewReroll: false },
       );
       if (pressFirst) document.querySelector('[aria-label="Impersonate"]').click();
-      h.GENERATION_STARTED({ chatId: "B", generationId: "i1" });
+      h.GENERATION_STARTED(Object.assign({ chatId: "B", generationId: "i1" }, kind ? { generationType: kind } : {}));
       await new Promise((r) => setTimeout(r, 10));
       // Stops mid-sentence, which is what a cut-off reply looks like.
       h.GENERATION_ENDED({ chatId: "B", generationId: "i1", content: "I lean on the counter and watch the" });
       await new Promise((r) => setTimeout(r, 400));
       return { clicks };
-    }, pressFirst);
+    }, [pressFirst, kind]);
     await page.close();
     return { out, errors };
   };
@@ -7998,7 +8058,14 @@ console.log("\nan impersonation is not a reply");
   check("a reply that stops mid-sentence is retried, as it should be", plain.out.clicks === 1, plain.out);
   const imp = await run(true);
   check("the same text after pressing Impersonate is left alone", imp.out.clicks === 0, imp.out);
-  check("no console errors", plain.errors.length === 0 && imp.errors.length === 0, plain.errors.concat(imp.errors));
+  // Started without the button, such as by a shortcut or from another tab.
+  const named = await run(false, "impersonate");
+  check("the same text is left alone when Lumiverse names it an impersonation", named.out.clicks === 0, named.out);
+  // Lumiverse's own word outranks a press that started nothing.
+  const normal = await run(true, "normal");
+  check("a reply Lumiverse names a normal one is retried, even after a press on Impersonate", normal.out.clicks === 1, normal.out);
+  check("no console errors", [plain, imp, named, normal].every((r) => r.errors.length === 0),
+    [plain, imp, named, normal].map((r) => r.errors));
 }
 
 // ---- a reply that stopped partway is a cut-off reply ----

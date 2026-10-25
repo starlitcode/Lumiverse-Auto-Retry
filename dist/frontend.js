@@ -10319,6 +10319,11 @@ export function setup(ctx, opts) {
         if (s.attempts >= cfg.maxRetries) {
             log("retry", "gave up", chatId, reason);
             s.attempts = 0;
+            s.takenOver = false;
+            s.awaitOther = false;
+            // A tab that was paused would otherwise start its own tries on this
+            // reply when it runs again.
+            tellOtherTabs(chatId, "gave_up");
             // A second guard on a value that is already clamped. The lowest the box
             // allows is 1, and a saved 0 from before that is clamped on load, so this
             // cannot happen from the panel. It stays because nothing here should
@@ -10458,26 +10463,30 @@ export function setup(ctx, opts) {
         s.awaitOther = false;
         s.attempts = 0;
     }
-    // Tells the other tabs of the account that retrying in this chat was
-    // stopped here. The backend passes it to every tab, this one included,
-    // which has nothing left to stop by then.
-    function tellOtherTabs(chatId) {
+    // Tells the other tabs of the account that retrying in this chat stopped
+    // here: you stopped it, or this tab used every try. The backend passes it
+    // to every tab, this one included, which has nothing left to stop by then.
+    function tellOtherTabs(chatId, why) {
         if (chatId === NO_CHAT)
             return;
         try {
             if (ctx && typeof ctx.sendToBackend === "function")
-                ctx.sendToBackend({ type: "stood_down", chatId: chatId });
+                ctx.sendToBackend({ type: "stood_down", chatId: chatId, why: why || "" });
         }
         catch (_) { }
     }
-    // Retrying in this chat was stopped in another tab: with Cancel, or by
-    // switching Auto Retry off. Whatever this tab had waiting or out for the
-    // chat stops too.
-    function othersStoodDown(chatId) {
+    // Retrying in this chat stopped in another tab: with Cancel, by switching
+    // Auto Retry off, or because that tab used every try. Whatever this tab had
+    // waiting or out for the chat stops too.
+    function othersStoodDown(chatId, why) {
         const s = st(chatId);
-        if (!(s.standby || s.pending || s.timer || s.atOnce || s.takenOver || s.awaitOther))
+        // Only something waiting or out. The tab that sent this hears it too, and
+        // has nothing waiting by then.
+        if (!(s.standby || s.pending || s.timer || s.atOnce))
             return;
-        log("retry", "you stopped retrying this chat in another tab, so this tab stops too");
+        log("retry", why === "gave_up"
+            ? "another tab used every try on this reply, so this tab stops too"
+            : "you stopped retrying this chat in another tab, so this tab stops too");
         standDown(chatId, false);
     }
     function leaveToOtherTab(chatId, why) {
@@ -11050,14 +11059,20 @@ export function setup(ctx, opts) {
         // after a minute, because a start arriving later than that on the back of
         // our own click reads as the reader asking for a reply themselves, which
         // hands the tries back and lets the same reply be re-rolled past the cap.
-        // An impersonation, told apart by the press on the host's own Impersonate
-        // button just before it: the events a generation raises say nothing about
-        // what kind it is. It writes your turn into the input box, in your voice,
+        // An impersonation. It writes your turn into the input box, in your voice,
         // and every check here is written for a reply in the character's. Judged as
         // one, a turn that stopped where you would stop read as cut off, and was
         // retried over the top of what it had just written for you.
-        if (impersonateAt > 0 && Date.now() - impersonateAt < IMPERSONATE_WINDOW_MS) {
+        //
+        // Lumiverse names the kind of generation on its start event, and every tab
+        // is told it, so that is read first. A Lumiverse that names none is told
+        // apart by the press on its own Impersonate button just before it, which
+        // only the tab it was pressed in sees.
+        const kind = typeof p.generationType === "string" ? p.generationType.toLowerCase() : "";
+        const pressed = impersonateAt > 0 && Date.now() - impersonateAt < IMPERSONATE_WINDOW_MS;
+        if (kind || pressed)
             impersonateAt = 0;
+        if (kind ? kind === "impersonate" : pressed) {
             s.impersonating = true;
             s.ignored.add(p.generationId);
             rememberGeneration(p.generationId, chatId);
@@ -16751,7 +16766,7 @@ export function setup(ctx, opts) {
                         return;
                     }
                     if (msg.type === "stood_down" && msg.chatId) {
-                        othersStoodDown(String(msg.chatId));
+                        othersStoodDown(String(msg.chatId), String(msg.why || ""));
                         return;
                     }
                     if (msg.type === "reroll_added" && msg.ok && msg.chatId) {

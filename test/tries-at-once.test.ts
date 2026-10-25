@@ -767,7 +767,15 @@ describe("adding the reply that passed", () => {
     const h = boot();
     await h.tell({ type: "stood_down", chatId: "c1" }, "u1");
     const out = h.sent.filter((m: any) => m.msg && m.msg.type === "stood_down");
-    expect(out).toEqual([{ msg: { type: "stood_down", chatId: "c1" }, userId: "u1" }]);
+    expect(out).toEqual([{ msg: { type: "stood_down", chatId: "c1", why: "" }, userId: "u1" }]);
+  });
+
+  test("a tab that used every try says so, and nothing else is passed on", async () => {
+    const h = boot();
+    await h.tell({ type: "stood_down", chatId: "c1", why: "gave_up" }, "u1");
+    await h.tell({ type: "stood_down", chatId: "c2", why: "<b>anything</b>" }, "u1");
+    const out = h.sent.filter((m: any) => m.msg && m.msg.type === "stood_down").map((m: any) => m.msg.why);
+    expect(out).toEqual(["gave_up", ""]);
   });
 
   // Every tab of the account hears these, and the chat id is how a tab
