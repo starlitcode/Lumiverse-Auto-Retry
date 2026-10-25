@@ -759,7 +759,7 @@ console.log("\nthe prompt view");
 // the kind of each recent line.
 console.log("\nthe debug report");
 {
-  const r = await inPanel(browser, { settings: { liveLog: true, maxRetries: 6, tryAtOnce: true } }, (page) =>
+  const r = await inPanel(browser, { settings: { liveLog: true, maxRetries: 6, tryAtOnce: true, panelPattern: "hearts" } }, (page) =>
     page.evaluate(async () => {
       const wait = (ms) => new Promise((r) => setTimeout(r, ms || 150));
       window.__handlers.GENERATION_STARTED({ chatId: "c1", generationId: "g1", messageId: "m1" });
@@ -778,10 +778,13 @@ console.log("\nthe debug report");
   check("its time is the reader's own, with the zone", /time: \d{4}-\d\d-\d\d \d\d:\d\d:\d\d \(UTC[+-]\d+(:\d\d)?\)/.test(text), text.slice(0, 200));
   check("a changed setting is listed by its label and name, with its default", /Most tries per message \(maxRetries\): 6, default 4/.test(text), text);
   check("a setting at its default is not listed", !/\(retryOnRefusal\)/.test(text), text);
+  check("a setting whose default is empty says so in a word",
+    /\(panelPattern\): "hearts", default empty\n/.test(text) && !/default ""/.test(text), text);
   check("a recent line says its kind", /\[replies\] a reply started \(g1\), from you/.test(text), text);
   check("no recent line carries a copy of the settings", !/ready v[0-9.]+ \{/.test(text), text);
   check("it says which Lumiverse, or that Lumiverse did not say", /\nlumiverse: (v\S+|not reported by this Lumiverse)\n/.test(text), text.slice(0, 300));
   check("with Several tries at once on, it has a part for the last run", /several tries at once, last run:\n  \(none yet\)/.test(text), text);
+  check("it says whether the page is secure, with no address", /\nsecure page: no \(plain http, not on this computer\)\n/.test(text) && !/lumiverse\.test/.test(text), text.slice(0, 400));
   check("no console errors", r.errors.length === 0, r.errors);
 }
 

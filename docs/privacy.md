@@ -134,7 +134,7 @@ None of these is written to disk, synced, or sent anywhere.
 
 Nothing here leaves your device by itself. The risk is only in what you copy and where you paste it.
 
-- **Debug info** gathers your settings, button selectors, browser string, session counters and recent activity. The activity log can contain short pieces of a reply. Read what you copied before pasting it in public, and untick any section you would rather keep private.
+- **Debug info** gathers your settings, button selectors, browser string, whether the page is secure, session counters and recent activity. The activity log can contain short pieces of a reply. Read what you copied before pasting it in public, and untick any section you would rather keep private.
 - **Copy**, on the on-screen panel, copies everything the tab shows. On **Replaced**, that is a whole reply. On **Log**, the whole activity log. On **Prompt**, the whole prompt, which is most of your chat. **Stats** is the safe one: only counters and reasons.
 - **The refusal tester**, in the settings, only reads the text in its box. **Use my last reply** fills the box with the reply on the page. The check runs on your device, and nothing is sent or stored.
 

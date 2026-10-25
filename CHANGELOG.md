@@ -8,6 +8,20 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.23.0
+
+_2026-10-25_
+
+### Added
+
+- **Debug info says whether the page is secure.** Some browser features only work on a secure page: one on `https`, or one opened on the same computer as Lumiverse. The report says yes or no. It never shows the address or the port.
+
+### Changed
+
+- **An empty default says "empty".** In **Your settings**, a setting whose default is empty, such as **Pattern behind the settings and the panel**, showed its default as a pair of quote marks. It now says "empty".
+
+---
+
 ## 5.22.0
 
 _2026-10-25_

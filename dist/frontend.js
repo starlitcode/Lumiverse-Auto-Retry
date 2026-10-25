@@ -159,7 +159,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.22.0";
+const VERSION = "5.23.0";
 // Whether two saved settings hold the same values, whatever order their keys
 // were written in. A key left undefined counts as not there, the way it is
 // when saved. Used to tell an update or a put-back that would change nothing.
@@ -12566,6 +12566,25 @@ export function setup(ctx, opts) {
         }
         return anyValid ? "no match" : "invalid selector";
     }
+    // Whether the page is a secure one, which some browser features need. Said
+    // as yes or no only, so the report carries no address or port.
+    function securePageLine() {
+        let https = false;
+        let secure = false;
+        try {
+            https = location.protocol === "https:";
+            secure = !!window.isSecureContext;
+        }
+        catch (_) { }
+        return "secure page: " + (https ? "yes (https)" : secure ? "yes (on this computer)" : "no (plain http, not on this computer)");
+    }
+    // A setting's value as the report writes it. An empty one says "empty",
+    // which reads more plainly than a pair of quote marks or brackets.
+    function reportValue(v) {
+        if (v === "" || (Array.isArray(v) && v.length === 0))
+            return "empty";
+        return JSON.stringify(v);
+    }
     function buildDebugInfo(opts) {
         const o = opts || {};
         const inc = (v) => v !== false; // sections default to on
@@ -12590,6 +12609,7 @@ export function setup(ctx, opts) {
         }
         catch (_) { }
         lines.push("lumiverse: " + (host ? "v" + host.replace(/^v/, "") : "not reported by this Lumiverse"));
+        lines.push(securePageLine());
         // Always included, whatever categories are ticked. This is the first thing
         // to check when retries have stopped happening, so it must never be the
         // part someone left out of the report.
@@ -12612,7 +12632,7 @@ export function setup(ctx, opts) {
             if (!changed.length)
                 lines.push("  (none)");
             for (const k of changed)
-                lines.push("  " + fieldByKey[k].label + " (" + k + "): " + JSON.stringify(cfg[k]) + ", default " + JSON.stringify(CONFIG[k]));
+                lines.push("  " + fieldByKey[k].label + " (" + k + "): " + reportValue(cfg[k]) + ", default " + reportValue(CONFIG[k]));
             lines.push("every other setting is at its default for v" + VERSION +
                 (inc(o.buttons) ? ", apart from the button selectors listed below" : ", apart from the button selectors, which are left out"));
         }
