@@ -41,7 +41,7 @@ if (!existsSync(bundle)) {
   console.error("dist/frontend.js is missing. Run `bun run build` first.");
   process.exit(1);
 }
-const SOURCE = readFileSync(bundle, "utf8") + "\nwindow.__setup = setup;\n";
+const SOURCE = readFileSync(bundle, "utf8") + "\nwindow.__setup = setup;\nwindow.__moved = __testing.MOVED_DEFAULTS;\n";
 
 // The setting whose description is longest, out of the ones that are on screen
 // without turning something on first. Worked out from the schema rather than
@@ -6289,6 +6289,62 @@ console.log("\nnote presets from the account and the reset");
   );
   check("the account's list replaces this browser's", late.local.join() === "chat-quiet" && late.told.join() === "chat-quiet", late);
   check("and this browser's is never sent up over it", late.saves.length === 0, late);
+
+  // A default that moved is only news to somebody who was on it before the
+  // move. The table is empty between moves, so this row is made up for the
+  // check: an old value no default has ever had.
+  const ROW = { key: "stuckTimeoutMs", was: 150000, label: "Give up waiting for it to start", why: "A made-up reason for this check." };
+  const LATER = { key: "retryDelayMs", was: 7000, label: "Wait before retrying", why: "Another made-up reason for this check." };
+  const movedPage = (local, settings, rows) => fresh(async ({ local, settings, rows }) => {
+    for (const k of Object.keys(local)) localStorage.setItem(k, local[k]);
+    window.__moved.push(...rows);
+    const listeners = [];
+    const sent = [];
+    const acts = {};
+    window.__setup({
+      events: { on: () => () => {} },
+      sendToBackend: (m) => {
+        sent.push(m);
+        if (m && m.type === "load_settings")
+          setTimeout(() => listeners.forEach((f) => f({ type: "loaded_settings", requestId: m.requestId, settings })), 20);
+        if (m && m.type === "load_state")
+          setTimeout(() => listeners.forEach((f) => f({ type: "loaded_state", requestId: m.requestId, state: null })), 20);
+      },
+      onBackendMessage: (cb) => { listeners.push(cb); return () => {}; },
+      ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+            registerInputBarAction: (o) => { const a = { onClick: (cb) => { a.cb = cb; return () => {}; }, destroy: () => {} }; acts[o.id] = a; return a; } },
+    }, { toast: false, liveLog: false });
+    await new Promise((r) => setTimeout(r, 200));
+    acts["auto-retry-settings"].cb();
+    await new Promise((r) => setTimeout(r, 100));
+    const n = document.querySelector('[data-ar-moveddefault="1"]');
+    const states = sent.filter((m) => m.type === "save_state").map((m) => m.state);
+    return {
+      line: n ? n.textContent : "",
+      mark: localStorage.getItem("lv-auto-retry:moved-seen:v1") || "",
+      up: states.length ? states[states.length - 1].movedSeen : null,
+    };
+  }, { local, settings, rows });
+  const STORE = "lv-auto-retry:settings:v1";
+
+  const told = await movedPage({ [STORE]: JSON.stringify({ stuckTimeoutMs: 150000 }) }, null, [ROW]);
+  check("somebody on the old default is told", told.line.indexOf(ROW.label) >= 0, told);
+  // A new install: nothing in this browser and nothing on the account.
+  const firstRun = await movedPage({}, {}, [ROW]);
+  check("a new install is marked as told", firstRun.mark !== "" && firstRun.line === "", firstRun);
+  check("and the mark goes to the account", firstRun.up === firstRun.mark, firstRun);
+  // The same browser later, after the reader picked the old value themselves.
+  const picked = await movedPage({ [STORE]: JSON.stringify({ stuckTimeoutMs: 150000 }), "lv-auto-retry:moved-seen:v1": firstRun.mark }, null, [ROW]);
+  check("a new install that picks the old value is not told it was on it", picked.line === "", picked);
+  // An account from before the move, opened in a new browser.
+  const older = await movedPage({}, { stuckTimeoutMs: 150000 }, [ROW]);
+  check("an older account opened in a new browser is told", older.line.indexOf(ROW.label) >= 0, older);
+  // Each row is answered on its own.
+  const later = await movedPage(
+    { [STORE]: JSON.stringify({ stuckTimeoutMs: 150000, retryDelayMs: 7000 }), "lv-auto-retry:moved-seen:v1": "stuckTimeoutMs:150000" },
+    null, [ROW, LATER]);
+  check("a row added later is told", later.line.indexOf(LATER.label) >= 0, later);
+  check("and the row already answered is not", later.line.indexOf(ROW.label) < 0, later);
 
   // The reset line names presets, so it has to mean all of them: counted,
   // cleared, and with the notes key left in place for the next read.

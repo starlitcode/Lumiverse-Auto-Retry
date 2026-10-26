@@ -418,22 +418,21 @@ const def = (key: keyof typeof CONFIG): string => String((CONFIG as any)[key]);
 // the old value is told once and offered the new one; anybody who set their own
 // is told nothing, because nothing of theirs changed.
 //
-// A row stays here for as long as somebody could still be on the old value,
-// which is until the next major version, since that is a reinstall. Auto Refine
-// carries the same table for the same reason.
-const MOVED_DEFAULTS: Array<{ key: keyof typeof CONFIG; was: number; label: string; why: string }> = [
-  {
-    key: "stuckTimeoutMs",
-    was: 180000,
-    label: "Give up waiting for it to start",
-    why: "Three minutes was under what a reasoning model needs on an endpoint that sends nothing until the answer starts, so a reply still being thought about could be thrown away and asked for again. It is four minutes now.",
-  },
-];
+// A row is added in the release that moves the default, and stays until the
+// next major version, which is a reinstall. Auto Refine carries the same table.
+//
+// A new install is marked as told about every row there is when it starts
+// (see loadFromAccount). Somebody who installs after a default moved was never
+// on the old one, even if they later pick the same value themselves.
+const MOVED_DEFAULTS: Array<{ key: keyof typeof CONFIG; was: number; label: string; why: string }> = [];
 
-// What a browser writes down once it has been told. The values themselves
-// rather than a hash: the list is short, and a stamp somebody can read in their
-// own storage is better than one only this file can explain.
-const MOVED_MARK = MOVED_DEFAULTS.map((m) => m.key + ":" + String(m.was)).join("|");
+// What a browser writes down once told about a row: the setting and the value
+// it moved from. The values themselves rather than a hash: the list is short,
+// and a mark somebody can read in their own storage is better than one only
+// this file can explain. Each row has its own, so a row added later is still
+// told, and a row already answered is not asked about again.
+const movedRowMark = (m: { key: string; was: number }): string => m.key + ":" + String(m.was);
+const allMovedMarks = (): string => MOVED_DEFAULTS.map(movedRowMark).join(" ");
 
 // Fields the settings UI can edit, in display order. The one place that defines
 // both the form and what gets persisted. Every option above (except the two
@@ -4408,7 +4407,13 @@ const OPEN_PANEL_ICON = iconSvg(
 export function setup(ctx: Ctx, opts?: any) {
   // cfg is mutable so the settings modal can change it live. Order: code
   // defaults, then GitHub opts, then whatever the user saved in the UI.
-  const cfg: any = Object.assign({}, CONFIG, opts || {}, loadSaved());
+  // Whether this browser held settings when the panel started, read before
+  // anything here can write them. With none here and none on the account,
+  // this is a new install.
+  // Read once: loadSaved also makes a one-time change the first time it runs.
+  const saved = loadSaved();
+  const savedHere = Object.keys(saved).length > 0;
+  const cfg: any = Object.assign({}, CONFIG, opts || {}, saved);
 
   // Persist the whole settings object to account storage (through the backend)
   // so settings follow the user across browsers, and so the backend knows
@@ -4469,6 +4474,12 @@ export function setup(ctx: Ctx, opts?: any) {
           try {
             if (typeof localStorage !== "undefined" && localStorage.getItem(STORE_KEY)) { saveToAccount(); log("setup", "settings migrated to account"); }
           } catch (_) {}
+          // Nothing on the account and nothing here: a new install. It starts
+          // on every default as it is now, so no moved default is about it.
+          if (!savedHere && !readKey(MOVED_SEEN_KEY)) {
+            writeKey(MOVED_SEEN_KEY, allMovedMarks());
+            saveStateToAccount();
+          }
         }
       });
       settingsWaiting = () => {
@@ -7957,16 +7968,16 @@ export function setup(ctx: Ctx, opts?: any) {
   function movedForMe(): typeof MOVED_DEFAULTS {
     try {
       if (typeof localStorage === "undefined") return [];
-      if (String(localStorage.getItem(MOVED_SEEN_KEY) || "") === MOVED_MARK) return [];
+      const seen = String(localStorage.getItem(MOVED_SEEN_KEY) || "").split(" ");
+      return MOVED_DEFAULTS.filter((m) => seen.indexOf(movedRowMark(m)) < 0 && Number((cfg as any)[m.key]) === m.was);
     } catch (_) {
       return [];
     }
-    return MOVED_DEFAULTS.filter((m) => Number((cfg as any)[m.key]) === m.was);
   }
 
   function markMovedSeen() {
     try {
-      if (typeof localStorage !== "undefined") localStorage.setItem(MOVED_SEEN_KEY, MOVED_MARK);
+      if (typeof localStorage !== "undefined") localStorage.setItem(MOVED_SEEN_KEY, allMovedMarks());
     } catch (_) {}
     saveStateToAccount();
   }
@@ -14422,8 +14433,8 @@ export function setup(ctx: Ctx, opts?: any) {
   // number they are running right now and did not choose.
   //
   // Only reaches a reader still holding the old value. Anybody who set their own
-  // is told nothing, since nothing of theirs changed, and a fresh install starts
-  // on the new value so it never sees this at all.
+  // is told nothing, since nothing of theirs changed, and a new install is
+  // marked as told when it starts, so it never sees this at all.
   function buildMovedNotice(): HTMLElement {
     const box = document.createElement("div");
     box.setAttribute("data-ar-moveddefault", "1");
