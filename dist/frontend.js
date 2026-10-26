@@ -1149,6 +1149,10 @@ function customBlockLeftOpen(shown) {
         const name = m[1].toLowerCase();
         if (HTML_KNOWN.indexOf(name) >= 0)
             continue;
+        // <marker ref="a1"/> closes itself, so it opens nothing. Another extension
+        // can ask the model for one of these on its own line, often at the end.
+        if (/\/\s*>[ \t]*$/.test(m[0]))
+            continue;
         counts[name] = (counts[name] || 0) + 1;
     }
     if (!Object.keys(counts).length)
@@ -9037,13 +9041,20 @@ export function setup(ctx, opts) {
     // of any copy the extension kept. Nothing is held between replies: it is read
     // at the moment somebody asks. SECURITY.md says a reply is read to check it
     // and no copy is kept, and that stays true.
+    //
+    // A chat drawn inside another extension's part of the page is that
+    // extension's copy and is passed over. So is anything another extension put
+    // inside a reply, such as a card under it: it can appear while a reply is
+    // being waited for, and it is not words from the model.
     const lastRenderedReply = () => {
         try {
             if (typeof document === "undefined")
                 return "";
             const all = document.querySelectorAll('[data-component="MessageContent"]');
             for (let i = all.length - 1; i >= 0; i--) {
-                const t = String(all[i].innerText || all[i].textContent || "").trim();
+                if (all[i].closest && all[i].closest(OTHER_UI))
+                    continue;
+                const t = textOutsideOthers(all[i]).trim();
                 if (t)
                     return t;
             }
@@ -9051,6 +9062,18 @@ export function setup(ctx, opts) {
         catch (_) { }
         return "";
     };
+    // The text in a node, leaving out every part another extension marked.
+    function textOutsideOthers(root) {
+        const out = [];
+        const walk = document.createTreeWalker(root, 4 /* text */, {
+            acceptNode: (n) => n.parentElement && n.parentElement.closest(OTHER_UI) && root.contains(n.parentElement.closest(OTHER_UI))
+                ? 2 /* reject */
+                : 1 /* accept */,
+        });
+        for (let n = walk.nextNode(); n; n = walk.nextNode())
+            out.push(String(n.nodeValue || ""));
+        return out.join("");
+    }
     // A fingerprint of the reply on screen, not the reply. This is held for the
     // length of a generation, and holding reply text that long is not something
     // the extension does anywhere else, so it does not start here. Length and a

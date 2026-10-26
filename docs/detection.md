@@ -256,6 +256,7 @@ What it does not count:
 - **A bare `<b>` or `<i>` left open.** Models leave these open in finished replies often, so counting them would throw away good replies. A `<span style="...">` is different: a card that asks for colored speech gets the closing tag every time, so a missing one means the reply stopped.
 - **A `<` typed in a scene**, like `if x<y then` or `the value was < 5`.
 - **A word in angle brackets inside a sentence**, like an emote. A made-up tag only counts when it is alone on its line and is not an HTML tag name.
+- **A made-up tag that closes itself**, like `<relay-mark ref="k22"/>`. It opens nothing. Another extension can ask the model for one of these on its own line, often at the end of the reply.
 
 For inline tags, only the attribute matters, not what is in it: any color, any style, single or double quotes, capitals or not. With several spans, it compares how many opened with how many closed, so one left open among others is caught.
 

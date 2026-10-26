@@ -38,6 +38,10 @@ const FINISHED: Array<[string, string]> = [
   ["divider asterisks", "He left.\n\n***\n\nThe room was quiet after that."],
   ["mood gauge", "Mood: ***\nShe said nothing else that night."],
   ["code block", "Here is the cipher:\n\n```\nXHFF QB\n```"],
+  // A marker another extension asks the model to put on its own line. It
+  // closes itself, so it opens nothing.
+  ["self-closing marker on its own line", "Mara read the message twice and put the phone face down.\n<relay-mark ref=\"k22\"/>"],
+  ["self-closing marker with a space", "Mara read the message twice and put the phone face down.\n<relay-mark ref=\"k22\" />"],
   ["inline code", "The sign read `NO ENTRY`, so she went in anyway."],
   ["math with asterisk", "Two rooms, three windows each, so 2*3 = 6 ways out."],
   ["stat widget", '<div class="card"><b>HP</b>: 12/20<br><b>Height</b>: 6\'2"</div>\n\nShe checked her wounds and stood.'],
@@ -120,6 +124,7 @@ const CUT: Array<[string, string]> = [
   ["Kimi thinking opened", "\u25c1think\u25b7The note is forged and he should"],
   ["begin of thought opened", "<|begin_of_thought|>The note is forged and he should"],
   ["custom block opened", "<story_plan>\nBeat one: she leaves"],
+  ["marker opened and never closed", "Mara read the message twice and put the phone face down.\n<relay-mark ref=\"k22\">"],
   ["a block opened, closed on no line, ending on a full stop", "<tally>\nLamps lit: 4\nOil left: half."],
   ["html container opened", '<div class="card"><b>HP</b>: 12'],
   ["stops on a letter with no punctuation", "She walked to the window and looked out at the empty street below and then she"],

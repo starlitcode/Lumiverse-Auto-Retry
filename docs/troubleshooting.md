@@ -56,7 +56,7 @@ The **Stats** tab counts the reasons over the whole session, so you can see whic
 
 A tab in the background can miss Lumiverse's events completely. So the extension could wait for a first word that had already arrived. Two things prevent a wrong retry here, and neither needs setting:
 
-- **It checks the page before acting.** If the reply on screen has changed since the generation started, words arrived, so it does not retry. It writes a line saying so.
+- **It checks the page before acting.** If the reply on screen has changed since the generation started, words arrived, so it does not retry. It writes a line saying so. Another extension's own chat, and anything another extension puts inside a reply, such as a card, are not counted.
 - **Time the tab spent asleep does not count.** A background tab's timers are held back or frozen. When you come back, the wait starts again from that moment, and the panel says why.
 
 A generation that really produced nothing is still retried.

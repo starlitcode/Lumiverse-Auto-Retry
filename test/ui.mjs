@@ -8550,7 +8550,20 @@ console.log("\na reply that arrived with none of its events");
           stuckTimeoutMs: 300, idleTimeoutMs: 0 },
       );
       h.GENERATION_STARTED({ chatId: "c1", generationId: "g1" });
-      if (landed) {
+      if (landed === "other card") {
+        // Another extension puts a card inside the last reply, the way
+        // Lumiverse wraps anything an extension injects. Not the model's words.
+        const card = document.createElement("div");
+        card.setAttribute("data-spindle-ext", "someone_else");
+        card.textContent = "New text from Ines: on my way, the ferry docked early.";
+        document.querySelector("#chat [data-component=MessageContent]").appendChild(card);
+      } else if (landed === "other chat") {
+        // Another extension's own copy of a chat gets a reply.
+        const part = document.createElement("div");
+        part.setAttribute("data-spindle-extension-root", "someone_else");
+        part.innerHTML = '<div data-component="MessageContent">Ines: on my way, the ferry docked early and the van is out front.</div>';
+        document.body.appendChild(part);
+      } else if (landed) {
         // The reply lands. No token event, no ending: the tab was not there to
         // be told, and nothing repeats it afterwards.
         const el = document.createElement("div");
@@ -8574,6 +8587,8 @@ console.log("\na reply that arrived with none of its events");
   const arrived = await run({ landed: true });
   const nothing = await run({ landed: false });
   const holding = await run({ landed: "placeholder" });
+  const otherCard = await run({ landed: "other card" });
+  const otherChat = await run({ landed: "other chat" });
 
   check("a reply the tab was never told about is not re-rolled",
     arrived.clicks.length === 0, arrived.clicks);
@@ -8584,6 +8599,10 @@ console.log("\na reply that arrived with none of its events");
     nothing.clicks.indexOf("stop") >= 0 && nothing.clicks.length > 1, nothing.clicks);
   check("and a bubble holding a placeholder is not mistaken for a reply",
     holding.clicks.indexOf("stop") >= 0 && holding.clicks.length > 1, holding.clicks);
+  check("and another extension's card inside the last reply is not mistaken for one",
+    otherCard.clicks.indexOf("stop") >= 0 && otherCard.clicks.length > 1, otherCard.clicks);
+  check("and neither is a reply in another extension's own chat",
+    otherChat.clicks.indexOf("stop") >= 0 && otherChat.clicks.length > 1, otherChat.clicks);
 
   check("no console errors", errors.length === 0, errors);
 }
