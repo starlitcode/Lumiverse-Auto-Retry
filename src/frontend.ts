@@ -3733,7 +3733,8 @@ function thinkingProblem(content: string, thought: string, cfg: any): string {
 // What a reply with text in it should be retried for, in the order the checks
 // run, or "" when it passes. HARD_FAILURE means one of your own hard failures,
 // which is never retried. Used for a reply that ended in the chat and for each
-// reply that comes back from several tries at once, so both are judged the same.
+// reply that comes back from several tries at once, so both are judged the same,
+// and for an impersonation with the cut off and very short checks turned off.
 const HARD_FAILURE = "hard failure";
 function replyProblem(content: string, thought: string, cfg: any): string {
   // A provider error written into the reply, matching one of your own hard
@@ -4862,8 +4863,16 @@ export function setup(ctx: Ctx, opts?: any) {
         { id: "auto-retry-open-panel", label: OPEN_PANEL_LABEL, iconSvg: OPEN_PANEL_ICON },
         openDrawerPanel,
       );
-    } catch (_) {}
+    } catch (e: any) {
+      // Said once, not on every save: the menu is synced each time settings
+      // change, and the same failure would fill the Log.
+      if (!barFailSaid) {
+        barFailSaid = true;
+        log("setup", "could not add Auto Retry to the Extras menu:", (e && e.message) || String(e));
+      }
+    }
   }
+  let barFailSaid = false;
   // A short in-memory ring buffer of what the extension did, captured whether or
   // not console logging is on, so the Copy debug info report carries a timeline
   // and the user never has to open dev tools to report a behavioral bug.
@@ -7425,6 +7434,16 @@ export function setup(ctx: Ctx, opts?: any) {
       });
   }
 
+  // What a confirmed press does. A throw from it would go nowhere, since the
+  // press has already been answered, so it is caught here and said.
+  function doConfirmed(go: () => void) {
+    try {
+      go();
+    } catch (e: any) {
+      log("setup", "that did not work:", (e && e.message) || String(e));
+      showToast("That did not work. The Log says why.", { kind: "warning" });
+    }
+  }
   async function askFirst(
     key: string,
     spec: { title: string; message: string; confirmLabel: string },
@@ -7448,7 +7467,7 @@ export function setup(ctx: Ctx, opts?: any) {
       asked = false;
     }
     if (asked) {
-      if (yes) go();
+      if (yes) doConfirmed(go);
       return;
     }
     // Armed instead. Keyed per button, since two of these on one panel are two
@@ -7458,7 +7477,7 @@ export function setup(ctx: Ctx, opts?: any) {
     if (waiting) {
       clearTimeout(waiting);
       armedFor.delete(key);
-      go();
+      doConfirmed(go);
       return;
     }
     showToast(armSays, { force: true });
@@ -10425,8 +10444,8 @@ export function setup(ctx: Ctx, opts?: any) {
       s.retryAt = 0;
       s.pending = false;
       if (s.impRetry) impersonateRetry(chatId, reason);
-      else if (atOnceFits(chatId, reason, s.attempts)) runAtOnce(chatId, reason);
-      else clickRetry(chatId, reason);
+      else if (atOnceFits(chatId, reason, s.attempts)) runAtOnce(chatId, reason).catch((e) => retryFailed(chatId, e));
+      else clickRetry(chatId, reason).catch((e) => retryFailed(chatId, e));
     }, delay);
   }
 
@@ -10519,6 +10538,23 @@ export function setup(ctx: Ctx, opts?: any) {
     hideToast();
     tellPage(RETRY_OFF_EVENT, chatId);
     log("retry", why);
+    paintNow();
+  }
+
+  // A retry that threw on its way out. Run from a timer or a message, so
+  // nothing above it would catch it. The chat is left with nothing waiting,
+  // and the reader is told.
+  function retryFailed(chatId: string, e: any) {
+    const s = st(chatId);
+    s.selfTriggered = false;
+    s.expectingStart = 0;
+    s.attempts = 0;
+    s.impRetry = false;
+    endAtOnce(s, true);
+    hideToast();
+    tellPage(RETRY_OFF_EVENT, chatId);
+    log("retry", "the retry could not run:", (e && e.message) || String(e));
+    showToast("Auto Retry could not retry. The Log says why.", { kind: "warning" });
     paintNow();
   }
 
@@ -10735,7 +10771,7 @@ export function setup(ctx: Ctx, opts?: any) {
       endAtOnce(s, true);
       hideToast();
       log("atonce", "several tries at once did not run: " + why + ". Pressing the retry button instead.");
-      clickRetry(chatId, reason);
+      clickRetry(chatId, reason).catch((e) => retryFailed(chatId, e));
     };
     try {
       run.off = (ctx as any).onBackendMessage((msg: any) => {
@@ -10764,7 +10800,11 @@ export function setup(ctx: Ctx, opts?: any) {
       addTicker(toastTick);
     }
     paintNow();
-    (ctx as any).sendToBackend({ type: "try_at_once", requestId: requestId, chatId: chatId, count: count });
+    try {
+      (ctx as any).sendToBackend({ type: "try_at_once", requestId: requestId, chatId: chatId, count: count });
+    } catch (e: any) {
+      fallBack("the panel could not reach the backend (" + ((e && e.message) || String(e)) + ")");
+    }
   }
   function onAtOnce(chatId: string, run: any, msg: any, fallBack: (why: string) => void) {
     const s = st(chatId);
@@ -11762,7 +11802,24 @@ export function setup(ctx: Ctx, opts?: any) {
   // Tries an impersonation again: what you had typed goes back in the input
   // box, and Impersonate is pressed. Never over a box you have typed in since
   // the impersonation ended.
+  // Run from a timer, so nothing above it would catch a throw. Anything that
+  // goes wrong in it gives the retry up and says so.
   async function impersonateRetry(chatId: string, reason: string) {
+    const s = st(chatId);
+    try {
+      await impersonateAgain(chatId, reason);
+    } catch (e: any) {
+      s.impRetry = false;
+      s.impRetryAt = 0;
+      s.attempts = 0;
+      hideToast();
+      tellPage(RETRY_OFF_EVENT, chatId);
+      log("retry", "the impersonation could not be tried again:", (e && e.message) || String(e));
+      showToast("Auto Retry could not try the impersonation again. The Log says why.", { kind: "warning" });
+      paintNow();
+    }
+  }
+  async function impersonateAgain(chatId: string, reason: string) {
     const s = st(chatId);
     const giveUp = (why: string, warn?: string) => {
       s.impRetry = false;
@@ -11803,7 +11860,11 @@ export function setup(ctx: Ctx, opts?: any) {
     if (Date.now() < s.suppressUntil || !s.impRetry) return;
     s.impRetryAt = Date.now();
     log("retry", "pressed Impersonate again (" + reason + ")");
-    if (!clickHostControl(impersonateButton() || btn)) return giveUp("pressing Impersonate failed, so the impersonation was not tried again");
+    if (!clickHostControl(impersonateButton() || btn))
+      return giveUp(
+        "pressing Impersonate failed, so the impersonation was not tried again",
+        "Auto Retry could not press Impersonate to try the impersonation again.",
+      );
     // A press that starts nothing is given up on, so the retry does not sit
     // waiting for good.
     if (s.impStartTimer) clearTimeout(s.impStartTimer);
@@ -11811,7 +11872,10 @@ export function setup(ctx: Ctx, opts?: any) {
       s.impStartTimer = null;
       if (!s.impRetryAt) return;
       s.impRetryAt = 0;
-      giveUp("Impersonate was pressed again, but no impersonation started");
+      giveUp(
+        "Impersonate was pressed again, but no impersonation started",
+        "Auto Retry pressed Impersonate again, but no impersonation started.",
+      );
     }, IMPERSONATE_START_MS);
   }
 

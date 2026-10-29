@@ -66,10 +66,16 @@ async function readUserJson(file, userId) {
             legacy = null;
         }
         if (legacy != null) {
+            // Read again from the old store next time, so a failed move is not lost.
             try {
                 await spindle.userStorage.setJson(file, legacy, { userId: userId });
             }
-            catch (_) { }
+            catch (e) {
+                try {
+                    spindle.log.warn('auto-retry: could not move ' + file + ' to the account, so it is read from the old store for now: ' + ((e && e.message) || String(e)));
+                }
+                catch (__) { }
+            }
         }
         return legacy;
     }

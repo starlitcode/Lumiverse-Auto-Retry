@@ -19,6 +19,7 @@ _2026-10-29_
 
 ### Fixed
 
+- **Some failures said nothing.** A retry that failed partway, sending **Several tries at once**, and a press you had confirmed, such as deleting a preset, could fail without a word. Each now shows a warning, and the Log says why. When sending **Several tries at once** fails, the retry button is now pressed right away, rather than after 20 seconds.
 - **Several tries at once could try again after a reply passed.** When a reply passed, Auto Retry asked your server to add it to the chat. If the server did not answer within 20 seconds, Auto Retry tried again, even though the reply could already be in the chat. That cost one more reroll. It now makes no more tries. A warning and the Log say it could not tell whether the reply was added.
 - **A finished reply could be retried as cut off when it ended on escaped color markup.** Another extension can color dialogue with markup such as `&lt;font color="#5a8fd0"&gt;` and `&lt;/font&gt;`, which Lumiverse would show as text. A reply that ended on that markup was read as stopping partway, and was retried. Auto Retry now reads past it, and past `[color=#hex]` and `[/color]` too, the same way it reads past an HTML tag.
 
