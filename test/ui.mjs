@@ -3199,6 +3199,84 @@ console.log("\nseveral tries at once, when adding the reply that passed gets no 
   await page.close();
 }
 
+// Tries at once are out for a reply, and Impersonate is pressed meanwhile.
+// Lumiverse is not generating in the chat while they are out, so the button
+// works. The impersonation is left alone, and when none of the tries pass,
+// the next retry is the reply's, with its count kept.
+console.log("\nseveral tries at once, with an impersonation started while they are out");
+{
+  const page = await browser.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await stage(page, '<div id=modal></div><button data-testid="regenerate">Regenerate</button>' +
+    '<textarea name="chat-message" style="width:200px;height:40px"></textarea>' +
+    '<button type="button" title="Impersonate: One-liner" aria-label="Impersonate">I</button>');
+  await page.addStyleTag({ content: THEME });
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  const out = await page.evaluate(async () => {
+    const handlers = {};
+    const sent = [];
+    let backs = [];
+    let regens = 0;
+    let impersonates = 0;
+    const box = document.querySelector('textarea[name="chat-message"]');
+    document.querySelector("[data-testid=regenerate]").addEventListener("click", () => regens++);
+    document.querySelector('[aria-label="Impersonate"]').addEventListener("click", () => { impersonates++; box.value = ""; });
+    window.__setup(
+      {
+        events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
+        sendToBackend: (m) => sent.push(m),
+        onBackendMessage: (fn) => { backs.push(fn); return () => { backs = backs.filter((f) => f !== fn); }; },
+        ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+              registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) },
+      },
+      { retryDelayMs: 10, backoffFactor: 1, maxDelayMs: 10, jitter: false, maxRetries: 4,
+        toast: false, stuckTimeoutMs: 0, idleTimeoutMs: 0, pauseWhenFailing: false,
+        tryAtOnce: true, tryAtOnceMax: 3 },
+    );
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const answer = (m) => { for (const f of backs.slice()) { try { f(m); } catch (_) {} } };
+    const REFUSAL = "I'm sorry, but I can't create that content.";
+    for (const n of [0, 1]) {
+      handlers.GENERATION_STARTED({ chatId: "mix", generationId: "mix-" + n });
+      handlers.GENERATION_ENDED({ chatId: "mix", generationId: "mix-" + n, content: REFUSAL });
+      await wait(60);
+    }
+    const ask = sent.find((m) => m.type === "try_at_once" && m.chatId === "mix") || null;
+    if (ask) answer({ type: "at_once", requestId: ask.requestId, stage: "sent", count: 2, from: "kept", messageId: "m2", swipeCount: 2 });
+    // You press Impersonate while the tries are out, and it is refused.
+    box.value = "I wave from the door.";
+    document.querySelector('[aria-label="Impersonate"]').click();
+    handlers.GENERATION_STARTED({ chatId: "mix", generationId: "imp-1", generationType: "impersonate" });
+    await wait(10);
+    box.value = REFUSAL;
+    handlers.GENERATION_ENDED({ chatId: "mix", generationId: "imp-1", generationType: "impersonate", impersonateDraft: true, content: REFUSAL });
+    await wait(100);
+    const impersonatesDuring = impersonates;
+    // None of the tries pass.
+    if (ask) {
+      answer({ type: "at_once", requestId: ask.requestId, stage: "reply", index: 0, content: REFUSAL });
+      answer({ type: "at_once", requestId: ask.requestId, stage: "reply", index: 1, content: REFUSAL });
+      answer({ type: "at_once", requestId: ask.requestId, stage: "done" });
+    }
+    await wait(300);
+    const asks = sent.filter((m) => m.type === "try_at_once" && m.chatId === "mix");
+    return {
+      asked: !!ask,
+      impersonatesDuring,
+      impersonatesAfter: impersonates,
+      nextAsk: asks.length > 1 ? asks[1].count : null,
+      regens,
+    };
+  });
+  check("an impersonation started while tries at once are out is left alone", out.asked && out.impersonatesDuring === 1, out);
+  check("when none of the tries pass, the next retry is the reply's, not Impersonate", out.impersonatesAfter === 1 && out.nextAsk !== null, out);
+  check("and the reply's try count is kept", out.nextAsk === 3, out);
+  check("no console errors with an impersonation during tries at once", errors.length === 0, errors);
+  await page.close();
+}
+
 console.log("\nreduce motion");
 {
   const run = async ({ reduceMotion, device }) => {

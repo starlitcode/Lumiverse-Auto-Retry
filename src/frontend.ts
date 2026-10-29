@@ -10304,10 +10304,14 @@ export function setup(ctx: Ctx, opts?: any) {
   }
 
   // waited is true when a stand-by has already waited out the delay.
-  function scheduleRetry(chatId: string, reason: string, err?: any, waited?: boolean) {
+  // imp is for an impersonation, which is tried again by pressing Impersonate.
+  // It is set here, past the guard below, so it can never mark a retry that is
+  // already waiting, or tries at once already out, as one for an impersonation.
+  function scheduleRetry(chatId: string, reason: string, err?: any, waited?: boolean, imp?: boolean) {
     const s = st(chatId);
     // Tries at once still out are this chat's retry already.
     if (!cfg.enabled || s.pending || s.atOnce) return;
+    s.impRetry = !!imp;
     if (chatIsOff(chatId)) {
       log("retry", "this chat is switched off, not retrying", chatId);
       return;
@@ -10328,6 +10332,7 @@ export function setup(ctx: Ctx, opts?: any) {
     if (s.attempts >= cfg.maxRetries) {
       log("retry", "gave up", chatId, reason);
       s.attempts = 0;
+      s.impRetry = false;
       s.takenOver = false;
       s.awaitOther = false;
       // A tab that was paused would otherwise start its own tries on this
@@ -11090,12 +11095,15 @@ export function setup(ctx: Ctx, opts?: any) {
       }
       rememberGeneration(p.generationId, chatId);
       clearTimers(s);
-      s.impWatched = !!cfg.retryImpersonations && (pressed || ownImpersonation);
+      // Tries at once still out for a reply in this chat are that reply's
+      // retry. An impersonation started meanwhile is left alone, so its retry
+      // can never take the place of theirs, and their try count is kept.
+      s.impWatched = !!cfg.retryImpersonations && (pressed || ownImpersonation) && !s.atOnce;
       if (!s.impWatched) {
         s.ignored.add(p.generationId);
-        s.impRetry = false;
-        s.attempts = 0;
-        log("replies", "an impersonation started, which writes your turn into the input box, so it is left alone");
+        log("replies", s.atOnce && cfg.retryImpersonations && pressed
+          ? "an impersonation started while tries at once are out for a reply, so it is left alone"
+          : "an impersonation started, which writes your turn into the input box, so it is left alone");
         return;
       }
       if (!ownImpersonation) {
@@ -11740,7 +11748,7 @@ export function setup(ctx: Ctx, opts?: any) {
       s.attempts = 0;
       return;
     }
-    s.impRetry = true;
+    scheduleRetry(chatId, reason, err, false, true);
     // What Lumiverse leaves in the box is written there after this event, so
     // the box is read a moment later as well. A box holding either one, or
     // nothing, has not been typed in.
@@ -11749,7 +11757,6 @@ export function setup(ctx: Ctx, opts?: any) {
       const box = inputBox();
       s.impBox = box ? String(box.value == null ? "" : box.value) : null;
     }, 300);
-    scheduleRetry(chatId, reason, err);
   }
 
   // Tries an impersonation again: what you had typed goes back in the input

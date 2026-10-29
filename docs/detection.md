@@ -390,6 +390,7 @@ What it leaves alone:
 
 - **An input box you have typed in.** If the box holds anything other than what the impersonation left there, it does not try again, and the Log says so.
 - **An impersonation it did not see you start.** Only one started with the **Impersonate** button in this tab is checked. One started from a menu, with a shortcut or in another tab is left alone, because Auto Retry cannot tell what you had typed.
+- **An impersonation started while [Several tries at once](tries-at-once.md) are out for a reply.** Those tries are that reply's retry, and they keep their count.
 - **Your notes.** A note is never sent with an impersonation retry. The notes are written for the character's reply, and an impersonation is your turn.
 
 The retry presses **Impersonate** the way the button is set, so it uses your default impersonation mode. The button and the input box are under [Buttons it clicks](buttons.md), if Auto Retry cannot find them.
