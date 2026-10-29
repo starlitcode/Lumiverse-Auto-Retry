@@ -38,6 +38,10 @@ const FINISHED: Array<[string, string]> = [
   ["divider asterisks", "He left.\n\n***\n\nThe room was quiet after that."],
   ["mood gauge", "Mood: ***\nShe said nothing else that night."],
   ["code block", "Here is the cipher:\n\n```\nXHFF QB\n```"],
+  // Color markup another extension draws as color, ending the reply.
+  ["dialogue in a font tag", 'Pell set the lamp down. <font color="#5a8fd0">"We leave at dawn."</font>'],
+  ["dialogue in a [color] mark", 'Pell set the lamp down. [color=#5a8fd0]"We leave at dawn."[/color]'],
+  ["dialogue in an escaped font tag", 'Pell set the lamp down. &lt;font color="#5a8fd0"&gt;"We leave at dawn."&lt;/font&gt;'],
   // A marker another extension asks the model to put on its own line. It
   // closes itself, so it opens nothing.
   ["self-closing marker on its own line", "Mara read the message twice and put the phone face down.\n<relay-mark ref=\"k22\"/>"],
@@ -113,6 +117,7 @@ const CUT: Array<[string, string]> = [
   ["stops mid-word", "She reached for the handle and pu"],
   ["stops on a comma", "He turned to face her, hands shaking,"],
   ["stops on a semicolon", "The room was cold;"],
+  ["dialogue cut inside an escaped font tag", 'Pell set the lamp down. &lt;font color="#5a8fd0"&gt;"We leave at'],
   ["dialogue opened, never closed", 'She grabbed his arm. "Wait, I need to tell you'],
   ["dialogue opened after a height", 'He was 6\'2". She looked up at him and said, "You never told me'],
   ["smart quote opened, never closed", "He shook his head. “That is not what happened"],

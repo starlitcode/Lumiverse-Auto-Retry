@@ -23,6 +23,12 @@ A reply that never comes back is not waited for forever:
 - If your `stuckTimeoutMs` wait is longer than 5 minutes, that wait is used instead.
 - The log says how many replies did not come back.
 
+Adding the reply that passes is not waited for forever either:
+
+- If your server does not say within 20 seconds whether the reply was added, Auto Retry makes no more tries.
+- The reply may be in the chat already, and one more try would be a reroll you pay for on a reply that passed.
+- The log says so. Look at the reply, and retry it yourself if it is not there.
+
 The first try is always a normal retry, because it can stream into the chat and it uses everything Lumiverse adds to a prompt.
 
 ## How many at once

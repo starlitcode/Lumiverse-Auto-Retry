@@ -171,7 +171,7 @@ const STREAM_BUF_MAX = 200000;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.23.1";
+const VERSION = "5.23.2";
 
 // Whether two saved settings hold the same values, whatever order their keys
 // were written in. A key left undefined counts as not there, the way it is
@@ -1206,8 +1206,19 @@ const HTML_TAG = /<\/?[a-zA-Z][a-zA-Z0-9-]*(?:"[^"]*"|'[^']*'|[^'">]){0,400}>/g;
 const BROKEN_TAG = /<\/?[a-zA-Z][a-zA-Z0-9-]*\s[^<>"']{0,200}["'][^<>]{0,400}>/g;
 
 function stripMarkup(text: string): string {
-  return String(text == null ? "" : text).replace(HTML_TAG, "").replace(BROKEN_TAG, "");
+  return String(text == null ? "" : text).replace(HTML_TAG, "").replace(BROKEN_TAG, "").replace(COLOR_MARKS, "");
 }
+
+// Color markup that another extension draws as color, while Lumiverse would
+// show it as text: [color=#hex] and [/color], and an escaped font or span tag
+// that sets a color, with either closing tag. Only the words inside are left
+// on screen, so the checks read past it. Auto Refine reads the same markup.
+const COLOR_MARKS = new RegExp(
+  '\\[color\\s*=\\s*["\']?#[0-9a-f]{3}(?:[0-9a-f]{3})?["\']?\\]|\\[\\/color\\]' +
+    '|&lt;(?:font\\b(?:(?!&gt;)[^<>\\n])*?\\bcolor(?:(?!&gt;)[^<>\\n])*|span\\b(?:(?!&gt;)[^<>\\n])*?\\bstyle\\s*=(?:(?!&gt;)[^<>\\n])*?\\bcolor\\s*:(?:(?!&gt;)[^<>\\n])*)&gt;' +
+    '|&lt;\\/(?:font|span)\\s*&gt;',
+  "gi",
+);
 
 // Containers whose closing tag is not optional, and which a model only ever
 // writes as a matched pair. A tracker is built out of these. The ones with an
@@ -10745,7 +10756,7 @@ export function setup(ctx: Ctx, opts?: any) {
     let off: any = null;
     let timer: any = null;
     const newReply = run.kind === "reply";
-    const finish = (ok: boolean, why: string, landed?: any, changed?: boolean) => {
+    const finish = (ok: boolean, why: string, landed?: any, changed?: boolean, unsure?: boolean) => {
       try { off && off(); } catch (_) {}
       off = null;
       clearTimeout(timer);
@@ -10755,6 +10766,14 @@ export function setup(ctx: Ctx, opts?: any) {
       if (current) {
         endAtOnce(s, false);
         hideToast();
+      }
+      // No answer about the add. The reply may be in the chat already, so
+      // another try could be a reroll paid for on a reply that passed.
+      if (unsure) {
+        endedAs(run, "a reply passed, and the backend did not say whether it was added, so no more tries were made");
+        log("atonce", "a reply passed, but the backend did not say whether it was added, so no more tries are made");
+        if (current) s.attempts = 0;
+        return;
       }
       if (ok && !current) {
         endedAs(run, "a reply that passed was added after you stopped the retry");
@@ -10808,7 +10827,7 @@ export function setup(ctx: Ctx, opts?: any) {
         if (msg && msg.type === "reroll_added" && msg.requestId === reqId) finish(!!msg.ok, String(msg.why || "no reason was given"), msg, !!msg.changed);
       });
     } catch (_) {}
-    timer = setTimeout(() => finish(false, "the backend did not answer"), AT_ONCE_ACK_MS);
+    timer = setTimeout(() => finish(false, "the backend did not answer", undefined, false, true), AT_ONCE_ACK_MS);
     try {
       (ctx as any).sendToBackend({
         type: "add_reroll",

@@ -3133,6 +3133,72 @@ console.log("\nseveral tries at once");
 // With Reduce motion on, or the device set to reduce motion, nothing of ours
 // moves or fades: the pop-up, the floating button and the panel. Off, the
 // pop-up still fades in.
+// A reply passed, and the backend never said whether it was added. It may be
+// in the chat already, so no more tries are made: one more would be a reroll
+// paid for on a reply that passed.
+console.log("\nseveral tries at once, when adding the reply that passed gets no answer");
+{
+  const page = await browser.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await stage(page, '<div id=modal></div><button data-testid="regenerate">Regenerate</button>');
+  await page.addStyleTag({ content: THEME });
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  const out = await page.evaluate(async () => {
+    const handlers = {};
+    const sent = [];
+    let backs = [];
+    let clicks = 0;
+    // The wait for an answer about the add is twenty seconds. Here it is short.
+    const realSetTimeout = window.setTimeout;
+    window.setTimeout = (fn, ms, ...rest) => realSetTimeout(fn, ms === 20000 ? 80 : ms === 5 * 60 * 1000 ? 80 : ms, ...rest);
+    document.querySelector("[data-testid=regenerate]").addEventListener("click", () => clicks++);
+    window.__setup(
+      {
+        events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
+        sendToBackend: (m) => sent.push(m),
+        onBackendMessage: (fn) => { backs.push(fn); return () => { backs = backs.filter((f) => f !== fn); }; },
+        ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+              registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) },
+      },
+      { retryDelayMs: 10, backoffFactor: 1, maxDelayMs: 10, jitter: false, maxRetries: 4,
+        toast: false, stuckTimeoutMs: 0, idleTimeoutMs: 0, pauseWhenFailing: false,
+        tryAtOnce: true, tryAtOnceMax: 3 },
+    );
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const answer = (m) => { for (const f of backs.slice()) { try { f(m); } catch (_) {} } };
+    const REFUSAL = "I'm sorry, but I can't create that content.";
+    const GOOD = "The ferry pulled away from the dock, and the gulls followed it out.";
+    for (const n of [0, 1]) {
+      handlers.GENERATION_STARTED({ chatId: "quiet", generationId: "quiet-" + n });
+      handlers.GENERATION_ENDED({ chatId: "quiet", generationId: "quiet-" + n, content: REFUSAL });
+      await wait(60);
+    }
+    const ask = sent.find((m) => m.type === "try_at_once" && m.chatId === "quiet") || null;
+    if (ask) {
+      answer({ type: "at_once", requestId: ask.requestId, stage: "sent", count: 2, from: "kept", messageId: "m2", swipeCount: 2 });
+      answer({ type: "at_once", requestId: ask.requestId, stage: "reply", index: 0, content: GOOD });
+    }
+    await wait(20);
+    const added = sent.filter((m) => m.type === "add_reroll").length;
+    const clicksBefore = clicks;
+    const asksBefore = sent.filter((m) => m.type === "try_at_once").length;
+    // No answer about the add comes. The short wait runs out.
+    await wait(400);
+    return {
+      asked: !!ask,
+      added: added,
+      moreClicks: clicks - clicksBefore,
+      moreAsks: sent.filter((m) => m.type === "try_at_once").length - asksBefore,
+    };
+  });
+  check("the reply that passed is sent to be added", out.asked && out.added === 1, out);
+  check("with no answer about the add, no more tries are made", out.moreClicks === 0 && out.moreAsks === 0, out);
+  check("no console errors when the add gets no answer", errors.length === 0, errors);
+  await page.close();
+}
+
 console.log("\nreduce motion");
 {
   const run = async ({ reduceMotion, device }) => {

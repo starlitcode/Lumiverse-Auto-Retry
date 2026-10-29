@@ -8,6 +8,17 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.23.2
+
+_2026-10-29_
+
+### Fixed
+
+- **Several tries at once could try again after a reply passed.** When a reply passed, Auto Retry asked your server to add it to the chat. If the server did not answer within 20 seconds, Auto Retry tried again, even though the reply could already be in the chat. That cost one more reroll. It now makes no more tries, and the Log says it could not tell whether the reply was added.
+- **A finished reply could be retried as cut off when it ended on escaped color markup.** Another extension can color dialogue with markup such as `&lt;font color="#5a8fd0"&gt;` and `&lt;/font&gt;`, which Lumiverse would show as text. A reply that ended on that markup was read as stopping partway, and was retried. Auto Retry now reads past it, and past `[color=#hex]` and `[/color]` too, the same way it reads past an HTML tag.
+
+---
+
 ## 5.23.1
 
 _2026-10-26_

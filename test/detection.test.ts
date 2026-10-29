@@ -911,6 +911,8 @@ describe("a reply that ends on a block, not a sentence", () => {
     ["a markdown table", "| Day | Sky |\n|---|---|\n| Mon | Sun |"],
     ["a stat block", "**HP:** 20/20\n**Time:** 14:00"],
     ["a stat block after a scene", "He nodded.\n\n---\nHP: 20\nGold: 5"],
+    ["a tracker in a code fence under a divider",
+      '"Wren, the kettle will *not* stop. Can you come?" *She sounds worn out.*\n\n"Please..." \n\n---\n```\nMood: Worn out \nTrust Level: 40%\nDoubt Level: 5%\n```'],
     ["a gauge of asterisks", "Mood: ***** \nHe sighed."],
   ];
   for (const [name, text] of finished) {
@@ -918,6 +920,11 @@ describe("a reply that ends on a block, not a sentence", () => {
       expect(looksTruncated(text, true, {})).toBe(false);
     });
   }
+
+  // The same tracker stopped inside its fence was cut off.
+  test("a tracker cut off inside its code fence is still cut off", () => {
+    expect(looksTruncated('"Please..." \n\n---\n```\nMood: Worn out \nTrust Level: 4', true, {})).toBe(true);
+  });
 
   // The tracker is not a license to stop mid-sentence after it.
   test("but prose cut off after a tracker is still cut off", () => {
