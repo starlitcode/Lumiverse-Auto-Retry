@@ -92,6 +92,10 @@ const CONTROL_GRACE_MS = 2500;
 // starts is taken to be that impersonation.
 const IMPERSONATE_BUTTON = '[aria-label="Impersonate"], button[title^="Impersonate"]';
 const IMPERSONATE_WINDOW_MS = 5000;
+// Lumiverse's input box, where an impersonation writes your turn.
+const INPUT_BOX = 'textarea[name="chat-message"]';
+// How long a retried impersonation has to start before the retry is given up.
+const IMPERSONATE_START_MS = 15000;
 const REFUSAL_REASON = "looks like an accidental refusal";
 // The other three ways a refusal is decided, each reported under its own name.
 //
@@ -171,7 +175,7 @@ const STREAM_BUF_MAX = 200000;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.23.2";
+const VERSION = "5.24.0";
 
 // Whether two saved settings hold the same values, whatever order their keys
 // were written in. A key left undefined counts as not there, the way it is
@@ -307,6 +311,10 @@ const CONFIG = {
   refusalUseBuiltins: true, // use the built-in refusal lists. Turn off to run purely on your own phrases below.
   refusalCatchDisengage: true, // also catch the model ending the scene ("I'll stop here", "I won't continue this conversation"). Only counted near the end of a reply and never inside quotation marks.
   refusalCatchCrisis: false, // also catch the model leaving the scene to offer real-world support and crisis resources. Off by default, and the panel asks you to read a warning before switching it on.
+  // Judge an impersonation you start, and try it again when it errors, is
+  // refused, comes back blank or is broken. Cut off and too short are never
+  // judged on one: your own turn often ends without punctuation.
+  retryImpersonations: true,
   refusalIgnoreQuoted: true, // a match inside quotation marks is a character speaking, not the model, so it is not counted.
   refusalMaxChars: 2000, // only replies up to this length are considered refusals. Longer = treated as real content. 0 = no limit (scan any length).
 
@@ -359,6 +367,10 @@ const CONFIG = {
   stopSelector:
     '[aria-label="Stop generation"], [data-action="stop"], [data-testid="stop"], ' +
     'button[aria-label*="stop" i], button[title*="stop" i], [class*="_sendBtnStop_"]',
+  // An impersonation is tried again by pressing this, with what you had typed
+  // put back in the input box first.
+  impersonateSelector: IMPERSONATE_BUTTON,
+  inputSelector: INPUT_BOX,
 
   // Nothing of Auto Retry's moves or fades. A device set to reduce motion
   // gets the same without this.
@@ -985,6 +997,12 @@ const SCHEMA: Group[] = [
         hint: "Retry when the model steps out of the story to decline, such as saying it is an AI or cannot continue. A character saying no is left alone.",
       },
       {
+        key: "retryImpersonations",
+        label: "Check an impersonation too",
+        type: "bool",
+        hint: "On by default. Tries Impersonate again when it errors, is refused, comes back blank or is broken. Never for cut off or very short.",
+      },
+      {
         key: "stuckTimeoutMs",
         run: "frozen",
         label: "Give up waiting for it to start (milliseconds)",
@@ -1134,7 +1152,7 @@ const SCHEMA: Group[] = [
   {
     title: "Buttons it clicks",
     collapsed: true,
-    desc: "A retry presses your own swipe or regenerate button. You only need this if retries are not happening. Press Pick it for me, then press and hold the real button. The docs page Buttons it clicks covers the rest.",
+    desc: "A retry presses your own swipe or regenerate button, or Impersonate for an impersonation. You only need this if retries are not happening. Press Pick it for me, then press and hold the real button or box. The docs page Buttons it clicks covers the rest.",
     fields: [
       {
         key: "swipeNextSelector",
@@ -1156,6 +1174,22 @@ const SCHEMA: Group[] = [
         type: "text",
         selector: true,
         hint: "The stop button, so it can halt a frozen reply before retrying.",
+      },
+      {
+        key: "impersonateSelector",
+        needs: ["retryImpersonations"],
+        label: "Your Impersonate button",
+        type: "text",
+        selector: true,
+        hint: "Pressed to try an impersonation again, the same way you pressed it.",
+      },
+      {
+        key: "inputSelector",
+        needs: ["retryImpersonations"],
+        label: "Your input box",
+        type: "text",
+        selector: true,
+        hint: "Where an impersonation writes your turn. What you had typed is put back here before it tries again.",
       },
       {
         key: "confirmButtonsCustom",
@@ -7696,6 +7730,7 @@ export function setup(ctx: Ctx, opts?: any) {
         "retryOnLoop",
         "retryOnLoopThinking",
         "retryOnTruncated",
+        "retryImpersonations",
         "retryOnNoPunct",
         "retryOnShort",
         "minChars",
@@ -7729,6 +7764,8 @@ export function setup(ctx: Ctx, opts?: any) {
         "regenerateSelector",
         "swipeNextSelector",
         "stopSelector",
+        "impersonateSelector",
+        "inputSelector",
         "confirmButtonsCustom",
         "confirmButtonLabels",
       ],
@@ -8671,9 +8708,26 @@ export function setup(ctx: Ctx, opts?: any) {
       // against, and no conclusion is drawn from it.
       screenAtStart: "",
       // An impersonation is running in this chat. It writes your turn into the
-      // input box rather than a reply into the chat, so none of the checks for
-      // a bad reply mean anything against it. Cleared when it ends or stops.
+      // input box rather than a reply into the chat, so it is never timed as a
+      // reply, and is judged only by judgeImpersonation. Cleared when it ends
+      // or stops.
       impersonating: false,
+      // The impersonation in the air is one this tab judges: you pressed
+      // Impersonate here, or a retry here pressed it.
+      impWatched: false,
+      // What was in the input box when Impersonate was pressed, put back
+      // before it is pressed again. Null when it is not known.
+      impInput: null,
+      // What the failed impersonation left in the input box, and the box as
+      // read a moment after it ended. A box holding anything else was typed
+      // in, and is not written over.
+      impDraft: "",
+      impBox: null,
+      // The retry waiting in this chat is for an impersonation.
+      impRetry: false,
+      // When a retry pressed Impersonate, so the start it causes is known.
+      impRetryAt: 0,
+      impStartTimer: null,
       ignored: new Set(),
       // Generations whose ending has already been judged. One ending, one
       // verdict: a build that reports the same generation as ended twice would
@@ -9323,12 +9377,50 @@ export function setup(ctx: Ctx, opts?: any) {
     return null;
   };
 
+  // Lumiverse's input box and its Impersonate button, from the selectors under
+  // Buttons it clicks, with the built-in ones behind them. Never one inside
+  // another extension's part of the page, which can draw its own of each.
+  const inputBox = (): any => find(String(cfg.inputSelector || ""), INPUT_BOX);
+  const impersonateButton = (): any => find(String(cfg.impersonateSelector || ""), IMPERSONATE_BUTTON);
+  // Whether a press landed on the Impersonate button. Each selector is tried
+  // on its own, so one that cannot be read does not hide the rest.
+  const onImpersonateButton = (target: any): boolean => {
+    if (!target || !target.closest) return false;
+    try {
+      if (target.closest(OTHER_UI) || target.closest(OWN_UI)) return false;
+    } catch (_) {}
+    const parts = splitSelectorList(String(cfg.impersonateSelector || ""));
+    for (const extra of splitSelectorList(IMPERSONATE_BUTTON)) if (parts.indexOf(extra) < 0) parts.push(extra);
+    for (const part of parts) {
+      try {
+        if (target.closest(part)) return true;
+      } catch (_) {}
+    }
+    return false;
+  };
+  // Written through the native setter, then announced as an input event, the
+  // same way Auto Refine writes the box. A plain assignment sets the text on
+  // screen and leaves Lumiverse holding the old text.
+  const setInputBox = (node: any, text: string): boolean => {
+    try {
+      const desc = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(node), "value");
+      if (desc && desc.set) desc.set.call(node, text);
+      else node.value = text;
+      node.dispatchEvent(new Event("input", { bubbles: true }));
+      return true;
+    } catch (_) {
+      return false;
+    }
+  };
+
   // Set while the extension clicks a host control itself, so the document-level
   // stop-press catcher can tell our synthetic click from the user's.
   let selfClicking = 0;
   // When the host's Impersonate button was last pressed, so the generation it
-  // starts can be left alone. Nought when there is none waiting.
+  // starts can be told apart. Nought when there is none waiting. And what was
+  // in the input box at that press, before Lumiverse cleared it.
   let impersonateAt = 0;
+  let impersonateText: string | null = null;
   const clickHostControl = (el: any): boolean => {
     if (!el) return false;
     selfClicking += 1;
@@ -9427,6 +9519,12 @@ export function setup(ctx: Ctx, opts?: any) {
     // chat was in the middle of.
     s.retryClickAt = 0;
     s.selfTriggered = false;
+    s.impRetry = false;
+    s.impRetryAt = 0;
+    if (s.impStartTimer) {
+      clearTimeout(s.impStartTimer);
+      s.impStartTimer = null;
+    }
     // Nothing is in the air once we have stood down. Without this the status
     // line went on saying the model was thinking after a reply was stopped,
     // because the flag was only ever cleared when a generation ended and a stop
@@ -10273,7 +10371,9 @@ export function setup(ctx: Ctx, opts?: any) {
     // Past every guard, so this is a retry that is really happening and the
     // reply on screen is really being replaced. Recorded here rather than at
     // each reason for retrying, so a reason added later cannot forget to.
-    rememberReplaced(chatId, s.lastText, reason);
+    // An impersonation's draft is your turn, not a reply, so it is not kept
+    // with the replies a retry replaced.
+    if (!s.impRetry) rememberReplaced(chatId, s.lastText, reason);
     s.attempts += 1;
     stats.retries += 1;
     stats.reasons[reason] = (stats.reasons[reason] || 0) + 1;
@@ -10301,8 +10401,13 @@ export function setup(ctx: Ctx, opts?: any) {
     // What the countdown reads from. Set before the message goes up, so the
     // first repaint has something to say rather than a blank second.
     s.retryAt = Date.now() + delay;
-    s.retryReason = rl ? "Rate limited" : reason.charAt(0).toUpperCase() + reason.slice(1);
-    tellPage(RETRYING_EVENT, chatId);
+    s.retryReason = rl
+      ? "Rate limited"
+      : s.impRetry
+        ? "Impersonation: " + reason
+        : reason.charAt(0).toUpperCase() + reason.slice(1);
+    // Auto Refine is told only about a reply. An impersonation is not one.
+    if (!s.impRetry) tellPage(RETRYING_EVENT, chatId);
     const opening = chatStatus(s);
     showToast(opening ? opening.text : "Retrying", {
       cancel: () => standDown(chatId, true, true),
@@ -10314,7 +10419,8 @@ export function setup(ctx: Ctx, opts?: any) {
       s.timer = null;
       s.retryAt = 0;
       s.pending = false;
-      if (atOnceFits(chatId, reason, s.attempts)) runAtOnce(chatId, reason);
+      if (s.impRetry) impersonateRetry(chatId, reason);
+      else if (atOnceFits(chatId, reason, s.attempts)) runAtOnce(chatId, reason);
       else clickRetry(chatId, reason);
     }, delay);
   }
@@ -10772,7 +10878,10 @@ export function setup(ctx: Ctx, opts?: any) {
       if (unsure) {
         endedAs(run, "a reply passed, and the backend did not say whether it was added, so no more tries were made");
         log("atonce", "a reply passed, but the backend did not say whether it was added, so no more tries are made");
-        if (current) s.attempts = 0;
+        if (!current) return;
+        s.attempts = 0;
+        // Nothing else on screen says to look at the reply.
+        showToast("A reply passed, but Auto Retry could not tell whether it was added. Check the last reply.", { kind: "warning" });
         return;
       }
       if (ok && !current) {
@@ -10959,17 +11068,51 @@ export function setup(ctx: Ctx, opts?: any) {
     // is told it, so that is read first. A Lumiverse that names none is told
     // apart by the press on its own Impersonate button just before it, which
     // only the tab it was pressed in sees.
+    //
+    // With Check an impersonation too on, one is judged in the tab it was
+    // started from: the one where Impersonate was pressed, by you or by a
+    // retry. Its draft goes into that tab's input box, so that tab is the one
+    // that can put it back and press again. Every other tab leaves it alone.
     const kind = typeof p.generationType === "string" ? p.generationType.toLowerCase() : "";
     const pressed = impersonateAt > 0 && Date.now() - impersonateAt < IMPERSONATE_WINDOW_MS;
-    if (kind || pressed) impersonateAt = 0;
-    if (kind ? kind === "impersonate" : pressed) {
+    const pressedText = impersonateText;
+    if (kind || pressed) {
+      impersonateAt = 0;
+      impersonateText = null;
+    }
+    const ownImpersonation = s.impRetryAt > 0 && Date.now() - s.impRetryAt < IMPERSONATE_START_MS;
+    if (kind ? kind === "impersonate" : pressed || ownImpersonation) {
       s.impersonating = true;
-      s.ignored.add(p.generationId);
+      s.impRetryAt = 0;
+      if (s.impStartTimer) {
+        clearTimeout(s.impStartTimer);
+        s.impStartTimer = null;
+      }
       rememberGeneration(p.generationId, chatId);
       clearTimers(s);
-      log("replies", "an impersonation started, which writes your turn into the input box, so it is left alone");
+      s.impWatched = !!cfg.retryImpersonations && (pressed || ownImpersonation);
+      if (!s.impWatched) {
+        s.ignored.add(p.generationId);
+        s.impRetry = false;
+        s.attempts = 0;
+        log("replies", "an impersonation started, which writes your turn into the input box, so it is left alone");
+        return;
+      }
+      if (!ownImpersonation) {
+        // A new impersonation you started. Its tries start from nothing, and
+        // what you had typed is what a retry puts back.
+        s.attempts = 0;
+        s.impInput = pressedText;
+      }
+      s.impRetry = false;
+      log("replies", ownImpersonation
+        ? "the impersonation started again"
+        : "an impersonation started. It is checked for errors, refusals, a blank turn and broken text");
       return;
     }
+    // Anything else that starts here is not the impersonation a retry was
+    // waiting on.
+    s.impRetry = false;
     const ours =
       s.selfTriggered ||
       (s.retryClickAt > 0 && Date.now() - s.retryClickAt < OURS_WINDOW_MS);
@@ -11458,6 +11601,9 @@ export function setup(ctx: Ctx, opts?: any) {
     paintNow();
     if (s.impersonating) {
       s.impersonating = false;
+      const watched = s.impWatched;
+      s.impWatched = false;
+      if (watched && !s.ignored.has(p.generationId)) judgeImpersonation(chatId, p, thought);
       return;
     }
     if (s.ignored.has(p.generationId)) return; // aborted gen's trailing event, retry already scheduled
@@ -11548,6 +11694,120 @@ export function setup(ctx: Ctx, opts?: any) {
     s.attempts = 0; // clean success
   }
 
+  // An impersonation that ended, judged with the same checks as a reply apart
+  // from cut off and very short. Your own turn often stops without
+  // punctuation, or is a line long, and both are how you write.
+  function judgeImpersonation(chatId: string, p: any, thought: string) {
+    const s = st(chatId);
+    clearTimers(s);
+    if (Date.now() < s.suppressUntil) {
+      log("replies", "the impersonation ended just after you stopped it, so ignoring it");
+      s.attempts = 0;
+      return;
+    }
+    const content = typeof p.content === "string" ? p.content.trim() : "";
+    s.impDraft = content;
+    s.impBox = null;
+    s.lastText = content.slice(-STREAM_BUF_MAX);
+    let reason = "";
+    let err: any = undefined;
+    if (p.error) {
+      if (cfg.ignoreHardErrors && isHardError(p.error, cfg) && !(cfg.retryOnRefusal && looksLikeRefusalError(errorText(p.error), cfg))) {
+        log("replies", "the impersonation's error is one of your hard failures, so not retrying:", errorText(p.error));
+        showToast("Auto Retry did not retry the impersonation: that error will not fix itself, so trying again would not help.", { kind: "warning" });
+        s.attempts = 0;
+        return;
+      }
+      if (cfg.retryOnRefusal && looksLikeRefusalError(errorText(p.error), cfg)) reason = BLOCKED_REASON;
+      else if (cfg.retryOnError) {
+        reason = "error";
+        err = p.error;
+      }
+    } else if (!content) {
+      if (cfg.retryOnEmpty) reason = "empty";
+    } else {
+      const problem = replyProblem(content, thought, Object.assign({}, cfg, { retryOnTruncated: false, retryOnNoPunct: false, retryOnShort: false }));
+      if (problem === HARD_FAILURE) {
+        log("replies", "the impersonation is one of your hard failures, so not retrying");
+        showToast("Auto Retry did not retry the impersonation: it matches one of your hard failures, so trying again would not help.", { kind: "warning" });
+        s.attempts = 0;
+        return;
+      }
+      reason = problem;
+    }
+    if (!reason) {
+      log("replies", "an impersonation came back fine,", content.length + " chars");
+      s.attempts = 0;
+      return;
+    }
+    s.impRetry = true;
+    // What Lumiverse leaves in the box is written there after this event, so
+    // the box is read a moment later as well. A box holding either one, or
+    // nothing, has not been typed in.
+    setTimeout(() => {
+      if (!s.impRetry) return;
+      const box = inputBox();
+      s.impBox = box ? String(box.value == null ? "" : box.value) : null;
+    }, 300);
+    scheduleRetry(chatId, reason, err);
+  }
+
+  // Tries an impersonation again: what you had typed goes back in the input
+  // box, and Impersonate is pressed. Never over a box you have typed in since
+  // the impersonation ended.
+  async function impersonateRetry(chatId: string, reason: string) {
+    const s = st(chatId);
+    const giveUp = (why: string, warn?: string) => {
+      s.impRetry = false;
+      s.attempts = 0;
+      hideToast();
+      tellPage(RETRY_OFF_EVENT, chatId);
+      log("retry", why);
+      if (warn) showToast(warn, { kind: "warning" });
+      paintNow();
+    };
+    // Impersonate is grayed out while anything is being written, so it gets
+    // the same moment of grace a retry button does.
+    for (let waited = 0; !impersonateButton() && waited < CONTROL_GRACE_MS; waited += 150) {
+      if (Date.now() < s.suppressUntil) return;
+      await new Promise((r) => setTimeout(r, 150));
+    }
+    if (Date.now() < s.suppressUntil || !s.impRetry) return;
+    const box = inputBox();
+    const btn = impersonateButton();
+    if (!box || !btn)
+      return giveUp(
+        "could not find " + (!box ? "the input box" : "the Impersonate button") + ", so the impersonation was not tried again",
+        "Auto Retry could not try the impersonation again: it could not find " + (!box ? "your input box" : "your Impersonate button") + ". Set it under Buttons it clicks.",
+      );
+    const now = String(box.value == null ? "" : box.value).trim();
+    const untouched = [s.impDraft, s.impBox == null ? "" : s.impBox, ""].map((x) => String(x).trim());
+    if (untouched.indexOf(now) < 0)
+      return giveUp("you typed in the input box, so the impersonation was not tried again");
+    setInputBox(box, s.impInput == null ? "" : s.impInput);
+    // A frame for Lumiverse to take the text in before the press reads it.
+    await new Promise((r) => {
+      try {
+        requestAnimationFrame(() => r(null));
+      } catch (_) {
+        setTimeout(() => r(null), 16);
+      }
+    });
+    if (Date.now() < s.suppressUntil || !s.impRetry) return;
+    s.impRetryAt = Date.now();
+    log("retry", "pressed Impersonate again (" + reason + ")");
+    if (!clickHostControl(impersonateButton() || btn)) return giveUp("pressing Impersonate failed, so the impersonation was not tried again");
+    // A press that starts nothing is given up on, so the retry does not sit
+    // waiting for good.
+    if (s.impStartTimer) clearTimeout(s.impStartTimer);
+    s.impStartTimer = setTimeout(() => {
+      s.impStartTimer = null;
+      if (!s.impRetryAt) return;
+      s.impRetryAt = 0;
+      giveUp("Impersonate was pressed again, but no impersonation started");
+    }, IMPERSONATE_START_MS);
+  }
+
   function onStop(p: any) {
     if (!p) return;
     // Resolved through the generation like the rest, so a stop still calls off
@@ -11558,6 +11818,14 @@ export function setup(ctx: Ctx, opts?: any) {
     const s = st(chatId);
     if (s.impersonating) {
       s.impersonating = false;
+      const watched = s.impWatched;
+      s.impWatched = false;
+      // An impersonation this tab was judging, stopped by you. Its tries stop
+      // with it, the same as for a reply.
+      if (watched) {
+        log("replies", "you stopped the impersonation");
+        standDown(chatId, true);
+      }
       return;
     }
     if (s.ignored.has(p.generationId)) return; // our own abort, not a user stop
@@ -11581,10 +11849,13 @@ export function setup(ctx: Ctx, opts?: any) {
       // them, which could take a feedback prompt they opened themselves.
       clearConfirmWatch();
       // The host's Impersonate button. Noted rather than acted on: the
-      // generation it starts is the one to leave alone, and that has not
-      // started yet.
-      if (e && e.target && e.target.closest && e.target.closest(IMPERSONATE_BUTTON))
+      // generation it starts has not started yet. The input box is read now,
+      // before Lumiverse clears it, so a retry can put it back.
+      if (onImpersonateButton(e && e.target)) {
         impersonateAt = Date.now();
+        const box = inputBox();
+        impersonateText = box ? String(box.value == null ? "" : box.value) : null;
+      }
       const tgt =
         e && e.target && e.target.closest
           ? e.target.closest(cfg.stopSelector)

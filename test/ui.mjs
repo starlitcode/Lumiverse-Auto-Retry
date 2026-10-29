@@ -8265,6 +8265,98 @@ console.log("\nan impersonation is not a reply");
     [plain, imp, named, normal].map((r) => r.errors));
 }
 
+// ---- an impersonation that goes wrong is tried again ----
+// With Check an impersonation too on, an impersonation started with the
+// Impersonate button in this tab is judged without cut off or very short.
+// One that errors or is refused is tried again: what was typed is put back in
+// the input box and Impersonate is pressed again. A box typed in since is left
+// alone, and so is an impersonation this tab did not see started.
+console.log("\nan impersonation that goes wrong is tried again");
+{
+  const REFUSAL = "I'm sorry, but I can't create that content.";
+  const run = async ({ end, kind = "impersonate", press = true, typeAfter = "", over = {} }) => {
+    const page = await browser.newPage();
+    const errors = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    await stage(
+      page,
+      "<div id=modal></div>" +
+        '<button data-testid="regenerate">Regenerate</button>' +
+        '<textarea name="chat-message" style="width:200px;height:40px"></textarea>' +
+        '<button type="button" title="Impersonate: One-liner" aria-label="Impersonate">I</button>',
+    );
+    await page.addScriptTag({ content: SOURCE, type: "module" });
+    await page.waitForFunction(() => !!window.__setup);
+    const out = await page.evaluate(async ([end, kind, press, typeAfter, over]) => {
+      const h = {};
+      let regens = 0;
+      const box = document.querySelector('textarea[name="chat-message"]');
+      // Like Lumiverse: a press reads the box, then clears it.
+      const pressedWith = [];
+      document.querySelector('[aria-label="Impersonate"]').addEventListener("click", () => {
+        pressedWith.push(box.value);
+        box.value = "";
+      });
+      document.querySelector('[data-testid="regenerate"]').addEventListener("click", () => regens++);
+      window.__setup(
+        { events: { on: (n, f) => { h[n] = f; return () => {}; } },
+          ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }) } },
+        Object.assign({ toast: false, retryDelayMs: 10, backoffFactor: 1, maxDelayMs: 10, jitter: false,
+          maxRetries: 3, stuckTimeoutMs: 0, idleTimeoutMs: 0, pauseWhenFailing: false }, over),
+      );
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      box.value = "I lean on the counter.";
+      if (press) document.querySelector('[aria-label="Impersonate"]').click();
+      h.GENERATION_STARTED({ chatId: "C", generationId: "p1", generationType: kind });
+      await wait(10);
+      // Lumiverse writes what came back into the box.
+      box.value = end.content || "";
+      h.GENERATION_ENDED(Object.assign({ chatId: "C", generationId: "p1", impersonateDraft: true }, end));
+      if (typeAfter) box.value = typeAfter;
+      await wait(400);
+      const second = pressedWith.length > 1 ? pressedWith[1] : null;
+      // The retry's own impersonation comes back fine.
+      if (pressedWith.length > 1) {
+        h.GENERATION_STARTED({ chatId: "C", generationId: "p2", generationType: "impersonate" });
+        await wait(10);
+        box.value = "I lean on the counter and wait for her.";
+        h.GENERATION_ENDED({ chatId: "C", generationId: "p2", impersonateDraft: true, content: "I lean on the counter and wait for her." });
+        await wait(300);
+      }
+      return { presses: pressedWith.length, second, regens };
+    }, [end, kind, press, typeAfter, over]);
+    await page.close();
+    return { out, errors };
+  };
+
+  const refused = await run({ end: { content: REFUSAL } });
+  check("a refused impersonation is tried again", refused.out.presses === 2, refused.out);
+  check("with what you had typed put back in the box first", refused.out.second === "I lean on the counter.", refused.out);
+  check("and the regenerate button is never pressed for it", refused.out.regens === 0, refused.out);
+  check("once the retry comes back fine, nothing more is pressed", refused.out.presses === 2, refused.out);
+
+  const errored = await run({ end: { content: "", error: "upstream timed out" } });
+  check("an impersonation that errors is tried again", errored.out.presses === 2, errored.out);
+
+  const blank = await run({ end: { content: "" } });
+  check("a blank impersonation is tried again", blank.out.presses === 2, blank.out);
+
+  const cut = await run({ end: { content: "I lean on the counter and watch the" } });
+  check("an impersonation that stops mid-sentence is not tried again", cut.out.presses === 1 && cut.out.regens === 0, cut.out);
+
+  const typed = await run({ end: { content: REFUSAL }, typeAfter: "Never mind, I will write it." });
+  check("an input box you typed in is not written over", typed.out.presses === 1, typed.out);
+
+  const off = await run({ end: { content: REFUSAL }, over: { retryImpersonations: false } });
+  check("with the switch off, a refused impersonation is left alone", off.out.presses === 1 && off.out.regens === 0, off.out);
+
+  const elsewhere = await run({ end: { content: REFUSAL }, press: false });
+  check("an impersonation this tab did not see started is left alone", elsewhere.out.presses === 0 && elsewhere.out.regens === 0, elsewhere.out);
+
+  const all = [refused, errored, blank, cut, typed, off, elsewhere];
+  check("no console errors", all.every((r) => r.errors.length === 0), all.map((r) => r.errors));
+}
+
 // ---- a reply that stopped partway is a cut-off reply ----
 // Two different things look like "words were appearing and then stopped", and
 // only one of them belongs to the watchdog that watches for it.

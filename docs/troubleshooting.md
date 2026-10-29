@@ -50,7 +50,7 @@ To stop it happening again, look at the reason. Each has its own switch under **
 
 The **Stats** tab counts the reasons over the whole session, so you can see which check keeps firing.
 
-**Impersonate is never retried.** It writes your own turn into the input box. Lumiverse says what kind of generation is starting, and Auto Retry reads that. So an impersonation started with a shortcut, or in another tab, is left alone too. On a Lumiverse that does not say, Auto Retry notices the press on Lumiverse's **Impersonate** button instead, and an impersonation started another way is judged like a reply.
+**Impersonate is only checked when you press its button.** It writes your own turn into the input box. With **Check an impersonation too** on, an impersonation you start with the **Impersonate** button is tried again for an error, a refusal, a blank turn or broken text, never for cut off or very short. One started from a menu, with a shortcut or in another tab is left alone. If the retry cannot find the button or the input box, set them under [Buttons it clicks](buttons.md). See [Impersonations](detection.md#impersonations).
 
 ## It called a reply stuck after you came back to the tab
 

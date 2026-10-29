@@ -2,13 +2,18 @@
 
 Lumiverse has no way for an extension to regenerate a reply directly. So a retry presses your own swipe or regenerate button on the screen. The built-in list finds these on current versions of Lumiverse, but a future update could change them.
 
-## The three buttons
+## The buttons
 
-There are three button settings, in the order a retry uses them:
+There are three button settings for a reply, in the order a retry uses them:
 
 - **next / swipe** adds a new reroll. A retry tries this first.
 - **regenerate** redoes the reply in place. This is the backup.
 - **stop** stops a reply that has frozen.
+
+And two for an impersonation, shown while **Check an impersonation too** is on:
+
+- **Impersonate** is pressed to try an impersonation again.
+- **input box** is where what you had typed is put back first. See [Impersonations](detection.md#impersonations).
 
 How a retry finds the button:
 

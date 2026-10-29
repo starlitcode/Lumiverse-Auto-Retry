@@ -365,6 +365,35 @@ Quoted lines are skipped, as everywhere else.
 
 Retries from this check have their own line on the Stats tab, so you can see how often it happens.
 
+## Impersonations
+
+**Impersonate** writes your own turn into the input box. With **Check an impersonation too** on, which is the default, Auto Retry checks it and tries it again when it goes wrong.
+
+What it is tried again for:
+
+- an error, including a refusal that arrives as an error
+- a refusal, a break-off, or leaving the scene to offer support, each with its own switch as for a reply
+- a blank turn
+- broken text: one character over and over, garbled, the prompt's format, or stuck repeating
+
+What it is never tried again for:
+
+- **cut off** and **very short**. Your own turn often ends without punctuation, or is one line, and that is how you write.
+
+How a retry works:
+
+1. When you press **Impersonate**, Auto Retry notes what was in your input box. Lumiverse clears the box at that moment.
+2. When the impersonation goes wrong, it waits, the same as before a reply is retried.
+3. It puts what you had typed back in the input box, and presses **Impersonate** again.
+
+What it leaves alone:
+
+- **An input box you have typed in.** If the box holds anything other than what the impersonation left there, it does not try again, and the Log says so.
+- **An impersonation it did not see you start.** Only one started with the **Impersonate** button in this tab is checked. One started from a menu, with a shortcut or in another tab is left alone, because Auto Retry cannot tell what you had typed.
+- **Your notes.** A note is never sent with an impersonation retry. The notes are written for the character's reply, and an impersonation is your turn.
+
+The retry presses **Impersonate** the way the button is set, so it uses your default impersonation mode. The button and the input box are under [Buttons it clicks](buttons.md), if Auto Retry cannot find them.
+
 ## What a retry is counted as
 
 The Stats tab groups retries by reason. A refusal can be one of four, and each is counted apart because the fix is different:

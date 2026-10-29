@@ -8,13 +8,18 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
-## 5.23.2
+## 5.24.0
 
 _2026-10-29_
 
+### Added
+
+- **An impersonation is checked too.** Before, Auto Retry left every impersonation alone, so an error or a refusal on one was never retried. With the new **Check an impersonation too** switch, which is on, an impersonation you start with the **Impersonate** button is tried again when it errors, is refused, comes back blank or is broken. It is never tried again as cut off or very short, since your own turn often ends that way. Before it tries again, it puts what you had typed back in the input box and presses **Impersonate**. It never writes over an input box you have typed in. See [Impersonations](docs/detection.md#impersonations).
+- **Your Impersonate button and Your input box,** under **Buttons it clicks**, for a Lumiverse where Auto Retry cannot find them. **Pick it for me** works for both.
+
 ### Fixed
 
-- **Several tries at once could try again after a reply passed.** When a reply passed, Auto Retry asked your server to add it to the chat. If the server did not answer within 20 seconds, Auto Retry tried again, even though the reply could already be in the chat. That cost one more reroll. It now makes no more tries, and the Log says it could not tell whether the reply was added.
+- **Several tries at once could try again after a reply passed.** When a reply passed, Auto Retry asked your server to add it to the chat. If the server did not answer within 20 seconds, Auto Retry tried again, even though the reply could already be in the chat. That cost one more reroll. It now makes no more tries. A warning and the Log say it could not tell whether the reply was added.
 - **A finished reply could be retried as cut off when it ended on escaped color markup.** Another extension can color dialogue with markup such as `&lt;font color="#5a8fd0"&gt;` and `&lt;/font&gt;`, which Lumiverse would show as text. A reply that ended on that markup was read as stopping partway, and was retried. Auto Retry now reads past it, and past `[color=#hex]` and `[/color]` too, the same way it reads past an HTML tag.
 
 ---

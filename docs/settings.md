@@ -305,6 +305,7 @@ These are the defaults for a new install. They are in the `CONFIG` block at the 
 | retryOnShort | false | Retry short replies. Off by default, because short replies are often fine. |
 | minChars | 24 | Replies with fewer characters than this count as short. Only the text you read is counted. Thinking and HTML tags are left out. Shown only while `retryOnShort` is on. |
 | retryOnRefusal | true | Retry an accidental out-of-character refusal. |
+| retryImpersonations | true | Check an impersonation too. An impersonation you start is tried again when it errors, is refused, comes back blank or is broken. It is never retried as cut off or very short. See [Impersonations](detection.md#impersonations). |
 | refusalUseBuiltins | true | Use the built-in English refusal lists. Off: only your own phrases are used. |
 | refusalCatchDisengage | true | Also catch the model breaking off ("I'll stop here", "I won't continue this conversation"). Only counted when it is how the reply ends, never inside quotation marks, and never behind a dialogue tag. Shown only while `refusalUseBuiltins` is on. |
 | refusalCatchCrisis | false | Also catch the model leaving the scene to offer real-world support and crisis resources. Two separate parts of the reply have to point that way before it counts, one of them the model addressing you rather than your character, and a line inside quotation marks never counts. The only check `refusalMaxChars` does not apply to. Ticking it opens a warning that has to be answered before it goes on. Shown only while `refusalUseBuiltins` is on, and read [Safety](safety.md) first. |
@@ -324,6 +325,8 @@ These are the defaults for a new install. They are in the `CONFIG` block at the 
 | confirmButtonsCustom | false | Lets you add your own dialog button words. Off: only the built-in list is used, and the box is hidden. |
 | confirmButtonLabels | (blank) | Extra dialog button labels it may press when a dialog appears after a retry, one per line. Tried before the built-in list, which is used as well. Shown and read only while `confirmButtonsCustom` is on. |
 | stopSelector | (see file) | Your stop button, used to stop a reply that has frozen. |
+| impersonateSelector | (see file) | Your Impersonate button, pressed to try an impersonation again. Shown only while `retryImpersonations` is on. |
+| inputSelector | (see file) | Your input box. What you had typed is put back here before an impersonation is tried again. Shown only while `retryImpersonations` is on. |
 | reduceMotion | false | Turn off every animation in Auto Retry: nothing moves or fades. A device set to reduce motion gets the same without this. |
 | toast | true | Show the retry pop-up with its Cancel button. It counts down the wait and says what the retry is for and which try it is. It sits just above Lumiverse's input box, so it never covers where you type. With it off, most other notifications are left out too. Notifications about something you did, and a pause after failed runs, always show. |
 | liveLog | false | Show the on-screen panel. It has four tabs: Log (what it is doing), Prompt (what went to the model), Stats (what it retried for) and Replaced (the last reply a retry replaced). |
