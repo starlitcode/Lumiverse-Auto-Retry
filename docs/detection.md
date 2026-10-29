@@ -375,10 +375,11 @@ What it is tried again for:
 - a refusal, a break-off, or leaving the scene to offer support, each with its own switch as for a reply
 - a blank turn
 - broken text: one character over and over, garbled, the prompt's format, or stuck repeating
+- a clear cut-off, with **It cut off mid-sentence** on: a quote, an `*action*` or bold left open, a code block or tag left open, or a turn that stops on a comma
 
 What it is never tried again for:
 
-- **cut off** and **very short**. Your own turn often ends without punctuation, or is one line, and that is how you write.
+- **very short**, and **ending on a word with no punctuation**. Your own turn is often one line, and often ends on a word, a dash or `...`, and that is how you write.
 
 How a retry works:
 

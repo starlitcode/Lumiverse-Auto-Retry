@@ -14,7 +14,7 @@ _2026-10-29_
 
 ### Added
 
-- **An impersonation is checked too.** Before, Auto Retry left every impersonation alone, so an error or a refusal on one was never retried. With the new **Check an impersonation too** switch, which is on, an impersonation you start with the **Impersonate** button is tried again when it errors, is refused, comes back blank or is broken. It is never tried again as cut off or very short, since your own turn often ends that way. Before it tries again, it puts what you had typed back in the input box and presses **Impersonate**. It never writes over an input box you have typed in. See [Impersonations](docs/detection.md#impersonations).
+- **An impersonation is checked too.** Before, Auto Retry left every impersonation alone, so an error or a refusal on one was never retried. With the new **Check an impersonation too** switch, which is on, an impersonation you start with the **Impersonate** button is tried again when it errors, is refused, comes back blank, is broken or is clearly cut off, such as a quote or an action left open. It is never tried again just for being short or for ending without punctuation, since your own turn often ends that way. Before it tries again, it puts what you had typed back in the input box and presses **Impersonate**. It never writes over an input box you have typed in. See [Impersonations](docs/detection.md#impersonations).
 - **Your Impersonate button and Your input box,** under **Buttons it clicks**, for a Lumiverse where Auto Retry cannot find them. **Pick it for me** works for both.
 
 ### Fixed

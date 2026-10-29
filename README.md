@@ -31,7 +31,7 @@ Also:
 - Every retry waits a little longer than the last, and longer again when the server says it is busy.
 - All the reasons share one retry limit, so no reply is retried more than you allow, and it can never loop forever.
 - (optional, off by default) From the second try, it can send several tries at once and keep the first reply that passes. See [Several tries at once](docs/tries-at-once.md).
-- An impersonation you start with **Impersonate** is tried again when it errors, is refused, comes back blank or is broken. What you had typed is put back first. See [Impersonations](docs/detection.md#impersonations).
+- An impersonation you start with **Impersonate** is tried again when it errors, is refused, comes back blank, is broken or is clearly cut off. What you had typed is put back first. See [Impersonations](docs/detection.md#impersonations).
 
 ## Install
 

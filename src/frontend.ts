@@ -312,8 +312,9 @@ const CONFIG = {
   refusalCatchDisengage: true, // also catch the model ending the scene ("I'll stop here", "I won't continue this conversation"). Only counted near the end of a reply and never inside quotation marks.
   refusalCatchCrisis: false, // also catch the model leaving the scene to offer real-world support and crisis resources. Off by default, and the panel asks you to read a warning before switching it on.
   // Judge an impersonation you start, and try it again when it errors, is
-  // refused, comes back blank or is broken. Cut off and too short are never
-  // judged on one: your own turn often ends without punctuation.
+  // refused, comes back blank, is broken or is clearly cut off, such as a
+  // quote left open. Too short and no ending punctuation are never judged on
+  // one: your own turn is often a line long and often ends on a word.
   retryImpersonations: true,
   refusalIgnoreQuoted: true, // a match inside quotation marks is a character speaking, not the model, so it is not counted.
   refusalMaxChars: 2000, // only replies up to this length are considered refusals. Longer = treated as real content. 0 = no limit (scan any length).
@@ -1000,7 +1001,7 @@ const SCHEMA: Group[] = [
         key: "retryImpersonations",
         label: "Check an impersonation too",
         type: "bool",
-        hint: "On by default. Tries Impersonate again when it errors, is refused, comes back blank or is broken. Never for cut off or very short.",
+        hint: "On by default. Tries Impersonate again when it errors, is refused, comes back blank, is broken or stops inside an open quote. Never just for being short.",
       },
       {
         key: "stuckTimeoutMs",
@@ -3734,7 +3735,7 @@ function thinkingProblem(content: string, thought: string, cfg: any): string {
 // run, or "" when it passes. HARD_FAILURE means one of your own hard failures,
 // which is never retried. Used for a reply that ended in the chat and for each
 // reply that comes back from several tries at once, so both are judged the same,
-// and for an impersonation with the cut off and very short checks turned off.
+// and for an impersonation with the very short and no-punctuation checks off.
 const HARD_FAILURE = "hard failure";
 function replyProblem(content: string, thought: string, cfg: any): string {
   // A provider error written into the reply, matching one of your own hard
@@ -11742,9 +11743,11 @@ export function setup(ctx: Ctx, opts?: any) {
     s.attempts = 0; // clean success
   }
 
-  // An impersonation that ended, judged with the same checks as a reply apart
-  // from cut off and very short. Your own turn often stops without
-  // punctuation, or is a line long, and both are how you write.
+  // An impersonation that ended, judged with the same checks as a reply, apart
+  // from very short and stopping with no punctuation. Your own turn is often a
+  // line long and often ends on a word, and both are how you write. A clear
+  // cut-off is still caught: a quote, an action or a block left open, or a
+  // turn that stops on a comma.
   function judgeImpersonation(chatId: string, p: any, thought: string) {
     const s = st(chatId);
     clearTimers(s);
@@ -11774,7 +11777,7 @@ export function setup(ctx: Ctx, opts?: any) {
     } else if (!content) {
       if (cfg.retryOnEmpty) reason = "empty";
     } else {
-      const problem = replyProblem(content, thought, Object.assign({}, cfg, { retryOnTruncated: false, retryOnNoPunct: false, retryOnShort: false }));
+      const problem = replyProblem(content, thought, Object.assign({}, cfg, { retryOnNoPunct: false, retryOnShort: false }));
       if (problem === HARD_FAILURE) {
         log("replies", "the impersonation is one of your hard failures, so not retrying");
         showToast("Auto Retry did not retry the impersonation: it matches one of your hard failures, so trying again would not help.", { kind: "warning" });

@@ -8420,7 +8420,13 @@ console.log("\nan impersonation that goes wrong is tried again");
   check("a blank impersonation is tried again", blank.out.presses === 2, blank.out);
 
   const cut = await run({ end: { content: "I lean on the counter and watch the" } });
-  check("an impersonation that stops mid-sentence is not tried again", cut.out.presses === 1 && cut.out.regens === 0, cut.out);
+  check("an impersonation that stops on a word is not tried again", cut.out.presses === 1 && cut.out.regens === 0, cut.out);
+
+  const short = await run({ end: { content: "*nods slowly*" }, over: { retryOnShort: true } });
+  check("a short impersonation is not tried again, even with It was very short on", short.out.presses === 1, short.out);
+
+  const openQuote = await run({ end: { content: 'I lean in. "Listen, the ferry leaves at' } });
+  check("an impersonation that stops inside an open quote is tried again", openQuote.out.presses === 2, openQuote.out);
 
   const typed = await run({ end: { content: REFUSAL }, typeAfter: "Never mind, I will write it." });
   check("an input box you typed in is not written over", typed.out.presses === 1, typed.out);
@@ -8431,7 +8437,7 @@ console.log("\nan impersonation that goes wrong is tried again");
   const elsewhere = await run({ end: { content: REFUSAL }, press: false });
   check("an impersonation this tab did not see started is left alone", elsewhere.out.presses === 0 && elsewhere.out.regens === 0, elsewhere.out);
 
-  const all = [refused, errored, blank, cut, typed, off, elsewhere];
+  const all = [refused, errored, blank, cut, short, openQuote, typed, off, elsewhere];
   check("no console errors", all.every((r) => r.errors.length === 0), all.map((r) => r.errors));
 }
 

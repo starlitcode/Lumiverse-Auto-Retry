@@ -50,7 +50,7 @@ To stop it happening again, look at the reason. Each has its own switch under **
 
 The **Stats** tab counts the reasons over the whole session, so you can see which check keeps firing.
 
-**Impersonate is only checked when you press its button.** It writes your own turn into the input box. With **Check an impersonation too** on, an impersonation you start with the **Impersonate** button is tried again for an error, a refusal, a blank turn or broken text, never for cut off or very short. One started from a menu, with a shortcut or in another tab is left alone. If the retry cannot find the button or the input box, set them under [Buttons it clicks](buttons.md). See [Impersonations](detection.md#impersonations).
+**Impersonate is only checked when you press its button.** It writes your own turn into the input box. With **Check an impersonation too** on, an impersonation you start with the **Impersonate** button is tried again for an error, a refusal, a blank turn, broken text or a clear cut-off, such as a quote left open. It is never tried again just for being short or for ending without punctuation. One started from a menu, with a shortcut or in another tab is left alone. If the retry cannot find the button or the input box, set them under [Buttons it clicks](buttons.md). See [Impersonations](detection.md#impersonations).
 
 ## It called a reply stuck after you came back to the tab
 
