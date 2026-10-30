@@ -1784,12 +1784,21 @@ function looksTruncated(
   // only when this check was about to fire. Discounting it always would break
   // the opposite case, a quotation that closes on a number: He said "42" is
   // even and correct, and taking that closing quote out would leave it odd.
+  //
+  // A count that is still odd is read at the end, where a reply is cut. When
+  // the last quotation mark closes a line of dialogue, the reply ended outside
+  // its dialogue, and the odd one out is earlier: a line the model opened
+  // without its mark, such as 'Cause I said so." Counting the whole reply
+  // read that as dialogue cut open, and re-rolled a finished reply.
   if ((prose.match(/"/g) || []).length % 2 === 1) {
     const withoutInches = prose.replace(/(\d)\s*"/g, "$1");
-    if ((withoutInches.match(/"/g) || []).length % 2 === 1) return true;
+    if ((withoutInches.match(/"/g) || []).length % 2 === 1 && !lastQuoteCloses(withoutInches)) return true;
   }
-  if ((prose.match(/\u201C/g) || []).length !== (prose.match(/\u201D/g) || []).length)
-    return true; // mismatched smart quotes
+  // Smart quotes say which way they face, so the same question is which one
+  // comes last.
+  if ((prose.match(/\u201C/g) || []).length !== (prose.match(/\u201D/g) || []).length &&
+      prose.lastIndexOf("\u201C") > prose.lastIndexOf("\u201D"))
+    return true; // mismatched smart quotes, the last one opening
   if (/[,;]$/.test(prose)) return true; // cut mid-clause
   // A status block written as raw JSON, stopped inside itself: {"temp": 24,
   // "sky": . Counted outside code, where a brace is nearly always half of a
@@ -1800,6 +1809,19 @@ function looksTruncated(
   if (retryOnNoPunct && !endsOnPunctuation(t) && !endsOnABlock(shown, t)) return true;
 
   return false;
+}
+
+// Whether the last straight quotation mark in the text closes a line of
+// dialogue: it follows a word or a mark, and the text ends after it or goes on
+// with a space or a mark. One that a word follows opens a line instead, and
+// one between two words is neither, so both count as open.
+function lastQuoteCloses(text: string): boolean {
+  const at = text.lastIndexOf('"');
+  if (at <= 0) return false;
+  const before = text.charAt(at - 1);
+  const after = text.charAt(at + 1);
+  if (!before || /\s/.test(before)) return false;
+  return after === "" || /[\s.,!?;:)\]}*_~\u2014\u2013-]/.test(after);
 }
 
 // A reply or its thinking that is one character over and over, such as

@@ -203,7 +203,7 @@ It counts a reply as cut off when it has:
 - a code block or inline backtick that was never closed
 - markup left open: a container never closed, a tag with no closing bracket, or a comment with no end (see [When the code itself is cut off](#when-the-code-itself-is-cut-off))
 - an odd number of `*`, meaning an action or emphasis was left open. Bullet lists are not counted.
-- a quotation mark that was never closed
+- a quotation mark that was never closed. When the marks do not add up, the last one decides. If it closes a line of dialogue, the reply ended outside its dialogue, and the mark that is missing is earlier on, such as a line the model started without one: `'Cause I said so."`. That reply is left alone. If the last mark opens a line, it was cut off.
 - a last character that is a comma or a semicolon
 - a last word with nothing after it. This is `retryOnNoPunct`, on by default. Punctuation in any script counts as an ending, and so does an emoji, so `。`, `؟`, `!` and `👋` are all fine.
 

@@ -15,6 +15,7 @@ _2026-10-30_
 ### Fixed
 
 - **Auto Refine could start refining a reply Auto Retry was about to retry.** Auto Retry tells Auto Refine in the page when it sets a retry, and that word reached Auto Refine a moment after Auto Refine had already started. Auto Retry now also says when a reply starts and once it has judged how that reply ended, so Auto Refine can wait for its verdict. This needs Auto Refine 1.54.1 or later. See [With Auto Refine](docs/settings.md#with-auto-refine).
+- **A finished reply could be retried as cut off because of one missing quotation mark.** A model sometimes starts a line of dialogue without its opening mark, such as `'Cause I said so."`, and closes it as usual. That left the reply with one quotation mark too many, which read as dialogue cut off partway, wherever in the reply it was. The marks are now read at the end, where a reply is cut: when the last one closes a line of dialogue, the reply is finished. Dialogue that really was cut off is still caught. See [Cut-off detection](docs/detection.md#cut-off-detection).
 
 ---
 

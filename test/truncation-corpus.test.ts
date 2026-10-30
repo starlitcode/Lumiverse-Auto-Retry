@@ -58,6 +58,12 @@ const FINISHED: Array<[string, string]> = [
   ["ends on exclamation", "She threw the cup at the wall. It shattered!"],
   ["ends on a bracket", "He nodded (though he did not agree)."],
   ["multi paragraph", "The rain had stopped.\n\nShe stepped outside, and the air smelled like iron.\n\nNothing moved."],
+  // A line the model opened without its quotation mark and closed with one.
+  // The count is odd, but the reply ends outside its dialogue.
+  ["a line opened without its mark, earlier on", 'Wren tapped the map. \'Cause the river is high this week," she said.\n\n"Pack light," she added.'],
+  ["the same in font tags, before a hidden tag", 'Wren tapped the map. <font color="#7aa0c8">\'Cause the river is high this week."</font>\n\n<font color="#7aa0c8">"Pack light."</font><scene-cue mood="calm"></scene-cue>'],
+  ["a speech over two paragraphs, the first left open", '"We go north at first light.\n\n"If the river is high, we take the ridge."'],
+  ["a smart quote line opened without its mark", "Wren tapped the map. \u2018Cause the river is high,\u201D she said. \u201CPack light.\u201D"],
   ["long scene with quotes", '"I told you," she said. "I told you and you did not listen." He said nothing. What was there to say?'],
   ["reply ending in an action", "She turned away. *He watched her go.*"],
   ["colon then list ending", "There were three doors, and she picked the middle one."],
@@ -121,6 +127,10 @@ const CUT: Array<[string, string]> = [
   ["dialogue opened, never closed", 'She grabbed his arm. "Wait, I need to tell you'],
   ["dialogue opened after a height", 'He was 6\'2". She looked up at him and said, "You never told me'],
   ["smart quote opened, never closed", "He shook his head. “That is not what happened"],
+  // The close ones to a line opened without its mark: the last mark opens a
+  // line, and the reply ends on a full stop, so only the quotes show the cut.
+  ["dialogue opened again and cut, after a full stop", 'Wren said, "We go north." She paused. "If the river is high, we take the ridge.'],
+  ["smart quote opened again and cut, after a full stop", "\u201CWe go north.\u201D She paused. \u201CIf the river is high, we take the ridge."],
   ["action asterisk opened", "*He steps forward, one hand raised"],
   ["code fence opened", "Here is the layout:\n\n```\nroom A"],
   ["inline code opened", "The sign said `NO ENT"],
