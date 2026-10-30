@@ -262,6 +262,7 @@ Auto Retry waits a few seconds before a retry. It tells [Auto Refine](https://gi
 - Auto Refine leaves a reply that Auto Retry is going to retry, so it does not pay for a rewrite of a reply that is about to be replaced.
 - If the retry is called off, such as when you press **Cancel**, Auto Refine refines the reply after all.
 - This needs Auto Refine 1.46.0 or later.
+- Auto Retry also tells Auto Refine when a reply starts, and once it has judged how that reply ended. Auto Refine waits for that, up to 3 seconds, before it starts on a reply. So it never starts on a reply that is about to be retried. This needs Auto Refine 1.54.1 or later.
 
 ## Every option and its default
 

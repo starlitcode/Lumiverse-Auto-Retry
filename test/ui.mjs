@@ -5105,6 +5105,53 @@ console.log("\nthe page is told when a retry is set and called off");
   check("no console errors", errors.length === 0, errors);
 }
 
+// Auto Refine hears that a reply ended from Lumiverse on its server, at the
+// same moment Auto Retry hears it here. It waits for Auto Retry to say it has
+// judged the reply, so it never starts on one about to be retried. The order
+// matters: a retry is announced before the reply is called judged.
+console.log("\nthe page is told when a reply is being judged and has been");
+{
+  const page = await browser.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await stage(page, '<div id=modal></div><button title="Regenerate" data-testid="regenerate">Regenerate</button>');
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  const run = (over) => page.evaluate(async (over) => {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const heard = [];
+    const names = ["auto-retry:judging", "auto-retry:retrying", "auto-retry:judged"];
+    const hear = (e) => heard.push(e.type + ":" + (e.detail && e.detail.chatId));
+    for (const name of names) window.addEventListener(name, hear);
+    const handlers = {};
+    const teardown = window.__setup(
+      { events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } }, sendToBackend: () => {},
+        ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+              registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) } },
+      Object.assign({ toast: false, retryDelayMs: 3000, backoffFactor: 1, maxDelayMs: 3000, jitter: false,
+        maxRetries: 3, stuckTimeoutMs: 0, idleTimeoutMs: 0, pauseWhenFailing: false }, over),
+    );
+    handlers.GENERATION_STARTED({ chatId: "c7", generationId: "g1" });
+    const atStart = heard.slice();
+    handlers.GENERATION_ENDED({ chatId: "c7", generationId: "g1", content: "" });
+    handlers.GENERATION_STARTED({ chatId: "c8", generationId: "g2" });
+    handlers.GENERATION_ENDED({ chatId: "c8", generationId: "g2", content: "She closed the door behind her and sat down by the fire to wait." });
+    await wait(50);
+    teardown();
+    for (const name of names) window.removeEventListener(name, hear);
+    return { atStart, all: heard };
+  }, over);
+  const on = await run({});
+  check("a reply starting is announced as being judged", on.atStart.join() === "auto-retry:judging:c7", on);
+  check("a retry it sets is announced before the reply is called judged",
+    on.all.slice(0, 3).join() === "auto-retry:judging:c7,auto-retry:retrying:c7,auto-retry:judged:c7", on);
+  check("a good reply is called judged with no retry",
+    on.all.slice(3).join() === "auto-retry:judging:c8,auto-retry:judged:c8", on);
+  const off = await run({ enabled: false });
+  check("switched off, nothing is said to be judging, so nothing waits on it", off.all.indexOf("auto-retry:judging:c7") < 0, off);
+  check("no console errors", errors.length === 0, errors);
+}
+
 console.log("\npop-up goes away");
 {
   const page = await browser.newPage();

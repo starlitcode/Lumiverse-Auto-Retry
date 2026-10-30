@@ -143,6 +143,13 @@ const REROLL_EVENT = "auto-retry:reroll-added";
 // after all when the retry is called off.
 const RETRYING_EVENT = "auto-retry:retrying";
 const RETRY_OFF_EVENT = "auto-retry:retry-off";
+// Raised when a reply Auto Retry will judge starts, and once it has judged
+// that reply's end, whatever the verdict. Auto Refine hears about the end
+// from Lumiverse on its server at the same moment Auto Retry does here, and
+// waits between the two for the word on whether a retry is coming. Without
+// it, a reply about to be retried was being refined.
+const JUDGING_EVENT = "auto-retry:judging";
+const JUDGED_EVENT = "auto-retry:judged";
 function tellPage(name, chatId) {
     try {
         if (typeof window !== "undefined" && typeof CustomEvent === "function")
@@ -174,7 +181,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.24.1";
+const VERSION = "5.24.2";
 // Whether two saved settings hold the same values, whatever order their keys
 // were written in. A key left undefined counts as not there, the way it is
 // when saved. Used to tell an update or a put-back that would change nothing.
@@ -11333,6 +11340,8 @@ export function setup(ctx, opts) {
             return;
         const chatId = chatOf(p);
         const s = st(chatId);
+        if (chatId !== NO_CHAT && retryingHere(chatId))
+            tellPage(JUDGING_EVENT, chatId);
         if (s.startWatchdog) {
             clearTimeout(s.startWatchdog);
             s.startWatchdog = null;
@@ -11855,7 +11864,8 @@ export function setup(ctx, opts) {
     function onEnd(p) {
         if (!p)
             return;
-        const s = st(chatForGeneration(p));
+        const chatId = chatForGeneration(p);
+        const s = st(chatId);
         s.standingBy = otherTab(p) && !s.takenOver;
         s.othersReply = false;
         try {
@@ -11863,6 +11873,9 @@ export function setup(ctx, opts) {
         }
         finally {
             s.standingBy = false;
+            // After the verdict, so a retry it set is announced first.
+            if (chatId !== NO_CHAT)
+                tellPage(JUDGED_EVENT, chatId);
         }
     }
     function judgeEnd(p) {

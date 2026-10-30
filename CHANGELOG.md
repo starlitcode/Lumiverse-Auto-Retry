@@ -8,6 +8,16 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.24.2
+
+_2026-10-30_
+
+### Fixed
+
+- **Auto Refine could start refining a reply Auto Retry was about to retry.** Auto Retry tells Auto Refine in the page when it sets a retry, and that word reached Auto Refine a moment after Auto Refine had already started. Auto Retry now also says when a reply starts and once it has judged how that reply ended, so Auto Refine can wait for its verdict. This needs Auto Refine 1.54.1 or later. See [With Auto Refine](docs/settings.md#with-auto-refine).
+
+---
+
 ## 5.24.1
 
 _2026-10-30_
