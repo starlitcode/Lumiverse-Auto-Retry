@@ -8516,8 +8516,11 @@ console.log("\nan impersonation that goes wrong is tried again");
         box.value = "";
       });
       document.querySelector('[data-testid="regenerate"]').addEventListener("click", () => regens++);
+      // Lumiverse's notifications, as the panel asked for them.
+      const notes = [];
       window.__setup(
         { events: { on: (n, f) => { h[n] = f; return () => {}; } },
+          sendToBackend: (m) => { if (m && m.type === "notify") notes.push(m.kind + ": " + m.text); },
           ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }) } },
         Object.assign({ toast: false, retryDelayMs: 10, backoffFactor: 1, maxDelayMs: 10, jitter: false,
           maxRetries: 3, stuckTimeoutMs: 0, idleTimeoutMs: 0, pauseWhenFailing: false }, over),
@@ -8541,7 +8544,7 @@ console.log("\nan impersonation that goes wrong is tried again");
         h.GENERATION_ENDED({ chatId: "C", generationId: "p2", impersonateDraft: true, content: "I lean on the counter and wait for her." });
         await wait(300);
       }
-      return { presses: pressedWith.length, second, regens };
+      return { presses: pressedWith.length, second, regens, notes };
     }, [end, kind, press, typeAfter, over]);
     await page.close();
     return { out, errors };
@@ -8555,6 +8558,12 @@ console.log("\nan impersonation that goes wrong is tried again");
 
   const errored = await run({ end: { content: "", error: "upstream timed out" } });
   check("an impersonation that errors is tried again", errored.out.presses === 2, errored.out);
+
+  // An error that will not fix itself is not tried again, and a warning says
+  // why, since nothing else on screen does.
+  const hard = await run({ end: { content: "", error: "Request failed (400): the model rejected the request body." }, over: { toast: true } });
+  check("an impersonation with a hard failure is not tried again", hard.out.presses === 1, hard.out);
+  check("and a warning says why", hard.out.notes.some((n) => /^warning: .*did not retry the impersonation/.test(n)), hard.out);
 
   const blank = await run({ end: { content: "" } });
   check("a blank impersonation is tried again", blank.out.presses === 2, blank.out);
