@@ -336,9 +336,6 @@ Some providers send a refusal as an error instead of reply text. An error about 
 
 **Skip hard failures** does the opposite job. An error that will be the same next time, like a missing model or a wrong key, is not retried. The built-in list cannot know every provider's wording, so **Your own hard failures** lets you add wording, one per line. It only shows while **Skip hard failures** is on.
 
-- Every error with a 400 code is a hard failure, except **Invalid thought signature**. Gemini sends that one when the thinking it saved with an earlier turn does not check out, and it can pass on the next try.
-- To stop that one being retried too, add `thought signature` to **Your own hard failures**.
-
 Some providers do not report an error at all. They write the error as the reply, as if a character had said it. **Your own hard failures** is checked against the reply's text too:
 
 - A reply that contains one of your phrases is not retried, for any reason.

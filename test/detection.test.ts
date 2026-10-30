@@ -767,20 +767,6 @@ describe("a phrase too short to mean anything", () => {
   });
 });
 
-describe("a 400 that can clear on a try again", () => {
-  test("an invalid thought signature is retried", () => {
-    expect(isHardError("Request to the model failed (400): Invalid thought signature on turn 4.", withCfg({}))).toBe(false);
-  });
-
-  test("another 400 is still a hard failure", () => {
-    expect(isHardError("Request to the model failed (400): unsupported parameter top_k.", withCfg({}))).toBe(true);
-  });
-
-  test("and your own hard failures still win", () => {
-    expect(isHardError("Request to the model failed (400): Invalid thought signature.", withCfg({ hardErrorPhrases: "thought signature" }))).toBe(true);
-  });
-});
-
 describe("an error in a shape other than text", () => {
   test("an error sent as an object is read by its message", () => {
     const own = withCfg({ hardErrorPhrases: "free_tier_cap" });

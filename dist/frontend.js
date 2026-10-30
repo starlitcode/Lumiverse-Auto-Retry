@@ -174,7 +174,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.24.2";
+const VERSION = "5.24.1";
 // Whether two saved settings hold the same values, whatever order their keys
 // were written in. A key left undefined counts as not there, the way it is
 // when saved. Used to tell an update or a put-back that would change nothing.
@@ -3769,11 +3769,6 @@ function splitLeadingThinking(content, thought, cfg) {
         .trim();
     return { text: visible, thinking: inner };
 }
-// A 400 that can clear on a try again. Gemini sends "Invalid thought
-// signature" when the thinking it saved with an earlier turn does not check
-// out, and a provider or proxy in between can cause that on one call and not
-// the next. Your own hard failures still win over this.
-const RETRYABLE_400 = /\binvalid thought signature\b/i;
 function isHardError(err, cfg) {
     if (!err)
         return false;
@@ -3782,8 +3777,6 @@ function isHardError(err, cfg) {
     for (const p of splitPhrases(cfg && cfg.hardErrorPhrases))
         if (lower.includes(p))
             return true;
-    if (RETRYABLE_400.test(text))
-        return false;
     return /\b(?:400|401|402|403|404|405|406|411|413|415|422|invalid api key|authentication|unauthorized|not found|does not exist|model missing|insufficient balance|permission|forbidden|not allowed)\b/i.test(text);
 }
 function looksLikeRefusalError(errText, cfg) {
