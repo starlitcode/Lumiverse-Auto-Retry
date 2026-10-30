@@ -18,7 +18,8 @@ And two for an impersonation, shown while **Check an impersonation too** is on:
 How a retry finds the button:
 
 - Your own selectors are tried first, then the built-in list. So a list you saved in an older version can never hide a button the built-in list would find.
-- The built-in list starts with the mark Lumiverse puts on its own Regenerate button. It keeps working if the button's title or language changes.
+- Each built-in list starts with the mark Lumiverse puts on its own controls: the Regenerate button, the box that holds the swipe arrows, and the Impersonate button. These keep working if a label's wording or language changes. The next / swipe arrow is the last button in its box, which also works while it shows that a new reroll is ready.
+- The input box is looked for under the same list Auto Refine uses, from Lumiverse's own name for the box down to any text box.
 - It presses the button on the newest message.
 - A button that is hidden or grayed out is skipped, because pressing it would do nothing and waste a retry.
 - If no button is on screen yet, it keeps looking for a couple of seconds. Lumiverse sometimes shows its buttons a moment after a reply ends.
@@ -85,7 +86,7 @@ Turn it on only if the Regeneration Feedback box stays on screen after a retry o
 Each button setting takes CSS selectors, the kind you would pass to `document.querySelector`.
 
 - Separate several with commas. They are tried left to right, and the first that finds a button you can press is used.
-- Put the most exact ones first, like `data-action` or `data-testid`, and broader ones last, like `aria-label` or `title`.
+- Put the most exact ones first, like a mark Lumiverse puts on the button, such as `[data-composer-action="regen"] button`. Put broader ones last, like `aria-label` or `title`.
 - A comma inside brackets, parentheses or quotes is part of that selector. So `:is(a, b)` and `[aria-label="Next, swipe"]` each count as one.
 - Do not use class names. Lumiverse changes them with every release.
 

@@ -8,6 +8,23 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.24.1
+
+_2026-10-30_
+
+### Fixed
+
+- **Pick it for me could not pick the input box on a phone.** Holding a text box, a phone starts its own text selection and paste menu, and that ended the hold before it could pick. A hold on a text box now ends only when you lift your finger, so it picks the box. The box is let go of afterward, so the keyboard closes.
+- **The next / swipe arrow could be missed.** Auto Retry looked for it by its English label, "Next swipe". In another language, and in English while the arrow showed that a new reroll was ready or still being written, it was not found, and a retry pressed Regenerate in its place. It now finds the arrow by the box Lumiverse puts the swipe arrows in.
+- **Impersonate could be missed in another language.** **Check an impersonation too** found the button by its English label. It now finds it first by the mark Lumiverse puts on it, which stays the same in every language.
+- **The input box was looked for under one selector.** It now uses the same list as Auto Refine, so a Lumiverse that renames the box is still covered.
+
+### Changed
+
+- **The built-in button lists hold only marks Lumiverse uses.** Each mark was checked against the Lumiverse source. Marks that no Lumiverse button has were taken out of the lists for Regenerate, the next / swipe arrow and Stop. A list you saved yourself keeps what you typed.
+
+---
+
 ## 5.24.0
 
 _2026-10-30_

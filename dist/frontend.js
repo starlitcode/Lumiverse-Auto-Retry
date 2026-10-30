@@ -79,14 +79,23 @@ const STANDBY_GRACE_MS = 20000;
 // How long a retry keeps looking for a button to press before it says there
 // is none. See where it is used.
 const CONTROL_GRACE_MS = 2500;
-// Lumiverse's Impersonate button, found by its label, which stays the same
-// whichever impersonation preset is chosen; the title and the action name
-// change with the preset. And how soon after a press on it the generation that
+// Lumiverse's Impersonate button. First by the mark Lumiverse puts on it in the
+// bar above the input box, which stays the same in every language. Then by its
+// label and title, which stay the same whichever impersonation preset is
+// chosen, in English. And how soon after a press on it the generation that
 // starts is taken to be that impersonation.
-const IMPERSONATE_BUTTON = '[aria-label="Impersonate"], button[title^="Impersonate"]';
+const IMPERSONATE_BUTTON = '[data-composer-action="oneliner"] button, [aria-label="Impersonate"], button[title^="Impersonate"]';
 const IMPERSONATE_WINDOW_MS = 5000;
-// Lumiverse's input box, where an impersonation writes your turn.
-const INPUT_BOX = 'textarea[name="chat-message"]';
+// Lumiverse's input box, where an impersonation writes your turn. The same
+// list Auto Refine looks under, in the same order: several, so a Lumiverse
+// that renames one is still covered by another.
+const INPUT_BOX = [
+    '[data-component="InputArea"] textarea[name="chat-message"]',
+    'textarea[name="chat-message"]',
+    '[data-component="InputArea"] textarea[aria-label="Message"]',
+    '[data-component="InputArea"] textarea',
+    "textarea",
+].join(", ");
 // How long a retried impersonation has to start before the retry is given up.
 const IMPERSONATE_START_MS = 15000;
 const REFUSAL_REASON = "looks like an accidental refusal";
@@ -165,7 +174,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.24.0";
+const VERSION = "5.24.1";
 // Whether two saved settings hold the same values, whatever order their keys
 // were written in. A key left undefined counts as not there, the way it is
 // when saved. Used to tell an update or a put-back that would change nothing.
@@ -331,11 +340,12 @@ const CONFIG = {
     // itself uses to place the button in the composer, so it survives a new
     // title or a translated label that the rest of this list would not.
     regenerateSelector: '[data-composer-action="regen"] button, ' +
-        '[title="Regenerate"], [data-action="regenerate"], [data-testid="regenerate"], ' +
-        'button[aria-label*="regenerate" i], button[title*="regenerate" i]',
-    swipeNextSelector: '[aria-label="Next swipe"], [data-action="swipe-right"], [data-testid="swipe-right"], ' +
-        'button[aria-label*="next swipe" i], button[aria-label*="swipe right" i], ' +
-        'button[aria-label*="reroll" i], button[title*="swipe" i]',
+        '[title="Regenerate"], button[title*="regenerate" i]',
+    // Lumiverse's own mark on its swipe arrows first: the next arrow is the last
+    // button in it. Its label is translated, and while a new swipe is ready or
+    // still being written it says so in place of "Next swipe".
+    swipeNextSelector: '[data-component="SwipeControls"] button:last-of-type, ' +
+        '[aria-label="Next swipe"], button[aria-label*="next swipe" i]',
     // Whether the box below is read at all. Off, the built-in list is used and
     // nothing else, which is what almost everyone wants, and the box stays out of
     // the panel rather than sitting there as one more thing to wonder about.
@@ -343,8 +353,7 @@ const CONFIG = {
     // extra button labels Auto Retry may press on a dialog that appears after it
     // clicks retry. One per line. Blank means the built-in list only.
     confirmButtonLabels: "",
-    stopSelector: '[aria-label="Stop generation"], [data-action="stop"], [data-testid="stop"], ' +
-        'button[aria-label*="stop" i], button[title*="stop" i], [class*="_sendBtnStop_"]',
+    stopSelector: '[aria-label="Stop generation"], button[aria-label*="stop" i], button[title*="stop" i], [class*="_sendBtnStop_"]',
     // An impersonation is tried again by pressing this, with what you had typed
     // put back in the input box first.
     impersonateSelector: IMPERSONATE_BUTTON,
@@ -16780,7 +16789,8 @@ export function setup(ctx, opts) {
                 ["pointerdown", onDown],
                 ["pointermove", onMove],
                 ["pointerup", onUp],
-                ["pointercancel", onUp],
+                ["pointercancel", onCancel],
+                ["touchend", onLift],
                 ["contextmenu", onMenu],
             ]) {
                 try {
@@ -16853,6 +16863,14 @@ export function setup(ctx, opts) {
                 finish(null, "That button belongs to another extension. Hold the button in the chat itself.");
                 return;
             }
+            // The box was focused by the press, which brings up the keyboard on a
+            // phone. It has done its job once it is picked.
+            if (textField(node)) {
+                try {
+                    node.blur();
+                }
+                catch (_) { }
+            }
             const sel = deriveSelector(node);
             if (!sel) {
                 finish(null, "Could not identify that one. Try holding the button itself rather than an icon inside it.");
@@ -16884,6 +16902,27 @@ export function setup(ctx, opts) {
                 letGo();
         };
         const onUp = () => letGo();
+        // A text box is held differently. Holding one, a phone starts its own
+        // caret and paste menu, and takes the press away with no menu event to
+        // catch. So a press on a text box is not let go when it is taken away,
+        // only when the finger lifts, which the touch events still report.
+        const textField = (n) => {
+            try {
+                return !!(n && n.closest && n.closest('textarea, input, [contenteditable=""], [contenteditable="true"]'));
+            }
+            catch (_) {
+                return false;
+            }
+        };
+        const onCancel = () => {
+            if (held && textField(held.node))
+                return;
+            letGo();
+        };
+        const onLift = () => {
+            if (held && textField(held.node))
+                letGo();
+        };
         // The browser raising its own menu on a long press is that same press,
         // recognized by something else first. Taken as the pick rather than
         // competed with, which also covers a right click on a desktop.
@@ -16917,7 +16956,8 @@ export function setup(ctx, opts) {
                 ["pointerdown", onDown],
                 ["pointermove", onMove],
                 ["pointerup", onUp],
-                ["pointercancel", onUp],
+                ["pointercancel", onCancel],
+                ["touchend", onLift],
                 ["contextmenu", onMenu],
             ]) {
                 try {
@@ -16939,7 +16979,8 @@ export function setup(ctx, opts) {
         document.addEventListener("pointerdown", onDown, true);
         document.addEventListener("pointermove", onMove, true);
         document.addEventListener("pointerup", onUp, true);
-        document.addEventListener("pointercancel", onUp, true);
+        document.addEventListener("pointercancel", onCancel, true);
+        document.addEventListener("touchend", onLift, true);
         document.addEventListener("contextmenu", onMenu, true);
         document.addEventListener("keydown", onKey, true);
         // The field labels already read "Your ... button", so the leading "your" is

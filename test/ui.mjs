@@ -1215,6 +1215,57 @@ console.log("\nthe picker and the browser's own long press");
   check("no console errors", errors.length === 0, errors);
 }
 
+// ---- holding the input box ----
+// Holding a text box, a phone starts its own caret and paste menu and takes the
+// press away, often with no menu event. The hold still counts, and only the
+// finger lifting lets it go, so a quick tap still picks nothing.
+console.log("\nthe picker and the input box");
+{
+  const { out, errors } = await inPanel(browser, {}, (page) =>
+    page.evaluate(async () => {
+      const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      const box = document.createElement("textarea");
+      box.setAttribute("name", "chat-message");
+      box.style.cssText = "width:200px;height:40px";
+      document.body.appendChild(box);
+      const value = () => (document.querySelector('[data-ar-row="inputSelector"] input') || {}).value;
+      const startPick = async () => {
+        const row = document.getElementById("modal").querySelector('[data-ar-row="inputSelector"]');
+        // Something no pick would write, so only a real pick changes it.
+        const input = row.querySelector("input");
+        input.value = ".nothing-picked-yet";
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        const pick = [...row.querySelectorAll("button")].find((b) => /pick it for me/i.test(b.textContent));
+        pick.click();
+        await frame();
+      };
+      const b = box.getBoundingClientRect();
+      const at = { clientX: b.left + 4, clientY: b.top + 4, bubbles: true, cancelable: true, pointerType: "touch" };
+
+      // A quick tap: down, taken away, lifted. Nothing is picked.
+      await startPick();
+      const before = value();
+      box.dispatchEvent(new PointerEvent("pointerdown", at));
+      box.dispatchEvent(new PointerEvent("pointercancel", at));
+      await wait(100);
+      box.dispatchEvent(new Event("touchend", { bubbles: true }));
+      await wait(700);
+      const afterTap = value();
+      const stillPicking = document.documentElement.classList.contains("ar-picking");
+
+      // A hold: down, taken away by the browser, and held past the time.
+      box.dispatchEvent(new PointerEvent("pointerdown", at));
+      box.dispatchEvent(new PointerEvent("pointercancel", at));
+      await wait(800);
+      return { before, afterTap, stillPicking, afterHold: value() };
+    }),
+  );
+  check("a quick tap on the input box picks nothing", out.before === ".nothing-picked-yet" && out.afterTap === out.before && out.stillPicking, out);
+  check("holding the input box picks it, even when the browser takes the press away", /chat-message/.test(String(out.afterHold || "")), out);
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- what each part of a row answers to ----
 {
   // Only the switch flips the switch. The words beside it name it for a screen
@@ -1872,7 +1923,7 @@ console.log("\nthe panel is still live after a re-sync");
     const errors = [];
     page.on("pageerror", (e) => errors.push(e.message));
     page.on("console", (m) => { if (m.type() === "error") errors.push("console: " + m.text()); });
-    await stage(page, '<div id=modal></div><button data-testid="regenerate">Regenerate</button>');
+    await stage(page, '<div id=modal></div><button title="Regenerate" data-testid="regenerate">Regenerate</button>');
     await page.addStyleTag({ content: THEME });
     await page.addScriptTag({ content: SOURCE, type: "module" });
     await page.waitForFunction(() => !!window.__setup);
@@ -2456,7 +2507,7 @@ console.log("\nretrying");
   const page = await browser.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  await stage(page, '<div id=modal></div><button data-testid="regenerate">Regenerate</button>',);
+  await stage(page, '<div id=modal></div><button title="Regenerate" data-testid="regenerate">Regenerate</button>',);
   await page.addStyleTag({ content: THEME });
   await page.addScriptTag({ content: SOURCE, type: "module" });
   await page.waitForFunction(() => !!window.__setup);
@@ -2554,7 +2605,7 @@ console.log("\nthe pop-up stays clear of the input area");
     const page = await browser.newPage({ viewport, hasTouch: touch, isMobile: touch });
     const errors = [];
     page.on("pageerror", (e) => errors.push(e.message));
-    await stage(page, '<div id=modal></div><button data-testid="regenerate">Regenerate</button>' + body);
+    await stage(page, '<div id=modal></div><button title="Regenerate" data-testid="regenerate">Regenerate</button>' + body);
     await page.addStyleTag({ content: THEME + "html{zoom:" + zoom + "}" });
     await page.addScriptTag({ content: SOURCE, type: "module" });
     await page.waitForFunction(() => !!window.__setup);
@@ -2619,7 +2670,7 @@ console.log("\ntwo tabs on one chat");
     const page = await browser.newPage();
     const errors = [];
     page.on("pageerror", (e) => errors.push(e.message));
-    await stage(page, '<div id=modal></div><button data-testid="regenerate">Regenerate</button>');
+    await stage(page, '<div id=modal></div><button title="Regenerate" data-testid="regenerate">Regenerate</button>');
     await page.addStyleTag({ content: THEME });
     await page.addScriptTag({ content: SOURCE, type: "module" });
     await page.waitForFunction(() => !!window.__setup);
@@ -2756,7 +2807,7 @@ console.log("\ntwo tabs on one chat");
   const telling = await browser.newPage();
   const tellingErrors = [];
   telling.on("pageerror", (e) => tellingErrors.push(e.message));
-  await stage(telling, '<div id=modal></div><button data-testid="regenerate">Regenerate</button>');
+  await stage(telling, '<div id=modal></div><button title="Regenerate" data-testid="regenerate">Regenerate</button>');
   await telling.addStyleTag({ content: THEME });
   await telling.addScriptTag({ content: SOURCE, type: "module" });
   await telling.waitForFunction(() => !!window.__setup);
@@ -2800,7 +2851,7 @@ console.log("\ntwo tabs on one chat");
   const giving = await browser.newPage();
   const givingErrors = [];
   giving.on("pageerror", (e) => givingErrors.push(e.message));
-  await stage(giving, '<div id=modal></div><button data-testid="regenerate">Regenerate</button>');
+  await stage(giving, '<div id=modal></div><button title="Regenerate" data-testid="regenerate">Regenerate</button>');
   await giving.addStyleTag({ content: THEME });
   await giving.addScriptTag({ content: SOURCE, type: "module" });
   await giving.waitForFunction(() => !!window.__setup);
@@ -2925,7 +2976,7 @@ console.log("\nseveral tries at once");
   const page = await browser.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  await stage(page, '<div id=modal></div><button data-testid="regenerate">Regenerate</button>');
+  await stage(page, '<div id=modal></div><button title="Regenerate" data-testid="regenerate">Regenerate</button>');
   await page.addStyleTag({ content: THEME });
   await page.addScriptTag({ content: SOURCE, type: "module" });
   await page.waitForFunction(() => !!window.__setup);
@@ -3141,7 +3192,7 @@ console.log("\nseveral tries at once, when adding the reply that passed gets no 
   const page = await browser.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  await stage(page, '<div id=modal></div><button data-testid="regenerate">Regenerate</button>');
+  await stage(page, '<div id=modal></div><button title="Regenerate" data-testid="regenerate">Regenerate</button>');
   await page.addStyleTag({ content: THEME });
   await page.addScriptTag({ content: SOURCE, type: "module" });
   await page.waitForFunction(() => !!window.__setup);
@@ -3208,7 +3259,7 @@ console.log("\nseveral tries at once, with an impersonation started while they a
   const page = await browser.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  await stage(page, '<div id=modal></div><button data-testid="regenerate">Regenerate</button>' +
+  await stage(page, '<div id=modal></div><button title="Regenerate" data-testid="regenerate">Regenerate</button>' +
     '<textarea name="chat-message" style="width:200px;height:40px"></textarea>' +
     '<button type="button" title="Impersonate: One-liner" aria-label="Impersonate">I</button>');
   await page.addStyleTag({ content: THEME });
@@ -3283,7 +3334,7 @@ console.log("\nreduce motion");
     const page = await browser.newPage();
     const errors = [];
     page.on("pageerror", (e) => errors.push(e.message));
-    await stage(page, '<div id=modal></div><button data-testid="regenerate">Regenerate</button>');
+    await stage(page, '<div id=modal></div><button title="Regenerate" data-testid="regenerate">Regenerate</button>');
     await page.addStyleTag({ content: THEME });
     if (device) await page.emulateMedia({ reducedMotion: "reduce" });
     await page.addScriptTag({ content: SOURCE, type: "module" });
@@ -3464,7 +3515,7 @@ console.log("\nthe tries at once bar on a phone");
   const page = await browser.newPage({ viewport: { width: 412, height: 900 }, hasTouch: true, isMobile: true });
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  await stage(page, '<div id=modal></div><button data-testid="regenerate">Regenerate</button>');
+  await stage(page, '<div id=modal></div><button title="Regenerate" data-testid="regenerate">Regenerate</button>');
   await page.addStyleTag({ content: THEME });
   await page.addScriptTag({ content: SOURCE, type: "module" });
   await page.waitForFunction(() => !!window.__setup);
@@ -3532,7 +3583,7 @@ console.log("\nchats with no id of their own");
   const runOne = async (startP, endP, opts = {}) => {
     const page = await browser.newPage();
     page.on("pageerror", (e) => errors.push(e.message));
-    await stage(page, '<div id=modal></div><button data-testid="regenerate">Regenerate</button>');
+    await stage(page, '<div id=modal></div><button title="Regenerate" data-testid="regenerate">Regenerate</button>');
     await page.addScriptTag({ content: SOURCE, type: "module" });
     await page.waitForFunction(() => !!window.__setup);
     const res = await page.evaluate(async ([startP, endP, opts]) => {
@@ -3614,7 +3665,7 @@ console.log("\na reply that is streaming is not stuck");
   const runOne = async (tokenP) => {
     const page = await browser.newPage();
     page.on("pageerror", (e) => errors.push(e.message));
-    await stage(page, '<div id=modal></div><button data-testid="regenerate">R</button>');
+    await stage(page, '<div id=modal></div><button title="Regenerate" data-testid="regenerate">R</button>');
     await page.addScriptTag({ content: SOURCE, type: "module" });
     await page.waitForFunction(() => !!window.__setup);
     const res = await page.evaluate(async (tokenP) => {
@@ -3666,7 +3717,7 @@ console.log("\na council at work is not a stuck reply");
   const runOne = async (steps) => {
     const page = await browser.newPage();
     page.on("pageerror", (e) => errors.push(e.message));
-    await stage(page, '<div id=modal></div><button data-testid="regenerate">R</button>');
+    await stage(page, '<div id=modal></div><button title="Regenerate" data-testid="regenerate">R</button>');
     await page.addScriptTag({ content: SOURCE, type: "module" });
     await page.waitForFunction(() => !!window.__setup);
     const res = await page.evaluate(async (steps) => {
@@ -3724,7 +3775,7 @@ console.log("\nswitching off a temporary chat");
   const page = await browser.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  await stage(page, '<div id=modal></div><button data-testid="regenerate">R</button>');
+  await stage(page, '<div id=modal></div><button title="Regenerate" data-testid="regenerate">R</button>');
   await page.addScriptTag({ content: SOURCE, type: "module" });
   await page.waitForFunction(() => !!window.__setup);
   const out = await page.evaluate(async () => {
@@ -3807,7 +3858,7 @@ console.log("\nregeneration feedback");
   const page = await browser.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  await stage(page, '<div id=modal></div><button data-testid="regenerate">Regenerate</button>',);
+  await stage(page, '<div id=modal></div><button title="Regenerate" data-testid="regenerate">Regenerate</button>',);
   await page.addStyleTag({ content: THEME });
   await page.addScriptTag({ content: SOURCE, type: "module" });
   await page.waitForFunction(() => !!window.__setup);
@@ -4449,7 +4500,7 @@ console.log("\nlive countdown");
   const page = await browser.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  await stage(page, '<div id=modal></div><button data-testid="regenerate">Regenerate</button>');
+  await stage(page, '<div id=modal></div><button title="Regenerate" data-testid="regenerate">Regenerate</button>');
   await page.addStyleTag({ content: THEME });
   await page.addScriptTag({ content: SOURCE, type: "module" });
   await page.waitForFunction(() => !!window.__setup);
@@ -4649,7 +4700,7 @@ console.log("\nstatus after a stop");
   const page = await browser.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  await stage(page, '<div id=modal></div><button data-testid="regenerate">Regenerate</button><button data-testid="stop">Stop</button>');
+  await stage(page, '<div id=modal></div><button title="Regenerate" data-testid="regenerate">Regenerate</button><button aria-label="Stop generation" data-testid="stop">Stop</button>');
   await page.addStyleTag({ content: THEME });
   await page.addScriptTag({ content: SOURCE, type: "module" });
   await page.waitForFunction(() => !!window.__setup);
@@ -4992,7 +5043,7 @@ console.log("\nthe page is told when a retry is set and called off");
   const page = await browser.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  await stage(page, '<div id=modal></div><button data-testid="regenerate">Regenerate</button>');
+  await stage(page, '<div id=modal></div><button title="Regenerate" data-testid="regenerate">Regenerate</button>');
   await page.addStyleTag({ content: THEME });
   await page.addScriptTag({ content: SOURCE, type: "module" });
   await page.waitForFunction(() => !!window.__setup);
@@ -5037,7 +5088,7 @@ console.log("\npop-up goes away");
   const page = await browser.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  await stage(page, '<div id=modal></div><button data-testid="regenerate">Regenerate</button>');
+  await stage(page, '<div id=modal></div><button title="Regenerate" data-testid="regenerate">Regenerate</button>');
   await page.addStyleTag({ content: THEME });
   await page.addScriptTag({ content: SOURCE, type: "module" });
   await page.waitForFunction(() => !!window.__setup);
@@ -5496,7 +5547,7 @@ console.log("\nwhat streamed stands in for the reply");
   const page = await browser.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  await stage(page, '<div id=modal></div><button data-testid="regenerate">Regenerate</button>');
+  await stage(page, '<div id=modal></div><button title="Regenerate" data-testid="regenerate">Regenerate</button>');
   await page.addStyleTag({ content: THEME });
   await page.addScriptTag({ content: SOURCE, type: "module" });
   await page.waitForFunction(() => !!window.__setup);
@@ -5880,7 +5931,7 @@ console.log("\nfloating surfaces");
   const page = await browser.newPage();
   const errs = [];
   page.on("pageerror", (e) => errs.push(e.message));
-  await stage(page, '<div id=modal></div><button data-testid="regenerate">Regenerate</button>');
+  await stage(page, '<div id=modal></div><button title="Regenerate" data-testid="regenerate">Regenerate</button>');
   await page.addStyleTag({ content: THEME });
   await page.addScriptTag({ content: SOURCE, type: "module" });
   await page.waitForFunction(() => !!window.__setup);
@@ -7046,7 +7097,7 @@ console.log("\nrefusal note");
   const page = await browser.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  await stage(page, '<div id=modal></div><button data-testid="regenerate">Regenerate</button>');
+  await stage(page, '<div id=modal></div><button title="Regenerate" data-testid="regenerate">Regenerate</button>');
   await page.addStyleTag({ content: THEME });
   await page.addScriptTag({ content: SOURCE, type: "module" });
   await page.waitForFunction(() => !!window.__setup);
@@ -7167,7 +7218,7 @@ console.log("\nper-chat switch");
   const page = await browser.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  await stage(page, '<div id=modal></div><div id=host></div><button data-testid="regenerate">Regenerate</button>');
+  await stage(page, '<div id=modal></div><div id=host></div><button title="Regenerate" data-testid="regenerate">Regenerate</button>');
   await page.addStyleTag({ content: THEME });
   await page.addScriptTag({ content: SOURCE, type: "module" });
   await page.waitForFunction(() => !!window.__setup);
@@ -7342,7 +7393,7 @@ console.log("\nstats view");
   const page = await browser.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  await stage(page, '<div id=modal></div><button data-testid="regenerate">Regenerate</button>');
+  await stage(page, '<div id=modal></div><button title="Regenerate" data-testid="regenerate">Regenerate</button>');
   await page.addStyleTag({ content: THEME });
   await page.addScriptTag({ content: SOURCE, type: "module" });
   await page.waitForFunction(() => !!window.__setup);
@@ -7535,7 +7586,7 @@ console.log("\nretries are tallied per chat, not per label");
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   page.on("console", (m) => { if (m.type() === "error") errors.push("console: " + m.text()); });
-  await stage(page, '<div id=modal></div><button data-testid="regenerate">Regenerate</button>');
+  await stage(page, '<div id=modal></div><button title="Regenerate" data-testid="regenerate">Regenerate</button>');
   await page.addStyleTag({ content: THEME });
   await page.addScriptTag({ content: SOURCE, type: "module" });
   await page.waitForFunction(() => !!window.__setup);
@@ -7693,7 +7744,7 @@ console.log("\nthe reply a retry threw away");
   const run = async (opts) => {
     const page = await browser.newPage();
     page.on("pageerror", (e) => errors.push(e.message));
-    await stage(page, '<div id=modal></div><button data-testid="regenerate">R</button><button data-testid="swipe-right">S</button>');
+    await stage(page, '<div id=modal></div><button title="Regenerate" data-testid="regenerate">R</button><button aria-label="Next swipe" data-testid="swipe-right">S</button>');
     await page.addScriptTag({ content: SOURCE, type: "module" });
     await page.waitForFunction(() => !!window.__setup);
     const res = await page.evaluate(async ([opts, REPLY]) => {
@@ -7743,7 +7794,7 @@ console.log("\nthe reply a retry threw away");
   // the promise is only about replies that had not happened yet.
   const page = await browser.newPage();
   page.on("pageerror", (e) => errors.push(e.message));
-  await stage(page, '<div id=modal></div><button data-testid="regenerate">R</button><button data-testid="swipe-right">S</button>');
+  await stage(page, '<div id=modal></div><button title="Regenerate" data-testid="regenerate">R</button><button aria-label="Next swipe" data-testid="swipe-right">S</button>');
   await page.addScriptTag({ content: SOURCE, type: "module" });
   await page.waitForFunction(() => !!window.__setup);
   const dropped = await page.evaluate(async (REPLY) => {
@@ -7801,7 +7852,7 @@ console.log("\nthe reply a retry threw away");
 async function page2NoChat(browser, REPLY, errors) {
   const page = await browser.newPage();
   page.on("pageerror", (e) => errors.push(e.message));
-  await stage(page, '<div id=modal></div><button data-testid="regenerate">R</button><button data-testid="swipe-right">S</button>');
+  await stage(page, '<div id=modal></div><button title="Regenerate" data-testid="regenerate">R</button><button aria-label="Next swipe" data-testid="swipe-right">S</button>');
   await page.addScriptTag({ content: SOURCE, type: "module" });
   await page.waitForFunction(() => !!window.__setup);
   const out = await page.evaluate(async (REPLY) => {
@@ -7848,7 +7899,7 @@ console.log("\nturning swiping on for people who already had settings");
     page.on("pageerror", (e) => errors.push(e.message));
     await page.route("**/*", (r) => r.fulfill({ contentType: "text/html", body:
       '<!doctype html><meta charset=utf-8><div id=modal></div>' +
-      '<button data-testid="regenerate">R</button><button data-testid="swipe-right">S</button>' }));
+      '<button title="Regenerate" data-testid="regenerate">R</button><button aria-label="Next swipe" data-testid="swipe-right">S</button>' }));
     await page.goto("http://lumiverse.test/");
     await page.addScriptTag({ content: SOURCE, type: "module" });
     await page.waitForFunction(() => !!window.__setup);
@@ -7907,7 +7958,7 @@ console.log("\nkeeping a reply that was fine");
   const loop = async (mode) => {
     const page = await browser.newPage();
     page.on("pageerror", (e) => errors.push(e.message));
-    await stage(page, '<div id=modal></div><button data-testid="regenerate">R</button>');
+    await stage(page, '<div id=modal></div><button title="Regenerate" data-testid="regenerate">R</button>');
     await page.addScriptTag({ content: SOURCE, type: "module" });
     await page.waitForFunction(() => !!window.__setup);
     const res = await page.evaluate(async (mode) => {
@@ -7956,7 +8007,7 @@ console.log("\nkeeping a reply that was fine");
   const ending = async (endPayload) => {
     const page = await browser.newPage();
     page.on("pageerror", (e) => errors.push(e.message));
-    await stage(page, '<div id=modal></div><button data-testid="regenerate">R</button><button data-testid="swipe-right">S</button>');
+    await stage(page, '<div id=modal></div><button title="Regenerate" data-testid="regenerate">R</button><button aria-label="Next swipe" data-testid="swipe-right">S</button>');
     await page.addScriptTag({ content: SOURCE, type: "module" });
     await page.waitForFunction(() => !!window.__setup);
     const res = await page.evaluate(async ([endPayload, REPLY]) => {
@@ -7996,7 +8047,8 @@ console.log("\nkeeping a reply that was fine");
 // ---- a retry never clicks the extension's own panel ----
 // The button selectors are patterns, not addresses, and the extension's own
 // settings are called things like "Retry by adding a new reroll", so its own
-// description button for that row matches the built-in swipe pattern exactly.
+// description button for that row matches a broad swipe selector someone
+// could type, such as `button[aria-label*="reroll" i]`.
 // With the panel open a retry opened a description instead of retrying, and
 // the reader watching the log saw the extension do nothing at all.
 //
@@ -8008,7 +8060,7 @@ console.log("\na retry never clicks the extension's own panel");
   const page = await browser.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  await stage(page, '<div id=modal></div><button data-testid="regenerate">Regenerate</button>');
+  await stage(page, '<div id=modal></div><button title="Regenerate" data-testid="regenerate">Regenerate</button>');
   await page.addScriptTag({ content: SOURCE, type: "module" });
   await page.waitForFunction(() => !!window.__setup);
   const out = await page.evaluate(async () => {
@@ -8020,18 +8072,17 @@ console.log("\na retry never clicks the extension's own panel");
         ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
               registerInputBarAction: (o) => { const a = { onClick: (cb) => { a.cb = cb; return () => {}; }, destroy: () => {} }; acts[o.id] = a; return a; } } },
       { toast: false, retryDelayMs: 10, backoffFactor: 1, maxDelayMs: 10, jitter: false,
-        maxRetries: 4, stuckTimeoutMs: 0, idleTimeoutMs: 0, pauseWhenFailing: false },
+        maxRetries: 4, stuckTimeoutMs: 0, idleTimeoutMs: 0, pauseWhenFailing: false,
+        swipeNextSelector: 'button[aria-label*="reroll" i]' },
     );
     acts["auto-retry-settings"].cb();
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
     for (const hdr of document.querySelectorAll('[role="button"][aria-expanded="false"]')) hdr.click();
     await new Promise((r) => setTimeout(r, 60));
 
-    // The panel really does hold something the built-in swipe pattern matches,
-    // so this cannot pass by the trap having gone away.
-    const SWIPE = '[aria-label="Next swipe"], [data-action="swipe-right"], [data-testid="swipe-right"], ' +
-      'button[aria-label*="next swipe" i], button[aria-label*="swipe right" i], ' +
-      'button[aria-label*="reroll" i], button[title*="swipe" i]';
+    // A broad swipe selector someone could type, which the panel really does
+    // hold something for, so this cannot pass by the trap having gone away.
+    const SWIPE = 'button[aria-label*="reroll" i]';
     const trap = [...document.querySelectorAll(SWIPE)].filter((e) => e.closest("#modal")).length;
 
     const before = clicks;
@@ -8042,7 +8093,7 @@ console.log("\na retry never clicks the extension's own panel");
     return { trap, retried: clicks > before, ownUiMarked: !!document.querySelector("[data-ar-ui]") };
   });
   await page.close();
-  check("the panel holds something the swipe pattern matches",
+  check("the panel holds something a broad swipe selector matches",
     out.trap > 0, out.trap);
   check("and the retry goes to the host's button, not that one",
     out.retried === true, out);
@@ -8059,7 +8110,7 @@ console.log("\nturning it off and on from the settings sends no notification");
   const page = await browser.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  await stage(page, '<div id=modal></div><button data-testid="regenerate">Regenerate</button>');
+  await stage(page, '<div id=modal></div><button title="Regenerate" data-testid="regenerate">Regenerate</button>');
   await page.addScriptTag({ content: SOURCE, type: "module" });
   await page.waitForFunction(() => !!window.__setup);
   const out = await page.evaluate(async () => {
@@ -8108,7 +8159,7 @@ console.log("\nanother extension's buttons, and a refusal sent as an error");
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await stage(page,
-    '<div id=modal></div><button data-testid="regenerate">Regenerate</button>' +
+    '<div id=modal></div><button title="Regenerate" data-testid="regenerate">Regenerate</button>' +
     '<div data-spindle-extension-root="another_one"><div class="thread">' +
     '<button title="Regenerate" aria-label="Regenerate response">R</button></div></div>');
   await page.addScriptTag({ content: SOURCE, type: "module" });
@@ -8284,6 +8335,44 @@ console.log("\nfinding the button to press");
     check("Lumiverse's own swipe arrow is pressed on the newest message", out.newest === 1 && out.older === 0, out);
     check("no console errors", errors.length === 0, errors);
   }
+
+  // The same arrows inside Lumiverse's own box for them, with the next arrow
+  // saying a new swipe is ready in place of "Next swipe". It is found by the
+  // box, and the previous arrow and Regenerate are left alone.
+  {
+    const page = await browser.newPage();
+    const errors = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    const BOX =
+      '<div data-component="SwipeControls"><button type="button" aria-label="Previous swipe">L</button>' +
+      '<span>1 / 2</span><button type="button" aria-label="New swipe ready">R</button></div>';
+    await stage(page, "<div id=modal></div><div class=older>" + BOX + "</div><div class=newest>" + BOX + "</div>" +
+      '<span data-composer-action="regen" style="display:contents"><button type="button" aria-label="Regenerate">G</button></span>');
+    await page.addScriptTag({ content: SOURCE, type: "module" });
+    await page.waitForFunction(() => !!window.__setup);
+    const out = await page.evaluate(async () => {
+      const h = {};
+      const hits = { older: 0, newest: 0, previous: 0, regen: 0 };
+      document.querySelector(".older button:last-of-type").addEventListener("click", () => hits.older++);
+      document.querySelector(".newest button:last-of-type").addEventListener("click", () => hits.newest++);
+      document.querySelector(".newest button:first-of-type").addEventListener("click", () => hits.previous++);
+      document.querySelector('[data-composer-action="regen"] button').addEventListener("click", () => hits.regen++);
+      window.__setup(
+        { events: { on: (n, f) => { h[n] = f; return () => {}; } },
+          ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }) } },
+        { toast: false, retryDelayMs: 10, backoffFactor: 1, maxDelayMs: 10, jitter: false,
+          maxRetries: 4, stuckTimeoutMs: 0, idleTimeoutMs: 0, pauseWhenFailing: false, retryByNewReroll: true },
+      );
+      h.GENERATION_STARTED({ chatId: "B", generationId: "s2" });
+      await new Promise((r) => setTimeout(r, 10));
+      h.GENERATION_ENDED({ chatId: "B", generationId: "s2", error: "boom" });
+      await new Promise((r) => setTimeout(r, 700));
+      return hits;
+    });
+    await page.close();
+    check("the next arrow in Lumiverse's swipe box is pressed, whatever its label says", out.newest === 1 && out.older === 0 && out.previous === 0 && out.regen === 0, out);
+    check("no console errors", errors.length === 0, errors);
+  }
 }
 
 // ---- an impersonation is not a reply ----
@@ -8301,7 +8390,7 @@ console.log("\nan impersonation is not a reply");
     await stage(
       page,
       "<div id=modal></div>" +
-        '<button data-testid="regenerate">Regenerate</button>' +
+        '<button title="Regenerate" data-testid="regenerate">Regenerate</button>' +
         '<span data-composer-action="oneliner" style="display:contents">' +
         '<button type="button" title="Impersonate: One-liner" aria-label="Impersonate">I</button></span>',
     );
@@ -8359,7 +8448,7 @@ console.log("\nan impersonation that goes wrong is tried again");
     await stage(
       page,
       "<div id=modal></div>" +
-        '<button data-testid="regenerate">Regenerate</button>' +
+        '<button title="Regenerate" data-testid="regenerate">Regenerate</button>' +
         '<textarea name="chat-message" style="width:200px;height:40px"></textarea>' +
         '<button type="button" title="Impersonate: One-liner" aria-label="Impersonate">I</button>',
     );
@@ -8437,7 +8526,46 @@ console.log("\nan impersonation that goes wrong is tried again");
   const elsewhere = await run({ end: { content: REFUSAL }, press: false });
   check("an impersonation this tab did not see started is left alone", elsewhere.out.presses === 0 && elsewhere.out.regens === 0, elsewhere.out);
 
-  const all = [refused, errored, blank, cut, short, openQuote, typed, off, elsewhere];
+  // Lumiverse in another language: the button's label is translated, and it
+  // is found by the mark Lumiverse puts on it in the bar. The input box has no
+  // name here, and is found inside the input area instead.
+  const translated = await (async () => {
+    const page = await browser.newPage();
+    const errors = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    await stage(page, "<div id=modal></div>" +
+      '<div data-component="InputArea"><textarea style="width:200px;height:40px"></textarea>' +
+      '<span data-composer-action="oneliner" style="display:contents"><button type="button" title="Imitar: una frase" aria-label="Imitar">I</button></span></div>');
+    await page.addScriptTag({ content: SOURCE, type: "module" });
+    await page.waitForFunction(() => !!window.__setup);
+    const out = await page.evaluate(async (REFUSAL) => {
+      const h = {};
+      const box = document.querySelector('[data-component="InputArea"] textarea');
+      const pressedWith = [];
+      document.querySelector('[aria-label="Imitar"]').addEventListener("click", () => { pressedWith.push(box.value); box.value = ""; });
+      window.__setup(
+        { events: { on: (n, f) => { h[n] = f; return () => {}; } },
+          ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }) } },
+        { toast: false, retryDelayMs: 10, backoffFactor: 1, maxDelayMs: 10, jitter: false, maxRetries: 3,
+          stuckTimeoutMs: 0, idleTimeoutMs: 0, pauseWhenFailing: false },
+      );
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      box.value = "Ich winke von der Tür.";
+      document.querySelector('[aria-label="Imitar"]').click();
+      h.GENERATION_STARTED({ chatId: "T", generationId: "t1" });
+      await wait(10);
+      box.value = REFUSAL;
+      h.GENERATION_ENDED({ chatId: "T", generationId: "t1", content: REFUSAL });
+      await wait(400);
+      return { presses: pressedWith.length, second: pressedWith[1] || null };
+    }, REFUSAL);
+    await page.close();
+    return { out, errors };
+  })();
+  check("in another language, the Impersonate button is found by Lumiverse's mark and pressed again", translated.out.presses === 2, translated.out);
+  check("and an input box with no name is found, with what you had typed put back", translated.out.second === "Ich winke von der Tür.", translated.out);
+
+  const all = [refused, errored, blank, cut, short, openQuote, typed, off, elsewhere, translated];
   check("no console errors", all.every((r) => r.errors.length === 0), all.map((r) => r.errors));
 }
 
@@ -8460,8 +8588,8 @@ console.log("\na reply that stopped partway with text in it");
     const page = await browser.newPage();
     page.on("pageerror", (e) => errors.push(e.message));
     await stage(page,
-      '<div id=modal></div><button data-testid="regenerate">R</button>' +
-      '<button data-testid="swipe-right">S</button><button data-testid="stop">X</button>');
+      '<div id=modal></div><button title="Regenerate" data-testid="regenerate">R</button>' +
+      '<button aria-label="Next swipe" data-testid="swipe-right">S</button><button aria-label="Stop generation" data-testid="stop">X</button>');
     await page.addScriptTag({ content: SOURCE, type: "module" });
     await page.waitForFunction(() => !!window.__setup);
     const res = await page.evaluate(async ([opts, streamText, kind]) => {
@@ -8770,8 +8898,8 @@ console.log("\na reply that arrived with none of its events");
     const page = await browser.newPage();
     page.on("pageerror", (e) => errors.push(e.message));
     await stage(page,
-      '<div id=modal></div><button data-testid="regenerate">R</button>' +
-      '<button data-testid="swipe-right">S</button><button data-testid="stop">X</button>' +
+      '<div id=modal></div><button title="Regenerate" data-testid="regenerate">R</button>' +
+      '<button aria-label="Next swipe" data-testid="swipe-right">S</button><button aria-label="Stop generation" data-testid="stop">X</button>' +
       '<div id=chat><div data-component="MessageContent">Marisol waited by the gate.</div></div>');
     await page.addScriptTag({ content: SOURCE, type: "module" });
     await page.waitForFunction(() => !!window.__setup);
@@ -8870,8 +8998,8 @@ console.log("\na reply that finished while the tab was asleep");
     const page = await browser.newPage();
     page.on("pageerror", (e) => errors.push(e.message));
     await stage(page,
-      '<div id=modal></div><button data-testid="regenerate">R</button>' +
-      '<button data-testid="swipe-right">S</button><button data-testid="stop">X</button>');
+      '<div id=modal></div><button title="Regenerate" data-testid="regenerate">R</button>' +
+      '<button aria-label="Next swipe" data-testid="swipe-right">S</button><button aria-label="Stop generation" data-testid="stop">X</button>');
     await page.addScriptTag({ content: SOURCE, type: "module" });
     await page.waitForFunction(() => !!window.__setup);
     const res = await page.evaluate(async ([jumpMs, endAfter]) => {
@@ -8955,7 +9083,7 @@ console.log("\nleaving a chat with nothing said about it");
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   page.on("console", (m) => { if (m.type() === "error") errors.push("console: " + m.text()); });
-  await stage(page, '<div id=modal></div><button data-testid="regenerate">R</button>');
+  await stage(page, '<div id=modal></div><button title="Regenerate" data-testid="regenerate">R</button>');
   await page.addScriptTag({ content: SOURCE, type: "module" });
   await page.waitForFunction(() => !!window.__setup);
   const out = await page.evaluate(async () => {
@@ -9081,7 +9209,7 @@ console.log("\nan answer that lands after a chat event");
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   page.on("console", (m) => { if (m.type() === "error") errors.push("console: " + m.text()); });
-  await stage(page, '<div id=modal></div><button data-testid="regenerate">R</button>');
+  await stage(page, '<div id=modal></div><button title="Regenerate" data-testid="regenerate">R</button>');
   await page.addScriptTag({ content: SOURCE, type: "module" });
   await page.waitForFunction(() => !!window.__setup);
   const out = await page.evaluate(async () => {
@@ -9856,7 +9984,7 @@ console.log("\na finished reply is not re-rolled, a stalled one still is");
     const errors = [];
     page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
     page.on("console", (m) => { if (m.type() === "error") errors.push("console: " + m.text()); });
-    await stage(page, '<div id=modal></div><button data-testid="regenerate">Regenerate</button>');
+    await stage(page, '<div id=modal></div><button title="Regenerate" data-testid="regenerate">Regenerate</button>');
     await page.addStyleTag({ content: THEME });
     await page.addScriptTag({ content: SOURCE, type: "module" });
     await page.waitForFunction(() => !!window.__setup);
@@ -9940,7 +10068,7 @@ console.log("\none-off messages are Lumiverse notifications, and the box is the 
   const errors = [];
   page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
   page.on("console", (m) => { if (m.type() === "error") errors.push("console: " + m.text()); });
-  await stage(page, '<div id=modal></div><button data-testid="regenerate">Regenerate</button>');
+  await stage(page, '<div id=modal></div><button title="Regenerate" data-testid="regenerate">Regenerate</button>');
   await page.addStyleTag({ content: THEME });
   await page.addScriptTag({ content: SOURCE, type: "module" });
   await page.waitForFunction(() => !!window.__setup);
@@ -10032,7 +10160,7 @@ console.log("\nthe countdown box holds still while it counts down");
       const errors = [];
       page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
       page.on("console", (m) => { if (m.type() === "error") errors.push("console: " + m.text()); });
-      await stage(page, '<div id=modal></div><button data-testid="regenerate">Regenerate</button>');
+      await stage(page, '<div id=modal></div><button title="Regenerate" data-testid="regenerate">Regenerate</button>');
       await page.addStyleTag({ content: THEME + "html{zoom:" + zoom + "}" });
       await page.addScriptTag({ content: SOURCE, type: "module" });
       await page.waitForFunction(() => !!window.__setup);
@@ -11707,7 +11835,7 @@ console.log("\ntaking a note back");
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   page.on("console", (m) => { if (m.type() === "error") errors.push("console: " + m.text()); });
-  await stage(page, '<div id=modal></div><button data-testid="regenerate">Regenerate</button>');
+  await stage(page, '<div id=modal></div><button title="Regenerate" data-testid="regenerate">Regenerate</button>');
   await page.addStyleTag({ content: THEME });
   await page.addScriptTag({ content: SOURCE, type: "module" });
   await page.waitForFunction(() => !!window.__setup);
@@ -14566,7 +14694,7 @@ console.log("\nrebuilt in place");
   const page = await browser.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  await stage(page, '<div id=modal></div><button data-testid="regenerate">R</button>');
+  await stage(page, '<div id=modal></div><button title="Regenerate" data-testid="regenerate">R</button>');
   await page.addScriptTag({ content: SOURCE, type: "module" });
   await page.waitForFunction(() => !!window.__setup);
   const out = await page.evaluate(async () => {
@@ -15138,7 +15266,7 @@ console.log("\na provider error written into the reply");
   const once = async (content, phrases) => {
     const page = await browser.newPage();
     page.on("pageerror", (e) => errLines.push(e.message));
-    await stage(page, '<div id=modal></div><button data-testid="regenerate">Regenerate</button>');
+    await stage(page, '<div id=modal></div><button title="Regenerate" data-testid="regenerate">Regenerate</button>');
     await page.addScriptTag({ content: SOURCE, type: "module" });
     await page.waitForFunction(() => !!window.__setup);
     const clicks = await page.evaluate(async ([content, phrases]) => {
