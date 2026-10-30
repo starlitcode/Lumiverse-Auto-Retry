@@ -420,13 +420,71 @@ const def = (key) => String(CONFIG[key]);
 // A new install is marked as told about every row there is when it starts
 // (see loadFromAccount). Somebody who installs after a default moved was never
 // on the old one, even if they later pick the same value themselves.
-const MOVED_DEFAULTS = [];
+//
+// A selector list is a row of its own, so a reader still on an old list is
+// told the built-in one moved. The lists below are as 5.24.0 had them.
+const MOVED_DEFAULTS = [
+    {
+        key: "regenerateSelector",
+        was: '[data-composer-action="regen"] button, ' +
+            '[title="Regenerate"], [data-action="regenerate"], [data-testid="regenerate"], ' +
+            'button[aria-label*="regenerate" i], button[title*="regenerate" i]',
+        label: "Your regenerate button",
+        why: "marks no Lumiverse button has were taken out of the built-in list.",
+    },
+    {
+        key: "swipeNextSelector",
+        was: '[aria-label="Next swipe"], [data-action="swipe-right"], [data-testid="swipe-right"], ' +
+            'button[aria-label*="next swipe" i], button[aria-label*="swipe right" i], ' +
+            'button[aria-label*="reroll" i], button[title*="swipe" i]',
+        label: "Your next / swipe button",
+        why: "the built-in list now finds the arrow by the box Lumiverse puts the swipe arrows in, which works in every language. Marks no Lumiverse button has were taken out.",
+    },
+    {
+        key: "stopSelector",
+        was: '[aria-label="Stop generation"], [data-action="stop"], [data-testid="stop"], ' +
+            'button[aria-label*="stop" i], button[title*="stop" i], [class*="_sendBtnStop_"]',
+        label: "Your stop button",
+        why: "marks no Lumiverse button has were taken out of the built-in list.",
+    },
+    {
+        key: "impersonateSelector",
+        was: '[aria-label="Impersonate"], button[title^="Impersonate"]',
+        label: "Your Impersonate button",
+        why: "the built-in list now finds the button by the mark Lumiverse puts on it, which works in every language.",
+    },
+    {
+        key: "inputSelector",
+        was: 'textarea[name="chat-message"]',
+        label: "Your input box",
+        why: "the built-in list now holds the same selectors as Auto Refine, so a Lumiverse that renames the box is still covered.",
+    },
+];
+// A short mark for a text, so a long one fits in the marks below. FNV-1a, the
+// same as the built-in notes' mark.
+function markText(text) {
+    let h = 0x811c9dc5;
+    for (let i = 0; i < text.length; i++) {
+        h ^= text.charCodeAt(i);
+        h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
+    }
+    return h.toString(36);
+}
 // What a browser writes down once told about a row: the setting and the value
-// it moved from. The values themselves rather than a hash: the list is short,
-// and a mark somebody can read in their own storage is better than one only
-// this file can explain. Each row has its own, so a row added later is still
-// told, and a row already answered is not asked about again.
-const movedRowMark = (m) => m.key + ":" + String(m.was);
+// it moved from. A number is written as it is, so a mark somebody can read in
+// their own storage stays readable. A text is written as a short mark of it,
+// since the marks are kept in one line split on spaces. Each row has its own,
+// so a row added later is still told, and a row already answered is not asked
+// about again.
+const movedRowMark = (m) => m.key + ":" + (typeof m.was === "string" ? markText(m.was) : String(m.was));
+// Whether a setting still holds the value a row moved from. A selector list
+// is the same list whatever the spacing around its commas.
+function sameAsWas(now, was) {
+    if (typeof was === "number")
+        return Number(now) === was;
+    const list = (v) => splitSelectorList(String(v == null ? "" : v)).join(", ");
+    return list(now) === list(was);
+}
 const allMovedMarks = () => MOVED_DEFAULTS.map(movedRowMark).join(" ");
 // The time on the reader's own clock, with the zone, so a time in a report
 // matches what the person saw and can be turned into anyone else's time.
@@ -3795,34 +3853,44 @@ function splitSelectorList(raw) {
     out.push(buf.trim());
     return out.filter((p) => p.length > 0);
 }
-// Class and id names Lumiverse generates per build (like _card_19912_336).
-// They change on every release, so a selector built on one stops
-// matching after an app update. Skipped when building a selector from a click.
+// Class and id names Lumiverse makes fresh for each build, such as
+// _card_19912_336. A selector built on one stops matching after an update, so
+// they are skipped when a selector is made from something held.
 const UNSTABLE_NAME = /(^_)|(_[a-z0-9]{4,}_\d+$)|(_[a-z0-9]{6,}$)|([-_][a-f0-9]{6,}$)/i;
 const SAFE_NAME = /^[A-Za-z_-][\w-]*$/;
-// Turns the element someone clicked into a selector for that control, choosing
-// attributes that survive an app update over class names that do not. Returns
-// null when nothing dependable is on the element.
+// Turns the box or button someone held into a selector for it, choosing
+// attributes that stay the same through an update over class names that do
+// not. Null when nothing dependable is on it. The same as Auto Refine's.
 function deriveSelector(start) {
-    let el = start;
-    let hops = 0;
-    // Clicks usually land on an icon or a span inside the control, so walk up to
-    // the thing that actually behaves like a button.
-    while (el && hops < 6) {
-        const tag = String(el.tagName || "").toLowerCase();
-        const role = el.getAttribute ? el.getAttribute("role") : null;
-        if (tag === "button" || tag === "a" || role === "button")
+    // A text box is the thing itself. Anything else is usually pressed on an
+    // icon or a span inside the control, so walk up to what behaves like a
+    // button. With nothing like one near, it stays on what was pressed, rather
+    // than on some box far up the page.
+    let el = null;
+    let node = start;
+    for (let hops = 0; node && hops < 6; hops++) {
+        const tag = String(node.tagName || "").toLowerCase();
+        const role = node.getAttribute ? node.getAttribute("role") : null;
+        if (tag === "textarea" || tag === "input" || node.isContentEditable === true ||
+            tag === "button" || tag === "a" || role === "button") {
+            el = node;
             break;
-        el = el.parentElement;
-        hops++;
+        }
+        node = node.parentElement;
     }
-    if (!el || !el.getAttribute)
+    if (!el)
         el = start;
     if (!el || !el.getAttribute)
         return null;
     const tag = String(el.tagName || "").toLowerCase() || "*";
     const q = (v) => '"' + String(v).replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"';
-    for (const attr of ["data-testid", "data-test-id", "data-test", "data-action", "aria-label", "title", "name"]) {
+    // A text box's name is set by the app and is the same in every language,
+    // where its label is translated.
+    const typed = tag === "textarea" || tag === "input" || el.isContentEditable === true;
+    const attrs = typed
+        ? ["name", "data-testid", "data-test-id", "data-test", "aria-label", "placeholder"]
+        : ["data-testid", "data-test-id", "data-test", "data-action", "aria-label", "title", "name"];
+    for (const attr of attrs) {
         const v = el.getAttribute(attr);
         if (v && String(v).trim())
             return tag + "[" + attr + "=" + q(String(v).trim()) + "]";
@@ -8079,7 +8147,7 @@ export function setup(ctx, opts) {
             if (typeof localStorage === "undefined")
                 return [];
             const seen = String(localStorage.getItem(MOVED_SEEN_KEY) || "").split(" ");
-            return MOVED_DEFAULTS.filter((m) => seen.indexOf(movedRowMark(m)) < 0 && Number(cfg[m.key]) === m.was);
+            return MOVED_DEFAULTS.filter((m) => seen.indexOf(movedRowMark(m)) < 0 && sameAsWas(cfg[m.key], m.was));
         }
         catch (_) {
             return [];
@@ -16826,15 +16894,21 @@ export function setup(ctx, opts) {
             else
                 back();
         };
-        // The press that picked is still down, so a click is coming for whatever is
+        // The press that picked is still down, so a click can come for whatever is
         // under it. Eaten by a listener of its own, since the picker stands down the
-        // moment it has its answer and would take its own with it.
+        // moment it has its answer and would take its own with it. A phone that
+        // took the press away sends no click, so the next press ends the wait, and
+        // the tap after a pick is never the one eaten.
         const eatClick = () => {
-            const eat = (e) => {
+            const stop = () => {
                 try {
                     document.removeEventListener("click", eat, true);
+                    document.removeEventListener("pointerdown", stop, true);
                 }
                 catch (_) { }
+            };
+            const eat = (e) => {
+                stop();
                 try {
                     e.preventDefault();
                     e.stopPropagation();
@@ -16842,12 +16916,8 @@ export function setup(ctx, opts) {
                 catch (_) { }
             };
             document.addEventListener("click", eat, true);
-            setTimeout(() => {
-                try {
-                    document.removeEventListener("click", eat, true);
-                }
-                catch (_) { }
-            }, 1200);
+            document.addEventListener("pointerdown", stop, true);
+            setTimeout(stop, 1200);
         };
         const take = (node) => {
             held = null;

@@ -1225,10 +1225,16 @@ console.log("\nthe picker and the input box");
     page.evaluate(async () => {
       const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-      const box = document.createElement("textarea");
-      box.setAttribute("name", "chat-message");
-      box.style.cssText = "width:200px;height:40px";
-      document.body.appendChild(box);
+      // Nested the way Lumiverse nests it, with a translated label on it, so
+      // the pick has to stop at the box rather than climb to a wrapper.
+      const area = document.createElement("div");
+      area.setAttribute("data-component", "InputArea");
+      area.innerHTML =
+        '<div class="_inputWrap_k3x9q_12"><div><div class="_field_k3x9q_40">' +
+        '<textarea name="chat-message" aria-label="Mensaje" style="width:200px;height:40px"></textarea>' +
+        "</div></div></div>";
+      document.body.appendChild(area);
+      const box = area.querySelector("textarea");
       const value = () => (document.querySelector('[data-ar-row="inputSelector"] input') || {}).value;
       const startPick = async () => {
         const row = document.getElementById("modal").querySelector('[data-ar-row="inputSelector"]');
@@ -1258,11 +1264,27 @@ console.log("\nthe picker and the input box");
       box.dispatchEvent(new PointerEvent("pointerdown", at));
       box.dispatchEvent(new PointerEvent("pointercancel", at));
       await wait(800);
-      return { before, afterTap, stillPicking, afterHold: value() };
+      const afterHold = value();
+
+      // The phone took that press away, so no click came for it. The next
+      // real tap, soon after, is a tap and is not eaten in its place.
+      await wait(150);
+      const again = [...document.getElementById("modal").querySelectorAll('[data-ar-row="inputSelector"] button')]
+        .find((b) => /pick it for me/i.test(b.textContent));
+      if (again) {
+        again.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerType: "touch" }));
+        again.click();
+      }
+      await frame();
+      const tapWorks = !!again && document.documentElement.classList.contains("ar-picking");
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      return { before, afterTap, stillPicking, afterHold, tapWorks };
     }),
   );
   check("a quick tap on the input box picks nothing", out.before === ".nothing-picked-yet" && out.afterTap === out.before && out.stillPicking, out);
   check("holding the input box picks it, even when the browser takes the press away", /chat-message/.test(String(out.afterHold || "")), out);
+  check("by its name, not its translated label or a box around it", out.afterHold === 'textarea[name="chat-message"]', out);
+  check("and the tap right after a pick is not eaten", out.tapWorks, out);
   check("no console errors", errors.length === 0, errors);
 }
 
@@ -6486,8 +6508,8 @@ console.log("\nnote presets from the account and the reset");
   check("and this browser's is never sent up over it", late.saves.length === 0, late);
 
   // A default that moved is only news to somebody who was on it before the
-  // move. The table is empty between moves, so this row is made up for the
-  // check: an old value no default has ever had.
+  // move. These rows are made up for the check, with old values no default
+  // has ever had, and go in after the rows the table already holds.
   const ROW = { key: "stuckTimeoutMs", was: 150000, label: "Give up waiting for it to start", why: "A made-up reason for this check." };
   const LATER = { key: "retryDelayMs", was: 7000, label: "Wait before retrying", why: "Another made-up reason for this check." };
   const movedPage = (local, settings, rows) => fresh(async ({ local, settings, rows }) => {
@@ -6540,6 +6562,35 @@ console.log("\nnote presets from the account and the reset");
     null, [ROW, LATER]);
   check("a row added later is told", later.line.indexOf(LATER.label) >= 0, later);
   check("and the row already answered is not", later.line.indexOf(ROW.label) < 0, later);
+
+  // The real rows for the selector lists, which moved after 5.24.0. A list
+  // saved with different spacing around its commas is still the old list.
+  const OLD_SWIPE =
+    '[aria-label="Next swipe"],[data-action="swipe-right"], [data-testid="swipe-right"], ' +
+    'button[aria-label*="next swipe" i], button[aria-label*="swipe right" i], ' +
+    'button[aria-label*="reroll" i],  button[title*="swipe" i]';
+  const onOld = await movedPage(
+    { [STORE]: JSON.stringify({ swipeNextSelector: OLD_SWIPE, inputSelector: 'textarea[name="chat-message"]' }) }, null, []);
+  check("the old swipe and input box lists are told about, by name",
+    onOld.line.indexOf("Your next / swipe button") >= 0 && onOld.line.indexOf("Your input box") >= 0, onOld);
+  check("and a list nobody saved is not", onOld.line.indexOf("Your stop button") < 0, onOld);
+  const taken = await fresh(async ({ STORE, OLD_SWIPE }) => {
+    localStorage.setItem(STORE, JSON.stringify({ swipeNextSelector: OLD_SWIPE }));
+    const acts = {};
+    window.__setup({
+      events: { on: () => () => {} }, sendToBackend: () => {}, onBackendMessage: () => () => {},
+      ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+            registerInputBarAction: (o) => { const a = { onClick: (cb) => { a.cb = cb; return () => {}; }, destroy: () => {} }; acts[o.id] = a; return a; } },
+    }, { toast: false, liveLog: false });
+    await new Promise((r) => setTimeout(r, 200));
+    acts["auto-retry-settings"].cb();
+    await new Promise((r) => setTimeout(r, 100));
+    document.querySelector('[data-ar-moveddefault="take"]').click();
+    await new Promise((r) => setTimeout(r, 100));
+    return JSON.parse(localStorage.getItem(STORE)).swipeNextSelector;
+  }, { STORE, OLD_SWIPE });
+  check("Take it puts in the list that finds the swipe box",
+    /^\[data-component="SwipeControls"\] button:last-of-type/.test(taken) && taken.indexOf("swipe-right") < 0, taken);
 
   // The reset line names presets, so it has to mean all of them: counted,
   // cleared, and with the notes key left in place for the next read.
