@@ -8,6 +8,16 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.24.2
+
+_2026-10-30_
+
+### Fixed
+
+- **An "Invalid thought signature" error was never retried.** Gemini sends this error with a 400 code, and **Skip hard failures** treats every 400 as an error that will be the same next time. This one can pass on the next try, so it is now retried, for a reply and for an impersonation. Every other 400 is still skipped. To skip this one too, add `thought signature` to **Your own hard failures**. See [Refusals that arrive as errors](docs/detection.md#refusals-that-arrive-as-errors).
+
+---
+
 ## 5.24.1
 
 _2026-10-30_
