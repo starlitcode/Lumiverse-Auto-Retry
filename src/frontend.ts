@@ -192,7 +192,7 @@ const STREAM_BUF_MAX = 200000;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.24.2";
+const VERSION = "5.24.3";
 
 // Whether two saved settings hold the same values, whatever order their keys
 // were written in. A key left undefined counts as not there, the way it is
@@ -12385,6 +12385,10 @@ export function setup(ctx: Ctx, opts?: any) {
   // jumps in partway. With less motion asked for, nothing moves or fades:
   // see noMotion.
   const TOAST_IN_MS = 220;
+  // How long the pop-up takes to follow the input area, and the way to stop
+  // following it. Declared up here with the rest, since toastOut reads it.
+  const TOAST_FOLLOW_MS = 160;
+  let toastFollow: (() => void) | null = null;
   const TOAST_OUT_MS = 160;
   const TOAST_IN_EASE = "cubic-bezier(.2,.8,.28,1)";
   // Most a held start waits for its two frames, for a tab in the background
@@ -12466,6 +12470,7 @@ export function setup(ctx: Ctx, opts?: any) {
     toastMove(t, [from, { opacity: "1", transform: "none" }], TOAST_IN_MS, TOAST_IN_EASE, true);
   }
   function toastOut(t: any) {
+    stopFollowingInputArea();
     const was = t.style.opacity === "1";
     const from = toastNow(t);
     const away = canMove(t) ? toastAway(t, 6) : "none";
@@ -12485,6 +12490,16 @@ export function setup(ctx: Ctx, opts?: any) {
   // box. Never a box inside another extension's part of the page, which can
   // draw an input of its own, or one of this extension's own.
   function inputAreaTop(): number | null {
+    const nodes = inputAreaNodes();
+    if (!nodes.length) return null;
+    const vh = window.innerHeight || 0;
+    let top = Infinity;
+    for (const n of nodes) top = Math.min(top, n.getBoundingClientRect().top);
+    return top > vh * 0.5 ? top : null;
+  }
+  // The input box and the short boxes around it, which together are the input
+  // area: what inputAreaTop measures, and what the pop-up watches to follow it.
+  function inputAreaNodes(): any[] {
     const usable = (el: any): boolean => {
       try {
         if (el.closest && (el.closest(OTHER_UI) || el.closest(OWN_UI))) return false;
@@ -12507,16 +12522,16 @@ export function setup(ctx: Ctx, opts?: any) {
         }
       }
     } catch (_) {}
-    if (!box) return null;
+    if (!box) return [];
     const vh = window.innerHeight || 0;
-    let top = box.getBoundingClientRect().top;
+    const out = [box];
     let node = box.parentElement;
     for (let i = 0; i < 6 && node && node !== document.body; i++, node = node.parentElement) {
       const r = node.getBoundingClientRect();
       if (!(r.height > 0) || r.height > vh * 0.4) break;
-      top = Math.min(top, r.top);
+      out.push(node);
     }
-    return top > vh * 0.5 ? top : null;
+    return out;
   }
   // Where the pop-up sits along the bottom: just above the input area, or 20
   // pixels up when there is none. The gap is read in screen pixels and written
@@ -12533,6 +12548,67 @@ export function setup(ctx: Ctx, opts?: any) {
     const gap = Math.ceil(((window.innerHeight || 0) - top) / (scale > 0.01 ? scale : 1)) + TOAST_ABOVE_INPUT;
     return gap > 20 ? "max(" + gap + "px,env(safe-area-inset-bottom,0px))" : base;
   }
+  // While the pop-up sits above the input area, it follows the input area as
+  // it grows or shrinks, such as when a row of options opens in it, or the
+  // keyboard on a phone resizes the page. A change is read in the frame after
+  // it happens, and the pop-up glides to its new place, the same as Auto
+  // Refine's selection bar. With less motion asked for, it moves at once.
+  // Watched only while the pop-up is up, and let go when it goes.
+  function followInputArea(t: any) {
+    stopFollowingInputArea();
+    if (typeof window === "undefined" || !t) return;
+    let frame = 0;
+    const place = () => {
+      frame = 0;
+      if (t.style.top !== "auto" || t.style.opacity !== "1") return;
+      const at = toastBottom(t);
+      if (t.style.bottom === at) return;
+      t.style.transition = noMotion()
+        ? "none"
+        : "bottom " + TOAST_FOLLOW_MS + "ms cubic-bezier(.2,.7,.3,1)";
+      t.style.bottom = at;
+    };
+    const soon = () => {
+      if (frame) return;
+      try {
+        frame = requestAnimationFrame(place);
+      } catch (_) {
+        place();
+      }
+    };
+    let watcher: any = null;
+    try {
+      if (typeof ResizeObserver === "function") {
+        watcher = new ResizeObserver(soon);
+        // The same boxes inputAreaTop measures, so a row opening anywhere in
+        // the input area is seen.
+        for (const el of inputAreaNodes()) watcher.observe(el);
+      }
+    } catch (_) {
+      watcher = null;
+    }
+    const vv: any = (window as any).visualViewport;
+    try {
+      window.addEventListener("resize", soon);
+      if (vv) vv.addEventListener("resize", soon);
+    } catch (_) {}
+    toastFollow = () => {
+      try { if (frame) cancelAnimationFrame(frame); } catch (_) {}
+      frame = 0;
+      try { if (watcher) watcher.disconnect(); } catch (_) {}
+      try {
+        window.removeEventListener("resize", soon);
+        if (vv) vv.removeEventListener("resize", soon);
+      } catch (_) {}
+    };
+  }
+  function stopFollowingInputArea() {
+    const off = toastFollow;
+    toastFollow = null;
+    if (off) off();
+  }
+  disposers.push(stopFollowingInputArea);
+
   function ensureToast(): any {
     if (typeof document === "undefined") return null;
     let t: any = document.getElementById("__lvRetryToast");
@@ -12819,12 +12895,17 @@ export function setup(ctx: Ctx, opts?: any) {
       // Both edges are set every time, so a normal toast after a top-anchored one
       // goes back to the bottom. The picker anchors to the top because the
       // buttons it is asking you to click sit at the bottom, under this.
+      // Placed at once, with no glide: a message going up is not the input
+      // area moving.
+      t.style.transition = "none";
       if (opts && opts.top) {
+        stopFollowingInputArea();
         t.style.top = "max(20px,env(safe-area-inset-top,0px))";
         t.style.bottom = "auto";
       } else {
         t.style.top = "auto";
         t.style.bottom = toastBottom(t);
+        followInputArea(t);
       }
       // Sticky and cancellable messages are the ones rewritten in place. Set
       // before the fit, which reads it.

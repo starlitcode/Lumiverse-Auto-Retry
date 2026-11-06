@@ -2678,6 +2678,77 @@ console.log("\nthe pop-up stays clear of the input area");
   const other = await run({ width: 1280, height: 900 }, false, 1, OTHER);
   check("another extension's box does not move the pop-up", other.out.shown && Math.abs(other.out.fromEdge - 20) <= 2, other.out);
   check("no console errors with another extension's box", other.errors.length === 0, other.errors);
+
+  // A row opening in the input area, such as Lumiverse's extra options, moves
+  // the area's top edge up. The pop-up follows it in the next frame and glides
+  // there, rather than staying put until the next countdown tick and jumping.
+  // With less motion asked for, it moves at once.
+  const follow = async (viewport, touch, reducedMotion) => {
+    const page = await browser.newPage({ viewport, hasTouch: touch, isMobile: touch, reducedMotion });
+    const errors = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    await stage(page, '<div id=modal></div><button title="Regenerate" data-testid="regenerate">Regenerate</button>' + AREA);
+    await page.addStyleTag({ content: THEME });
+    await page.addScriptTag({ content: SOURCE, type: "module" });
+    await page.waitForFunction(() => !!window.__setup);
+    const out = await page.evaluate(async () => {
+      const h = {};
+      const teardown = window.__setup(
+        {
+          events: { on: (n, fn) => { h[n] = fn; return () => {}; } },
+          ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+                registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) },
+        },
+        // A long wait, so no countdown tick lands inside what is measured.
+        { retryDelayMs: 60000, backoffFactor: 1, maxDelayMs: 60000, jitter: false, maxRetries: 2,
+          toast: true, stuckTimeoutMs: 0, idleTimeoutMs: 0, pauseWhenFailing: false },
+      );
+      const frame = () => new Promise((r) => requestAnimationFrame(() => r()));
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      h.GENERATION_STARTED({ chatId: "c1", generationId: "g1" });
+      h.GENERATION_ENDED({ chatId: "c1", generationId: "g1", content: "" });
+      await wait(600);
+      const t = document.getElementById("__lvRetryToast");
+      const area = document.getElementById("area");
+      const before = { toast: t.getBoundingClientRect().bottom, area: area.getBoundingClientRect().top };
+      const row = document.createElement("div");
+      row.style.height = "70px";
+      row.textContent = "more options";
+      area.insertBefore(row, area.firstChild);
+      await frame();
+      await frame();
+      await frame();
+      const moving = { transition: t.style.transition, bottom: t.style.bottom };
+      await wait(300);
+      const after = { toast: t.getBoundingClientRect().bottom, area: area.getBoundingClientRect().top };
+      // Shut again: it comes back down.
+      row.remove();
+      await wait(350);
+      const back = { toast: t.getBoundingClientRect().bottom, area: area.getBoundingClientRect().top };
+      teardown();
+      return { before, moving, after, back };
+    });
+    await page.close();
+    return { out, errors };
+  };
+  for (const [label, viewport, touch] of [
+    ["phone", { width: 390, height: 844 }, true],
+    ["laptop", { width: 1280, height: 900 }, false],
+  ]) {
+    for (const reducedMotion of ["no-preference", "reduce"]) {
+      const say = label + (reducedMotion === "reduce" ? ", reduce motion" : "") + ": ";
+      const r = await follow(viewport, touch, reducedMotion);
+      check(say + "a row opening in the input area moves the pop-up up above it",
+        r.out.after.area < r.out.before.area - 60 && r.out.after.toast <= r.out.after.area - 4, r.out);
+      if (reducedMotion === "reduce")
+        check(say + "with no glide", r.out.moving.transition === "none", r.out.moving);
+      else
+        check(say + "with a short glide", /^bottom 160ms/.test(r.out.moving.transition), r.out.moving);
+      check(say + "and it comes back down when the row shuts",
+        Math.abs(r.out.back.toast - r.out.before.toast) <= 2, r.out);
+      check(say + "no console errors", r.errors.length === 0, r.errors);
+    }
+  }
 }
 
 // ---- two tabs on one chat ----

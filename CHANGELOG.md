@@ -8,6 +8,16 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.24.3
+
+_2026-11-06_
+
+### Fixed
+
+- **The retry pop-up did not follow the input area smoothly.** The pop-up sits just above Lumiverse's input area. When the area grew or shrank, such as when a row of options opened in it, the pop-up stayed where it was and then jumped, up to a quarter of a second later. It now follows the input area in the next frame and glides to its new place. With **Reduce motion** on, it moves at once.
+
+---
+
 ## 5.24.2
 
 _2026-11-01_
