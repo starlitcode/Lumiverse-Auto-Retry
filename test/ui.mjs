@@ -3273,6 +3273,146 @@ console.log("\nseveral tries at once");
   check("no console errors", errors.length === 0, errors);
 }
 
+// Errors on the replies that come back. They follow the same settings as an
+// error on a reply that streamed: an error that will not fix itself stops the
+// run, every reply an error is retried only with Retry on errors on, and a
+// wait an error asks for, such as for a rate limit, is waited out before the
+// next tries. A reply that passed but could not be added is followed by a
+// press of the retry button, not by more tries at once.
+console.log("\nseveral tries at once, when the replies fail with errors");
+{
+  const page = await browser.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await stage(page, '<div id=modal></div><button title="Regenerate" data-testid="regenerate">Regenerate</button>');
+  await page.addStyleTag({ content: THEME });
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  const out = await page.evaluate(async () => {
+    const handlers = {};
+    const sent = [];
+    let backs = [];
+    let clicks = 0;
+    document.querySelector("[data-testid=regenerate]").addEventListener("click", () => clicks++);
+    window.__setup(
+      {
+        events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
+        sendToBackend: (m) => sent.push(m),
+        onBackendMessage: (fn) => { backs.push(fn); return () => { backs = backs.filter((f) => f !== fn); }; },
+        ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+              registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) },
+      },
+      { retryDelayMs: 10, backoffFactor: 1, maxDelayMs: 10, jitter: false, maxRetries: 4,
+        rateLimitDelayMs: 400, retryOnError: false,
+        toast: false, stuckTimeoutMs: 0, idleTimeoutMs: 0, pauseWhenFailing: false,
+        tryAtOnce: true, tryAtOnceMax: 3 },
+    );
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const answer = (m) => { for (const f of backs.slice()) { try { f(m); } catch (_) {} } };
+    const asks = (chatId) => sent.filter((m) => m.type === "try_at_once" && m.chatId === chatId);
+    const REFUSAL = "I'm sorry, but I can't create that content.";
+    const GOOD = "The baker set the loaves on the sill, and the street filled with the smell of them.";
+    const twoFailures = async (chatId) => {
+      for (const n of [0, 1]) {
+        handlers.GENERATION_STARTED({ chatId, generationId: chatId + "-" + n });
+        handlers.GENERATION_ENDED({ chatId, generationId: chatId + "-" + n, content: REFUSAL });
+        await wait(60);
+      }
+    };
+    const sentOut = (ask) => answer({ type: "at_once", requestId: ask.requestId, stage: "sent", count: 2, from: "kept", messageId: "m2", swipeCount: 2 });
+    // Auto Refine holds a reply while a retry is set, so it is told when one
+    // ends with no retry after it.
+    const offs = [];
+    window.addEventListener("auto-retry:retry-off", (e) => offs.push(e.detail && e.detail.chatId));
+
+    // An error that will not fix itself: the run stops at the first one.
+    const c1 = clicks;
+    await twoFailures("hard");
+    const hardAsk = asks("hard")[0] || null;
+    if (hardAsk) {
+      sentOut(hardAsk);
+      answer({ type: "at_once", requestId: hardAsk.requestId, stage: "reply", index: 0, error: "401 Unauthorized: invalid api key" });
+    }
+    await wait(20);
+    const hardStopped = !!hardAsk && sent.some((m) => m.type === "stop_at_once" && m.requestId === hardAsk.requestId);
+    if (hardAsk) {
+      answer({ type: "at_once", requestId: hardAsk.requestId, stage: "reply", index: 1, error: "401 Unauthorized: invalid api key" });
+      answer({ type: "at_once", requestId: hardAsk.requestId, stage: "done" });
+    }
+    await wait(120);
+    const hard = { asked: !!hardAsk, stopped: hardStopped, asks: asks("hard").length, clicks: clicks - c1 };
+
+    // Every reply an error, with Retry on errors off: no more tries.
+    const c2 = clicks;
+    await twoFailures("off");
+    const offAsk = asks("off")[0] || null;
+    if (offAsk) {
+      sentOut(offAsk);
+      answer({ type: "at_once", requestId: offAsk.requestId, stage: "reply", index: 0, error: "upstream connection reset" });
+      answer({ type: "at_once", requestId: offAsk.requestId, stage: "reply", index: 1, error: "upstream connection reset" });
+      answer({ type: "at_once", requestId: offAsk.requestId, stage: "done" });
+    }
+    await wait(120);
+    const off = { asked: !!offAsk, asks: asks("off").length, clicks: clicks - c2 };
+
+    // One reply rate limited and one refused: the next tries wait out the
+    // rate limit, not the 10 ms between tries.
+    await twoFailures("slow");
+    const slowAsk = asks("slow")[0] || null;
+    let slowMs = -1;
+    if (slowAsk) {
+      sentOut(slowAsk);
+      answer({ type: "at_once", requestId: slowAsk.requestId, stage: "reply", index: 0, error: "429 Too Many Requests" });
+      answer({ type: "at_once", requestId: slowAsk.requestId, stage: "reply", index: 1, content: REFUSAL });
+      const t0 = Date.now();
+      answer({ type: "at_once", requestId: slowAsk.requestId, stage: "done" });
+      while (asks("slow").length < 2 && Date.now() - t0 < 3000) await wait(20);
+      slowMs = asks("slow").length >= 2 ? Date.now() - t0 : -1;
+    }
+
+    // A reply passed, and Lumiverse would not add it: the next try presses the
+    // retry button rather than sending more tries at once.
+    const c4 = clicks;
+    await twoFailures("stuckadd");
+    const addAsk = asks("stuckadd")[0] || null;
+    if (addAsk) {
+      sentOut(addAsk);
+      answer({ type: "at_once", requestId: addAsk.requestId, stage: "reply", index: 0, content: GOOD });
+    }
+    await wait(20);
+    const add = sent.find((m) => m.type === "add_reroll" && m.chatId === "stuckadd") || null;
+    if (add) answer({ type: "reroll_added", requestId: add.requestId, ok: false, why: "Lumiverse would not add the reroll (no permission)" });
+    await wait(150);
+    const stuckAdd = { added: !!add, asks: asks("stuckadd").length, clicks: clicks - c4 };
+
+    // Every try used: the page is told the retry is off. With four tries, the
+    // first presses the button and the other three go out at once.
+    await twoFailures("spent");
+    for (let n = 0; n < 3; n++) {
+      const ask = asks("spent")[n] || null;
+      if (!ask) break;
+      answer({ type: "at_once", requestId: ask.requestId, stage: "sent", count: 2, from: "kept", messageId: "m2", swipeCount: 2 });
+      answer({ type: "at_once", requestId: ask.requestId, stage: "reply", index: 0, content: REFUSAL });
+      answer({ type: "at_once", requestId: ask.requestId, stage: "reply", index: 1, content: REFUSAL });
+      answer({ type: "at_once", requestId: ask.requestId, stage: "done" });
+      await wait(80);
+    }
+    await wait(80);
+
+    return { hard, off, slowMs, stuckAdd, offs, spentAsks: asks("spent").length };
+  });
+  await page.close();
+  check("a hard failure on a reply stops the other tries", out.hard.asked && out.hard.stopped, out.hard);
+  check("and no more tries are made", out.hard.asks === 1 && out.hard.clicks === 1, out.hard);
+  check("every reply an error, with Retry on errors off, is not retried", out.off.asked && out.off.asks === 1 && out.off.clicks === 1, out.off);
+  check("a rate limit on one reply makes the next tries wait it out", out.slowMs >= 350, out);
+  check("a reply that passed but could not be added is followed by a press of the button", out.stuckAdd.added && out.stuckAdd.asks === 1 && out.stuckAdd.clicks === 2, out.stuckAdd);
+  check("the page is told the retry is off after a hard failure", out.offs.includes("hard"), out.offs);
+  check("and after every reply was an error with Retry on errors off", out.offs.includes("off"), out.offs);
+  check("and once every try is used", out.spentAsks === 3 && out.offs.includes("spent"), out);
+  check("no console errors", errors.length === 0, errors);
+}
+
 // ---- reduce motion ----
 // With Reduce motion on, or the device set to reduce motion, nothing of ours
 // moves or fades: the pop-up, the floating button and the panel. Off, the

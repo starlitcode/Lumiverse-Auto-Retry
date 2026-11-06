@@ -8911,6 +8911,9 @@ export function setup(ctx: Ctx, opts?: any) {
       expectingStart: 0,
       // Several tries at once that are still out, or null.
       atOnce: null,
+      // The next try presses the retry button rather than sending tries at
+      // once, after a reply that passed could not be added.
+      buttonNext: false,
       // The reply in the air is one another tab handles. This tab reads it,
       // so it can judge the ending, but times none of it.
       othersReply: false,
@@ -9286,9 +9289,11 @@ export function setup(ctx: Ctx, opts?: any) {
     s.pending = false;
   };
 
+  // Read through errorText, the same as the hard failures: an error that
+  // arrives as an object reads as "[object Object]" through String.
   const isRateLimit = (err: any) =>
     !!err &&
-    /\b(?:408|429|500|502|503|504|520|521|522|523|524)\b|rate.?limit|too many requests|quota|overloaded|timeout|temporary|network/i.test(String(err));
+    /\b(?:408|429|500|502|503|504|520|521|522|523|524)\b|rate.?limit|too many requests|quota|overloaded|timeout|temporary|network/i.test(errorText(err));
 
   const computeDelay = (attempt: number, rateLimited: boolean, err?: any) => {
     let d =
@@ -9688,6 +9693,7 @@ export function setup(ctx: Ctx, opts?: any) {
     // taken over.
     endedAs(s.atOnce, "stopped by you");
     endAtOnce(s, true);
+    s.buttonNext = false;
     // Otherwise a dialog raised by the retry that was just called off could
     // still be confirmed, starting a reply the user had stopped.
     clearConfirmWatch();
@@ -10509,6 +10515,8 @@ export function setup(ctx: Ctx, opts?: any) {
     }
     if (s.attempts >= cfg.maxRetries) {
       log("retry", "gave up", chatId, reason);
+      // Auto Refine holds a reply while a retry is set, and this one is not.
+      tellPage(RETRY_OFF_EVENT, chatId);
       s.attempts = 0;
       s.impRetry = false;
       s.takenOver = false;
@@ -10602,8 +10610,10 @@ export function setup(ctx: Ctx, opts?: any) {
       s.timer = null;
       s.retryAt = 0;
       s.pending = false;
+      const button = !!s.buttonNext;
+      s.buttonNext = false;
       if (s.impRetry) impersonateRetry(chatId, reason);
-      else if (atOnceFits(chatId, reason, s.attempts)) runAtOnce(chatId, reason).catch((e) => retryFailed(chatId, e));
+      else if (!button && atOnceFits(chatId, reason, s.attempts)) runAtOnce(chatId, reason).catch((e) => retryFailed(chatId, e));
       else clickRetry(chatId, reason).catch((e) => retryFailed(chatId, e));
     }, delay);
   }
@@ -10830,10 +10840,31 @@ export function setup(ctx: Ctx, opts?: any) {
           ", so they were stopped",
       );
       if (run.lastText) s.lastText = run.lastText.slice(-STREAM_BUF_MAX);
-      if (run.judged) scheduleRetry(chatId, run.reason);
-      else if (run.lastError) scheduleRetry(chatId, "error", run.lastError);
-      else scheduleRetry(chatId, "stuck");
+      if (!run.judged && !run.lastError) scheduleRetry(chatId, "stuck");
+      else nextAfterAtOnce(chatId, run);
     }, atOnceWaitMs());
+  }
+  // The next try after a run where none passed. Every reply an error is an
+  // error retry, and only with Retry on errors on, the same as one error on a
+  // reply that streamed. Otherwise the next try is for what the replies were
+  // checked for. A wait an error asked for, such as for a rate limit, is
+  // waited out either way, so the next tries do not go straight back into it.
+  function nextAfterAtOnce(chatId: string, run: any) {
+    const s = st(chatId);
+    if (!run.judged && run.lastError) {
+      if (!cfg.retryOnError) {
+        endedAs(run, "every reply was an error, and Retry on errors is off, so it stopped");
+        s.attempts = 0;
+        tellPage(RETRY_OFF_EVENT, chatId);
+        log("atonce", "every reply was an error, and Retry on errors is off, so not retrying");
+        return;
+      }
+      endedAs(run, "none passed, so the next try was set up");
+      scheduleRetry(chatId, "error", run.waitError || run.lastError);
+      return;
+    }
+    endedAs(run, "none passed, so the next try was set up");
+    scheduleRetry(chatId, run.reason, run.waitError || undefined);
   }
   function atOnceMost(): number {
     return Math.max(2, Math.min(AT_ONCE_MAX, Math.round(Number(cfg.tryAtOnceMax)) || CONFIG.tryAtOnceMax));
@@ -10889,8 +10920,10 @@ export function setup(ctx: Ctx, opts?: any) {
     // The note for this try, armed the same way as for a click. The backend
     // puts it into these calls and uses it up.
     await armRefusalNote(chatId, reason, attempt);
+    // Stop or Cancel can land during that wait, the same as before a click.
     if (Date.now() < s.suppressUntil) {
       disarmRefusalNote(chatId);
+      tellPage(RETRY_OFF_EVENT, chatId);
       return;
     }
     const requestId = "ar-once-" + Date.now() + "-" + Math.random().toString(36).slice(2);
@@ -10907,6 +10940,9 @@ export function setup(ctx: Ctx, opts?: any) {
       // presses the button and waits as long as an error asks for.
       judged: 0,
       lastError: null,
+      // The last error that asked for a wait, such as a rate limit. The next
+      // try waits it out, even when other replies came back with text.
+      waitError: null,
       kind: "reroll",
       chatId: String(chatId),
       from: "",
@@ -11016,7 +11052,21 @@ export function setup(ctx: Ctx, opts?: any) {
           log("atonce", "reply " + run.back + " of " + run.count + ": " + BLOCKED_REASON + " (" + String(msg.error) + ")");
           return;
         }
+        // An error that will not fix itself stops the run, the same as one on
+        // a reply that streamed. Sending more tries would only fail the same
+        // way, several at a time.
+        if (cfg.ignoreHardErrors && isHardError(String(msg.error), cfg)) {
+          endedAs(run, "a reply failed with one of your hard failures, so it stopped");
+          endAtOnce(s, true);
+          hideToast();
+          s.attempts = 0;
+          tellPage(RETRY_OFF_EVENT, chatId);
+          log("atonce", "reply " + run.back + " of " + run.count + " failed with a hard failure, so not retrying: " + String(msg.error));
+          showToast("Auto Retry did not retry: that error will not fix itself, so trying again would not help.", { kind: "warning" });
+          return;
+        }
         run.lastError = String(msg.error);
+        if (isRateLimit(run.lastError)) run.waitError = run.lastError;
         run.lastProblem = "error: " + run.lastError;
         log("atonce", "reply " + run.back + " of " + run.count + " failed: " + run.lastError);
         return;
@@ -11031,6 +11081,7 @@ export function setup(ctx: Ctx, opts?: any) {
         endAtOnce(s, true);
         hideToast();
         s.attempts = 0;
+        tellPage(RETRY_OFF_EVENT, chatId);
         log("atonce", "a reply is one of your hard failures, so not retrying");
         showToast("Auto Retry did not retry: a reply matches one of your hard failures, so trying again would not help.", { kind: "warning" });
         return;
@@ -11049,13 +11100,11 @@ export function setup(ctx: Ctx, opts?: any) {
     }
     if (msg.stage === "done") {
       if (run.adding) return;
-      endedAs(run, "none passed, so the next try was set up");
       endAtOnce(s, false);
       hideToast();
       log("atonce", "none of the " + run.count + " replies passed");
       if (run.lastText) s.lastText = run.lastText.slice(-STREAM_BUF_MAX);
-      if (!run.judged && run.lastError) scheduleRetry(chatId, "error", run.lastError);
-      else scheduleRetry(chatId, run.reason);
+      nextAfterAtOnce(chatId, run);
     }
   }
   function addAtOnceReply(chatId: string, run: any, content: string, thought: string) {
@@ -11128,9 +11177,14 @@ export function setup(ctx: Ctx, opts?: any) {
       // is nothing left to retry. Another tab may have added its own.
       if (changed) {
         s.attempts = 0;
+        tellPage(RETRY_OFF_EVENT, chatId);
         return;
       }
       s.lastText = content.slice(-STREAM_BUF_MAX);
+      // The next try presses the retry button. A reply that could not be added
+      // once is likely to fail the same way, and more tries at once would
+      // each be paid for and thrown away.
+      s.buttonNext = true;
       scheduleRetry(chatId, run.reason);
     };
     // The rest are not needed once one has passed.
@@ -13172,6 +13226,7 @@ export function setup(ctx: Ctx, opts?: any) {
             );
           if (run.connection) lines.push("  connection: " + run.connection);
           if (run.lastProblem) lines.push("  last reply that failed: " + run.lastProblem);
+          if (run.waitError) lines.push("  an error asked for a wait: " + run.waitError);
           lines.push("  how it ended: " + (run.outcome || (run.over ? "ended" : "still running")));
         }
       }

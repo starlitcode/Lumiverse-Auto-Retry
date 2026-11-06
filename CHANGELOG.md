@@ -16,6 +16,15 @@ _2026-11-06_
 
 - **How solid the boxes are (%).** A new setting under the pattern. It sets how much of the pattern shows through the boxes over it: each section of the settings, the log and the line under the tabs. It is shown only while a pattern is picked, and it is 60 by default. 100 is solid. Auto Refine has the same setting.
 
+### Fixed
+
+- **Several tries at once kept going after an error that will not fix itself.** With **Skip hard failures** on, an error such as an invalid API key or a missing model stops retrying. A reply with that error from Several tries at once did not, so the tries were sent again, several at a time, until every try was used. The other tries are now stopped, and no more are sent.
+- **Several tries at once retried errors with Retry on errors off.** When every reply that came back was an error, the next try went out even with **Retry on errors** off. It now stops, the same as an error on a reply that streamed.
+- **Several tries at once did not wait out a rate limit.** When one reply came back rate limited and another came back with text, the next tries went out after the usual short wait, back into the rate limit. They now wait as long as a rate limit asks for.
+- **A reply that passed but could not be added led to more tries at once.** When Lumiverse would not add the reply that passed, the next try sent several more, which were likely to fail to be added the same way. The next try now presses the retry button.
+- **Several tries at once on a Lumiverse that cannot send a reply for an extension.** Every try came back as the same error, and the run was sent again. It now presses the retry button at once.
+- **Auto Refine was not always told that a retry was over.** When retrying stopped with no retry after it, such as when every try was used or a reply was a hard failure, Auto Refine kept holding the reply until a new reply started, or for up to 10 minutes. It is now told at once.
+
 ### Changed
 
 - **The boxes over a pattern are partly see-through.** They were solid, so the pattern only showed in the gaps between them. They are now 60% solid by default, so the pattern shows behind them too. Set **How solid the boxes are (%)** to 100 to have them solid again.

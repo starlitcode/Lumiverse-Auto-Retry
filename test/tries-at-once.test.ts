@@ -35,6 +35,8 @@ function boot(opts?: {
   meta?: any;
   // What the dry run hands back for showing, when it differs from the prompt.
   display?: any[];
+  // A Lumiverse with no way to send a reply for an extension.
+  noQuiet?: boolean;
 }) {
   let onFrontend: any = null;
   let interceptor: any = null;
@@ -106,6 +108,7 @@ function boot(opts?: {
     registerInterceptor: (fn: any) => { if (!(opts && opts.noInterceptor)) interceptor = fn; },
     log: { info() {}, warn() {}, error() {} },
   };
+  if (opts && opts.noQuiet) delete spindle.generate.quiet;
   // eslint-disable-next-line no-new-func
   new Function("spindle", BACKEND)(spindle);
   const atOnce = () => sent.filter((s) => s.msg && s.msg.type === "at_once");
@@ -936,3 +939,27 @@ describe("a new device", () => {
   });
 });
 
+
+describe("a Lumiverse that cannot send a reply for an extension", () => {
+  // Every try would come back as the same error, and the panel would send
+  // them again. The run fails at once, so the panel presses the retry button.
+  test("fails before anything is sent, and says why", async () => {
+    const h = boot({ noQuiet: true });
+    await h.tell({ type: "try_at_once", requestId: "r1", chatId: "c1", count: 2 });
+    await h.settle();
+    expect(h.stage("sent").length).toBe(0);
+    expect(h.stage("failed").length).toBe(1);
+    expect(h.stage("failed")[0].msg.why).toBe("this Lumiverse cannot send a reply for an extension");
+  });
+
+  test("and the next run in that chat is not held as busy", async () => {
+    const h = boot({ noQuiet: true });
+    await h.tell({ type: "try_at_once", requestId: "r1", chatId: "c1", count: 2 });
+    await h.settle();
+    await h.tell({ type: "try_at_once", requestId: "r2", chatId: "c1", count: 2 });
+    await h.settle();
+    const failed = h.stage("failed");
+    expect(failed.length).toBe(2);
+    expect(failed[1].msg.busy).toBeFalsy();
+  });
+});

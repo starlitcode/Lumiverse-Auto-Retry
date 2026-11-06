@@ -640,6 +640,11 @@ async function tryAtOnce(payload, userId) {
         release();
         return say({ stage: 'failed', why: why });
     };
+    // Without a way to send a reply for an extension, every try would come back
+    // as the same error, and the panel would send them again. Said now, so the
+    // panel presses the retry button instead.
+    if (!spindle.generate || typeof spindle.generate.quiet !== 'function')
+        return fail('this Lumiverse cannot send a reply for an extension');
     const target = await whereToAdd(chatId);
     if ('why' in target)
         return fail(target.why);

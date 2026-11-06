@@ -66,6 +66,15 @@ Every reason for a retry uses it: a reply that failed a check, a refusal, an err
 - A wait the provider asks for, such as for a rate limit, is waited out first. Then the tries go out at once.
 - Every reply sent at once to a provider in trouble can fail the same way, and each one may still be charged. If your provider is often busy, a lower **Most at once** costs less.
 
+### When the replies come back with errors
+
+An error on a reply sent at once follows the same settings as an error on a reply that streamed.
+
+- **An error that will not fix itself**, such as an invalid API key or a missing model, stops the run when **Skip hard failures** is on. The other replies are stopped, and no more tries are made.
+- **Every reply an error** is retried only when **Retry on errors** is on. The next try is an error retry.
+- **A wait an error asks for**, such as for a rate limit, is waited out before the next tries. This holds even when other replies came back with text.
+- A refusal from the provider, such as `prohibited_content`, is a refusal, the same as a reply that ends with one.
+
 ### When no reply was saved
 
 Some errors stop a turn before any text comes back, such as `prohibited_content` before the first word. Lumiverse then saves no reply, so the last message in the chat is yours.
@@ -81,6 +90,8 @@ These cases always use a normal retry, even with the setting on. The try is made
 - **A group chat with no reply saved.** A reply added by an extension cannot say which character wrote it. A reroll on a reply that is there still goes out at once.
 - **No reply saved, and no `chats` permission.** Auto Retry reads the chat to see whether it is a group chat, and that needs the `chats` permission.
 - **Nothing to add to.** The chat is empty, or its last message is neither a reply nor yours.
+- **A Lumiverse that cannot send a reply for an extension.**
+- **The try after a reply that passed but could not be added.** That reply is lost, and more tries at once would likely fail to be added the same way.
 
 ## What is sent
 
