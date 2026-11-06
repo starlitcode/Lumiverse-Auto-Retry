@@ -29,6 +29,7 @@ _2026-11-06_
 
 ### Changed
 
+- **Errors are read the same way as in Auto Refine.** The two extensions now share one list of errors that will not fix themselves, and one list of errors worth waiting out. With **Skip hard failures** on, these are no longer retried: an account with no balance, credit or quota left, such as OpenAI's `insufficient_quota`, a billing limit, and a prompt over the model's context length. These now get the longer wait a rate limit gets: a server at capacity, "try again later", a call that timed out, and a dropped connection.
 - **The boxes over a pattern are partly see-through.** They were solid, so the pattern only showed in the gaps between them. They are now 60% solid by default, so the pattern shows behind them too. Set **How solid the boxes are (%)** to 100 to have them solid again.
 
 ---

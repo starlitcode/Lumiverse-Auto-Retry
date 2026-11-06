@@ -334,7 +334,15 @@ Some providers send a refusal as an error instead of reply text. An error about 
 - On the Stats tab it counts as **blocked before it was written**.
 - A network error, like a dropped connection, is not a refusal. It is retried as an error.
 
-**Skip hard failures** does the opposite job. An error that will be the same next time, like a missing model or a wrong key, is not retried. The built-in list cannot know every provider's wording, so **Your own hard failures** lets you add wording, one per line. It only shows while **Skip hard failures** is on.
+**Skip hard failures** does the opposite job. An error that will be the same next time is not retried:
+
+- a wrong key, or a failed login
+- a model that does not exist
+- a missing permission
+- an account with no balance or quota left
+- a prompt too long for the model
+
+The built-in list cannot know every provider's wording, so **Your own hard failures** lets you add wording, one per line. It only shows while **Skip hard failures** is on. Auto Refine reads errors with the same list, so the two extensions agree on which errors are worth trying again.
 
 Some providers do not report an error at all. They write the error as the reply, as if a character had said it. **Your own hard failures** is checked against the reply's text too:
 

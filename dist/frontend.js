@@ -3846,8 +3846,16 @@ function isHardError(err, cfg) {
     for (const p of splitPhrases(cfg && cfg.hardErrorPhrases))
         if (lower.includes(p))
             return true;
-    return /\b(?:400|401|402|403|404|405|406|411|413|415|422|invalid api key|authentication|unauthorized|not found|does not exist|model missing|insufficient balance|permission|forbidden|not allowed)\b/i.test(text);
+    return HARD_ERROR.test(text);
 }
+// Errors waiting cannot fix: a wrong key stays wrong, a model that does not
+// exist does not start existing, a balance does not refill, and a prompt over
+// the context length is the same prompt next time. The same list as Auto
+// Refine's, so the two agree on which errors are worth trying again.
+const HARD_ERROR = /\b(?:400|401|402|403|404|405|406|411|413|415|422|invalid[_ ]?api[_ ]?key|authentication|unauthorized|forbidden|permission|not allowed|not found|does not exist|model missing|insufficient[_ ](?:balance|credits?|funds|quota)|billing|context[_ ]length(?:[_ ]exceeded)?|maximum context|(?:prompt|input|context|messages?) (?:is |are )?too long)\b/i;
+// Errors that clear if you wait: a rate limit, a busy or loading server, a
+// dropped connection. The same list as Auto Refine's.
+const WAIT_ERROR = /\b(?:408|429|500|502|503|504|520|521|522|523|524)\b|rate.?limit|too many requests|quota|overloaded|capacity|try again later|temporar(?:y|ily)|time(?:d ?| |-)?out|network|connection reset|socket hang up|econnrefused|econnreset|fetch failed/i;
 function looksLikeRefusalError(errText, cfg) {
     const norm = normalizeForMatch(errText);
     if (!norm)
@@ -9400,7 +9408,7 @@ export function setup(ctx, opts) {
     // Read through errorText, the same as the hard failures: an error that
     // arrives as an object reads as "[object Object]" through String.
     const isRateLimit = (err) => !!err &&
-        /\b(?:408|429|500|502|503|504|520|521|522|523|524)\b|rate.?limit|too many requests|quota|overloaded|timeout|temporary|network/i.test(errorText(err));
+        WAIT_ERROR.test(errorText(err));
     const computeDelay = (attempt, rateLimited, err) => {
         let d = cfg.retryDelayMs * Math.pow(cfg.backoffFactor, Math.max(0, attempt - 1));
         d = Math.min(d, cfg.maxDelayMs);
