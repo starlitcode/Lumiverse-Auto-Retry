@@ -83,9 +83,13 @@ jobs:
       # path is a clone, and it pulls a few hundred megabytes of browsers. It is
       # added here and nowhere else, so nobody installing the extension pays for
       # it. Nothing is committed back.
+      #
+      # Held at one version, so the browser the checks run in only changes in a
+      # commit that says so. Taking the newest on every run turned the checks
+      # red one morning with nothing in the extension changed.
       - name: Add Playwright, for this run only
         run: |
-          bun add -d playwright
+          bun add -d playwright@1.65.0
           bunx playwright install --with-deps chromium
 
       # test/ui.mjs exits cleanly when there is no browser, which is right on a

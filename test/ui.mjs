@@ -3159,8 +3159,8 @@ console.log("\nseveral tries at once");
     const errAsk = asks("allerr")[0] || null;
     if (errAsk) {
       answer({ type: "at_once", requestId: errAsk.requestId, stage: "sent", count: 2, from: "kept", messageId: "m2", swipeCount: 2 });
-      answer({ type: "at_once", requestId: errAsk.requestId, stage: "reply", index: 0, error: "upstream connection reset" });
-      answer({ type: "at_once", requestId: errAsk.requestId, stage: "reply", index: 1, error: "upstream connection reset" });
+      answer({ type: "at_once", requestId: errAsk.requestId, stage: "reply", index: 0, error: "the upstream sent back a malformed answer" });
+      answer({ type: "at_once", requestId: errAsk.requestId, stage: "reply", index: 1, error: "the upstream sent back a malformed answer" });
       answer({ type: "at_once", requestId: errAsk.requestId, stage: "done" });
     }
     await wait(60);
@@ -3189,14 +3189,14 @@ console.log("\nseveral tries at once");
     // An error from the provider is sent several at once from its second try,
     // the same as a reply that failed a check.
     const c5 = clicks;
-    await twoFailures("error", { error: "upstream connection reset" });
+    await twoFailures("error", { error: "the upstream sent back a malformed answer" });
     const errorAsks = asks("error").length;
     const errorClicks = clicks - c5;
 
     // A turn that failed before any text came back saved no reply, so the
     // backend runs the tries for a new reply after your message. The page is
     // told the new reply's own id, which the backend hands back.
-    await twoFailures("fresh", { error: "upstream connection reset" });
+    await twoFailures("fresh", { error: "the upstream sent back a malformed answer" });
     const freshAsk = asks("fresh")[0] || null;
     if (freshAsk) {
       answer({ type: "at_once", requestId: freshAsk.requestId, stage: "sent", count: 2, from: "built", kind: "reply", messageId: "u4", swipeCount: 0 });
@@ -3348,8 +3348,8 @@ console.log("\nseveral tries at once, when the replies fail with errors");
     const offAsk = asks("off")[0] || null;
     if (offAsk) {
       sentOut(offAsk);
-      answer({ type: "at_once", requestId: offAsk.requestId, stage: "reply", index: 0, error: "upstream connection reset" });
-      answer({ type: "at_once", requestId: offAsk.requestId, stage: "reply", index: 1, error: "upstream connection reset" });
+      answer({ type: "at_once", requestId: offAsk.requestId, stage: "reply", index: 0, error: "the upstream sent back a malformed answer" });
+      answer({ type: "at_once", requestId: offAsk.requestId, stage: "reply", index: 1, error: "the upstream sent back a malformed answer" });
       answer({ type: "at_once", requestId: offAsk.requestId, stage: "done" });
     }
     await wait(120);
@@ -8566,7 +8566,7 @@ console.log("\nanother extension's buttons, and a refusal sent as an error");
     // later on the page and matching the built-in pattern.
     const matches = [...document.querySelectorAll('[title="Regenerate"], button[aria-label*="regenerate" i]')]
       .filter((e) => e.closest("[data-spindle-extension-root]")).length;
-    await end("btn", 0, { error: "connection reset" });
+    await end("btn", 0, { error: "the upstream sent back a malformed answer" });
     const pressed = { host, theirs };
 
     // A provider refusal sent as an error: the first retry presses the
@@ -8874,7 +8874,7 @@ console.log("\nan impersonation that goes wrong is tried again");
   check("and the regenerate button is never pressed for it", refused.out.regens === 0, refused.out);
   check("once the retry comes back fine, nothing more is pressed", refused.out.presses === 2, refused.out);
 
-  const errored = await run({ end: { content: "", error: "upstream timed out" } });
+  const errored = await run({ end: { content: "", error: "the upstream sent back a malformed answer" } });
   check("an impersonation that errors is tried again", errored.out.presses === 2, errored.out);
 
   // An error that will not fix itself is not tried again, and a warning says
