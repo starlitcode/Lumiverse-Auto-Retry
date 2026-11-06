@@ -458,6 +458,30 @@ describe("refusal detection ignores the model's thinking", () => {
       expect(stripThinking(answer, {}).trim()).toBe(answer);
     });
 
+    // The formats with tokens of their own work the same way. A local model's
+    // chat template can put the opener in the prompt for any of them.
+    for (const close of ["<|END_THINKING|>", "</seed:think>", "<|end_of_thought|>", "\u25c1/think\u25b7"]) {
+      test("the closer " + close + " with no opener counts the same", () => {
+        expect(stripThinking(thought + "\n" + close + "\n\n" + answer, {}).trim()).toBe(answer);
+        expect(stripThinking(thought + "\n" + close, {}).trim()).toBe("");
+      });
+    }
+
+    // The Prefix and Suffix saved on a connection, the case where Lumiverse
+    // starts the reply with the Prefix. A Suffix with no letter in it, such as
+    // ***, is also a scene break, so it does not end anything on its own.
+    test("a connection's own closer with no opener counts the same", () => {
+      const { setBoundThinkPairs } = __testing as any;
+      setBoundThinkPairs([{ open: "<<plan>>", close: "<</plan>>" }, { open: "+++", close: "***" }]);
+      try {
+        expect(stripThinking(thought + "\n<</plan>>\n\n" + answer, {}).trim()).toBe(answer);
+        const broken = "The lamp went out.\n\n***\n\nMorning came.";
+        expect(stripThinking(broken, {}).trim()).toBe(broken);
+      } finally {
+        setBoundThinkPairs([]);
+      }
+    });
+
     // A quote of the format inside that thinking ends nothing. The closer that
     // ends the thinking is the one with no opener of its own.
     test("a quoted pair inside it does not end it early", () => {

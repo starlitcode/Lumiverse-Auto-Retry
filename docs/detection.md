@@ -429,13 +429,16 @@ Nine formats are recognized. The first three use tag names like `think`, `thinki
 
 **Gemma 4** has an empty channel pair on every reply when the model is not thinking. Empty pairs are removed too.
 
+**Thinking opened in the prompt.** Some presets, and some local models' chat templates, put the opening tag in the prompt. The reply then has a closing tag with no opening tag, and everything before it is thinking. This works for every format in the table.
+
 **Your own thinking markers** are recognized too. In Lumiverse's **Reasoning** settings, a **Prefix** and **Suffix** saved on a connection are read from that connection.
 
 - Each must be at least 3 characters, so ordinary punctuation is never taken for thinking.
+- A Suffix with a letter in it also ends thinking opened in the prompt. A Suffix with no letter, such as `***`, does not, since it is also a scene break.
 - They are read again at most once a minute.
 - A Prefix and Suffix set only in the global Reasoning settings, with nothing saved on a connection, cannot be read by an extension. For those, add the tag name to **Extra thinking tag names**.
 
-**Turn markers** are also removed: Gemma's `<\|turn>model` and `<turn\|>`, ChatML's `<\|im_start\|>` and `<\|im_end\|>`, Llama's header block, and Cohere's turn tokens. These are removed whether or not **Ignore the thinking / reasoning** is on, because they are not thinking.
+**Turn markers** are also removed: Gemma's `<\|turn>model` and `<turn\|>`, ChatML's `<\|im_start\|>` and `<\|im_end\|>`, Llama's header block, Cohere's turn tokens, and `<\|begin_of_solution\|>` and `<\|end_of_solution\|>`. So is any other special token in the same shape, such as `<\|assistant\|>` or `<\|im_sep\|>`, which a local model's template can leave in a reply. These are removed whether or not **Ignore the thinking / reasoning** is on, because they are not thinking.
 
 **A thinking format quoted inside the thinking** does not end it. Some models write out the format they were given, tags and all, while they are still thinking. A tag inside a code block or backticks is ignored. So is a whole pair of tags inside the thinking. The thinking ends at the closer that matches its own opener.
 

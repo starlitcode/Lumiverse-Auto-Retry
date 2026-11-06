@@ -3131,6 +3131,9 @@ const CONTROL_MARKS = [
     /[ \t]*<\|start_header_id\|>[\s\S]*?<\|end_header_id\|>[ \t]*/gi,
     /[ \t]*(?:<\|(?:end|return|call|message|constrain|endoftext|eot_id|im_end)\|>|<turn\|>|<end_of_turn>)[ \t]*/gi,
     /[ \t]*<\|(?:START|END)_(?:THINKING|RESPONSE)\|>[ \t]*/gi,
+    // The answer's own markers in the begin and end of thought format, which
+    // wrap the reply that follows the thinking.
+    /[ \t]*<\|(?:begin|end)_of_solution\|>[ \t]*/gi,
     /[ \t]*<\|(?:START_OF_TURN_TOKEN|CHATBOT_TOKEN|USER_TOKEN|SYSTEM_TOKEN)\|>[ \t]*/gi,
 ];
 // What a streamed token calls itself when it is the model working rather than
@@ -3160,6 +3163,14 @@ function stripControlTokens(text) {
     for (const mark of CONTROL_MARKS)
         t = t.replace(mark, " ");
     return t;
+}
+// Any other special token in the <|name|> shape, such as <|assistant|> or
+// <|im_sep|>, which a local model's template can leave in the text. None is
+// ever prose, and one left in front of a reply hid that reply being cut off.
+// Taken out last, once the thinking is gone, since the pipe thinking format
+// <|think|> has the same shape and has to be read as thinking first.
+function stripOtherTokens(text) {
+    return String(text).replace(/[ \t]*<\|[A-Za-z][\w.:-]{0,40}\|>[ \t]*/g, " ");
 }
 // A thinking tag written as an example is not the end of the thinking. A model
 // that quotes the format it was given, in a code block or as a pair of its
@@ -3285,7 +3296,7 @@ function planThenBlockEnd(t, alt) {
 function stripThinking(text, cfg) {
     let t = String(text == null ? "" : text);
     if (cfg && cfg.refusalStripThinking === false)
-        return stripControlTokens(t);
+        return stripOtherTokens(stripControlTokens(t));
     const names = thinkTagNames(cfg);
     if (!names.length)
         return t;
@@ -3319,6 +3330,19 @@ function stripThinking(text, cfg) {
             continue;
         t = t.replace(new RegExp(pair.open + "[\\s\\S]*?" + pair.close, "gi"), " ");
         t = t.replace(new RegExp(pair.open + "[\\s\\S]*$", "i"), " ");
+    }
+    // A closer of one of these left with nothing opening it: the opener was in
+    // the prompt, the same as for the tag names below, which a local model's
+    // chat template does for its own format. Every opener of these has gone by
+    // now, so a closer still here has none, and everything up to it is
+    // thinking. A closer with no letter in it, such as *** saved on a
+    // connection, is also a scene break, so it does not end anything.
+    for (const pair of thinkPairs()) {
+        if (!/[a-z]/i.test(pair.close))
+            continue;
+        const close = new RegExp(pair.close, "i").exec(t);
+        if (close)
+            t = " " + t.slice(close.index + close[0].length);
     }
     // A closer with nothing opening it: the thinking began before this text did.
     // A preset that starts the reply inside the thinking tag puts the opener in
@@ -3370,7 +3394,7 @@ function stripThinking(text, cfg) {
     t = t.replace(new RegExp("<\\|(?:" + alt + ")\\|?>[\\s\\S]*$", "i"), " ");
     t = t.replace(new RegExp("<(?:" + alt + ")(?:\\s[^>]*)?>[\\s\\S]*$", "i"), " ");
     t = t.replace(new RegExp("\\[(?:" + alt + ")(?:\\s[^\\]]*)?\\][\\s\\S]*$", "i"), " ");
-    return showExampleTags(t);
+    return showExampleTags(stripOtherTokens(t));
 }
 // Removes reasoning blocks regardless of the refusal-side option. That option
 // governs refusal matching only: whether a refusal written inside thinking

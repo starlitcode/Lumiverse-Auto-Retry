@@ -53,6 +53,11 @@ const FINISHED: Array<[string, string]> = [
   ["closed think block", "<think>She is lying.</think>\n\n\"I believe you,\" he said."],
   ["closed Kimi thinking", "\u25c1think\u25b7The note is forged.\u25c1/think\u25b7He folded the letter and kept it."],
   ["closed begin and end of thought", "<|begin_of_thought|>The note is forged.<|end_of_thought|>\nHe folded the letter and kept it."],
+  // Special tokens a local model's template can leave in the text. The close
+  // ones to the cut replies with the same tokens below.
+  ["begin and end of solution around the reply", "<|begin_of_thought|>The note is forged.<|end_of_thought|>\n<|begin_of_solution|>He folded the letter and kept it.<|end_of_solution|>"],
+  ["a turn token in front of the reply", "<|assistant|>He folded the letter and kept it."],
+  ["a separator token in front of the reply", "<|im_sep|>He folded the letter and kept it."],
   ["json status closed", 'Status: {"hp": 12, "sky": "clear"}\n\nShe pressed on.'],
   ["ends on closing quote", 'He shook his head. "Not tonight."'],
   ["ends on exclamation", "She threw the cup at the wall. It shattered!"],
@@ -121,6 +126,10 @@ describe("a finished reply is never called cut off", () => {
 
 const CUT: Array<[string, string]> = [
   ["stops mid-word", "She reached for the handle and pu"],
+  // A special token in front of the reply hid the cut.
+  ["cut after a begin of solution", "<|begin_of_thought|>The note is forged.<|end_of_thought|>\n<|begin_of_solution|>He folded the letter and kept it, then reached for the"],
+  ["cut after a turn token", "<|assistant|>He folded the letter and kept it, then reached for the"],
+  ["cut after a separator token", "<|im_sep|>He folded the letter and kept it, then reached for the"],
   ["stops on a comma", "He turned to face her, hands shaking,"],
   ["stops on a semicolon", "The room was cold;"],
   ["dialogue cut inside an escaped font tag", 'Pell set the lamp down. &lt;font color="#5a8fd0"&gt;"We leave at'],
