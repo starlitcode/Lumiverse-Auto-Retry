@@ -1164,6 +1164,70 @@ console.log("\nthe picker and teardown");
   check("and the page still answers a press", out.pageStillWorks, out);
 }
 
+// ---- the picker while a retry is waiting ----
+// The picker and a retry share the bar. While the picker waits for a press,
+// its message stays at the top and the retry's countdown does not write over
+// it. When the picker is done, the retry's message comes back above the input
+// area, with its countdown and its Cancel.
+console.log("\nthe picker while a retry is waiting");
+{
+  for (const [label, viewport, touch] of [["phone", { width: 390, height: 800 }, true], ["laptop", { width: 1280, height: 900 }, false]]) {
+    const page = await browser.newPage({ viewport, hasTouch: touch, isMobile: touch });
+    const errors = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    await stage(page, '<div id=modal></div><button title="Regenerate" data-testid="regenerate">Regenerate</button>');
+    await page.addStyleTag({ content: THEME });
+    await page.addScriptTag({ content: SOURCE, type: "module" });
+    await page.waitForFunction(() => !!window.__setup);
+    const out = await page.evaluate(async () => {
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      const handlers = {};
+      window.__acts = {};
+      window.__setup(
+        {
+          events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
+          ui: {
+            showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+            registerInputBarAction: (o) => {
+              const a = { onClick: (cb) => { a.cb = cb; return () => {}; }, destroy: () => {} };
+              window.__acts[o.id] = a;
+              return a;
+            },
+          },
+        },
+        { toast: true, retryDelayMs: 6000, backoffFactor: 1, maxDelayMs: 6000, jitter: false, maxRetries: 3 },
+      );
+      const bar = () => {
+        const t = document.getElementById("__lvRetryToast");
+        return t ? { text: t.textContent, top: t.style.top, shown: t.style.opacity === "1" } : null;
+      };
+      handlers.GENERATION_STARTED({ chatId: "c1", generationId: "g0" });
+      handlers.GENERATION_ENDED({ chatId: "c1", generationId: "g0", content: "I'm sorry, but I can't create that content." });
+      await wait(400);
+      const waiting = bar();
+      window.__acts["auto-retry-settings"].cb();
+      await wait(300);
+      const row = document.querySelector('#modal [data-ar-row="stopSelector"]');
+      [...row.querySelectorAll("button")].find((b) => /pick it for me/i.test(b.textContent)).click();
+      await wait(1200);
+      const picking = bar();
+      const cancel = [...document.getElementById("__lvRetryToast").querySelectorAll("button")].find((b) => /cancel/i.test(b.textContent));
+      cancel.click();
+      await wait(700);
+      const after = bar();
+      await wait(1100);
+      const later = bar();
+      return { waiting, picking, after, later };
+    });
+    await page.close();
+    check(label + ": the retry's countdown was up, or this proves nothing", !!out.waiting && /Retrying in/.test(out.waiting.text), out);
+    check(label + ": while picking, the bar holds the picker's message at the top", !!out.picking && /Press and hold/.test(out.picking.text) && out.picking.top !== "auto" && out.picking.shown, out.picking);
+    check(label + ": after picking, the retry's message is back above the input area", !!out.after && /Retrying in/.test(out.after.text) && out.after.top === "auto" && out.after.shown, out.after);
+    check(label + ": with its Cancel and a countdown that moves", !!out.later && /Cancel/.test(out.later.text) && out.later.text !== out.after.text, out);
+    check(label + ": no console errors", errors.length === 0, errors);
+  }
+}
+
 // ---- the browser's own long press is the same gesture ----
 // On a phone a long press is also how the browser starts selecting text and
 // raises its callout, and it decides that at about the moment the hold

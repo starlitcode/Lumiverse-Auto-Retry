@@ -11161,22 +11161,7 @@ export function setup(ctx, opts) {
             return fallBack("the panel could not listen for the replies");
         }
         run.timer = setTimeout(() => fallBack("the backend did not answer"), AT_ONCE_ACK_MS);
-        showToast(atOnceText(run), { cancel: () => standDown(chatId, true, true), sticky: true });
-        // Ticked like the countdown before a retry, and taken down once the run is
-        // over, whatever ended it.
-        if (cfg.toast) {
-            stopToastCountdown();
-            toastTick = () => {
-                if (s.atOnce !== run) {
-                    hideToast();
-                    return;
-                }
-                const now = chatStatus(s);
-                if (now)
-                    setToastText(now.text);
-            };
-            addTicker(toastTick);
-        }
+        showAtOnceBar(chatId, run);
         paintNow();
         try {
             ctx.sendToBackend({ type: "try_at_once", requestId: requestId, chatId: chatId, count: count });
@@ -11184,6 +11169,47 @@ export function setup(ctx, opts) {
         catch (e) {
             fallBack("the panel could not reach the backend (" + ((e && e.message) || String(e)) + ")");
         }
+    }
+    // The bar for tries at once, with its Cancel. Ticked like the countdown
+    // before a retry, and taken down once the run is over, whatever ended it.
+    function showAtOnceBar(chatId, run) {
+        const s = st(chatId);
+        showToast(atOnceText(run), { cancel: () => standDown(chatId, true, true), sticky: true });
+        if (!cfg.toast || pickerHolds)
+            return;
+        stopToastCountdown();
+        toastTick = () => {
+            if (s.atOnce !== run) {
+                hideToast();
+                return;
+            }
+            const now = chatStatus(s);
+            if (now)
+                setToastText(now.text);
+        };
+        addTicker(toastTick);
+    }
+    // A retry that is still waiting, or tries at once still out, put back in
+    // the bar once the picker has given it up. The first chat found: the bar
+    // holds one message, the same as when the retry was set.
+    function showWaitingRetry() {
+        if (pickerHolds)
+            return;
+        let shown = false;
+        chats.forEach((s, id) => {
+            if (shown)
+                return;
+            if (s.atOnce && !s.atOnce.over) {
+                showAtOnceBar(id, s.atOnce);
+                shown = true;
+            }
+            else if (s.pending && s.retryAt > Date.now()) {
+                const now = chatStatus(s);
+                showToast(now ? now.text : "Retrying", { cancel: () => standDown(id, true, true), sticky: true });
+                startToastCountdown(s);
+                shown = true;
+            }
+        });
     }
     function onAtOnce(chatId, run, msg, fallBack) {
         const s = st(chatId);
@@ -13154,6 +13180,10 @@ export function setup(ctx, opts) {
         catch (_) { }
     }
     function hideToast() {
+        // Only the picker takes its own message down. A retry that ends while the
+        // picker waits leaves it where it is.
+        if (pickerHolds)
+            return;
         stopToastCountdown();
         const t = typeof document !== "undefined" &&
             document.getElementById("__lvRetryToast");
@@ -13167,7 +13197,7 @@ export function setup(ctx, opts) {
     // countdown that outlives its own message cannot write over the next one.
     function setToastText(msg) {
         const t = typeof document !== "undefined" && document.getElementById("__lvRetryToast");
-        if (!t || !t.__words || t.style.opacity !== "1")
+        if (!t || !t.__words || t.style.opacity !== "1" || pickerHolds)
             return;
         // Kept above the input area as it grows, such as while a long message is
         // typed under it. Only along the bottom: the picker's message sits at the
@@ -13226,6 +13256,10 @@ export function setup(ctx, opts) {
     // The countdown behind a sticky retry message. One at a time: a second retry
     // replaces the first message, so it replaces the clock with it.
     let toastTick = null;
+    // Set while Pick it for me shows its message in the bar. A retry's own
+    // message and countdown stay off the bar until the picker is done, and are
+    // put back then.
+    let pickerHolds = false;
     function stopToastCountdown() {
         if (!toastTick)
             return;
@@ -13284,6 +13318,11 @@ export function setup(ctx, opts) {
             notify(msg, (opts && opts.kind) || "info");
             return;
         }
+        // The bar is the picker's while it waits for a press. A retry that wants
+        // the bar meanwhile is shown again when the picker is done (see
+        // showWaitingRetry).
+        if (pickerHolds && !(opts && opts.top))
+            return;
         const t = ensureToast();
         if (!t)
             return;
@@ -17144,12 +17183,15 @@ export function setup(ctx, opts) {
             // Cancel starts the fade before it gets here, so a fade already
             // running counts as one.
             const fades = !!box && canMove(box) && (box.style.opacity === "1" || !!box.__move);
+            pickerHolds = false;
             hideToast();
             if (sel)
                 cfg[key] = sel;
             const back = () => {
                 if (tornDown)
                     return;
+                // A retry that waited while the picker had the bar has it back.
+                showWaitingRetry();
                 openSettings();
                 // A notification, so Lumiverse decides where it shows. The bar that
                 // asked for the press has gone with the picker.
@@ -17309,6 +17351,7 @@ export function setup(ctx, opts) {
                 document.documentElement.classList.remove("ar-picking");
             }
             catch (_) { }
+            pickerHolds = false;
             hideToast();
             stopPicking = null;
         };
@@ -17330,6 +17373,10 @@ export function setup(ctx, opts) {
         // page, since the screen alone says a phone showing the desktop site has a
         // keyboard and it would then name a key nobody can press.
         const hasKeyboard = fromMouse();
+        // The bar is the picker's until it is done. A retry countdown in it stops
+        // here and is put back afterwards.
+        stopToastCountdown();
+        pickerHolds = false;
         showToast("Press and hold your " + what +
             ". Everything else still works, so you can get to it. " +
             (hasKeyboard ? "Esc or Cancel to stop." : "Or press Cancel."), {
@@ -17339,6 +17386,7 @@ export function setup(ctx, opts) {
             noEntrance: true,
             cancel: () => finish(null, "Picking canceled."),
         });
+        pickerHolds = true;
     }
     function openSettings() {
         if (!ctx?.ui?.showModal) {
