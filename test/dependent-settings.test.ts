@@ -105,10 +105,12 @@ describe("a row that hangs off a switch", () => {
 
   test("and every one of them is a switch, not a box", () => {
     // Hanging a row off a number or a text box would hide it whenever that box
-    // held something falsy, which for a number means zero.
+    // held something falsy, which for a number means zero. A list whose first
+    // choice is empty, such as the pattern's None, is the one other kind:
+    // empty there means off.
     const notBool = deps.flatMap((d) =>
       d.needs
-        .filter((n) => CONFIG[n] !== "true" && CONFIG[n] !== "false")
+        .filter((n) => CONFIG[n] !== "true" && CONFIG[n] !== "false" && CONFIG[n] !== '""')
         .map((n) => d.key + " needs " + n + ", which defaults to " + CONFIG[n]),
     );
     expect(notBool).toEqual([]);

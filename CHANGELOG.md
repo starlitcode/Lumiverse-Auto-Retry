@@ -8,6 +8,20 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.25.0
+
+_2026-11-06_
+
+### Added
+
+- **How solid the boxes are (%).** A new setting under the pattern. It sets how much of the pattern shows through the boxes over it: each section of the settings, the log and the line under the tabs. It is shown only while a pattern is picked, and it is 60 by default. 100 is solid. Auto Refine has the same setting.
+
+### Changed
+
+- **The boxes over a pattern are partly see-through.** They were solid, so the pattern only showed in the gaps between them. They are now 60% solid by default, so the pattern shows behind them too. Set **How solid the boxes are (%)** to 100 to have them solid again.
+
+---
+
 ## 5.24.3
 
 _2026-11-06_

@@ -338,7 +338,8 @@ These are the defaults for a new install. They are in the `CONFIG` block at the 
 | logNotes | true | Show the lines about refusal notes: which went with a retry, and why a note did not. Shown only while `liveLog` is on. |
 | logSetup | true | Show the lines about settings and presets loaded, saved, or moved to and from your account. Shown only while `liveLog` is on. |
 | logProblems | true | Show the lines about something that could not be done, such as a window that would not open. Shown only while `liveLog` is on. |
-| panelPattern | (none) | A faint pattern behind these settings and the on-screen panel: Diamonds, Stripes, Dots, Hearts or Stars. Each section of the settings, the log and the line under the tabs sit on a solid box over it. |
+| panelPattern | (none) | A faint pattern behind these settings and the on-screen panel: Diamonds, Stripes, Dots, Hearts or Stars. Each section of the settings, the log and the line under the tabs sit on a box over it. |
+| boxSolid | 60 | How solid those boxes are over a pattern, from 0 to 100. Lower lets more of the pattern show through. 100 is solid. Shown only while a pattern is picked. |
 | costIn | 0 | Your provider's input price per million tokens, in its own currency. The panel's Prompt tab uses it to say what retrying costs. 0 leaves the line off. |
 | costOut | 0 | The output price from the same list, for the reply a retry produces. Both at 0 leaves the line off. |
 

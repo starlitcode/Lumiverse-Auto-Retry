@@ -3508,15 +3508,38 @@ console.log("\nreduce motion");
 }
 
 // ---- a pattern behind the panel ----
-// None by default. Chosen, it is drawn behind the on-screen panel, and the log
-// and the line under the tabs sit on solid boxes over it.
+// None by default. Chosen, it is drawn behind the on-screen panel and the
+// settings. The log, the line under the tabs and each section of the settings
+// sit on boxes over it: two layers of the theme's raised color, together as
+// solid as How solid the boxes are says. 60 by default, so the pattern shows
+// through.
 console.log("\na pattern behind the panel");
 {
+  // What a box covers, read the way it is drawn: its color, and the one
+  // color its gradient lays on top. A color-mix is read back as
+  // color(srgb r g b / a), with channels from 0 to 1.
+  const COVER = `(el) => {
+    if (!el) return { a: -1 };
+    const read = (c) => {
+      let m = /^rgba?\\(([^)]*)\\)/.exec(c);
+      if (m) { const p = m[1].split(/[ ,\\/]+/).filter(Boolean).map(Number); return { r: p[0], g: p[1], b: p[2], a: p.length > 3 ? p[3] : 1 }; }
+      m = /^color\\(srgb ([^)]*)\\)/.exec(c);
+      if (m) { const p = m[1].split(/[ \\/]+/).filter(Boolean).map(Number); return { r: p[0] * 255, g: p[1] * 255, b: p[2] * 255, a: p.length > 3 ? p[3] : 1 }; }
+      return null;
+    };
+    const cs = getComputedStyle(el);
+    const base = read(cs.backgroundColor) || { r: 0, g: 0, b: 0, a: 0 };
+    const stop = /(rgba?\\([^)]*\\)|color\\(srgb [^)]*\\))/.exec(cs.backgroundImage || "");
+    const top = stop ? read(stop[1]) : null;
+    const a = top ? top.a + base.a * (1 - top.a) : base.a;
+    return { a: Math.round(a * 1000) / 1000, rgb: [Math.round(base.r), Math.round(base.g), Math.round(base.b)].join(",") };
+  }`;
   for (const [label, viewport, touch] of [["phone", { width: 390, height: 800 }, true], ["laptop", { width: 1280, height: 800 }, false]]) {
     for (const panelPattern of ["", "diamonds", "stripes", "dots", "hearts", "stars"]) {
       const r = await inPanel(browser, { viewport, touch, settings: { liveLog: true, panelHome: "drawer", panelPattern } }, async (page) => {
         await page.waitForTimeout(200);
-        return page.evaluate(() => {
+        return page.evaluate((COVER) => {
+          const cover = eval(COVER);
           const d = document.querySelector("[data-ar-panel]");
           const body = document.getElementById("__lvRetryLogBody");
           const settings = document.querySelector("[data-ar-settings]");
@@ -3541,40 +3564,77 @@ console.log("\na pattern behind the panel");
           };
           return {
             drawn: drawnOn(d),
-            bodySolid: !!body && ((c) => { const m = /rgba?\(([^)]*)\)/.exec(c); if (!m) return false; const p = m[1].split(","); return p.length < 4 || parseFloat(p[3]) >= 0.85; })(getComputedStyle(body).backgroundColor),
+            body: cover(body).a,
             settingsDrawn: pinned(settings),
-            sectionSolid: !!sec && ((c) => { const m = /rgba?\(([^)]*)\)/.exec(c); if (!m) return false; const p = m[1].split(","); return p.length < 4 || parseFloat(p[3]) >= 0.85; })(getComputedStyle(sec).backgroundColor),
+            section: cover(sec).a,
             sideways: document.documentElement.scrollWidth > window.innerWidth + 1,
           };
-        });
+        }, COVER);
       });
       const name = panelPattern || "none";
-      if (!panelPattern) check(label + ": with None, nothing is drawn", !r.out.drawn && !r.out.settingsDrawn && !r.out.sectionSolid, r.out);
+      if (!panelPattern) check(label + ": with None, nothing is drawn and the sections have no box", !r.out.drawn && !r.out.settingsDrawn && r.out.section === 0, r.out);
       else {
         check(label + ", " + name + ": the pattern is drawn", r.out.drawn, r.out);
-        check(label + ", " + name + ": the log sits on a solid box", r.out.bodySolid, r.out);
+        check(label + ", " + name + ": the log sits on a box that lets some of it show through", r.out.body > 0.55 && r.out.body < 0.65, r.out);
         check(label + ", " + name + ": the settings have the pattern too", r.out.settingsDrawn, r.out);
-        check(label + ", " + name + ": and each section of the settings sits on a solid box", r.out.sectionSolid, r.out);
+        check(label + ", " + name + ": and each section of the settings sits on the same kind of box", Math.abs(r.out.section - r.out.body) < 0.01, r.out);
       }
       check(label + ", " + name + ": nothing runs off the side", !r.out.sideways, r.out);
     }
+    // How solid the boxes are is a row of its own, shown only while a
+    // pattern is picked. Typing a number changes the boxes at once.
+    const row = await inPanel(browser, { viewport, touch, settings: { liveLog: true, panelHome: "drawer" } }, async (page) => {
+      await page.waitForTimeout(200);
+      const shown = () => page.evaluate(() => { const r = document.querySelector('[data-ar-row="boxSolid"]'); return !!r && r.style.display !== "none" && getComputedStyle(r).display !== "none"; });
+      const before = await shown();
+      await page.evaluate(() => {
+        const sel = document.querySelector('[data-ar-row="panelPattern"] select');
+        sel.value = "stars";
+        sel.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+      await page.waitForTimeout(700);
+      const after = await shown();
+      const box = await page.evaluate(() => {
+        const f = document.querySelector('[data-ar-row="boxSolid"] input');
+        if (!f) return null;
+        f.scrollIntoView({ block: "center" });
+        const r = f.getBoundingClientRect();
+        return { value: f.value, h: r.height, right: r.right, vw: window.innerWidth };
+      });
+      await page.evaluate(() => {
+        const f = document.querySelector('[data-ar-row="boxSolid"] input');
+        f.value = "100";
+        f.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      await page.waitForTimeout(300);
+      const solid = await page.evaluate((COVER) => eval(COVER)(document.querySelector("[data-ar-sec]")).a, COVER);
+      return { before, after, box, solid };
+    });
+    check(label + ": with no pattern, How solid the boxes are is not shown", row.out.before === false, row.out);
+    check(label + ": picking a pattern shows it", row.out.after === true, row.out);
+    check(label + ": it shows 60", !!row.out.box && row.out.box.value === "60", row.out);
+    check(label + ": its box is at least 32 pixels high and inside the screen", !!row.out.box && row.out.box.h >= 32 && row.out.box.right <= row.out.box.vw, row.out);
+    // The test theme's raised color is itself a little see-through, so two
+    // full layers of it cover 99%.
+    check(label + ": typing 100 makes the boxes solid at once", row.out.solid >= 0.98, row.out);
+    check(label + ": no console errors", row.errors.length === 0, row.errors);
   }
-  // The solid color comes from the theme, and the floating panel keeps its
-  // own color under the pattern. Lumiverse's own "solid card" color is a
-  // fixed gray, and a purple theme turned gray-black under it.
+  // The color comes from the theme, and the floating panel keeps its own
+  // color under the pattern. Lumiverse's own "solid card" color is a fixed
+  // gray, and a purple theme turned gray-black under it.
   const r = await inPanel(browser, {
     css: ":root{--lumiverse-bg-elevated:rgb(40,0,60);--lumiverse-card-bg-solid:rgb(24,20,34)}",
     settings: { liveLog: true, panelHome: "float", panelPattern: "dots" },
   }, async (page) => {
     await page.waitForTimeout(200);
-    return page.evaluate(() => {
+    return page.evaluate((COVER) => {
       const panel = document.getElementById("__lvRetryLog");
       const body = document.getElementById("__lvRetryLogBody");
       return {
         layers: panel ? (getComputedStyle(panel).backgroundImage.match(/gradient\(/g) || []).length : 0,
-        body: body ? getComputedStyle(body).backgroundColor : "",
+        body: eval(COVER)(body),
       };
-    });
+    }, COVER);
   });
   check("the floating panel keeps its theme color under the pattern", r.out.layers >= 2, r.out);
   // On a light theme with a pattern on, the panel's buttons keep dark text.
@@ -3596,7 +3656,7 @@ console.log("\na pattern behind the panel");
     });
     check("light theme, pattern, " + panelHome + ": the panel's buttons keep dark text", lit.out.count > 3 && lit.out.light.length === 0, lit.out);
   }
-  check("the log's box takes the theme's color, not a fixed gray", r.out.body === "rgb(40, 0, 60)", r.out);
+  check("the log's box takes the theme's color, not a fixed gray", r.out.body.rgb === "40,0,60", r.out);
 }
 
 // ---- the tries at once bar on a phone ----

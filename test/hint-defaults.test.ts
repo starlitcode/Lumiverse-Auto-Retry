@@ -44,6 +44,7 @@ const QUOTES_ITS_DEFAULT = [
   "floatingToggleSize",
   "breakerRuns",
   "refusalMaxChars",
+  "boxSolid",
 ];
 
 describe("a hint that names a default names the real one", () => {

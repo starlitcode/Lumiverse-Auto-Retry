@@ -181,7 +181,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.24.3";
+const VERSION = "5.25.0";
 // Whether two saved settings hold the same values, whatever order their keys
 // were written in. A key left undefined counts as not there, the way it is
 // when saved. Used to tell an update or a put-back that would change nothing.
@@ -371,6 +371,10 @@ const CONFIG = {
     toast: true,
     // A faint pattern behind the on-screen panel. Empty is plain.
     panelPattern: "",
+    // How solid the boxes are over a pattern, from 0 to 100. Partly see-through
+    // by default, so the pattern shows behind them. Auto Refine has the same
+    // setting, with the same default.
+    boxSolid: 60,
     // The on-screen panel: what the extension did, what went to the model, and
     // what it has been doing overall, as four tabs of one thing. Handy on
     // mobile, where there is no console to open. Off by default.
@@ -617,7 +621,18 @@ const SCHEMA = [
                     { value: "hearts", label: "Hearts" },
                     { value: "stars", label: "Stars" },
                 ],
-                hint: "None by default. A faint pattern in your theme's color, behind these settings and the on-screen panel. Text sits on solid boxes over it.",
+                hint: "None by default. A faint pattern in your theme's color, behind these settings and the on-screen panel. Text sits on boxes over it.",
+            },
+            {
+                key: "boxSolid",
+                needs: ["panelPattern"],
+                label: "How solid the boxes are (%)",
+                type: "num",
+                int: true,
+                min: 0,
+                max: 100,
+                live: true,
+                hint: "60 by default. Lower lets more of the pattern show through the boxes. Higher makes them more solid.",
             },
             {
                 key: "toast",
@@ -3938,6 +3953,18 @@ function deriveSelector(start) {
 // getComputedStyle hands colors back as rgb()/rgba(), so that is all this needs
 // to read. Anything else is reported as unknown and the caller leaves it alone.
 function parseColor(value) {
+    // A color mixed with color-mix is read back in this form, with each
+    // channel from 0 to 1.
+    const mixed = String(value == null ? "" : value).trim().match(/^color\(\s*srgb\s+([^)]+)\)$/i);
+    if (mixed) {
+        const p = mixed[1].replace(/\//g, " ").split(/\s+/).filter(Boolean);
+        if (p.length < 3)
+            return null;
+        const one = (t) => (t.indexOf("%") >= 0 ? parseFloat(t) / 100 : parseFloat(t));
+        const a = p.length > 3 ? one(p[3]) : 1;
+        const c = [one(p[0]) * 255, one(p[1]) * 255, one(p[2]) * 255, Number.isFinite(a) ? Math.max(0, Math.min(1, a)) : 1];
+        return c.slice(0, 3).some((n) => !Number.isFinite(n)) ? null : c;
+    }
     const m = String(value == null ? "" : value)
         .trim()
         .match(/^rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:[,/\s]+([\d.]+%?))?\s*\)$/i);
@@ -3954,6 +3981,15 @@ function parseColor(value) {
     }
     const c = [Number(m[1]), Number(m[2]), Number(m[3]), Math.max(0, Math.min(1, a))];
     return c.slice(0, 3).some((n) => !Number.isFinite(n)) ? null : c;
+}
+// How much of the raised color each of the two layers under a box holds,
+// so that the two together cover `solid` per cent of what is behind them.
+// One layer covers a, and two cover 1 - (1 - a) * (1 - a), so each layer is
+// 1 - sqrt(1 - solid). Anything that is not a number is the default, 60.
+function boxLayer(solid) {
+    const n = solid === "" || solid == null ? NaN : Number(solid);
+    const s = Number.isFinite(n) ? Math.min(100, Math.max(0, n)) / 100 : 0.6;
+    return (100 * (1 - Math.sqrt(1 - s))).toFixed(1) + "%";
 }
 // Lay a partly transparent color over an opaque one.
 function blendColor(top, under) {
@@ -4004,7 +4040,7 @@ function paintedBg(el) {
         return base;
     // Only the first stop is read. These gradients are one color repeated, used
     // to lay a flat tint rather than to shade anything.
-    const stop = img.match(/rgba?\([^)]*\)|#[0-9a-fA-F]{3,8}/);
+    const stop = img.match(/rgba?\([^)]*\)|color\(\s*srgb[^)]*\)|#[0-9a-fA-F]{3,8}/);
     const over = stop ? parseColor(stop[0]) : null;
     if (!over)
         return base;
@@ -7193,7 +7229,7 @@ export function setup(ctx, opts) {
             if (key === "panelHome")
                 syncLiveLog();
             // The pattern is shown as it is picked, the same way.
-            if (key === "panelPattern")
+            if (key === "panelPattern" || key === "boxSolid")
                 markMotion();
         }
         catch (_) { }
@@ -7926,7 +7962,7 @@ export function setup(ctx, opts) {
             id: "notifications",
             label: "Panel, pop-up and prices",
             keys: [
-                "reduceMotion", "toast", "liveLog", "panelHome", "panelPattern", "costIn", "costOut",
+                "reduceMotion", "toast", "liveLog", "panelHome", "panelPattern", "boxSolid", "costIn", "costOut",
                 "logReplies", "logRetries", "logAtOnce", "logNotes", "logSetup", "logProblems",
             ],
         },
@@ -9455,12 +9491,6 @@ export function setup(ctx, opts) {
                     "html[data-ar-pattern] [data-ar-settings]{position:relative;isolation:isolate}" +
                         'html[data-ar-pattern] [data-ar-settings]::before{content:"";display:block;position:sticky;top:0;' +
                         "height:var(--ar-view,60vh);margin-bottom:calc(-1 * var(--ar-view,60vh));z-index:-1;pointer-events:none}";
-                // Solid, and in the theme's own color: the theme's raised color,
-                // laid twice. It is light on a light theme and dark on a dark one,
-                // and near solid once laid twice even when a theme makes it
-                // see-through. Lumiverse's "solid card" color is a fixed gray that
-                // no theme changes, and a custom theme does not always set the
-                // deepest background, so neither is used.
                 // Hearts and stars are shapes, which a gradient cannot draw. Each is a
                 // small picture used as a mask over a layer filled with the theme's
                 // color, so the shapes take the color and follow a theme change. The
@@ -9477,8 +9507,20 @@ export function setup(ctx, opts) {
                             on + "[data-ar-panel]::before," + on + "#__lvRetryLog::before," + on + "[data-ar-settings]::before{" +
                             "background-color:" + ink + ";-webkit-mask:" + tile + " 0 0/36px 36px repeat;mask:" + tile + " 0 0/36px 36px repeat}";
                 }
+                // The boxes over a pattern: the theme's raised color, laid twice. It
+                // is light on a light theme and dark on a dark one. Lumiverse's "solid
+                // card" color is a fixed gray that no theme changes, and a custom
+                // theme does not always set the deepest background, so neither is
+                // used. Each layer is the raised color mixed with nothing, by
+                // --ar-box-layer, which boxSolid sets (see boxLayer). Two layers keep
+                // a theme whose raised color is itself see-through near solid at 100.
+                // A browser with no color-mix keeps the first two lines, which are
+                // solid.
+                const mix = "color-mix(in srgb,var(--lumiverse-bg-elevated,rgba(35,30,48,.9)) var(--ar-box-layer,37%),transparent)";
                 const solid = "background-color:var(--lumiverse-bg-elevated,rgba(35,30,48,.9))!important;" +
-                    "background-image:" + lift + "!important;";
+                    "background-image:" + lift + "!important;" +
+                    "background-color:" + mix + "!important;" +
+                    "background-image:linear-gradient(" + mix + "," + mix + ")!important;";
                 const el = document.createElement("style");
                 el.id = "__lvRetryMotionStyle";
                 el.textContent =
@@ -9489,8 +9531,8 @@ export function setup(ctx, opts) {
                         "html[data-ar-pattern] #__lvRetryLogBody,html[data-ar-pattern] #__lvRetryStatus{" + solid +
                         "margin:6px 8px;border-radius:var(--lumiverse-radius,8px);" +
                         "border:1px solid var(--lumiverse-border,rgba(255,255,255,.12))}" +
-                        // Each section of the settings on a solid box of its own, so no
-                        // setting is read across the lines.
+                        // Each section of the settings on a box of its own, as solid as
+                        // boxSolid says.
                         // Lumiverse styles every scroll bar on the page, with no least size
                         // for the thumb, so a box holding a very long text gets a thumb a
                         // few pixels tall. Inside our boxes it is never shorter than this,
@@ -9512,6 +9554,7 @@ export function setup(ctx, opts) {
                 document.documentElement.setAttribute("data-ar-pattern", pattern);
             else
                 document.documentElement.removeAttribute("data-ar-pattern");
+            document.documentElement.style.setProperty("--ar-box-layer", boxLayer(cfg.boxSolid));
         }
         catch (_) { }
     }
@@ -15961,6 +16004,9 @@ export function setup(ctx, opts) {
                 // and then does nothing.
                 if (f.live)
                     onLiveEdit(String(f.key));
+                // Rows that hang off this list appear or go with it, such as How
+                // solid the boxes are under the pattern.
+                applyDeps();
             });
             fieldSetters[f.key] = (v) => {
                 sel.value = coerce("pick", v, CONFIG[f.key], f);
@@ -17659,6 +17705,7 @@ export function setup(ctx, opts) {
         try {
             document.documentElement.removeAttribute("data-ar-still");
             document.documentElement.removeAttribute("data-ar-pattern");
+            document.documentElement.style.removeProperty("--ar-box-layer");
         }
         catch (_) { }
         offs.forEach((o) => {
@@ -17725,6 +17772,7 @@ export function setup(ctx, opts) {
 // input, so they can be checked without a browser.
 export const __testing = {
     LOG_KINDS,
+    boxLayer,
     setBoundThinkPairs,
     replyProblem,
     garbledVerdict,
