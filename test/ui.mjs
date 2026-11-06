@@ -15219,6 +15219,11 @@ console.log("\na note in a built-in note set does not light up when tapped");
         const area = await page.evaluate(() => {
           const ta = [...document.querySelectorAll('#modal textarea[aria-label^="Note "]')].find((n) => n.getClientRects().length && !n.closest("[hidden]"));
           ta.setAttribute("data-probe", "1");
+          // The letters are hidden for the shots. Chrome can draw them with
+          // colored subpixel edges before a tap and plain gray ones after it,
+          // which changes thousands of pixels and is not a glow. The box, its
+          // border and any ring around it are what this compares.
+          ta.style.setProperty("color", "transparent", "important");
           ta.scrollIntoView({ block: "center" });
           const r = ta.getBoundingClientRect();
           return { x: Math.max(0, r.left - 12), y: Math.max(0, r.top - 12), width: r.width + 24, height: Math.min(r.height + 24, 300) };
@@ -15238,7 +15243,6 @@ console.log("\na note in a built-in note set does not light up when tapped");
           return { focused: document.activeElement === ta, readOnly: ta.readOnly };
         });
         const still = same(before, after), stillHovered = same(before, hovered);
-        if (builtIn && !still) console.log("SHOTS " + label + " " + before.toString("base64") + " " + after.toString("base64"));
         return { state, still, stillHovered, changed: still ? null : whereChanged(before, after) };
       });
       if (builtIn) {
