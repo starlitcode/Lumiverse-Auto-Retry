@@ -7397,6 +7397,9 @@ export function setup(ctx: Ctx, opts?: any) {
       node.style.borderBottomWidth = "";
       node.style.transform = "";
       node.style.flexShrink = "";
+      node.style.minHeight = "";
+      node.style.marginTop = "";
+      if (node.removeAttribute) node.removeAttribute("data-ar-folding");
     } catch (_) {}
   }
 
@@ -7446,6 +7449,10 @@ export function setup(ctx: Ctx, opts?: any) {
               0,
             );
       node.style.height = Math.max(0, tall - edges) + "px";
+      // A button keeps a minimum height for a finger, which would hold it at
+      // full size while its height closed and then let it go in one step.
+      node.style.minHeight = "0px";
+      node.setAttribute("data-ar-folding", "1");
       node.style.overflow = "hidden";
       node.style.opacity = was;
       // Read the layout between the two, or the browser sees one value being set
@@ -7465,7 +7472,7 @@ export function setup(ctx: Ctx, opts?: any) {
       // are gone before the row is squeezed, and nothing is seen cut in half.
       const ease = "220ms ease-out";
       node.style.transition =
-        "height " + ease + ",margin-bottom " + ease +
+        "height " + ease + ",margin-bottom " + ease + ",margin-top " + ease +
         ",padding-top " + ease + ",padding-bottom " + ease +
         ",border-top-width " + ease + ",border-bottom-width " + ease +
         ",opacity 140ms ease-out,transform 160ms ease-out";
@@ -7474,6 +7481,8 @@ export function setup(ctx: Ctx, opts?: any) {
       node.style.transform = "translateY(-4px)";
       // The gap under it closes too, or the last few pixels go all at once.
       node.style.marginBottom = gap > 0 ? -gap + "px" : "0px";
+      // And a margin above it.
+      node.style.marginTop = "0px";
       // And its own padding and edge. A height of nothing still leaves those
       // standing, so a block let down to zero was thirty pixels tall and the
       // last thirty went in one frame at the end of the travel.
@@ -7534,6 +7543,7 @@ export function setup(ctx: Ctx, opts?: any) {
       // that value instead, which held the gap shut until the end and then
       // opened it in one step.
       const margin = cs.marginBottom;
+      const marginTop = cs.marginTop;
       let gap = 0;
       try {
         const owner = node.parentElement;
@@ -7547,12 +7557,18 @@ export function setup(ctx: Ctx, opts?: any) {
       // height moved where it could not be seen, and the box opened in one
       // step at the end.
       node.style.flexShrink = "0";
+      // The same minimum would hold a button at full size while its height
+      // opened from nothing.
+      node.style.minHeight = "0px";
+      node.setAttribute("data-ar-folding", "1");
       node.style.height = fromH + "px";
       node.style.opacity = String(fromO);
       if (fromHidden) {
         // The gap its parent puts under it, and its own padding and edge,
         // open with it, or they arrive in one step at the start.
         node.style.marginBottom = gap > 0 ? -gap + "px" : "0px";
+        // A margin above it opens with it too.
+        node.style.marginTop = "0px";
         for (const k of pads) node.style[k] = "0px";
         node.style.transform = "translateY(-4px)";
       }
@@ -7561,11 +7577,12 @@ export function setup(ctx: Ctx, opts?: any) {
       // softly.
       const ease = "240ms cubic-bezier(.2,.8,.28,1)";
       node.style.transition =
-        "height " + ease + ",margin-bottom " + ease + ",padding-top " + ease + ",padding-bottom " + ease +
+        "height " + ease + ",margin-bottom " + ease + ",margin-top " + ease + ",padding-top " + ease + ",padding-bottom " + ease +
         ",border-top-width " + ease + ",border-bottom-width " + ease + ",transform " + ease +
         ",opacity 200ms ease-out 60ms";
       node.style.height = goal + "px";
       node.style.marginBottom = margin;
+      node.style.marginTop = marginTop;
       for (const k of pads) node.style[k] = want[k];
       node.style.opacity = "1";
       node.style.transform = "none";
@@ -10117,6 +10134,11 @@ export function setup(ctx: Ctx, opts?: any) {
         // panel the one control that arrived instead of moving. The mark grows
         // into the box with a small spring and the box fills behind it, in
         // step with Auto Refine's switches, whose knob springs the same way.
+        // Nothing in a box that is opening or closing is squeezed. Its height
+        // is held while it moves, so a text box in it that gave way was
+        // squashed and stretched while it could still be seen. Marked by
+        // unfold and foldAway, and only for as long as they run.
+        "[data-ar-folding]>*{flex-shrink:0!important}" +
         // The margin is the browser's own default for a checkbox, kept rather than
         // zeroed. It is what gives every row holding one its height, and a check
         // holds those rows to 26px so a finger has something to land on: taking

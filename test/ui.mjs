@@ -16026,6 +16026,62 @@ console.log("\na permission notice follows its setting while the panel is open")
   check("no console errors", errors.length === 0, errors);
 }
 
+console.log("\nnothing in a fold is squeezed");
+// A text box inside something that opens or closes keeps its own height
+// while it moves. Two of them were squashed as their fold closed and
+// stretched as it opened: Your own hard failures, under Skip hard failures,
+// and the box in Debug info.
+{
+  for (const [label, viewport, touch] of [["phone", { width: 390, height: 844 }, true], ["laptop", { width: 1280, height: 900 }, false]]) {
+    for (const zoom of [1, 1.25, 0.85]) {
+      const say = label + (zoom === 1 ? "" : ", zoom " + zoom) + ": ";
+      const { out, errors } = await inPanel(browser, { viewport, touch, css: zoom === 1 ? "" : "html{zoom:" + zoom + "}" }, async (page) => {
+        return page.evaluate(async () => {
+          // Every height the box is drawn at while the press plays out, and
+          // the height it ends at.
+          const watch = async (press, box) => {
+            const ta = () => document.querySelector(box);
+            const shown = () => ta() && ta().getClientRects().length > 0 && ta().getBoundingClientRect().height > 0;
+            const before = shown() ? Math.round(ta().getBoundingClientRect().height) : 0;
+            const seen = [];
+            const p = document.querySelector(press);
+            if (!p) return null;
+            p.scrollIntoView({ block: "center" });
+            p.click();
+            const t0 = performance.now();
+            while (performance.now() - t0 < 450) {
+              await new Promise((r) => requestAnimationFrame(r));
+              if (shown()) seen.push(Math.round(ta().getBoundingClientRect().height));
+            }
+            return { before, seen };
+          };
+          const hard = '#modal [data-ar-row="ignoreHardErrors"] input[type="checkbox"]';
+          const hardBox = '#modal [data-ar-row="hardErrorPhrases"] textarea';
+          const shut = await watch(hard, hardBox);
+          await new Promise((r) => setTimeout(r, 300));
+          const opened = await watch(hard, hardBox);
+          const head = [...document.querySelectorAll("#modal [data-ar-sechead]")].find((h) => /Debug info/.test(h.textContent || ""));
+          if (head) head.setAttribute("data-probe-debug", "1");
+          const debugBox = '#modal [data-probe-debug]';
+          const box = () => head && head.closest("[data-ar-sec]") ? head.closest("[data-ar-sec]").querySelector("textarea") : null;
+          if (box()) box().setAttribute("data-probe-box", "1");
+          const dOpen = await watch(debugBox, "#modal [data-probe-box]");
+          if (box()) box().setAttribute("data-probe-box", "1");
+          await new Promise((r) => setTimeout(r, 300));
+          const dShut = await watch(debugBox, "#modal [data-probe-box]");
+          return { shut, opened, dOpen, dShut };
+        });
+      });
+      const same = (w, to) => !!w && w.seen.length > 0 && w.seen.every((h) => Math.abs(h - to) <= 1);
+      check(say + "closing Skip hard failures, its text box keeps its height until it is gone", !!out.shut && out.shut.before > 20 && same(out.shut, out.shut.before), out.shut);
+      check(say + "opening it, the text box is at its own height from the first frame", !!out.opened && same(out.opened, out.opened.seen[out.opened.seen.length - 1]), out.opened);
+      check(say + "opening Debug info, its text box is at its own height from the first frame", !!out.dOpen && same(out.dOpen, out.dOpen.seen[out.dOpen.seen.length - 1]), out.dOpen);
+      check(say + "closing it, the text box keeps its height until it is gone", !!out.dShut && out.dShut.before > 20 && same(out.dShut, out.dShut.before), out.dShut);
+      check(say + "no console errors", errors.length === 0, errors);
+    }
+  }
+}
+
 console.log("\nthe settings on a phone and under a mouse");
 // On a phone: nothing scrolls sideways and everything that can be pressed is
 // at least 32 pixels, with the tick boxes answering a tap just around them.
