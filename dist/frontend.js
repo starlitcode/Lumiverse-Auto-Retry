@@ -10285,9 +10285,8 @@ export function setup(ctx, opts) {
                     // at a time.
                     //
                     // The button itself grows rather than an invisible hit area being laid
-                    // over it. Each "?" sits at the end of a row that is one large label,
-                    // so a hit area reaching past the button would take taps meant for the
-                    // setting it explains.
+                    // over it. Each "?" sits right after the setting's name, so a hit area
+                    // reaching past the button would cover the name and the row around it.
                     "button[data-ar-hint]{width:18px;height:18px;font-size:11px}" +
                     "@media (pointer:coarse){" +
                     "button[data-ar-hint]{width:32px;height:32px;font-size:14px}}" +
@@ -15687,16 +15686,11 @@ export function setup(ctx, opts) {
     let idAt = 0;
     const nextId = () => "ar-i" + ++idAt;
     function buildRow(f) {
-        // The row is a plain box and the setting's words are the label inside it.
-        //
-        // A label wrapping the whole row would make every part of it a press on the
-        // control: the description, the boxes belonging to nested rows, empty
-        // space. A label with no `for` also names the first labelable element
-        // inside it, and a button is one, so the "?" on these rows would take the
-        // label off the setting outright.
-        //
-        // The words carry it instead, named to the control by id, which is the target
-        // anyone aims at anyway and the one Auto Refine's rows already use.
+        // The row is a plain box, and no part of it is a label. A label makes its
+        // words a press on the control, and a label wrapping the whole row would
+        // make the description and the boxes of nested rows one too. Only the
+        // control changes the setting, the same as in Auto Refine's rows. The
+        // words name it for a screen reader through aria-labelledby, below.
         const row = document.createElement("div");
         const forId = f.type === "bool" || f.type === "num" || f.type === "pick" ? nextId() : "";
         // Marks the row as the thing a hint popover measures itself against, and
