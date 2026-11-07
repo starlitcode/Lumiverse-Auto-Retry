@@ -23,7 +23,7 @@ const WAIT = read("WAIT_ERROR");
 
 // The text of each list, the same in both extensions.
 const HARD_TEXT =
-  "\\b(?:400|401|402|403|404|405|406|411|413|415|422|invalid[_ ]?api[_ ]?key|authentication|unauthorized|forbidden|permission|not allowed|not found|does not exist|model missing|insufficient[_ ](?:balance|credits?|funds|quota)|billing|context[_ ]length(?:[_ ]exceeded)?|maximum context|(?:prompt|input|context|messages?) (?:is |are )?too long)\\b";
+  "\\b(?:400|401|402|403|404|405|406|411|413|415|422|invalid[_ ]?api[_ ]?key|authentication|unauthorized|forbidden|permission|not allowed|not found|does not exist|model missing|insufficient[_ ](?:balance|credits?|funds|quota)|billing|context[_ ]length(?:[_ ]exceeded)?|maximum context|(?:prompt|input|context|messages?) (?:is |are )?too long|daily (?:request |token |usage )?(?:limit|quota|cap)|today['’]?s (?:free )?(?:requests|quota|limit|usage)|\\w*(?:requests|tokens) ?per ?day\\w*|resets? at (?:midnight|00:00))\\b";
 const WAIT_TEXT =
   "\\b(?:408|429|500|502|503|504|520|521|522|523|524)\\b|rate.?limit|too many requests|quota|overloaded|capacity|try again later|temporar(?:y|ily)|time(?:d ?| |-)?out|network|connection reset|socket hang up|econnrefused|econnreset|fetch failed";
 
@@ -51,6 +51,11 @@ const WONT_FIX = [
   "context_length_exceeded",
   "prompt is too long: 210000 tokens",
   "billing hard limit reached",
+  // A daily limit: waiting minutes does not bring it back, only the next day.
+  "429 You have reached your daily request limit",
+  "Today’s quota is used up, come back tomorrow",
+  "Quota exceeded for metric: GenerateRequestsPerDay",
+  "429: limit reached, it resets at midnight UTC",
 ];
 const WAIT_IT_OUT = [
   "429 Too Many Requests",
@@ -67,7 +72,7 @@ const WAIT_IT_OUT = [
   "Model is at capacity",
 ];
 // Neither: a timeout is not a context error, and these stay worth waiting out.
-const NOT_HARD = ["The request took too long to respond", "Request timed out", "529 overloaded"];
+const NOT_HARD = ["The request took too long to respond", "Request timed out", "529 overloaded", "429 rate limit: 20 requests per minute"];
 
 describe("each error is read the same way in both extensions", () => {
   for (const e of WONT_FIX) test("will not fix itself: " + e, () => expect(HARD.test(e)).toBe(true));

@@ -340,6 +340,7 @@ Some providers send a refusal as an error instead of reply text. An error about 
 - a model that does not exist
 - a missing permission
 - an account with no balance or quota left
+- a daily limit, such as a free tier's requests for the day, which only comes back the next day
 - a prompt too long for the model
 
 The built-in list cannot know every provider's wording, so **Your own hard failures** lets you add wording, one per line. It only shows while **Skip hard failures** is on. Auto Refine reads errors with the same list, so the two extensions agree on which errors are worth trying again.

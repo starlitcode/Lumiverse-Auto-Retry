@@ -3852,7 +3852,7 @@ function isHardError(err, cfg) {
 // exist does not start existing, a balance does not refill, and a prompt over
 // the context length is the same prompt next time. The same list as Auto
 // Refine's, so the two agree on which errors are worth trying again.
-const HARD_ERROR = /\b(?:400|401|402|403|404|405|406|411|413|415|422|invalid[_ ]?api[_ ]?key|authentication|unauthorized|forbidden|permission|not allowed|not found|does not exist|model missing|insufficient[_ ](?:balance|credits?|funds|quota)|billing|context[_ ]length(?:[_ ]exceeded)?|maximum context|(?:prompt|input|context|messages?) (?:is |are )?too long)\b/i;
+const HARD_ERROR = /\b(?:400|401|402|403|404|405|406|411|413|415|422|invalid[_ ]?api[_ ]?key|authentication|unauthorized|forbidden|permission|not allowed|not found|does not exist|model missing|insufficient[_ ](?:balance|credits?|funds|quota)|billing|context[_ ]length(?:[_ ]exceeded)?|maximum context|(?:prompt|input|context|messages?) (?:is |are )?too long|daily (?:request |token |usage )?(?:limit|quota|cap)|today['’]?s (?:free )?(?:requests|quota|limit|usage)|\w*(?:requests|tokens) ?per ?day\w*|resets? at (?:midnight|00:00))\b/i;
 // Errors that clear if you wait: a rate limit, a busy or loading server, a
 // dropped connection. The same list as Auto Refine's.
 const WAIT_ERROR = /\b(?:408|429|500|502|503|504|520|521|522|523|524)\b|rate.?limit|too many requests|quota|overloaded|capacity|try again later|temporar(?:y|ily)|time(?:d ?| |-)?out|network|connection reset|socket hang up|econnrefused|econnreset|fetch failed/i;
