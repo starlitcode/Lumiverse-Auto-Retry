@@ -37,6 +37,9 @@ function boot(opts?: {
   display?: any[];
   // A Lumiverse with no way to send a reply for an extension.
   noQuiet?: boolean;
+  // The one account the chat belongs to. Looked up under any other, it is
+  // not found, as on a server shared by several accounts.
+  owner?: string;
 }) {
   let onFrontend: any = null;
   let interceptor: any = null;
@@ -81,7 +84,8 @@ function boot(opts?: {
       },
     },
     chats: {
-      get: async (chatId: string) => {
+      get: async (chatId: string, userId?: string) => {
+        if (opts && opts.owner !== undefined && userId !== opts.owner) return null;
         if (opts && opts.chatGetFails) throw new Error("permission denied");
         return { id: chatId, metadata: Object.assign({}, opts && opts.group ? { group: true } : {}, (opts && opts.meta) || {}) };
       },
@@ -961,5 +965,28 @@ describe("a Lumiverse that cannot send a reply for an extension", () => {
     const failed = h.stage("failed");
     expect(failed.length).toBe(2);
     expect(failed[1].msg.busy).toBeFalsy();
+  });
+});
+
+describe("a chat on another account", () => {
+  const of = (h: any, type: string) => h.sent.filter((s: any) => s.msg && s.msg.type === type).map((s: any) => s.msg);
+
+  test("is not tried at once, given a reroll, or given a retry note", async () => {
+    const h = boot({ owner: "a" });
+    await h.tell({ type: "try_at_once", requestId: "r1", chatId: "c1", count: 2 }, "b");
+    await h.tell({ type: "add_reroll", requestId: "a1", chatId: "c1", messageId: "m2", swipeCount: 1, text: "She lit the lamp and waited." }, "b");
+    await h.tell({ type: "arm_refusal_note", requestId: "n1", chatId: "c1", notes: [{ text: "Keep going.", role: "system" }] }, "b");
+    await new Promise((r) => setTimeout(r, 30));
+    expect(h.quietCalls.length).toBe(0);
+    expect(of(h, "at_once")[0]).toMatchObject({ requestId: "r1", stage: "failed" });
+    expect(of(h, "at_once")[0].why).toContain("could not find that chat on your account");
+    expect(of(h, "reroll_added")[0]).toMatchObject({ requestId: "a1", ok: false });
+    expect(of(h, "note_armed")[0]).toMatchObject({ requestId: "n1", armed: false });
+  });
+
+  test("the account that owns it can still use it", async () => {
+    const h = boot({ owner: "a" });
+    await h.tell({ type: "add_reroll", requestId: "a1", chatId: "c1", messageId: "m2", swipeCount: 1, text: "She lit the lamp and waited." }, "a");
+    expect(of(h, "reroll_added")[0]).toMatchObject({ requestId: "a1", ok: true });
   });
 });

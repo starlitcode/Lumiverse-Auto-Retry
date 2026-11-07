@@ -916,9 +916,51 @@ function notify(kind: any, text: any, userId?: string) {
 // account storage and send it back on request.
 // tab is the id of the browser tab that sent the message. A Lumiverse that
 // does not pass one leaves it undefined.
+// On a server shared by several accounts, Lumiverse reads and writes any chat
+// by its id, whoever asks. So a chat named by the panel is first looked up
+// under the account that sent it, which finds only that account's own chats,
+// and a chat that is not there is not read, written, or given a retry note. A
+// chat found is remembered for a few minutes. The same check as Auto Refine's.
+//
+// When the lookup cannot be made at all, because the chats permission is
+// refused or Lumiverse is too old to have it, the panel's chat is used as
+// before, since retrying still works without that permission.
+const OWN_CHAT_MS = 5 * 60 * 1000;
+const ownChats = new Map<string, number>();
+// Empty when the chat is the sender's, or cannot be checked, and otherwise
+// why it is not used, in words for the panel.
+async function chatIsTheirs(chatId: string, userId?: string): Promise<string> {
+  if (!userId || !spindle.chats || typeof spindle.chats.get !== 'function') return '';
+  const k = userKey(userId) + '\u0000' + chatId;
+  const seen = ownChats.get(k);
+  if (seen && Date.now() - seen < OWN_CHAT_MS) return '';
+  try {
+    const chat = await spindle.chats.get(chatId, userId);
+    if (!chat) return 'Auto Retry could not find that chat on your account';
+    ownChats.set(k, Date.now());
+    if (ownChats.size > 500) ownChats.delete(ownChats.keys().next().value as string);
+    return '';
+  } catch (e) {
+    if (/PERMISSION_DENIED/.test(sayError(e))) return '';
+    try { spindle.log.warn('auto-retry: could not check which account a chat belongs to, so it was not used: ' + sayError(e)); } catch (__) {}
+    return 'Auto Retry could not check which account that chat belongs to, so it was not used. Lumiverse said: ' + sayError(e);
+  }
+}
+// The panel messages that name a chat to read, write or add a note to.
+const NAMES_A_CHAT = ['arm_refusal_note', 'try_at_once', 'add_reroll'];
+
 spindle.onFrontendMessage(async (payload: any, userId?: string, tab?: string) => {
   try {
     if (!payload) return;
+    const notTheirs = NAMES_A_CHAT.indexOf(String(payload.type)) >= 0 && payload.chatId ? await chatIsTheirs(String(payload.chatId), userId) : '';
+    if (notTheirs) {
+      const why = notTheirs;
+      try { spindle.log.warn('auto-retry: a ' + payload.type + ' was not used: ' + why); } catch (__) {}
+      if (payload.type === 'arm_refusal_note') replyTo(userId, { type: 'note_armed', requestId: payload.requestId, armed: false });
+      else if (payload.type === 'try_at_once') replyTo(userId, { type: 'at_once', requestId: String(payload.requestId || ''), stage: 'failed', why: why });
+      else replyTo(userId, { type: 'reroll_added', requestId: payload.requestId, chatId: String(payload.chatId), ok: false, why: why, changed: false, messageId: '', swipe: 0 });
+      return;
+    }
     if (payload.type === 'notify') {
       notify(payload.kind, payload.text, userId);
       return;

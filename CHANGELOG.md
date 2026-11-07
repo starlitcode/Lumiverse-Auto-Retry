@@ -18,6 +18,7 @@ _2026-11-06_
 
 ### Fixed
 
+- **A chat on another account could be named from the panel.** On a Lumiverse shared by several accounts, Lumiverse reads and writes any chat by its id. Several tries at once, adding a reroll, and a retry note took the chat the panel named without checking whose it was, so an account that knew another account's chat id could read it, add a reply to it, or put a note in its next prompt. A chat is now looked up under the account that asked first, and one that is not theirs is not used. This needs the chats permission. On a Lumiverse with one account, nothing changes.
 - **Several tries at once kept going after an error that will not fix itself.** With **Skip hard failures** on, an error such as an invalid API key or a missing model stops retrying. A reply with that error from Several tries at once did not, so the tries were sent again, several at a time, until every try was used. The other tries are now stopped, and no more are sent.
 - **Several tries at once retried errors with Retry on errors off.** When every reply that came back was an error, the next try went out even with **Retry on errors** off. It now stops, the same as an error on a reply that streamed.
 - **Several tries at once did not wait out a rate limit.** When one reply came back rate limited and another came back with text, the next tries went out after the usual short wait, back into the rate limit. They now wait as long as a rate limit asks for.
