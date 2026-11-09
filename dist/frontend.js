@@ -181,7 +181,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.25.1";
+const VERSION = "5.25.2";
 // Whether two saved settings hold the same values, whatever order their keys
 // were written in. A key left undefined counts as not there, the way it is
 // when saved. Used to tell an update or a put-back that would change nothing.
@@ -7427,9 +7427,7 @@ export function setup(ctx, opts) {
     // of the list is then past the end of it, so the page is pulled back by
     // exactly that much between two frames. Its space is let down first instead
     // and the pull back comes with it.
-    // A box let down to nothing and then handed over. done runs once, whether the
-    // travel finished, was cut short by a second one, or never started because the
-    // reader asked for no movement.
+    //
     // A box's height in its own CSS pixels. getBoundingClientRect gives screen
     // pixels, and Lumiverse applies its UI Scale as a zoom, so the two differ.
     // A height read in screen pixels and written back as CSS pixels opened a
@@ -7441,27 +7439,43 @@ export function setup(ctx, opts) {
         const scale = node.offsetWidth > 0 && r.width > 0 ? r.width / node.offsetWidth : 1;
         return r.height / (scale > 0.01 ? scale : 1);
     }
-    // Everything a fold or an open sets, taken back off.
+    // What a fold or an open writes to a box.
+    const FOLD_STYLES = ["height", "opacity", "overflow", "transition", "marginBottom", "marginTop", "paddingTop", "paddingBottom", "borderTopWidth", "borderBottomWidth", "transform", "flexShrink", "minHeight"];
+    // A box can set some of these itself, such as a margin above it. They are
+    // read before a fold or an open first writes over them, and put back when
+    // it ends. Without that, the box loses them at the end and moves in one step.
+    function holdOwnStyle(node) {
+        try {
+            if (node._ownStyle)
+                return;
+            const own = {};
+            for (const k of FOLD_STYLES)
+                own[k] = node.style[k] || "";
+            node._ownStyle = own;
+        }
+        catch (_) { }
+    }
+    // Everything a fold or an open sets, taken back off, with the box's own
+    // styles put back. Called at the end of one, and by anything that wants the
+    // fold dropped rather than waited out: a row switched back on mid-close
+    // would otherwise sit at no height until a travel it no longer needs
+    // finished. With no fold running there is nothing of the fold's to take off,
+    // and the box's own styles are left as they are.
     function clearFold(node) {
         try {
-            node.style.height = "";
-            node.style.opacity = "";
-            node.style.overflow = "";
-            node.style.transition = "";
-            node.style.marginBottom = "";
-            node.style.paddingTop = "";
-            node.style.paddingBottom = "";
-            node.style.borderTopWidth = "";
-            node.style.borderBottomWidth = "";
-            node.style.transform = "";
-            node.style.flexShrink = "";
-            node.style.minHeight = "";
-            node.style.marginTop = "";
+            const own = node._ownStyle;
+            if (own)
+                for (const k of FOLD_STYLES)
+                    node.style[k] = own[k] || "";
+            node._ownStyle = null;
             if (node.removeAttribute)
                 node.removeAttribute("data-ar-folding");
         }
         catch (_) { }
     }
+    // A box let down to nothing and then handed over. done runs once, whether the
+    // travel finished, was cut short by a second one, or never started because the
+    // reader asked for no movement.
     function foldAway(node, done) {
         let ran = false;
         const token = {};
@@ -7498,6 +7512,7 @@ export function setup(ctx, opts) {
             catch (_) { }
             // An open still running stops where it is, and this closes from there.
             const was = getComputedStyle(node).opacity;
+            holdOwnStyle(node);
             node.style.transition = "none";
             node.style.flexShrink = "0";
             // Written as the box-sizing reads it. A content-box box counts its
@@ -7616,6 +7631,7 @@ export function setup(ctx, opts) {
                     gap = parseFloat(how.rowGap || how.gap || "0") || 0;
             }
             catch (_) { }
+            holdOwnStyle(node);
             node.style.transition = "none";
             node.style.overflow = "hidden";
             // Held at the height it is given. In a box that scrolls, a flex item
@@ -9657,9 +9673,18 @@ export function setup(ctx, opts) {
                         // and keeps the theme's color and shape.
                         "[data-ar-ui] ::-webkit-scrollbar-thumb,[data-ar-panel] ::-webkit-scrollbar-thumb," +
                         "[data-ar-settings] ::-webkit-scrollbar-thumb,#__lvRetryLog ::-webkit-scrollbar-thumb{min-height:28px;min-width:28px}" +
-                        "html[data-ar-pattern] [data-ar-sec]{" + solid + "padding:12px;" +
+                        "html[data-ar-pattern] [data-ar-sec]{" + solid + "padding:12px;margin:0;" +
                         "border-radius:var(--lumiverse-radius-md,10px);" +
-                        "border:1px solid var(--lumiverse-border,rgba(255,255,255,.12))}";
+                        "border-color:var(--lumiverse-border,rgba(255,255,255,.12))}" +
+                        // A pattern picked or taken away gives every section its padding and
+                        // edge, or takes them off, which moves everything under them. The
+                        // padding grows and shrinks over the same time as a row that opens,
+                        // rather than in one step. The edge is always 1px, clear with no
+                        // pattern, and a margin of -1px puts the section where it would be
+                        // with no edge. Its width cannot move smoothly: the browser draws an
+                        // edge under 1px as 1px, so the last pixel of each went in one step.
+                        "[data-ar-sec]{border:1px solid transparent;margin:-1px;" +
+                        "transition:padding .24s ease,margin .24s ease,border-color .24s ease}";
                 (document.head || document.documentElement).appendChild(el);
                 motionStyleEl = el;
             }

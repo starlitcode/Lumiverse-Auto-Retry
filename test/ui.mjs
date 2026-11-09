@@ -16145,6 +16145,66 @@ console.log("\nthe settings on a phone and under a mouse");
   check("no console errors", phone.errors.length + mouse.errors.length === 0, phone.errors.concat(mouse.errors));
 }
 
+// Picking a pattern puts each section of the settings on a box with padding
+// and an edge, and None takes them off. That changes the height of every
+// section, so it moves over several frames, the same as a row that opens,
+// and it lands with no step at the end.
+//
+// The padding also changes the width the text has, so lines can unwrap
+// partway through, and on a narrow screen several do so in the same frame.
+// That is part of the movement. What is checked is how it lands: the last
+// change is small, or no bigger than the ones just before it.
+console.log("\nthe boxes under a pattern grow and shrink with no step");
+{
+  const landingStep = (tops) => {
+    const d = tops.map((t, i) => Math.abs(t - (i ? tops[i - 1] : 0)));
+    let last = -1;
+    for (let i = d.length - 1; i >= 0; i--) if (d[i] > 0.5) { last = i; break; }
+    if (last < 2) return 0;
+    const before = Math.max(d[last - 1], d[last - 2]);
+    return d[last] > 2 && d[last] > 3 * before ? Math.round(d[last]) : 0;
+  };
+  for (const [label, viewport, touch] of [["phone", { width: 390, height: 900 }, true], ["laptop", { width: 1280, height: 900 }, false]]) {
+    for (const zoom of [1, 1.25, 0.85]) {
+      const run = await inPanel(browser, { viewport, touch, css: zoom === 1 ? "" : "html{zoom:" + zoom + "}" }, async (page) => {
+        const pick = (value) =>
+          page.evaluate(async (value) => {
+            const sel = [...document.querySelectorAll("#modal select")].find((s) => [...s.options].some((o) => o.value === "diamonds"));
+            if (!sel) return null;
+            const box = [...document.querySelectorAll("#modal *")]
+              .filter((n) => /auto|scroll/.test(getComputedStyle(n).overflowY))
+              .sort((a, b) => b.scrollHeight - a.scrollHeight)[0];
+            if (!box) return null;
+            const start = box.scrollHeight;
+            sel.value = value;
+            sel.dispatchEvent(new Event("change", { bubbles: true }));
+            const tops = [];
+            const t0 = performance.now();
+            while (performance.now() - t0 < 700) {
+              await new Promise((r) => requestAnimationFrame(r));
+              tops.push(box.scrollHeight - start);
+            }
+            return tops;
+          }, value);
+        await page.evaluate(() => new Promise((r) => setTimeout(r, 300)));
+        const on = await pick("diamonds");
+        const off = await pick("");
+        return { on, off };
+      });
+      const say = label + (zoom === 1 ? "" : ", zoom " + zoom) + ": ";
+      for (const [name, tops] of [["a pattern picked", run.out.on], ["None picked", run.out.off]]) {
+        const travel = tops ? tops[tops.length - 1] : 0;
+        let biggest = 0;
+        if (tops) tops.forEach((t, i) => { biggest = Math.max(biggest, Math.abs(t - (i ? tops[i - 1] : 0))); });
+        check(say + name + ", the sections grow or shrink over several frames",
+          !!tops && Math.abs(travel) > 50 && biggest < Math.abs(travel) / 3, tops && tops.map(Math.round));
+        check(say + name + ", it lands with no step at the end", !!tops && landingStep(tops) === 0, tops && tops.map(Math.round));
+      }
+      check(say + "no console errors", run.errors.length === 0, run.errors);
+    }
+  }
+}
+
 await browser.close();
 console.log(failures ? `\n${failures} FAILED` : "\nall browser checks passed");
 process.exit(failures ? 1 : 0);

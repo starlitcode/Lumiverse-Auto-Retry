@@ -8,6 +8,16 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.25.2
+
+_2026-11-09_
+
+### Fixed
+
+- **Picking a pattern moved the settings in one step.** A pattern puts each section of the settings on a box, with space around what is in it. That space came and went all at once when a pattern was picked or set back to None, so everything under it jumped. It now grows and shrinks smoothly. With Reduce motion on, it changes with no movement.
+
+---
+
 ## 5.25.1
 
 _2026-11-09_
