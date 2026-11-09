@@ -910,7 +910,7 @@ _2026-09-14_
 
 - **The acknowledgement notes are gone.** Every set used to answer its own note in the assistant's voice. That leaves the request ending on a turn the model has not written, which is a prefill, and providers are dropping support for it. A set built that way works until the connection behind it stops allowing it, and then it fails for a reason nobody reading the note would guess. Every built-in note is a user note now. Your own notes can still use any role the panel offers.
 
-- **Turn and role markers are removed before the checks run.** Gemma's `<|turn>model` and `<turn|>`, ChatML's `<|im_start|>` and `<|im_end|>`, Llama's header block, and Cohere's turn tokens. They are not reasoning, but until they were gone they counted towards the length checks and sat in the middle of the phrases a refusal is matched on.
+- **Turn and role markers are removed before the checks run.** Gemma's `<|turn>model` and `<turn|>`, ChatML's `<|im_start|>` and `<|im_end|>`, Llama's header block, and Cohere's turn tokens. They are not reasoning, but until they were gone they counted toward the length checks and sat in the middle of the phrases a refusal is matched on.
 
   This happens whether or not **Ignore the thinking / reasoning** is on. That option decides whether a refusal written inside the working counts, which is a question about the working. A turn marker is not the working.
 

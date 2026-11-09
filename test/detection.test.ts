@@ -677,7 +677,7 @@ describe("refusal detection ignores the model's thinking", () => {
         expect(stripThinking(open + REPLY, {}).trim()).toBe(REPLY);
     });
 
-    test("turn markers do not count towards the reply", () => {
+    test("turn markers do not count toward the reply", () => {
       expect(stripThinking("<|turn>model\n" + REPLY + "<turn|>", {}).trim()).toBe(REPLY);
       expect(stripThinking("<|im_start|>assistant\n" + REPLY + "<|im_end|>", {}).trim()).toBe(REPLY);
       expect(stripThinking("<start_of_turn>model\n" + REPLY + "<end_of_turn>", {}).trim()).toBe(REPLY);

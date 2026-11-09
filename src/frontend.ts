@@ -3265,7 +3265,7 @@ function thinkPairs(): Array<{ needs: string; open: string; close: string }> {
 }
 
 // Turn, role and reply markers a local backend can pass through. They are not
-// reasoning, but until they are gone they count towards the length checks and
+// reasoning, but until they are gone they count toward the length checks and
 // sit in the middle of the phrases the refusal checks match on.
 const CONTROL_MARKS: RegExp[] = [
   new RegExp("[ \\t]*<\\|channel\\|>[ \\t]*\\w+[ \\t]*<\\|message\\|>[ \\t]*", "gi"),
@@ -3525,7 +3525,7 @@ function stripThinking(text: string, cfg?: any): string {
   // What is left of the channel format once the thinking channels are gone: the
   // header that introduces the visible reply, and the control tokens around it.
   // The host normally strips these before anything is displayed, but when they
-  // reach us they count towards the reply's length and sit in the middle of a
+  // reach us they count toward the reply's length and sit in the middle of a
   // phrase the checks are trying to match. Only the markers go; the reply
   // between them is what we are keeping.
   t = stripControlTokens(t);
