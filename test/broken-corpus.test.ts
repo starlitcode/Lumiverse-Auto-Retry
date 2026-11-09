@@ -138,6 +138,12 @@ describe("the thinking, judged on its own", () => {
     ["thinking stuck repeating to its end, sent apart", reply, loop, "thinking got stuck repeating"],
     ["thinking stuck repeating to its end, written into the reply", "<think>" + loop + "</think>\n\n" + reply, "", "thinking got stuck repeating"],
     [
+      "thinking that cycles through a few sentences and breaks out",
+      reply,
+      plan + "I should write the reply. I should write it now. Write it.\n".repeat(9) + "Fine. Tamsin answers and sits by the stove.",
+      "thinking got stuck repeating",
+    ],
+    [
       "a loop after a draft of the reply's first line, written into the reply",
       "<think>" + plan + "Draft: " + reply + " " + "Wait, let me check the bridge again. ".repeat(14) + "</think>\n\n" + reply,
       "",
@@ -204,6 +210,17 @@ describe("stuck repeating or rambling", () => {
     ["a loop inside asterisks that never close", scene + "*She ran and " + "she ran and ".repeat(25)],
     ["a pattern of digits after a colon", scene + "The total was: " + "1.".repeat(120)],
     ["one word and a comma repeated to the end", scene + "The tired, hopeful, small, " + "and, ".repeat(40) + "and,"],
+    [
+      "one sentence six times, then another six times, with the scene going on",
+      scene + "The stove ticks as it cools. ".repeat(6) + "Orrin pulls the strap tight. ".repeat(6) + "Then the lamp went out.",
+    ],
+    ["two sentences in turn, over and over", scene + "Tamsin looks at the door. The wind pulls at the shutters. ".repeat(6) + "Nobody came."],
+    [
+      "three sentences in turn, with an odd one between, that break off",
+      scene + "Orrin waits by the stove.\nHe says nothing at all.\nHe waits.\n".repeat(4) + "He the.\n" +
+        "Orrin waits by the stove.\nHe says nothing at all.\nHe waits.\n".repeat(5) + "At last the rain stopped and they went out to the barn.",
+    ],
+    ["a long cycle of sentences on their own lines", scene + "Check the strap.\nCheck the coat on the peg.\nCheck the mule.\nCheck the gate is shut.\nCheck the lamp.\n".repeat(5)],
   ];
   const fine: Array<[string, string]> = [
     ["a chant with the scene carrying on after it", scene + "\"Run, run, run, run, run, run!\" Tamsin shouted, and they ran for the trees."],
@@ -222,7 +239,14 @@ describe("stuck repeating or rambling", () => {
     ["lines written out as a punishment, ending the reply", scene + "On the board she wrote:\n" + "I will not feed the mule from the table. ".repeat(6)],
     ["a laugh held long", scene + "\"Ha" + "ha".repeat(70) + "!\" He could not stop."],
     ["a long reply in Thai, which has no punctuation", Array.from({ length: 200 }, (_, i) => ["ฝนตก", "ทะเล", "ปลา", "แมว"][i % 4] + i).join(" ")],
-    ["a poem with no punctuation, one short line each", scene + Array.from({ length: 60 }, (_, i) => ["the reeds bend low", "the water runs on", "the heron waits", "the light goes gray"][i % 4]).join("\n")],
+    // Each line is different: four lines in turn, over and over, is a loop.
+    [
+      "a poem with no punctuation, one short line each",
+      scene +
+        Array.from({ length: 60 }, (_, i) =>
+          [["the reeds", "the water", "the heron", "the light"][i % 4], ["bend", "run", "wait", "turn", "fade"][i % 5], ["low", "on", "gray"][i % 3]].join(" "),
+        ).join("\n"),
+    ],
     ["a crowd's chant in quotation marks that close", scene + "The crowd roared, \"" + "Hail the miller! ".repeat(25).trim() + "\""],
     ["a chant in curly quotation marks that close", scene + "They sang, \u201c" + "Turn the wheel, turn the wheel, ".repeat(12).trim() + "\u201d"],
     ["a chant in asterisks that close", scene + "*" + "Down to the weir, down to the weir. ".repeat(12).trim() + "*"],
@@ -233,6 +257,20 @@ describe("stuck repeating or rambling", () => {
     ["a refrain sung three times", scene + "\"Down by the water, down by the water,\" she sang. \"Down by the water we go.\""],
     ["one word shouted many times in quotation marks that close", scene + "\"" + "and, ".repeat(25) + "and!\" she shouted, then laughed."],
     ["one word hummed fewer times than a loop needs, at the end", scene + "She hummed under her breath, " + "la ".repeat(24) + "la."],
+    ["a sentence said three times for effect", scene + "He would not leave her here. He would not leave her here. He would not leave her here. The door gave."],
+    [
+      "a plan said twice with a check between",
+      "Keep it short. She is tired. Mention the coat on the peg. Leave the strap for him. " + "Wait, let me check that. ".repeat(3) +
+        "Keep it short. She is tired. Mention the coat on the peg. Leave the strap for him. Now the reply.",
+    ],
+    [
+      "a refrain between verses",
+      scene + ["The river runs to the sea", "Down by the water we go", "The ferry waits at the pier", "Down by the water we go", "The reeds lie flat in the rain",
+        "Down by the water we go", "The lamps are lit on the hill", "Down by the water we go", "The mule is home in the barn", "Down by the water we go"].join("\n"),
+    ],
+    ["short lines shouted over and over", scene + "\"Run! Go! Run! Go! Run! Go! Run! Go! Run! Go! Run! Go! Run! Go!\" Tamsin shouted, and they ran."],
+    ["a chant of sentences in quotation marks that close", scene + "The crowd roared, \"" + "Bring the miller out. Bring the miller out now. ".repeat(8).trim() + "\" Orrin shut the door."],
+    ["sentences written out after a colon", scene + "She wrote it out:\n" + "I will not feed the mule. I will not open the gate.\n".repeat(8)],
   ];
   for (const [label, text] of broken) test("caught: " + label, () => expect(loopVerdict(text)).toBe(true));
   for (const [label, text] of fine) test("left alone: " + label, () => expect(loopVerdict(text)).toBe(false));

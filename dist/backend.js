@@ -28,7 +28,7 @@
 // with while this side comes back on the new build. A debug report naming only
 // the panel's version would be speaking for a file it cannot see, so the panel
 // asks for this one and prints both.
-const VERSION = '5.25.0';
+const VERSION = '5.25.1';
 const SETTINGS_FILE = 'settings.json';
 // Presets, kept in account storage next to the settings so they
 // follow the user between devices. The browser copy is a fast local cache, not
@@ -721,6 +721,13 @@ async function tryAtOnce(payload, userId) {
     // A chat set to its own connection can also be set to its own model on it.
     if (!parameters && connectionId && connectionId === bound && typeof meta.connection_model === 'string' && meta.connection_model.trim())
         parameters = { model: meta.connection_model.trim() };
+    // Checked before the note is taken. The panel stops tries that are slow to
+    // go out and presses the retry button instead, and arms the note again for
+    // that press.
+    if (stoppedEarly.get(requestId) === who) {
+        stoppedEarly.delete(requestId);
+        return fail('you stopped it');
+    }
     // The refusal note armed for this try, placed the same way the interceptor
     // places it, and used up the same way.
     let notes = 0;
@@ -732,10 +739,6 @@ async function tryAtOnce(payload, userId) {
             messages = placeNotes(messages, built, armed.placement).list;
             notes = built.length;
         }
-    }
-    if (stoppedEarly.get(requestId) === who) {
-        stoppedEarly.delete(requestId);
-        return fail('you stopped it');
     }
     const Ctl = globalThis.AbortController;
     const controller = typeof Ctl === 'function' ? new Ctl() : null;

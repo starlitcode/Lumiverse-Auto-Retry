@@ -7,8 +7,8 @@ This page covers the checks that read the text of a finished reply:
 - [One character over and over](#one-character-over-and-over): the model sent `!!!!!!!!` or similar.
 - [Garbled replies](#garbled-replies): the reply turned into a jumble of words from several languages, or into broken characters.
 - [Leaked prompt format](#leaked-prompt-format): the reply ran into the prompt's own markers, such as `[/INST]`.
-- [Stuck repeating or rambling](#stuck-repeating-or-rambling): the reply repeats itself to the end, or runs on with no punctuation.
-- [The thinking](#the-thinking): the thinking turned into a jumble, or repeats itself to its end.
+- [Stuck repeating or rambling](#stuck-repeating-or-rambling): the reply repeats itself, or runs on with no punctuation.
+- [The thinking](#the-thinking): the thinking turned into a jumble, or repeats itself.
 - [Cut-off detection](#cut-off-detection): the reply stopped part way.
 - [Accidental-refusal detection](#accidental-refusal-detection): the model stepped out of the story and declined.
 
@@ -142,13 +142,24 @@ Any one of these counts:
 
 ## Stuck repeating or rambling
 
-A model can get stuck. It repeats one word, phrase or sentence until it runs out of room. Or it writes words in a chain with no punctuation at all.
+A model can get stuck. It repeats one word, phrase or sentence until it runs out of room. It can say the same few sentences again and again, and then stop repeating and go on. Or it writes words in a chain with no punctuation at all.
 
 **It got stuck repeating or rambling** (`retryOnLoop`) retries a reply like that. It is on by default, under **When to count a reply as bad**, in **Broken replies**.
 
 Any one of these counts:
 
 - **A loop to the end.** A run of 1 to 12 words repeated at least 10 times in a row, at least 30 words in all, reaching the end of the reply. The last repeat can stop partway. So one word such as `and,` needs 30 repeats, and a phrase of three words needs 10.
+- **A few sentences said again and again.** The same sentences come back, with little else between them. This one does not have to reach the end. Examples:
+  - one sentence six times in a row, then another sentence six times in a row
+  - the same two, three or more sentences in turn, over and over, up to 10 different sentences
+  - the same, with an odd sentence between the repeats
+
+  The details:
+  - A sentence ends at a period, a question mark, an exclamation mark, an ellipsis, a colon or a line break. Capital letters and punctuation do not count when two sentences are compared.
+  - A sentence counts as said again when the same sentence came in the 10 sentences before it.
+  - Each sentence said a third time or more adds one. A sentence said a second time adds nothing. Any other sentence takes two away.
+  - It counts as stuck at 6, with at least 40 words in the sentences said again.
+  - So a plan written out twice, a refrain between verses, or a line said three times for effect is left alone.
 - **A short pattern repeated hundreds of times.** A pattern of 2 to 4 characters with a letter or a digit in it, repeated at least 60 times in a row, such as `1.1.1.1.` A pattern of letters only, such as `haha`, needs 150 repeats.
 - **A run-on to the end.** At least 150 words in a row on one line with no punctuation, reaching the end of the reply.
 
@@ -176,7 +187,7 @@ A model stuck in a loop runs until it is cut off, so it does not close a quotati
 A model can break down in its thinking and still write a reply that looks fine. Two switches check the thinking on its own, both on by default, under **When to count a reply as bad**, in **Broken replies**:
 
 - **Its thinking was garbled** (`retryOnGarbledThinking`) uses the checks in [Garbled replies](#garbled-replies): a jumble of languages, words with no spaces, and broken characters.
-- **Its thinking got stuck repeating** (`retryOnLoopThinking`) uses the checks in [Stuck repeating or rambling](#stuck-repeating-or-rambling): a loop that reaches the end of the thinking, and a short pattern repeated hundreds of times.
+- **Its thinking got stuck repeating** (`retryOnLoopThinking`) uses the checks in [Stuck repeating or rambling](#stuck-repeating-or-rambling): a loop that reaches the end of the thinking, a few sentences said again and again, and a short pattern repeated hundreds of times.
 
 Both retry even when the reply after the thinking looks fine. Turn one off to keep that reply. Somebody who had turned off **It was garbled** or **It got stuck repeating or rambling** before these switches came finds the thinking switch off too.
 

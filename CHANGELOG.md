@@ -8,6 +8,21 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.25.1
+
+_2026-11-09_
+
+### Fixed
+
+- **A few sentences said again and again were not caught.** **It got stuck repeating or rambling** and **Its thinking got stuck repeating** only caught a loop of up to 12 words that ran to the end. A model can also say one sentence six times and then another six times, or repeat the same two or three sentences in turn many times, and then stop repeating and go on. Neither switch caught that. Both now catch the same few sentences said again and again, anywhere in the reply or the thinking. A line said a few times for effect, a refrain, and lines written out after a colon are still left alone. See [Stuck repeating or rambling](docs/detection.md#stuck-repeating-or-rambling).
+- **A refusal note could be lost when Several tries at once was slow to start.** When the tries had not gone out after 20 seconds, Auto Retry stopped them and pressed the retry button instead, with a refusal note for that press. The tries it stopped could still take that note, so the press went out without it. The note now stays for the press.
+
+### Fixed again
+
+- **Auto Refine was not always told that a retry was over.** 5.25.0 fixed this for when every try was used or a reply was a hard failure. It missed one case: a reply from Several tries at once passed, and Lumiverse did not answer whether it was added. Retrying stopped there, and Auto Refine kept holding the reply for up to 10 minutes. It is now told at once.
+
+---
+
 ## 5.25.0
 
 _2026-11-07_

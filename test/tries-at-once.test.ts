@@ -286,6 +286,22 @@ describe("the refusal note", () => {
     expect(JSON.stringify(real)).toContain("That refusal was a mistake.");
   });
 
+  // The panel stops tries that are slow to go out and presses the retry
+  // button instead, with a note armed for that press. The stopped tries must
+  // leave it for the press.
+  test("tries stopped before they go out leave the note for the button press", async () => {
+    const h = boot();
+    const going = h.tell({ type: "try_at_once", requestId: "r1", chatId: "c1", count: 2 });
+    await h.tell({ type: "stop_at_once", requestId: "r1" });
+    await h.arm();
+    await going;
+    await h.settle();
+    expect(h.quietCalls.length).toBe(0);
+    expect(h.stage("failed")[0].msg.why).toBe("you stopped it");
+    const press = await h.run(prompt(), { chatId: "c1", generationType: "swipe" });
+    expect(JSON.stringify(press)).toContain("That refusal was a mistake.");
+  });
+
   test("the prompt built for the tries carries the note once", async () => {
     const h = boot();
     await h.arm();

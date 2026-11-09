@@ -3518,6 +3518,10 @@ console.log("\nseveral tries at once, when adding the reply that passed gets no 
     const answer = (m) => { for (const f of backs.slice()) { try { f(m); } catch (_) {} } };
     const REFUSAL = "I'm sorry, but I can't create that content.";
     const GOOD = "The ferry pulled away from the dock, and the gulls followed it out.";
+    // Auto Refine holds the reply while a retry is set, so it is told that
+    // retrying stopped.
+    const offs = [];
+    window.addEventListener("auto-retry:retry-off", (e) => offs.push(e.detail && e.detail.chatId));
     for (const n of [0, 1]) {
       handlers.GENERATION_STARTED({ chatId: "quiet", generationId: "quiet-" + n });
       handlers.GENERATION_ENDED({ chatId: "quiet", generationId: "quiet-" + n, content: REFUSAL });
@@ -3539,10 +3543,12 @@ console.log("\nseveral tries at once, when adding the reply that passed gets no 
       added: added,
       moreClicks: clicks - clicksBefore,
       moreAsks: sent.filter((m) => m.type === "try_at_once").length - asksBefore,
+      offs: offs,
     };
   });
   check("the reply that passed is sent to be added", out.asked && out.added === 1, out);
   check("with no answer about the add, no more tries are made", out.moreClicks === 0 && out.moreAsks === 0, out);
+  check("and the page is told the retry is off", out.offs.includes("quiet"), out);
   check("no console errors when the add gets no answer", errors.length === 0, errors);
   await page.close();
 }
