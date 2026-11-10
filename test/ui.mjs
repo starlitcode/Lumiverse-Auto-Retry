@@ -16205,6 +16205,45 @@ console.log("\nthe boxes under a pattern grow and shrink with no step");
   }
 }
 
+// A row that opens is held at a height worked out in CSS pixels, and let go
+// when it lands. Under UI Scale that height has to be its real height to a
+// fraction of a pixel, or the row snaps to its real height as it is let go,
+// which shows as a small step at the end. Checked at every UI Scale step,
+// on the tallest row that hangs off a switch.
+console.log("\na row opens to its exact height at every UI Scale");
+for (const [label, viewport, touch] of [["phone", { width: 390, height: 900 }, true], ["laptop", { width: 1280, height: 900 }, false]]) {
+  const run = await inPanel(browser, { viewport, touch }, async (page) => {
+    await page.evaluate(async () => {
+      for (let k = 0; k < 4; k++) {
+        for (const h of document.querySelectorAll("#modal [data-ar-sechead]")) if (h.getAttribute("aria-expanded") === "false") h.click();
+        await new Promise((r) => setTimeout(r, 300));
+      }
+    });
+    const off = [];
+    for (let step = 50; step <= 150; step += 5) {
+      const got = await page.evaluate(async (z) => {
+        document.documentElement.style.zoom = String(z);
+        const sw = () => document.querySelector('#modal [data-ar-row="ignoreHardErrors"] input[type="checkbox"]');
+        const row = () => document.querySelector('#modal [data-ar-row="hardErrorPhrases"]');
+        if (!sw() || !row()) return null;
+        if (sw().checked) {
+          sw().click();
+          await new Promise((r) => setTimeout(r, 400));
+        }
+        sw().click();
+        await new Promise((r) => setTimeout(r, 60));
+        const held = parseFloat(row().style.height);
+        await new Promise((r) => setTimeout(r, 400));
+        return { held, real: parseFloat(getComputedStyle(row()).height) };
+      }, step / 100);
+      if (!got || !(Math.abs(got.held - got.real) < 0.05)) off.push(step + "%: " + JSON.stringify(got));
+    }
+    return off;
+  });
+  check(label + ": Your own hard failures opens to its real height at every UI Scale from 50% to 150%", run.out.length === 0, run.out.join(" "));
+  check(label + ": no console errors", run.errors.length === 0, run.errors);
+}
+
 await browser.close();
 console.log(failures ? `\n${failures} FAILED` : "\nall browser checks passed");
 process.exit(failures ? 1 : 0);

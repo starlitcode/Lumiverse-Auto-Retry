@@ -15,6 +15,7 @@ _2026-11-09_
 ### Fixed
 
 - **Picking a pattern moved the settings in one step.** A pattern puts each section of the settings on a box, with space around what is in it. That space came and went all at once when a pattern was picked or set back to None, so everything under it jumped. It now grows and shrinks smoothly. With Reduce motion on, it changes with no movement.
+- **A row that opens with a switch landed with a small step under UI Scale.** With **UI Scale** at some sizes, such as 115% or 135%, a row that opens or closes with a switch could be up to a pixel off when it stopped, and then moved into place in one step. It now stops where it belongs. Auto Refine has the same fix.
 
 ---
 

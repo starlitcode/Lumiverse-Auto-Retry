@@ -473,6 +473,37 @@ const MOVED_DEFAULTS = [
 ];
 // A short mark for a text, so a long one fits in the marks below. FNV-1a, the
 // same as the built-in notes' mark.
+// How much the page is zoomed at an element. Lumiverse's UI Scale is a CSS
+// zoom, so a size read with getBoundingClientRect is in zoomed screen pixels,
+// and one written to a style is in CSS pixels. currentCSSZoom gives it
+// exactly, where the browser has it. Elsewhere it is the width on screen over
+// the width in CSS pixels from the computed style. offsetWidth is not used
+// for that: it is rounded to a whole pixel, and on a box 300 pixels wide that
+// put a height out by most of a pixel, which showed as a step at the end of a
+// fold.
+function zoomOf(el, rect) {
+    try {
+        const z = el && el.currentCSSZoom;
+        if (typeof z === "number" && z > 0.01)
+            return z;
+        const r = rect || el.getBoundingClientRect();
+        if (!(r.width > 0))
+            return 1;
+        const cs = getComputedStyle(el);
+        let w = parseFloat(cs.width);
+        if (w > 0 && cs.boxSizing !== "border-box")
+            for (const k of ["paddingLeft", "paddingRight", "borderLeftWidth", "borderRightWidth"])
+                w += parseFloat(cs[k]) || 0;
+        // An inline box has no width of its own in its style.
+        if (!(w > 0))
+            w = el.offsetWidth || 0;
+        const s = w > 0 ? r.width / w : 1;
+        return s > 0.01 ? s : 1;
+    }
+    catch (_) {
+        return 1;
+    }
+}
 function markText(text) {
     let h = 0x811c9dc5;
     for (let i = 0; i < text.length; i++) {
@@ -6720,7 +6751,7 @@ export function setup(ctx, opts) {
         el.style.left = Math.round(left) + "px";
         el.style.top = Math.round(top) + "px";
         const got = el.getBoundingClientRect();
-        const scale = el.offsetWidth > 0 ? got.width / el.offsetWidth : 1;
+        const scale = zoomOf(el, got);
         const dx = left - got.left;
         const dy = top - got.top;
         if (scale > 0.01 && (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5)) {
@@ -7432,12 +7463,10 @@ export function setup(ctx, opts) {
     // pixels, and Lumiverse applies its UI Scale as a zoom, so the two differ.
     // A height read in screen pixels and written back as CSS pixels opened a
     // row too tall or too short, and it jumped to its real height at the end.
-    // The scale is read off the width, which the browser also reports both
-    // ways.
+    // The scale comes from zoomOf.
     function cssHeight(node) {
         const r = node.getBoundingClientRect();
-        const scale = node.offsetWidth > 0 && r.width > 0 ? r.width / node.offsetWidth : 1;
-        return r.height / (scale > 0.01 ? scale : 1);
+        return r.height / zoomOf(node, r);
     }
     // What a fold or an open writes to a box.
     const FOLD_STYLES = ["height", "opacity", "overflow", "transition", "marginBottom", "marginTop", "paddingTop", "paddingBottom", "borderTopWidth", "borderBottomWidth", "transform", "flexShrink", "minHeight"];
@@ -12655,7 +12684,7 @@ export function setup(ctx, opts) {
         const want = Math.min(WIDEST, roomW);
         el.style.width = want + "px";
         const first = el.getBoundingClientRect();
-        const zoomW = el.offsetWidth > 0 ? first.width / el.offsetWidth : 1;
+        const zoomW = zoomOf(el, first);
         if (zoomW > 0.01 && Math.abs(zoomW - 1) > 0.01)
             el.style.width = Math.floor(want / zoomW) + "px";
         // Measured as it ends up on screen. Under a host that scales its interface
@@ -12695,7 +12724,7 @@ export function setup(ctx, opts) {
             // off the bottom of the screen. Divide by however much the host is
             // scaling, measured rather than assumed, the same as the left and top
             // below. Without a zoom this is a division by 1 and changes nothing.
-            const zoom = el.offsetWidth > 0 ? w / el.offsetWidth : 1;
+            const zoom = zoomOf(el);
             el.style.maxHeight = Math.floor(room / (zoom > 0.01 ? zoom : 1)) + "px";
             el.style.overflowY = "auto";
             // Reaching the end of the description must not start scrolling the panel
@@ -13097,9 +13126,7 @@ export function setup(ctx, opts) {
             return base;
         let scale = 1;
         try {
-            const r = t.getBoundingClientRect();
-            if (t.offsetWidth > 0 && r.width > 0)
-                scale = r.width / t.offsetWidth;
+            scale = zoomOf(t);
         }
         catch (_) { }
         const gap = Math.ceil(((window.innerHeight || 0) - top) / (scale > 0.01 ? scale : 1)) + TOAST_ABOVE_INPUT;
@@ -13282,7 +13309,7 @@ export function setup(ctx, opts) {
             // are not the same, and pinning a screen measurement as an element width
             // would come out wider than what was measured by however much it is
             // scaling. Without a zoom this divides by one.
-            const zoom = span.offsetWidth > 0 ? span.getBoundingClientRect().width / span.offsetWidth : 1;
+            const zoom = zoomOf(span);
             const own = zoom > 0.01 ? widest / zoom : widest;
             // A pixel over, so a line pinned to its own measured width cannot come
             // back a hair too narrow and wrap again.
@@ -13328,8 +13355,7 @@ export function setup(ctx, opts) {
                 const held = span.style.minHeight;
                 span.style.minHeight = "";
                 const r = span.getBoundingClientRect();
-                const zoom = span.offsetWidth > 0 && r.width > 0 ? r.width / span.offsetWidth : 1;
-                const h = r.height / (zoom > 0.01 ? zoom : 1);
+                const h = r.height / zoomOf(span, r);
                 span.style.minHeight = held;
                 if (h <= span.__hold + 0.5)
                     return;
@@ -13351,8 +13377,7 @@ export function setup(ctx, opts) {
             return;
         try {
             const r = span.getBoundingClientRect();
-            const zoom = span.offsetWidth > 0 && r.width > 0 ? r.width / span.offsetWidth : 1;
-            const h = r.height / (zoom > 0.01 ? zoom : 1);
+            const h = r.height / zoomOf(span, r);
             const had = span.__hold || 0;
             // Grown only by more than half a pixel. Under UI Scale a height read
             // back carries a fraction, and rounding it up on every read would grow
