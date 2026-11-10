@@ -352,6 +352,12 @@ These are the defaults for a new install. They are in the `CONFIG` block at the 
 
 `idleTimeoutMs` needs streaming on. It watches for text that stopped arriving, and with streaming off no text arrives until the end. A reply that hangs is then caught by `stuckTimeoutMs` instead. Every other check reads the finished reply, so it works with streaming on or off.
 
+A tab can miss the event that ends a reply, most often on a phone or in a tab left in the background. So when either wait runs out, Auto Retry first asks its own backend how the reply ended, which takes up to a second and a half:
+
+- It ended with an error: it is retried as an error, or not at all when the error will not fix itself.
+- It was stopped, or it finished: it is left alone.
+- The backend did not hear it end either, or did not answer: the reply is stopped and retried as stuck or stalled.
+
 With the council on, the council works before the reply's first words. Each step it reports starts the `stuckTimeoutMs` wait again. When a council tool fails, Lumiverse asks you whether to retry it, and that wait is not counted.
 
 ### After an update

@@ -16244,6 +16244,154 @@ for (const [label, viewport, touch] of [["phone", { width: 390, height: 900 }, t
   check(label + ": no console errors", run.errors.length === 0, run.errors);
 }
 
+// A tab can miss the event that ends a reply. The wait for the reply then runs
+// out, and before the reply is called stuck or stalled the backend is asked
+// how it ended. An error is retried as an error, one that will not fix itself
+// is not retried, and a reply that was stopped or that finished is left
+// alone. With no answer, or an ending the backend did not hear, it is stuck
+// as before.
+console.log("\nan ending this tab did not hear is asked for before a reply is called stuck");
+{
+  const errors = [];
+  const runOne = async (answer, how) => {
+    const page = await browser.newPage();
+    page.on("pageerror", (e) => errors.push(e.message));
+    await stage(page, '<div id=modal></div><button title="Regenerate" data-testid="regenerate">R</button><button aria-label="Stop generation" data-testid="stop">X</button>');
+    await page.addScriptTag({ content: SOURCE, type: "module" });
+    await page.waitForFunction(() => !!window.__setup);
+    const res = await page.evaluate(async ([answer, how]) => {
+      const handlers = {};
+      const sent = [];
+      let backs = [];
+      let clicks = 0;
+      let stops = 0;
+      document.querySelector("[data-testid=regenerate]").addEventListener("click", () => clicks++);
+      document.querySelector("[data-testid=stop]").addEventListener("click", () => stops++);
+      // The wait for the backend's answer is a second and a half. Here it is short.
+      const realSetTimeout = window.setTimeout;
+      window.setTimeout = (fn, ms, ...rest) => realSetTimeout(fn, ms === 1500 ? 120 : ms, ...rest);
+      window.__setup(
+        {
+          events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
+          sendToBackend: (m) => {
+            sent.push(m);
+            if (m.type === "how_ended" && answer && answer !== "absent")
+              realSetTimeout(() => { for (const f of backs.slice()) f(Object.assign({ type: "ended_how", requestId: m.requestId }, answer)); }, 10);
+          },
+          onBackendMessage: (fn) => { backs.push(fn); return () => { backs = backs.filter((f) => f !== fn); }; },
+          ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+                registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) },
+        },
+        { retryDelayMs: 10, backoffFactor: 1, maxDelayMs: 10, jitter: false, maxRetries: 2, rateLimitDelayMs: 10,
+          toast: true, stuckTimeoutMs: how === "stuck" ? 80 : 0, idleTimeoutMs: how === "stalled" ? 80 : 0, pauseWhenFailing: false },
+      );
+      // A backend that is there says which build it is on when the panel loads.
+      if (answer !== "absent") for (const f of backs.slice()) f({ type: "backend_version", version: "0.0.0" });
+      handlers.GENERATION_STARTED({ chatId: "c1", generationId: "g1" });
+      if (how === "stalled") handlers.STREAM_TOKEN_RECEIVED({ chatId: "c1", generationId: "g1", content: "She set the" });
+      // Past the wait, the question, and the retry's own short wait.
+      let said = "";
+      const t0 = Date.now();
+      while (Date.now() - t0 < 600) {
+        await new Promise((r) => realSetTimeout(r, 20));
+        const t = document.getElementById("__lvRetryToast");
+        if (t && /Stuck|Stalled|Error|Rate limited/.test(t.textContent)) said = (t.textContent.match(/Stuck|Stalled|Error|Rate limited/) || [""])[0];
+      }
+      return { asked: sent.filter((m) => m.type === "how_ended").map((m) => m.generationId), clicks, stops, said };
+    }, [answer, how]);
+    await page.close();
+    return res;
+  };
+  const gateway = { known: true, how: "ended", error: "Lantern (OpenAI-compatible) stream failed (504): Gateway Timeout", hasText: false };
+  const key = { known: true, how: "ended", error: "Lantern stream failed (401): Unauthorized", hasText: false };
+  for (const how of ["stuck", "stalled"]) {
+    const erred = await runOne(gateway, how);
+    check(how + ": the backend is asked how the reply ended, by its id", erred.asked.join() === "g1", erred);
+    check(how + ": an error the tab did not hear is retried as an error, and the reply is not stopped",
+      erred.clicks >= 1 && erred.stops === 0 && erred.said === "Rate limited", erred);
+    const hard = await runOne(key, how);
+    check(how + ": an error that will not fix itself is not retried", hard.clicks === 0 && hard.stops === 0, hard);
+    const stopped = await runOne({ known: true, how: "stopped", error: "", hasText: false }, how);
+    check(how + ": a reply that was stopped is left alone", stopped.clicks === 0 && stopped.stops === 0 && !stopped.said, stopped);
+    const done = await runOne({ known: true, how: "ended", error: "", hasText: true }, how);
+    check(how + ": a reply that finished is left alone", done.clicks === 0 && done.stops === 0 && !done.said, done);
+    const unknown = await runOne({ known: false, how: "", error: "", hasText: false }, how);
+    check(how + ": an ending the backend did not hear either is " + how + " as before",
+      unknown.clicks >= 1 && unknown.stops >= 1 && unknown.said === (how === "stuck" ? "Stuck" : "Stalled"), unknown);
+    const silent = await runOne(null, how);
+    check(how + ": with no answer from the backend it is " + how + " as before",
+      silent.clicks >= 1 && silent.stops >= 1 && silent.said === (how === "stuck" ? "Stuck" : "Stalled"), silent);
+    const absent = await runOne("absent", how);
+    check(how + ": a backend that never said it is there is not asked",
+      absent.asked.length === 0 && absent.clicks >= 1 && absent.said === (how === "stuck" ? "Stuck" : "Stalled"), absent);
+  }
+  check("no console errors", errors.length === 0, errors);
+}
+
+// A reply you stopped is not retried, whatever Lumiverse reports for it
+// afterwards. The press itself is remembered: the stop button, or Escape,
+// which Lumiverse also stops a reply on. A reply that ends reading as a stop
+// is not an error either.
+console.log("\na reply you stopped is not retried as an error");
+{
+  const errors = [];
+  const runOne = async (how, ending) => {
+    const page = await browser.newPage();
+    page.on("pageerror", (e) => errors.push(e.message));
+    await stage(page, '<div id=modal></div><button title="Regenerate" data-testid="regenerate">R</button><button aria-label="Stop generation" data-testid="stop">X</button>' +
+      '<div data-spindle-ext="other"><button aria-label="Stop generation" data-testid="theirs">X</button></div>');
+    await page.addScriptTag({ content: SOURCE, type: "module" });
+    await page.waitForFunction(() => !!window.__setup);
+    await page.evaluate(() => {
+      window.__h = {};
+      window.__clicks = 0;
+      document.querySelector("[data-testid=regenerate]").addEventListener("click", () => window.__clicks++);
+      window.__setup(
+        {
+          events: { on: (n, fn) => { window.__h[n] = fn; return () => {}; } },
+          sendToBackend: () => {},
+          onBackendMessage: () => () => {},
+          ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+                registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) },
+        },
+        { retryDelayMs: 10, backoffFactor: 1, maxDelayMs: 10, jitter: false, maxRetries: 2, rateLimitDelayMs: 10,
+          toast: false, stuckTimeoutMs: 0, idleTimeoutMs: 150, pauseWhenFailing: false },
+      );
+      window.__h.GENERATION_STARTED({ chatId: "c1", generationId: "g1" });
+      window.__h.STREAM_TOKEN_RECEIVED({ chatId: "c1", generationId: "g1", content: "She set the" });
+    });
+    // A real press, so the page's own listeners hear it the way they would.
+    if (how === "button") await page.click("[data-testid=stop]");
+    if (how === "escape") await page.keyboard.press("Escape");
+    if (how === "theirs") await page.click("[data-testid=theirs]");
+    // Longer than the two and a half seconds a stop is remembered by time alone.
+    if (ending.late) await page.waitForTimeout(2700);
+    const clicks = await page.evaluate(async (ending) => {
+      if (ending.error !== undefined) window.__h.GENERATION_ENDED({ chatId: "c1", generationId: "g1", error: ending.error });
+      // Past the retry's short wait, and past the wait for the next words.
+      await new Promise((r) => setTimeout(r, 450));
+      return window.__clicks;
+    }, ending);
+    await page.close();
+    return clicks;
+  };
+  const gateway = "Lantern (OpenAI-compatible) stream failed (504): Gateway Timeout";
+  check("an error on a reply nobody stopped is retried", (await runOne("none", { error: gateway })) >= 1);
+  for (const how of ["button", "escape"]) {
+    const name = how === "button" ? "the stop button" : "Escape";
+    check(name + ": an error that ends the reply just after is not retried", (await runOne(how, { error: gateway })) === 0);
+    check(name + ": an error that ends it seconds later is not retried either", (await runOne(how, { error: gateway, late: true })) === 0);
+    check(name + ": with no ending heard at all, the reply is not retried as stalled", (await runOne(how, {})) === 0);
+  }
+  check("a stop button in another extension's part of the page is not yours: the error is still retried",
+    (await runOne("theirs", { error: gateway })) >= 1);
+  for (const words of ["AbortError: Generation aborted", "The operation was aborted.", "Generation cancelled"])
+    check("an ending that reads as a stop is not retried: " + words, (await runOne("none", { error: words })) === 0);
+  check("an error that only mentions a dropped connection is still retried",
+    (await runOne("none", { error: "Lantern stream failed (502): connection aborted by the upstream" })) >= 1);
+  check("no console errors", errors.length === 0, errors);
+}
+
 await browser.close();
 console.log(failures ? `\n${failures} FAILED` : "\nall browser checks passed");
 process.exit(failures ? 1 : 0);

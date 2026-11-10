@@ -354,6 +354,20 @@ Some providers send a refusal as an error instead of reply text. An error about 
 - a daily limit, such as a free tier's requests for the day, which only comes back the next day
 - a prompt too long for the model
 
+Every other error is retried. These get the longer wait a rate limit gets, since they clear if you wait:
+
+- a rate limit, or "too many requests"
+- any status from 500 to 599, such as 502 Bad Gateway, 503 Service Unavailable and 504 Gateway Timeout, and 408, 409 and 425
+- a server that is overloaded, busy, loading a model or at capacity
+- a call that timed out, a dropped connection, or a server that could not be reached
+
+Lumiverse writes a failed call with the provider's status in parentheses, such as `stream failed (504): Gateway Timeout`. That status is read on its own:
+
+- A number in the rest of the error is not a status. "Try again in 2.404 seconds" is not a 404.
+- With 408, 425, 502, 503, 504 or 520 to 530, the rest is the gateway's own page. It can say "404 page not found" or "permission" about itself, so the error is waited out all the same. Only a key, a balance, a daily limit or a prompt too long still stops the retry.
+
+A reply you stopped is not an error. The stop button and Escape are both remembered, and whatever Lumiverse reports for that reply afterwards is left alone.
+
 The built-in list cannot know every provider's wording, so **Your own hard failures** lets you add wording, one per line. It only shows while **Skip hard failures** is on. Auto Refine reads errors with the same list, so the two extensions agree on which errors are worth trying again.
 
 Some providers do not report an error at all. They write the error as the reply, as if a character had said it. **Your own hard failures** is checked against the reply's text too:

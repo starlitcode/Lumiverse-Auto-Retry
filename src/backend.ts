@@ -1,7 +1,7 @@
 /*
  * Auto Retry backend.
  *
- * Three jobs.
+ * Four jobs.
  *
  * It keeps the whole settings object in per-user account storage, so somebody's
  * settings follow them across browsers and devices instead of living in one
@@ -15,6 +15,9 @@
  * And it sends the prompt several times at once when "Several tries at once"
  * is on, then adds the reply the panel picks to the chat as a new reroll, or
  * as a new reply when the failed turn saved none.
+ *
+ * And it notes how each reply ended, so a tab that missed the ending can ask
+ * before it calls the reply stuck or stalled.
  *
  * Needs the `generation` permission to hear when a reply finishes and to send
  * the tries, `interceptor` for the refusal note, `chat_mutation` to add a
@@ -402,6 +405,55 @@ function snapshotPrompt(messages: any[], context: any, userId?: string, noteAt?:
       })
       .catch(() => {});
   } catch (_) { /* a viewer must never cost anyone their generation */ }
+}
+
+// ---- how a reply ended ----
+// A tab can miss the event that ends a reply. A phone's connection drops it or
+// delivers it late, and a tab in the background is not sent it at all. The
+// panel then waits for an ending that already happened, and when the wait runs
+// out it would call the reply stuck or stalled, whatever really ended it.
+//
+// The events here come from Lumiverse's server and never cross the browser's
+// connection, so this side knows how each reply ended. The panel asks before
+// it acts on a wait that ran out. Kept in memory only, for the last
+// ENDINGS_MAX replies: the reply's id, the account, whether it ended or was
+// stopped, the error's words, and whether it had text. No reply text is kept.
+interface Ending { who: string; how: string; error: string; hasText: boolean; at: number; }
+const endings = new Map<string, Ending>();
+const ENDINGS_MAX = 60;
+
+function noteEnding(p: any, userId: string | undefined, how: string): void {
+  try {
+    const id = p && p.generationId != null ? String(p.generationId) : '';
+    if (!id) return;
+    endings.delete(id);
+    endings.set(id, {
+      who: watcherKey(userId),
+      how: how,
+      error: how === 'ended' && p.error ? sayError(p.error).slice(0, 1000) : '',
+      hasText: typeof p.content === 'string' && p.content.trim().length > 0,
+      at: Date.now(),
+    });
+    while (endings.size > ENDINGS_MAX) endings.delete(endings.keys().next().value as string);
+  } catch (_) { /* a note of an ending must never cost anyone their reply */ }
+}
+
+// What the panel is told. An ending heard for another account is not handed
+// over. Where either side names no account, as on a Lumiverse with one, the
+// reply's id is enough.
+function endingFor(generationId: string, userId?: string): { known: boolean; how: string; error: string; hasText: boolean } {
+  const e = endings.get(generationId);
+  const who = watcherKey(userId);
+  if (!e || (e.who !== who && e.who !== '' && who !== '')) return { known: false, how: '', error: '', hasText: false };
+  return { known: true, how: e.how, error: e.error, hasText: e.hasText };
+}
+
+try {
+  spindle.on('GENERATION_ENDED', (p: any, userId?: string) => noteEnding(p, userId, 'ended'));
+  spindle.on('GENERATION_STOPPED', (p: any, userId?: string) => noteEnding(p, userId, 'stopped'));
+} catch (_) {
+  // Without the generation permission nothing is heard, the panel is told the
+  // ending is not known, and it acts as it would have with nobody to ask.
 }
 
 // ---- several tries at once ----
@@ -1065,6 +1117,12 @@ spindle.onFrontendMessage(async (payload: any, userId?: string, tab?: string) =>
     // Which build this half is on. Asked on every panel load rather than only
     // announced at startup: this module comes up once and stays up, so a panel
     // opened at any point after that missed the announcement.
+    // How a reply ended, for a panel whose wait for the ending ran out.
+    if (payload.type === 'how_ended') {
+      const found = endingFor(String(payload.generationId || ''), userId);
+      replyTo(userId, { type: 'ended_how', requestId: payload.requestId, known: found.known, how: found.how, error: found.error, hasText: found.hasText });
+      return;
+    }
     if (payload.type === 'get_backend_version') {
       replyTo(userId, { type: 'backend_version', requestId: payload.requestId, version: VERSION });
       return;

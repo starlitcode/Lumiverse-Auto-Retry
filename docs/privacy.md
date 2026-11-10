@@ -16,7 +16,7 @@ It asks Lumiverse for six permissions. All six are privileged: on a shared serve
 
 | Permission | What it is for | Without it |
 | --- | --- | --- |
-| `generation` | Seeing replies start, stream and end. | It cannot see replies at all. This is the one it needs. |
+| `generation` | Seeing replies start, stream and end, in your browser and on the server. | It cannot see replies at all. This is the one it needs. |
 | `ui_panels` | The floating on/off button, and the on-screen panel when it floats over the chat. It gives screen space, not access to your data. | Everything works, with no floating button. A panel in the sidebar drawer needs no permission. |
 | `chats` | Asking which chat you are looking at. On a server shared by several accounts, checking that a chat the panel names is on your account before it is read, written or given a retry note. With **Several tries at once** on, also reading whether a chat is a group chat, and which connection and model it is set to. | Everything works. **Turn off here** waits to be told which chat you are in. With **Several tries at once** on, a try after an error that came before any text presses the retry button instead. A chat the panel names cannot be checked to be yours. |
 | `characters` | Turning a chat's card id into a name, so the panel can say who a chat is with. It reads one card, for the chat you are in. | Everything works. The panel says "This chat" instead of a name. |
@@ -127,6 +127,8 @@ None of these is written to disk, synced, or sent anywhere.
 - They are held in this tab and in your server's memory, for your account only. A reload keeps them. An update or a restart of Lumiverse clears them.
 - With **Keep it through an update** on, they are also saved on your server, in Lumiverse's storage for your account. It is off by default. Turning it off empties the saved copy.
 - Turn off **Keep the reply a retry replaced**, under **How it retries**, and nothing is kept.
+
+**In memory on the server:** how each of the last 60 replies ended, so a tab that missed the ending can ask. For each one it holds the reply's id, your account, whether it ended or was stopped, the words of an error, and whether it had text. It holds no reply text. A restart clears it, and it is not written to disk.
 
 **In memory on the server, only with Several tries at once on:** the last prompt in each chat, for up to 12 chats and 30 minutes each. Turning the setting off drops every copy, and so does a restart. It is not written to disk. See [Several tries at once](#several-tries-at-once).
 
