@@ -302,6 +302,25 @@ describe("the refusal note", () => {
     expect(JSON.stringify(press)).toContain("That refusal was a mistake.");
   });
 
+  // A note armed long before the tries go out belongs to an earlier retry. It
+  // is left out, and the panel is told, the same as when the interceptor
+  // leaves an old note out.
+  test("a note armed too long ago is left out, and the panel is told", async () => {
+    const h = boot();
+    await h.arm();
+    const realNow = Date.now;
+    Date.now = () => realNow() + 60 * 60 * 1000;
+    try {
+      await h.tell({ type: "try_at_once", requestId: "r1", chatId: "c1", count: 2 });
+      await h.settle();
+    } finally {
+      Date.now = realNow;
+    }
+    expect(h.stage("sent")[0].msg.notes).toBe(0);
+    expect(JSON.stringify(h.quietCalls[0].messages)).not.toContain("That refusal was a mistake.");
+    expect(h.sent.some((s) => s.msg && s.msg.type === "note_skipped" && /too long ago/.test(s.msg.reason))).toBe(true);
+  });
+
   test("the prompt built for the tries carries the note once", async () => {
     const h = boot();
     await h.arm();

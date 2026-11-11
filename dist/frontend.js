@@ -181,7 +181,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.25.2";
+const VERSION = "5.25.3";
 // Whether two saved settings hold the same values, whatever order their keys
 // were written in. A key left undefined counts as not there, the way it is
 // when saved. Used to tell an update or a put-back that would change nothing.
@@ -11430,6 +11430,13 @@ export function setup(ctx, opts) {
             // The backend has used the note up, so there is nothing left to take back.
             if (armedNoteChat === String(chatId))
                 armedNoteChat = null;
+            // Counted and logged as a note that went out, the same as one sent
+            // with a press of the retry button, so the Log and the Stats tab say so
+            // whichever way the try was sent.
+            if (run.notes > 0) {
+                stats.notesSent += 1;
+                log("notes", "refusal note sent with the tries at once (" + run.notes + (run.notes === 1 ? " note" : " notes") + ")");
+            }
             log("atonce", "sent " + run.count + " at once, with the prompt " +
                 (msg.from === "kept"
                     ? "the last reply went out with"

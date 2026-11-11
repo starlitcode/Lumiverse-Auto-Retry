@@ -31,7 +31,7 @@
 // with while this side comes back on the new build. A debug report naming only
 // the panel's version would be speaking for a file it cannot see, so the panel
 // asks for this one and prints both.
-const VERSION = '5.25.2';
+const VERSION = '5.25.3';
 const SETTINGS_FILE = 'settings.json';
 // Presets, kept in account storage next to the settings so they
 // follow the user between devices. The browser copy is a fast local cache, not
@@ -779,6 +779,10 @@ async function tryAtOnce(payload, userId) {
             const built = armed.notes.map((n) => ({ role: n.role, content: n.text }));
             messages = placeNotes(messages, built, armed.placement).list;
             notes = built.length;
+        }
+        else {
+            // Said, the same as when the interceptor leaves an old note out.
+            replyTo(userId, { type: 'note_skipped', reason: 'it was armed too long ago to still belong to this try' });
         }
     }
     const Ctl = globalThis.AbortController;

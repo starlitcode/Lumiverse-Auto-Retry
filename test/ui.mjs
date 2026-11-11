@@ -788,6 +788,52 @@ console.log("\nthe debug report");
   check("no console errors", r.errors.length === 0, r.errors);
 }
 
+// A refusal note that goes out with Several tries at once is counted and
+// logged as sent, the same as one sent with a press of the retry button. The
+// Log has a line of the notes kind for it, and the report's count goes up.
+console.log("\na refusal note sent with several tries at once is logged as sent");
+{
+  const run = (notes) =>
+    inPanel(browser, { body: '<div id=modal></div><button title="Regenerate" data-testid="regenerate">R</button>',
+      settings: { liveLog: true, tryAtOnce: true, tryAtOnceMax: 3, maxRetries: 4, toast: false, retryDelayMs: 10, backoffFactor: 1, maxDelayMs: 10, jitter: false,
+        stuckTimeoutMs: 0, idleTimeoutMs: 0, pauseWhenFailing: false, refusalNote: true, refusalNotes: [{ text: "That refusal was a mistake.", role: "system", fromTry: 2 }] } }, (page) =>
+      page.evaluate(async (notes) => {
+        const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+        const REFUSAL = "I'm sorry, but I can't create that content.";
+        // The backend takes the note when the panel arms it.
+        const answerArm = () => {
+          for (const m of window.__sent.filter((x) => x.type === "arm_refusal_note" && !x.__done)) {
+            m.__done = true;
+            window.__fromBackend({ type: "note_armed", requestId: m.requestId, armed: true });
+          }
+        };
+        for (const n of [0, 1]) {
+          window.__handlers.GENERATION_STARTED({ chatId: "c1", generationId: "g" + n });
+          window.__handlers.GENERATION_ENDED({ chatId: "c1", generationId: "g" + n, content: REFUSAL });
+          for (let k = 0; k < 8; k++) { await wait(25); answerArm(); }
+        }
+        const ask = window.__sent.find((m) => m.type === "try_at_once");
+        if (!ask) return { asked: false };
+        window.__fromBackend({ type: "at_once", requestId: ask.requestId, stage: "sent", count: 2, from: "kept", messageId: "m2", swipeCount: 2, notes: notes });
+        await wait(150);
+        const modal = document.getElementById("modal");
+        const build = [...modal.querySelectorAll("button")].find((b) => b.textContent.trim() === "Build preview");
+        if (build) build.click();
+        await wait(150);
+        const area = modal.querySelector("[data-ar-debug]");
+        return { asked: true, report: area ? area.value : "" };
+      }, notes),
+    );
+  const sent = await run(1);
+  const none = await run(0);
+  check("the tries went out at once", sent.out.asked && none.out.asked, sent.out);
+  check("with the note in them, the Log has a notes line saying it was sent",
+    /\[notes\] refusal note sent with the tries at once \(1 note\)/.test(sent.out.report || ""), (sent.out.report || "").slice(-900));
+  check("and the count of notes sent goes up", /  refusal notes sent: 1\n/.test(sent.out.report || ""), (sent.out.report || "").slice(0, 900));
+  check("with no note in them, no such line is written, and the count stays at 0", !/refusal note sent with the tries at once/.test(none.out.report || "") && /  refusal notes sent: 0\n/.test(none.out.report || "") && /\[atonce\] sent 2 at once/.test(none.out.report || ""), (none.out.report || "").slice(-600));
+  check("no console errors", sent.errors.length + none.errors.length === 0, sent.errors.concat(none.errors));
+}
+
 // ---- hiding kinds of line in the Log ----
 // Each kind of line has its own switch. A hidden line is still kept, so the
 // Log says how many are hidden and Debug info still carries them.

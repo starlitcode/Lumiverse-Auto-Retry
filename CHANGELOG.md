@@ -8,6 +8,16 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.25.3
+
+_2026-11-10_
+
+### Fixed
+
+- **A refusal note sent with Several tries at once was not shown as sent.** With **Several tries at once** on, a note goes out with the tries from the second try on. The Log wrote that under Several tries at once only, so there was no **Refusal notes** line saying the note was sent, and the Stats tab did not count it under **Refusal notes sent**. Both now say so, the same as for a note sent with a press of the retry button. A note that was armed too long before the tries went out is left out, and the Log now says that too.
+
+---
+
 ## 5.25.2
 
 _2026-11-10_
