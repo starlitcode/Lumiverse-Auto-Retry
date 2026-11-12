@@ -15,7 +15,7 @@
 //
 //   bun add -d playwright && bunx playwright install chromium
 //
-// The pure logic (refusal detection, cut-off detection, contrast maths, the
+// The pure logic (refusal detection, cut-off detection, contrast math, the
 // word-swap engine) is covered by `bun test`, which needs nothing extra.
 
 import { createRequire } from "node:module";

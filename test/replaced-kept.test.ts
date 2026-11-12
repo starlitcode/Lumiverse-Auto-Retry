@@ -14,6 +14,7 @@ const BACKEND = readFileSync(join(root, "dist", "backend.js"), "utf8");
 // update or a restart.
 function boot(stored: Record<string, any> = {}, connections: any[] = []) {
   let frontendHandler: any = null;
+  const events: Record<string, any[]> = {};
   const sent: Array<{ msg: any; userId: any }> = [];
   const spindle = {
     storage: {
@@ -37,7 +38,9 @@ function boot(stored: Record<string, any> = {}, connections: any[] = []) {
     sendToFrontend: (msg: any, userId: any) => {
       sent.push({ msg, userId });
     },
-    on: () => {},
+    on: (name: string, fn: any) => {
+      (events[name] = events[name] || []).push(fn);
+    },
     chat: { getMessages: async () => [], updateMessage: async () => {} },
     registerInterceptor: () => {},
     connections: { list: async () => connections },
@@ -47,6 +50,10 @@ function boot(stored: Record<string, any> = {}, connections: any[] = []) {
   return {
     stored,
     ask: (payload: any, userId = "u1") => frontendHandler(payload, userId),
+    fire: async (name: string, p: any, userId = "u1") => {
+      for (const fn of events[name] || []) fn(p, userId);
+      await new Promise((r) => setTimeout(r, 20));
+    },
     sent,
     list: async (userId = "u1", save = false) => {
       await frontendHandler({ type: "list_replaced", requestId: "r", save }, userId);
@@ -93,6 +100,26 @@ describe("the reply a retry replaced", () => {
     expect((await h.list()).map((r: any) => r.chatId)).toEqual(["c2"]);
     await h.ask({ type: "forget_replaced", all: true, save: false });
     expect(await h.list()).toEqual([]);
+  });
+
+  // A deleted chat has nowhere to read the reply, so its text is not kept.
+  test("a chat that is deleted takes its reply with it, from memory and the saved copy", async () => {
+    const h = boot();
+    await h.ask({ type: "keep_replaced", item: item("c1", "One", 1), save: true });
+    await h.ask({ type: "keep_replaced", item: item("c2", "Two", 2), save: true });
+    await h.fire("CHAT_DELETED", { id: "c1" });
+    expect((await h.list("u1", true)).map((r: any) => r.chatId)).toEqual(["c2"]);
+    expect(h.stored["u1:replaced.json"].map((r: any) => r.chatId)).toEqual(["c2"]);
+    // A fresh backend over the same store does not bring it back.
+    const after = boot(h.stored);
+    expect((await after.list("u1", true)).map((r: any) => r.chatId)).toEqual(["c2"]);
+  });
+
+  test("a deleted chat of another account leaves this one's alone", async () => {
+    const h = boot();
+    await h.ask({ type: "keep_replaced", item: item("c1", "One", 1), save: false });
+    await h.fire("CHAT_DELETED", { id: "c1" }, "u2");
+    expect((await h.list()).map((r: any) => r.chatId)).toEqual(["c1"]);
   });
 
   test("with Keep it through an update off, nothing is written", async () => {

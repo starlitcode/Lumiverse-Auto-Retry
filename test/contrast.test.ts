@@ -60,7 +60,7 @@ describe("compositing", () => {
   });
 });
 
-describe("contrast maths matches the WCAG definition", () => {
+describe("contrast math matches the WCAG definition", () => {
   test("black on white is 21:1", () => {
     expect(contrastRatio([0, 0, 0, 1], [255, 255, 255, 1])).toBeCloseTo(21, 4);
   });

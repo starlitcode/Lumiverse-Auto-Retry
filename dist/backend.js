@@ -218,6 +218,20 @@ async function readReplaced(userId) {
     while (list.length > REPLACED_PER_USER)
         list.shift();
 }
+// The reply a retry replaced in a chat that was deleted. There is no chat left
+// to read it in, and the text of a deleted chat is not kept. The saved copy is
+// read in first, so the reply does not come back from it after a restart. It
+// is written again only when this account is known to keep a saved copy.
+async function forgetChat(chatId, userId) {
+    await readReplaced(userId);
+    const list = replacedFor(userId);
+    const left = list.filter((x) => x.chatId !== chatId);
+    if (left.length === list.length)
+        return;
+    replacedKept.set(userKey(userId), left);
+    if (replacedSavedWas.get(userKey(userId)) === true)
+        await saveReplaced(userId, true);
+}
 // ---- thinking markers saved on a connection ----
 // The thinking start and end a reader saved on a connection, under Lumiverse's
 // Reasoning settings. The panel does the stripping, so they are sent there as
@@ -463,6 +477,14 @@ function endingFor(generationId, userId) {
 try {
     spindle.on('GENERATION_ENDED', (p, userId) => noteEnding(p, userId, 'ended'));
     spindle.on('GENERATION_STOPPED', (p, userId) => noteEnding(p, userId, 'stopped'));
+    spindle.on('CHAT_DELETED', (p, userId) => {
+        try {
+            const chatId = p && (p.id != null ? String(p.id) : p.chatId != null ? String(p.chatId) : '');
+            if (chatId)
+                forgetChat(chatId, userId).catch(() => { });
+        }
+        catch (_) { }
+    });
 }
 catch (_) {
     // Without the generation permission nothing is heard, the panel is told the

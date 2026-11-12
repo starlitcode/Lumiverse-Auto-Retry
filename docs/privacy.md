@@ -126,6 +126,7 @@ None of these is written to disk, synced, or sent anywhere.
 - You can read them back on the **Replaced** tab. At most eight chats' worth is kept, newest first.
 - They are held in this tab and in your server's memory, for your account only. A reload keeps them. An update or a restart of Lumiverse clears them.
 - With **Keep it through an update** on, they are also saved on your server, in Lumiverse's storage for your account. It is off by default. Turning it off empties the saved copy.
+- Deleting a chat removes its reply from your server's memory and from the saved copy.
 - Turn off **Keep the reply a retry replaced**, under **How it retries**, and nothing is kept.
 
 **In memory on the server:** how each of the last 60 replies ended, so a tab that missed the ending can ask. For each one it holds the reply's id, your account, whether it ended or was stopped, the words of an error, and whether it had text. It holds no reply text. A restart clears it, and it is not written to disk.

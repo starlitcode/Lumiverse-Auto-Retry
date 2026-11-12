@@ -8,7 +8,9 @@ Adults.
 
 Lumiverse itself isn't an adult app. Anyone can use it, and it has no adult content of its own. My extensions are made for adults writing their own fiction. If you're under 18, these extensions aren't for you.
 
-I can't know someone's age unless they tell me, and I'm not going to pretend I can. But if someone tells me they're under 18, I won't help them with anything, bugs and errors included. It isn't personal. I'm just not comfortable working with minors, and I don't make exceptions.
+I can't know someone's age unless they tell me, and I'm not going to pretend I can. If someone tells me they're under 18, I won't help them with anything, bugs and errors included. That rule is the same for everyone. It doesn't mean they did anything wrong. If you're under 18 and you're having a hard time, the support lines in [If some of that applies to you](#if-some-of-that-applies-to-you) are for you too.
+
+These extensions aren't for sexual content involving minors, and that includes fiction. I believe it can make harm to a child seem less wrong, and I won't make tools for it. That's why they're for adults. It isn't a guess about who you are.
 
 Auto Retry only reads the reply's text. It doesn't keep that text after checking it, and it knows nothing about you. It can't tell what your story means to you or why you're writing it. It checks whether the reply failed as writing, such as coming back empty, stopping halfway through, breaking character, or refusing to continue.
 
@@ -20,7 +22,7 @@ This setting catches replies where the model stops the scene and starts talking 
 
 When this setting is on, Auto Retry can discard that kind of reply and ask for another one. That might be what you want if the model keeps interrupting your story. It can also mean throwing away a response that was trying to offer support. The extension can't tell whether that response was useful to you. It only reads the reply.
 
-Before you enable it, decide whether you want those responses discarded and retried. Don't turn it on without understanding what it does.
+Before you enable it, decide whether you want those responses discarded and retried. Please read this part before you turn it on.
 
 You can turn it off again using the same setting. That won't restore any replies it already discarded.
 
@@ -71,8 +73,6 @@ The model doesn't know you or care about what happens to you. It generates text 
 If a reply agrees with something awful you believe about yourself, that doesn't make it true. The model doesn't know enough about you to prove that belief right. It can agree with you in one reply and say the opposite in the next.
 
 Writing about something isn't the same as wanting it to happen. Adults can write about gentle or harsh things in fiction without wanting them in real life. Having a kink for something doesn't mean you want it to happen. I don't have a problem with adults exploring those things in fiction.
-
-I don't support sexual content involving a minor, and that includes fiction, whatever the reason. I don't think it helps anyone. I think it can make harm to a child seem less wrong, first in a story and then in real life. I'm not saying that because I think you're a predator or because I'm assuming something about you. I'm telling you what I believe and why my extensions are for adults.
 
 I hope you're okay. If you're struggling, talk to a person you trust. Someone who knows you can listen to what is actually happening and help in ways a language model can't.
 

@@ -68,7 +68,7 @@ const broken: Array<[string, string]> = [
   ["stopping on a comma", "She stepped through the gate and the cold met her,"],
   ["an invented block left open", "<story_plan>\nShe goes north. She meets the guard and"],
   // Counting single asterisks reads this as balanced: an unclosed bold run
-  // leaves two of them, which is an even number. It ends on a full stop, so no
+  // leaves two of them, which is an even number. It ends on a period, so no
   // other check would have caught it either.
   ["an unclosed bold run", "She read it twice. **This was not the plan."],
 ];

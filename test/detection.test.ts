@@ -433,7 +433,7 @@ describe("refusal detection ignores the model's thinking", () => {
 
     // Empty is what gets it retried as thinking with no reply. Before this the
     // whole of the thinking was left standing and read as a long reply that had
-    // finished on a full stop.
+    // finished on a period.
     test("so a reply that was only thinking has nothing left in it", () => {
       expect(stripThinking(thought + "\n</think>", {}).trim()).toBe("");
     });
@@ -873,7 +873,7 @@ describe("cut-off detection", () => {
     expect(looksTruncated('<think>"maybe</think>He said, "hi."', false, {})).toBe(false);
   });
 
-  test("the strict option also catches a missing full stop", () => {
+  test("the strict option also catches a missing period", () => {
     expect(looksTruncated("He walked to the door", false, {})).toBe(false);
     expect(looksTruncated("He walked to the door", true, {})).toBe(true);
   });
@@ -921,7 +921,7 @@ describe("cut-off detection sees past inline HTML", () => {
 //
 // "Retry when a reply has no ending punctuation" is on by default now, and a
 // tracker is the shape that check was worst at: a weather box, a stat block or
-// a status line closes on a number or a tag, never on a full stop. Every reply
+// a status line closes on a number or a tag, never on a period. Every reply
 // from a card like that read as cut off, so it re-rolled every reply, and the
 // replacement ended the same way. Code is the same problem one layer down: the
 // asterisks, quotes and semicolons in a snippet are not prose punctuation, and
@@ -1056,13 +1056,13 @@ describe("code and markup left open", () => {
 //
 // Cards ask for a planning or bookkeeping block wrapped in a tag of the card's
 // own making. When a reply is cut off inside one, nothing else here notices:
-// the block's prose can end on a full stop with its quotation marks balanced,
+// the block's prose can end on a period with its quotation marks balanced,
 // so every check that reads the shape of the text says the reply finished, and
 // stripping markup deletes the one piece of evidence first.
 describe("a tag the model invented and never closed", () => {
   const OPEN = "<story_plan>\nI. Setting\nThe pair meet at the mill. Rain is falling steadily.";
 
-  test("is cut off even though the words end on a full stop", () => {
+  test("is cut off even though the words end on a period", () => {
     expect(looksTruncated(OPEN, true, {})).toBe(true);
   });
 
@@ -1201,7 +1201,7 @@ describe("dialogue colored with a span, and a details block under it", () => {
 // world's scripts counted as having no ending at all.
 describe("an ending counts in any script", () => {
   const finished = [
-    ["a full stop", "He walked to the door."],
+    ["a period", "He walked to the door."],
     ["Japanese", "\u5F7C\u306F\u6249\u306B\u5411\u304B\u3063\u3066\u6B69\u3044\u305F\u3002"],
     ["Chinese", "\u4ED6\u8D70\u5411\u95E8\u53E3\uFF01"],
     ["Arabic", "\u0645\u0631\u062D\u0628\u0627 \u0628\u0643\u061F"],

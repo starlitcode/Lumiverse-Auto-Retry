@@ -15,6 +15,11 @@ _2026-11-10_
 ### Fixed
 
 - **A refusal note sent with Several tries at once was not shown as sent.** With **Several tries at once** on, a note goes out with the tries from the second try on. The Log wrote that under Several tries at once only, so there was no **Refusal notes** line saying the note was sent, and the Stats tab did not count it under **Refusal notes sent**. Both now say so, the same as for a note sent with a press of the retry button. A note that was armed too long before the tries went out is left out, and the Log now says that too.
+- **The reply a retry replaced was kept after its chat was deleted.** With **Keep the reply a retry replaced** on, your server held the replaced reply of a deleted chat until it was pushed out by newer ones. With **Keep it through an update** on, it stayed in the saved copy too. Deleting a chat now removes its reply from both. Auto Refine has the same fix for its refines you can put back.
+
+### Changed
+
+- **The Safety page was reworded.** The part about sexual content involving minors moved from **From me** to **Who this is for**, so the last section is only support. It was reworded so it does not read as an accusation. Someone under 18 who is having a hard time is pointed to the support lines. What the extensions allow has not changed. See [Safety](docs/safety.md).
 
 ---
 
@@ -741,7 +746,7 @@ _2026-09-25_
 - **A broken color tag could make a finished reply look cut off.** Models sometimes write a tag with its closing quotation mark missing, like `<font color="#c0a060>`. That lone quotation mark counted as dialogue opened and never closed, so the reply was retried. Tags like this are now left out of the count. See [Code and trackers](docs/detection.md#code-and-trackers).
 - **A broken color tag could hide a refusal.** The same lone quotation mark made a refusal after it look like a character speaking. The refusal check now reads the reply without its tags. See [Quotation marks](docs/detection.md#quotation-marks).
 - **HTML tags counted toward the refusal length limit.** A short refusal wrapped in a lot of markup could pass the 2000-character limit and be left alone. The length now counts only the text.
-- **A status bar on one line made a finished reply look cut off.** A tracker such as `📍 The pier | 🕘 9:40 PM | 🌧 Rain` has no full stop at the end, so the reply was retried. A last line with two or more `|` now counts as a finished ending. See [Code and trackers](docs/detection.md#code-and-trackers).
+- **A status bar on one line made a finished reply look cut off.** A tracker such as `📍 The pier | 🕘 9:40 PM | 🌧 Rain` has no period at the end, so the reply was retried. A last line with two or more `|` now counts as a finished ending. See [Code and trackers](docs/detection.md#code-and-trackers).
 
 ---
 
@@ -1322,7 +1327,7 @@ _2026-08-22_
 ### Fixed
 
 - **A reply mentioning a height was read as cut off.** A height written 6'2", or a gap 3" wide, puts a single straight quote in ordinary prose, and the check that looks for dialogue opened and never closed counted it as an opening. Character descriptions are full of heights, so this threw away replies that were plainly complete. A measurement is no longer mistaken for the start of a line of speech.
-- **A reply that ends on a list was read as cut off.** A bullet or numbered item is a fragment and has no full stop at the end, which is what the check for a missing ending was looking for. A list that has finished now counts as an ending, while one cut mid-item is still caught.
+- **A reply that ends on a list was read as cut off.** A bullet or numbered item is a fragment and has no period at the end, which is what the check for a missing ending was looking for. A list that has finished now counts as an ending, while one cut mid-item is still caught.
 - **Multiplication written 2*3 was read as an unfinished action.** A single asterisk between two words is not the start of an *action*, so it is no longer counted as one.
 - **The This chat row often did not say who the chat was with.** The character's name was only ever looked up when a message rendered. Switching chats and starting a reply both make a chat current without going through that, so the two most ordinary ways of ending up in a chat left the row reading "This chat" with no name. It is looked up whichever way you got there, and asked for once per chat.
 
@@ -1724,7 +1729,7 @@ _2026-08-07_
 
 ### Fixed
 
-- **A reply cut off inside a block the card asked for is caught now.** Cards ask the model to wrap its planning in a tag of their own making, `<story_plan>` and the like. When the reply stopped partway through one, nothing noticed: the text inside can end on a full stop with its quotation marks balanced, so every check that reads the shape of the reply said it finished, and stripping the markup deleted the one piece of evidence first. A tag alone on its line, with a name HTML does not have, opened and never closed, is now read as cut off. A word in angle brackets inside a sentence is not, since that is how people write an emote.
+- **A reply cut off inside a block the card asked for is caught now.** Cards ask the model to wrap its planning in a tag of their own making, `<story_plan>` and the like. When the reply stopped partway through one, nothing noticed: the text inside can end on a period with its quotation marks balanced, so every check that reads the shape of the reply said it finished, and stripping the markup deleted the one piece of evidence first. A tag alone on its line, with a name HTML does not have, opened and never closed, is now read as cut off. A word in angle brackets inside a sentence is not, since that is how people write an emote.
 - **The check for an unclosed reasoning block knew the wrong list of names.** It was written out by hand rather than read from the setting, so it knew five of the eight built-in names, and none of the ones you had added under **Extra thinking tag names**. A reply cut off inside `<scratchpad>`, `<analysis>`, `<thoughts>` or any tag you had told the extension about read as finished. Both now read the same list.
 
 ## 4.5.2
@@ -1772,7 +1777,7 @@ What has not started counting: a `<` someone typed in a scene, `if x<y`, a bare 
 
 ### Fixed
 
-- **A card that prints a tracker no longer has every reply thrown away.** 4.4.0 turned **Retry when a reply has no ending punctuation** on by default, and a tracker is the one shape that check was worst at. A weather box, a stat block, a status line, a table: none of them end on a full stop, so the reply read as cut off mid-sentence, the retry ended the same way, and it went round until the cap stopped it. A reply that ends on a block ends on a block. Closing HTML, a markdown table row and a run of two or more label lines like `HP: 20/20` all count as an ending now. Prose that stops mid-sentence after a tracker is still caught, and a single line with a colon in it is still an ordinary sentence, since a tracker never has only the one field.
+- **A card that prints a tracker no longer has every reply thrown away.** 4.4.0 turned **Retry when a reply has no ending punctuation** on by default, and a tracker is the one shape that check was worst at. A weather box, a stat block, a status line, a table: none of them end on a period, so the reply read as cut off mid-sentence, the retry ended the same way, and it went round until the cap stopped it. A reply that ends on a block ends on a block. Closing HTML, a markdown table row and a run of two or more label lines like `HP: 20/20` all count as an ending now. Prose that stops mid-sentence after a tracker is still caught, and a single line with a colon in it is still an ordinary sentence, since a tracker never has only the one field.
 - **Code in a reply is no longer read as unfinished writing.** The checks below the code fence count are about prose: dialogue left open, a sentence stopping on a comma, an emphasis run with no partner. A snippet is full of the same characters meaning something else, so one `const a = b * 2;` counted as an opened emphasis run and re-rolled a finished answer. Fenced blocks and inline spans are now left out of that counting. The fences and backticks themselves are still counted first, so a reply cut off inside a code block is caught exactly as before.
 - **A row of asterisks is no longer mistaken for an opened emphasis run.** `Mood: ***`, printed by a card as a gauge, or a line of them used as a divider. Emphasis has to touch the words it marks, so `*He nods*` and `**bold**` still count.
 
@@ -1819,7 +1824,7 @@ _2026-08-06_
 - **"That violates my safety guidelines" and "that goes against my content policies" were never matched.** The pattern only allowed the noun to follow the possessive directly. Neither was "that isn't something I can help with", which was only matched written as "that's not".
 - **A phrase only matched the way it happened to be listed.** "I'm unable to help with that" and "I am unable to help with that" are the same refusal, and only one of them was caught. The written-out form of every contracted phrase is worked out from the contracted one now.
 - **Inline HTML confused the checks that decide a reply was cut off.** Models color their dialogue with a raw `<span style="...">`, and the two quotes around that style value were counted alongside the two around the speech, so a reply whose dialogue was genuinely cut open came out even and was passed as finished. A trailing `</span>` was also read as end punctuation, which hid the same fault from the other check. Tags are removed before anything is counted.
-- **A reply only counted as finished if it ended in Latin punctuation.** A scene closing on an emoji, or on a Japanese, Chinese, Greek or Arabic full stop, was read as having no ending at all. Punctuation in any script counts now, and so does an emoji.
+- **A reply only counted as finished if it ended in Latin punctuation.** A scene closing on an emoji, or on a Japanese, Chinese, Greek or Arabic period, was read as having no ending at all. Punctuation in any script counts now, and so does an emoji.
 - **Stripping a model's reasoning got slower the more of it there was.** The patterns that remove a reasoning block walk forward from every opener looking for its closer, so a reply carrying many openers and no closer made each one scan everything after it. Twice the input meant four times the work: 5,000 openers took 96ms, 20,000 took a second and a half, and 40,000 took six seconds, which on a real reply is a locked-up tab. It now checks whether there is a closer at all before going looking, which makes that case linear and takes it to a couple of milliseconds. An ordinary long reply was never affected and is unchanged.
 - **Word swaps could rewrite the extension's own log panel.** The pass over what is on screen skipped the settings panel and the pop-up but not the log, so a rule could edit the extension's own words underneath it.
 - **Word swaps could rewrite other extensions' interfaces.** Applying a swap to what was on screen walked every piece of text on the page, so a rule of "cat => dog" changed the word wherever it appeared, including inside another extension's panel, which had no idea its own text had been edited underneath it. Only the rendered replies are touched now.

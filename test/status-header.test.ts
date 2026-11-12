@@ -48,7 +48,7 @@ const finished = [
   // Bold, which some cards wrap the whole line in. The asterisks are paired.
   "**" + header + "**\n\nThe road was empty both ways.",
   // The other arrangement: the header last, so the reply ends on a bracket
-  // rather than on a full stop. That has to count as an ending or every single
+  // rather than on a period. That has to count as an ending or every single
   // reply in this format gets re-rolled.
   "She latched the door behind her.\n\n" + header,
   // A place with an apostrophe in it, which is one straight-ish mark in prose.

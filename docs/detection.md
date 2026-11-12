@@ -239,7 +239,7 @@ Two kinds of text are not prose, so the prose checks leave them out.
 
 **A row of stars** with a space on each side, like `Mood: ***` or a divider line, does not count as emphasis. Emphasis touches the words it marks, so `*He nods*` and `**bold**` are still counted.
 
-**Trackers.** Some cards print a tracker at the end of every reply, such as a weather box or a status line. These do not end on a full stop. Without this rule, every reply would count as cut off, and it would retry until it hit the limit. These four endings count as finished:
+**Trackers.** Some cards print a tracker at the end of every reply, such as a weather box or a status line. These do not end on a period. Without this rule, every reply would count as cut off, and it would retry until it hit the limit. These four endings count as finished:
 
 - a closing or self-closing HTML tag at the very end, like `</div>`, `</table>` or `<br/>`
 - a table row: the last line starts and ends with `|`
@@ -277,7 +277,7 @@ This matters because nothing else would catch it. Speech closes its own quotatio
 <span style="background: linear-gradient(...);">"Wait... hold on,"
 ```
 
-A made-up tag is the hardest case. Cards ask for a planning block wrapped in a tag of their own. A reply cut off inside one can end on a full stop with balanced quotes, so the tag is the only sign.
+A made-up tag is the hardest case. Cards ask for a planning block wrapped in a tag of their own. A reply cut off inside one can end on a period with balanced quotes, so the tag is the only sign.
 
 ## Accidental-refusal detection
 

@@ -298,7 +298,7 @@ const CONFIG = {
     retryOnTruncated: true, // final content present but cut off mid-sentence (structural heuristic, see looksTruncated)
     // Also treat "the reply stops on a letter" as cut off. The test for an
     // ending reads any script's punctuation, and an emoji, so a scene closing on
-    // a Japanese, Chinese, Greek or Arabic full stop has an ending. What is left
+    // a Japanese, Chinese, Greek or Arabic period has an ending. What is left
     // for this to fire on is a reply that stops mid-word.
     retryOnNoPunct: true,
     retryOnShort: false, // off by default. A short reply is often a finished one, and retrying each one spends the retry limit on replies that were fine.
@@ -1286,7 +1286,7 @@ const HTML_KNOWN = ("html|head|body|div|span|p|a|b|i|u|s|em|strong|small|mark|su
 // Models are asked to wrap a planning or bookkeeping block in a tag of their
 // own making: <story_plan>, <plan>, <status>. When a reply is cut off inside
 // one of those, nothing else here notices. The block's own prose can end on a
-// full stop with its quotation marks balanced, so every check that reads the
+// period with its quotation marks balanced, so every check that reads the
 // shape of the text says the reply finished, and stripping markup deletes the
 // one piece of evidence before anything looks at it.
 //
@@ -1581,7 +1581,7 @@ function thinkOpenedNeverClosed(raw, cfg) {
 // Does the reply end on something that can end a reply?
 //
 // Punctuation and symbols in any script count, so a scene closing on an emoji
-// or on a Japanese, Chinese, Greek or Arabic full stop is an ending. What is
+// or on a Japanese, Chinese, Greek or Arabic period is an ending. What is
 // left reading as unfinished is a reply stopping on a letter or a digit, which
 // is what being cut off mid-word looks like.
 function endsOnPunctuation(t) {
@@ -1701,7 +1701,7 @@ function looksTruncated(text, retryOnNoPunct, cfg) {
     // Bold runs, counted as runs rather than as characters. Counting single
     // asterisks reads an unclosed **bold** as balanced, because the two it left
     // behind are an even number: "She read it twice. **This was not the plan."
-    // came back finished, full stop and all, with no setting that would catch it.
+    // came back finished, period and all, with no setting that would catch it.
     // Marker pairs are what emphasis is made of, so they are what gets counted.
     //
     // A run of three is one pair and one single, which is what ***both at once***
@@ -8051,7 +8051,7 @@ export function setup(ctx, opts) {
     // Turn whatever is in a number box into a safe value: a blank or non-numeric
     // box falls back to that field's default, then the result is clamped to the
     // field's range and rounded if it's a whole-number field. Stops an empty or
-    // silly box from poisoning the retry maths.
+    // silly box from poisoning the retry math.
     function clampField(f, raw) {
         const s = (raw == null ? "" : String(raw)).trim();
         let n = s === "" ? CONFIG[f.key] : Number(s);

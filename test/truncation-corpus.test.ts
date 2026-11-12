@@ -137,9 +137,9 @@ const CUT: Array<[string, string]> = [
   ["dialogue opened after a height", 'He was 6\'2". She looked up at him and said, "You never told me'],
   ["smart quote opened, never closed", "He shook his head. “That is not what happened"],
   // The close ones to a line opened without its mark: the last mark opens a
-  // line, and the reply ends on a full stop, so only the quotes show the cut.
-  ["dialogue opened again and cut, after a full stop", 'Wren said, "We go north." She paused. "If the river is high, we take the ridge.'],
-  ["smart quote opened again and cut, after a full stop", "\u201CWe go north.\u201D She paused. \u201CIf the river is high, we take the ridge."],
+  // line, and the reply ends on a period, so only the quotes show the cut.
+  ["dialogue opened again and cut, after a period", 'Wren said, "We go north." She paused. "If the river is high, we take the ridge.'],
+  ["smart quote opened again and cut, after a period", "\u201CWe go north.\u201D She paused. \u201CIf the river is high, we take the ridge."],
   ["action asterisk opened", "*He steps forward, one hand raised"],
   ["code fence opened", "Here is the layout:\n\n```\nroom A"],
   ["inline code opened", "The sign said `NO ENT"],
@@ -149,7 +149,7 @@ const CUT: Array<[string, string]> = [
   ["begin of thought opened", "<|begin_of_thought|>The note is forged and he should"],
   ["custom block opened", "<story_plan>\nBeat one: she leaves"],
   ["marker opened and never closed", "Mara read the message twice and put the phone face down.\n<relay-mark ref=\"k22\">"],
-  ["a block opened, closed on no line, ending on a full stop", "<tally>\nLamps lit: 4\nOil left: half."],
+  ["a block opened, closed on no line, ending on a period", "<tally>\nLamps lit: 4\nOil left: half."],
   ["html container opened", '<div class="card"><b>HP</b>: 12'],
   ["stops on a letter with no punctuation", "She walked to the window and looked out at the empty street below and then she"],
   ["list then cut mid-item", "Supplies:\n- rope\n- water\n- a map she could not"],
