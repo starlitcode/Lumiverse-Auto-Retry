@@ -1703,11 +1703,10 @@ console.log("\nkeyboard and search");
       };
     }),
   );
-  // Four sections start shut: refusal tuning, buttons, debug info and
-  // import / export. Inside import / export, its two lists of ticks fold the
-  // same way. The count is asserted exactly, so a heading that stops being
-  // collapsible is caught here.
-  check("every section header is focusable", out.focusable && out.sections === 6, out.sections);
+  // All seven sections open and close from their heading, and inside
+  // import / export its two lists of ticks fold the same way. The count is
+  // asserted exactly, so a heading that stops being collapsible is caught here.
+  check("every section header is focusable", out.focusable && out.sections === 9, out.sections);
   check("Enter opens a section", out.afterEnter.exp === "true" && out.afterEnter.vis === 1, out.afterEnter);
   check("Space closes it", out.afterSpace.exp === "false" && out.afterSpace.vis === 0, out.afterSpace);
   check("search filters", out.filtered.hit === 1 && out.filtered.miss === 0, out.filtered);
@@ -1731,10 +1730,9 @@ console.log("\nwhat is on screen straight away");
           (e) => (e.textContent || "").trim() === t && e.offsetParent !== null,
         );
       const heads = [...modal.querySelectorAll('[role="button"][aria-expanded]')];
-      // Open sections are the ones with no caret to press.
-      const open = [...modal.querySelectorAll("div")]
-        .filter((d) => /^(Basics|How it retries|When to count a reply as bad)$/.test((d.textContent || "").trim()))
-        .filter((d) => d.offsetParent !== null && !d.getAttribute("role"));
+      const title = (h) => (h.textContent || "").replace(/^[▸▾]/, "").trim();
+      const open = heads.filter((h) => h.getAttribute("aria-expanded") === "true" && h.offsetParent !== null);
+      const shut = heads.filter((h) => h.getAttribute("aria-expanded") === "false");
       return {
         panelSwitch: shown("Show the on-screen panel"),
         rerollSwitch: shown("Retry by adding a new reroll"),
@@ -1742,8 +1740,8 @@ console.log("\nwhat is on screen straight away");
         brokenRun: shown("Broken replies"),
         garbledRow: shown("It was garbled"),
         frozenRow: shown("Give up on a reply that froze (milliseconds)"),
-        openHeadings: open.map((d) => (d.textContent || "").trim()).sort(),
-        shutHeadings: heads.map((h) => (h.textContent || "").trim()).sort(),
+        openHeadings: open.map(title).sort(),
+        shutHeadings: shut.map(title).sort(),
       };
     }),
   );
@@ -1751,11 +1749,12 @@ console.log("\nwhat is on screen straight away");
   check("and neither does the reroll choice", out.rerollSwitch, out);
   check("the frozen-reply rows are under their own heading", out.frozenRun && out.frozenRow, out);
   check("the broken-reply switches, garbled among them, are under their own heading", out.brokenRun && out.garbledRow, out);
-  // Four sections are shut, and so are the two lists of ticks inside
-  // Import / export, each under a heading of its own.
+  // The three main sections start open. Four sections are shut, and so are
+  // the two lists of ticks inside Import / export, each under a heading of
+  // its own.
   check(
     "three headings are open and six are shut",
-    out.openHeadings.length === 3 && out.shutHeadings.length === 6,
+    out.openHeadings.join("|") === "Basics|How it retries|When to count a reply as bad" && out.shutHeadings.length === 6,
     out,
   );
   check("no console errors", errors.length === 0, errors);
