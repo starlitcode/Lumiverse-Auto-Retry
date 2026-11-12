@@ -70,7 +70,7 @@ Every reason for a retry uses it: a reply that failed a check, a refusal, an err
 
 An error on a reply sent at once follows the same settings as an error on a reply that streamed.
 
-- **An error that will not fix itself**, such as an invalid API key or a missing model, stops the run when **Skip hard failures** is on. The other replies are stopped, and no more tries are made.
+- **An error that will not fix itself**, such as an invalid API key, a missing model or a `reasoning_extraction` decline, stops the run when **Skip hard failures** is on. The other replies are stopped, and no more tries are made.
 - **Every reply an error** is retried only when **Retry on errors** is on. The next try is an error retry.
 - **A wait an error asks for**, such as for a rate limit, is waited out before the next tries. This holds even when other replies came back with text.
 - A refusal from the provider, such as `prohibited_content`, is a refusal, the same as a reply that ends with one.

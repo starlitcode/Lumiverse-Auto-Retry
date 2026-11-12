@@ -717,6 +717,19 @@ describe("refusal detection on error text", () => {
       expect({ e, hit: looksLikeRefusalError(e, cfg) }).toEqual({ e, hit: false });
   });
 
+  // A decline for asking the model to write out its thinking is decided from
+  // the prompt, so it is declined again on every try. It is a hard failure,
+  // not a refusal.
+  test("a decline as reasoning_extraction is not a refusal, and is a hard failure", () => {
+    const e = "Lantern generation failed: The provider declined the response (reasoning_extraction). No explanation was provided.";
+    expect(looksLikeRefusalError(e, cfg)).toBe(false);
+    expect(isHardError(e, cfg)).toBe(true);
+    // A decline for another reason is still a refusal.
+    expect(looksLikeRefusalError(e.replace("reasoning_extraction", "violence"), cfg)).toBe(true);
+    // Your own phrase still wins over it.
+    expect(looksLikeRefusalError(e, withCfg({ refusalExtraPhrases: "reasoning_extraction" }))).toBe(true);
+  });
+
   test("an ordinary network error does not", () => {
     expect(looksLikeRefusalError("connection refused", cfg)).toBe(false);
     expect(looksLikeRefusalError("ETIMEDOUT", cfg)).toBe(false);

@@ -16445,6 +16445,11 @@ console.log("\na reply you stopped is not retried as an error");
     check("an ending that reads as a stop is not retried: " + words, (await runOne("none", { error: words })) === 0);
   check("an error that only mentions a dropped connection is still retried",
     (await runOne("none", { error: "Lantern stream failed (502): connection aborted by the upstream" })) >= 1);
+  // A decline for asking the model to write out its thinking comes back the
+  // same on every try, so it is not retried. Another decline still is.
+  const declined = (why) => "Lantern generation failed: The provider declined the response (" + why + "). No explanation was provided.";
+  check("a request declined as reasoning_extraction is not retried", (await runOne("none", { error: declined("reasoning_extraction") })) === 0);
+  check("a request declined for another reason is still retried", (await runOne("none", { error: declined("violence") })) >= 1);
   check("no console errors", errors.length === 0, errors);
 }
 

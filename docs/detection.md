@@ -353,6 +353,7 @@ Some providers send a refusal as an error instead of reply text. An error about 
 - an account with no balance or quota left
 - a daily limit, such as a free tier's requests for the day, which only comes back the next day
 - a prompt too long for the model
+- a request the provider declined as `reasoning_extraction`. Some providers decline a prompt that asks the model to write out its thinking or reasoning in the reply, such as a preset that asks for the thinking in a tag. The same preset is declined again every time. It is not retried as a refusal, and a notice says which wording to take out of the preset.
 
 Every other error is retried. These get the longer wait a rate limit gets, since they clear if you wait:
 
@@ -364,7 +365,7 @@ Every other error is retried. These get the longer wait a rate limit gets, since
 Lumiverse writes a failed call with the provider's status in parentheses, such as `stream failed (504): Gateway Timeout`. That status is read on its own:
 
 - A number in the rest of the error is not a status. "Try again in 2.404 seconds" is not a 404.
-- With 408, 425, 502, 503, 504 or 520 to 530, the rest is the gateway's own page. It can say "404 page not found" or "permission" about itself, so the error is waited out all the same. Only a key, a balance, a daily limit or a prompt too long still stops the retry.
+- With 408, 425, 502, 503, 504 or 520 to 530, the rest is the gateway's own page. It can say "404 page not found" or "permission" about itself, so the error is waited out all the same. Only a key, a balance, a daily limit, a prompt too long or a `reasoning_extraction` decline still stops the retry.
 
 A reply you stopped is not an error. The stop button and Escape are both remembered, and whatever Lumiverse reports for that reply afterwards is left alone.
 

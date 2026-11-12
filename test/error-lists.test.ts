@@ -53,7 +53,7 @@ describe("the error lists are the same as in the other extension", () => {
       h ^= all.charCodeAt(i);
       h = Math.imul(h, 16777619) >>> 0;
     }
-    expect(h.toString(16)).toBe("315b75bd");
+    expect(h.toString(16)).toBe("c2246a9c");
   });
 });
 
@@ -86,6 +86,10 @@ const WONT_FIX = [
   // The account is the problem, whatever the gateway's status.
   "Lantern stream failed (502): insufficient balance on the upstream account",
   "Lantern stream failed (503): Invalid API key",
+  // A prompt that asks the model to write out its thinking is declined the
+  // same way every time.
+  "Lantern generation failed: The provider declined the response (reasoning_extraction).",
+  "stop_reason refusal, category reasoning-extraction",
 ];
 const WAIT_IT_OUT = [
   "429 Too Many Requests",
@@ -134,7 +138,13 @@ const WAIT_IT_OUT = [
 // Neither: nothing in these says the call can or cannot work next time.
 const NOT_KNOWN = ["Lantern generation failed: the answer could not be read", "Something went wrong", "the upstream sent back a malformed answer"];
 // Not hard: a timeout is not a context error.
-const NOT_HARD = ["The request took too long to respond", "Request timed out", "429 rate limit: 20 requests per minute"];
+const NOT_HARD = [
+  "The request took too long to respond",
+  "Request timed out",
+  "429 rate limit: 20 requests per minute",
+  // A decline for another reason is a refusal, and is asked again.
+  "Lantern generation failed: The provider declined the response (violence).",
+];
 
 describe("each error is read the same way in both extensions", () => {
   for (const e of WONT_FIX) test("will not fix itself: " + e, () => expect(errorKind(e)).toBe("hard"));

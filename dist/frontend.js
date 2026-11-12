@@ -3968,8 +3968,10 @@ const WAIT_STATUS = /^(?:408|409|425|429|5\d\d)$/;
 const HARD_STATUS = /\b(?:400|401|402|403|404|405|406|411|413|415|422)\b/;
 // The key, the account and the prompt. A balance does not refill, a daily
 // limit only comes back the next day, and a prompt over the context length is
-// the same prompt next time. These are hard whatever status comes with them.
-const HARD_SURE = /\b(?:invalid[_ ]?api[_ ]?key|authentication|unauthorized|insufficient[_ ](?:balance|credits?|funds|quota)|billing|context[_ ]length(?:[_ ]exceeded)?|maximum context|(?:prompt|input|context|messages?) (?:is |are )?too long|daily (?:request |token |usage )?(?:limit|quota|cap)|today['’]?s (?:free )?(?:requests|quota|limit|usage)|\w*(?:requests|tokens) ?per ?day\w*|resets? at (?:midnight|00:00))\b/i;
+// the same prompt next time. A prompt declined as "reasoning_extraction",
+// for asking the model to write out its thinking, is declined again the same
+// way. These are hard whatever status comes with them.
+const HARD_SURE = /\b(?:reasoning[_ -]?extraction|invalid[_ ]?api[_ ]?key|authentication|unauthorized|insufficient[_ ](?:balance|credits?|funds|quota)|billing|context[_ ]length(?:[_ ]exceeded)?|maximum context|(?:prompt|input|context|messages?) (?:is |are )?too long|daily (?:request |token |usage )?(?:limit|quota|cap)|today['’]?s (?:free )?(?:requests|quota|limit|usage)|\w*(?:requests|tokens) ?per ?day\w*|resets? at (?:midnight|00:00))\b/i;
 // Words that are hard from a provider, and that a gateway's page can also use
 // about itself.
 const HARD_LOOSE = /\b(?:forbidden|permission|not allowed|not found|does not exist|model missing)\b/i;
@@ -3995,6 +3997,14 @@ function errorKind(text) {
         return "hard";
     return WAIT_ERROR.test(text) ? "wait" : "";
 }
+// A provider's own category for a request it declined because the prompt asks
+// the model to write out its reasoning or thinking in the reply, such as a
+// preset that asks for the thinking in a tag. Newer Claude models do this. It
+// reads as a refusal, but asking again with the same prompt is declined again
+// and paid for again, so it is never retried as one. errorKind reads it as an
+// error that will not fix itself.
+const REASONING_BLOCK = /reasoning[_ -]?extraction/i;
+const REASONING_BLOCK_SAID = "Auto Retry did not retry: the provider declined the request as \"reasoning_extraction\". It does that when a preset or prompt asks the model to write out its thinking or reasoning in the reply. Asking again would be declined the same way. Take that wording out of your preset.";
 function looksLikeRefusalError(errText, cfg) {
     const norm = normalizeForMatch(errText);
     if (!norm)
@@ -4010,6 +4020,10 @@ function looksLikeRefusalError(errText, cfg) {
         if (lower.includes(p))
             return true;
     if (!cfg || cfg.refusalUseBuiltins !== false) {
+        // After your own phrases, which still win, and before the built-in
+        // pattern, whose "declined the response" would take it.
+        if (REASONING_BLOCK.test(norm))
+            return false;
         if (REFUSAL_ERROR.test(norm))
             return true;
     }
@@ -11487,7 +11501,9 @@ export function setup(ctx, opts) {
                     s.attempts = 0;
                     tellPage(RETRY_OFF_EVENT, chatId);
                     log("atonce", "reply " + run.back + " of " + run.count + " failed with a hard failure, so not retrying: " + String(msg.error));
-                    showToast("Auto Retry did not retry: that error will not fix itself, so trying again would not help.", { kind: "warning" });
+                    showToast(REASONING_BLOCK.test(String(msg.error))
+                        ? REASONING_BLOCK_SAID
+                        : "Auto Retry did not retry: that error will not fix itself, so trying again would not help.", { kind: "warning" });
                     return;
                 }
                 run.lastError = String(msg.error);
@@ -12287,7 +12303,9 @@ export function setup(ctx, opts) {
         // failure, so don't let the hard-error skip catch it before the refusal check.
         if (cfg.ignoreHardErrors && isHardError(error, cfg) && !(cfg.retryOnRefusal && looksLikeRefusalError(words, cfg))) {
             log("replies", "the error is one of your hard failures, so not retrying:", words);
-            showToast("Auto Retry did not retry: that error will not fix itself, so trying again would not help.", { kind: "warning" });
+            showToast(REASONING_BLOCK.test(words)
+                ? REASONING_BLOCK_SAID
+                : "Auto Retry did not retry: that error will not fix itself, so trying again would not help.", { kind: "warning" });
             s.attempts = 0;
             return;
         }
@@ -12556,7 +12574,9 @@ export function setup(ctx, opts) {
         if (p.error) {
             if (cfg.ignoreHardErrors && isHardError(p.error, cfg) && !(cfg.retryOnRefusal && looksLikeRefusalError(errorText(p.error), cfg))) {
                 log("replies", "the impersonation's error is one of your hard failures, so not retrying:", errorText(p.error));
-                showToast("Auto Retry did not retry the impersonation: that error will not fix itself, so trying again would not help.", { kind: "warning" });
+                showToast(REASONING_BLOCK.test(errorText(p.error))
+                    ? REASONING_BLOCK_SAID
+                    : "Auto Retry did not retry the impersonation: that error will not fix itself, so trying again would not help.", { kind: "warning" });
                 s.attempts = 0;
                 return;
             }
