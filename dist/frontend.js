@@ -181,7 +181,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.25.3";
+const VERSION = "5.26.0";
 // Whether two saved settings hold the same values, whatever order their keys
 // were written in. A key left undefined counts as not there, the way it is
 // when saved. Used to tell an update or a put-back that would change nothing.
@@ -8221,8 +8221,13 @@ export function setup(ctx, opts) {
     // presets can update them without rebuilding the panel.
     let presetBarRefreshers = [];
     // Titles of collapsible sections the user has opened, kept so a rebuild
-    // (import) doesn't collapse everything back.
+    // (import) doesn't collapse everything back. Every section can be closed.
+    // The ones not marked collapsed start open, so the panel reads the same
+    // the first time it opens.
     const openGroups = new Set();
+    for (const g of SCHEMA)
+        if (!g.collapsed)
+            openGroups.add(g.title);
     function coerceKey(key, val) {
         const f = fieldByKey[key];
         if (!f)
@@ -15088,7 +15093,7 @@ export function setup(ctx, opts) {
         // schema-built ones in the first place.
         const SECTION_CSS = "display:flex;flex-direction:column;gap:10px";
         const HEADING_CSS = "font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:" + MUTED;
-        function sectionHeader(title, collapsible) {
+        function sectionHeader(title) {
             const header = document.createElement("div");
             // A rule under the heading. Sections were text sitting above rows with
             // nothing between them, so on a long panel one section ran into the next
@@ -15100,10 +15105,6 @@ export function setup(ctx, opts) {
                     "padding-bottom:7px;border-bottom:1px solid var(--lumiverse-border,rgba(255,255,255,.12));color:" +
                     MUTED;
             const caret = document.createElement("span");
-            if (!collapsible) {
-                header.textContent = title;
-                return { header: header, caret: caret };
-            }
             header.style.cursor = "pointer";
             header.style.userSelect = "none";
             header.style.display = "flex";
@@ -15267,8 +15268,8 @@ export function setup(ctx, opts) {
                     open.el.appendChild(addRow(buildRow(f), f));
                 }
             };
-            if (group.collapsed) {
-                const { header, caret } = sectionHeader(group.title, true);
+            {
+                const { header, caret } = sectionHeader(group.title);
                 sec.appendChild(header);
                 const body = document.createElement("div");
                 body.style.cssText = "display:none;flex-direction:column;gap:10px";
@@ -15305,14 +15306,6 @@ export function setup(ctx, opts) {
                 }
                 if (hasExtra("refusalTester"))
                     body.appendChild(buildRefusalTester());
-                sec.appendChild(body);
-                handle.setOpen = makeCollapsible(header, body, caret, group.title);
-            }
-            else {
-                sec.appendChild(sectionHeader(group.title, false).header);
-                if (group.desc)
-                    sec.appendChild(sectionDesc(group.desc, true));
-                emitFields(sec);
                 // The switch for the chat you are in, and the only place it is. Basics
                 // is where somebody looks for a switch, and the floating button's menu
                 // is not: that button sits over the chat and its menu is opened for the
@@ -15321,7 +15314,9 @@ export function setup(ctx, opts) {
                 // not a setting. It belongs to one chat, it is kept in the browser, and
                 // it does not belong in an export, an import or a reset with the rest.
                 if (group.title === "Basics")
-                    sec.appendChild(buildChatSwitchRow());
+                    body.appendChild(buildChatSwitchRow());
+                sec.appendChild(body);
+                handle.setOpen = makeCollapsible(header, body, caret, group.title);
             }
             scroller.appendChild(sec);
         }
@@ -15330,7 +15325,7 @@ export function setup(ctx, opts) {
             const sec = document.createElement("div");
             sec.style.cssText = SECTION_CSS;
             sec.setAttribute("data-ar-sec", "1");
-            const { header: h, caret } = sectionHeader("Debug info", true);
+            const { header: h, caret } = sectionHeader("Debug info");
             sec.appendChild(h);
             const handle = {
                 sec: sec,
@@ -15400,7 +15395,7 @@ export function setup(ctx, opts) {
             const sec = document.createElement("div");
             sec.style.cssText = SECTION_CSS;
             sec.setAttribute("data-ar-sec", "1");
-            const { header: h, caret } = sectionHeader("Import / export", true);
+            const { header: h, caret } = sectionHeader("Import / export");
             sec.appendChild(h);
             const handle = {
                 sec: sec,

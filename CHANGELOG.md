@@ -8,6 +8,16 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.26.0
+
+_2026-11-12_
+
+### Added
+
+- **Every section of the settings can be closed.** **Basics**, **How it retries** and **When to count a reply as bad** now have a heading that opens and closes them, like the other sections. They still start open. A section you close stays closed until the page is reloaded. See [Finding a setting](docs/settings.md#finding-a-setting).
+
+---
+
 ## 5.25.3
 
 _2026-11-12_

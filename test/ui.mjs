@@ -15405,6 +15405,62 @@ console.log("\nsections open and shut over several frames");
   check("shutting one: no console errors", closeErrors.length === 0, closeErrors);
 }
 
+// Every section has a heading that opens and closes it. The three that start
+// open close the same way the others open, with a tap on a phone or a click
+// on a laptop, and come back with another.
+console.log("\nevery section opens and closes with its heading");
+for (const [label, viewport, touch, zoom] of [
+  ["phone", { width: 390, height: 900 }, true, 1],
+  ["laptop", { width: 1280, height: 900 }, false, 1],
+  ["laptop, UI Scale 1.25", { width: 1280, height: 900 }, false, 1.25],
+  ["laptop, UI Scale 0.85", { width: 1280, height: 900 }, false, 0.85],
+]) {
+  const CARETS = /[▸▾]/g;
+  const { out, errors } = await inPanel(browser, { viewport, touch, css: zoom === 1 ? "" : "body{zoom:" + zoom + "}" }, async (page) => {
+    const heads = () =>
+      page.evaluate(() =>
+        [...document.querySelectorAll("#modal [data-ar-sec] > [data-ar-sechead]")].map((h) => {
+          const b = h.nextElementSibling;
+          return {
+            title: (h.textContent || "").replace(/[▸▾]/g, "").trim(),
+            open: h.getAttribute("aria-expanded"),
+            tall: Math.round(h.getBoundingClientRect().height),
+            body: b ? getComputedStyle(b).display : "none",
+          };
+        }),
+      );
+    const first = await heads();
+    const press = async (title) => {
+      for (const h of await page.$$("#modal [data-ar-sec] > [data-ar-sechead]")) {
+        const t = ((await h.textContent()) || "").replace(CARETS, "").trim();
+        if (t !== title) continue;
+        await h.scrollIntoViewIfNeeded();
+        if (touch) await h.tap();
+        else await h.click();
+      }
+      await page.waitForTimeout(500);
+    };
+    const shut = [];
+    const back = [];
+    for (const title of ["Basics", "How it retries", "When to count a reply as bad"]) {
+      await press(title);
+      shut.push((await heads()).find((h) => h.title === title));
+      await press(title);
+      back.push((await heads()).find((h) => h.title === title));
+    }
+    return { first, shut, back };
+  });
+  const say = label + ": ";
+  const MAIN = ["Basics", "How it retries", "When to count a reply as bad"];
+  check(say + "all seven sections have a heading that opens and closes them", out.first.length === 7, out.first.map((h) => h.title));
+  check(say + "the three main ones start open", MAIN.every((t) => (out.first.find((h) => h.title === t) || {}).open === "true"), out.first);
+  check(say + "the other four start closed", out.first.filter((h) => h.open === "false").length === 4, out.first);
+  check(say + "pressing the heading closes each one", out.shut.every((h) => h && h.open === "false" && h.body === "none"), out.shut);
+  check(say + "and pressing it again opens it", out.back.every((h) => h && h.open === "true" && h.body !== "none"), out.back);
+  if (touch) check(say + "each heading is at least 32 pixels high", out.first.every((h) => h.tall >= 32), out.first.map((h) => h.tall));
+  check(say + "no console errors", errors.length === 0, errors);
+}
+
 console.log("\na note set that comes with it cannot be typed into");
 {
   // The same rule Auto Refine keeps for its built-in prompts. A set that comes
