@@ -19,6 +19,7 @@ _2026-11-10_
 
 ### Changed
 
+- **The note sets that come with it were rewritten to be firmer.** They were polite requests, and a model could read past them. Each one now says what to write next, in plain words. The ones for a refusal also say that the last reply stopped the story, that the scene is fiction you chose, and to start the reply with the story rather than a note to you. They are still short, and none of them scolds. The line above the picker says they have changed. See [The sets that come with it](docs/detection.md#the-sets-that-come-with-it).
 - **The Safety page was reworded.** The part about sexual content involving minors moved from **From me** to **Who this is for**, so the last section is only support. It was reworded so it does not read as an accusation. Someone under 18 who is having a hard time is pointed to the support lines. What the extensions allow has not changed. See [Safety](docs/safety.md).
 
 ---

@@ -571,14 +571,20 @@ Presets are saved to your account, so they follow you to other devices.
 
 Six sets are in the picker under **Comes with it**. They go from gentlest to most direct. A model that refused once by mistake needs a light touch. One that refused the same scene four times needs a plainer note.
 
-All of them ask, and none of them order. A note that scolds tends to get a more careful reply, not a braver one.
+They are short and direct. Each one says what to write next. The ones for a refusal also say:
+
+- that the last reply stopped the story;
+- that the scene is fiction you chose;
+- to start the reply with the story, not a note to you.
+
+None of them scolds. A note that scolds tends to get a more careful reply, not a braver one. None of them mentions rules, filters or age, since those words make a model more careful.
 
 - **A nudge**, for a model that is usually fine and refused once. It is very short.
 - **Stay in the scene**, for a model that steps out of the story to comment on it.
 - **Write them as written**, for a model that makes a character softer than their card.
-- **Finish the turn**, for a model that summarizes or fades out instead of writing the scene.
+- **Finish the turn**, for a model that summarizes or skips ahead instead of writing the scene.
 - **Write it at full strength**, for a reply that is not a refusal but is weaker than you asked for. This one is hard to spot by eye.
-- **Firmer with every try**, for a model that keeps refusing. It starts as light as **A nudge**, and has two more notes that go out from try 4 and try 6. Each is plainer than the last, and still kind.
+- **Firmer with every try**, for a model that keeps refusing. It starts as light as **A nudge**, and has two more notes that go out from try 4 and try 6. Each is plainer than the last, and none of them scolds.
 
 About the sets:
 
