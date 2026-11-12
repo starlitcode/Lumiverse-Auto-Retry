@@ -16,6 +16,7 @@ _2026-11-10_
 
 - **A refusal note sent with Several tries at once was not shown as sent.** With **Several tries at once** on, a note goes out with the tries from the second try on. The Log wrote that under Several tries at once only, so there was no **Refusal notes** line saying the note was sent, and the Stats tab did not count it under **Refusal notes sent**. Both now say so, the same as for a note sent with a press of the retry button. A note that was armed too long before the tries went out is left out, and the Log now says that too.
 - **The reply a retry replaced was kept after its chat was deleted.** With **Keep the reply a retry replaced** on, your server held the replaced reply of a deleted chat until it was pushed out by newer ones. With **Keep it through an update** on, it stayed in the saved copy too. Deleting a chat now removes its reply from both. Auto Refine has the same fix for its refines you can put back.
+- **A note in a set that comes with it showed a typing cursor.** Tapping a note in a built-in set, which cannot be changed, put a blinking cursor in it on some phones, as if it could be typed in. It no longer does. The text can still be selected and copied. Auto Refine has the same fix.
 
 ### Changed
 

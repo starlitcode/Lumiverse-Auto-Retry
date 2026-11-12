@@ -15559,10 +15559,20 @@ console.log("\na note in a built-in note set does not light up when tapped");
           return { focused: document.activeElement === ta, readOnly: ta.readOnly };
         });
         const still = same(before, after), stillHovered = same(before, hovered);
-        return { state, still, stillHovered, changed: still ? null : whereChanged(before, after) };
+        // Chromium draws no cursor in a read-only box, so a screenshot here
+        // cannot show one. Safari on a phone does draw it. So this reads the
+        // color the cursor is drawn in, with the box's own text color back.
+        const noCaret = await page.evaluate(() => {
+          const ta = document.querySelector("#modal [data-probe]");
+          ta.style.removeProperty("color");
+          const c = getComputedStyle(ta).caretColor;
+          return c === "transparent" || /^rgba\(\d+, \d+, \d+, 0\)$/.test(c) ? true : c;
+        });
+        return { state, still, stillHovered, noCaret, changed: still ? null : whereChanged(before, after) };
       });
       if (builtIn) {
         check(say + "the note is read-only and was focused", out.state.focused && out.state.readOnly, out.state);
+        check(say + "and it shows no typing cursor", out.noCaret === true, out);
         check(say + "it is drawn the same as before, with no glow", out.still, out);
         check(say + "and no mark while the pointer is on it", out.stillHovered, out);
       } else {

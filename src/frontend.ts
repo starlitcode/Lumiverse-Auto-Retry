@@ -16034,8 +16034,11 @@ export function setup(ctx: Ctx, opts?: any) {
           const ta = document.createElement("textarea");
           // Readable rather than disabled, so a line can still be copied out of a
           // set somebody wants to borrow wording from.
+          // No blinking cursor in it: it cannot be typed in, and a cursor says
+          // it can.
           if (held) {
             ta.readOnly = true;
+            ta.style.caretColor = "transparent";
             ta.style.opacity = "0.75";
             ta.title =
               "Part of " + notesOnBuiltIn + ", which cannot be changed. Save it as your own first.";
