@@ -6036,8 +6036,7 @@ export function setup(ctx, opts) {
                 // header offering to be dragged there would be a lie.
                 (draggable ? "cursor:move;touch-action:none" : "");
         // Two views, one panel. The log says what the extension did; the prompt
-        // view says what went to the model. They answer different questions and
-        // both are wanted in the same place.
+        // view says what went to the model. Both are wanted in the same place.
         const tabs = document.createElement("div");
         tabs.setAttribute("role", "tablist");
         // One row. Wrapping dropped the last tab onto a second line on a narrow
@@ -7844,8 +7843,8 @@ export function setup(ctx, opts) {
                 doConfirmed(go);
             return;
         }
-        // Armed instead. Keyed per button, since two of these on one panel are two
-        // different questions and arming one must not arm the other, and the arming
+        // Armed instead. Keyed per button, since two of these on one panel each
+        // ask about their own thing and arming one must not arm the other, and the arming
         // lapses so a press tomorrow does not land on one waiting since today.
         const waiting = armedFor.get(key);
         if (waiting) {
@@ -15410,13 +15409,12 @@ export function setup(ctx, opts) {
             panelSections.push(handle);
             const body = document.createElement("div");
             body.style.cssText = "display:none;flex-direction:column;gap:10px";
-            body.appendChild(sectionDesc("Save settings to a file or load them from one. The two lists are asked separately, because what you want out of a file and what you are willing to let a file change are different questions. An import fills in the settings above without saving, so you can review first: press Save to keep it, or close to discard.", false));
+            body.appendChild(sectionDesc("Save settings to a file or load them from one. The two lists are separate: one is what goes in a file, and the other is what a file can change. An import fills in the settings above without saving, so you can review first: press Save to keep it, or close to discard.", false));
             // Two lists, not one. They were the same ticks for a long time, which
             // meant exporting everything and then importing one part was two rounds
             // of ticking: set them for the export, unset them for the import, set
-            // them back the next time you export. What you want out of a file and
-            // what you are willing to let a file change are different questions and
-            // they get one answer each.
+            // them back the next time you export. So what goes in a file and what a
+            // file can change are ticked apart, one list each.
             //
             // Each list folds away under its own heading, shut to begin with, the
             // same as the two in Auto Refine. Ten ticks shown at once filled the
