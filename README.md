@@ -30,7 +30,7 @@ Also:
 
 - Every retry waits a little longer than the last, and longer again when the server says it is busy.
 - All the reasons share one retry limit, so no reply is retried more than you allow, and it can never loop forever.
-- (optional, off by default) From the second try, it can send several tries at once and keep the first reply that passes. See [Several tries at once](docs/tries-at-once.md).
+- (optional, off by default) From the second try, it can ask for several replies at the same time and keep the first good one. See [Several tries at once](docs/tries-at-once.md).
 - An impersonation you start with **Impersonate** is tried again when it errors, is refused, comes back blank, is broken or is clearly cut off. What you had typed is put back first. See [Impersonations](docs/detection.md#impersonations).
 
 ## Install
@@ -54,13 +54,21 @@ It works with no setup. Everything else is optional.
 
 ## Documentation
 
-- [When it retries](docs/detection.md): cut-off detection and accidental-refusal detection
-- [All settings](docs/settings.md): every option with its default, the panel, and turning it off
-- [Several tries at once](docs/tries-at-once.md): what it does, what it costs, and when it is used
-- [Buttons it clicks](docs/buttons.md): fixing the regenerate button, Regeneration Feedback, writing selectors
+**Start here**
+
+- [All settings](docs/settings.md): every option with its default, the settings panel, and turning it off
+- [When it retries](docs/detection.md): every check that starts a retry, such as errors, blank replies, cut-off replies, repeats and refusals
 - [The on-screen panel](docs/settings.md#the-on-screen-panel): the log, the prompt viewer and the stats
+
+**Going further**
+
+- [Several tries at once](docs/tries-at-once.md): asking for several replies at the same time, and what it costs
+- [Buttons it clicks](docs/buttons.md): fixing the regenerate button, Regeneration Feedback, writing selectors
 - [Import and export](docs/import-export.md): moving your setup between devices
-- [Reporting a bug](docs/troubleshooting.md)
+- [Reporting a bug](docs/troubleshooting.md): the debug report and common questions
+
+**About it**
+
 - [Safety](docs/safety.md): who this is for, the one setting that asks before it turns on, and what the retry loop can turn into
 - [Privacy](docs/privacy.md): what the extension can and cannot reach, what it keeps, and how to check any of it
 - [Security policy](SECURITY.md): how to report a security problem

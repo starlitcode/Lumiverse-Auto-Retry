@@ -192,7 +192,7 @@ const STREAM_BUF_MAX = 200000;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.26.1";
+const VERSION = "5.26.2";
 
 // Whether two saved settings hold the same values, whatever order their keys
 // were written in. A key left undefined counts as not there, the way it is
@@ -897,7 +897,7 @@ const SCHEMA: Group[] = [
         key: "tryAtOnce",
         label: "Several tries at once",
         type: "bool",
-        hint: "Off by default. From the second try, sends the same prompt several times at once and keeps the first reply that passes. Each one costs a whole reply.",
+        hint: "Off by default. From the second try on, asks for several replies at the same time and keeps the first good one. Each reply costs as much as a normal one.",
       },
       {
         key: "tryAtOnceMax",

@@ -8,6 +8,20 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.26.2
+
+_2026-11-13_
+
+### Changed
+
+- **Clearer explanations.** The hardest features are easier to follow:
+  - [Several tries at once](docs/tries-at-once.md) starts with a short summary, then goes step by step, says plainly which prompt it uses, and has a worked example.
+  - The documentation list in the README is in three groups: **Start here**, **Going further** and **About it**.
+  - The [Privacy](docs/privacy.md) page no longer repeats the full list of limits on a refusal note. It links to the list instead.
+  - A simpler hint under **Several tries at once**.
+
+---
+
 ## 5.26.1
 
 _2026-11-13_

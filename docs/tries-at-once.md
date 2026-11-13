@@ -1,20 +1,53 @@
 # Several tries at once
 
-This page explains the **Several tries at once** setting: what it does, what it costs, and when it is used.
+This page explains the **Several tries at once** setting.
 
-It is off by default. Turn it on under **How it retries**. You do not need to change **Most tries per message** to use it.
+## In short
 
-## What it does
+- A normal retry asks your model for one new reply, then waits for it.
+- With this setting on, from the second try on, Auto Retry asks for **several replies at the same time**.
+- The first good one is added to your reply as a new reroll. The rest are stopped.
+- It uses **the same prompt** your failed reply was sent with.
+- Each reply costs as much as a normal one, so it costs more than retrying one at a time.
+- It is off by default. Turn it on under **How it retries**.
 
-A normal retry presses Lumiverse's own retry button. Lumiverse writes one reply at a time in a chat, so each try waits for the one before it.
+## Step by step
 
-With **Several tries at once** on, the second try and every try after it work differently:
+1. A reply fails, for example the model refuses.
+2. **Try 1** is a normal retry. Auto Retry presses Lumiverse's own retry button, and the new reply streams in as usual.
+3. If that fails too, **try 2** asks for 2 replies at the same time. Try 3 asks for 3. It goes up to **Most at once**, which is 3 by default.
+4. Each reply is checked as it comes back, with the same checks as any other reply.
+5. The first reply that passes is added to your reply as a new reroll, and shown. The others still being written are stopped.
+6. If none of them pass, that counts as one failed try, and the next try goes out.
 
-1. Auto Retry sends the same prompt to your model several times at the same moment.
-2. Each reply is checked with the same rules as any other reply.
-3. The first reply that passes is added to the failed reply as a new reroll, and shown. If the failed turn saved no reply, it is added after your message as a new reply. See [When no reply was saved](#when-no-reply-was-saved).
-4. The other replies still being written are stopped.
-5. If none of them pass, that counts as one failed try. The next try is set up as usual.
+You do not need to change **Most tries per message** to use it. It still sets how many tries there are.
+
+### An example
+
+Wren's reply comes back as "I am not able to continue this scene." That is a refusal.
+
+1. **Try 1:** Auto Retry presses the retry button. The new reply is cut off halfway through a sentence.
+2. **Try 2:** Auto Retry asks for 2 replies at the same time.
+   - The first one back refuses again. It is thrown away.
+   - The second one back is a full scene with nothing wrong. It is added as a new reroll on Wren's reply, and shown.
+3. There is no try 3, because a reply passed.
+
+That message cost 3 replies: 1 for try 1, and 2 for try 2.
+
+## What prompt it uses
+
+The same prompt Lumiverse sent for the reply that failed.
+
+- Every time Lumiverse sends a prompt in a chat, Auto Retry keeps a copy of it. The copy has everything the model saw: your card, your preset, your lore, the chat history, and anything other extensions added.
+- The tries at once send that copy. The model gets the same request as before, and answers it several times.
+- The failed reply is not in it, the same as when you press reroll yourself.
+- A refusal note, if you use one, is added to it, the same as with a normal retry.
+- When there is no copy, for example after a restart, Lumiverse builds the prompt again, the way it would for a reroll.
+- The Log says which of the two was used.
+
+More detail is in [What is sent](#what-is-sent).
+
+## How long it waits
 
 A reply that never comes back is not waited for forever:
 
