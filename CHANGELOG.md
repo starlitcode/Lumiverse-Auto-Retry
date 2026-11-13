@@ -16,6 +16,10 @@ _2026-11-13_
 
 - **A rename could look like it saved your changes.** **Rename selected** changes only the name of a note preset, and keeps the notes it holds. Changes made since it was loaded stay on the panel and are not in it, but the message only said it was renamed, so the preset could look updated. When there are such changes, it now says **Only the name changed, so your changes are not saved in it yet.** Auto Refine has the same fix.
 
+### Changed
+
+- **The Import / export description was reworded.** It now says plainly what the two lists are: one is what goes in a file, and the other is what a file can change. What the lists do has not changed.
+
 ---
 
 ## 5.26.0
