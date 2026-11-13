@@ -181,7 +181,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.26.0";
+const VERSION = "5.26.1";
 // Whether two saved settings hold the same values, whatever order their keys
 // were written in. A key left undefined counts as not there, the way it is
 // when saved. Used to tell an update or a put-back that would change nothing.
@@ -14484,21 +14484,20 @@ export function setup(ctx, opts) {
             // Only the keys the preset actually carries. A set that comes with it holds the
             // notes and where they go, and nothing else, so measuring it against
             // every setting on the panel would call it changed the moment it loaded.
+            // Whether the settings now differ from what the named preset holds.
+            const changedSince = (name) => {
+                const p = name ? list().find((x) => x.name === name) || builtInNote(name) : null;
+                if (!p || !p.values)
+                    return false;
+                const now = cfg;
+                for (const k of Object.keys(p.values))
+                    if (settledJson(now[k]) !== settledJson(p.values[k]))
+                        return true;
+                return false;
+            };
             const syncDrift = () => {
                 const name = select.value;
-                const p = name ? list().find((x) => x.name === name) || builtInNote(name) : null;
-                if (!p || !p.values) {
-                    showLine(drift, false);
-                    return;
-                }
-                const now = cfg;
-                let moved = false;
-                for (const k of Object.keys(p.values)) {
-                    if (settledJson(now[k]) !== settledJson(p.values[k])) {
-                        moved = true;
-                        break;
-                    }
-                }
+                const moved = changedSince(name);
                 showLine(drift, moved);
                 if (moved)
                     drift.textContent = isBuiltIn(name)
@@ -14729,7 +14728,12 @@ export function setup(ctx, opts) {
                 if (readPick(kind) === cur)
                     writePick(kind, newName);
                 refreshSelect(newName);
-                status.textContent = "Renamed " + cur + " to " + newName + ".";
+                // A rename keeps what the preset holds. Changes made since it was
+                // loaded stay on the panel and are not in it, which a rename alone
+                // could hide, so it says so.
+                status.textContent =
+                    "Renamed " + cur + " to " + newName + "." +
+                        (changedSince(newName) ? " Only the name changed, so your changes are not saved in it yet." : "");
                 log("setup", "renamed a " + kindLabel + " preset to " + JSON.stringify(newName));
             });
             update.addEventListener("click", () => {

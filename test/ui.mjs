@@ -6820,10 +6820,28 @@ console.log("\npicking a preset loads it, so a save cannot land on the wrong one
         await frame();
       }
       const putBackSaid = bar.textContent;
-      return { ...res, updateSaid, putBackSaid };
+
+      // A rename keeps what the preset holds. With nothing changed it just
+      // says so. With changes on the panel, it says they are not in it.
+      const renameTo = async (name) => {
+        bar.querySelector('input[placeholder="A name for this preset"]').value = name;
+        press("Rename selected");
+        await frame();
+        return bar.textContent;
+      };
+      await forceLoad("Alpha");
+      const renamedClean = await renameTo("Gamma");
+      await setPhrases("CHANGED");
+      const renamedChanged = await renameTo("Delta");
+      await forceLoad("Delta");
+      const deltaHolds = phrases().value;
+      return { ...res, updateSaid, putBackSaid, renamedClean, renamedChanged, deltaHolds };
     }),
   );
 
+  check("a rename with nothing changed just says it was renamed", /Renamed Alpha to Gamma\./.test(out.renamedClean) && !/Only the name changed/.test(out.renamedClean), out.renamedClean);
+  check("a rename with changes on the panel says they are not saved in it", /Only the name changed, so your changes are not saved in it yet/.test(out.renamedChanged), out.renamedChanged);
+  check("and the renamed preset still holds what it held", out.deltaHolds === "ALPHA", out.deltaHolds);
   check("picking one loads its settings", out.onAlpha === "ALPHA", out);
   check("picking the other one loads that one instead", out.afterPick === "BETA", out);
   check(

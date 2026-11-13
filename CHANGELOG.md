@@ -8,6 +8,16 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.26.1
+
+_2026-11-13_
+
+### Fixed
+
+- **A rename could look like it saved your changes.** **Rename selected** changes only the name of a note preset, and keeps the notes it holds. Changes made since it was loaded stay on the panel and are not in it, but the message only said it was renamed, so the preset could look updated. When there are such changes, it now says **Only the name changed, so your changes are not saved in it yet.** Auto Refine has the same fix.
+
+---
+
 ## 5.26.0
 
 _2026-11-12_

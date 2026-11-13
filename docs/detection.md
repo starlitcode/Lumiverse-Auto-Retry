@@ -565,6 +565,7 @@ A set holds the notes and **Where the notes go**. It does not hold **Send a note
 - **Press Save to keep it.** A pick fills in the boxes but does not save them, the same as any other change in the panel. Close the panel without saving, and the set you had before comes back, in the boxes and in the picker.
 - **Put it back** appears after a pick replaced what you had. One press brings back what was there. It goes away once you save.
 - **Load it again** reloads the set you are on, which throws away your edits.
+- **Rename selected** changes only the name. Changes you have not saved with **Update selected** are not put in the set, and the message under the buttons says so.
 
 Presets are saved to your account, so they follow you to other devices.
 
