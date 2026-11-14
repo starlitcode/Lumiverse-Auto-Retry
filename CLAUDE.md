@@ -151,6 +151,18 @@ shown in Lumiverse.
   something used to do.
 - Keep the panel and GitHub pages organized: short sections with headings,
   and detail in `docs/` rather than in the README.
+- A complex feature is explained plainly, in this order: an **In short**
+  list, then the steps in order, then what it sends, then one example with
+  made-up names that follows a real case from start to end. Detail, limits
+  and edge cases come after. Run every example through the real code before
+  it goes in. The panel hint for the feature uses the same plain words.
+- A setting that only matters while one switch is on sits straight under
+  that switch, and shows only while it is on. It is not a card of its own.
+- The README lists the docs in three groups: **Start here**, **Going
+  further** and **About it**.
+- When docs are trimmed, a sentence repeated on more than one page is kept in
+  one place and linked from the others. Text that answers a real question
+  stays, even when it is long.
 - Every host call and every outside call handles failure and says what went
   wrong in words a user understands.
 
@@ -223,6 +235,9 @@ the changelog already explains.
 Write the Discord post each time a version is pushed to `stable`, and give it
 to the owner in the reply. A push that changes nothing users see, such as a
 change to CLAUDE.md, has no post.
+
+A change to the docs on GitHub can have a line of its own, saying "on
+GitHub", such as "**Changed: clearer explanations on GitHub.**"
 
 ## Phones and laptops
 
