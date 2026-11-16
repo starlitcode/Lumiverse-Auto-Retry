@@ -1660,6 +1660,45 @@ for (const [label, css, viewport] of [
 }
 
 // ---- keyboard reach, and the search ----
+// The preset bar's Delete is drawn in the danger color, the same as Auto
+// Refine's, so it reads as the careful one. Read from what is drawn: its
+// pixels lean red, and Update selected beside it does not. At every UI Scale
+// it also stays on the line it shares with Update selected.
+console.log("\nthe preset bar's Delete is drawn red and keeps its place");
+for (const scale of [0.9, 1, 1.25, 1.5]) {
+  const w = Math.round(390 / scale);
+  const { out, errors } = await inPanel(browser, { viewport: { width: 390, height: 900 }, touch: true, css: "body{zoom:" + scale + "} #modal{width:" + w + "px !important;max-width:none !important}", settings: { refusalNote: true } }, async (page) => {
+    await page.evaluate(async () => {
+      for (const h of document.querySelectorAll('#modal [role="button"][aria-expanded="false"]')) h.click();
+      await new Promise((r) => setTimeout(r, 600));
+    });
+    const find = (label) =>
+      page.evaluateHandle((label) => [...document.querySelectorAll('[data-ar-presets="notes"] button')].find((b) => b.textContent.trim() === label), label);
+    const del = (await find("Delete")).asElement();
+    const upd = (await find("Update selected")).asElement();
+    await del.scrollIntoViewIfNeeded();
+    await page.waitForTimeout(200);
+    const reddish = (png) => {
+      const px = decodePixels(png);
+      if (!px) return -1;
+      let n = 0;
+      for (const p of px) if (p.r - Math.max(p.g, p.b) > 30) n++;
+      return n;
+    };
+    const lines = await page.evaluate(() => {
+      const bs = [...document.querySelectorAll('[data-ar-presets="notes"] button')];
+      const top = (t) => Math.round(bs.find((b) => b.textContent.trim() === t).getBoundingClientRect().top);
+      return { del: top("Delete"), upd: top("Update selected") };
+    });
+    return { delRed: reddish(await del.screenshot()), updRed: reddish(await upd.screenshot()), lines };
+  });
+  const say = "UI Scale " + scale + ": ";
+  check(say + "Delete is drawn red", out.delRed >= 15, out);
+  check(say + "and Update selected is not", out.updRed < 5, out);
+  check(say + "Delete stays on the line with Update selected", Math.abs(out.lines.del - out.lines.upd) <= 2, out.lines);
+  check(say + "no console errors", errors.length === 0, errors);
+}
+
 console.log("\nkeyboard and search");
 {
   const { out, errors } = await inPanel(browser, {}, (page) =>

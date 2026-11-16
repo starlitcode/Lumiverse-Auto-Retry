@@ -181,7 +181,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.26.2";
+const VERSION = "5.26.3";
 // Whether two saved settings hold the same values, whatever order their keys
 // were written in. A key left undefined counts as not there, the way it is
 // when saved. Used to tell an update or a put-back that would change nothing.
@@ -14395,6 +14395,14 @@ export function setup(ctx, opts) {
             pickRow.appendChild(undoBtn);
             const update = smallBtn(btn("Update selected", false));
             const del = smallBtn(btn("Delete", false));
+            // A light wash of the danger color with a softer edge and a red label,
+            // the same as Auto Refine's Delete. The label mixes the danger color
+            // with the theme's text color, so it stays red and still reads against
+            // the wash on a dark theme and a light one. Set as its tone, so hovering
+            // it does not put the plain button color back.
+            del.style.color = "color-mix(in srgb,var(--lumiverse-danger,#ef4444) 70%,var(--lumiverse-text,#eee))";
+            del.__setTone("color-mix(in srgb,var(--lumiverse-danger,#ef4444) 12%,transparent)", "color-mix(in srgb,var(--lumiverse-danger,#ef4444) 22%,transparent)");
+            del.style.borderColor = "color-mix(in srgb,var(--lumiverse-danger,#ef4444) 45%,transparent)";
             const manageRow = rowBox();
             manageRow.appendChild(update);
             manageRow.appendChild(del);

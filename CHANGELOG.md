@@ -8,6 +8,16 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.26.3
+
+_2026-11-15_
+
+### Changed
+
+- **A softer red look for Delete.** The note presets' Delete has a light red wash and red text, so it stands apart from the other buttons. It was a plain gray button. Auto Refine's Delete looks the same.
+
+---
+
 ## 5.26.2
 
 _2026-11-13_
