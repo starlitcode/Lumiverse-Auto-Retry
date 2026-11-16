@@ -425,8 +425,16 @@ try {
 // the theme checks below and by the one that swaps the theme underneath a panel
 // that is already drawn.
 const CONTRAST_PROBE = () => {
+  // The channels of a computed color, 0 to 255, then alpha. A color made with
+  // color-mix() is reported as color(srgb r g b / a), with each channel from
+  // 0 to 1, and read as 0 to 1 it would measure as nearly black.
+  const nums = (c) => {
+    const n = (String(c).match(/[\d.]+/g) || []).map(Number);
+    if (/^\s*color\(\s*srgb/i.test(String(c))) return [n[0] * 255, n[1] * 255, n[2] * 255].concat(n.slice(3));
+    return n;
+  };
   const lum = (c) => {
-    const n = c.match(/[\d.]+/g).map(Number);
+    const n = nums(c);
     const f = (v) => {
       v /= 255;
       return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
@@ -447,7 +455,7 @@ const CONTRAST_PROBE = () => {
     let p = el;
     while (p) {
       const cs = getComputedStyle(p);
-      const n = (cs.backgroundColor.match(/[\d.]+/g) || []).map(Number);
+      const n = nums(cs.backgroundColor);
       let c = n.slice(0, 3);
       let a = n[3] === undefined ? 1 : n[3];
       const stop = (cs.backgroundImage || "").match(/rgba?\([^)]*\)/);
