@@ -181,7 +181,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.26.3";
+const VERSION = "5.26.4";
 // Whether two saved settings hold the same values, whatever order their keys
 // were written in. A key left undefined counts as not there, the way it is
 // when saved. Used to tell an update or a put-back that would change nothing.
@@ -2267,11 +2267,15 @@ function loopVerdict(visible, runOn = true) {
             continue;
         return true;
     }
+    // A dot or a slash inside a word, as in a name like Mill.io or in and/or,
+    // is not punctuation, so it does not break the run. A mark at the end of a
+    // word does. The reply's last word may end on a mark and still close the
+    // run, so a list of words that ends with a full stop is caught as well.
     let run = 0;
-    for (const t of plain.split(/[ \t]+|(\n)/)) {
-        if (!t)
-            continue;
-        run = /^[\p{Script=Latin}\p{Script=Greek}\p{Script=Cyrillic}\p{N}]+(?:['\u2019-][\p{Script=Latin}\p{Script=Greek}\p{Script=Cyrillic}\p{N}]+)*$/u.test(t) ? run + 1 : 0;
+    const tokens = plain.trimEnd().split(/[ \t]+|(\n)/).filter((t) => !!t);
+    for (let i = 0; i < tokens.length; i++) {
+        const t = i === tokens.length - 1 ? tokens[i].replace(/\p{P}+$/u, "") : tokens[i];
+        run = /^[\p{Script=Latin}\p{Script=Greek}\p{Script=Cyrillic}\p{N}]+(?:['\u2019\-./][\p{Script=Latin}\p{Script=Greek}\p{Script=Cyrillic}\p{N}]+)*$/u.test(t) ? run + 1 : 0;
     }
     if (runOn && run >= LOOP_RUN_ON)
         return true;

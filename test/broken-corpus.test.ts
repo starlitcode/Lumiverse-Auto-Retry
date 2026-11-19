@@ -200,12 +200,19 @@ describe("the prompt's format leaked into the reply", () => {
 
 describe("stuck repeating or rambling", () => {
   const runOn = Array.from({ length: 170 }, (_, i) => ["quiet", "still", "settled", "calm", "resting", "steady", "level", "even"][i % 8] + (i % 3 ? "" : "ly")).join(" ");
+  // A list of terms with no sentences, the way a reply can fall apart into
+  // the names of things. Some of the names have a dot or a slash inside them,
+  // which is not punctuation.
+  const terms = ["seed trays", "cold frame", "Bloom.ly", "mulch depth", "pH/EC meter", "drip line", "Grow.io", "root zone", "potash", "frost cloth", "seed bank", "Sprout.app"];
+  const termList = Array.from({ length: 120 }, (_, i) => terms[i % terms.length] + " " + ["index", "chart", "guide", "kit", "log"][i % 5]).join(" ");
   const broken: Array<[string, string]> = [
     ["a phrase repeated to the end", scene + "the lantern is the lantern is ".repeat(14) + "the lan"],
     ["one word repeated to the end", scene + "Not here, here, " + "here, ".repeat(80)],
     ["a sentence repeated to the end", scene + "She looked at the door and waited for him. ".repeat(12)],
     ["a short pattern repeated hundreds of times", scene + "The total was 3." + "1.".repeat(120) + " as a fraction."],
     ["words running on with no punctuation to the end", scene + runOn],
+    ["a list of terms with dotted names in it, running on to the end", scene + termList],
+    ["a list of terms that ends with a full stop", scene + termList + "."],
     ["a loop inside dialogue that never closes", scene + "\"I do not know, " + "I do not know, ".repeat(25)],
     ["a loop inside asterisks that never close", scene + "*She ran and " + "she ran and ".repeat(25)],
     ["a pattern of digits after a colon", scene + "The total was: " + "1.".repeat(120)],
@@ -223,6 +230,16 @@ describe("stuck repeating or rambling", () => {
     ["a long cycle of sentences on their own lines", scene + "Check the strap.\nCheck the coat on the peg.\nCheck the mule.\nCheck the gate is shut.\nCheck the lamp.\n".repeat(5)],
   ];
   const fine: Array<[string, string]> = [
+    [
+      "a long scene that names websites with dots and has commas now and then",
+      scene +
+        "she checked the planting notes on Grow.io before breakfast, then the seed list on Bloom.ly that her sister kept for the shared beds, " +
+        "and after that she walked down past the cold frames where the lettuce had bolted in the heat of the week before, " +
+        "pulled the worst of it and dropped it in the barrow, found the drip line kinked again under the gooseberry bush, " +
+        "straightened it with her thumb while the tap ran, and wrote a line in the log about watering the squash at dusk instead of noon, " +
+        "because Sprout.app kept saying the soil would hold it better then and she had stopped arguing with it, " +
+        "and when the rain finally came in from the hill she pulled the frost cloth over the beans and went in to dry off.",
+    ],
     ["a chant with the scene carrying on after it", scene + "\"Run, run, run, run, run, run!\" Tamsin shouted, and they ran for the trees."],
     ["a stammer", scene + "\"I-I-I didn't mean it,\" he said."],
     ["a scream held long", scene + "\"Noooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo!\""],

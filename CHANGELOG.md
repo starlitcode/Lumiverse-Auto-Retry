@@ -8,6 +8,16 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.26.4
+
+_2026-11-19_
+
+### Fixed
+
+- **A reply that fell apart into a list of terms could be missed.** A reply can turn into hundreds of words with no sentences, such as the names of tools and methods one after another. **It got stuck repeating or rambling** looks for 150 words in a row with no punctuation, but a name with a dot inside it, such as `Bloom.ly`, counted as punctuation and started the count again. A list that ended with a full stop was missed too. A dot or a slash inside a word no longer counts, and the last word can end with a full stop. Auto Refine has the same fix. See [Stuck repeating or rambling](docs/detection.md#stuck-repeating-or-rambling).
+
+---
+
 ## 5.26.3
 
 _2026-11-15_

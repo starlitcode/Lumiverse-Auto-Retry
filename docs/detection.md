@@ -161,7 +161,9 @@ Any one of these counts:
   - It counts as stuck at 6, with at least 40 words in the sentences said again.
   - So a plan written out twice, a refrain between verses, or a line said three times for effect is left alone.
 - **A short pattern repeated hundreds of times.** A pattern of 2 to 4 characters with a letter or a digit in it, repeated at least 60 times in a row, such as `1.1.1.1.` A pattern of letters only, such as `haha`, needs 150 repeats.
-- **A run-on to the end.** At least 150 words in a row on one line with no punctuation, reaching the end of the reply.
+- **A run-on to the end.** At least 150 words in a row on one line with no punctuation, reaching the end of the reply. This is how a reply looks when it falls apart into a list of terms, such as `seed trays cold frame Bloom.ly mulch depth drip line ...`.
+  - A dot or a slash inside a word, as in a name like `Bloom.ly` or in `and/or`, is not punctuation.
+  - The last word can end with a full stop, and the run still counts.
 
 **What it leaves alone:**
 
