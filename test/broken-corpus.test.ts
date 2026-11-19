@@ -131,6 +131,15 @@ describe("the thinking, judged on its own", () => {
     "然后system拒绝了道路data处理 cartQ 心理model训练集准确率 lampFRS 桥已经断了 stoveTL 没有人知道 strap路径 " +
     "awlRMB 数据集验证结果为 barnLWN 他们的mapping继续 muleQ 水还在不断上涨 pegTRV 天也越来越黑 coatFRN 结果 ";
   const loop = plan + "Wait, let me check the bridge again. ".repeat(14);
+  // A list of terms with no sentences, the thinking's version of a reply
+  // that falls apart. Nothing in it repeats in a short cycle.
+  const nouns = ["awl", "strap", "Mule.io", "barn", "peg", "stove/flue", "cart", "harness", "bridle", "gate", "lamp", "Barn.app", "trough"];
+  const kinds = ["log", "kit", "guide", "index", "gauge", "table", "scale", "notes", "list", "map", "plan"];
+  const terms = (n: number, from = 0) =>
+    Array.from({ length: n }, (_, k) => {
+      const i = k + from;
+      return nouns[(i * 7) % 13] + " " + kinds[(i * 3) % 11];
+    }).join(" ");
   const caught: Array<[string, string, string, string]> = [
     ["garbled thinking sent apart from the reply", reply, plan + plan + jumble.repeat(3), "thinking was garbled"],
     ["garbled thinking written into the reply", "<think>" + plan + plan + jumble.repeat(3) + "</think>\n\n" + reply, "", "thinking was garbled"],
@@ -143,6 +152,7 @@ describe("the thinking, judged on its own", () => {
       plan + "I should write the reply. I should write it now. Write it.\n".repeat(9) + "Fine. Tamsin answers and sits by the stove.",
       "thinking got stuck repeating",
     ],
+    ["thinking that falls apart into a list of terms", reply, plan + terms(160), "thinking got stuck repeating"],
     [
       "a loop after a draft of the reply's first line, written into the reply",
       "<think>" + plan + "Draft: " + reply + " " + "Wait, let me check the bridge again. ".repeat(14) + "</think>\n\n" + reply,
@@ -160,6 +170,8 @@ describe("the thinking, judged on its own", () => {
       Array.from({ length: 170 }, (_, i) => ["keep", "her", "voice", "short", "and", "tired", "then", "the", "coat", "goes", "on", "a", "peg", "by", "door"][i % 15] + (i % 4 ? "" : "s")).join(" "),
     ],
     ["a reply whose first line is drafted in the thinking", reply, plan + "Draft: \"It was out,\" Tamsin said, and sat down by the stove. Good."],
+    ["a list of terms in the thinking, shorter than a reply's limit times two", reply, plan + terms(130)],
+    ["notes with no punctuation over many short lines", reply, plan + Array.from({ length: 30 }, (_, i) => terms(6 + (i % 3), i * 9)).join("\n")],
   ];
   for (const [label, content, thought, why] of caught)
     test("caught: " + label, () => expect(replyProblem(content, thought, cfg)).toBe(why));

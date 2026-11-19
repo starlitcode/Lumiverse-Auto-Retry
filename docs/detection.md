@@ -189,7 +189,7 @@ A model stuck in a loop runs until it is cut off, so it does not close a quotati
 A model can break down in its thinking and still write a reply that looks fine. Two switches check the thinking on its own, both on by default, under **When to count a reply as bad**, in **Broken replies**:
 
 - **Its thinking was garbled** (`retryOnGarbledThinking`) uses the checks in [Garbled replies](#garbled-replies): a jumble of languages, words with no spaces, and broken characters.
-- **Its thinking got stuck repeating** (`retryOnLoopThinking`) uses the checks in [Stuck repeating or rambling](#stuck-repeating-or-rambling): a loop that reaches the end of the thinking, a few sentences said again and again, and a short pattern repeated hundreds of times.
+- **Its thinking got stuck repeating** (`retryOnLoopThinking`) uses the checks in [Stuck repeating or rambling](#stuck-repeating-or-rambling): a loop that reaches the end of the thinking, a few sentences said again and again, a short pattern repeated hundreds of times, and a run of words with no punctuation. The run has to be at least 300 words on one line, twice what a reply needs.
 
 Both retry even when the reply after the thinking looks fine. Turn one off to keep that reply. Somebody who had turned off **It was garbled** or **It got stuck repeating or rambling** before these switches came finds the thinking switch off too.
 
@@ -201,7 +201,7 @@ They check two places, each on its own:
 **What they leave alone in the thinking**, on top of what the reply's checks leave alone:
 
 - a switch to another alphabet. Some models think in Chinese or switch partway through.
-- a long run of words with no punctuation. A plan is often written that way.
+- a run of words with no punctuation shorter than 300 words, or one split over several lines. A plan is often written as notes like that.
 - the same line written a few times, when the thinking goes on after it
 - a draft of the reply's first line
 

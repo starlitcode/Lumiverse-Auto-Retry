@@ -1078,7 +1078,7 @@ const SCHEMA: Group[] = [
         run: "broken",
         label: "Its thinking got stuck repeating",
         type: "bool",
-        hint: "Retry when the thinking repeats a phrase to its end, or a few sentences again and again, even when the reply after it looks fine.",
+        hint: "Retry when the thinking repeats a phrase to its end, says a few sentences again and again, or runs on with no punctuation, even when the reply looks fine.",
       },
       {
         key: "retryOnEmpty",
@@ -2329,8 +2329,13 @@ const LOOP_MAX_UNIT = 12;
 const LOOP_CHAR_REPEATS = 60;
 const LOOP_LETTER_REPEATS = 150;
 const LOOP_RUN_ON = 150;
+// The same run in the thinking needs twice as many words. A plan is often
+// written as notes with no punctuation, but over several lines and far
+// shorter than this, so a run this long on one line is the model falling
+// apart rather than planning.
+const LOOP_RUN_ON_THINKING = 300;
 
-function loopVerdict(visible: string, runOn: boolean = true): boolean {
+function loopVerdict(visible: string, runOn: number = LOOP_RUN_ON): boolean {
   const plain = withoutCode(visible);
   const chars = new RegExp("([^\\s]{2,4}?)\\1{" + (LOOP_CHAR_REPEATS - 1) + ",}", "gu");
   for (const hit of plain.matchAll(chars)) {
@@ -2353,7 +2358,7 @@ function loopVerdict(visible: string, runOn: boolean = true): boolean {
     const t = i === tokens.length - 1 ? tokens[i].replace(/\p{P}+$/u, "") : tokens[i];
     run = /^[\p{Script=Latin}\p{Script=Greek}\p{Script=Cyrillic}\p{N}]+(?:['\u2019\-./][\p{Script=Latin}\p{Script=Greek}\p{Script=Cyrillic}\p{N}]+)*$/u.test(t) ? run + 1 : 0;
   }
-  if (runOn && run >= LOOP_RUN_ON) return true;
+  if (run >= runOn) return true;
   if (sentenceLoop(plain)) return true;
   // Each word with where it starts and ends, so a loop can be placed in the
   // text. A mark on its own, such as a lone quotation mark, is not a word.
@@ -3958,7 +3963,7 @@ function thinkingProblem(content: string, thought: string, cfg: any): string {
     const text = stripMarkup(part);
     if (cfg.retryOnGarbledThinking && (garbledVerdict(text) || soupVerdict(text) || gluedVerdict(text)))
       return THINKING_GARBLED_WHY;
-    if (cfg.retryOnLoopThinking && loopVerdict(text, false)) return THINKING_LOOP_WHY;
+    if (cfg.retryOnLoopThinking && loopVerdict(text, LOOP_RUN_ON_THINKING)) return THINKING_LOOP_WHY;
   }
   return "";
 }

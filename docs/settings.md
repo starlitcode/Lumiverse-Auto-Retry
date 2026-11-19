@@ -300,7 +300,7 @@ These are the defaults for a new install. They are in the `CONFIG` block at the 
 | retryOnGarbledThinking | true | Retry when the thinking turns into a jumble, words with no spaces, or broken characters, even when the reply after it looks fine. A switch to another alphabet is left alone in the thinking. See [The thinking](detection.md#the-thinking). |
 | retryOnLeak | true | Retry a reply that runs into the prompt's own markers, such as `[/INST]`, or a character card's data. See [Leaked prompt format](detection.md#leaked-prompt-format). |
 | retryOnLoop | true | Retry a reply that repeats a word or phrase over and over to the end, says a few sentences again and again, or runs on for hundreds of words with no punctuation. See [Stuck repeating or rambling](detection.md#stuck-repeating-or-rambling). |
-| retryOnLoopThinking | true | Retry when the thinking repeats a word or phrase over and over to its end, or says a few sentences again and again, even when the reply after it looks fine. See [The thinking](detection.md#the-thinking). |
+| retryOnLoopThinking | true | Retry when the thinking repeats a word or phrase over and over to its end, says a few sentences again and again, or runs on for 300 words with no punctuation, even when the reply after it looks fine. See [The thinking](detection.md#the-thinking). |
 | retryOnTruncated | true | Retry a reply that ends mid-sentence. |
 | retryOnNoPunct | true | Retry a reply that stops on a word with nothing after it. Punctuation in any script counts as an ending, and so does an emoji. |
 | retryOnShort | false | Retry short replies. Off by default, because short replies are often fine. |
