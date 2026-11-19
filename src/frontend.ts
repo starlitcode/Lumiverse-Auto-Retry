@@ -3927,9 +3927,10 @@ function isOwnHardFailure(text: any, cfg?: any): boolean {
 // The thinking judged on its own, with the reply's checks for a jumble and
 // for a loop. Each part of the thinking is judged apart: the thinking sent
 // separately, and the thinking written into the reply in front of it, so a
-// loop has to reach the end of its own part. Two of the reply's rules are left
-// out, since thinking does these on purpose: a switch to another alphabet,
-// which some models think in, and a long run of words with no punctuation.
+// loop has to reach the end of its own part. A switch to another alphabet is
+// left out, since some models think in another language. A run of words with
+// no punctuation needs LOOP_RUN_ON_THINKING words rather than the reply's
+// LOOP_RUN_ON, since a plan is often written as notes.
 const THINKING_GARBLED_WHY = "thinking was garbled";
 const THINKING_LOOP_WHY = "thinking got stuck repeating";
 // Tags and control tokens around the thinking, which are not words in it.
