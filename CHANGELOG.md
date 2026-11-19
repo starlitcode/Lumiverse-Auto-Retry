@@ -14,8 +14,11 @@ _2026-11-19_
 
 ### Fixed
 
-- **A reply that fell apart into a list of terms could be missed.** A reply can turn into hundreds of words with no sentences, such as the names of tools and methods one after another. **It got stuck repeating or rambling** looks for 150 words in a row with no punctuation, but a name with a dot inside it, such as `Bloom.ly`, counted as punctuation and started the count again. A list that ended with a full stop was missed too. A dot or a slash inside a word no longer counts, and the last word can end with a full stop. Auto Refine has the same fix. See [Stuck repeating or rambling](docs/detection.md#stuck-repeating-or-rambling).
-- **Thinking that fell apart into a list of terms was not caught.** **Its thinking got stuck repeating** left every run of words with no punctuation alone, since a plan is often written as notes. It now catches a run of 300 words on one line, twice what a reply needs. Shorter notes, and notes over several lines, are still left alone. See [The thinking](docs/detection.md#the-thinking).
+- **A reply that fell apart into a list of terms could be missed.** A reply can turn into hundreds of words with no sentences, such as the names of tools and methods one after another. **It got stuck repeating or rambling** looks for 150 words in a row with no punctuation, but a name with a dot inside it, such as `Bloom.ly`, counted as punctuation and started the count again. A list that ended with a period was missed too. A dot or a slash inside a word no longer counts, and the last word can end with a period. Auto Refine has the same fix. See [Stuck repeating or rambling](docs/detection.md#stuck-repeating-or-rambling).
+
+### Changed
+
+- **Thinking that falls apart into a list of terms is caught.** **Its thinking got stuck repeating** left every run of words with no punctuation alone, since a plan is often written as notes. It now catches a run of 300 words on one line, twice what a reply needs. Shorter notes, and notes over several lines, are still left alone. See [The thinking](docs/detection.md#the-thinking).
 
 ---
 

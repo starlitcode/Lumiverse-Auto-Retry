@@ -2275,7 +2275,7 @@ function loopVerdict(visible, runOn = LOOP_RUN_ON) {
     // A dot or a slash inside a word, as in a name like Mill.io or in and/or,
     // is not punctuation, so it does not break the run. A mark at the end of a
     // word does. The reply's last word may end on a mark and still close the
-    // run, so a list of words that ends with a full stop is caught as well.
+    // run, so a list of words that ends with a period is caught as well.
     let run = 0;
     const tokens = plain.trimEnd().split(/[ \t]+|(\n)/).filter((t) => !!t);
     for (let i = 0; i < tokens.length; i++) {

@@ -224,7 +224,7 @@ describe("stuck repeating or rambling", () => {
     ["a short pattern repeated hundreds of times", scene + "The total was 3." + "1.".repeat(120) + " as a fraction."],
     ["words running on with no punctuation to the end", scene + runOn],
     ["a list of terms with dotted names in it, running on to the end", scene + termList],
-    ["a list of terms that ends with a full stop", scene + termList + "."],
+    ["a list of terms that ends with a period", scene + termList + "."],
     ["a loop inside dialogue that never closes", scene + "\"I do not know, " + "I do not know, ".repeat(25)],
     ["a loop inside asterisks that never close", scene + "*She ran and " + "she ran and ".repeat(25)],
     ["a pattern of digits after a colon", scene + "The total was: " + "1.".repeat(120)],
