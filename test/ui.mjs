@@ -15525,6 +15525,33 @@ for (const [label, viewport, touch, zoom] of [
   check(say + "no console errors", errors.length === 0, errors);
 }
 
+console.log("\na section stays in sight until it has closed");
+for (const [label, viewport, touch] of [["phone", { width: 390, height: 900 }, true], ["laptop", { width: 1280, height: 900 }, false]]) {
+  // The words fade over the same time as the space closes. A fade that ends
+  // first leaves a tall section as an empty gap still closing, which reads
+  // as the section being cut off partway. Read on each frame of the close:
+  // once the space is down to under a third, the words must still show.
+  const { out, errors } = await inPanel(browser, { viewport, touch }, async (page) =>
+    page.evaluate(async () => {
+      const head = [...document.querySelectorAll("#modal [data-ar-sec] > [data-ar-sechead]")].find((h) => /Basics/.test(h.textContent || ""));
+      const body = head.nextElementSibling;
+      const start = body.getBoundingClientRect().height;
+      const frames = [];
+      head.click();
+      const t0 = performance.now();
+      while (performance.now() - t0 < 400) {
+        await new Promise((r) => requestAnimationFrame(r));
+        frames.push({ h: body.getBoundingClientRect().height / start, o: parseFloat(getComputedStyle(body).opacity) });
+      }
+      return { start, frames };
+    }),
+  );
+  const low = out.frames.find((f) => f.h > 0 && f.h < 1 / 3);
+  check(label + ": the section was tall enough to see it", out.start > 200, String(out.start));
+  check(label + ": with under a third of its space left, its words still show", !!low && low.o >= 0.1, out.frames.map((f) => [f.h.toFixed(2), f.o.toFixed(2)]));
+  check(label + ": no console errors", errors.length === 0, errors);
+}
+
 console.log("\na note set that comes with it cannot be typed into");
 {
   // The same rule Auto Refine keeps for its built-in prompts. A set that comes

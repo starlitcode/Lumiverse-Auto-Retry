@@ -181,7 +181,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.26.4";
+const VERSION = "5.26.5";
 // Whether two saved settings hold the same values, whatever order their keys
 // were written in. A key left undefined counts as not there, the way it is
 // when saved. Used to tell an update or a put-back that would change nothing.
@@ -7639,14 +7639,16 @@ export function setup(ctx, opts) {
             // movements because this one carries the page with it, and the same
             // distance over more frames is a smaller step in each.
             //
-            // The words fade and slide 4px up faster than the space closes, so they
-            // are gone before the row is squeezed, and nothing is seen cut in half.
+            // The words fade and slide 4px up over the same time as the space
+            // closes, so they are seen until the end. A fade that ends first leaves
+            // a tall fold as an empty gap that is still closing, which reads as the
+            // fold being cut off partway.
             const ease = "220ms ease-out";
             node.style.transition =
                 "height " + ease + ",margin-bottom " + ease + ",margin-top " + ease +
                     ",padding-top " + ease + ",padding-bottom " + ease +
                     ",border-top-width " + ease + ",border-bottom-width " + ease +
-                    ",opacity 140ms ease-out,transform 160ms ease-out";
+                    ",opacity " + ease + ",transform " + ease;
             node.style.height = "0px";
             node.style.opacity = "0";
             node.style.transform = "translateY(-4px)";

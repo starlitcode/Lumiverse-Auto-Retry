@@ -8,6 +8,16 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.26.5
+
+_2026-11-24_
+
+### Fixed
+
+- **A section closing could look cut off partway.** Its words faded out before its space finished closing, so a tall section left an empty gap that was still closing. The words now fade over the same time as the space closes, so they stay in sight until it is shut. Auto Refine has the same fix.
+
+---
+
 ## 5.26.4
 
 _2026-11-19_
