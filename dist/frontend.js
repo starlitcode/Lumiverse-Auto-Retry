@@ -14014,6 +14014,8 @@ export function setup(ctx, opts) {
             const ta = document.createElement("textarea");
             ta.value = text;
             ta.style.cssText = "position:fixed;top:-1000px;left:-1000px;opacity:0";
+            // Read-only, so focusing it to copy does not raise a phone's keyboard.
+            ta.readOnly = true;
             (document.body || document.documentElement).appendChild(ta);
             ta.focus();
             ta.select();
