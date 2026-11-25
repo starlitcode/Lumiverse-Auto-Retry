@@ -9619,6 +9619,82 @@ export function setup(ctx: Ctx, opts?: any) {
       return false;
     }
   }
+
+  // Lumiverse draws a pop-up's frame and shade with no motion. This fades
+  // them in with a 4 pixel slide. Closed with the function this returns, they
+  // fade out before they go. Closed by Lumiverse, with its X, a tap outside or
+  // Escape, they are already gone, so a copy that cannot be pressed fades out
+  // in their place.
+  const modalGhosts = new Set<HTMLElement>();
+  function easeModal(modal: any): () => void {
+    const MS = 180;
+    let frame: HTMLElement | null = null;
+    let shade: HTMLElement | null = null;
+    try {
+      const body = (modal.root as HTMLElement).parentElement;
+      frame = body ? body.parentElement : null;
+      shade = frame ? frame.parentElement : null;
+      // Only Lumiverse's own shade, laid over the whole page, is moved.
+      if (!shade || shade.parentElement !== document.body || getComputedStyle(shade).position !== "fixed") frame = shade = null;
+    } catch (_) {
+      frame = shade = null;
+    }
+    let leaving = false;
+    const play = (box: Element | null, keys: Keyframe[]) => {
+      try {
+        return box ? box.animate(keys, { duration: MS, easing: "ease-out", fill: "both" }) : null;
+      } catch (_) {
+        return null;
+      }
+    };
+    const IN = [{ opacity: 0, transform: "translateY(4px)" }, { opacity: 1, transform: "none" }];
+    const OUT = [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateY(4px)" }];
+    if (shade && frame && !noMotion()) {
+      play(shade, [{ opacity: 0 }, { opacity: 1 }]);
+      play(frame, IN);
+    }
+    const ghostOut = () => {
+      if (!shade || tornDown || noMotion()) return;
+      try {
+        const copy = shade.cloneNode(true) as HTMLElement;
+        for (const n of Array.from(copy.querySelectorAll("[data-spindle-modal],[data-spindle-extension-root]")))
+          ["data-spindle-modal", "data-spindle-extension-root"].forEach((a) => n.removeAttribute(a));
+        copy.setAttribute("aria-hidden", "true");
+        copy.setAttribute("inert", "");
+        copy.style.pointerEvents = "none";
+        document.body.appendChild(copy);
+        modalGhosts.add(copy);
+        const gone = () => {
+          modalGhosts.delete(copy);
+          copy.remove();
+        };
+        const a = play(copy, [{ opacity: 1 }, { opacity: 0 }]);
+        play(copy.firstElementChild, [{ transform: "none" }, { transform: "translateY(4px)" }]);
+        if (a) a.onfinish = gone;
+        setTimeout(gone, MS + 200);
+      } catch (_) {}
+    };
+    try {
+      modal.onDismiss(() => {
+        if (!leaving) ghostOut();
+      });
+    } catch (_) {}
+    return () => {
+      if (leaving) return;
+      leaving = true;
+      const done = () => {
+        try {
+          modal.dismiss();
+        } catch (_) {}
+      };
+      if (!shade || !frame || noMotion()) return done();
+      shade.style.pointerEvents = "none";
+      const a = play(shade, [{ opacity: 1 }, { opacity: 0 }]);
+      play(frame, OUT);
+      if (a) a.onfinish = done;
+      setTimeout(done, MS + 200);
+    };
+  }
   // Reduce motion, put on the page's root, with the rules that read it. Every
   // part of ours carries data-ar-ui, the float button carries data-ar-float,
   // and the drawer panel carries data-ar-panel, so one rule reaches all of it.
@@ -17465,6 +17541,7 @@ export function setup(ctx: Ctx, opts?: any) {
       });
       modalHandle = modal;
       modalRoot = modal.root;
+      easeModal(modal);
       // The host owns this element, so it is marked rather than renamed.
       markOwnUI(modal.root);
 
@@ -17798,6 +17875,8 @@ export function setup(ctx: Ctx, opts?: any) {
 
   return () => {
     tornDown = true;
+    for (const g of Array.from(modalGhosts)) g.remove();
+    modalGhosts.clear();
     // A pop-up still fading out goes now, not when its timer runs.
     for (const node of Array.from(leaving)) {
       leaving.delete(node);

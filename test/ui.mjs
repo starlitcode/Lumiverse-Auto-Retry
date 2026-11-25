@@ -15575,6 +15575,38 @@ console.log("\nno scroll bar at the side of the settings");
   check("no console errors", errors.length === 0, errors);
 }
 
+console.log("\nthe settings pop-up fades in");
+for (const still of [false, true]) {
+  // Laid out as Lumiverse lays its pop-up out: a shade over the page, a
+  // frame, a body, and the extension's root. Lumiverse gives it no motion,
+  // so the panel fades the shade and frame in, with a 4 pixel slide.
+  const { out, errors } = await inPanel(
+    browser,
+    {
+      viewport: { width: 390, height: 860 },
+      touch: true,
+      settings: still ? { reduceMotion: true } : null,
+      body: '<div id=shade style="position:fixed;inset:0;z-index:10003;display:flex;align-items:center;justify-content:center"><div id=frame><div><div id=modal></div></div></div></div>',
+    },
+    async (page) =>
+      page.evaluate(() => {
+        const keys = (id) =>
+          document
+            .getElementById(id)
+            .getAnimations()
+            .map((a) => JSON.stringify(a.effect.getKeyframes().map((k) => [k.opacity, k.transform])));
+        return { shade: keys("shade"), frame: keys("frame") };
+      }),
+  );
+  if (!still) {
+    check("the shade fades in", out.shade.some((k) => k.startsWith('[["0"')), out);
+    check("the frame fades in and slides 4 pixels", out.frame.some((k) => k.includes("translateY(4px)")), out);
+  } else {
+    check("with reduce motion on, nothing moves", !out.shade.length && !out.frame.length, out);
+  }
+  check("no console errors", errors.length === 0, errors);
+}
+
 console.log("\na section stays in sight until it has closed");
 for (const [label, viewport, touch] of [["phone", { width: 390, height: 900 }, true], ["laptop", { width: 1280, height: 900 }, false]]) {
   // The words fade over the same time as the space closes. A fade that ends
