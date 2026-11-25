@@ -15557,6 +15557,24 @@ for (const [label, viewport, touch, zoom] of [
   check(say + "no console errors", errors.length === 0, errors);
 }
 
+console.log("\nno scroll bar at the side of the settings");
+{
+  // The settings scroll with no bar at the side, which took up room. Boxes
+  // inside them, such as the log, keep theirs.
+  const { out, errors } = await inPanel(browser, { viewport: { width: 390, height: 860 }, touch: true }, async (page) =>
+    page.evaluate(() => {
+      const sc = document.querySelector("#modal [data-ar-scroller]");
+      if (!sc) return { outer: "missing", inner: "", scrolls: "" };
+      const box = document.createElement("textarea");
+      sc.appendChild(box);
+      return { outer: sc ? getComputedStyle(sc).scrollbarWidth : "missing", inner: getComputedStyle(box).scrollbarWidth, scrolls: sc ? getComputedStyle(sc).overflowY : "" };
+    }),
+  );
+  check("the settings have no scroll bar at the side", out.outer === "none" && out.scrolls === "auto", out);
+  check("a box inside them keeps its scroll bar", out.inner !== "none", out);
+  check("no console errors", errors.length === 0, errors);
+}
+
 console.log("\na section stays in sight until it has closed");
 for (const [label, viewport, touch] of [["phone", { width: 390, height: 900 }, true], ["laptop", { width: 1280, height: 900 }, false]]) {
   // The words fade over the same time as the space closes. A fade that ends

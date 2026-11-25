@@ -12,6 +12,10 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 _2026-11-24_
 
+### Changed
+
+- **No scroll bar at the side of the settings.** The scroll bar took up room at the side of every section. It is hidden, and the settings still scroll. Boxes inside them, such as the log, keep their scroll bars. Auto Refine and Auto Foley do the same.
+
 ### Fixed
 
 - **A section closing could look cut off partway.** Its words faded out before its space finished closing. On a section taller than the settings box, most of the close also happened below the edge, where it could not be seen, so the space stood empty and then snapped shut. Now the words fade over the same time as the space closes, and only the part you can see moves: the rest is added or taken away out of sight. Opening works the same way. Auto Refine and Auto Foley have the same fix.

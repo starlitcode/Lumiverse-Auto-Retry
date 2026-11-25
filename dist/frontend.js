@@ -9836,6 +9836,7 @@ export function setup(ctx, opts) {
                         // for the thumb, so a box holding a very long text gets a thumb a
                         // few pixels tall. Inside our boxes it is never shorter than this,
                         // and keeps the theme's color and shape.
+                        "[data-ar-scroller]::-webkit-scrollbar{display:none;width:0;height:0}" +
                         "[data-ar-ui] ::-webkit-scrollbar-thumb,[data-ar-panel] ::-webkit-scrollbar-thumb," +
                         "[data-ar-settings] ::-webkit-scrollbar-thumb,#__lvRetryLog ::-webkit-scrollbar-thumb{min-height:28px;min-width:28px}" +
                         "html[data-ar-pattern] [data-ar-sec]{" + solid + "padding:12px;margin:0;" +
@@ -15006,8 +15007,13 @@ export function setup(ctx, opts) {
         // the one scroll area: flexes to fill whatever height is left after the
         // footer. min-height:0 lets it actually shrink and scroll inside the flex.
         const scroller = document.createElement("div");
+        // Its scroll bar is hidden, the same as the drawer's in Auto Refine and
+        // Auto Foley. Lumiverse draws scroll bars that do not fade, so it took up
+        // room at the side of every section. It still scrolls, and boxes inside
+        // the settings keep their scroll bars.
+        scroller.setAttribute("data-ar-scroller", "");
         scroller.style.cssText =
-            "display:flex;flex-direction:column;gap:18px;flex:1 1 auto;min-height:0;overflow-y:auto;padding-right:4px";
+            "display:flex;flex-direction:column;gap:18px;flex:1 1 auto;min-height:0;overflow-y:auto;scrollbar-width:none";
         const panelSections = [];
         const searchRows = [];
         // Labeled runs of rows inside a group, hidden by a search once none of
