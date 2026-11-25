@@ -15099,8 +15099,11 @@ export function setup(ctx, opts) {
         // room at the side of every section. It still scrolls, and boxes inside
         // the settings keep their scroll bars.
         scroller.setAttribute("data-ar-scroller", "");
+        // Two pixels at each side hold the sections' -1px margin, with one pixel
+        // spare for a width that is not a whole number, so they never reach past
+        // the edge and scroll sideways.
         scroller.style.cssText =
-            "display:flex;flex-direction:column;gap:18px;flex:1 1 auto;min-height:0;overflow-y:auto;scrollbar-width:none";
+            "display:flex;flex-direction:column;gap:18px;flex:1 1 auto;min-height:0;overflow-y:auto;scrollbar-width:none;padding:0 2px";
         const panelSections = [];
         const searchRows = [];
         // Labeled runs of rows inside a group, hidden by a search once none of
@@ -15881,9 +15884,13 @@ export function setup(ctx, opts) {
             clearTimeout(statusGone);
             if (text) {
                 status.textContent = text;
-                // Its right edge where the cards' is, short of the list's scroll bar,
-                // so the bar stays in view while the message shows.
-                status.style.right = Math.max(0, scroller.offsetWidth - scroller.clientWidth + 4) + "px";
+                // Its right edge where the cards' is, short of the list's scroll bar
+                // where a theme shows one, so the bar stays in view while the message
+                // shows.
+                // The sections sit one pixel in from each side, from the list's
+                // padding less their -1px margin.
+                status.style.left = "1px";
+                status.style.right = Math.max(0, scroller.offsetWidth - scroller.clientWidth) + 1 + "px";
                 status.style.transition = "opacity .18s ease,transform .18s ease,visibility 0s";
                 status.style.visibility = "visible";
                 status.style.opacity = "1";

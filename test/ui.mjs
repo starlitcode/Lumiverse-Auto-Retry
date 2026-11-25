@@ -1046,6 +1046,10 @@ console.log("\nhints");
         // that closes can be found by what it does rather than by its markup.
         const around = [];
         for (let n = again; n && n !== modal; n = n.parentElement) around.push({ n });
+        // In sight, as someone pressing it sees it. A note with no room to
+        // show closes at once, since none of it is seen.
+        if (again) again.scrollIntoView({ block: "center" });
+        await frame();
         if (again) {
           again.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerType: "touch" }));
           again.click();
@@ -15474,6 +15478,10 @@ console.log("\nsections open and shut over several frames");
         const head = shut()[0];
         const below = shut()[1];
         if (!head || !below) return { err: "not enough sections" };
+        // In sight, as someone pressing it sees it. A section with no room
+        // to show below the edge opens at once, since none of it is seen.
+        head.scrollIntoView({ block: "start" });
+        await new Promise((r) => setTimeout(r, 50));
         const at = () => below.getBoundingClientRect().top;
         if (closeIt) {
           head.click();
@@ -15497,7 +15505,9 @@ console.log("\nsections open and shut over several frames");
   check("opening one: no console errors", openErrors.length === 0, openErrors);
 
   const { out: close, errors: closeErrors } = await measure(true);
-  check("shutting one moves them back over several frames", close.settled > 200 && close.moved < close.settled, close);
+  // With the section scrolled to the top, the page cannot stay scrolled past
+  // its new, shorter end, so less movement is seen than the section's height.
+  check("shutting one moves them back over several frames", close.settled > 100 && close.moved < close.settled, close);
   check("shutting one: no console errors", closeErrors.length === 0, closeErrors);
 }
 
@@ -16515,6 +16525,9 @@ for (const [label, viewport, touch] of [["phone", { width: 390, height: 900 }, t
           sw().click();
           await new Promise((r) => setTimeout(r, 400));
         }
+        // In sight, so the row has room to open over several frames.
+        sw().scrollIntoView({ block: "start" });
+        await new Promise((r) => setTimeout(r, 30));
         sw().click();
         await new Promise((r) => setTimeout(r, 60));
         const held = parseFloat(row().style.height);
