@@ -252,6 +252,14 @@ Every change to the panel or the page has to work on a phone and on a laptop.
   button. Hover is only ever an extra. Phones have no hover, so everything a
   hover shows or does must also work with a click or a tap.
 - Use a click or a tap for anything that does something or opens something.
+- A number is typed in a box, held to its range when the box is left, the
+  same in all three extensions. A slider is only for a value set by eye or
+  by ear: the hue, saturation and lightness of a color, a picture's zoom,
+  and a volume, such as Auto Foley's Mixer and floating player.
+- Every dropdown has the drawn arrow: a small rotated square with two
+  borders, in the theme's muted text color, on a box around the dropdown.
+  Folds and section headings use the triangles ▶ and ▼. The browser's own
+  dropdown arrow and the smaller ▸ and ▾ are not used.
 - Lumiverse's **UI Scale** zooms the whole page. A size read with
   `getBoundingClientRect` is in zoomed screen pixels, and a size written to a
   style is in CSS pixels. Convert before writing one back, as `cssHeight`
