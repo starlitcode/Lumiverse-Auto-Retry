@@ -22,7 +22,7 @@ _2026-11-24_
 
 - **A section closing could look cut off partway.** Its words faded out before its space finished closing. Now the words fade over the same time as the space closes. Auto Refine has the same fix.
 - **Copying could raise a phone's keyboard.** When the browser did not allow the usual way to copy, the text was copied through a hidden box, and selecting it could raise the keyboard. The hidden box is now read-only, so it cannot be typed in and the keyboard stays down. Auto Refine has the same fix.
-- **On a server with several accounts, another account got Lumiverse's own error and nothing on what to do.** Lumiverse lets an extension installed as Personal work only for the account that installed it. Auto Retry now says so, and that it has to be installed as Operator, under Extensions, for every account to use it. Auto Refine and Auto Foley say the same.
+- **On a server with several accounts, another account got Lumiverse's own error and nothing on what to do.** Lumiverse lets an extension installed as Personal work only for the account that installed it. Auto Retry now says so, and that it has to be installed as Operator, under Extensions, for every account to use it. Auto Refine and Auto Foley say the same. Reported by a Discord user.
 
 ---
 
