@@ -14,6 +14,7 @@ _2026-11-24_
 
 ### Changed
 
+- **Size of the floating button is now called How big it is**, the same name as in Auto Refine and Auto Foley. It sits under **Floating on/off button** and works the same.
 - **The settings fade in and out.** Lumiverse shows the settings with no motion. They now fade in and slide a little, and fade out when they close. With reduce motion on, they show and close at once. Auto Refine does the same for Refine every reply here?.
 - **No scroll bar at the side of the settings.** The scroll bar took up room at the side of every section. It is hidden, and the settings still scroll. Boxes inside them, such as the log, keep their scroll bars. Auto Refine and Auto Foley do the same.
 

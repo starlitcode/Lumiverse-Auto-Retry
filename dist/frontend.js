@@ -619,7 +619,7 @@ const SCHEMA = [
             {
                 key: "floatingToggleSize",
                 needs: ["showFloatingToggle"],
-                label: "Size of the floating button",
+                label: "How big it is",
                 type: "num",
                 int: true,
                 min: 28,
