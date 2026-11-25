@@ -448,7 +448,7 @@ All four are treated alike, including the retry limit and the note, if you send 
 
 Only the final reply is checked for a refusal, never the model's thinking. Thinking blocks are removed first.
 
-Nine formats are recognized. The first three use tag names like `think`, `thinking`, `reasoning`, `thought`, `reflection`, `scratchpad` and `analysis`. The other six have their own fixed tokens.
+Nine formats are recognized. The first three use these tag names: `think`, `thinking`, `thought`, `thoughts`, `reasoning`, `reflection`, `scratchpad` and `analysis`. The other six have their own fixed tokens.
 
 | Form | Example |
 | --- | --- |
