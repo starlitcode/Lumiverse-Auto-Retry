@@ -672,6 +672,17 @@ describe("a turn that saved no reply", () => {
     expect(h.stage("failed")[0].msg.why).toContain("group chat");
   });
 
+  // Lumiverse refuses an extension installed as Personal for every account
+  // but the one that installed it, and says so in its own words.
+  test("an install as Personal is named, with what to do", async () => {
+    const h = boot({ quiet: async () => { throw new Error("Extension is user-scoped and cannot access this user context"); } });
+    await h.tell({ type: "try_at_once", requestId: "r1", chatId: "c1", count: 2 });
+    await h.settle();
+    const said = JSON.stringify(h.sent.map((m: any) => m.msg));
+    expect(said).toContain("installed as Personal");
+    expect(said).toContain("install it as Operator, under Extensions");
+  });
+
   test("a group chat does not stop a reroll on a reply that is there", async () => {
     const h = boot({ group: true });
     await h.tell({ type: "try_at_once", requestId: "r1", chatId: "c1", count: 2 });

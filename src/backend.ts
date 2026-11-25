@@ -611,10 +611,18 @@ function keepPrompt(messages: any[], context: any, userId?: string): void {
 
 // What went wrong, in words a user can act on. A host error can be a string,
 // an Error, or an object with the message further in.
+// Lumiverse installs an extension as Personal, for the account that
+// installed it, or as Operator, for every account. A Personal one is refused
+// for every other account, with one of these messages. Auto Refine and Auto
+// Foley say the same.
+const PERSONAL_INSTALL = /user-scoped|cannot access this user context|Extension owner is not set/i;
+const PERSONAL_WORDS =
+  'Auto Retry is installed as Personal, so Lumiverse lets only the account that installed it use it. Ask whoever runs Lumiverse to install it as Operator, under Extensions, so every account can use it';
+
 function sayError(e: any): string {
   if (!e) return 'no reason was given';
-  if (typeof e === 'string') return e;
-  const m = e.message || (e.error && (e.error.message || e.error)) || '';
+  const m = typeof e === 'string' ? e : e.message || (e.error && (e.error.message || e.error)) || '';
+  if (m && PERSONAL_INSTALL.test(String(m))) return PERSONAL_WORDS;
   return m ? String(m) : 'no reason was given';
 }
 
