@@ -7532,29 +7532,6 @@ export function setup(ctx, opts) {
     // A height read in screen pixels and written back as CSS pixels opened a
     // row too tall or too short, and it jumped to its real height at the end.
     // The scale comes from zoomOf.
-    // How much of a box can be seen, from its top down to the bottom of the
-    // nearest box that scrolls, or of the screen, in its own CSS pixels, with
-    // a few pixels spare. A fold taller than that opens and closes only the
-    // part that can be seen. The rest is added or taken away out of sight.
-    // A section taller than the panel would otherwise spend most of its close
-    // below the edge, where nothing can be seen moving, and the part that can
-    // be seen would go by in a few frames, which reads as a snap.
-    function roomBelow(node) {
-        try {
-            const r = node.getBoundingClientRect();
-            let bottom = window.innerHeight || Infinity;
-            for (let p = node.parentElement; p; p = p.parentElement) {
-                const oy = getComputedStyle(p).overflowY;
-                if (oy === "auto" || oy === "scroll")
-                    bottom = Math.min(bottom, p.getBoundingClientRect().bottom);
-            }
-            const z = zoomOf(node, r);
-            return Math.max(0, (bottom - r.top) / z + 8);
-        }
-        catch (_) {
-            return Infinity;
-        }
-    }
     function cssHeight(node) {
         const r = node.getBoundingClientRect();
         return r.height / zoomOf(node, r);
@@ -7642,15 +7619,7 @@ export function setup(ctx, opts) {
             const edges = how.boxSizing === "border-box"
                 ? 0
                 : ["paddingTop", "paddingBottom", "borderTopWidth", "borderBottomWidth"].reduce((sum, k) => sum + (parseFloat(how[k]) || 0), 0);
-            // Cut first to the part that can be seen, out of sight, so the whole
-            // close is the part that can be seen moving. A box with none of it in
-            // sight has nothing to show moving, and closes at once.
-            const seen = Math.min(tall, roomBelow(node));
-            if (seen <= 9) {
-                finish();
-                return;
-            }
-            node.style.height = Math.max(0, seen - edges) + "px";
+            node.style.height = Math.max(0, tall - edges) + "px";
             // A button keeps a minimum height for a finger, which would hold it at
             // full size while its height closed and then let it go in one step.
             node.style.minHeight = "0px";
@@ -7738,11 +7707,6 @@ export function setup(ctx, opts) {
             const tall = cssHeight(node);
             if (!(tall > 0))
                 return;
-            const room = roomBelow(node);
-            // None of it in sight: it opens at once, since nothing could be seen
-            // moving.
-            if (room <= 9)
-                return;
             const pads = ["paddingTop", "paddingBottom", "borderTopWidth", "borderBottomWidth"];
             const want = {};
             let edges = 0;
@@ -7798,9 +7762,7 @@ export function setup(ctx, opts) {
                 "height " + ease + ",margin-bottom " + ease + ",margin-top " + ease + ",padding-top " + ease + ",padding-bottom " + ease +
                     ",border-top-width " + ease + ",border-bottom-width " + ease + ",transform " + ease +
                     ",opacity 200ms ease-out 60ms";
-            // Only as far as can be seen. The rest is added when it ends, out of
-            // sight.
-            node.style.height = Math.min(goal, Math.max(0, room - (cs.boxSizing === "border-box" ? 0 : edges))) + "px";
+            node.style.height = goal + "px";
             node.style.marginBottom = margin;
             node.style.marginTop = marginTop;
             for (const k of pads)
