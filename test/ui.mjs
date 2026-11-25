@@ -14693,8 +14693,16 @@ console.log("\na section that hangs off a switch opens and closes smoothly");
           const dep = secs.find((x) => x.style.display === "none");
           const next = dep && secs[secs.indexOf(dep) + 1];
           if (!sw || !dep || !next) return null;
-          // Measured from the switch's own row, so a scroll is not counted.
-          const at = () => next.getBoundingClientRect().top - sw.getBoundingClientRect().top;
+          // Measured from the switch's own row, so a scroll is not counted,
+          // and only down to the bottom of the box the settings scroll in:
+          // a section taller than that opens and closes only the part that
+          // can be seen, and the rest out of sight.
+          let box = sw.parentElement;
+          while (box && !/auto|scroll/.test(getComputedStyle(box).overflowY)) box = box.parentElement;
+          const edge = () => (box ? Math.min(box.getBoundingClientRect().bottom, window.innerHeight) : window.innerHeight);
+          sw.scrollIntoView({ block: "start" });
+          await frame();
+          const at = () => Math.min(next.getBoundingClientRect().top, edge()) - sw.getBoundingClientRect().top;
           const watch = async () => {
             const start = at();
             const tops = [];
@@ -14769,7 +14777,18 @@ for (const [label, viewport, touch] of [["phone", { width: 390, height: 860 }, t
         // The height of the box holding the rows. Everything under the box
         // moves by as much as it grows, and a scroll does not change it.
         const box = kid.parentElement;
-        const gapNow = () => box.getBoundingClientRect().height;
+        // Near the top of the box the settings scroll in, so the rows that
+        // open can be seen. Measured only down to that box's bottom: rows
+        // past it open only the part that can be seen.
+        sw.scrollIntoView({ block: "start" });
+        await frame();
+        let scroller = box.parentElement;
+        while (scroller && !/auto|scroll/.test(getComputedStyle(scroller).overflowY)) scroller = scroller.parentElement;
+        const edge = () => (scroller ? Math.min(scroller.getBoundingClientRect().bottom, window.innerHeight) : window.innerHeight);
+        const gapNow = () => {
+          const r = box.getBoundingClientRect();
+          return Math.max(0, Math.min(r.bottom, edge()) - r.top);
+        };
         const watch = async () => {
           const start = gapNow();
           const times = [];
@@ -14837,7 +14856,9 @@ for (const [label, viewport, touch] of [["phone", { width: 390, height: 860 }, t
         out.shut && Math.max(...out.shut.steps) < Math.abs(out.shut.travel) / 3, out.shut && { travel: out.shut.travel, biggest: out.shut.biggest });
       const faded = out.shut ? out.shut.looks.findIndex((l) => l.o < 0.05) : -1;
       const flat = out.shut ? out.shut.looks.findIndex((l) => l.h < 1) : -1;
-      check(say + "closing, the words are gone before the space is", faded >= 0 && (flat === -1 || faded < flat), { faded, flat });
+      // The words fade over the same time as the space closes, so they are
+      // still there until it is nearly shut, and gone when it is.
+      check(say + "closing, the words stay in sight until the space is nearly shut", faded >= 0 && (out.shut.looks[faded] ? out.shut.looks[faded].h : 0) <= 0.15 * Math.max(...out.shut.looks.map((l) => (l ? l.h : 0))), { faded, flat });
     } else {
       check(say + "the rows open in one step", out.opened && Math.abs(out.opened.biggest - out.opened.travel) <= 2, out.opened && { travel: out.opened.travel, biggest: out.opened.biggest });
       check(say + "and close in one step", out.shut && Math.abs(out.shut.biggest - Math.abs(out.shut.travel)) <= 2, out.shut && { travel: out.shut.travel, biggest: out.shut.biggest });
@@ -14860,7 +14881,18 @@ for (const [label, viewport, touch] of [["phone", { width: 390, height: 860 }, t
         const head = [...document.querySelectorAll('#modal [data-ar-sechead][aria-expanded="false"]')].find((x) => x.closest("[data-ar-sec]") && x.closest("[data-ar-sec]").style.display !== "none");
         if (!head) return null;
         const sec = head.closest("[data-ar-sec]");
-        const h = () => sec.getBoundingClientRect().height;
+        // Near the top of the box the settings scroll in, and measured only
+        // down to that box's bottom: a section taller than the box opens and
+        // closes only the part that can be seen.
+        head.scrollIntoView({ block: "start" });
+        await frame();
+        let scroller = sec.parentElement;
+        while (scroller && !/auto|scroll/.test(getComputedStyle(scroller).overflowY)) scroller = scroller.parentElement;
+        const edge = () => (scroller ? Math.min(scroller.getBoundingClientRect().bottom, window.innerHeight) : window.innerHeight);
+        const h = () => {
+          const r = sec.getBoundingClientRect();
+          return Math.max(0, Math.min(r.bottom, edge()) - r.top);
+        };
         const run = async (turn) => {
           const start = h();
           const tops = [];

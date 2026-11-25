@@ -14,7 +14,7 @@ _2026-11-24_
 
 ### Fixed
 
-- **A section closing could look cut off partway.** Its words faded out before its space finished closing, so a tall section left an empty gap that was still closing. The words now fade over the same time as the space closes, so they stay in sight until it is shut. Auto Refine has the same fix.
+- **A section closing could look cut off partway.** Its words faded out before its space finished closing. On a section taller than the settings box, most of the close also happened below the edge, where it could not be seen, so the space stood empty and then snapped shut. Now the words fade over the same time as the space closes, and only the part you can see moves: the rest is added or taken away out of sight. Opening works the same way. Auto Refine and Auto Foley have the same fix.
 - **Copying could raise a phone's keyboard.** When the browser did not allow the usual way to copy, the text was copied through a hidden box, and selecting it could raise the keyboard. The hidden box is now read-only, so it cannot be typed in and the keyboard stays down. Auto Refine has the same fix.
 
 ---
