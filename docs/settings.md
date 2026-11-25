@@ -9,7 +9,7 @@ There are about fifty options. The quickest way to reach one is the **Search set
 - Type part of a name or a description. Only the rows that match are shown, and any closed section they are in opens.
 - Clear the box to put the panel back as it was.
 
-The panel has seven sections. Each one opens and closes with its heading: press **▾** to close one and **▸** to open it. Three are open when the panel opens:
+The panel has seven sections. Each one opens and closes with its heading: press **▼** to close one and **▶** to open it. Three are open when the panel opens:
 
 - **Basics**: the main switch, the floating button, the Extras entry, the retry pop-up, the on-screen panel, and the switch for the chat you are in.
 - **How it retries**: how many tries, whether to send several at once, how long it waits between them, when it pauses itself, and whether a retry adds a new reroll or redoes the reply.

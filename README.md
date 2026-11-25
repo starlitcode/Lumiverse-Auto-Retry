@@ -1,12 +1,10 @@
 <p align="center">
-  <img src="docs/retry-banner.png" width="100%" alt="Auto Retry: on a city rooftop at night, a woman smiles at a glowing chat bubble above her open hand. A ribbon of light loops to it from an old chat bubble coming apart in the sky.">
+  <img src="docs/retry-banner.png" width="100%" alt="Auto Retry: on a city rooftop at night, a woman holds out her hand under a glowing chat bubble. A ribbon of light loops to it from an old chat bubble coming apart in the sky.">
 </p>
 
 # Auto Retry
 
 A Lumiverse extension. It re-runs an AI reply when it fails, comes back empty, stalls partway, gets cut off mid-sentence, or refuses by mistake, so you do not have to catch it and press regenerate yourself.
-
-It works alongside [Auto Refine](https://github.com/starlitcode/Lumiverse-Auto-Refine). Auto Retry decides whether a reply is worth keeping. Auto Refine improves the ones that are.
 
 ## What it does
 

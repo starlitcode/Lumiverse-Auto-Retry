@@ -1781,7 +1781,7 @@ console.log("\nwhat is on screen straight away");
           (e) => (e.textContent || "").trim() === t && e.offsetParent !== null,
         );
       const heads = [...modal.querySelectorAll('[role="button"][aria-expanded]')];
-      const title = (h) => (h.textContent || "").replace(/^[▸▾]/, "").trim();
+      const title = (h) => (h.textContent || "").replace(/^[▸▾▶▼]/, "").trim();
       const open = heads.filter((h) => h.getAttribute("aria-expanded") === "true" && h.offsetParent !== null);
       const shut = heads.filter((h) => h.getAttribute("aria-expanded") === "false");
       return {
@@ -15491,14 +15491,14 @@ for (const [label, viewport, touch, zoom] of [
   ["laptop, UI Scale 1.25", { width: 1280, height: 900 }, false, 1.25],
   ["laptop, UI Scale 0.85", { width: 1280, height: 900 }, false, 0.85],
 ]) {
-  const CARETS = /[▸▾]/g;
+  const CARETS = /[▸▾▶▼]/g;
   const { out, errors } = await inPanel(browser, { viewport, touch, css: zoom === 1 ? "" : "body{zoom:" + zoom + "}" }, async (page) => {
     const heads = () =>
       page.evaluate(() =>
         [...document.querySelectorAll("#modal [data-ar-sec] > [data-ar-sechead]")].map((h) => {
           const b = h.nextElementSibling;
           return {
-            title: (h.textContent || "").replace(/[▸▾]/g, "").trim(),
+            title: (h.textContent || "").replace(/[▸▾▶▼]/g, "").trim(),
             open: h.getAttribute("aria-expanded"),
             tall: Math.round(h.getBoundingClientRect().height),
             body: b ? getComputedStyle(b).display : "none",

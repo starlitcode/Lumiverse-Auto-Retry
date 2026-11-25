@@ -8,6 +8,17 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.26.6
+
+_2026-11-25_
+
+### Changed
+
+- **Every dropdown has a drawn arrow, the same as in Auto Foley.** It is thinner, takes your theme's muted text color, and looks the same on every device. Before, each browser drew its own.
+- **The arrows on the section headings and folds are the same size as in Auto Foley.** They were a smaller triangle.
+
+---
+
 ## 5.26.5
 
 _2026-11-25_

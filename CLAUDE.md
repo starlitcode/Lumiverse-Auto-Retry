@@ -364,6 +364,12 @@ The owner has a learning disability. Contradictions are confusing.
   Auto Refine's `docs/prompt.md`.
 - The README never grows with extra detail. Anything beyond a short summary
   goes in the doc it belongs to, with a link from the README.
+- The README names no other extension of the owner's, so each one stands on
+  its own. The credits the owner asked for stay in **Credits**. Docs, the
+  changelog and panel text can still name the others where it helps.
+- The README's banner is `docs/<name>-banner.png`, with alt text that says
+  what the picture shows. When the owner uploads a new one, it replaces the
+  old file under the same name, and the alt text is checked against it.
 - `docs/safety.md` in Auto Retry is in the owner's own voice: human, honest
   and a little blunt, in short sentences, with contractions. Every other
   writing rule above still applies to it.

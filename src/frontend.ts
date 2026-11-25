@@ -16,8 +16,18 @@ type Ctx = any;
 
 // The section-header carets. Named so the open and shut states are set from
 // one place instead of repeating the escapes at every call site.
-const CARET_OPEN = "\u25BE"; // down triangle
-const CARET_SHUT = "\u25B8"; // right triangle
+const CARET_OPEN = "\u25BC"; // down triangle
+const CARET_SHUT = "\u25B6"; // right triangle
+
+// A dropdown in the box that draws its arrow. sizing is the flex size the
+// dropdown would have had in its row, which the box takes instead.
+function selectBox(sel: HTMLSelectElement, sizing = ""): HTMLElement {
+  const box = document.createElement("span");
+  box.className = "ar-selwrap";
+  if (sizing) box.style.cssText = sizing;
+  box.appendChild(sel);
+  return box;
+}
 
 // Stacking order for everything this extension puts on screen, in one place.
 //
@@ -192,7 +202,7 @@ const STREAM_BUF_MAX = 200000;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.26.5";
+const VERSION = "5.26.6";
 
 // Whether two saved settings hold the same values, whatever order their keys
 // were written in. A key left undefined counts as not there, the way it is
@@ -10480,7 +10490,15 @@ export function setup(ctx: Ctx, opts?: any) {
         "[data-ar-check]::before{content:\"\";position:absolute;inset:-6px}" +
         "button[data-ar-btn]{min-height:32px!important}" +
         "[data-ar-sechead]{min-height:32px;box-sizing:border-box}" +
-        "select[data-ar-field]{min-height:32px}}";
+        "select[data-ar-field]{min-height:32px}}" +
+        // A drawn arrow on every dropdown, the same as Auto Foley's, in place
+        // of the browser's own, which differs on every device and ignores the
+        // theme. Important, since the dropdowns are styled inline.
+        ".ar-selwrap{position:relative;display:block;min-width:0}" +
+        ".ar-selwrap>select{-webkit-appearance:none!important;appearance:none!important;padding-right:32px!important;text-overflow:ellipsis;width:100%;max-width:100%;box-sizing:border-box}" +
+        ".ar-selwrap::after{content:\"\";position:absolute;right:13px;top:50%;width:7px;height:7px;" +
+        "border-right:1.5px solid var(--lumiverse-text-muted,rgba(255,255,255,.65));border-bottom:1.5px solid var(--lumiverse-text-muted,rgba(255,255,255,.65));" +
+        "transform:translateY(-70%) rotate(45deg);pointer-events:none}";
       (document.head || document.documentElement).appendChild(el);
       panelStyleEl = el;
     } catch (_) {}
@@ -14111,7 +14129,7 @@ export function setup(ctx: Ctx, opts?: any) {
       const select = document.createElement("select");
       select.setAttribute("data-ar-field", "1");
       select.style.cssText =
-        "flex:1;min-width:150px;padding:8px 10px;border-radius:var(--lumiverse-radius,8px);border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));background:var(--lumiverse-input-bg,var(--lumiverse-fill,rgba(0,0,0,.15)));color:var(--lumiverse-text,#eee);font:13px var(--lumiverse-font-family,system-ui)";
+        "padding:8px 10px;border-radius:var(--lumiverse-radius,8px);border:1px solid var(--lumiverse-border,rgba(255,255,255,.16));background:var(--lumiverse-input-bg,var(--lumiverse-fill,rgba(0,0,0,.15)));color:var(--lumiverse-text,#eee);font:13px var(--lumiverse-font-family,system-ui)";
       // Picking already loads, so this is only for loading the one already
       // picked a second time, which is how you throw away changes and get the
       // saved settings back. Named for that, because "Load" next to a picker
@@ -14120,7 +14138,7 @@ export function setup(ctx: Ctx, opts?: any) {
       const undoBtn = smallBtn(btn("Put it back", false));
       undoBtn.setAttribute("data-ar-preset", "undo");
       const pickRow = rowBox();
-      pickRow.appendChild(select);
+      pickRow.appendChild(selectBox(select, "flex:1;min-width:150px"));
       pickRow.appendChild(loadBtn);
       pickRow.appendChild(undoBtn);
 
@@ -16068,7 +16086,7 @@ export function setup(ctx: Ctx, opts?: any) {
           }
           who.value = note.role;
           styleField(who);
-          who.style.cssText += "flex:none;padding:5px 8px;font-size:12px";
+          who.style.cssText += "padding:5px 8px;font-size:12px";
           who.setAttribute("aria-label", "Who note " + (i + 1) + " comes from");
           who.addEventListener("change", () => {
             note.role = coerce("pick", who.value, "system", {
@@ -16165,7 +16183,7 @@ export function setup(ctx: Ctx, opts?: any) {
             bar.appendChild(fixedWho);
           } else {
             bar.appendChild(fromWrap);
-            bar.appendChild(who);
+            bar.appendChild(selectBox(who, "flex:none"));
           }
           bar.appendChild(drop);
 
@@ -16286,8 +16304,6 @@ export function setup(ctx: Ctx, opts?: any) {
       }
       sel.value = String(cfg[f.key]);
       styleField(sel);
-      sel.style.flex = "none";
-      sel.style.maxWidth = "60%";
       sel.addEventListener("change", () => {
         cfg[f.key] = coerce("pick", sel.value, (CONFIG as any)[f.key], f);
         // Honored here as well as on a number box. Wired up for numbers alone,
@@ -16301,7 +16317,7 @@ export function setup(ctx: Ctx, opts?: any) {
       fieldSetters[f.key] = (v: any) => {
         sel.value = coerce("pick", v, (CONFIG as any)[f.key], f);
       };
-      top.appendChild(sel);
+      top.appendChild(selectBox(sel, "flex:none;max-width:60%"));
       row.appendChild(top);
     } else if (f.type === "num") {
       const input = document.createElement("input");
