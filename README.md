@@ -12,15 +12,16 @@ It watches each reply and tries again when:
 
 - the provider sends back an error (by default it skips errors that will not go away, like a wrong API key)
 - the reply comes back empty, including one that "thinks" but never writes anything
-- the thinking or the reply is one character over and over, like `!!!!!!!!` (see [One character over and over](docs/detection.md#one-character-over-and-over))
-- the thinking or the reply turns into a jumble of words from several languages run together, words with no spaces, or broken characters (see [Garbled replies](docs/detection.md#garbled-replies) and [The thinking](docs/detection.md#the-thinking))
+- the reply is one character over and over, like `!!!!!!!!` (see [One character over and over](docs/detection.md#one-character-over-and-over))
+- the reply turns into a jumble of words from several languages run together, words with no spaces, or broken characters (see [Garbled replies](docs/detection.md#garbled-replies))
 - the reply runs into the prompt's own format, such as `[/INST]` (see [Leaked prompt format](docs/detection.md#leaked-prompt-format))
-- the thinking or the reply gets stuck repeating itself, or runs on with no punctuation, such as a long list of terms (see [Stuck repeating or rambling](docs/detection.md#stuck-repeating-or-rambling))
+- the reply gets stuck repeating itself, or runs on with no punctuation, such as a long list of terms (see [Stuck repeating or rambling](docs/detection.md#stuck-repeating-or-rambling))
 - the reply is cut off mid-sentence (see [Cut-off detection](docs/detection.md#cut-off-detection))
 - the reply is an accidental out-of-character refusal, or the model breaks off mid-scene
   (see [Accidental-refusal detection](docs/detection.md#accidental-refusal-detection))
 - a reply never starts, or stops partway and nothing more comes for a while
 - (optional, off by default) the reply is very short
+- (optional, off by default) the thinking breaks in one of those ways, even when the reply after it looks fine (see [The thinking](docs/detection.md#the-thinking))
 - (optional, off by default) the model leaves the scene to offer real-world support
   (see [Stopping to offer support](docs/detection.md#stopping-to-offer-support), and [Safety](docs/safety.md) before switching it on)
 

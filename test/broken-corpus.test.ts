@@ -123,6 +123,8 @@ describe("words run together with no spaces", () => {
 });
 
 describe("the thinking, judged on its own", () => {
+  // The thinking checks are off by default, so they are switched on here.
+  const on = { ...cfg, retryOnSpamThinking: true, retryOnGarbledThinking: true, retryOnLoopThinking: true };
   const plan =
     "The reader wants Tamsin to answer Orrin about the bridge. Keep it short and dry. She is tired, so no long speech. " +
     "Mention the coat on the peg, and leave the strap for him to bring up. ";
@@ -174,14 +176,17 @@ describe("the thinking, judged on its own", () => {
     ["notes with no punctuation over many short lines", reply, plan + Array.from({ length: 30 }, (_, i) => terms(6 + (i % 3), i * 9)).join("\n")],
   ];
   for (const [label, content, thought, why] of caught)
-    test("caught: " + label, () => expect(replyProblem(content, thought, cfg)).toBe(why));
+    test("caught: " + label, () => expect(replyProblem(content, thought, on)).toBe(why));
   for (const [label, content, thought] of fine)
-    test("left alone: " + label, () => expect(replyProblem(content, thought, cfg)).toBe(""));
+    test("left alone: " + label, () => expect(replyProblem(content, thought, on)).toBe(""));
   test("each has its own switch", () => {
-    expect(replyProblem(reply, plan + plan + jumble.repeat(3), { ...cfg, retryOnGarbledThinking: false })).toBe("");
-    expect(replyProblem(reply, loop, { ...cfg, retryOnLoopThinking: false })).toBe("");
+    expect(replyProblem(reply, plan + plan + jumble.repeat(3), { ...on, retryOnGarbledThinking: false })).toBe("");
+    expect(replyProblem(reply, loop, { ...on, retryOnLoopThinking: false })).toBe("");
   });
-  test("and both are on by default", () => expect(cfg.retryOnGarbledThinking && cfg.retryOnLoopThinking).toBe(true));
+  test("and all three are off by default", () => {
+    expect(cfg.retryOnSpamThinking || cfg.retryOnGarbledThinking || cfg.retryOnLoopThinking).toBe(false);
+    expect(replyProblem(reply, loop, cfg)).toBe("");
+  });
 });
 
 describe("the prompt's format leaked into the reply", () => {

@@ -13,7 +13,7 @@ The panel has seven sections. Each one opens and closes with its heading: press 
 
 - **Basics**: the main switch, the floating button, the Extras entry, the retry pop-up, the on-screen panel, and the switch for the chat you are in.
 - **How it retries**: how many tries, whether to send several at once, how long it waits between them, when it pauses itself, and whether a retry adds a new reroll or redoes the reply.
-- **When to count a reply as bad**: which kinds of bad reply start a retry, and the two waits for a reply that freezes or never arrives.
+- **When to count a reply as bad**: which kinds of bad reply start a retry, the two waits for a reply that freezes or never arrives, and the switch that fits those waits to the model.
 
 Four start closed. Nothing in them is needed to use the extension. A section you open or close stays that way until the page is reloaded.
 
@@ -225,26 +225,6 @@ The whole prompt that went to the model, after your settings, world info, person
 
 The prompt stays on your device. It is not sent anywhere or written to disk, and it goes when you close the tab.
 
-### What a retry costs
-
-This line sits under the message count on the **Prompt** tab once you fill in the two prices under **Basics**. **Input** and **output** are the words your provider's price list uses: input is what you send, output is what the model writes back.
-
-**What to type:** price lists write prices as `$5.00/M` or `$0.075/M`, meaning per million tokens. Type the number: `5` or `0.075`. You can also paste the whole thing, and the number is taken out of it.
-
-How it works it out:
-
-- A retry pays for the prompt and the new reply, so both are counted.
-- The prompt is the one on this tab.
-- The new reply has not been written yet, so it uses the size of the last reply in this chat. The line says so.
-- A chat with no reply yet is priced on the prompt only, and says so.
-- Under it is what the retries so far this session come to. With **Several tries at once** on, each reply sent at once counts as one more.
-
-**It is an estimate, not your bill.** It prices every token at the full rate, so a provider discount, such as for cached tokens, makes the real cost lower. It leaves out anything your provider adds around your prompt.
-
-- Tokens are counted by Lumiverse's own tokenizer for the model. Where it has none, the line says **roughly**.
-- Both prices start at 0, and while both are 0 the line is hidden.
-- Prices are in your provider's own currency. Nothing is converted.
-
 ### Replaced
 
 The reply the last retry in this chat threw away, with the reason and how long ago. Use it when a retry was a mistake: read the old reply, or press **Copy** to take it.
@@ -276,7 +256,7 @@ These are the defaults for a new install. They are in the `CONFIG` block at the 
 | showFloatingToggle | false | Put a small draggable on/off button over the chat. |
 | floatingToggleSize | 44 | How wide that floating button is, in pixels (28-96). The button on the chat resizes as you type, so the size can be seen before it is saved, and closing the settings without saving puts it back. Shown only while `showFloatingToggle` is on. |
 | showExtrasToggle | false | Add an on/off button to the chat input's Extras menu. Its label says whether Auto Retry is on or off. Hidden while the floating button is on. |
-| maxRetries | 4 | The most tries for one message. Nothing retries past this. The lowest is 1. To stop it retrying, switch it off instead. |
+| maxRetries | 3 | The most tries for one message. Nothing retries past this. The lowest is 1. To stop it retrying, switch it off instead. |
 | tryAtOnce | false | From the second try, send the same prompt several times at once and add the first reply that passes as a new reroll. Each one costs a whole reply. Needs the `chat_mutation` permission. See [Several tries at once](tries-at-once.md). |
 | tryAtOnceMax | 3 | The most replies sent at once (2-5). The second try sends 2, the third 3, and so on up to this. Shown only while `tryAtOnce` is on. |
 | pauseWhenFailing | true | Pause Auto Retry after several messages in a row use up all their tries. The next reply that comes back fine ends the pause. |
@@ -284,25 +264,26 @@ These are the defaults for a new install. They are in the `CONFIG` block at the 
 | breakerPauseMins | 5 | How long the pause lasts, in minutes. A reply that comes back fine ends it early. Shown only while `pauseWhenFailing` is on. |
 | retryDelayMs | 2000 | Wait before the first retry, in milliseconds. |
 | backoffFactor | 2 | Each wait is this many times longer than the last. |
-| maxDelayMs | 60000 | Longest it will ever wait. |
+| maxDelayMs | 60000 | The longest wait between tries. A wait the provider asks for, such as for a rate limit, can be longer, up to an hour. See `rateLimitDelayMs`. |
 | jitter | true | Changes each wait by a small random amount, so retries do not all reach the server at the same moment. |
 | rateLimitDelayMs | 15000 | The shortest wait when the server says it is busy. A shorter wait often hits the same limit again. When the server says how long to wait, that time is used instead, even if it is longer than `maxDelayMs`, up to an hour. |
 | retryByNewReroll | true | On: a retry clicks the next / swipe button, adding a new reroll and keeping the existing ones, so a reply it was wrong to retry can be swiped back to. Off: a retry redoes the reply in place with the regenerate button, which on some setups clears the other rerolls. Applies to every retry reason. The other button is the fallback. |
 | keepReplaced | true | Keep the last reply a retry replaced in this chat, to read or copy on the Replaced tab of the on-screen panel. It is kept in this tab and in your server's memory, so a reload keeps it. An update or a restart clears it. |
 | keepReplacedSaved | false | Keep it through an update. Also saves the replaced replies on your server, for your account, so an update or a restart does not clear them. Turning it off empties the saved copy. |
-| stuckTimeoutMs | 240000 | A reply started, but no text came within this time. It is retried. 0 turns this off. |
+| stuckTimeoutMs | 240000 | A reply started, but no text came within this time. It is retried. 0 turns this off. With streaming off, it stops no reply after the first reply that comes back whole. See [The two waits for a frozen reply](#the-two-waits-for-a-frozen-reply). |
 | idleTimeoutMs | 90000 | Text was coming in, then stopped for this long. It is retried. While the model is still thinking and no reply text has come yet, it waits as long as `stuckTimeoutMs` instead. 0 turns this off. |
+| waitFit | true | Fit the wait to the model. Both waits above are made longer for a model on your own computer or network, and for high thinking, up to an hour. Off: they are used as they are. See [How long it waits](#how-long-it-waits). |
 | retryOnError | true | Retry provider errors. |
 | ignoreHardErrors | true | Skip permanent failures like missing models or invalid API keys. |
 | hardErrorPhrases | (blank) | Your own wording for an error that will not fix itself, one per line, counted alongside the built-in list. Shown only while `ignoreHardErrors` is on. |
 | retryOnEmpty | true | Retry empty replies, and replies cut off while the model is still thinking. |
 | retryOnSpam | true | Retry when the reply is one character over and over, such as `!!!!!!!!`. |
-| retryOnSpamThinking | true | Retry when the thinking is one character over and over, even when the reply after it looks fine. |
+| retryOnSpamThinking | false | Retry when the thinking is one character over and over, even when the reply after it looks fine. |
 | retryOnGarbled | true | Retry a reply that turned into a jumble: words from several languages and alphabets run together, words with no spaces between them, broken characters, or a switch to another alphabet for the rest of the reply. See [Garbled replies](detection.md#garbled-replies). |
-| retryOnGarbledThinking | true | Retry when the thinking turns into a jumble, words with no spaces, or broken characters, even when the reply after it looks fine. A switch to another alphabet is left alone in the thinking. See [The thinking](detection.md#the-thinking). |
+| retryOnGarbledThinking | false | Retry when the thinking turns into a jumble, words with no spaces, or broken characters, even when the reply after it looks fine. A switch to another alphabet is left alone in the thinking. See [The thinking](detection.md#the-thinking). |
 | retryOnLeak | true | Retry a reply that runs into the prompt's own markers, such as `[/INST]`, or a character card's data. See [Leaked prompt format](detection.md#leaked-prompt-format). |
 | retryOnLoop | true | Retry a reply that repeats a word or phrase over and over to the end, says a few sentences again and again, or runs on for hundreds of words with no punctuation. See [Stuck repeating or rambling](detection.md#stuck-repeating-or-rambling). |
-| retryOnLoopThinking | true | Retry when the thinking repeats a word or phrase over and over to its end, says a few sentences again and again, or runs on for 300 words with no punctuation, even when the reply after it looks fine. See [The thinking](detection.md#the-thinking). |
+| retryOnLoopThinking | false | Retry when the thinking repeats a word or phrase over and over to its end, says a few sentences again and again, or runs on for 300 words with no punctuation, even when the reply after it looks fine. See [The thinking](detection.md#the-thinking). |
 | retryOnTruncated | true | Retry a reply that ends mid-sentence. |
 | retryOnNoPunct | true | Retry a reply that stops on a word with nothing after it. Punctuation in any script counts as an ending, and so does an emoji. |
 | retryOnShort | false | Retry short replies. Off by default, because short replies are often fine. |
@@ -342,8 +323,6 @@ These are the defaults for a new install. They are in the `CONFIG` block at the 
 | logProblems | true | Show the lines about something that could not be done, such as a window that would not open. Shown only while `liveLog` is on. |
 | panelPattern | (none) | A faint pattern behind these settings and the on-screen panel: Diamonds, Stripes, Dots, Hearts or Stars. Each section of the settings, the log and the line under the tabs sit on a box over it. |
 | boxSolid | 60 | How solid those boxes are over a pattern, from 0 to 100. Lower lets more of the pattern show through. 100 is solid. Shown only while a pattern is picked. |
-| costIn | 0 | Your provider's input price per million tokens, in its own currency. The panel's Prompt tab uses it to say what retrying costs. 0 leaves the line off. |
-| costOut | 0 | The output price from the same list, for the reply a retry produces. Both at 0 leaves the line off. |
 
 ### The two waits for a frozen reply
 
@@ -352,7 +331,15 @@ These are the defaults for a new install. They are in the `CONFIG` block at the 
 - A wait that runs out too early throws away a reply that was still coming. The retry then goes to the same slow model, so it runs out again.
 - If your provider is fast and you want quicker retries, lower them.
 
-`idleTimeoutMs` needs streaming on. It watches for text that stopped arriving, and with streaming off no text arrives until the end. A reply that hangs is then caught by `stuckTimeoutMs` instead. Every other check reads the finished reply, so it works with streaming on or off.
+`idleTimeoutMs` needs streaming on. It watches for text that stopped arriving, and with streaming off no text arrives until the end. Every other check reads the finished reply, so it works with streaming on or off.
+
+With streaming off, `stuckTimeoutMs` would stop a slow reply that is still being written, because no text comes until the reply is done. So:
+
+- Auto Retry learns that streaming is off from the first reply that comes back whole, with no text before it.
+- After that, `stuckTimeoutMs` stops no reply that has not started. The Log says so once for each reply.
+- It still asks the backend how the reply ended each time the wait runs out, so a reply that ended without the tab hearing it is still found.
+- The first text that arrives as it is written means streaming is on again, and `stuckTimeoutMs` works as before.
+- This is learned again in each browser tab. The first reply in a tab, before any reply has come back whole, can still be retried as stuck.
 
 A tab can miss the event that ends a reply, most often on a phone or in a tab left in the background. So when either wait runs out, Auto Retry first asks its own backend how the reply ended, which takes up to a second and a half:
 
@@ -361,6 +348,34 @@ A tab can miss the event that ends a reply, most often on a phone or in a tab le
 - The backend did not hear it end either, or did not answer: the reply is stopped and retried as stuck or stalled.
 
 With the council on, the council works before the reply's first words. Each step it reports starts the `stuckTimeoutMs` wait again. When a council tool fails, Lumiverse asks you whether to retry it, and that wait is not counted.
+
+### How long it waits
+
+**Give up waiting for it to start** (`stuckTimeoutMs`) is 4 minutes by default. **Give up on a reply that froze** (`idleTimeoutMs`) is 90 seconds by default.
+
+**Fit the wait to the model**, under them, is on by default. It stretches both waits for a slow model:
+
+| What | How much longer |
+| --- | --- |
+| A model on your own computer or network | 5 times |
+| Thinking set to medium | 1.5 times |
+| Thinking set to high | 2 times |
+| Thinking set to extra high or max | 3 times |
+
+- A model counts as on your own computer or network when its connection's address is `localhost`, a private address such as `192.168.1.40`, a name with no dot, or a name ending in `.local`.
+- The thinking level is the connection's **Reasoning Effort**, in Lumiverse's Reasoning settings. It counts only while **API Reasoning** is on for that connection.
+- Both can apply. A local model with high thinking gets 2 × 5 = 10 times as long: 40 minutes to start, and 15 minutes when it goes quiet. The wait is never more than an hour.
+- The Log says when a reply is given longer, and why.
+- 0 stays off. With the switch off, the waits are used as they are.
+
+**Which connection.** The connection is the one Lumiverse writes the reply with:
+
+1. When a reply starts, Auto Retry uses the connection it last saw in this chat, then the chat's own connection, then your default connection.
+2. Once Lumiverse has built the prompt, Auto Retry's interceptor is told the connection Lumiverse picked. The wait is fitted again to that one, and still counts from the start of the reply.
+
+Reading the connections needs the `generation` permission. Step 2 needs the `interceptor` permission. Without it, step 1 is all that is used.
+
+The same rules are used in Auto Refine and Auto Foley.
 
 ### After an update
 

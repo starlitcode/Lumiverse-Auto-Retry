@@ -202,7 +202,7 @@ const STREAM_BUF_MAX = 200000;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.27.0";
+const VERSION = "5.28.0";
 
 // Whether two saved settings hold the same values, whatever order their keys
 // were written in. A key left undefined counts as not there, the way it is
@@ -246,7 +246,7 @@ const CONFIG = {
   showExtrasToggle: false,
 
   // retry budget
-  maxRetries: 4,
+  maxRetries: 3,
   // From the second try on, send the prompt several times at once and keep the
   // first reply that passes. Off by default: each one is a whole reply to pay for.
   tryAtOnce: false,
@@ -310,6 +310,10 @@ const CONFIG = {
   // blocks, and a slow CPU model can take a minute between tokens on a long
   // context, so anything shorter re-rolls replies that were still coming.
   idleTimeoutMs: 90000, // tokens were flowing then stopped this long (mid-stream cutoff). 0 disables.
+  // Fit the wait to the model: both waits above are stretched for a model on
+  // your own computer or network, and for more thinking (see fitWait). Off,
+  // they are used as they are.
+  waitFit: true,
 
   // what counts as needing a retry
   retryOnError: true,
@@ -317,12 +321,12 @@ const CONFIG = {
   hardErrorPhrases: "", // your own wording for an error that will not fix itself, one per line. Counted alongside the built-in list, and only while Skip hard failures is on.
   retryOnEmpty: true, // also catches a generation cut off mid-reasoning (reasoning seen, content empty)
   retryOnSpam: true, // the reply is one character over and over, such as "!!!!!!!!" (see spamVerdict)
-  retryOnSpamThinking: true, // the thinking is one character over and over, even when the reply after it looks fine
+  retryOnSpamThinking: false, // the thinking is one character over and over, even when the reply after it looks fine
   retryOnGarbled: true, // words run together across languages and scripts, words with no spaces between them, broken characters, or a switch to another alphabet for the rest of the reply (see garbledVerdict and gluedVerdict)
-  retryOnGarbledThinking: true, // the thinking is garbled, judged as the reply is apart from a switch to another alphabet, even when the reply after it looks fine (see thinkingProblem)
+  retryOnGarbledThinking: false, // the thinking is garbled, judged as the reply is apart from a switch to another alphabet, even when the reply after it looks fine (see thinkingProblem)
   retryOnLeak: true, // the prompt's own format written into the reply, such as [/INST] or a character card's data (see leakVerdict)
   retryOnLoop: true, // a word or phrase repeated over and over to the end of the reply, a few sentences said again and again, a short pattern repeated many times, or words with no punctuation running on to the end (see loopVerdict)
-  retryOnLoopThinking: true, // the thinking is stuck repeating, even when the reply after it looks fine (see thinkingProblem)
+  retryOnLoopThinking: false, // the thinking is stuck repeating, even when the reply after it looks fine (see thinkingProblem)
   retryOnTruncated: true, // final content present but cut off mid-sentence (structural heuristic, see looksTruncated)
   // Also treat "the reply stops on a letter" as cut off. The test for an
   // ending reads any script's punctuation, and an emoji, so a scene closing on
@@ -429,10 +433,6 @@ const CONFIG = {
   // sidebar, which places it, themes it, lists it in the Ctrl+K palette, and
   // keeps it off the reply the user is reading.
   panelHome: "float",
-  // What a million tokens costs, input and output. Nobody's prices are known
-  // here, so 0 means the reader has not said and no cost is worked out.
-  costIn: 0,
-  costOut: 0,
 };
 
 // A hint that quotes a default reads it from the block above rather than
@@ -458,6 +458,55 @@ function defaultMs(key: keyof typeof CONFIG): string {
 }
 const def = (key: keyof typeof CONFIG): string => String((CONFIG as any)[key]);
 
+// ---- Fit the wait to the model ----
+// A model on your own computer or network is slower than a cloud one, and
+// thinking takes longer the higher it is set. The same rules are used in
+// Auto Refine and Auto Foley.
+// An address on this computer or this network: localhost, a private
+// address, or a name with no dot, such as a computer on a home network.
+function isLocalUrl(u: string): boolean {
+  // The host: after the scheme and any user name, before a port or path.
+  const m0 = String(u || "").trim().match(/^[a-z][a-z0-9+.-]*:\/\/(?:[^@\/?#]*@)?(\[[^\]]+\]|[^\/:?#]+)/i);
+  const host = m0 ? m0[1].toLowerCase().replace(/^\[|\]$/g, "") : "";
+  if (!host) return false;
+  if (host === "localhost" || host === "::1" || host === "0.0.0.0" || /\.(local|lan|home|internal|localhost)$/.test(host) || host.endsWith(".home.arpa")) return true;
+  if (/^127\./.test(host) || /^10\./.test(host) || /^192\.168\./.test(host) || /^169\.254\./.test(host)) return true;
+  const m = host.match(/^(\d+)\.(\d+)\./);
+  if (m && Number(m[1]) === 172 && Number(m[2]) >= 16 && Number(m[2]) <= 31) return true;
+  // The range VPNs such as Tailscale give out, for a computer of your own.
+  if (m && Number(m[1]) === 100 && Number(m[2]) >= 64 && Number(m[2]) <= 127) return true;
+  if (/^(fc|fd)[0-9a-f]{2}:/.test(host) || /^fe80:/.test(host)) return true;
+  return !host.includes(".") && !host.includes(":");
+}
+// A wait in words, such as "10 minutes" or "90 seconds".
+function minutesText(secs: number): string {
+  if (secs < 120) return secs + " seconds";
+  const m = Math.round(secs / 60);
+  return m + " minutes";
+}
+// How many times longer each thinking level is given.
+const EFFORT_TIMES: Record<string, number> = { none: 1, minimal: 1, low: 1, medium: 1.5, high: 2, xhigh: 3, max: 3 };
+// A model on your own computer or network is given five times as long.
+const LOCAL_TIMES = 5;
+const WAIT_MAX_SECS = 3600;
+// The wait for a call: base seconds, times the thinking level, times five
+// for a local model, at most an hour. why says what made it longer.
+function fitWait(base: number, url: string, effort: string): { secs: number; why: string[] } {
+  const why: string[] = [];
+  let secs = base;
+  const e = String(effort || "").toLowerCase();
+  const times = EFFORT_TIMES[e] || 1;
+  if (times > 1) {
+    secs *= times;
+    why.push("thinking is set to " + (e === "xhigh" ? "extra high" : e));
+  }
+  if (isLocalUrl(url)) {
+    secs *= LOCAL_TIMES;
+    why.push("the model runs on your own computer or network");
+  }
+  return { secs: Math.min(WAIT_MAX_SECS, Math.round(secs)), why };
+}
+
 // Defaults that moved, with the value they moved from. A reader still holding
 // the old value is told once and offered the new one; anybody who set their own
 // is told nothing, because nothing of theirs changed.
@@ -471,7 +520,11 @@ const def = (key: keyof typeof CONFIG): string => String((CONFIG as any)[key]);
 //
 // A selector list is a row of its own, so a reader still on an old list is
 // told the built-in one moved. The lists below are as 5.24.0 had them.
-const MOVED_DEFAULTS: Array<{ key: keyof typeof CONFIG; was: number | string; label: string; why: string }> = [
+// Said for each of the three thinking switches, since a reader can be on the
+// old value of any one of them without the others.
+const THINKING_OFF_WHY =
+  "it is now off. The reply after the thinking is often fine, and a retry for the thinking alone throws that reply away.";
+const MOVED_DEFAULTS: Array<{ key: keyof typeof CONFIG; was: number | string | boolean; label: string; why: string }> = [
   {
     key: "regenerateSelector",
     was:
@@ -509,6 +562,30 @@ const MOVED_DEFAULTS: Array<{ key: keyof typeof CONFIG; was: number | string; la
     was: 'textarea[name="chat-message"]',
     label: "Your input box",
     why: "the built-in list now holds the same selectors as Auto Refine, so a Lumiverse that renames the box is still covered.",
+  },
+  {
+    key: "maxRetries",
+    was: 4,
+    label: "Most tries per message",
+    why: "it is now 3, so a message that keeps failing costs fewer replies.",
+  },
+  {
+    key: "retryOnSpamThinking",
+    was: true,
+    label: "Its thinking was one character over and over",
+    why: THINKING_OFF_WHY,
+  },
+  {
+    key: "retryOnGarbledThinking",
+    was: true,
+    label: "Its thinking was garbled",
+    why: THINKING_OFF_WHY,
+  },
+  {
+    key: "retryOnLoopThinking",
+    was: true,
+    label: "Its thinking got stuck repeating",
+    why: THINKING_OFF_WHY,
   },
 ];
 
@@ -556,13 +633,14 @@ function markText(text: string): string {
 // since the marks are kept in one line split on spaces. Each row has its own,
 // so a row added later is still told, and a row already answered is not asked
 // about again.
-const movedRowMark = (m: { key: string; was: number | string }): string =>
+const movedRowMark = (m: { key: string; was: number | string | boolean }): string =>
   m.key + ":" + (typeof m.was === "string" ? markText(m.was) : String(m.was));
 
 // Whether a setting still holds the value a row moved from. A selector list
 // is the same list whatever the spacing around its commas.
-function sameAsWas(now: any, was: number | string): boolean {
+function sameAsWas(now: any, was: number | string | boolean): boolean {
   if (typeof was === "number") return Number(now) === was;
+  if (typeof was === "boolean") return now === was;
   const list = (v: any) => splitSelectorList(String(v == null ? "" : v)).join(", ");
   return list(now) === list(was);
 }
@@ -698,10 +776,6 @@ const RUNS: Record<string, { title: string; note: string }> = {
     title: "The on-screen panel",
     note: "Whether it is shown, and where it goes.",
   },
-  panelCost: {
-    title: "What a retry costs",
-    note: "Your provider's own prices, copied off its price list, in whatever currency it bills you in. Nothing here knows what a model charges and no two providers agree, so this is the only way the panel can turn a token count into money. A retry pays for the prompt again and for a whole new reply, so both are counted. Both at 0, no cost is worked out and the Prompt tab says nothing about it.",
-  },
   errors: {
     title: "Errors",
     note: "A reply that failed outright, rather than one that arrived and was no good. Most errors are worth another try. The ones that will read the same next time are not, and the two rows under the switch are where that is decided.",
@@ -712,7 +786,7 @@ const RUNS: Record<string, { title: string; note: string }> = {
   },
   frozen: {
     title: "Replies that freeze",
-    note: "The rows above are about a reply that arrived and was no good. These two are about one that never finished. Both are waits in milliseconds, and both lean long so a slow connection is not read as a freeze. Lower them for quicker retries on a fast provider, or set either to 0 to switch that one off.",
+    note: "The rows above are about a reply that arrived and was no good. These are about one that never finished. The two waits are in milliseconds, and both lean long so a slow connection is not read as a freeze. Lower them for quicker retries on a fast provider, or set either to 0 to switch that one off. The switch under them gives a slow model longer.",
   },
 };
 // The runs of switches that get All and None over them.
@@ -859,31 +933,6 @@ const SCHEMA: Group[] = [
         type: "bool",
         hint: "On by default. Something that could not be done, such as a window that would not open.",
       },
-
-      // A retry is a whole generation paid for twice, so the Prompt tab can say
-      // what one costs. Nothing here knows what a model charges and no two
-      // providers agree, so the price comes from the reader. Both at 0 leaves
-      // the line off.
-      {
-        key: "costIn",
-        needs: ["liveLog"],
-        run: "panelCost",
-        label: "Input price, per million tokens",
-        type: "num",
-        min: 0,
-        max: 10000,
-        hint: "Your provider's input price per million tokens. A retry sends the whole prompt again. Type the number, like 5 or 0.075, or paste the whole line.",
-      },
-      {
-        key: "costOut",
-        needs: ["liveLog"],
-        run: "panelCost",
-        label: "Output price, per million tokens",
-        type: "num",
-        min: 0,
-        max: 10000,
-        hint: "Your provider's output price per million tokens, for the text the model writes. Type the number, or paste the whole line.",
-      },
     ],
   },
   {
@@ -977,7 +1026,7 @@ const SCHEMA: Group[] = [
         int: true,
         min: 0,
         max: 600000,
-        hint: "A ceiling so it never pauses forever. The default is " + defaultMs("maxDelayMs") + ".",
+        hint: "The longest wait between tries. The default is " + defaultMs("maxDelayMs") + ". A wait the provider asks for, such as for a rate limit, can be longer, up to an hour.",
       },
       {
         key: "rateLimitDelayMs",
@@ -1055,7 +1104,7 @@ const SCHEMA: Group[] = [
         run: "broken",
         label: "Its thinking was one character over and over",
         type: "bool",
-        hint: "Retry when the thinking is only something like !!!!!!!!, even when the reply after it looks fine.",
+        hint: "Off by default. Retry when the thinking is only something like !!!!!!!!, even when the reply after it looks fine.",
       },
       {
         key: "retryOnGarbled",
@@ -1069,7 +1118,7 @@ const SCHEMA: Group[] = [
         run: "broken",
         label: "Its thinking was garbled",
         type: "bool",
-        hint: "Retry when the thinking turns into a jumble or broken characters, even when the reply after it looks fine.",
+        hint: "Off by default. Retry when the thinking turns into a jumble or broken characters, even when the reply after it looks fine.",
       },
       {
         key: "retryOnLeak",
@@ -1090,7 +1139,7 @@ const SCHEMA: Group[] = [
         run: "broken",
         label: "Its thinking got stuck repeating",
         type: "bool",
-        hint: "Retry when the thinking repeats a phrase to its end, says a few sentences again and again, or runs on with no punctuation, even when the reply looks fine.",
+        hint: "Off by default. Retry when the thinking repeats a phrase to its end, says a few sentences again and again, or runs on with no punctuation, even when the reply looks fine.",
       },
       {
         key: "retryOnEmpty",
@@ -1146,7 +1195,7 @@ const SCHEMA: Group[] = [
         int: true,
         min: 0,
         max: 600000,
-        hint: "If a reply starts but no words come in this long, it retries. The default is " + defaultMs("stuckTimeoutMs") + ", to give slow and thinking models time. 0 turns it off.",
+        hint: "If a reply starts but no words come in this long, it retries. The default is " + defaultMs("stuckTimeoutMs") + ". 0 turns it off. With streaming off, it no longer retries after the first reply that comes back whole.",
       },
       {
         key: "idleTimeoutMs",
@@ -1157,6 +1206,13 @@ const SCHEMA: Group[] = [
         min: 0,
         max: 600000,
         hint: "If words stop coming for this long partway through a reply, it retries. The default is " + defaultMs("idleTimeoutMs") + ". While the model is still thinking, it waits as long as for the first words.",
+      },
+      {
+        key: "waitFit",
+        run: "frozen",
+        label: "Fit the wait to the model",
+        type: "bool",
+        hint: "On by default. A model on your own computer or network gets five times as long, and high thinking two or three times. Off: the two waits above are used as they are.",
       },
     ],
   },
@@ -1642,11 +1698,42 @@ function endsOnABlock(shown: string, visible: string): boolean {
   // reply genuinely cut after "he said:" where it belongs.
   const labeled = (l: string) =>
     /^[*_`]{0,2}[^:\n]{1,30}[*_`]{0,2}\s*:\s*\S[^\n]{0,60}$/.test(l);
-  return (
+  if (
     lines.length >= 2 &&
     labeled(lines[lines.length - 1]) &&
     labeled(lines[lines.length - 2])
-  );
+  )
+    return true;
+
+  // One label line on its own, such as "Where: North Pier" under a "---"
+  // line. A card can ask for one at the end of every reply, and read as cut
+  // off, it spent every try on every message. It has to look like a label,
+  // which a sentence cut after a colon does not:
+  // - the label is one to three words, each starting with a capital letter or
+  //   a digit, so "She whispered: I need to" is not one;
+  // - the value is at most five words, so a line of dialogue written as
+  //   "Name: words" and cut partway is still caught when it is longer;
+  // - the value does not end on a word that needs another after it, so
+  //   "Next: she walks to the" is still cut.
+  // An emoji or symbol in front of the label is allowed, and so is bold.
+  if (oneLabel(lastLine) && !danglingWord.test(lastLine)) return true;
+
+  // A line of hashtags, such as "#midnight-run #rivals". Every word on the
+  // line is a tag. A heading has a space after its "#", so it is not one.
+  if (/^#[\p{L}\p{N}_][\p{L}\p{N}_-]*(?:[ \t,]+#[\p{L}\p{N}_][\p{L}\p{N}_-]*)*$/u.test(lastLine)) return true;
+  return false;
+}
+
+// One "Label: value" line, for endsOnABlock. The label may start with an
+// emoji or a symbol and may be in bold. Its words each start with a capital
+// letter or a digit. The value is at most five words and 40 characters.
+function oneLabel(l: string): boolean {
+  const m = /^[*_]{0,2}[\p{S}\p{P}\p{M}\s]{0,4}([^:\n]{1,30}?)[*_]{0,2}\s*:\s*[*_]{0,2}(\S[^\n]{0,39})$/u.exec(l);
+  if (!m) return false;
+  const words = m[1].trim().split(/\s+/);
+  if (!words.length || words.length > 3) return false;
+  if (m[2].trim().split(/\s+/).length > 5) return false;
+  return words.every((w) => /^[\p{Lu}\p{N}]/u.test(w));
 }
 
 // A wait, said the way a person would. Whole seconds, because tenths flicker
@@ -5520,58 +5607,6 @@ export function setup(ctx: Ctx, opts?: any) {
   }
 
   const rough = (n: number) => (n < 1000 ? String(n) : Math.round(n / 100) / 10 + "k");
-  // ---- turning tokens into the number people actually want ----
-  // A retry is a whole generation charged for again, so what one costs is worth
-  // saying beside the prompt it was measured from.
-  const hasPrices = (): boolean => Number(cfg.costIn) > 0 || Number(cfg.costOut) > 0;
-
-  // No currency symbol, because nothing here knows the currency: a "$" printed
-  // for somebody billed in euros is worse than no symbol at all.
-  //
-  // Two places at a whole unit and up, two significant figures below one. A
-  // fixed number of decimals is what goes wrong here: two prints every prompt
-  // there is as 0.00, and four rounds a cost of 0.000012 away to nothing.
-  const money = (n: number): string =>
-    !Number.isFinite(n) || n <= 0 ? "0" : n >= 1 ? n.toFixed(2) : String(Number(n.toPrecision(2)));
-
-  // Input and output priced apart, since providers charge more for output.
-  const costOf = (sent: number, back: number): number =>
-    (sent / 1e6) * Number(cfg.costIn || 0) + (back / 1e6) * Number(cfg.costOut || 0);
-
-  // The last reply this tab saw, which is the only honest stand-in for the size
-  // of the next one. Counted by the host where it will answer and estimated at
-  // four characters a token where it will not, the same as the prompt.
-  let lastReplyChars = 0;
-  let lastReplyTokens = 0;
-  // Which chat it came from. A reply from the chat you were in an hour ago is
-  // not a stand-in for the next one here, and the line says "the last one
-  // here", so it has to mean here.
-  let lastReplyChat = "";
-  const replyTokens = (chatId: any): number => {
-    if (!lastReplyChars || String(chatId || "") !== lastReplyChat) return 0;
-    return lastReplyTokens || Math.round(lastReplyChars / 4);
-  };
-
-  // Remembered on every reply so the panel has a size to price the output half
-  // with. The host is asked for the real count only while the panel is watching
-  // prompts and a price is set, so a reader who never opens the panel and never
-  // asked for costs sends nothing anywhere.
-  let replyCountAt = 0;
-  function noteReplySize(text: string, chatId: any) {
-    lastReplyChars = String(text || "").length;
-    lastReplyTokens = 0;
-    lastReplyChat = String(chatId || "");
-    if (!lastReplyChars || !promptsAsked || !hasPrices()) return;
-    // Never the same number twice, so two replies ending inside one millisecond
-    // cannot have the first one's count accepted for the second. The prompt
-    // snapshots are stamped the same way for the same reason.
-    const at = Math.max(Date.now(), replyCountAt + 1);
-    replyCountAt = at;
-    try {
-      if (ctx && typeof (ctx as any).sendToBackend === "function")
-        (ctx as any).sendToBackend({ type: "count_reply", at: at, text: text });
-    } catch (_) {}
-  }
   // The host's own count when it gives one, and an estimate otherwise. Which
   // of the two it is gets said in words, since a count and a guess are
   // different things to act on.
@@ -5918,62 +5953,6 @@ export function setup(ctx: Ctx, opts?: any) {
       lastPrompt.total + (lastPrompt.total === 1 ? " message, " : " messages, ") +
       rough(chars) + " characters, " + sayTokens(chars);
     body.appendChild(sum);
-    // What retrying this costs. A retry sends the whole prompt again and pays
-    // for a whole new reply, so both halves are here: the prompt from this tab,
-    // and the reply from the size of the last one this tab saw, which is the
-    // only honest stand-in for one that has not been written yet.
-    if (hasPrices()) {
-      const sent = lastPromptTokens || Math.round(chars / 4);
-      const back = replyTokens(lastPrompt.chatId);
-      const one = costOf(sent, back);
-      const cost = document.createElement("div");
-      cost.style.cssText =
-        "margin-bottom:6px;color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
-      // Which half of the sum is real. One price left at 0 is a price nobody
-      // gave rather than a cost of nothing, and a total that leaves
-      // half out is worse than one that says what it covers.
-      const covers =
-        Number(cfg.costIn) <= 0
-          ? " Only the reply is priced, since the input price is 0."
-          : Number(cfg.costOut) <= 0
-            ? " Only the prompt is priced, since the output price is 0."
-            : back
-              ? " The reply is reckoned at " +
-                // Counted by the host, or the panel's own four-characters-a-token
-                // guess. The prompt half says which of the two it is holding and
-                // this one has to as well, or half the sum reads as measured when
-                // it is not.
-                (lastReplyTokens ? "" : "roughly ") +
-                "the size of the last one here."
-              : " No reply has arrived in this chat yet, so only the prompt is counted.";
-      // With the output price the only one set and no reply to measure, the sum
-      // has nothing in it. Printing the total then puts a 0 on the panel next
-      // to a price somebody just typed, which reads as retries being free.
-      const nothingYet = Number(cfg.costIn) <= 0 && !back;
-      cost.textContent = nothingYet
-        ? "The input price is 0 and no reply has arrived in this chat yet, so there is nothing to price."
-        : "About " + money(one) + " a retry at this size." +
-          (stats.retries
-            ? " The " + stats.retries + (stats.retries === 1 ? " retry" : " retries") +
-              (stats.extraReplies
-                ? ", and " + stats.extraReplies + " more " + (stats.extraReplies === 1 ? "reply" : "replies") + " sent at once,"
-                : "") +
-              " this session come to about " + money(one * (stats.retries + stats.extraReplies)) + "."
-            : "") +
-          covers;
-      body.appendChild(cost);
-      // Said under the figure rather than in a hint, because a hint is only read
-      // by somebody who went looking and this is worth knowing by anybody who
-      // reads the number.
-      const rough = document.createElement("div");
-      rough.setAttribute("data-ar-cost-rough", "1");
-      rough.style.cssText =
-        "margin-bottom:6px;font-size:12px;line-height:1.4;" +
-        "color:var(--lumiverse-text-muted,rgba(255,255,255,.65))";
-      rough.textContent =
-        "This is an estimate, not your bill. It prices every token at the full rate, so a provider discount, such as for cached tokens, makes the real cost lower. It leaves out anything your provider adds around the prompt. Lumiverse counts the tokens with its own tokenizer for the model, and your provider may count them differently.";
-      body.appendChild(rough);
-    }
     const viewRow = document.createElement("div");
     viewRow.style.cssText = "margin-bottom:8px";
     const viewBtn = document.createElement("button");
@@ -8116,6 +8095,7 @@ export function setup(ctx: Ctx, opts?: any) {
         "keepReplacedSaved",
         "stuckTimeoutMs",
         "idleTimeoutMs",
+        "waitFit",
         "retryOnError",
         "ignoreHardErrors",
         "hardErrorPhrases",
@@ -8168,14 +8148,11 @@ export function setup(ctx: Ctx, opts?: any) {
         "confirmButtonLabels",
       ],
     },
-    // The prices are here because the panel is the only thing that reads them:
-    // the cost line is on its Prompt tab and nowhere else. A tick box named
-    // after the panel and carrying them is one somebody can predict.
     {
       id: "notifications",
-      label: "Panel, pop-up and prices",
+      label: "Panel and pop-up",
       keys: [
-        "reduceMotion", "toast", "liveLog", "panelHome", "panelPattern", "boxSolid", "costIn", "costOut",
+        "reduceMotion", "toast", "liveLog", "panelHome", "panelPattern", "boxSolid",
         "logReplies", "logRetries", "logAtOnce", "logNotes", "logSetup", "logProblems",
       ],
     },
@@ -9188,12 +9165,14 @@ export function setup(ctx: Ctx, opts?: any) {
     evictIdleChats();
     return s;
   };
-  // Whether this build streams. Nothing exposes the setting, so it is learned
-  // from what arrives: one token proves streaming is on, and a generation that
-  // finished with text while never sending one proves it is off. Until a whole
-  // generation has gone by, neither is known, and the line says the careful
-  // thing rather than guessing.
-  let sawStreaming = false;
+  // Whether this setup streams. Nothing exposes the setting, so it is learned
+  // from what arrives: a generation that finished with text while never
+  // sending a token says streaming is off, and the next token says it is on
+  // again. Until a whole reply has come back, it is taken to stream.
+  //
+  // With streaming off, no word arrives before the reply is done, so the wait
+  // for the first words would stop a healthy slow reply and retry it. While
+  // this is true, that wait stops nothing (see stuckRanOut).
   let sawWholeReplyAtOnce = false;
 
   // Circuit breaker. Whole runs that gave up, back to back. Three in a row means
@@ -9212,7 +9191,7 @@ export function setup(ctx: Ctx, opts?: any) {
   const stats = {
     retries: 0,
     // Replies sent beyond the first by several tries at once. Each is a whole
-    // reply to pay for, so the cost line counts them with the retries.
+    // reply to pay for, so Debug info counts them apart from the retries.
     extraReplies: 0,
     gaveUp: 0,
     good: 0,
@@ -9301,7 +9280,7 @@ export function setup(ctx: Ctx, opts?: any) {
     if (s.live)
       return {
         text:
-          (!sawStreaming && sawWholeReplyAtOnce
+          (sawWholeReplyAtOnce
             ? "Generating the reply"
             : "Waiting for the reply to start") + soFar,
         busy: true,
@@ -9439,6 +9418,83 @@ export function setup(ctx: Ctx, opts?: any) {
       }
       fire();
     }, delay);
+  }
+
+  // The two waits for this reply, fitted to the model that writes it unless
+  // the reader turned that off. s.fit is the connection the backend named for
+  // the chat (see takeWaitFit). Until it has named one, the waits are used as
+  // they are. 0 stays off.
+  function waitFor(s: any, key: "stuckTimeoutMs" | "idleTimeoutMs"): number {
+    const base = Number((cfg as any)[key]) || 0;
+    if (base <= 0 || !cfg.waitFit || !s || !s.fit) return base;
+    const fit = fitWait(base / 1000, s.fit.url, s.fit.effort);
+    return fit.why.length ? fit.secs * 1000 : base;
+  }
+  // The wait for the first words. When it was armed is kept, so a wait fitted
+  // after the reply started still counts from the start.
+  function armStart(s: any, chatId: string, delay?: number) {
+    if (delay == null) s.startArmedAt = Date.now();
+    armWatchdog(s, "startTimer", delay == null ? waitFor(s, "stuckTimeoutMs") : delay, () =>
+      askHowEnded(chatId, () => stuckRanOut(chatId)),
+    );
+  }
+  // No words came in time, and the backend did not hear the reply end. With
+  // streaming off, no words come until the reply is done, so a reply in that
+  // setup is not stopped. The wait is armed again, so a reply that ended
+  // without this tab hearing it is still asked about.
+  function stuckRanOut(chatId: string) {
+    const s = st(chatId);
+    if (sawWholeReplyAtOnce) {
+      if (s.wholeSaidFor !== s.genId) {
+        s.wholeSaidFor = s.genId;
+        log("replies",
+          "no words have come in yet, but replies here come back whole once they are done, so the reply is not stopped as stuck",
+        );
+      }
+      if (s.live && cfg.enabled && Number(cfg.stuckTimeoutMs) > 0) armStart(s, chatId);
+      return;
+    }
+    abortAndRetry(chatId, "stuck");
+  }
+  // Asks the backend which connection the reply just started is written by.
+  // The interceptor names it again once Lumiverse has picked it, which is the
+  // answer that counts (see takeWaitFit).
+  function askWaitFit(chatId: string) {
+    if (!cfg.enabled || !cfg.waitFit || (Number(cfg.stuckTimeoutMs) <= 0 && Number(cfg.idleTimeoutMs) <= 0)) return;
+    try {
+      if (ctx && typeof (ctx as any).sendToBackend === "function")
+        (ctx as any).sendToBackend({ type: "get_wait_fit", chatId: chatId === NO_CHAT ? "" : chatId });
+    } catch (_) {}
+  }
+  // The connection a reply is written by, from the backend. The start wait is
+  // armed again for the time it has left, and the Log says once per reply
+  // when the reply is given longer, and why.
+  function takeWaitFit(msg: any) {
+    const f = msg && msg.fit;
+    if (!f || typeof f !== "object") return;
+    const chatId = chatSlot(msg.chatId);
+    const s = chats.get(chatKey(chatId));
+    if (!s) return;
+    // The interceptor's answer is about this reply. An answer to the question
+    // asked at the start is a guess, and does not replace it.
+    const exact = msg.from === "interceptor";
+    if (!exact && s.live && s.fitExactFor === s.genId) return;
+    s.fit = { name: String(f.name || ""), url: String(f.url || ""), effort: String(f.effort || "") };
+    if (!s.live) return;
+    if (exact) s.fitExactFor = s.genId;
+    const stuck = waitFor(s, "stuckTimeoutMs");
+    const idle = waitFor(s, "idleTimeoutMs");
+    const why = cfg.waitFit ? fitWait(1, s.fit.url, s.fit.effort).why : [];
+    if (why.length && s.fitSaidFor !== s.genId) {
+      s.fitSaidFor = s.genId;
+      const parts: string[] = [];
+      if (stuck > 0) parts.push(minutesText(Math.round(stuck / 1000)) + " to start");
+      if (idle > 0) parts.push(minutesText(Math.round(idle / 1000)) + " when it goes quiet");
+      if (parts.length)
+        log("replies", "This reply is given up to " + parts.join(" and ") + ", since " + why.join(" and ") + ".");
+    }
+    if (s.startTimer && s.startArmedAt && !s.othersReply)
+      armStart(s, chatId, Math.max(0, stuck - (Date.now() - s.startArmedAt)));
   }
 
   // The last reply as the page is showing it, read off the page rather than out
@@ -11174,8 +11230,8 @@ export function setup(ctx: Ctx, opts?: any) {
   // slow thinking model. A longer Stuck reply limit raises it. Without it, a
   // call the provider never answers keeps the run and its bar up for good.
   const AT_ONCE_WAIT_MS = 5 * 60 * 1000;
-  function atOnceWaitMs(): number {
-    return Math.max(AT_ONCE_WAIT_MS, Number(cfg.stuckTimeoutMs) || 0);
+  function atOnceWaitMs(s?: any): number {
+    return Math.max(AT_ONCE_WAIT_MS, s ? waitFor(s, "stuckTimeoutMs") : Number(cfg.stuckTimeoutMs) || 0);
   }
   function armAtOnceWait(chatId: string, run: any) {
     clearTimeout(run.timer);
@@ -11189,13 +11245,13 @@ export function setup(ctx: Ctx, opts?: any) {
       endAtOnce(s, true);
       hideToast();
       log("atonce",
-        missing + " of the " + run.count + " replies did not come back in " + sayTime(atOnceWaitMs()) +
+        missing + " of the " + run.count + " replies did not come back in " + sayTime(atOnceWaitMs(s)) +
           ", so they were stopped",
       );
       if (run.lastText) s.lastText = run.lastText.slice(-STREAM_BUF_MAX);
       if (!run.judged && !run.lastError) scheduleRetry(chatId, "stuck");
       else nextAfterAtOnce(chatId, run);
-    }, atOnceWaitMs());
+    }, atOnceWaitMs(st(chatId)));
   }
   // The next try after a run where none passed. Every reply an error is an
   // error retry, and only with Retry on errors on, the same as one error on a
@@ -11461,7 +11517,6 @@ export function setup(ctx: Ctx, opts?: any) {
       run.judged += 1;
       const content = String(msg.content || "").trim();
       const thought = String(msg.reasoning || "");
-      noteReplySize(content, chatId);
       const problem = content ? replyProblem(content, thought, cfg) : "empty";
       if (problem === HARD_FAILURE) {
         endedAs(run, "a reply was one of your hard failures, so it stopped");
@@ -11843,10 +11898,8 @@ export function setup(ctx: Ctx, opts?: any) {
     // watchdog compares against rather than trusting that silence means silence.
     s.screenAtStart = screenMark(lastRenderedReply());
     clearTimers(s);
-    if (cfg.enabled && cfg.stuckTimeoutMs > 0)
-      armWatchdog(s, "startTimer", cfg.stuckTimeoutMs, () =>
-        askHowEnded(chatId, () => abortAndRetry(chatId, "stuck")),
-      );
+    if (cfg.enabled && cfg.stuckTimeoutMs > 0) armStart(s, chatId);
+    askWaitFit(chatId);
   }
 
   // Ask the backend which chat is open. Everything else that sets the chat id
@@ -12094,9 +12147,10 @@ export function setup(ctx: Ctx, opts?: any) {
     // decided this reply was over and it was not, this puts it right.
     if (!s.live) s.liveSince = Date.now();
     s.live = true;
+    // A token is the proof this setup streams.
+    sawWholeReplyAtOnce = false;
     // Matched by shape, not an exact string, so a build that labels these
     // "reasoning_content" or "thinking" is not counted as visible reply text.
-    sawStreaming = true;
     if (REASONING_TOKEN.test(String((p && p.type) || ""))) {
       s.sawReasoning = true;
       const thought = tokenText(p);
@@ -12131,10 +12185,10 @@ export function setup(ctx: Ctx, opts?: any) {
   // first words. Many models think in bursts with long quiet spells between
   // them, and stopping one there cut its thinking off partway.
   function quietAllowed(s: any): number {
-    const idle = Number(cfg.idleTimeoutMs) || 0;
+    const idle = waitFor(s, "idleTimeoutMs");
     if (String(s.buf || "").trim()) return idle;
     if (!s.sawReasoning) return idle;
-    return Math.max(idle, Number(cfg.stuckTimeoutMs) || 0);
+    return Math.max(idle, waitFor(s, "stuckTimeoutMs"));
   }
 
   // A council runs between the start of a reply and its first word. Other
@@ -12157,10 +12211,7 @@ export function setup(ctx: Ctx, opts?: any) {
       log("replies", "a council tool failed and Lumiverse is asking what to do, so the reply is not counted as stuck while it waits");
       return;
     }
-    if (cfg.enabled && cfg.stuckTimeoutMs > 0)
-      armWatchdog(s, "startTimer", cfg.stuckTimeoutMs, () =>
-        askHowEnded(chatId, () => abortAndRetry(chatId, "stuck")),
-      );
+    if (cfg.enabled && cfg.stuckTimeoutMs > 0) armStart(s, chatId);
   }
 
   // A reply another tab handles, including one this tab opened too late to
@@ -12399,11 +12450,6 @@ export function setup(ctx: Ctx, opts?: any) {
     // keep one of these, so leaving this one uncapped while the store it feeds
     // is capped only moves where the memory goes.
     s.lastText = content.slice(-STREAM_BUF_MAX);
-    // Every finished reply, not only the ones that pass. A reply a retry throws
-    // away was still generated and still paid for, so it is exactly the size a
-    // retry costs, and recording it only on a clean pass left the panel with
-    // nothing to price the output half with in the case it exists for.
-    noteReplySize(content, chatId);
     // Empty only when the payload says so, or when nothing streamed either. A
     // missing field plus tokens that carried no readable text is not a verdict,
     // so it is left alone rather than re-rolled on a guess.
@@ -16386,9 +16432,8 @@ export function setup(ctx: Ctx, opts?: any) {
       }
       input.type = "number";
       // A box with no step is one the browser holds to whole numbers, and
-      // "numeric" is the keypad with no decimal point on it. Every setting here
-      // was whole until a price arrived, so both were right and both are wrong
-      // now: a price is a fraction of a unit, and so is the backoff factor.
+      // "numeric" is the keypad with no decimal point on it. A setting that
+      // takes a fraction, such as the backoff factor, gets neither.
       input.step = f.int ? "1" : "any";
       input.inputMode = f.int ? "numeric" : "decimal";
       // Marks it for the rule that takes the browser's spinner off. An
@@ -16407,9 +16452,9 @@ export function setup(ctx: Ctx, opts?: any) {
       // for. The circle also reserved a box the width of the largest size the
       // setting allows, so it took that much room out of every panel whether
       // or not the button was even switched on.
-      // A price is copied off a provider's own page, where it reads $5.00/M or
-      // $0.075/M. A number box takes none of that: the paste lands as nothing
-      // and the setting stays at its default, which reads as the
+      // A number pasted with words or symbols around it, such as "2x" or
+      // "90 seconds". A number box takes none of that: the paste lands as
+      // nothing and the setting stays at its default, which reads as the
       // feature being broken. The number is lifted out of whatever was pasted.
       input.addEventListener("paste", (e: any) => {
         const raw = e && e.clipboardData && e.clipboardData.getData("text");
@@ -17824,18 +17869,6 @@ export function setup(ctx: Ctx, opts?: any) {
           if (liveTab === "prompt") renderLiveLog();
           return;
         }
-        // The real count for the reply the panel is pricing. Late answers for a
-        // reply that has since been replaced are dropped, the same way the
-        // prompt's count is, so a slow tokenizer cannot put an old number
-        // against a new reply.
-        if (msg.type === "reply_tokens") {
-          if (!msg.at || msg.at !== replyCountAt) return;
-          const n = Number(msg.tokens);
-          if (!Number.isFinite(n) || n <= 0) return;
-          lastReplyTokens = n;
-          if (liveTab === "prompt") renderLiveLog();
-          return;
-        }
         if (msg.type === "note_skipped") {
           stats.notesSkipped += 1;
           stats.lastNoteSkip = String(msg.reason || "unknown");
@@ -17872,6 +17905,10 @@ export function setup(ctx: Ctx, opts?: any) {
         // that carries them to another device did not happen.
         if (msg.type === "think_marks") {
           setBoundThinkPairs(msg.pairs);
+          return;
+        }
+        if (msg.type === "wait_fit") {
+          takeWaitFit(msg);
           return;
         }
         if (msg.type === "replaced_list") {
@@ -18042,6 +18079,9 @@ export function setup(ctx: Ctx, opts?: any) {
 // input, so they can be checked without a browser.
 export const __testing = {
   LOG_KINDS,
+  isLocalUrl,
+  fitWait,
+  minutesText,
   boxLayer,
   setBoundThinkPairs,
   replyProblem,

@@ -16,12 +16,12 @@ This page covers the checks that read the text of a finished reply:
 
 Some free or busy providers send a broken reply: the same character over and over, like `!!!!!!!!`. It can be in the thinking, in the reply, or both.
 
-There are two switches, both on by default:
+There are two switches:
 
-- **It was one character over and over** (`retryOnSpam`) retries when the reply is broken.
-- **Its thinking was one character over and over** (`retryOnSpamThinking`) retries when the thinking is broken, even when the reply after it looks fine.
+- **It was one character over and over** (`retryOnSpam`) retries when the reply is broken. It is on by default.
+- **Its thinking was one character over and over** (`retryOnSpamThinking`) retries when the thinking is broken, even when the reply after it looks fine. It is off by default.
 
-Turn off the second one to keep a reply that looks fine after broken thinking.
+With the second one off, a reply that looks fine after broken thinking is kept.
 
 It counts as broken when one character is:
 
@@ -186,26 +186,25 @@ A model stuck in a loop runs until it is cut off, so it does not close a quotati
 
 ## The thinking
 
-A model can break down in its thinking and still write a reply that looks fine. Two switches check the thinking on its own, both on by default, under **When to count a reply as bad**, in **Broken replies**:
+A model can break down in its thinking and still write a reply that looks fine. Three switches check the thinking on its own, all off by default, under **When to count a reply as bad**, in **Broken replies**:
 
+- **Its thinking was one character over and over** (`retryOnSpamThinking`) uses the check in [One character over and over](#one-character-over-and-over).
 - **Its thinking was garbled** (`retryOnGarbledThinking`) uses the checks in [Garbled replies](#garbled-replies): a jumble of languages, words with no spaces, and broken characters.
 - **Its thinking got stuck repeating** (`retryOnLoopThinking`) uses the checks in [Stuck repeating or rambling](#stuck-repeating-or-rambling): a loop that reaches the end of the thinking, a few sentences said again and again, a short pattern repeated hundreds of times, and a run of words with no punctuation. The run has to be at least 300 words on one line, twice what a reply needs.
 
-Both retry even when the reply after the thinking looks fine. Turn one off to keep that reply. Somebody who had turned off **It was garbled** or **It got stuck repeating or rambling** before these switches came finds the thinking switch off too.
+All three retry even when the reply after the thinking looks fine. They are off by default for that reason: a retry for the thinking alone throws away a reply that may be fine. Turn one on to retry for it. Somebody who had turned off **It was garbled** or **It got stuck repeating or rambling** before these switches came finds the thinking switch off too.
 
-They check two places, each on its own:
+They check the thinking in two places, each on its own:
 
 - the thinking the model sends apart from the reply
 - thinking written inside the reply, like a `<think>` block, and a plan written in front of one
 
-**What they leave alone in the thinking**, on top of what the reply's checks leave alone:
+**What the garbled and repeating checks leave alone in the thinking**, on top of what the reply's checks leave alone:
 
 - a switch to another alphabet. Some models think in Chinese or switch partway through.
 - a run of words with no punctuation shorter than 300 words, or one split over several lines. A plan is often written as notes like that.
 - the same line written a few times, when the thinking goes on after it
 - a draft of the reply's first line
-
-The thinking switch for [one character over and over](#one-character-over-and-over) is separate.
 
 ## Cut-off detection
 
@@ -241,14 +240,22 @@ Two kinds of text are not prose, so the prose checks leave them out.
 
 **A row of stars** with a space on each side, like `Mood: ***` or a divider line, does not count as emphasis. Emphasis touches the words it marks, so `*He nods*` and `**bold**` are still counted.
 
-**Trackers.** Some cards print a tracker at the end of every reply, such as a weather box or a status line. These do not end on a period. Without this rule, every reply would count as cut off, and it would retry until it hit the limit. These four endings count as finished:
+**Trackers.** Some cards print a tracker at the end of every reply, such as a weather box or a status line. These do not end on a period. Without this rule, every reply would count as cut off, and it would retry until it hit the limit. These endings count as finished:
 
 - a closing or self-closing HTML tag at the very end, like `</div>`, `</table>` or `<br/>`
 - a table row: the last line starts and ends with `|`
 - a status bar on one line, with two or more `|` between its fields, like `📍 The pier | 🕘 9:40 PM | 🌧 Rain`
 - two or more label lines in a row, like `HP: 20/20` over `Time: 14:00`, with or without bold on the label
+- one label line on its own, like `Where: North Pier` under a `---` line
+- a line of hashtags, like `#midnight-run #rivals`
 
-It needs at least two label lines, because a normal sentence can have a colon in it. So a reply cut off after "he said:" is still caught. Prose that stops mid-sentence after a tracker is also still caught: this rule is about how the reply ends.
+One label line has to look like a label, because a normal sentence can have a colon in it:
+
+- The label is one to three words, and each starts with a capital letter or a digit. An emoji or bold in front of it is fine.
+- The value after the colon is at most five words and 40 characters.
+- The value does not end on a word that needs another after it, such as "the" or "and".
+
+So a reply cut off after "he said:" is still caught, and so is `She whispered: we should never have come down`. A line of hashtags has a `#` in front of every word on it. A heading has a space after its `#`, so a reply that ends on a heading is still caught. Prose that stops mid-sentence after a tracker is also still caught: this rule is about how the reply ends.
 
 ### When the code itself is cut off
 
@@ -712,7 +719,7 @@ The words about age are there for one mistake: an adult character, written as an
 What the extension does:
 
 - **It never reads your story to judge it, and never changes a word of it.** It watches how a reply ended and, when that looks wrong, presses Lumiverse's own retry button. It has no rules about what a story may contain.
-- **A retry asks your model again for the same reply.** Whether anything is written is up to your model and your provider. Retries stop at **Most tries per message**, 4 by default.
+- **A retry asks your model again for the same reply.** Whether anything is written is up to your model and your provider. Retries stop at **Most tries per message**, 3 by default.
 - **It cannot tell a mistaken refusal from a correct one.** With **It looks like an accidental refusal** on, which it is by default, every refusal it recognizes is retried the same way, up to that limit.
 - **A provider that blocks a request before anything is written counts as a refusal too**, with the same limit.
 - **The retry notes are off by default.** None of them mentions age or any subject, and every word of each is on the panel before you pick it.

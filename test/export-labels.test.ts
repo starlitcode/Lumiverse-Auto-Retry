@@ -62,11 +62,6 @@ describe("every tick box is named after what it carries", () => {
       keys: ["liveLog", "panelHome", "toast"],
       why: "it carries the on-screen panel and the pop-up",
     },
-    {
-      word: /price/i,
-      keys: ["costIn", "costOut"],
-      why: "it carries what your provider charges",
-    },
   ];
 
   // The list has a safety net under it that folds an uncovered setting into the

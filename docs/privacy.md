@@ -16,11 +16,11 @@ It asks Lumiverse for six permissions. All six are privileged: on a shared serve
 
 | Permission | What it is for | Without it |
 | --- | --- | --- |
-| `generation` | Seeing replies start, stream and end, in your browser and on the server. | It cannot see replies at all. This is the one it needs. |
+| `generation` | Seeing replies start, stream and end, in your browser and on the server. Reading your list of connections: the thinking markers saved on one, and, for **Fit the wait to the model**, its address and thinking level. | It cannot see replies at all. This is the one it needs. |
 | `ui_panels` | The floating on/off button, and the on-screen panel when it floats over the chat. It gives screen space, not access to your data. | Everything works, with no floating button. A panel in the sidebar drawer needs no permission. |
-| `chats` | Asking which chat you are looking at. On a server shared by several accounts, checking that a chat the panel names is on your account before it is read, written or given a retry note. With **Several tries at once** on, also reading whether a chat is a group chat, and which connection and model it is set to. | Everything works. **Turn off here** waits to be told which chat you are in. With **Several tries at once** on, a try after an error that came before any text presses the retry button instead. A chat the panel names cannot be checked to be yours. |
+| `chats` | Asking which chat you are looking at. On a server shared by several accounts, checking that a chat the panel names is on your account before it is read, written or given a retry note. Reading which connection a chat is set to, for **Fit the wait to the model**. With **Several tries at once** on, also reading whether a chat is a group chat, and which connection and model it is set to. | Everything works. **Turn off here** waits to be told which chat you are in. With **Several tries at once** on, a try after an error that came before any text presses the retry button instead. A chat the panel names cannot be checked to be yours. |
 | `characters` | Turning a chat's card id into a name, so the panel can say who a chat is with. It reads one card, for the chat you are in. | Everything works. The panel says "This chat" instead of a name. |
-| `interceptor` | Adding the retry note to a prompt, and showing the whole prompt on the panel's **Prompt** tab. With Several tries at once on, it also finds the failed reply in a prompt Lumiverse builds, so it can be left out, and learns which connection the chat's replies use. | Everything works. No retry note is sent, and the Prompt tab stays empty and says so. Several tries at once finds the failed reply by its words only, and uses your default connection unless the chat is set to its own. |
+| `interceptor` | Adding the retry note to a prompt, and showing the whole prompt on the panel's **Prompt** tab. With Several tries at once on, it also finds the failed reply in a prompt Lumiverse builds, so it can be left out, and learns which connection the chat's replies use. Learning which connection each reply is written by, for **Fit the wait to the model**. | Everything works. No retry note is sent, and the Prompt tab stays empty and says so. Several tries at once finds the failed reply by its words only, and uses your default connection unless the chat is set to its own. The waits are fitted to the chat's own connection, or your default one. |
 | `chat_mutation` | **Several tries at once** only: reading the messages in the chat to find the failed reply, and adding the reply that passed to it as a new reroll. When the failed turn saved no reply, the reply that passed is added after your message as a new reply. | Everything works. With **Several tries at once** on, each try presses the retry button instead. |
 
 **About `chats`:** Lumiverse puts reading, creating and deleting chats into one permission, with no narrower one to ask for. Auto Retry only uses two calls from it: which chat is open, and reading one chat, to check it is on your account and, with **Several tries at once** on, to see whether it is a group chat. It never creates, deletes or changes a chat.
@@ -37,6 +37,7 @@ Behind those permissions it uses these Lumiverse features and nothing else:
 - asking which chat is open
 - reading the name on one character card
 - counting the tokens in a prompt
+- reading your list of connections
 - reading its own settings
 - saving its own settings
 - adding the retry note to a prompt
@@ -86,12 +87,6 @@ What it reads, and for how long:
 - **The text of a reply while it streams**, because some versions of Lumiverse do not include the finished reply when it ends. This copy is dropped when the reply ends or is stopped.
 - **The reply on screen when a reply starts.** It keeps only a fingerprint: a length and a number worked out from the characters. That is enough to tell if it changed, and useless for anything else. It is dropped when the reply ends.
 - **The address in your browser**, to check one thing: does it still contain the id of the chat you are in. The answer is yes or no. The address is not stored or sent anywhere.
-
-**One case sends a reply to the extension's own backend.** With the panel open on the **Prompt** tab and a price set under **What a retry costs**, the finished reply is counted by Lumiverse's own tokenizer, so the panel can show what the reply part of a retry costs.
-
-- Only the number comes back. The text is not stored or used for anything else.
-- It stays inside your Lumiverse.
-- Close the panel, leave the Prompt tab, or leave the prices at 0, and this never happens. The panel then estimates at four characters a token and says **roughly**.
 
 ## What it keeps
 

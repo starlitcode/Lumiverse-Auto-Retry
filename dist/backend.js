@@ -2,7 +2,7 @@
 /*
  * Auto Retry backend.
  *
- * Four jobs.
+ * Five jobs.
  *
  * It keeps the whole settings object in per-user account storage, so somebody's
  * settings follow them across browsers and devices instead of living in one
@@ -20,6 +20,9 @@
  * And it notes how each reply ended, so a tab that missed the ending can ask
  * before it calls the reply stuck or stalled.
  *
+ * And it tells the panel which connection a reply is written by, so the waits
+ * for a stuck or frozen reply can be fitted to that model.
+ *
  * Needs the `generation` permission to hear when a reply finishes and to send
  * the tries, `interceptor` for the refusal note, `chat_mutation` to add a
  * reroll or a reply, and `chats` to see whether a chat is a group chat before
@@ -31,7 +34,7 @@
 // with while this side comes back on the new build. A debug report naming only
 // the panel's version would be speaking for a file it cannot see, so the panel
 // asks for this one and prints both.
-const VERSION = '5.27.0';
+const VERSION = '5.28.0';
 const SETTINGS_FILE = 'settings.json';
 // Presets, kept in account storage next to the settings so they
 // follow the user between devices. The browser copy is a fast local cache, not
@@ -261,6 +264,86 @@ function marksFrom(list) {
             break;
     }
     return out;
+}
+// ---- Fit the wait to the model ----
+// The panel gives a slow model longer before it calls a reply stuck or frozen
+// (see fitWait in the panel). It needs the connection the reply is written by:
+// its address, and its thinking level.
+//
+// The interceptor is told the connection Lumiverse picked for each reply, and
+// names it to the panel at once. Before the interceptor runs, and without the
+// interceptor permission, the connection is the one the interceptor last named
+// in this chat, then the chat's own connection, then the default connection.
+//
+// The list of connections is read at most once a minute per account, and is
+// shared with the thinking markers above.
+const connsBy = new Map();
+async function connectionList(userId) {
+    const k = userKey(userId);
+    const had = connsBy.get(k);
+    if (had && Date.now() - had.at < MARKS_FRESH_MS)
+        return had.list;
+    let list = had ? had.list : [];
+    try {
+        if (spindle.connections && typeof spindle.connections.list === 'function') {
+            const got = await spindle.connections.list(userId);
+            if (Array.isArray(got))
+                list = got;
+        }
+    }
+    catch (_) { /* no generation permission: the waits are used as they are */ }
+    connsBy.set(k, { at: Date.now(), list: list });
+    return list;
+}
+// The connection the interceptor last named for each chat, by account.
+// Bounded, oldest first.
+const connByChat = new Map();
+const CONN_BY_CHAT_MAX = 50;
+const chatConnKey = (userId, chatId) => userKey(userId) + '\n' + chatId;
+// What the panel needs from a connection. The thinking level is the
+// connection's own when it sends a reasoning setting to the model
+// (apiReasoning), and none otherwise.
+function fitInfo(c) {
+    const r = c && c.reasoning_bindings && c.reasoning_bindings.settings;
+    return {
+        id: String(c.id == null ? '' : c.id),
+        name: String(c.name == null ? '' : c.name),
+        url: String(c.api_url == null ? '' : c.api_url),
+        effort: r && r.apiReasoning ? String(r.reasoningEffort || '') : '',
+    };
+}
+async function waitFitFor(userId, chatId, connectionId) {
+    const list = await connectionList(userId);
+    const byId = (id) => (id ? list.find((c) => c && String(c.id) === id) : undefined);
+    let c = byId(connectionId);
+    if (!c && chatId)
+        c = byId(connByChat.get(chatConnKey(userId, chatId)) || '');
+    if (!c && chatId) {
+        const read = await chatMeta(chatId, userId);
+        const pinned = read.meta && typeof read.meta.connection_profile_id === 'string' ? read.meta.connection_profile_id.trim() : '';
+        c = byId(pinned);
+    }
+    if (!c)
+        c = list.find((x) => x && x.is_default);
+    return c ? fitInfo(c) : null;
+}
+// Called from the interceptor. It must not hold the reply up, so the answer
+// goes to the panel when it is ready. Only to the account named: with no
+// account named there is nobody it can safely go to.
+function nameConnection(userId, chatId, connectionId) {
+    if (!userId || !chatId || !connectionId)
+        return;
+    const k = chatConnKey(userId, chatId);
+    connByChat.delete(k);
+    connByChat.set(k, connectionId);
+    while (connByChat.size > CONN_BY_CHAT_MAX)
+        connByChat.delete(connByChat.keys().next().value);
+    waitFitFor(userId, chatId, connectionId)
+        .then((fit) => {
+        if (fit)
+            replyTo(userId, { type: 'wait_fit', chatId: chatId, from: 'interceptor', fit: fit });
+    })
+        .catch(() => { });
 }
 // Replying without a userId broadcasts to every connected user on an
 // operator-scoped install, so every reply to a frontend message carries the id
@@ -1225,24 +1308,6 @@ spindle.onFrontendMessage(async (payload, userId, tab) => {
             });
             return;
         }
-        // The reply a generation just produced, counted so the panel can price the
-        // output half of a retry. Only the count goes back: the text is not kept,
-        // not stored, and not read for anything else, and it came from this server
-        // in the first place.
-        if (payload.type === 'count_reply') {
-            const text = String(payload.text == null ? '' : payload.text);
-            const at = Number(payload.at) || 0;
-            if (!text)
-                return;
-            countTokens(text, null, userId)
-                .then((tokens) => {
-                if (tokens == null)
-                    return;
-                replyTo(userId, { type: 'reply_tokens', at: at, tokens: tokens });
-            })
-                .catch(() => { });
-            return;
-        }
         if (payload.type === 'set_prompt_capture') {
             const k = watcherKey(userId);
             if (payload.on)
@@ -1348,14 +1413,20 @@ spindle.onFrontendMessage(async (payload, userId, tab) => {
             const had = marksBy.get(k);
             let pairs = had ? had.pairs : [];
             if (!had || Date.now() - had.at >= MARKS_FRESH_MS) {
-                try {
-                    if (spindle.connections && typeof spindle.connections.list === 'function')
-                        pairs = marksFrom(await spindle.connections.list(userId));
-                }
-                catch (_) { /* no generation permission: the built-in formats still apply */ }
+                // With no generation permission the list is empty, and the built-in
+                // formats still apply.
+                pairs = marksFrom(await connectionList(userId));
                 marksBy.set(k, { at: Date.now(), pairs: pairs });
             }
             replyTo(userId, { type: 'think_marks', pairs: pairs });
+            return;
+        }
+        // The connection the reply in this chat is written by, as far as it can be
+        // known before the interceptor names it (see waitFitFor).
+        if (payload.type === 'get_wait_fit') {
+            const chatId = payload.chatId ? String(payload.chatId) : '';
+            const fit = await waitFitFor(userId, chatId, '');
+            replyTo(userId, { type: 'wait_fit', chatId: chatId, from: 'ask', fit: fit });
             return;
         }
         if (payload.type === 'keep_replaced') {
@@ -1461,6 +1532,8 @@ const promptInterceptor = async (messages, context) => {
         }
         const who = context && context.userId;
         const chatId = context && context.chatId ? String(context.chatId) : '';
+        if (context && context.connectionId)
+            nameConnection(who, chatId, String(context.connectionId));
         // Before the note goes in, so a later try only carries a note when one is
         // armed for it.
         keepPrompt(messages, context, who);

@@ -24,7 +24,7 @@ The two lists are separate, so you can export everything but import only one par
 - **Retrying and its buttons**, including whether the floating button and the Extras entry are shown
 - **Refusals and notes**: everything that decides a reply was a refusal, and the note wording sent with a retry
 - **Button selectors**
-- **Panel, pop-up and prices**: the on-screen panel, the message on each retry, and the two prices used to work out costs
+- **Panel and pop-up**: the on-screen panel and the message on each retry
 - **All presets**, both kinds at once
 
 Together these cover every setting, so an export is a full backup. A setting that is not in a named group is saved with retry behavior, so a newer option is never left out.

@@ -70,10 +70,9 @@ describe("a hint that names a default names the real one", () => {
   test("no hint carries a number the extension does not use", () => {
     const bad: Array<{ key: string; number: string }> = [];
     for (const f of FIELDS) {
-      // Not the fractional half of a decimal. A price is written 0.075, and no
-      // default is a fraction with three places on it, so a run of digits
-      // sitting behind a point is an example rather than a number this
-      // extension has.
+      // Not the fractional half of a decimal. No default is a fraction with
+      // three places on it, so a run of digits sitting behind a point is an
+      // example rather than a number this extension has.
       for (const m of f.hint.matchAll(/(?<![.\d])(\d{3,})\b/g)) {
         if (!DEFAULT_NUMBERS.has(m[1])) bad.push({ key: f.key, number: m[1] });
       }

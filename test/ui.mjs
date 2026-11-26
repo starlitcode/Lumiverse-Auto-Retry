@@ -784,7 +784,7 @@ console.log("\nthe debug report");
   const text = r.out;
   check("the report was built", text.length > 200, text.slice(0, 200));
   check("its time is the reader's own, with the zone", /time: \d{4}-\d\d-\d\d \d\d:\d\d:\d\d \(UTC[+-]\d+(:\d\d)?\)/.test(text), text.slice(0, 200));
-  check("a changed setting is listed by its label and name, with its default", /Most tries per message \(maxRetries\): 6, default 4/.test(text), text);
+  check("a changed setting is listed by its label and name, with its default", /Most tries per message \(maxRetries\): 6, default 3/.test(text), text);
   check("a setting at its default is not listed", !/\(retryOnRefusal\)/.test(text), text);
   check("a setting whose default is empty says so in a word",
     /\(panelPattern\): "hearts", default empty\n/.test(text) && !/default ""/.test(text), text);
@@ -4239,6 +4239,186 @@ console.log("\na reply that is streaming is not stuck");
   check("no console errors", errors.length === 0, errors);
 }
 
+console.log("\nfit the wait to the model");
+{
+  // The switch sits straight under the two waits, works with a tap on a phone
+  // and a click on a laptop, and is saved.
+  for (const [name, viewport, touch] of [["phone", { width: 390, height: 844 }, true], ["laptop", { width: 1280, height: 800 }, false]]) {
+    const { out, errors } = await inPanel(browser, { viewport, touch }, async (page) => {
+      const where = await page.evaluate(() => {
+        const rows = [...document.querySelectorAll("#modal [data-ar-row]")].map((r) => r.getAttribute("data-ar-row"));
+        const at = rows.indexOf("waitFit");
+        const row = document.querySelector('#modal [data-ar-row="waitFit"]');
+        const r = row ? row.getBoundingClientRect() : null;
+        return {
+          before: rows.slice(at - 2, at),
+          label: row ? row.textContent : "",
+          width: r ? r.right : 0,
+          page: document.documentElement.clientWidth,
+          wide: document.documentElement.scrollWidth,
+        };
+      });
+      const box = page.locator('#modal [data-ar-row="waitFit"] input[type=checkbox]');
+      // A panel without the switch fails the checks below rather than waiting.
+      if (!(await box.count())) return { where, was: null, now: null, saved: null, hitHeight: 0, boxHeight: 0, aimed: false };
+      await box.scrollIntoViewIfNeeded();
+      const was = await box.isChecked();
+      // The box is drawn as the switch, so the middle of it is what a person
+      // presses. The probe checks it hit the box before anything else.
+      const hit = await page.evaluate(() => {
+        const input = document.querySelector('#modal [data-ar-row="waitFit"] input[type=checkbox]');
+        const r = input ? input.getBoundingClientRect() : null;
+        if (!r) return null;
+        const x = r.left + r.width / 2;
+        const y = r.top + r.height / 2;
+        // A tick box answers a tap just around it, so its tap target is the
+        // height that still hits it, read point by point.
+        let up = 0;
+        let down = 0;
+        while (up < 40 && document.elementFromPoint(x, y - up - 1) === input) up++;
+        while (down < 40 && document.elementFromPoint(x, y + down + 1) === input) down++;
+        return { x, y, h: up + down + 1, box: r.height, aimed: document.elementFromPoint(x, y) === input };
+      });
+      if (touch) await page.touchscreen.tap(hit.x, hit.y);
+      else await page.mouse.click(hit.x, hit.y);
+      await page.waitForTimeout(60);
+      const now = await box.isChecked();
+      await page.evaluate(() => [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === "Save").click());
+      await page.waitForTimeout(60);
+      const saved = await page.evaluate(() => {
+        try { return JSON.parse(localStorage.getItem("lv-auto-retry:settings:v1") || "{}").waitFit; } catch (_) { return "unreadable"; }
+      });
+      return { where, was, now, saved, hitHeight: hit ? hit.h : 0, boxHeight: hit ? hit.box : 0, aimed: !!(hit && hit.aimed) };
+    });
+    check(name + ": the probe presses the switch itself", out.aimed, out);
+    check(name + ": the switch sits straight under the two waits",
+      out.where.before.join() === "stuckTimeoutMs,idleTimeoutMs", out.where);
+    check(name + ": it is labeled Fit the wait to the model", /Fit the wait to the model/.test(out.where.label), out.where.label.slice(0, 80));
+    check(name + ": it is on by default", out.was === true, out);
+    check(name + ": a " + (touch ? "tap" : "click") + " turns it off", out.now === false, out);
+    check(name + ": and Save keeps it", out.saved === false, out.saved);
+    check(name + ": nothing runs off the side", out.where.width <= out.where.page + 1 && out.where.wide <= out.where.page, out.where);
+    // The same rule as every tick box in the panel (see "the settings on a
+    // phone and under a mouse"): it answers a tap just around it.
+    if (touch) check(name + ": the switch answers a tap just around it", out.hitHeight > out.boxHeight, out);
+    check(name + ": no console errors", errors.length === 0, errors);
+  }
+
+  // A reply on a local model with high thinking is given ten times as long
+  // to start, once the interceptor has named its connection. The Log says so.
+  const errors = [];
+  const runOne = async (settings, fit) => {
+    const page = await browser.newPage();
+    page.on("pageerror", (e) => errors.push(e.message));
+    await stage(page, '<div id=modal></div><button title="Regenerate" data-testid="regenerate">R</button>');
+    await page.addScriptTag({ content: SOURCE, type: "module" });
+    await page.waitForFunction(() => !!window.__setup);
+    const res = await page.evaluate(async ({ settings, fit }) => {
+      const handlers = {};
+      const backs = [];
+      const sent = [];
+      let clicks = 0;
+      document.querySelector("[data-testid=regenerate]").addEventListener("click", () => clicks++);
+      window.__setup(
+        {
+          events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
+          sendToBackend: (m) => sent.push(m),
+          onBackendMessage: (fn) => { backs.push(fn); return () => {}; },
+          ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+                registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) },
+        },
+        Object.assign({ retryDelayMs: 10, backoffFactor: 1, maxDelayMs: 10, jitter: false, maxRetries: 2,
+          toast: false, stuckTimeoutMs: 100, idleTimeoutMs: 0, pauseWhenFailing: false, liveLog: true }, settings),
+      );
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      handlers.GENERATION_STARTED({ chatId: "c1", generationId: "g" });
+      const asked = sent.filter((m) => m.type === "get_wait_fit").length;
+      await wait(20);
+      if (fit) for (const fn of backs) fn({ type: "wait_fit", chatId: "c1", from: "interceptor", fit });
+      // Past the plain wait, and well short of the fitted one.
+      await wait(300);
+      const early = clicks;
+      // Past the fitted wait of one second.
+      await wait(1100);
+      return { asked, early, late: clicks, log: document.body.innerText };
+    }, { settings, fit });
+    await page.close();
+    return res;
+  };
+  const home = { name: "Home", url: "http://192.168.1.40:5001/v1", effort: "high" };
+  const fitted = await runOne({}, home);
+  check("the backend is asked which connection the reply is written by", fitted.asked === 1, fitted.asked);
+  check("a local model with high thinking is not stopped at the plain wait", fitted.early === 0, fitted);
+  check("and is still retried once the fitted wait runs out", fitted.late === 1, fitted.late);
+  check("the Log says it was given longer, and why",
+    /This reply is given up to 1 seconds? to start, since thinking is set to high and the model runs on your own computer or network\./.test(fitted.log),
+    fitted.log.slice(0, 400));
+  const plain = await runOne({ waitFit: false }, home);
+  check("with the switch off, the wait is used as it is", plain.early === 1, plain);
+  const cloud = await runOne({}, { name: "Cloud", url: "https://api.example.com/v1", effort: "low" });
+  check("a cloud model with low thinking keeps the plain wait", cloud.early === 1, cloud);
+  check("no console errors", errors.length === 0, errors);
+}
+
+console.log("\na reply with streaming off is not stopped as stuck");
+{
+  // With streaming off no word arrives before the reply is done. Once one
+  // reply has come back whole, the wait for the first words stops nothing.
+  const errors = [];
+  const page = await browser.newPage();
+  page.on("pageerror", (e) => errors.push(e.message));
+  await stage(page, '<div id=modal></div><button title="Regenerate" data-testid="regenerate">R</button>');
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  const out = await page.evaluate(async () => {
+    const handlers = {};
+    let clicks = 0;
+    document.querySelector("[data-testid=regenerate]").addEventListener("click", () => clicks++);
+    window.__setup(
+      {
+        events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
+        sendToBackend: () => {},
+        onBackendMessage: () => () => {},
+        ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+              registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) },
+      },
+      { retryDelayMs: 10, backoffFactor: 1, maxDelayMs: 10, jitter: false, maxRetries: 2,
+        toast: false, stuckTimeoutMs: 80, idleTimeoutMs: 0, pauseWhenFailing: false, liveLog: true },
+    );
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const reply = "Ivo shut the ledger and blew out the lamp.";
+    // The first reply comes back whole, with no word before it.
+    handlers.GENERATION_STARTED({ chatId: "c1", generationId: "g1" });
+    await wait(20);
+    handlers.GENERATION_ENDED({ chatId: "c1", generationId: "g1", content: reply });
+    await wait(40);
+    const afterWhole = clicks;
+    // The next one is slow, past the wait, and is not stopped.
+    handlers.GENERATION_STARTED({ chatId: "c1", generationId: "g2" });
+    await wait(400);
+    const slow = clicks - afterWhole;
+    handlers.GENERATION_ENDED({ chatId: "c1", generationId: "g2", content: reply });
+    await wait(40);
+    const said = /replies here come back whole/.test(document.body.innerText);
+    // A word that arrives as it is written means streaming is on again, and
+    // a reply that then never starts is retried as before.
+    handlers.GENERATION_STARTED({ chatId: "c1", generationId: "g3" });
+    handlers.STREAM_TOKEN_RECEIVED({ chatId: "c1", generationId: "g3", content: "Ivo " });
+    handlers.GENERATION_ENDED({ chatId: "c1", generationId: "g3", content: reply });
+    await wait(40);
+    const beforeStall = clicks;
+    handlers.GENERATION_STARTED({ chatId: "c1", generationId: "g4" });
+    await wait(400);
+    return { afterWhole, slow, said, stalled: clicks - beforeStall };
+  });
+  await page.close();
+  check("a reply that came back whole is not retried", out.afterWhole === 0, out);
+  check("after it, a slow reply with no words yet is not stopped as stuck", out.slow === 0, out);
+  check("and the Log says why", out.said, out);
+  check("once words stream again, a reply that never starts is retried", out.stalled === 1, out);
+  check("no console errors", errors.length === 0, errors);
+}
+
 console.log("\na council at work is not a stuck reply");
 {
   // A council runs between the start of a reply and its first word, and
@@ -7166,6 +7346,36 @@ console.log("\nnote presets from the account and the reset");
   }, { STORE, OLD_SWIPE });
   check("Take it puts in the list that finds the swipe box",
     /^\[data-component="SwipeControls"\] button:last-of-type/.test(taken) && taken.indexOf("swipe-right") < 0, taken);
+
+  // The rows for the defaults that moved in 5.28.0: three tries, and the
+  // three thinking-only checks off. A switch saved on its old value of true
+  // is told about, and one saved off is not.
+  const onOldThinking = await movedPage(
+    { [STORE]: JSON.stringify({ maxRetries: 4, retryOnSpamThinking: true, retryOnGarbledThinking: false, retryOnLoopThinking: true }) }, null, []);
+  check("somebody on 4 tries and the thinking checks on is told, by name",
+    onOldThinking.line.indexOf("Most tries per message") >= 0 &&
+      onOldThinking.line.indexOf("Its thinking was one character over and over") >= 0 &&
+      onOldThinking.line.indexOf("Its thinking got stuck repeating") >= 0, onOldThinking);
+  check("and a thinking check already off is not", onOldThinking.line.indexOf("Its thinking was garbled") < 0, onOldThinking);
+  const tookThinking = await fresh(async ({ STORE }) => {
+    localStorage.setItem(STORE, JSON.stringify({ maxRetries: 4, retryOnLoopThinking: true }));
+    const acts = {};
+    window.__setup({
+      events: { on: () => () => {} }, sendToBackend: () => {}, onBackendMessage: () => () => {},
+      ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+            registerInputBarAction: (o) => { const a = { onClick: (cb) => { a.cb = cb; return () => {}; }, destroy: () => {} }; acts[o.id] = a; return a; } },
+    }, { toast: false, liveLog: false });
+    await new Promise((r) => setTimeout(r, 200));
+    acts["auto-retry-settings"].cb();
+    await new Promise((r) => setTimeout(r, 100));
+    const take = document.querySelector('[data-ar-moveddefault="take"]');
+    if (!take) return { maxRetries: null, loop: null };
+    take.click();
+    await new Promise((r) => setTimeout(r, 100));
+    const saved = JSON.parse(localStorage.getItem(STORE));
+    return { maxRetries: saved.maxRetries, loop: saved.retryOnLoopThinking };
+  }, { STORE });
+  check("Take it puts in 3 tries and the thinking check off", tookThinking.maxRetries === 3 && tookThinking.loop === false, tookThinking);
 
   // The reset line names presets, so it has to mean all of them: counted,
   // cleared, and with the notes key left in place for the next read.
@@ -12245,56 +12455,55 @@ console.log("\nprompt viewer");
   check("no console errors", errors.length === 0, errors);
 }
 
-// ---- prices as a provider writes them ----
-// A price list reads $5.00/M or $0.075/M. The box asked a phone for the keypad
-// with no decimal point on it and held itself to whole numbers, so neither a
-// price nor the backoff factor could be typed on one.
+// ---- a number that takes a fraction ----
+// A box with no step holds itself to whole numbers, and the "numeric" keypad
+// has no decimal point on it, so the backoff factor could not be typed on a
+// phone. A number pasted with words around it is taken out of them.
 {
-  const { errors: priceErrors } = await inPanel(browser, {}, async (page) => {
+  const { errors: numErrors } = await inPanel(browser, {}, async (page) => {
     const out = await page.evaluate(() => {
       const find = (k) => {
         const row = document.querySelector('[data-ar-row="' + k + '"]');
         return row ? row.querySelector("input[data-ar-num]") : null;
       };
       const shape = (n) => (n ? { step: n.step, mode: n.inputMode } : null);
-      return {
-        price: shape(find("costIn")),
-        out: shape(find("costOut")),
-        factor: shape(find("backoffFactor")),
-        whole: shape(find("maxRetries")),
-      };
+      return { factor: shape(find("backoffFactor")), whole: shape(find("maxRetries")) };
     });
-    check("a price box takes decimals", out.price && out.price.step === "any", JSON.stringify(out));
-    check("and asks for a keypad with a point on it", out.price && out.price.mode === "decimal", JSON.stringify(out));
-    check("the output price the same", out.out && out.out.step === "any", JSON.stringify(out));
-    check("the backoff factor too, which it never did", out.factor && out.factor.step === "any", JSON.stringify(out));
+    check("the backoff factor takes decimals", out.factor && out.factor.step === "any", JSON.stringify(out));
+    check("and asks for a keypad with a point on it", out.factor && out.factor.mode === "decimal", JSON.stringify(out));
     check("while a whole number still asks for whole numbers", out.whole && out.whole.step === "1", JSON.stringify(out));
     check("and keeps the plain keypad", out.whole && out.whole.mode === "numeric", JSON.stringify(out));
 
-    // Typed and pasted, as somebody copying a price list would do each.
     const kept = await page.evaluate(async () => {
-      const row = document.querySelector('[data-ar-row="costIn"]');
-      const n = row.querySelector("input[data-ar-num]");
-      n.value = "0.075";
-      n.dispatchEvent(new Event("change", { bubbles: true }));
-      const orow = document.querySelector('[data-ar-row="costOut"]');
-      const o = orow.querySelector("input[data-ar-num]");
+      const n = document.querySelector('[data-ar-row="backoffFactor"] input[data-ar-num]');
       const dt = new DataTransfer();
-      dt.setData("text", "$3.75/M");
-      o.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
+      dt.setData("text", "1.5x");
+      n.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
       await new Promise((r) => setTimeout(r, 40));
-      return { typed: n.value, pasted: o.value };
+      return { pasted: n.value };
     });
-    check("a fraction of a unit survives being typed", kept.typed === "0.075", JSON.stringify(kept));
-    check("and a price pasted as the provider writes it is understood", kept.pasted === "3.75", JSON.stringify(kept));
+    check("and a number pasted with words around it is understood", kept.pasted === "1.5", JSON.stringify(kept));
   });
-  check("no console errors on the price rows", priceErrors.length === 0, priceErrors);
+  check("no console errors on the number rows", numErrors.length === 0, numErrors);
 }
 
-// ---- the reply is only sent for counting when it is asked for ----
-// The privacy page promises this happens with the panel watching prompts and a
-// price set, and not otherwise. That promise is the check.
+// ---- no price rows, and a reply is never sent for counting ----
+// The two price boxes are gone. A price saved by an older version is dropped,
+// and no reply goes to the backend to be counted, with the Prompt tab open or
+// not.
 {
+  // The rows were shown with the on-screen panel on, so it is on here.
+  const { out: rows, errors: rowErrors } = await inPanel(browser, { settings: { liveLog: true } }, (page) =>
+    page.evaluate(() => ({
+      costIn: !!document.querySelector('[data-ar-row="costIn"]'),
+      costOut: !!document.querySelector('[data-ar-row="costOut"]'),
+      words: /price/i.test(document.body.innerText),
+    })),
+  );
+  check("there is no input or output price row", !rows.costIn && !rows.costOut, JSON.stringify(rows));
+  check("and no row talks about a price", !rows.words, JSON.stringify(rows));
+  check("no console errors without the price rows", rowErrors.length === 0, rowErrors);
+
   const run = async (over, opts) => {
     const page = await browser.newPage();
     const errors = [];
@@ -12305,14 +12514,13 @@ console.log("\nprompt viewer");
     await page.waitForFunction(() => !!window.__setup);
     const out = await page.evaluate(async ({ over, opts }) => {
       const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-      let msgCbs = [];
       const sent = [];
       const handlers = {};
       window.__setup(
         {
           events: { on: (n, fn) => { (handlers[n] = handlers[n] || []).push(fn); return () => {}; } },
           sendToBackend: (m) => sent.push(m),
-          onBackendMessage: (cb) => { msgCbs.push(cb); return () => {}; },
+          onBackendMessage: () => () => {},
           ui: {
             showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
             registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }),
@@ -12336,126 +12544,12 @@ console.log("\nprompt viewer");
     return { out, errors };
   };
 
-  const asked = await run({ liveLog: true, toast: false, costIn: 3, costOut: 15 }, { openPromptTab: true });
-  check("with the prompt tab open and prices set, the reply is counted", asked.out === 1, asked.out);
-  check("no console errors while counting", asked.errors.length === 0, asked.errors);
-
-  const noPrice = await run({ liveLog: true, toast: false }, { openPromptTab: true });
-  check("with no price set, the reply is not sent anywhere", noPrice.out === 0, noPrice.out);
-
-  const noTab = await run({ liveLog: true, toast: false, costIn: 3, costOut: 15 }, { openPromptTab: false });
-  check("and not while the panel is not watching prompts", noTab.out === 0, noTab.out);
-}
-
-// ---- what a retry costs ----
-// The prompt tab reported messages, characters and tokens, none of which is
-// what somebody is billed in. A retry sends the whole prompt again, so that
-// half can be worked out; what the new reply costs cannot be known before it
-// arrives and is named rather than guessed at.
-{
-  const run = async (over, opts) => {
-    const page = await browser.newPage();
-    const errors = [];
-    page.on("pageerror", (e) => errors.push(e.message));
-    await stage(page, "<div id=modal></div>");
-    await page.addStyleTag({ content: THEME });
-    await page.addScriptTag({ content: SOURCE, type: "module" });
-    await page.waitForFunction(() => !!window.__setup);
-    const out = await page.evaluate(async ({ over, opts }) => {
-      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-      let msgCbs = [];
-      const onBackend = (m) => { for (const cb of msgCbs.slice()) { try { cb(m); } catch (_) {} } };
-      const handlers = {};
-      const sent = [];
-      window.__setup(
-        {
-          events: { on: (n, fn) => { (handlers[n] = handlers[n] || []).push(fn); return () => {}; } },
-          sendToBackend: (m) => sent.push(m),
-          onBackendMessage: (cb) => { msgCbs.push(cb); return () => {}; },
-          ui: {
-            showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
-            registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }),
-          },
-        },
-        over,
-      );
-      await wait(30);
-      const tab = (label) => [...document.querySelectorAll('[role="tab"]')]
-        .find((b) => b.textContent.trim() === label);
-      const body = () => document.getElementById("__lvRetryLogBody");
-      tab("Prompt").click();
-      await wait(20);
-      // A reply of 800 characters, which is the estimate's 200 tokens, so the
-      // output half has a size to be priced on.
-      const fire = (name, p) => { for (const fn of handlers[name] || []) { try { fn(p); } catch (_) {} } };
-      const replyChat = (opts && opts.replyChat) || "c1";
-      fire("GENERATION_STARTED", { generationId: "g1", chatId: replyChat });
-      fire("GENERATION_ENDED", { generationId: "g1", chatId: replyChat, content: "She set the cup down. ".repeat(36) });
-      await wait(30);
-      // The prompt below is for c1. A reply that came from somewhere else has
-      // to leave the panel with a prompt it will still show, so the generation
-      // that follows puts the tab back in c1.
-      if (replyChat !== "c1") {
-        fire("GENERATION_STARTED", { generationId: "g2", chatId: "c1" });
-        await wait(10);
-      }
-      // 4000 characters with no host count, so the estimate is 1000 tokens.
-      onBackend({
-        type: "prompt_snapshot",
-        at: Date.now(),
-        chatId: "c1",
-        messages: [{ role: "system", content: "z".repeat(4000), history: false }],
-        total: 1,
-        notes: 0,
-      });
-      await wait(30);
-      return body() ? body().textContent : "";
-    }, { over, opts });
-    await page.close();
-    return { out, errors };
-  };
-
-  // Both halves: 1000 tokens of prompt at 3 per million is 0.003, and a reply
-  // of 200 tokens at 15 is another 0.003, so 0.006.
-  const both = await run({ liveLog: true, toast: false, costIn: 3, costOut: 15 });
-  check("a retry is priced on the prompt and the reply together",
-    /About 0\.006 a retry at this size/.test(both.out), both.out.slice(0, 260));
-  // No host count in this stub, so the reply is the panel's own estimate and
-  // the line has to say so rather than let half the sum read as measured.
-  check("and says where the reply's size came from",
-    /reckoned at roughly the size of the last one here/.test(both.out), both.out.slice(0, 260));
-  check("no currency is invented", !/[$£€]/.test(both.out), both.out.slice(0, 260));
-  check("no console errors with both prices set", both.errors.length === 0, both.errors);
-
-  // One price missing is a price nobody gave, not a cost of nothing.
-  const half = await run({ liveLog: true, toast: false, costIn: 3 });
-  check("with no output price, only the prompt is counted",
-    /About 0\.003 a retry at this size/.test(half.out), half.out.slice(0, 260));
-  check("and the line says so rather than leaving half out without saying so",
-    /Only the prompt is priced/.test(half.out), half.out.slice(0, 260));
-
-  // A reply from another chat is not a stand-in for the next one here, and the
-  // line says "the last one here", so it has to mean here.
-  const elsewhere = await run({ liveLog: true, toast: false, costIn: 3, costOut: 15 }, { replyChat: "c2" });
-  check("a reply from another chat is not priced against this one",
-    /No reply has arrived in this chat yet/.test(elsewhere.out), elsewhere.out.slice(0, 260));
-  check("and the prompt half is still counted",
-    /About 0\.003 a retry at this size/.test(elsewhere.out), elsewhere.out.slice(0, 260));
-
-  // The output price alone, with no reply here to measure it against, leaves
-  // the sum with nothing in it. A total printed then is a 0 sitting next to a
-  // price somebody has just typed.
-  const outOnly = await run({ liveLog: true, toast: false, costOut: 15 }, { replyChat: "c2" });
-  check("an output price with no reply to size says so instead of printing nothing",
-    /nothing to price/.test(outOnly.out) && !/a retry at this size/.test(outOnly.out),
-    outOnly.out.slice(0, 260));
-
-  const free = await run({ liveLog: true, toast: false });
-  check("and nothing is costed until prices are set",
-    !/a retry at this size/.test(free.out), free.out.slice(0, 240));
-  check("while the token count is there either way",
-    /tokens/.test(free.out), free.out.slice(0, 240));
-  check("no console errors without prices", free.errors.length === 0, free.errors);
+  // costIn and costOut are what an older version saved.
+  const open = await run({ liveLog: true, toast: false, costIn: 3, costOut: 15 }, { openPromptTab: true });
+  check("with the Prompt tab open and an old price saved, no reply is sent for counting", open.out === 0, open.out);
+  check("no console errors with an old price saved", open.errors.length === 0, open.errors);
+  const shut = await run({ liveLog: true, toast: false }, { openPromptTab: false });
+  check("and none with the Prompt tab closed", shut.out === 0, shut.out);
 }
 
 // ---- taking a note back is scoped to the chat it was armed for ----
@@ -15118,11 +15212,10 @@ console.log("\ntaking more than one file at a time");
   check("no console errors", errors.length === 0, errors);
 }
 
-// ---- the cost figure says what it is worth ----
-// The tokens are counted here rather than taken from the provider, and every
-// one is priced at the full rate, so a model with prompt caching on bills less
-// than this. Somebody reading the number needs that beside it, not in a hint.
-console.log("\nthe cost line says it is an estimate");
+// ---- the Prompt tab has no cost line ----
+// The cost line is gone. A price saved by an older version draws nothing, and
+// the token count stays.
+console.log("\nthe prompt tab has no cost line");
 {
   const { out, errors } = await inPanel(
     browser,
@@ -15132,15 +15225,8 @@ console.log("\nthe cost line says it is an estimate");
         const wait = () => new Promise((r) => setTimeout(r, 140));
         const tab = (name) =>
           [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === name);
-        const seen = () => {
-          const n = document.querySelector("[data-ar-cost-rough]");
-          return n ? n.textContent : null;
-        };
         tab("Prompt").click();
         await wait();
-        // Nothing captured yet, so there is no figure on screen to caveat.
-        const empty = seen();
-        // A prompt, fed the way the prompt view check feeds one.
         if (window.__handlers.CHAT_CHANGED) window.__handlers.CHAT_CHANGED({ chatId: "here-1" });
         await wait();
         window.__fromBackend({
@@ -15157,29 +15243,16 @@ console.log("\nthe cost line says it is an estimate");
         await wait();
         const body = document.body.innerText;
         return {
-          empty,
-          after: seen(),
-          priced: /About /.test(body),
-          // The cost block is drawn above the message list, so anything that
-          // throws in it takes the prompt itself off the screen with it. The
-          // other prompt view check runs with no prices set and never comes
-          // through here, so without this the priced path had nothing holding
-          // it to drawing the prompt at all.
+          priced: /About |a retry at this size|not your bill/.test(body),
+          rough: !!document.querySelector("[data-ar-cost-rough]"),
+          tokens: /2 messages, .* tokens/.test(body),
           messages: body.indexOf("the words I typed") >= 0,
         };
       }),
   );
-  check("with nothing captured there is no figure to caveat", out.empty === null, out.empty);
-  check("a captured prompt with prices set does show a figure", out.priced, out.priced);
-  // The figure is an upper bound and the line under it has to say so. Matched
-  // on what the line is for rather than on its exact wording, so rewording it
-  // does not fail a check that was never about the wording.
-  check("and the line under it calls the figure an estimate", /an estimate, not your bill/.test(out.after || ""), out.after);
-  check("and saying the rate it prices at is the full one",
-    /full rate/.test(out.after || ""), out.after);
-  check("and saying whose tokenizer counted it",
-    /tokenizer/.test(out.after || ""), out.after);
-  check("and the prompt itself is still drawn under it", out.messages, out);
+  check("a captured prompt with an old price saved shows no cost", !out.priced && !out.rough, out);
+  check("and the token count is still shown", out.tokens, out);
+  check("and the prompt itself is drawn", out.messages, out);
   check("no console errors", errors.length === 0, errors);
 }
 

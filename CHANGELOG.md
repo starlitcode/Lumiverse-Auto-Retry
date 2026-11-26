@@ -8,6 +8,30 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.28.0
+
+_2026-11-26_
+
+### Added
+
+- **Fit the wait to the model.** A new switch under the two waits for a stuck or frozen reply, on by default. A model on your own computer or network gets five times as long. Thinking set to medium gets 1.5 times as long, high 2 times, and extra high or max 3 times. Both can apply, and the wait is never more than an hour. The Log says when a reply is given longer, and why. The connection is the one Lumiverse writes the reply with, and its thinking level is the connection's **Reasoning Effort** while **API Reasoning** is on. The same rules are used in Auto Refine and Auto Foley. See [How long it waits](docs/settings.md#how-long-it-waits).
+
+### Changed
+
+- **The thinking-only checks are off by default.** **Its thinking was one character over and over**, **Its thinking was garbled** and **Its thinking got stuck repeating** now start off. Each one retried a reply that looked fine, because of its thinking alone. If you were on the old default, the panel tells you once and offers the new one.
+- **3 tries by default.** **Most tries per message** now starts at 3, not 4. If you were on the old default, the panel tells you once and offers the new one.
+- **The two price boxes and the cost line on the Prompt tab are removed.** **Input price, per million tokens**, **Output price, per million tokens** and the line on the Prompt tab that used them are gone. Auto Retry makes no calls of its own, and the line was only an estimate. The token count on the Prompt tab stays. The tick box in Import / export is now called **Panel and pop-up**.
+
+### Fixed
+
+- **A reply with streaming off was stopped as stuck.** With streaming off, no words come until the whole reply is done. A slow reply could then run past **Give up waiting for it to start**, and it was stopped and retried while it was still being written. Once a reply has come back whole, Auto Retry now knows streaming is off, and that wait stops no reply that has not started. The Log says so.
+- **A reply that ends on one label line or a line of hashtags counted as cut off.** A card that ends every reply with a line like `Where: North Pier`, or with tags like `#midnight-run`, had every reply retried until the tries ran out. One label line, and a line of hashtags, now count as an ending. A sentence cut off after a colon is still caught.
+- **The hint under Longest it will ever wait said it never pauses forever.** A wait the provider asks for, such as for a rate limit, can be longer than it, up to an hour. The hint now says so.
+- **The docs said two switches check the thinking.** There are three. [The thinking](docs/detection.md#the-thinking) now names all three.
+- **The docs on Several tries at once left out the first reply.** The counts of what a message costs now include it.
+
+---
+
 ## 5.27.0
 
 _2026-11-25_

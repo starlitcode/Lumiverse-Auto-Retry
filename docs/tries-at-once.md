@@ -53,7 +53,7 @@ A reply that never comes back is not waited for forever:
 
 - If no reply comes back for 5 minutes, the replies still out are stopped, and the next try goes out.
 - The 5 minutes start again each time a reply comes back.
-- If your `stuckTimeoutMs` wait is longer than 5 minutes, that wait is used instead.
+- If your `stuckTimeoutMs` wait is longer than 5 minutes, that wait is used instead. It is fitted to the model first, as in [How long it waits](settings.md#how-long-it-waits).
 - The log says how many replies did not come back.
 
 Adding the reply that passes is not waited for forever either:
@@ -80,14 +80,14 @@ The try number decides how many are sent, up to **Most at once**:
 **Most tries per message** still decides how many tries there are. It counts tries, not replies.
 
 - Several at once starts from the second try, so **Most tries per message** has to be 2 or more for it to do anything.
-- At the default of 4, tries 2, 3 and 4 are sent at once.
+- At the default of 3, tries 2 and 3 are sent at once.
 
 ## What it costs
 
 Every reply sent at once is a whole reply, and your provider charges for each one.
 
-- With the defaults, 4 tries and 3 at once, a message that fails every try costs up to 9 replies: 1 + 2 + 3 + 3.
-- The same message with this setting off costs 4.
+- With the defaults, 3 tries and 3 at once, a message that fails every try costs up to 7 replies: the first reply, then 1 + 2 + 3 for the tries.
+- The same message with this setting off costs 4: the first reply and 3 tries.
 - The replies that are stopped early may still be charged in part. That depends on your provider.
 
 It suits a model that refuses or cuts off often, where waiting for one try after another takes a long time.

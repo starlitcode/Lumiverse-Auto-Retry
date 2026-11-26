@@ -968,9 +968,11 @@ describe("a reply that ends on a block, not a sentence", () => {
     expect(looksTruncated('<div class="wx">Sunny 24C</div>\n\nHe walked to the', true, {})).toBe(true);
   });
 
-  // One colon is an ordinary sentence. A tracker never has only the one field.
-  test("and a single line with a colon is not a stat block", () => {
-    expect(looksTruncated("Weather: clear", true, {})).toBe(true);
+  // One label line on its own is an ending a card can ask for. A sentence
+  // with a colon in it is not one, since its label is not in capitals.
+  test("one label line is an ending, and a sentence with a colon is not", () => {
+    expect(looksTruncated("Weather: clear", true, {})).toBe(false);
+    expect(looksTruncated("She told him: we leave tonight", true, {})).toBe(true);
   });
 });
 
