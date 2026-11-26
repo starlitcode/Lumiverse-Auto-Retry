@@ -8794,7 +8794,8 @@ export function setup(ctx: Ctx, opts?: any) {
     tellBackendChatsOff();
   }
 
-  // Returns whether this browser will remember the change after a reload.
+  // Returns whether the change will be remembered after a reload: on the
+  // account, or failing that in this browser.
   function setChatOff(chatId: any, off: boolean): boolean {
     if (chatId == null) return false;
     const id = String(chatId);
@@ -8804,11 +8805,12 @@ export function setup(ctx: Ctx, opts?: any) {
     // Oldest first, so a long history of one-off exclusions cannot grow without
     // bound in somebody's browser.
     if (chatsOff.length > CHATS_OFF_CAP) chatsOff = chatsOff.slice(-CHATS_OFF_CAP);
-    // Whether this browser will still know about it after a reload. The switch
-    // itself works either way, because the list is held in memory; a browser
-    // that blocks site data just forgets it. The docs say this is remembered,
-    // so a browser that will not remember it has to say so.
-    let remembered = false;
+    // Whether it will still be known after a reload. The switch itself works
+    // either way, because the list is held in memory. It is remembered on the
+    // account once the account has answered, and in this browser when site
+    // data is allowed. The docs say it is remembered, so when neither holds
+    // it has to say so.
+    let wroteLocal = false;
     // Temporary chats are filtered out of what gets written, not out of the
     // list itself: the switch has to hold for the chat that is open, and the
     // backend still needs to be told so it leaves that chat alone.
@@ -8818,11 +8820,12 @@ export function setup(ctx: Ctx, opts?: any) {
     try {
       if (typeof localStorage !== "undefined") {
         localStorage.setItem(CHATS_OFF_KEY, JSON.stringify(keep));
-        remembered = !cardless.has(id);
+        wroteLocal = true;
       }
     } catch (_) {}
     tellBackendChatsOff();
     saveStateToAccount();
+    const remembered = !cardless.has(id) && (wroteLocal || stateLoaded);
     // Anything already in flight for that chat goes with it, in every tab.
     if (off) {
       standDown(id, false);
@@ -14808,8 +14811,6 @@ export function setup(ctx: Ctx, opts?: any) {
     // Held rather than closed over directly, because applyDeps can run before
     // the search box has been built and a const would still be in its dead zone.
     let searchBox: any = null;
-    // Same reason as searchBox: applyDeps is defined long before this element
-    // is built, and a const would still be in its dead zone if it ever ran early.
 
     // A row that hangs off a switch, opening and closing rather than
     // appearing and going between two frames. Its space opens and closes
@@ -15076,6 +15077,9 @@ export function setup(ctx: Ctx, opts?: any) {
         none.setAttribute("data-ar-pick", "none");
         for (const b2 of [all, none]) b2.style.cssText += "min-height:0;padding:4px 12px;flex:none";
         const paint = () => {
+          // Hidden while a search is typed, since All and None would also
+          // change the switches the search hides.
+          bar.style.display = searchBox && String(searchBox.value || "").trim() ? "none" : "flex";
           const on = keys.filter((k) => !!(cfg as any)[k]).length;
           said.textContent = on + " of " + keys.length + " chosen";
           const dim = (b2: HTMLButtonElement, off: boolean) => {
@@ -15485,6 +15489,7 @@ export function setup(ctx: Ctx, opts?: any) {
 
     const runSearch = () => {
       hideHint();
+      for (const b of bulkSyncs) b();
       const q = search.value.trim().toLowerCase();
       // Every row buildRow makes is a flex column, so hidden rows are put back
       // to "flex" rather than "". Clearing the property instead would drop the
@@ -18043,7 +18048,6 @@ export const __testing = {
   garbledVerdict,
   soupVerdict,
   gluedVerdict,
-  thinkingProblem,
   switchVerdict,
   leakVerdict,
   loopVerdict,

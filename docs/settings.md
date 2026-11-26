@@ -192,7 +192,7 @@ What the extension is doing as it happens: replies starting, retries and why, re
 - **Settings and presets**: settings and presets loaded, saved, or moved to and from your account.
 - **Problems and warnings**: something that could not be done, such as a window that would not open.
 
-**All** turns every one on, and **None** turns every one off. The line beside them says how many are on. Press **Save** to keep the change, the same as for one switch.
+**All** turns every one on, and **None** turns every one off. The line beside them says how many are on, such as **5 of 6 chosen**. While you search the settings, All and None are hidden. Press **Save** to keep the change, the same as for one switch.
 
 A hidden line is still kept. The top of the Log says how many are hidden, and **Debug info** still includes them.
 

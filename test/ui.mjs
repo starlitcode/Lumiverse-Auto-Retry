@@ -924,7 +924,20 @@ console.log("\nAll and None over Show in the log");
         if (masterBox) masterBox.click();
         await wait(700);
         const gone = getComputedStyle(run).display === "none";
-        return { found: 1, count: boxes().length, start, afterNone, afterAll, afterOne, fits, tall, gone, master: !!masterBox };
+        if (masterBox) masterBox.click();
+        await wait(700);
+        // A search hides the bar, since All and None would also change the
+        // switches the search hides.
+        const search = modal.querySelector('input[aria-label="Search settings"]');
+        search.value = "Retries";
+        search.dispatchEvent(new Event("input", { bubbles: true }));
+        await wait(200);
+        const searching = getComputedStyle(bar).display;
+        search.value = "";
+        search.dispatchEvent(new Event("input", { bubbles: true }));
+        await wait(200);
+        const after = getComputedStyle(bar).display;
+        return { found: 1, count: boxes().length, start, afterNone, afterAll, afterOne, fits, tall, gone, master: !!masterBox, searching, after };
       });
     });
     check(label + ": the bar is there, over the six switches", out.found === 1 && out.count === 6, JSON.stringify(out));
@@ -936,6 +949,7 @@ console.log("\nAll and None over Show in the log");
     check(label + ": the bar fits the settings, with no sideways scroll", out.fits, JSON.stringify(out));
     if (touch) check(label + ": All and None are at least 32 pixels high", out.tall >= 32, String(out.tall));
     check(label + ": with the on-screen panel off, the bar goes with the rows", out.master && out.gone, JSON.stringify(out));
+    check(label + ": while a search is typed, the bar is hidden, and it comes back after", out.searching === "none" && out.after === "flex", JSON.stringify({ searching: out.searching, after: out.after }));
     check(label + ": no console errors", errors.length === 0, errors);
   }
 }
@@ -16712,6 +16726,8 @@ console.log("\na reply you stopped is not retried as an error");
   }
   check("a stop button in another extension's part of the page is not yours: the error is still retried",
     (await runOne("theirs", { error: gateway })) >= 1);
+  // "Generation cancelled" is Lumiverse's own wording, so it is matched as
+  // Lumiverse writes it.
   for (const words of ["AbortError: Generation aborted", "The operation was aborted.", "Generation cancelled"])
     check("an ending that reads as a stop is not retried: " + words, (await runOne("none", { error: words })) === 0);
   check("an error that only mentions a dropped connection is still retried",

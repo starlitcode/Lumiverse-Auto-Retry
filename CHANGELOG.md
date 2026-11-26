@@ -14,10 +14,11 @@ _2026-11-25_
 
 ### Added
 
-- **All and None over the switches in Show in the log.** All turns every kind of line on, and None turns every one off. A line beside them says how many are on. Press Save to keep it, the same as for one switch. Auto Refine already had this.
+- **All and None over the switches in Show in the log.** All turns every kind of line on, and None turns every one off. A line beside them says how many are on. Press Save to keep it, the same as for one switch. They are hidden while you search the settings. Auto Refine already had this.
 
 ### Fixed
 
+- **A false warning after Turn off here.** In a browser that blocks site data, a warning said the chat would not be remembered after a reload. The choice is saved on your account, so it is remembered. The warning now shows only when it cannot be saved anywhere.
 - **The line under Turn off here said where the choice is kept wrongly.** It said the choice was kept in this browser. It is kept on your account, so it follows you to other devices. The line now says so.
 
 ---
