@@ -2037,6 +2037,9 @@ console.log("\nthe live line knows whether the build streams");
       return seen;
     };
     const h = window.__handlers;
+    // The tab is showing chat c1. Only a reply in the chat on screen can
+    // show that streaming is off, since Lumiverse sends words only there.
+    h.CHAT_CHANGED({ chatId: "c1" });
     h.GENERATION_STARTED({ chatId: "c1", generationId: "g1", messageId: "m1" });
     await wait(1200);
     const first = read();
@@ -2055,6 +2058,9 @@ console.log("\nthe live line knows whether the build streams");
     const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     const read = () => (document.getElementById("__lvRetryStatus") || {}).textContent?.trim() || "";
     const h = window.__handlers;
+    // The tab is showing chat c1. Only a reply in the chat on screen can
+    // show that streaming is off, since Lumiverse sends words only there.
+    h.CHAT_CHANGED({ chatId: "c1" });
     h.GENERATION_STARTED({ chatId: "c1", generationId: "g1", messageId: "m1" });
     h.STREAM_TOKEN_RECEIVED({ chatId: "c1", generationId: "g1", token: "She ", type: "content", seq: 0 });
     await wait(300);
