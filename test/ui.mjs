@@ -16893,6 +16893,33 @@ console.log("\na reply you stopped is not retried as an error");
   check("no console errors", errors.length === 0, errors);
 }
 
+// A description sits next to the row its "?" belongs to, found as the
+// nearest [data-ar-row]. A row built inside another row's element would make
+// the "?" find the outer row, and the description would open above that whole
+// block, far from the button. So every "?" in the settings finds a row that
+// holds no other "?". Rows under a switch are built either way, so they are
+// in the tree with the switch off.
+console.log("\nevery description belongs to its own row");
+{
+  for (const [label, viewport, touch] of [["phone", { width: 390, height: 860 }, true], ["laptop", { width: 1280, height: 860 }, false]]) {
+    const { out, errors } = await inPanel(browser, { viewport, touch, settings: { liveLog: true } }, (page) =>
+      page.evaluate(() => {
+        const list = [];
+        const qs = Array.from(document.querySelectorAll("#modal [data-ar-hint]"));
+        for (const q of qs) {
+          const row = q.closest("[data-ar-row]");
+          if (!row) continue;
+          const n = row.querySelectorAll("[data-ar-hint]").length;
+          if (n > 1) list.push((q.getAttribute("aria-label") || "?") + " finds the row " + row.getAttribute("data-ar-row") + ", which holds " + n);
+        }
+        return { n: qs.length, list };
+      }),
+    );
+    check(label + ": every ? in the settings finds a row of its own (" + out.n + " looked at)", out.n > 20 && out.list.length === 0, out.list.slice(0, 6));
+    check(label + ": no console errors", errors.length === 0, errors);
+  }
+}
+
 await browser.close();
 console.log(failures ? `\n${failures} FAILED` : "\nall browser checks passed");
 process.exit(failures ? 1 : 0);
