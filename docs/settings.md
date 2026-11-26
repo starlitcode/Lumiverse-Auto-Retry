@@ -364,7 +364,7 @@ With the council on, the council works before the reply's first words. Each step
 | Thinking set to high | 2 times |
 | Thinking set to extra high or max | 3 times |
 
-- A model counts as on your own computer or network when its connection's address is `localhost`, a private address such as `192.168.1.40`, a name with no dot, or a name ending in `.local`.
+- A model counts as on your own computer or network when its connection's address is `localhost`, a private address such as `192.168.1.40` or `10.0.0.7`, an address a VPN such as Tailscale gives out (`100.64` to `100.127`), a name with no dot, or a name ending in `.local`, `.lan`, `.home`, `.internal` or `.home.arpa`.
 - The thinking level is the connection's **Reasoning Effort**, in Lumiverse's Reasoning settings. It counts only while **API Reasoning** is on for that connection.
 - Both can apply. A local model with high thinking gets 2 × 5 = 10 times as long: 40 minutes to start, and 15 minutes when it goes quiet. The wait is never more than an hour.
 - The Log says when a reply is given longer, and why.
