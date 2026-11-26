@@ -266,16 +266,14 @@ const chatConnKey = (userId: string | undefined, chatId: string) => userKey(user
 // What the panel needs from a connection. The thinking level is the
 // connection's own when it sends a reasoning setting to the model
 // (apiReasoning), and none otherwise.
-function fitInfo(c: any): { id: string; name: string; url: string; effort: string } {
+function fitInfo(c: any): { url: string; effort: string } {
   const r = c && c.reasoning_bindings && c.reasoning_bindings.settings;
   return {
-    id: String(c.id == null ? '' : c.id),
-    name: String(c.name == null ? '' : c.name),
     url: String(c.api_url == null ? '' : c.api_url),
     effort: r && r.apiReasoning ? String(r.reasoningEffort || '') : '',
   };
 }
-async function waitFitFor(userId: string | undefined, chatId: string, connectionId: string): Promise<{ id: string; name: string; url: string; effort: string } | null> {
+async function waitFitFor(userId: string | undefined, chatId: string, connectionId: string): Promise<{ url: string; effort: string } | null> {
   const list = await connectionList(userId);
   const byId = (id: string) => (id ? list.find((c: any) => c && String(c.id) === id) : undefined);
   let c = byId(connectionId);

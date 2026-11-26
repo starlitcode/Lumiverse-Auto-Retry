@@ -1026,7 +1026,7 @@ const SCHEMA: Group[] = [
         int: true,
         min: 0,
         max: 600000,
-        hint: "The longest wait between tries. The default is " + defaultMs("maxDelayMs") + ". A wait the provider asks for, such as for a rate limit, can be longer, up to an hour.",
+        hint: "The longest wait between tries, " + defaultMs("maxDelayMs") + " by default. A wait the provider asks for can be longer, up to an hour.",
       },
       {
         key: "rateLimitDelayMs",
@@ -1195,7 +1195,7 @@ const SCHEMA: Group[] = [
         int: true,
         min: 0,
         max: 600000,
-        hint: "If a reply starts but no words come in this long, it retries. The default is " + defaultMs("stuckTimeoutMs") + ". 0 turns it off. With streaming off, it no longer retries after the first reply that comes back whole.",
+        hint: "How long it waits for a reply's first words, " + defaultMs("stuckTimeoutMs") + " by default. With streaming off, it stops nothing once a reply has come back whole.",
       },
       {
         key: "idleTimeoutMs",
@@ -1705,10 +1705,12 @@ function endsOnABlock(shown: string, visible: string): boolean {
   )
     return true;
 
-  // One label line on its own, such as "Where: North Pier" under a "---"
-  // line. A card can ask for one at the end of every reply, and read as cut
-  // off, it spent every try on every message. It has to look like a label,
-  // which a sentence cut after a colon does not:
+  // One label line straight under a divider line, such as "Where: North
+  // Pier" under "---", with the reply above the divider. A card can ask for
+  // one at the end of every reply, and read as cut off, it spent every try on
+  // every message. Without the divider, a line such as "Mara: I was going" is
+  // a line of dialogue that may be cut, so it is left to the check. It also
+  // has to look like a label, which a sentence cut after a colon does not:
   // - the label is one to three words, each starting with a capital letter or
   //   a digit, so "She whispered: I need to" is not one;
   // - the value is at most five words, so a line of dialogue written as
@@ -1716,7 +1718,9 @@ function endsOnABlock(shown: string, visible: string): boolean {
   // - the value does not end on a word that needs another after it, so
   //   "Next: she walks to the" is still cut.
   // An emoji or symbol in front of the label is allowed, and so is bold.
-  if (oneLabel(lastLine) && !danglingWord.test(lastLine)) return true;
+  const divider = (l: string) => /^(?:[-*_=~\u2014\u2013\u2500\u2550]\s*){3,}$/.test(l);
+  if (lines.length >= 3 && divider(lines[lines.length - 2]) && oneLabel(lastLine) && !danglingWord.test(lastLine))
+    return true;
 
   // A line of hashtags, such as "#midnight-run #rivals". Every word on the
   // line is a tag. A heading has a space after its "#", so it is not one.
@@ -9174,6 +9178,11 @@ export function setup(ctx: Ctx, opts?: any) {
   // for the first words would stop a healthy slow reply and retry it. While
   // this is true, that wait stops nothing (see stuckRanOut).
   let sawWholeReplyAtOnce = false;
+  // The chat this tab is showing, as the host last said with CHAT_CHANGED or
+  // CHAT_SWITCHED. Lumiverse sends the words of a reply only to the tab that
+  // is showing its chat, so only a reply in that chat can say anything about
+  // streaming (see viewing).
+  let viewedChat: string | null = null;
 
   // Circuit breaker. Whole runs that gave up, back to back. Three in a row means
   // the provider is down rather than one reply being unlucky, so retrying again
@@ -9424,6 +9433,14 @@ export function setup(ctx: Ctx, opts?: any) {
   // the reader turned that off. s.fit is the connection the backend named for
   // the chat (see takeWaitFit). Until it has named one, the waits are used as
   // they are. 0 stays off.
+  // Whether this tab is showing a chat. The address says so when it names
+  // chats. Otherwise the host's last word on which chat is open does. Not
+  // known is a no.
+  function viewing(chatId: string): boolean {
+    if (chatId == null || chatId === NO_CHAT) return false;
+    if (urlNamesChats) return urlHolds(chatId);
+    return viewedChat != null && viewedChat === String(chatId);
+  }
   function waitFor(s: any, key: "stuckTimeoutMs" | "idleTimeoutMs"): number {
     const base = Number((cfg as any)[key]) || 0;
     if (base <= 0 || !cfg.waitFit || !s || !s.fit) return base;
@@ -9441,19 +9458,28 @@ export function setup(ctx: Ctx, opts?: any) {
   // No words came in time, and the backend did not hear the reply end. With
   // streaming off, no words come until the reply is done, so a reply in that
   // setup is not stopped. The wait is armed again, so a reply that ended
-  // without this tab hearing it is still asked about.
+  // without this tab hearing it is still asked about. A reply that has not
+  // ended an hour after it started is stopped all the same (WAIT_MAX_SECS,
+  // the longest any fitted wait can be).
   function stuckRanOut(chatId: string) {
     const s = st(chatId);
-    if (sawWholeReplyAtOnce) {
+    const since = s.liveSince ? Date.now() - s.liveSince : 0;
+    const left = WAIT_MAX_SECS * 1000 - since;
+    if (sawWholeReplyAtOnce && left > 0) {
       if (s.wholeSaidFor !== s.genId) {
         s.wholeSaidFor = s.genId;
         log("replies",
-          "no words have come in yet, but replies here come back whole once they are done, so the reply is not stopped as stuck",
+          "no words have come in yet, but replies here come back whole once they are done, so the reply is not stopped as stuck until an hour after it started",
         );
       }
-      if (s.live && cfg.enabled && Number(cfg.stuckTimeoutMs) > 0) armStart(s, chatId);
+      if (s.live && cfg.enabled && Number(cfg.stuckTimeoutMs) > 0) {
+        s.startArmedAt = Date.now();
+        armStart(s, chatId, Math.min(waitFor(s, "stuckTimeoutMs"), left));
+      }
       return;
     }
+    if (sawWholeReplyAtOnce)
+      log("replies", "the reply has not come back an hour after it started, so it is stopped as stuck");
     abortAndRetry(chatId, "stuck");
   }
   // Asks the backend which connection the reply just started is written by.
@@ -9479,19 +9505,28 @@ export function setup(ctx: Ctx, opts?: any) {
     // asked at the start is a guess, and does not replace it.
     const exact = msg.from === "interceptor";
     if (!exact && s.live && s.fitExactFor === s.genId) return;
-    s.fit = { name: String(f.name || ""), url: String(f.url || ""), effort: String(f.effort || "") };
+    s.fit = { url: String(f.url || ""), effort: String(f.effort || "") };
     if (!s.live) return;
     if (exact) s.fitExactFor = s.genId;
     const stuck = waitFor(s, "stuckTimeoutMs");
     const idle = waitFor(s, "idleTimeoutMs");
     const why = cfg.waitFit ? fitWait(1, s.fit.url, s.fit.effort).why : [];
-    if (why.length && s.fitSaidFor !== s.genId) {
+    const parts: string[] = [];
+    if (stuck > 0) parts.push(minutesText(Math.round(stuck / 1000)) + " to start");
+    if (idle > 0) parts.push(minutesText(Math.round(idle / 1000)) + " when it goes quiet");
+    const said = !parts.length
+      ? ""
+      : why.length
+        ? "This reply is given up to " + parts.join(" and ") + ", since " + why.join(" and ") + "."
+        : "This reply is given the waits as they are set: up to " + parts.join(" and ") + ".";
+    // Said when the reply is given longer. Said again when a later answer
+    // changes the wait, so the Log never keeps a wait that is not the one in
+    // use. The waits as they are set are only said after a longer one was.
+    const before = s.fitSaidFor === s.genId ? s.fitSaid : "";
+    if (said && said !== before && (why.length || before)) {
       s.fitSaidFor = s.genId;
-      const parts: string[] = [];
-      if (stuck > 0) parts.push(minutesText(Math.round(stuck / 1000)) + " to start");
-      if (idle > 0) parts.push(minutesText(Math.round(idle / 1000)) + " when it goes quiet");
-      if (parts.length)
-        log("replies", "This reply is given up to " + parts.join(" and ") + ", since " + why.join(" and ") + ".");
+      s.fitSaid = said;
+      log("replies", said);
     }
     if (s.startTimer && s.startArmedAt && !s.othersReply)
       armStart(s, chatId, Math.max(0, stuck - (Date.now() - s.startArmedAt)));
@@ -11740,6 +11775,9 @@ export function setup(ctx: Ctx, opts?: any) {
       s.startWatchdog = null;
     }
     s.expectingStart = 0;
+    // Whether this reply can show that streaming is off. Set below only for a
+    // reply of this tab's own, in the chat it is showing.
+    s.wholeWatch = false;
     // Whether the Prompt tab was open and asking at the moment this generation
     // began. The prompt is assembled at the start, which is when the interceptor
     // runs and the only chance there is to capture it, so arming the tab any
@@ -11859,6 +11897,7 @@ export function setup(ctx: Ctx, opts?: any) {
     }
     s.othersReply = false;
     s.awaitOther = false;
+    s.wholeWatch = viewing(chatId);
     log("replies",
       "a reply started (" + String(p.generationId) + "), " + (ours ? "from a retry" : "from you"),
     );
@@ -12097,6 +12136,7 @@ export function setup(ctx: Ctx, opts?: any) {
 
   function onChatSwitched(p: any) {
     if (!p || typeof p.chatId === "undefined") return;
+    viewedChat = p.chatId == null || p.chatId === "" ? null : String(p.chatId);
     // Set directly rather than through noteChat, because this is the one event
     // that can also mean "no chat any more", which noteChat ignores on purpose.
     lastChatId = p.chatId || null;
@@ -12381,10 +12421,16 @@ export function setup(ctx: Ctx, opts?: any) {
       ensureChatName(chatId);
       startChatUrlWatch();
     }
-    // Text that turned up without a single token behind it is a build that
-    // does not stream, which is the other half of what the live line needs to
-    // know. An empty or failed reply proves nothing, so it has to have text.
-    if (!s.sawContent && !s.sawReasoning && !p.error &&
+    // Text that turned up without a single token behind it is a setup that
+    // does not stream. Lumiverse sends the words only to the tab showing the
+    // chat, while every tab hears the ending, so this counts only for a reply
+    // this tab started watching in the chat it was showing, and is still
+    // showing. A reply in another chat, another tab's reply, and an
+    // impersonation say nothing about it. An empty or failed reply proves
+    // nothing, so it has to have text.
+    const watchedWhole = s.wholeWatch && !s.impersonating && viewing(chatId);
+    s.wholeWatch = false;
+    if (watchedWhole && !s.sawContent && !s.sawReasoning && !p.error &&
         String(p.content == null ? "" : p.content).trim())
       sawWholeReplyAtOnce = true;
     s.live = false;

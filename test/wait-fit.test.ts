@@ -125,13 +125,13 @@ describe("the connection a reply is written by", () => {
     await h.ask({ type: "get_wait_fit", chatId: "c1" });
     const got = h.fits().pop();
     expect(got.userId).toBe("u1");
-    expect(got.msg.fit).toEqual({ id: "cloud", name: "Cloud", url: "https://api.example.com/v1", effort: "low" });
+    expect(got.msg.fit).toEqual({ url: "https://api.example.com/v1", effort: "low" });
   });
 
   test("a chat with its own connection uses that one", async () => {
     const h = boot(conns, { connection_profile_id: "home" });
     await h.ask({ type: "get_wait_fit", chatId: "c1" });
-    expect(h.fits().pop().msg.fit.id).toBe("home");
+    expect(h.fits().pop().msg.fit.url).toBe("http://192.168.1.40:5001/v1");
   });
 
   test("the interceptor names the connection Lumiverse picked, and it is used for that chat after", async () => {
@@ -141,10 +141,10 @@ describe("the connection a reply is written by", () => {
     const pushed = h.fits().pop();
     expect(pushed.msg.from).toBe("interceptor");
     expect(pushed.msg.chatId).toBe("c1");
-    expect(pushed.msg.fit.id).toBe("home");
+    expect(pushed.msg.fit.url).toBe("http://192.168.1.40:5001/v1");
     expect(pushed.userId).toBe("u1");
     await h.ask({ type: "get_wait_fit", chatId: "c1" });
-    expect(h.fits().pop().msg.fit.id).toBe("home");
+    expect(h.fits().pop().msg.fit.url).toBe("http://192.168.1.40:5001/v1");
   });
 
   test("thinking counts only when the connection sends it to the model", async () => {

@@ -246,10 +246,10 @@ Two kinds of text are not prose, so the prose checks leave them out.
 - a table row: the last line starts and ends with `|`
 - a status bar on one line, with two or more `|` between its fields, like `📍 The pier | 🕘 9:40 PM | 🌧 Rain`
 - two or more label lines in a row, like `HP: 20/20` over `Time: 14:00`, with or without bold on the label
-- one label line on its own, like `Where: North Pier` under a `---` line
+- one label line straight under a divider line such as `---`, `***` or `___`, with the reply above the divider, like `Where: North Pier`
 - a line of hashtags, like `#midnight-run #rivals`
 
-One label line has to look like a label, because a normal sentence can have a colon in it:
+One label line needs the divider above it. Without one, a line such as `Mara: I was going` is read as a line of dialogue, which may be cut off. It also has to look like a label, because a normal sentence can have a colon in it:
 
 - The label is one to three words, and each starts with a capital letter or a digit. An emoji or bold in front of it is fine.
 - The value after the colon is at most five words and 40 characters.

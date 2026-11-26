@@ -23,7 +23,7 @@ It asks Lumiverse for six permissions. All six are privileged: on a shared serve
 | `interceptor` | Adding the retry note to a prompt, and showing the whole prompt on the panel's **Prompt** tab. With Several tries at once on, it also finds the failed reply in a prompt Lumiverse builds, so it can be left out, and learns which connection the chat's replies use. Learning which connection each reply is written by, for **Fit the wait to the model**. | Everything works. No retry note is sent, and the Prompt tab stays empty and says so. Several tries at once finds the failed reply by its words only, and uses your default connection unless the chat is set to its own. The waits are fitted to the chat's own connection, or your default one. |
 | `chat_mutation` | **Several tries at once** only: reading the messages in the chat to find the failed reply, and adding the reply that passed to it as a new reroll. When the failed turn saved no reply, the reply that passed is added after your message as a new reply. | Everything works. With **Several tries at once** on, each try presses the retry button instead. |
 
-**About `chats`:** Lumiverse puts reading, creating and deleting chats into one permission, with no narrower one to ask for. Auto Retry only uses two calls from it: which chat is open, and reading one chat, to check it is on your account and, with **Several tries at once** on, to see whether it is a group chat. It never creates, deletes or changes a chat.
+**About `chats`:** Lumiverse puts reading, creating and deleting chats into one permission, with no narrower one to ask for. Auto Retry only uses two calls from it: which chat is open, and reading one chat. It reads a chat to check it is on your account, to read the connection the chat is set to (`connection_profile_id`) for **Fit the wait to the model**, and, with **Several tries at once** on, to see whether it is a group chat. It never creates, deletes or changes a chat.
 
 **About `characters`:** it never creates, edits or deletes a card.
 
@@ -117,6 +117,8 @@ None of these is written to disk, synced, or sent anywhere.
 - Turn off **Keep the reply a retry replaced**, under **How it retries**, and nothing is kept.
 
 **In memory on the server:** how each of the last 60 replies ended, so a tab that missed the ending can ask. For each one it holds the reply's id, your account, whether it ended or was stopped, the words of an error, and whether it had text. It holds no reply text. A restart clears it, and it is not written to disk.
+
+**In memory on the server, for Fit the wait to the model:** the id of the connection each chat's last reply was written by, for up to 50 chats, and your list of connections, kept for a minute before it is read again. Each connection in the list is as Lumiverse gives it to extensions, with no API key. A restart clears both, and neither is written to disk.
 
 **In memory on the server, only with Several tries at once on:** the last prompt in each chat, for up to 12 chats and 30 minutes each. Turning the setting off drops every copy, and so does a restart. It is not written to disk. See [Several tries at once](#several-tries-at-once).
 

@@ -270,7 +270,7 @@ These are the defaults for a new install. They are in the `CONFIG` block at the 
 | retryByNewReroll | true | On: a retry clicks the next / swipe button, adding a new reroll and keeping the existing ones, so a reply it was wrong to retry can be swiped back to. Off: a retry redoes the reply in place with the regenerate button, which on some setups clears the other rerolls. Applies to every retry reason. The other button is the fallback. |
 | keepReplaced | true | Keep the last reply a retry replaced in this chat, to read or copy on the Replaced tab of the on-screen panel. It is kept in this tab and in your server's memory, so a reload keeps it. An update or a restart clears it. |
 | keepReplacedSaved | false | Keep it through an update. Also saves the replaced replies on your server, for your account, so an update or a restart does not clear them. Turning it off empties the saved copy. |
-| stuckTimeoutMs | 240000 | A reply started, but no text came within this time. It is retried. 0 turns this off. With streaming off, it stops no reply after the first reply that comes back whole. See [The two waits for a frozen reply](#the-two-waits-for-a-frozen-reply). |
+| stuckTimeoutMs | 240000 | A reply started, but no text came within this time. It is retried. 0 turns this off. With streaming off, it stops nothing once a reply has come back whole, until an hour after the reply started. See [The two waits for a frozen reply](#the-two-waits-for-a-frozen-reply). |
 | idleTimeoutMs | 90000 | Text was coming in, then stopped for this long. It is retried. While the model is still thinking and no reply text has come yet, it waits as long as `stuckTimeoutMs` instead. 0 turns this off. |
 | waitFit | true | Fit the wait to the model. Both waits above are made longer for a model on your own computer or network, and for high thinking, up to an hour. Off: they are used as they are. See [How long it waits](#how-long-it-waits). |
 | retryOnError | true | Retry provider errors. |
@@ -335,9 +335,11 @@ These are the defaults for a new install. They are in the `CONFIG` block at the 
 
 With streaming off, `stuckTimeoutMs` would stop a slow reply that is still being written, because no text comes until the reply is done. So:
 
-- Auto Retry learns that streaming is off from the first reply that comes back whole, with no text before it.
+- Auto Retry learns that streaming is off from a reply that comes back whole, with no text before it.
+- It only learns this from a reply it watched from the start, in the chat the tab is showing. Lumiverse sends the text of a reply only to the tab showing its chat, and tells every tab when it ends. So a reply in another chat, a reply whose chat you left before its first words, and an impersonation are not counted.
 - After that, `stuckTimeoutMs` stops no reply that has not started. The Log says so once for each reply.
 - It still asks the backend how the reply ended each time the wait runs out, so a reply that ended without the tab hearing it is still found.
+- A reply that has not come back an hour after it started is stopped and retried as stuck. An hour is the longest any wait can be fitted to (see [How long it waits](#how-long-it-waits)).
 - The first text that arrives as it is written means streaming is on again, and `stuckTimeoutMs` works as before.
 - This is learned again in each browser tab. The first reply in a tab, before any reply has come back whole, can still be retried as stuck.
 

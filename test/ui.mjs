@@ -4334,7 +4334,9 @@ console.log("\nfit the wait to the model");
       handlers.GENERATION_STARTED({ chatId: "c1", generationId: "g" });
       const asked = sent.filter((m) => m.type === "get_wait_fit").length;
       await wait(20);
-      if (fit) for (const fn of backs) fn({ type: "wait_fit", chatId: "c1", from: "interceptor", fit });
+      // One connection named by the interceptor, or a list of answers in order.
+      const answers = Array.isArray(fit) ? fit : fit ? [{ from: "interceptor", fit }] : [];
+      for (const a of answers) for (const fn of backs) fn({ type: "wait_fit", chatId: "c1", from: a.from, fit: a.fit });
       // Past the plain wait, and well short of the fitted one.
       await wait(300);
       const early = clicks;
@@ -4345,7 +4347,7 @@ console.log("\nfit the wait to the model");
     await page.close();
     return res;
   };
-  const home = { name: "Home", url: "http://192.168.1.40:5001/v1", effort: "high" };
+  const home = { url: "http://192.168.1.40:5001/v1", effort: "high" };
   const fitted = await runOne({}, home);
   check("the backend is asked which connection the reply is written by", fitted.asked === 1, fitted.asked);
   check("a local model with high thinking is not stopped at the plain wait", fitted.early === 0, fitted);
@@ -4355,67 +4357,139 @@ console.log("\nfit the wait to the model");
     fitted.log.slice(0, 400));
   const plain = await runOne({ waitFit: false }, home);
   check("with the switch off, the wait is used as it is", plain.early === 1, plain);
-  const cloud = await runOne({}, { name: "Cloud", url: "https://api.example.com/v1", effort: "low" });
+  const cloud = await runOne({}, { url: "https://api.example.com/v1", effort: "low" });
   check("a cloud model with low thinking keeps the plain wait", cloud.early === 1, cloud);
+  // The first answer is a guess. When the interceptor names a connection
+  // with another wait, the Log says the new one, so it never keeps a wait
+  // that is not in use.
+  const local = { url: "http://192.168.1.40:5001/v1", effort: "high" };
+  const changed = await runOne({}, [{ from: "ask", fit: local }, { from: "interceptor", fit: { url: "https://api.example.com/v1", effort: "" } }]);
+  check("a guess that is then changed to a cloud model keeps the plain wait", changed.early === 1, changed);
+  check("and the Log says the plain wait after the longer one",
+    /This reply is given up to 1 seconds? to start, since/.test(changed.log) &&
+      /This reply is given the waits as they are set: up to 0 seconds to start\./.test(changed.log),
+    changed.log.slice(0, 500));
+  const moved = await runOne({}, [{ from: "ask", fit: local }, { from: "interceptor", fit: { url: "http://192.168.1.40:5001/v1", effort: "max" } }]);
+  check("and a different longer wait is said too",
+    /since thinking is set to high and/.test(moved.log) && /since thinking is set to max and/.test(moved.log),
+    moved.log.slice(0, 500));
   check("no console errors", errors.length === 0, errors);
 }
 
 console.log("\na reply with streaming off is not stopped as stuck");
 {
   // With streaming off no word arrives before the reply is done. Once one
-  // reply has come back whole, the wait for the first words stops nothing.
+  // reply this tab watched, in the chat it is showing, has come back whole,
+  // the wait for the first words stops nothing until an hour has gone by.
+  //
+  // Lumiverse sends the words of a reply only to the tab showing its chat,
+  // and the ending to every tab. So a reply in another chat, an
+  // impersonation, and a reply whose chat was left before its first word all
+  // end with text and no words, and none of them says streaming is off.
   const errors = [];
-  const page = await browser.newPage();
-  page.on("pageerror", (e) => errors.push(e.message));
-  await stage(page, '<div id=modal></div><button title="Regenerate" data-testid="regenerate">R</button>');
-  await page.addScriptTag({ content: SOURCE, type: "module" });
-  await page.waitForFunction(() => !!window.__setup);
-  const out = await page.evaluate(async () => {
-    const handlers = {};
-    let clicks = 0;
-    document.querySelector("[data-testid=regenerate]").addEventListener("click", () => clicks++);
-    window.__setup(
-      {
-        events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
-        sendToBackend: () => {},
-        onBackendMessage: () => () => {},
-        ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
-              registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) },
-      },
-      { retryDelayMs: 10, backoffFactor: 1, maxDelayMs: 10, jitter: false, maxRetries: 2,
-        toast: false, stuckTimeoutMs: 80, idleTimeoutMs: 0, pauseWhenFailing: false, liveLog: true },
-    );
-    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-    const reply = "Ivo shut the ledger and blew out the lamp.";
-    // The first reply comes back whole, with no word before it.
-    handlers.GENERATION_STARTED({ chatId: "c1", generationId: "g1" });
-    await wait(20);
-    handlers.GENERATION_ENDED({ chatId: "c1", generationId: "g1", content: reply });
-    await wait(40);
-    const afterWhole = clicks;
-    // The next one is slow, past the wait, and is not stopped.
-    handlers.GENERATION_STARTED({ chatId: "c1", generationId: "g2" });
-    await wait(400);
-    const slow = clicks - afterWhole;
-    handlers.GENERATION_ENDED({ chatId: "c1", generationId: "g2", content: reply });
-    await wait(40);
-    const said = /replies here come back whole/.test(document.body.innerText);
-    // A word that arrives as it is written means streaming is on again, and
-    // a reply that then never starts is retried as before.
-    handlers.GENERATION_STARTED({ chatId: "c1", generationId: "g3" });
-    handlers.STREAM_TOKEN_RECEIVED({ chatId: "c1", generationId: "g3", content: "Ivo " });
-    handlers.GENERATION_ENDED({ chatId: "c1", generationId: "g3", content: reply });
-    await wait(40);
-    const beforeStall = clicks;
-    handlers.GENERATION_STARTED({ chatId: "c1", generationId: "g4" });
-    await wait(400);
-    return { afterWhole, slow, said, stalled: clicks - beforeStall };
-  });
-  await page.close();
-  check("a reply that came back whole is not retried", out.afterWhole === 0, out);
-  check("after it, a slow reply with no words yet is not stopped as stuck", out.slow === 0, out);
-  check("and the Log says why", out.said, out);
-  check("once words stream again, a reply that never starts is retried", out.stalled === 1, out);
+  const run = async (script) => {
+    const page = await browser.newPage();
+    page.on("pageerror", (e) => errors.push(e.message));
+    await stage(page, '<div id=modal></div><button title="Regenerate" data-testid="regenerate">R</button>');
+    await page.addScriptTag({ content: SOURCE, type: "module" });
+    await page.waitForFunction(() => !!window.__setup);
+    const out = await page.evaluate(async (script) => {
+      const handlers = {};
+      let clicks = 0;
+      document.querySelector("[data-testid=regenerate]").addEventListener("click", () => clicks++);
+      // A clock that can be moved on, for the hour.
+      const realNow = Date.now.bind(Date);
+      let ahead = 0;
+      Date.now = () => realNow() + ahead;
+      window.__setup(
+        {
+          events: { on: (n, fn) => { handlers[n] = fn; return () => {}; } },
+          sendToBackend: () => {},
+          onBackendMessage: () => () => {},
+          ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+                registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }) },
+        },
+        { retryDelayMs: 10, backoffFactor: 1, maxDelayMs: 10, jitter: false, maxRetries: 2,
+          toast: false, stuckTimeoutMs: 80, idleTimeoutMs: 0, pauseWhenFailing: false, liveLog: true },
+      );
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      const reply = "Ivo shut the ledger and blew out the lamp.";
+      const h = (n, p) => handlers[n] && handlers[n](p);
+      const whole = async (chatId, id, extra) => {
+        h("GENERATION_STARTED", Object.assign({ chatId, generationId: id }, extra || {}));
+        await wait(20);
+        h("GENERATION_ENDED", { chatId, generationId: id, content: reply });
+        await wait(40);
+      };
+      // How many presses a reply in c1 with no words gets in 400 ms.
+      const stall = async (id) => {
+        const before = clicks;
+        h("GENERATION_STARTED", { chatId: "c1", generationId: id });
+        await wait(400);
+        return clicks - before;
+      };
+      h("CHAT_CHANGED", { chatId: "c1" });
+      const r = {};
+      if (script === "here") {
+        await whole("c1", "g1");
+        r.afterWhole = clicks;
+        r.slow = await stall("g2");
+        h("GENERATION_ENDED", { chatId: "c1", generationId: "g2", content: reply });
+        await wait(40);
+        r.said = /replies here come back whole/.test(document.body.innerText);
+        // An hour after the start, a reply that has not come back is stopped.
+        const before = clicks;
+        h("GENERATION_STARTED", { chatId: "c1", generationId: "g5" });
+        await wait(200);
+        r.beforeHour = clicks - before;
+        ahead = 3600 * 1000 + 1000;
+        await wait(400);
+        r.afterHour = clicks - before;
+        r.hourSaid = /an hour after it started, so it is stopped as stuck/.test(document.body.innerText);
+        ahead = 0;
+        // A word that arrives as it is written means streaming is on again.
+        h("GENERATION_STARTED", { chatId: "c1", generationId: "g3" });
+        h("STREAM_TOKEN_RECEIVED", { chatId: "c1", generationId: "g3", content: "Ivo " });
+        h("GENERATION_ENDED", { chatId: "c1", generationId: "g3", content: reply });
+        await wait(40);
+        r.stalled = await stall("g4");
+      }
+      if (script === "other chat") {
+        await whole("c2", "o1");
+        r.stalled = await stall("o2");
+      }
+      if (script === "impersonation") {
+        await whole("c1", "i1", { generationType: "impersonate" });
+        r.stalled = await stall("i2");
+      }
+      if (script === "left the chat") {
+        h("GENERATION_STARTED", { chatId: "c1", generationId: "l1" });
+        await wait(20);
+        h("CHAT_CHANGED", { chatId: "c2" });
+        h("GENERATION_ENDED", { chatId: "c1", generationId: "l1", content: reply });
+        await wait(40);
+        h("CHAT_CHANGED", { chatId: "c1" });
+        r.stalled = await stall("l2");
+      }
+      return r;
+    }, script);
+    await page.close();
+    return out;
+  };
+  const here = await run("here");
+  check("a reply that came back whole is not retried", here.afterWhole === 0, here);
+  check("after it, a slow reply with no words yet is not stopped as stuck", here.slow === 0, here);
+  check("and the Log says why", here.said, here);
+  check("a reply that has not come back is not stopped before an hour", here.beforeHour === 0, here);
+  check("and is stopped once an hour has gone by since it started", here.afterHour === 1, here);
+  check("and the Log says why it was stopped", here.hourSaid, here);
+  check("once words stream again, a reply that never starts is retried", here.stalled === 1, here);
+  const other = await run("other chat");
+  check("a whole reply in another chat does not say streaming is off", other.stalled === 1, other);
+  const imp = await run("impersonation");
+  check("a whole impersonation does not say streaming is off", imp.stalled === 1, imp);
+  const left = await run("left the chat");
+  check("a reply whose chat was left before its first word does not say streaming is off", left.stalled === 1, left);
   check("no console errors", errors.length === 0, errors);
 }
 

@@ -306,8 +306,6 @@ const chatConnKey = (userId, chatId) => userKey(userId) + '\n' + chatId;
 function fitInfo(c) {
     const r = c && c.reasoning_bindings && c.reasoning_bindings.settings;
     return {
-        id: String(c.id == null ? '' : c.id),
-        name: String(c.name == null ? '' : c.name),
         url: String(c.api_url == null ? '' : c.api_url),
         effort: r && r.apiReasoning ? String(r.reasoningEffort || '') : '',
     };

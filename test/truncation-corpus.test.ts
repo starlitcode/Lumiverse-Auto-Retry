@@ -111,12 +111,13 @@ const FINISHED: Array<[string, string]> = [
   ["a block closed on its last line", "<tally>\nLamps lit: 4\nOil left: half</tally>\n\nShe trimmed the last wick."],
   ["a block closed with the reply after it", "<tally>\nLamps lit: 4\n</tally> She trimmed the last wick."],
   ["a block closed with a space in the tag", "<tally>\nLamps lit: 4\n</ tally>\n\nShe trimmed the last wick."],
-  // One label line, or a line of hashtags, that a card asks for at the end of
-  // every reply. The close ones to these are in the cut list below.
+  // One label line under a divider, or a line of hashtags, that a card asks
+  // for at the end of every reply. The close ones to these are in the cut
+  // list below.
   ["one label line after a divider", "Ivo shut the ledger and blew out the lamp.\n\n---\nWhere: North Pier"],
-  ["one label line on its own", "Ivo shut the ledger and blew out the lamp.\n\nWhere: North Pier"],
-  ["one label line in bold", "Ivo shut the ledger and blew out the lamp.\n\n**Time:** Late evening"],
-  ["one label line after an emoji", "Ivo shut the ledger and blew out the lamp.\n\n\u{1F319} Moon Phase: waning"],
+  ["one label line after a row of stars", "Ivo shut the ledger and blew out the lamp.\n\n***\nWhere: North Pier"],
+  ["one label line in bold, after a divider", "Ivo shut the ledger and blew out the lamp.\n\n---\n**Time:** Late evening"],
+  ["one label line after a divider and an emoji", "Ivo shut the ledger and blew out the lamp.\n\n___\n\u{1F319} Moon Phase: waning"],
   ["a line of hashtags", "Ivo shut the ledger and blew out the lamp.\n\n#midnight-run #rivals"],
   ["one hashtag", "Ivo shut the ledger and blew out the lamp.\n\n#tidewatch"],
 ];
@@ -168,7 +169,15 @@ const CUT: Array<[string, string]> = [
   ["list cut after a joining word", "- lock the door\n- draw the curtains and"],
   ["list cut after an article", "- lock the door\n- draw the"],
   ["thinking cut mid-structure", "<think>\nBeats:\n1. he panics\n2. she sof"],
-  // Close to one label line, and still cut.
+  // Close to one label line, and still cut. Without a divider above it, a
+  // label line is read as a line of dialogue, which may be cut.
+  ["a name and a line of dialogue cut after a scene", "Ivo shut the ledger and blew out the lamp.\n\nMara: I was going"],
+  ["a bold name and a line of dialogue, cut", "Ivo shut the ledger and blew out the lamp.\n\n**Mara:** I never wanted"],
+  ["a name and a question, cut", "Ivo shut the ledger and blew out the lamp.\n\nMara: Do you remember when"],
+  ["a name and a line cut after a comma and more", "Ivo shut the ledger and blew out the lamp.\n\nMara: Hold on, let me"],
+  ["one line of dialogue with a name, cut", "Mara: I was going"],
+  ["one label line with no divider above it", "Ivo shut the ledger and blew out the lamp.\n\nWhere: North Pier"],
+  ["a divider and one label line with nothing above them", "---\nMara: I was going"],
   ["a sentence cut after a colon", "Ivo leaned closer.\n\nHe muttered: we should never have come down"],
   ["a label line cut on a joining word", "Ivo shut the ledger.\n\nNext: Ivo walks to the"],
   ["a name and a long line of dialogue, cut", "Ivo shut the ledger.\n\nIvo: I was going to tell you about the ledger first"],
