@@ -191,7 +191,7 @@ const NOTE_FROM_TRY_MAX = 20;
 const STREAM_BUF_MAX = 200000;
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.26.6";
+const VERSION = "5.27.0";
 // Whether two saved settings hold the same values, whatever order their keys
 // were written in. A key left undefined counts as not there, the way it is
 // when saved. Used to tell an update or a put-back that would change nothing.
@@ -609,6 +609,8 @@ const RUNS = {
         note: "The rows above are about a reply that arrived and was no good. These two are about one that never finished. Both are waits in milliseconds, and both lean long so a slow connection is not read as a freeze. Lower them for quicker retries on a fast provider, or set either to 0 to switch that one off.",
     },
 };
+// The runs of switches that get All and None over them.
+const BULK_RUNS = ["logShow"];
 const SCHEMA = [
     {
         title: "Basics",
@@ -15089,6 +15091,8 @@ export function setup(ctx, opts) {
         // Labeled runs of rows inside a group, hidden by a search once none of
         // their rows match so a heading is never left standing over nothing.
         const subRuns = [];
+        // The All and None bars, each repainted whenever a switch moves.
+        const bulkSyncs = [];
         // Rows that only mean something while some switch is on. Kept out of the
         // panel while it is off, so what is on screen is what is in use.
         // Groups rather than a flat list, matching depNotes below: any switch
@@ -15187,6 +15191,9 @@ export function setup(ctx, opts) {
             // Ahead of the search guard: whether the master switch is off has nothing
             // to do with what is being searched for, and this must not go stale.
             syncMasterNote();
+            // So is the count on an All and None bar.
+            for (const s of bulkSyncs)
+                s();
             // A permission only one setting uses is missing from the moment that
             // setting is switched on, not from the next time the panel opens.
             if (permPaint)
@@ -15391,6 +15398,50 @@ export function setup(ctx, opts) {
                 subRuns.push(wrap);
                 return wrap;
             };
+            // All and None over a run of switches, the same as Auto Refine's: a
+            // count of the ones on, and two buttons that turn every one on or off.
+            // Each is grayed while it would change nothing. Like any switch here,
+            // the change is kept when Save is pressed.
+            const bulkBar = (keys) => {
+                const bar = document.createElement("div");
+                bar.setAttribute("data-ar-bulk", "1");
+                bar.style.cssText = "display:flex;align-items:center;gap:8px;flex-wrap:wrap";
+                const said = document.createElement("span");
+                said.style.cssText = "flex:1;min-width:0;font-size:12px;color:" + MUTED;
+                const all = btn("All", false);
+                all.setAttribute("data-ar-pick", "all");
+                const none = btn("None", false);
+                none.setAttribute("data-ar-pick", "none");
+                for (const b2 of [all, none])
+                    b2.style.cssText += "min-height:0;padding:4px 12px;flex:none";
+                const paint = () => {
+                    const on = keys.filter((k) => !!cfg[k]).length;
+                    said.textContent = on + " of " + keys.length + " chosen";
+                    const dim = (b2, off) => {
+                        b2.disabled = off;
+                        b2.style.opacity = off ? "0.45" : "1";
+                        b2.style.cursor = off ? "not-allowed" : "pointer";
+                    };
+                    dim(all, on === keys.length);
+                    dim(none, on === 0);
+                };
+                const pickAll = (on) => {
+                    for (const k of keys) {
+                        cfg[k] = on;
+                        if (fieldSetters[k])
+                            fieldSetters[k](on);
+                    }
+                    applyDeps();
+                };
+                all.addEventListener("click", () => pickAll(true));
+                none.addEventListener("click", () => pickAll(false));
+                paint();
+                bulkSyncs.push(paint);
+                bar.appendChild(said);
+                bar.appendChild(all);
+                bar.appendChild(none);
+                return bar;
+            };
             // Rows naming a run go under one heading together. Anything without a
             // run goes straight into the group, and closes any run above it.
             const emitFields = (into) => {
@@ -15402,8 +15453,11 @@ export function setup(ctx, opts) {
                         into.appendChild(addRow(buildRow(f), f));
                         continue;
                     }
-                    if (!open || open.key !== key)
+                    if (!open || open.key !== key) {
                         open = { key: key, el: subGroup(into, RUNS[key].title, RUNS[key].note) };
+                        if (BULK_RUNS.indexOf(key) >= 0)
+                            open.el.appendChild(bulkBar(group.fields.filter((g) => g.run === key && g.type === "bool").map((g) => g.key)));
+                    }
                     open.el.appendChild(addRow(buildRow(f), f));
                 }
             };
@@ -16150,7 +16204,7 @@ export function setup(ctx, opts) {
                         ? "Auto Retry is off in this temporary chat. Every other chat carries on as it is. This lasts while the chat is open and is not remembered, since the chat itself is not kept."
                         : "Switch Auto Retry off for this temporary chat, to watch what the model does without anything re-rolling it. This lasts while the chat is open and is not remembered, since the chat itself is not kept."
                     : off
-                        ? "Auto Retry is switched off in this chat. Every other chat carries on as it is. This is remembered, and it is kept in this browser rather than in your settings."
+                        ? "Auto Retry is switched off in this chat. Every other chat carries on as it is. This is remembered on your account, so it follows you to other devices."
                         : "Switch Auto Retry off in this chat alone, for a scene where the model is meant to refuse. Every other chat carries on as it is.";
         };
         act.addEventListener("click", () => {

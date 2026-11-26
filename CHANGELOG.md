@@ -8,6 +8,20 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.27.0
+
+_2026-11-25_
+
+### Added
+
+- **All and None over the switches in Show in the log.** All turns every kind of line on, and None turns every one off. A line beside them says how many are on. Press Save to keep it, the same as for one switch. Auto Refine already had this.
+
+### Fixed
+
+- **The line under Turn off here said where the choice is kept wrongly.** It said the choice was kept in this browser. It is kept on your account, so it follows you to other devices. The line now says so.
+
+---
+
 ## 5.26.6
 
 _2026-11-25_

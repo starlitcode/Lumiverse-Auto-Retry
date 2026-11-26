@@ -881,6 +881,65 @@ console.log("\nhiding kinds of line in the Log");
   check("no console errors", on.errors.length === 0 && off.errors.length === 0, on.errors.concat(off.errors));
 }
 
+// ---- All and None over Show in the log ----
+// The same bar as Auto Refine's: a count of the switches on, All and None,
+// each grayed while it would change nothing. It sits in the run, so it goes
+// with the rows when the on-screen panel is switched off.
+console.log("\nAll and None over Show in the log");
+{
+  for (const [label, viewport, touch] of [["phone", { width: 390, height: 860 }, true], ["laptop", { width: 1280, height: 860 }, false]]) {
+    const { out, errors } = await inPanel(browser, { viewport, touch, settings: { liveLog: true, logRetries: false } }, async (page) => {
+      const bar = page.locator("#modal [data-ar-bulk]");
+      const found = await bar.count();
+      if (!found) return { found };
+      await bar.scrollIntoViewIfNeeded();
+      return page.evaluate(async () => {
+        const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+        const modal = document.getElementById("modal");
+        const bar = modal.querySelector("[data-ar-bulk]");
+        const all = bar.querySelector('[data-ar-pick="all"]');
+        const none = bar.querySelector('[data-ar-pick="none"]');
+        const run = bar.parentElement;
+        const boxes = () => [...run.querySelectorAll("[data-ar-row] input[type=checkbox]")];
+        const state = () => ({ said: bar.querySelector("span").textContent, on: boxes().filter((b) => b.checked).length, all: all.disabled, none: none.disabled });
+        const m = modal.getBoundingClientRect();
+        const r = bar.getBoundingClientRect();
+        const fits = r.left >= m.left - 0.5 && r.right <= m.right + 0.5 && document.documentElement.scrollWidth <= window.innerWidth;
+        const tall = Math.min(all.getBoundingClientRect().height, none.getBoundingClientRect().height);
+        const start = state();
+        none.click();
+        await wait(60);
+        const afterNone = state();
+        all.click();
+        await wait(60);
+        const afterAll = state();
+        // One switch turned off by hand moves the count, and lights None and All.
+        const one = boxes()[0];
+        one.click();
+        await wait(60);
+        const afterOne = state();
+        // With the on-screen panel off, the run and its bar go with the rows.
+        const master = [...modal.querySelectorAll("[data-ar-row]")].find((row) => /Show the on-screen panel/.test(row.textContent) && !row.closest("[data-ar-bulk]"));
+        const masterBox = master && master.querySelector("input[type=checkbox]");
+        if (masterBox) masterBox.click();
+        await wait(700);
+        const gone = getComputedStyle(run).display === "none";
+        return { found: 1, count: boxes().length, start, afterNone, afterAll, afterOne, fits, tall, gone, master: !!masterBox };
+      });
+    });
+    check(label + ": the bar is there, over the six switches", out.found === 1 && out.count === 6, JSON.stringify(out));
+    if (out.found !== 1) continue;
+    check(label + ": it counts the switches on, with one off", out.start.said === "5 of 6 chosen" && out.start.on === 5 && !out.start.all && !out.start.none, JSON.stringify(out.start));
+    check(label + ": None turns every one off, and is then grayed", out.afterNone.on === 0 && out.afterNone.said === "0 of 6 chosen" && out.afterNone.none && !out.afterNone.all, JSON.stringify(out.afterNone));
+    check(label + ": All turns every one on, and is then grayed", out.afterAll.on === 6 && out.afterAll.said === "6 of 6 chosen" && out.afterAll.all && !out.afterAll.none, JSON.stringify(out.afterAll));
+    check(label + ": one switch by hand moves the count", out.afterOne.on === 5 && out.afterOne.said === "5 of 6 chosen" && !out.afterOne.all, JSON.stringify(out.afterOne));
+    check(label + ": the bar fits the settings, with no sideways scroll", out.fits, JSON.stringify(out));
+    if (touch) check(label + ": All and None are at least 32 pixels high", out.tall >= 32, String(out.tall));
+    check(label + ": with the on-screen panel off, the bar goes with the rows", out.master && out.gone, JSON.stringify(out));
+    check(label + ": no console errors", errors.length === 0, errors);
+  }
+}
+
 // ---- a description fades and slides in ----
 // The same small slide as Auto Refine's: 4px from the row it belongs to,
 // with the fade. With less motion asked for, it appears at once.
