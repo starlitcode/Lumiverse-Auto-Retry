@@ -6326,38 +6326,37 @@ export function setup(ctx: Ctx, opts?: any) {
     const clearBtn = tinyBtn("Clear");
     clearBtn.setAttribute("data-ar-log-clear", "1");
     clearBtn.addEventListener("click", () => {
-      // The box keeps its size, so what it held fades out and slides up
-      // 4px, and what it says next fades in.
-      fadeThrough(liveLogBody, () => {
-        if (liveTab === "prompt") {
-          lastPrompt = null;
-          // And what it was saying about the reply that prompt came from. Left
-          // set, Clear emptied the tab and kept it telling you the interceptor
-          // permission was missing, about a reply you had just discarded.
-          promptNeverArrived = false;
-        }
-        else if (liveTab === "replaced") {
-          replaced.delete(chatSlot(lastChatId));
-          try {
-            if (canSend())
-              (ctx as any).sendToBackend({ type: "forget_replaced", chatId: chatSlot(lastChatId), save: replacedSaving() });
-          } catch (_) {}
-        }
-        else if (liveTab === "stats") {
-          // Counting starts again from now, so the clock resets with the counts
-          // or the rate below them would be measured against the wrong window.
-          stats.retries = 0;
-          stats.extraReplies = 0;
-          stats.gaveUp = 0;
-          stats.good = 0;
-          stats.notesSent = 0;
-          stats.notesSkipped = 0;
-          stats.lastNoteSkip = "";
-          for (const k of Object.keys(stats.reasons)) delete stats.reasons[k];
-          stats.since = Date.now();
-        } else eventLog.length = 0;
-        renderLiveLog();
-      });
+      // Cleared at once, so closing the Log mid-fade loses nothing. Only
+      // the drawing waits: the box keeps its size, so what it held fades
+      // out and slides up 4px, and what it says next fades in.
+      if (liveTab === "prompt") {
+        lastPrompt = null;
+        // And what it was saying about the reply that prompt came from. Left
+        // set, Clear emptied the tab and kept it telling you the interceptor
+        // permission was missing, about a reply you had just discarded.
+        promptNeverArrived = false;
+      }
+      else if (liveTab === "replaced") {
+        replaced.delete(chatSlot(lastChatId));
+        try {
+          if (canSend())
+            (ctx as any).sendToBackend({ type: "forget_replaced", chatId: chatSlot(lastChatId), save: replacedSaving() });
+        } catch (_) {}
+      }
+      else if (liveTab === "stats") {
+        // Counting starts again from now, so the clock resets with the counts
+        // or the rate below them would be measured against the wrong window.
+        stats.retries = 0;
+        stats.extraReplies = 0;
+        stats.gaveUp = 0;
+        stats.good = 0;
+        stats.notesSent = 0;
+        stats.notesSkipped = 0;
+        stats.lastNoteSkip = "";
+        for (const k of Object.keys(stats.reasons)) delete stats.reasons[k];
+        stats.since = Date.now();
+      } else eventLog.length = 0;
+      fadeThrough(liveLogBody, renderLiveLog);
     });
     // Held together, so on a narrow panel the pair moves to the next line as
     // one rather than Clear on its own.
@@ -7631,6 +7630,8 @@ export function setup(ctx: Ctx, opts?: any) {
     if (!node || !node.style || noMotion()) return change();
     const MS = 180;
     let done = false;
+    // Marked while it fades, so anything waiting for the box to settle can tell.
+    node.setAttribute("data-ar-fading", "1");
     const swap = () => {
       if (done) return;
       done = true;
@@ -7645,6 +7646,7 @@ export function setup(ctx: Ctx, opts?: any) {
         node.style.transition = "";
         node.style.transform = "";
         node.style.opacity = "";
+        node.removeAttribute("data-ar-fading");
       }, MS + 40);
     };
     node.style.transition = "opacity " + MS + "ms ease-out,transform " + MS + "ms ease-out";

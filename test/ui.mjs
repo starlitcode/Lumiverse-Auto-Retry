@@ -2148,6 +2148,8 @@ console.log("\nthe panel survives a re-sync");
           await frame();
           const logBefore = bodyText();
           press("Clear").click();
+          // The box fades out what it held and in what it says next.
+          for (let i = 0; i < 100 && document.querySelector("[data-ar-fading]"); i++) await new Promise((r) => setTimeout(r, 20));
           await frame();
           const logAfter = bodyText();
 
@@ -8348,7 +8350,8 @@ console.log("\nstats view");
 
     // Clear starts the counting again rather than leaving a stale rate behind.
     [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === "Clear").click();
-    await wait(20);
+    // The box fades out what it held and in what it says next.
+    for (let i = 0; i < 100 && document.querySelector("[data-ar-fading]"); i++) await new Promise((r) => setTimeout(r, 20));
     const afterClear = body().textContent;
 
     teardown();
@@ -12091,7 +12094,7 @@ console.log("\nthe Prompt tab only blames the permission when it can");
       // saying about the reply that prompt came from.
       [...document.querySelectorAll("#__lvRetryLog button")]
         .find((b) => (b.textContent || "").trim() === "Clear").click();
-      await wait(20);
+      for (let i = 0; i < 100 && document.querySelector("[data-ar-fading]"); i++) await new Promise((r) => setTimeout(r, 20));
       return { after: after, cleared: document.getElementById("__lvRetryLogBody").textContent };
     });
     await page.close();
