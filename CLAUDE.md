@@ -109,6 +109,9 @@ Two skills are available. Load them before starting work.
 - Refusal and cut-off detection has corpus tests in `test/detection-corpus.test.ts`
   and `test/truncation-corpus.test.ts`. A new pattern gets a line in the corpus
   that it catches and one close to it that it must not.
+- A failed read of the account is not the same as nothing saved. A read that
+  fails never leads to a write. A list or setting counts as read only after a
+  read that worked. The panel warns once and tries the read again.
 
 ## Thinking formats
 
@@ -272,6 +275,14 @@ Every change to the panel or the page has to work on a phone and on a laptop.
   high and reads it back as 0, at every UI Scale step from 50% to 150%. It
   never compares `scrollHeight` with `clientHeight`, which can read as equal
   while the box still scrolls.
+- No text box, text area or number box is focused by the code on a touch
+  screen. Focus opens the phone's keyboard. With a mouse, focus can go where it
+  helps.
+- Each part of the panel has one scroll area at most. A box whose content fits
+  never scrolls. Where scrolling is needed, the bar is thin and takes no space.
+- Every "?" description opens next to its own row. A row is never built inside
+  another row's element. If it is, the "?" finds the outer row, and the
+  description opens above the whole block, far from the button.
 
 ## Motion
 
