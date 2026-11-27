@@ -8536,6 +8536,121 @@ console.log("\nthe settings window that does not open says so");
   await page.close();
 }
 
+// ---- anything taken off the panel leaves smoothly ----
+// It fades, slides 4px and its space closes over several frames, so what is
+// under it moves up with it. With Reduce motion it goes in one step. The live
+// Log keeps its size, so what it held fades out and the new text fades in.
+console.log("\nanything taken off the panel leaves smoothly");
+{
+  const record = (page, sel, press, box) =>
+    page.evaluate(async ([sel, press, box]) => {
+      const target = document.querySelector(sel);
+      if (!target) return { missing: sel };
+      const next = box ? null : (() => {
+        let n = target;
+        while (n) {
+          let s = n.nextElementSibling;
+          while (s) {
+            if (!s.hidden && s.getClientRects().length && s.getBoundingClientRect().height > 0) return s;
+            s = s.nextElementSibling;
+          }
+          n = n.parentElement;
+          if (!n || n.id === "modal") return null;
+        }
+        return null;
+      })();
+      const frames = [];
+      const read = () => {
+        const on = target.isConnected && target.getClientRects().length;
+        frames.push({
+          h: on ? Math.round(target.getBoundingClientRect().height * 10) / 10 : 0,
+          o: on ? Number(getComputedStyle(target).opacity) : 0,
+          y: next && next.isConnected && on ? Math.round((next.getBoundingClientRect().top - target.getBoundingClientRect().top) * 10) / 10 : null,
+        });
+      };
+      read();
+      const b = document.querySelector(press);
+      if (!b) return { missing: press };
+      b.click();
+      for (let i = 0; i < 40; i++) {
+        await new Promise((r) => requestAnimationFrame(r));
+        read();
+      }
+      return { frames };
+    }, [sel, press, box]);
+  const judge = (label, out, still, box) => {
+    if (out.missing) return check(label + ": the row to take off is there", false, out.missing);
+    const f = out.frames;
+    const start = f[0].h;
+    const between = f.filter((x) => x.h > 1 && x.h < start - 1).length;
+    const faded = f.filter((x) => x.o > 0.02 && x.o < 0.98).length;
+    if (still) return check(label + ", Reduce motion: it goes in one step", between <= 1 && faded <= 1, f.slice(0, 6));
+    check(label + ": it fades over several frames", faded >= 3, f.map((x) => x.o));
+    if (box) return check(label + ": the box keeps its size", f.every((x) => Math.abs(x.h - start) < 1), f.map((x) => x.h));
+    check(label + ": its space closes over several frames", between >= 3, f.map((x) => x.h));
+    const ys = f.map((x) => x.y).filter((y) => y != null);
+    const moves = [];
+    for (let i = 1; i < ys.length; i++) moves.push(ys[i - 1] - ys[i]);
+    const travel = ys.length ? ys[0] - Math.min(...ys) : 0;
+    const biggest = moves.length ? Math.max(...moves) : 0;
+    check(label + ": what is under it moves up with it, a little at a time",
+      travel < 2 || (moves.filter((m) => m > 0.5).length >= 3 && biggest <= travel * 0.5 + 1), { travel, biggest });
+  };
+  const openNotes = (page) =>
+    page.evaluate(async () => {
+      for (const b of [...document.querySelectorAll("#modal [aria-expanded]")])
+        if (/Refusal tuning/.test(b.textContent || "") && b.getAttribute("aria-expanded") === "false") b.click();
+      await new Promise((r) => setTimeout(r, 400));
+    });
+  const KINDS = [
+    {
+      name: "a notice dismissed",
+      opts: { settings: { refusalNote: true }, seed: { "lv-auto-retry:built-in-seen:v1": "notthemark" } },
+      set: openNotes,
+      sel: '#modal [data-lvr-builtinmoved="1"]',
+      press: '#modal [data-lvr-builtinmoved="dismiss"]',
+    },
+    {
+      name: "the live Log cleared",
+      opts: { settings: { liveLog: true } },
+      box: true,
+      set: async (page) => page.evaluate(async () => {
+        for (let i = 0; i < 6; i++) window.__fromBackend({ type: "log", kind: "setup", text: "a line " + i });
+        await new Promise((r) => setTimeout(r, 100));
+      }),
+      sel: "#__lvRetryLogBody",
+      press: "#__lvRetryLog [data-ar-log-clear]",
+    },
+  ];
+  const SIZES = [
+    ["phone", { width: 390, height: 860 }, true, 1],
+    ["phone, zoom 1.25", { width: 390, height: 860 }, true, 1.25],
+    ["phone, zoom 0.85", { width: 390, height: 860 }, true, 0.85],
+    ["laptop", { width: 1280, height: 900 }, false, 1],
+    ["laptop, zoom 1.25", { width: 1280, height: 900 }, false, 1.25],
+    ["laptop, zoom 0.85", { width: 1280, height: 900 }, false, 0.85],
+    ["phone, Reduce motion", { width: 390, height: 860 }, true, 1],
+  ];
+  for (const k of KINDS) {
+    for (const [size, viewport, touch, zoom] of SIZES) {
+      const still = size.indexOf("Reduce motion") >= 0;
+      const opts = Object.assign({}, k.opts, {
+        viewport, touch,
+        css: zoom === 1 ? "" : "html{zoom:" + zoom + "}",
+        settings: Object.assign({}, k.opts.settings, still ? { reduceMotion: true } : {}),
+      });
+      const { out, errors } = await inPanel(browser, opts, async (page) => {
+        await k.set(page);
+        await page.evaluate((sel) => { const n = document.querySelector(sel); if (n) n.scrollIntoView({ block: "start" }); }, k.sel);
+        await page.waitForTimeout(100);
+        return record(page, k.sel, k.press, !!k.box);
+      });
+      judge(k.name + ", " + size, out, still, !!k.box);
+      check(k.name + ", " + size + ": no console errors", errors.length === 0, errors);
+    }
+  }
+}
+
 console.log("\nthe quick toggle syncs");
 {
   const page = await browser.newPage();
@@ -16258,7 +16373,8 @@ console.log("\nsaying the note sets have changed");
           const b = document.querySelector('#modal [data-lvr-builtinmoved="dismiss"]');
           if (!b) return { noButton: true };
           b.click();
-          await new Promise((r) => setTimeout(r, 80));
+          // The line leaves over a few frames.
+          await new Promise((r) => setTimeout(r, 450));
           return {
             gone: !document.querySelector('#modal [data-lvr-builtinmoved="1"]'),
             stamped: localStorage.getItem("lv-auto-retry:built-in-seen:v1"),

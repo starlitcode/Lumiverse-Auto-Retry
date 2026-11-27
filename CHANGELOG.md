@@ -24,6 +24,7 @@ _2026-11-26_
 
 ### Fixed
 
+- **Things taken off the panel leave smoothly.** Dismissing a notice took it away between two frames, and everything under it jumped up, and Clear emptied the live Log in one step. Now a notice fades, slides up 4 pixels and its space closes over several frames, and the live Log fades out what it held and fades in what it says next. With Reduce motion on, both happen at once.
 - **The reply a retry replaced is no longer lost when your account cannot be read.** With **Keep it through an update** on, a failed read of the saved list left it looking empty, and the next save wrote over it. Now nothing is saved over a list that could not be read, a notification says so, and it is read again next time.
 - **Settings that cannot be read from your account are not overwritten.** A failed read was taken as nothing saved, and this browser's copy was written over the account's, which could undo changes made on another device. Now the panel keeps this browser's copy, writes nothing to the account, says "Your settings could not be read from your account. They are kept in this browser only for now.", and asks again in 10 seconds. Presets and the chats switched off work the same way.
 - **A settings window that does not open says so.** A failure to open it was only written in the Log, which is inside that window, so the press did nothing you could see. Now a notification says it could not open, and why.

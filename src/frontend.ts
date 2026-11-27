@@ -6324,35 +6324,40 @@ export function setup(ctx: Ctx, opts?: any) {
       }, 1400);
     });
     const clearBtn = tinyBtn("Clear");
+    clearBtn.setAttribute("data-ar-log-clear", "1");
     clearBtn.addEventListener("click", () => {
-      if (liveTab === "prompt") {
-        lastPrompt = null;
-        // And what it was saying about the reply that prompt came from. Left
-        // set, Clear emptied the tab and kept it telling you the interceptor
-        // permission was missing, about a reply you had just discarded.
-        promptNeverArrived = false;
-      }
-      else if (liveTab === "replaced") {
-        replaced.delete(chatSlot(lastChatId));
-        try {
-          if (canSend())
-            (ctx as any).sendToBackend({ type: "forget_replaced", chatId: chatSlot(lastChatId), save: replacedSaving() });
-        } catch (_) {}
-      }
-      else if (liveTab === "stats") {
-        // Counting starts again from now, so the clock resets with the counts
-        // or the rate below them would be measured against the wrong window.
-        stats.retries = 0;
-        stats.extraReplies = 0;
-        stats.gaveUp = 0;
-        stats.good = 0;
-        stats.notesSent = 0;
-        stats.notesSkipped = 0;
-        stats.lastNoteSkip = "";
-        for (const k of Object.keys(stats.reasons)) delete stats.reasons[k];
-        stats.since = Date.now();
-      } else eventLog.length = 0;
-      renderLiveLog();
+      // The box keeps its size, so what it held fades out and slides up
+      // 4px, and what it says next fades in.
+      fadeThrough(liveLogBody, () => {
+        if (liveTab === "prompt") {
+          lastPrompt = null;
+          // And what it was saying about the reply that prompt came from. Left
+          // set, Clear emptied the tab and kept it telling you the interceptor
+          // permission was missing, about a reply you had just discarded.
+          promptNeverArrived = false;
+        }
+        else if (liveTab === "replaced") {
+          replaced.delete(chatSlot(lastChatId));
+          try {
+            if (canSend())
+              (ctx as any).sendToBackend({ type: "forget_replaced", chatId: chatSlot(lastChatId), save: replacedSaving() });
+          } catch (_) {}
+        }
+        else if (liveTab === "stats") {
+          // Counting starts again from now, so the clock resets with the counts
+          // or the rate below them would be measured against the wrong window.
+          stats.retries = 0;
+          stats.extraReplies = 0;
+          stats.gaveUp = 0;
+          stats.good = 0;
+          stats.notesSent = 0;
+          stats.notesSkipped = 0;
+          stats.lastNoteSkip = "";
+          for (const k of Object.keys(stats.reasons)) delete stats.reasons[k];
+          stats.since = Date.now();
+        } else eventLog.length = 0;
+        renderLiveLog();
+      });
     });
     // Held together, so on a narrow panel the pair moves to the next line as
     // one rather than Clear on its own.
@@ -7604,6 +7609,50 @@ export function setup(ctx: Ctx, opts?: any) {
   // A box let down to nothing and then handed over. done runs once, whether the
   // travel finished, was cut short by a second one, or never started because the
   // reader asked for no movement.
+  // Anything taken off the panel leaves through here: it fades, slides 4px
+  // and its space closes over several frames, so what is under it moves up
+  // with it. With Reduce motion it goes at once. done runs once, after every
+  // node has gone, and at once when there is nothing on screen to move.
+  function leaveThen(nodes: any, done: () => void) {
+    const list = (Array.isArray(nodes) ? nodes : [nodes]).filter((n: any) => n && n.isConnected);
+    if (!list.length) return done();
+    let left = list.length;
+    for (const n of list)
+      foldAway(n, () => {
+        left--;
+        if (left === 0) done();
+      });
+  }
+
+  // For a box that keeps its size, such as the live Log: what it holds fades
+  // out and slides up 4px, change runs, and the new contents fade in. With
+  // Reduce motion, change runs at once.
+  function fadeThrough(node: any, change: () => void) {
+    if (!node || !node.style || noMotion()) return change();
+    const MS = 180;
+    let done = false;
+    const swap = () => {
+      if (done) return;
+      done = true;
+      change();
+      node.style.transition = "none";
+      node.style.transform = "translateY(4px)";
+      void node.offsetWidth;
+      node.style.transition = "opacity " + MS + "ms ease-out,transform " + MS + "ms ease-out";
+      node.style.opacity = "1";
+      node.style.transform = "none";
+      setTimeout(() => {
+        node.style.transition = "";
+        node.style.transform = "";
+        node.style.opacity = "";
+      }, MS + 40);
+    };
+    node.style.transition = "opacity " + MS + "ms ease-out,transform " + MS + "ms ease-out";
+    node.style.opacity = "0";
+    node.style.transform = "translateY(-4px)";
+    setTimeout(swap, MS);
+  }
+
   function foldAway(node: any, done: () => void) {
     let ran = false;
     const token = {};
@@ -14724,7 +14773,7 @@ export function setup(ctx: Ctx, opts?: any) {
         gotIt.setAttribute("data-lvr-builtinmoved", "dismiss");
         gotIt.addEventListener("click", () => {
           markBuiltInSeen();
-          moved.remove();
+          leaveThen(moved, () => moved.remove());
         });
         moved.appendChild(what);
         moved.appendChild(gotIt);
@@ -15891,14 +15940,14 @@ export function setup(ctx: Ctx, opts?: any) {
       markMovedSeen();
       saveSaved();
       saveToAccount();
-      box.remove();
+      leaveThen(box, () => box.remove());
     });
     box.appendChild(take);
     const keep = small(btn("Keep mine", false));
     keep.setAttribute("data-ar-moveddefault", "keep");
     keep.addEventListener("click", () => {
       markMovedSeen();
-      box.remove();
+      leaveThen(box, () => box.remove());
     });
     box.appendChild(keep);
     return box;
