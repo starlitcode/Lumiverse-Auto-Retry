@@ -12,7 +12,9 @@ const BACKEND = readFileSync(join(root, "dist", "backend.js"), "utf8");
 
 // A fresh backend over a store that can be handed to the next one, as after an
 // update or a restart.
-function boot(stored: Record<string, any> = {}, connections: any[] = []) {
+// failReads makes the account read of a file fail that many times, the way
+// storage that is busy or offline does.
+function boot(stored: Record<string, any> = {}, connections: any[] = [], failReads: Record<string, number> = {}) {
   let frontendHandler: any = null;
   const events: Record<string, any[]> = {};
   const sent: Array<{ msg: any; userId: any }> = [];
@@ -25,6 +27,10 @@ function boot(stored: Record<string, any> = {}, connections: any[] = []) {
     },
     userStorage: {
       getJson: async (file: string, o: any) => {
+        if (failReads[file] > 0) {
+          failReads[file]--;
+          throw new Error("storage is busy");
+        }
         const k = String((o && o.userId) || "") + ":" + file;
         return k in stored ? stored[k] : null;
       },
@@ -181,5 +187,31 @@ describe("the thinking markers saved on a connection", () => {
     const h = boot({}, [bound("(", ")")]);
     await h.ask({ type: "get_think_marks" });
     expect(h.sent.filter((s) => s.msg.type === "think_marks").pop().msg.pairs).toEqual([]);
+  });
+});
+
+// A saved copy that could not be read is never written over, so the replies
+// in it are not lost. The next save reads it again and keeps both.
+describe("a saved copy that could not be read", () => {
+  test("is not written over, and is read again next time", async () => {
+    const stored: Record<string, any> = { "u1:replaced.json": [item("c1", "The ferry left without them.", 1)] };
+    const h = boot(stored, [], { "replaced.json": 1 });
+    await h.ask({ type: "keep_replaced", item: item("c2", "The lamp went out.", 2), save: true });
+    expect(h.stored["u1:replaced.json"].map((r: any) => r.chatId)).toEqual(["c1"]);
+    await h.ask({ type: "keep_replaced", item: item("c3", "Nobody answered the door.", 3), save: true });
+    expect(h.stored["u1:replaced.json"].map((r: any) => r.chatId).sort()).toEqual(["c1", "c2", "c3"]);
+  });
+
+  test("settings that could not be read are answered as failed, not as nothing saved", async () => {
+    // Two: the backend reads the settings once on its own when it starts.
+    const h = boot({}, [], { "settings.json": 2 });
+    await h.ask({ type: "load_settings", requestId: "s1" });
+    const failed = h.sent.filter((x) => x.msg.type === "loaded_settings").pop()!.msg;
+    expect(failed.failed).toBe(true);
+    expect(failed.settings).toBeNull();
+    await h.ask({ type: "load_settings", requestId: "s2" });
+    const empty = h.sent.filter((x) => x.msg.type === "loaded_settings").pop()!.msg;
+    expect(empty.failed).toBe(false);
+    expect(empty.settings).toBeNull();
   });
 });

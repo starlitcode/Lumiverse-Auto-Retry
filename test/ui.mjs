@@ -8446,6 +8446,96 @@ console.log("\ntwo menus, one press");
 // the same, or the setting people change most often stays in one browser. Word
 // swapping reads that switch from the backend, so it would not hear about the
 // extension being switched off either.
+// ---- a settings read that fails ----
+// A read of the account that fails is not the same as nothing saved there.
+// The panel keeps this browser's copy, writes nothing to the account, says so
+// once, and asks again in 10 seconds.
+console.log("\na settings read that fails keeps this browser's copy");
+{
+  const page = await browser.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  page.on("console", (m) => { if (m.type() === "error") errors.push("console: " + m.text()); });
+  await stage(page, "<div id=modal></div><div id=host></div>");
+  await page.addStyleTag({ content: THEME });
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  const out = await page.evaluate(async () => {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const host = document.getElementById("host");
+    const sent = [];
+    const backs = [];
+    window.__setup(
+      { events: { on: () => () => {} },
+        sendToBackend: (m) => sent.push(m),
+        onBackendMessage: (fn) => { backs.push(fn); return () => { const i = backs.indexOf(fn); if (i >= 0) backs.splice(i, 1); }; },
+        ui: { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+              registerInputBarAction: () => ({ onClick: () => () => {}, destroy: () => {} }),
+              createFloatWidget: () => ({ root: host, destroy: () => {}, setPosition: () => {} }) } },
+      { enabled: true, showFloatingToggle: true, floatingToggleSize: 44, toast: false },
+    );
+    const answer = (m) => { for (const f of backs.slice()) { try { f(m); } catch (_) {} } };
+    const loads = () => sent.filter((m) => m.type === "load_settings");
+    const saves = () => sent.filter((m) => m.type === "save_settings").length;
+    await wait(50);
+    answer({ type: "loaded_settings", requestId: loads().pop().requestId, settings: null, failed: true });
+    await wait(40);
+    const told = sent.filter((m) => m.type === "notify").map((m) => m.text);
+    const savesBefore = saves();
+    host.querySelector("button").click();
+    await wait(40);
+    const savesAfter = saves();
+    const asked = loads().length;
+    await wait(10600);
+    const askedAgain = loads().length;
+    answer({ type: "loaded_settings", requestId: loads().pop().requestId, settings: null, failed: false });
+    await wait(40);
+    host.querySelector("button").click();
+    await wait(40);
+    return { told, savesBefore, savesAfter, asked, askedAgain, savesThen: saves() };
+  });
+  check("a failed read says so once, in plain words",
+    out.told.filter((t) => t === "Your settings could not be read from your account. They are kept in this browser only for now.").length === 1, out);
+  check("and nothing is written to the account while it has not been read", out.savesAfter === out.savesBefore, out);
+  check("it is asked for again after 10 seconds", out.askedAgain === out.asked + 1, out);
+  check("once it is read, saves go to the account again", out.savesThen > out.savesAfter, out);
+  check("no console errors", errors.length === 0, errors);
+  await page.close();
+}
+
+// ---- the settings window that does not open ----
+// The Log is inside the window, so a window that fails to open is said in a
+// notification, or the press does nothing anybody can see.
+console.log("\nthe settings window that does not open says so");
+{
+  const page = await browser.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await stage(page, "<div id=modal></div>");
+  await page.addStyleTag({ content: THEME });
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  const out = await page.evaluate(async () => {
+    const sent = [];
+    const acts = {};
+    window.__setup(
+      { events: { on: () => () => {} },
+        sendToBackend: (m) => sent.push(m),
+        onBackendMessage: () => () => {},
+        ui: { showModal: () => { throw new Error("no room for a window"); },
+              registerInputBarAction: (o) => { const a = { onClick: (cb) => { a.cb = cb; return () => {}; }, destroy: () => {} }; acts[o.id] = a; return a; } } },
+      { enabled: true },
+    );
+    acts["auto-retry-settings"].cb();
+    await new Promise((r) => setTimeout(r, 40));
+    return sent.filter((m) => m.type === "notify").map((m) => ({ text: m.text, kind: m.kind }));
+  });
+  check("a settings window that fails to open is said in a notification",
+    out.some((n) => n.kind === "error" && n.text === "Auto Retry could not open its settings window: no room for a window"), out);
+  check("no page errors", errors.length === 0, errors);
+  await page.close();
+}
+
 console.log("\nthe quick toggle syncs");
 {
   const page = await browser.newPage();

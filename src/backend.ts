@@ -62,10 +62,16 @@ function hasUserStorage(): boolean {
 // shared-store copy up rather than presenting the user with empty settings.
 async function readUserJson(file: string, userId?: string): Promise<any> {
   if (hasUserStorage()) {
+    // A read that failed is told apart from a file that is not there: it
+    // throws, so nothing is written over an account copy that was never read.
+    let failed: any = null;
     try {
       const v = await spindle.userStorage.getJson(file, { fallback: null, userId: userId });
       if (v != null) return v;
-    } catch (_) { /* fall through to the legacy store */ }
+    } catch (e: any) {
+      failed = e;
+    }
+    if (failed) throw new Error('the account copy of ' + file + ' could not be read: ' + ((failed && failed.message) || 'no reason given'));
     let legacy: any = null;
     try { legacy = JSON.parse(await spindle.storage.read(file)); } catch (_) { legacy = null; }
     if (legacy != null) {
@@ -161,8 +167,10 @@ async function saveReplaced(userId: any, on: boolean): Promise<void> {
   const was = replacedSavedWas.get(k);
   replacedSavedWas.set(k, on);
   if (!on && was === false) return;
-  if (on) await readReplaced(userId);
-  else replacedRead.add(k);
+  // A saved copy that could not be read is never written over: the replies in
+  // it would be lost. The next save reads it again.
+  if (on && !(await readReplaced(userId))) return;
+  if (!on) replacedRead.add(k);
   const value = on ? replacedFor(userId).slice() : [];
   return inTurn(replacedWrites, userId, async () => {
     try {
@@ -176,13 +184,21 @@ async function saveReplaced(userId: any, on: boolean): Promise<void> {
 // The saved copy is read once per account, on the first ask after this module
 // starts, and only when the account keeps one. What is already in memory is
 // newer and wins.
-async function readReplaced(userId: any): Promise<void> {
+// Marked as read only once a read works, so a failed one is tried again, and
+// false while the saved copy has not been read.
+async function readReplaced(userId: any): Promise<boolean> {
   const k = userKey(userId);
-  if (replacedRead.has(k)) return;
-  replacedRead.add(k);
+  if (replacedRead.has(k)) return true;
   let got: any = null;
-  try { got = await readUserJson(REPLACED_FILE, userId); } catch (_) { got = null; }
-  if (!Array.isArray(got)) return;
+  try { got = await readUserJson(REPLACED_FILE, userId); } catch (e: any) {
+    const why = 'the replies a retry replaced could not be read from your account, so nothing was saved over them. They are read again next time: ' + ((e && e.message) || 'no reason given');
+    try { spindle.log.warn('auto-retry: ' + why); } catch (__) {}
+    notify('warning', why.charAt(0).toUpperCase() + why.slice(1) + '.', userId);
+    return false;
+  }
+  if (replacedRead.has(k)) return true;
+  replacedRead.add(k);
+  if (!Array.isArray(got)) return true;
   const list = replacedFor(userId);
   for (const raw of got.slice(0, REPLACED_PER_USER)) {
     const r = cleanReplaced(raw);
@@ -190,6 +206,7 @@ async function readReplaced(userId: any): Promise<void> {
   }
   list.sort((a, b) => a.at - b.at);
   while (list.length > REPLACED_PER_USER) list.shift();
+  return true;
 }
 
 // The reply a retry replaced in a chat that was deleted. There is no chat left
@@ -197,7 +214,7 @@ async function readReplaced(userId: any): Promise<void> {
 // read in first, so the reply does not come back from it after a restart. It
 // is written again only when this account is known to keep a saved copy.
 async function forgetChat(chatId: string, userId: any): Promise<void> {
-  await readReplaced(userId);
+  if (!(await readReplaced(userId))) return;
   const list = replacedFor(userId);
   const left = list.filter((x) => x.chatId !== chatId);
   if (left.length === list.length) return;
@@ -1142,7 +1159,14 @@ spindle.onFrontendMessage(async (payload: any, userId?: string, tab?: string) =>
     }
     if (payload.type === 'load_settings') {
       let settings: any = null;
-      try { settings = await readUserJson(SETTINGS_FILE, userId); } catch (__) { settings = null; }
+      // failed: the account could not be read, which is not the same as
+      // nothing saved there. The panel then keeps its copy and writes nothing.
+      let failed = false;
+      try { settings = await readUserJson(SETTINGS_FILE, userId); } catch (e: any) {
+        settings = null;
+        failed = true;
+        try { spindle.log.warn('auto-retry: ' + ((e && e.message) || 'the account could not be read')); } catch (__) {}
+      }
       // A panel on a new device has none of this person's settings yet and
       // tells this side nothing until it saves, so the switch is read from the
       // account copy here.
@@ -1150,7 +1174,7 @@ spindle.onFrontendMessage(async (payload: any, userId?: string, tab?: string) =>
       // This runs on every page load and it is the only path that arrives with
       // a userId, so it is the one that can resolve per-user storage. The
       // startup read above cannot: it has no user to read for.
-      replyTo(userId, { type: 'loaded_settings', requestId: payload.requestId, settings: settings });
+      replyTo(userId, { type: 'loaded_settings', requestId: payload.requestId, settings: settings, failed: failed });
       return;
     }
     // Which chat the user is looking at. The frontend cannot ask for this
@@ -1408,15 +1432,17 @@ spindle.onFrontendMessage(async (payload: any, userId?: string, tab?: string) =>
 
     if (payload.type === 'load_state') {
       let state: any = null;
-      try { state = await readUserJson(STATE_FILE, userId); } catch (_) { state = null; }
-      replyTo(userId, { type: 'loaded_state', requestId: payload.requestId, state: state });
+      let failed = false;
+      try { state = await readUserJson(STATE_FILE, userId); } catch (_) { state = null; failed = true; }
+      replyTo(userId, { type: 'loaded_state', requestId: payload.requestId, state: state, failed: failed });
       return;
     }
 
     if (payload.type === 'load_presets') {
       let presets: any = null;
-      try { presets = await readUserJson(PRESETS_FILE, userId); } catch (__) { presets = null; }
-      replyTo(userId, { type: 'loaded_presets', requestId: payload.requestId, presets: presets });
+      let failed = false;
+      try { presets = await readUserJson(PRESETS_FILE, userId); } catch (__) { presets = null; failed = true; }
+      replyTo(userId, { type: 'loaded_presets', requestId: payload.requestId, presets: presets, failed: failed });
       return;
     }
   } catch (_) {

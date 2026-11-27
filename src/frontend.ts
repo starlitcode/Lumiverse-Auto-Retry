@@ -4910,6 +4910,12 @@ export function setup(ctx: Ctx, opts?: any) {
   // so settings follow the user across browsers, and so the backend knows
   // whether the extension is switched on. Safe to call with no backend bridge.
   function saveToAccount() {
+    // Not while the account's settings could not be read: this browser's copy
+    // would be written over them.
+    if (unread.settings) {
+      log("problem", "your settings were saved in this browser only, since they could not be read from your account");
+      return;
+    }
     try {
       if (ctx && typeof (ctx as any).sendToBackend === "function") {
         const out: any = {};
@@ -4938,6 +4944,41 @@ export function setup(ctx: Ctx, opts?: any) {
   // one comes off first rather than waiting for teardown.
   let settingsWaiting: (() => void) | null = null;
   let presetsWaiting: (() => void) | null = null;
+  // What could not be read from the account, by kind. While one is set, this
+  // browser's copy is used and nothing of that kind is written to the
+  // account, so a copy that could not be read is never written over. It is
+  // asked for again in 10 seconds, and when the backend says it is ready.
+  const unread: Record<string, boolean> = {};
+  const unreadSaid: Record<string, boolean> = {};
+  const unreadAgain: Record<string, any> = {};
+  const UNREAD_AGAIN_MS = 10000;
+  function readFailed(what: string, again: () => void) {
+    unread[what] = true;
+    log("problem", "your " + what + " could not be read from your account, so this browser's copy is used and nothing is written to the account. It is asked for again in 10 seconds.");
+    if (!unreadSaid[what]) {
+      unreadSaid[what] = true;
+      notify("Your " + what + " could not be read from your account. They are kept in this browser only for now.", "warning");
+    }
+    if (unreadAgain[what]) clearTimeout(unreadAgain[what]);
+    unreadAgain[what] = setTimeout(() => {
+      unreadAgain[what] = null;
+      if (unread[what]) again();
+    }, UNREAD_AGAIN_MS);
+    // Taken down with the panel. Registered here, the first time, since the
+    // list of cleanups is made further down the file.
+    if (!unreadCleanup) {
+      unreadCleanup = true;
+      disposers.push(() => {
+        for (const k of Object.keys(unreadAgain)) if (unreadAgain[k]) clearTimeout(unreadAgain[k]);
+      });
+    }
+  }
+  function readWorked(what: string) {
+    unread[what] = false;
+    if (unreadAgain[what]) clearTimeout(unreadAgain[what]);
+    unreadAgain[what] = null;
+  }
+  let unreadCleanup = false;
   function loadFromAccount() {
     try {
       if (!ctx || typeof (ctx as any).sendToBackend !== "function" || typeof (ctx as any).onBackendMessage !== "function") return;
@@ -4948,6 +4989,8 @@ export function setup(ctx: Ctx, opts?: any) {
         if (!msg || msg.type !== "loaded_settings" || msg.requestId !== reqId) return;
         try { off && off(); } catch (_) {}
         settingsWaiting = null;
+        if (msg.failed) return readFailed("settings", loadFromAccount);
+        readWorked("settings");
         const s = msg.settings;
         if (s && typeof s === "object" && Object.keys(s).length) {
           Object.assign(cfg, coerceSaved(s));
@@ -8531,6 +8574,8 @@ export function setup(ctx: Ctx, opts?: any) {
   // browser copy stays the synchronous source every caller reads; the account
   // copy is what makes them turn up on another device.
   function savePresetsToAccount(all: Record<string, Preset[]>) {
+    // Not while the account's presets could not be read.
+    if (unread.presets) return;
     try {
       if (ctx && typeof (ctx as any).sendToBackend === "function") {
         (ctx as any).sendToBackend({ type: "save_presets", presets: all });
@@ -8560,6 +8605,8 @@ export function setup(ctx: Ctx, opts?: any) {
         if (!msg || msg.type !== "loaded_presets" || msg.requestId !== reqId) return;
         try { off && off(); } catch (_) {}
         presetsWaiting = null;
+        if (msg.failed) return readFailed("presets", loadPresetsFromAccount);
+        readWorked("presets");
         const incoming = coercePresets(msg.presets);
         const local = loadPresets();
         // Per kind, not all or nothing. The account winning outright would drop
@@ -8877,6 +8924,10 @@ export function setup(ctx: Ctx, opts?: any) {
         if (!msg || msg.type !== "loaded_state" || msg.requestId !== reqId) return;
         try { off && off(); } catch (_) {}
         stateWaiting = null;
+        // stateLoaded stays false, which already keeps saveStateToAccount from
+        // writing.
+        if (msg.failed) return readFailed("chats switched off and notices", loadStateFromAccount);
+        readWorked("chats switched off and notices");
         const st = msg.state && typeof msg.state === "object" ? msg.state : null;
         let sendUp = !st;
         if (st) {
@@ -17648,8 +17699,11 @@ export function setup(ctx: Ctx, opts?: any) {
   }
 
   function openSettings() {
+    // The Log is inside the window that did not open, so each failure is also
+    // said in a notification. Otherwise the press does nothing anybody can see.
     if (!ctx?.ui?.showModal) {
       log("problem", "this version of Lumiverse cannot open the settings window");
+      notify("Auto Retry could not open its settings window: this version of Lumiverse cannot open one.", "error");
       return;
     }
     try {
@@ -17734,8 +17788,9 @@ export function setup(ctx: Ctx, opts?: any) {
         modalSnapshot = null;
         modalBaseline = null;
       });
-    } catch (e) {
+    } catch (e: any) {
       log("problem", "could not open the settings window", e);
+      notify("Auto Retry could not open its settings window: " + String((e && e.message) || e || "no reason given").slice(0, 200), "error");
     }
   }
 
@@ -17849,9 +17904,9 @@ export function setup(ctx: Ctx, opts?: any) {
           // Without asking again, the panel would run on this browser's copy
           // for the whole visit, and its next save would write that copy over
           // the account's.
-          if (settingsWaiting) loadFromAccount();
-          if (presetsWaiting) loadPresetsFromAccount();
-          if (stateWaiting) loadStateFromAccount();
+          if (settingsWaiting || unread.settings) loadFromAccount();
+          if (presetsWaiting || unread.presets) loadPresetsFromAccount();
+          if (stateWaiting || unread["chats switched off and notices"]) loadStateFromAccount();
           askReplaced();
           askThinkMarks();
           askForPermissions();
