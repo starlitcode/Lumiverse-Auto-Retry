@@ -18,6 +18,7 @@ _2026-11-26_
 
 ### Changed
 
+- **A question that deletes something looks like one.** When the panel asks before deleting a preset or a note, Lumiverse's dialog is now drawn as a danger, in red, where it was a warning. When it asks on the button instead, by pressing again, the notification is red as well, where it was blue.
 - **The thinking-only checks are off by default.** **Its thinking was one character over and over**, **Its thinking was garbled** and **Its thinking got stuck repeating** now start off. Each one retried a reply that looked fine, because of its thinking alone. If you were on the old default, the panel tells you once and offers the new one.
 - **3 tries by default.** **Most tries per message** now starts at 3, not 4. If you were on the old default, the panel tells you once and offers the new one.
 - **The two price boxes and the cost line on the Prompt tab are removed.** **Input price, per million tokens**, **Output price, per million tokens** and the line on the Prompt tab that used them are gone. Auto Retry makes no calls of its own, and the line was only an estimate. The token count on the Prompt tab stays. The tick box in Import / export is now called **Panel and pop-up**.

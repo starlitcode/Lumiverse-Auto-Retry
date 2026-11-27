@@ -7900,9 +7900,16 @@ export function setup(ctx: Ctx, opts?: any) {
       showToast("That did not work. The Log says why.", { kind: "warning" });
     }
   }
+  // What a question is, which sets how Lumiverse draws it: danger for one that
+  // deletes or loses something, warning for a caution that loses nothing, such
+  // as a change with a cost, and default for a plain question. Auto Refine
+  // picks the same way.
+  type AskKind = "danger" | "warning" | "default";
+  // The notification the in-panel ask uses, in the same color as the dialog.
+  const ASK_NOTE: Record<AskKind, NoteKind> = { danger: "error", warning: "warning", default: "info" };
   async function askFirst(
     key: string,
-    spec: { title: string; message: string; confirmLabel: string },
+    spec: { title: string; message: string; confirmLabel: string; variant: AskKind },
     armSays: string,
     go: () => void,
   ) {
@@ -7913,7 +7920,7 @@ export function setup(ctx: Ctx, opts?: any) {
         const answer = await (ctx as any).ui.showConfirm({
           title: spec.title,
           message: spec.message,
-          variant: "warning",
+          variant: spec.variant,
           confirmLabel: spec.confirmLabel,
         });
         asked = true;
@@ -7936,7 +7943,7 @@ export function setup(ctx: Ctx, opts?: any) {
       doConfirmed(go);
       return;
     }
-    showToast(armSays, { force: true });
+    showToast(armSays, { force: true, kind: ASK_NOTE[spec.variant] });
     armedFor.set(
       key,
       setTimeout(() => armedFor.delete(key), ARM_MS),
@@ -14736,6 +14743,8 @@ export function setup(ctx: Ctx, opts?: any) {
             title: "Delete preset",
             message: 'Delete the preset "' + name + '"? There is no undo.',
             confirmLabel: "Delete",
+            // Deletes, so it is drawn as danger.
+            variant: "danger",
           },
           'Press Delete again to remove "' + name + '".',
           () => {
@@ -16403,6 +16412,8 @@ export function setup(ctx: Ctx, opts?: any) {
                     words.slice(0, 90) + (words.length > 90 ? "\u2026" : "") + '"'
                   : "Remove note " + (i + 1) + "? It is empty, so nothing is lost.",
                 confirmLabel: "Remove",
+                // Deletes, so it is drawn as danger.
+                variant: "danger",
               },
               "Press it again to remove this note.",
               () => {

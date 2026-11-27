@@ -7941,6 +7941,8 @@ export function setup(ctx, opts) {
             showToast("That did not work. The Log says why.", { kind: "warning" });
         }
     }
+    // The notification the in-panel ask uses, in the same color as the dialog.
+    const ASK_NOTE = { danger: "error", warning: "warning", default: "info" };
     async function askFirst(key, spec, armSays, go) {
         let asked = false;
         let yes = false;
@@ -7949,7 +7951,7 @@ export function setup(ctx, opts) {
                 const answer = await ctx.ui.showConfirm({
                     title: spec.title,
                     message: spec.message,
-                    variant: "warning",
+                    variant: spec.variant,
                     confirmLabel: spec.confirmLabel,
                 });
                 asked = true;
@@ -7974,7 +7976,7 @@ export function setup(ctx, opts) {
             doConfirmed(go);
             return;
         }
-        showToast(armSays, { force: true });
+        showToast(armSays, { force: true, kind: ASK_NOTE[spec.variant] });
         armedFor.set(key, setTimeout(() => armedFor.delete(key), ARM_MS));
     }
     // Three ways a theme changes and none of them covers the others. The reader
@@ -15139,6 +15141,8 @@ export function setup(ctx, opts) {
                     title: "Delete preset",
                     message: 'Delete the preset "' + name + '"? There is no undo.',
                     confirmLabel: "Delete",
+                    // Deletes, so it is drawn as danger.
+                    variant: "danger",
                 }, 'Press Delete again to remove "' + name + '".', () => {
                     releaseScroll(held);
                     presets[kind] = list().filter((x) => x.name !== name);
@@ -16754,6 +16758,8 @@ export function setup(ctx, opts) {
                                     words.slice(0, 90) + (words.length > 90 ? "\u2026" : "") + '"'
                                 : "Remove note " + (i + 1) + "? It is empty, so nothing is lost.",
                             confirmLabel: "Remove",
+                            // Deletes, so it is drawn as danger.
+                            variant: "danger",
                         }, "Press it again to remove this note.", () => {
                             if (notes.length <= 1)
                                 return;

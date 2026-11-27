@@ -8654,6 +8654,56 @@ console.log("\nanything taken off the panel leaves smoothly");
   }
 }
 
+// ---- a delete is asked as danger ----
+// The question is drawn by what it is: danger for one that deletes or loses
+// something. In Lumiverse's dialog it is the variant; asked on the button
+// instead, the notification is the matching color.
+console.log("\na delete is asked as danger");
+for (const dialog of [true, false]) {
+  const page = await browser.newPage({ viewport: { width: 480, height: 1030 } });
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await stage(page, "<div id=modal></div>");
+  await page.addStyleTag({ content: THEME });
+  await page.addScriptTag({ content: SOURCE, type: "module" });
+  await page.waitForFunction(() => !!window.__setup);
+  const out = await page.evaluate(async (dialog) => {
+    const sent = [];
+    const confirms = [];
+    const acts = {};
+    window.__setup(
+      { events: { on: () => () => {} },
+        sendToBackend: (m) => sent.push(m),
+        onBackendMessage: () => () => {},
+        ui: Object.assign(
+          { showModal: () => ({ root: document.getElementById("modal"), onDismiss: () => {}, dismiss: () => {} }),
+            registerInputBarAction: (o) => { const a = { onClick: (cb) => { a.cb = cb; return () => {}; }, destroy: () => {} }; acts[o.id] = a; return a; } },
+          dialog ? { showConfirm: (spec) => { confirms.push(spec); return Promise.resolve({ confirmed: false }); } } : {},
+        ) },
+      { enabled: true, refusalNote: true },
+    );
+    acts["auto-retry-settings"].cb();
+    const modal = document.getElementById("modal");
+    await new Promise((r) => setTimeout(r, 100));
+    for (const h of modal.querySelectorAll('[role="button"][aria-expanded="false"]')) h.click();
+    await new Promise((r) => setTimeout(r, 400));
+    const add = [...modal.querySelectorAll("button")].find((b) => b.getAttribute("aria-label") === "Add another note");
+    if (!add) return { noAdd: true };
+    add.click();
+    await new Promise((r) => setTimeout(r, 100));
+    modal.querySelector('[data-ar-note-drop="1"]').click();
+    await new Promise((r) => setTimeout(r, 200));
+    return {
+      variants: confirms.map((c) => c.variant),
+      kinds: sent.filter((m) => m.type === "notify").map((m) => m.kind),
+    };
+  }, dialog);
+  const asked = out.variants && out.variants.length ? out.variants[0] === "danger" : out.kinds && out.kinds[0] === "error";
+  check((dialog ? "with Lumiverse's dialog" : "asked on the button") + ": deleting a note is asked as danger", !!asked, out);
+  check("no page errors", errors.length === 0, errors);
+  await page.close();
+}
+
 console.log("\nthe quick toggle syncs");
 {
   const page = await browser.newPage();
