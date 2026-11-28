@@ -202,7 +202,7 @@ const STREAM_BUF_MAX = 200000;
 
 // Bumped on each release. Shown in the startup log and in the Copy debug info
 // report, so a bug report always says which version it came from.
-const VERSION = "5.28.0";
+const VERSION = "5.28.1";
 
 // Whether two saved settings hold the same values, whatever order their keys
 // were written in. A key left undefined counts as not there, the way it is
@@ -4184,7 +4184,12 @@ const HARD_STATUS = /\b(?:400|401|402|403|404|405|406|411|413|415|422)\b/;
 // for asking the model to write out its thinking, is declined again the same
 // way. These are hard whatever status comes with them.
 const HARD_SURE =
-  /\b(?:reasoning[_ -]?extraction|invalid[_ ]?api[_ ]?key|authentication|unauthorized|insufficient[_ ](?:balance|credits?|funds|quota)|billing|context[_ ]length(?:[_ ]exceeded)?|maximum context|(?:prompt|input|context|messages?) (?:is |are )?too long|daily (?:request |token |usage )?(?:limit|quota|cap)|today['’]?s (?:free )?(?:requests|quota|limit|usage)|\w*(?:requests|tokens) ?per ?day\w*|resets? at (?:midnight|00:00))\b/i;
+  /\b(?:reasoning[_ -]?extraction|invalid[_ ]?api[_ ]?key|authentication|unauthorized|insufficient[_ ](?:balance|credits?|funds|quota)|billing|context[_ ]length(?:[_ ]exceeded)?|maximum context|(?:prompt|input|context|messages?) (?:is |are )?too long|daily (?:request |token |usage )?(?:limit|quota|cap)|today['’]?s (?:free )?(?:requests|quota|limit|usage)|\w*(?:requests|tokens)[ _]?per[ _]?(?:model[ _]?per[ _]?)?day\w*|resets? at (?:midnight|00:00))\b/i;
+// A limit per minute clears within a minute. Google's message for one also
+// says to check "your plan and billing details", which alone reads as hard.
+// A limit per day does not clear, so it stays hard.
+const PER_MINUTE = /per[ _]?minute/i;
+const PER_DAY = /per[ _]?(?:model[ _]?per[ _]?)?day/i;
 // Words that are hard from a provider, and that a gateway's page can also use
 // about itself.
 const HARD_LOOSE = /\b(?:forbidden|permission|not allowed|not found|does not exist|model missing)\b/i;
@@ -4197,7 +4202,7 @@ function errorKind(text: string): string {
   const stated = STATED_STATUS.exec(text);
   const status = stated ? stated[1] : "";
   const detail = stated ? text.slice(stated.index + stated[0].length) : text;
-  if (HARD_SURE.test(detail)) return "hard";
+  if (HARD_SURE.test(detail) && !(PER_MINUTE.test(detail) && !PER_DAY.test(detail))) return "hard";
   if (status) {
     if (GATEWAY_STATUS.test(status)) return "wait";
     if (HARD_STATUS.test(status) || HARD_LOOSE.test(detail)) return "hard";

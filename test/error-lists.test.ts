@@ -25,6 +25,8 @@ const HARD_STATUS = read("HARD_STATUS");
 const HARD_SURE = read("HARD_SURE");
 const HARD_LOOSE = read("HARD_LOOSE");
 const WAIT_ERROR = read("WAIT_ERROR");
+const PER_MINUTE = read("PER_MINUTE");
+const PER_DAY = read("PER_DAY");
 
 // The function as it is written in the source, run on the lists above.
 const errorKind: (text: string) => string = (() => {
@@ -34,9 +36,9 @@ const errorKind: (text: string) => string = (() => {
   const body = SRC.slice(SRC.indexOf("{", at) + 1, end);
   // eslint-disable-next-line no-new-func
   return new Function(
-    "STATED_STATUS", "GATEWAY_STATUS", "WAIT_STATUS", "HARD_STATUS", "HARD_SURE", "HARD_LOOSE", "WAIT_ERROR",
+    "STATED_STATUS", "GATEWAY_STATUS", "WAIT_STATUS", "HARD_STATUS", "HARD_SURE", "HARD_LOOSE", "WAIT_ERROR", "PER_MINUTE", "PER_DAY",
     "return function (text) {" + body + "\n}",
-  )(STATED_STATUS, GATEWAY_STATUS, WAIT_STATUS, HARD_STATUS, HARD_SURE, HARD_LOOSE, WAIT_ERROR);
+  )(STATED_STATUS, GATEWAY_STATUS, WAIT_STATUS, HARD_STATUS, HARD_SURE, HARD_LOOSE, WAIT_ERROR, PER_MINUTE, PER_DAY);
 })();
 
 // The whole block, from its heading to the end of errorKind, with the two
@@ -53,7 +55,7 @@ describe("the error lists are the same as in the other extension", () => {
       h ^= all.charCodeAt(i);
       h = Math.imul(h, 16777619) >>> 0;
     }
-    expect(h.toString(16)).toBe("c2246a9c");
+    expect(h.toString(16)).toBe("7312535c");
   });
 });
 
@@ -77,6 +79,9 @@ const WONT_FIX = [
   "Today’s quota is used up, come back tomorrow",
   "Quota exceeded for metric: GenerateRequestsPerDay",
   "429: limit reached, it resets at midnight UTC",
+  // Google's daily limit, which names the metric.
+  "Lantern stream failed (429): You exceeded your current quota, please check your plan and billing details. * Quota exceeded for metric: generativelanguage.googleapis.com/generate_requests_per_model_per_day, limit: 100, model: lantern-9. Please retry in 41.5s.",
+  "Quota exceeded for metric: GenerateRequestsPerDayPerProjectPerModel",
   // As Lumiverse writes a failed call, with the status in parentheses.
   "Lantern stream failed (401): Unauthorized",
   "Lantern stream failed (404): The model `lantern-9` does not exist",
@@ -134,6 +139,9 @@ const WAIT_IT_OUT = [
   // A number in the detail is not a status.
   "Lantern stream failed (429): Rate limit reached. Please try again in 2.404 seconds",
   "Lantern stream failed (429): Limit 400, Used 400, Requested 1",
+  // Google's limit per minute. Its message also points to billing.
+  "Lantern stream failed (429): You exceeded your current quota, please check your plan and billing details. * Quota exceeded for metric: generativelanguage.googleapis.com/generate_requests_per_model_per_minute, limit: 10, model: lantern-9. Please retry in 12.2s.",
+  "Quota exceeded for metric: GenerateRequestsPerMinutePerProjectPerModel. Check billing.",
 ];
 // Neither: nothing in these says the call can or cannot work next time.
 const NOT_KNOWN = ["Lantern generation failed: the answer could not be read", "Something went wrong", "the upstream sent back a malformed answer"];

@@ -367,6 +367,7 @@ Some providers send a refusal as an error instead of reply text. An error about 
 Every other error is retried. These get the longer wait a rate limit gets, since they clear if you wait:
 
 - a rate limit, or "too many requests"
+- a limit per minute, such as Google's "requests_per_model_per_minute". Google's answer for one also says to check your plan and billing details, and it is still waited out.
 - any status from 500 to 599, such as 502 Bad Gateway, 503 Service Unavailable and 504 Gateway Timeout, and 408, 409 and 425
 - a server that is overloaded, busy, loading a model or at capacity
 - a call that timed out, a dropped connection, or a server that could not be reached

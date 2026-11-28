@@ -8,6 +8,16 @@ Versions follow [Semantic Versioning](https://semver.org). A new major version m
 
 ---
 
+## 5.28.1
+
+_2026-11-28_
+
+### Fixed
+
+- **A limit per minute from Google is waited out.** When a Gemini model on Google AI Studio reached its limit of requests in a minute, Google's answer also said to check your plan and billing details. Auto Retry read the word "billing" as a problem that waiting cannot fix, so it did not try again. It now waits and tries again when the answer names a limit per minute. A limit per day still stops it, since only the next day clears it, and Google's form of it, such as "requests_per_model_per_day", is now read as one.
+
+---
+
 ## 5.28.0
 
 _2026-11-27_
